@@ -778,9 +778,9 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   seqCount: number;
   startedAt: Date;
   sealedAt: Date | null;
-  /** `agent_stop` or `idle_timeout`; null while open or on a seal older than the column. */
+  /** `agent_stop`, `idle_timeout` or `operator`; null while open or on a seal older than the column. */
   sealSource?: string | null;
-  /** The `agent_stop` event's own timestamp, or after an idle close the last event's; null while open. */
+  /** The `agent_stop` event's own timestamp, or after an idle close or an operator's seal the last event's; null while open. */
   endedAt?: Date | null;
   /** The model the session started on and the one it ended on; either may be unrecorded. */
   modelInitial: string | null;
@@ -990,6 +990,7 @@ export function costIsEstimate(
 /**
  * What sealed a sealed session. A seal written before `seal_source` existed
  * was an `agent_stop`, which is the only thing that sealed a session then.
+ * `operator` is a person's `seal_run` (#4073).
  */
 export function recordedSealSource(
   sealedAt: Date | null,
@@ -997,6 +998,7 @@ export function recordedSealSource(
 ): RunItem["sealSource"] {
   if (sealedAt === null) return null;
   if (source === "idle_timeout") return "idle_timeout";
+  if (source === "operator") return "operator";
   if (source === null || source === undefined || source === "agent_stop")
     return "agent_stop";
   throw new RangeError(

@@ -262,7 +262,8 @@
                 "type": "string",
                 "enum": [
                   "agent_stop",
-                  "idle_timeout"
+                  "idle_timeout",
+                  "operator"
                 ]
               },
               {

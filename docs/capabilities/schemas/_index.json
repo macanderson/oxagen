@@ -1,5 +1,5 @@
 {
-  "generatedCount": 383,
+  "generatedCount": 384,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -3444,6 +3444,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "seal_run",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

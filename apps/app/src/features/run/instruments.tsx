@@ -13,6 +13,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import { type Money, ratioOfIntegers } from "@/data/contracts/money";
 import type { RunRow } from "@/data/contracts/runs";
+import { Clock } from "@/ui/clock";
 import { Money as MoneyText } from "@/ui/money";
 import {
   formatCount,
@@ -347,7 +348,18 @@ function WallTile({ metrics }: { metrics: RunMetrics }) {
           <NoValue />
         ) : (
           <>
-            {formatDuration(ms, locale)}
+            {wall.ticking === null ? (
+              formatDuration(ms, locale)
+            ) : (
+              // A live run's clock keeps counting from its start, as the stat
+              // row's does; the split below is as of the render.
+              <Clock
+                at={wall.ticking.from}
+                now={wall.ticking.at}
+                direction="since"
+                className="tabular-nums"
+              />
+            )}
             <small className={instUnit}>{t("elapsed")}</small>
           </>
         )

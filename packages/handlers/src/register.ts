@@ -1306,6 +1306,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .runExportGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "seal_run",
+    async () =>
+      (await import("./run.seal")).runSealHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "summarize_run",
     async () =>
       (await import("./run.summarize"))

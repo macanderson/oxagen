@@ -1,0 +1,106 @@
+{
+  "name": "seal_run",
+  "domain": "run",
+  "description": "Seal a live or idle-closed wrapped run now, and queue a kill for its agent on the host it runs on when that host can collect a command.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "control"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "sealedAt": {
+        "type": "string"
+      },
+      "sessionsSealed": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "kill": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "queued"
+              },
+              "commandId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "status",
+              "commandId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "not_sent"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "run_sealed",
+                  "no_host",
+                  "host_revoked",
+                  "host_offline"
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "required": [
+      "runId",
+      "sealedAt",
+      "sessionsSealed",
+      "kill"
+    ],
+    "additionalProperties": false
+  }
+}

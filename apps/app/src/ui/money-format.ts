@@ -97,19 +97,25 @@ export function formatByteSize(bytes: number, locale: string): string {
   }).format(value);
 }
 
-/** Whole seconds as `m:ss`, the approval clock's reading; a negative duration reads 0:00. */
+/**
+ * Whole seconds as a clock: `m:ss` under an hour, `h:mm:ss` from one. A run
+ * left open for three days reads `76:12:09` rather than `4,572:09` minutes, so
+ * the reading stays short enough for a stat tile. A negative duration reads
+ * 0:00.
+ */
 export function formatClock(seconds: number, locale: string): string {
   const total = Math.max(0, Math.floor(seconds));
-  const minutes = new Intl.NumberFormat(locale).format(Math.floor(total / 60));
-  const rest = new Intl.NumberFormat(locale, {
-    minimumIntegerDigits: 2,
-  }).format(total % 60);
-  return `${minutes}:${rest}`;
+  const whole = new Intl.NumberFormat(locale);
+  const two = new Intl.NumberFormat(locale, { minimumIntegerDigits: 2 });
+  const rest = two.format(total % 60);
+  if (total < 3600) return `${whole.format(Math.floor(total / 60))}:${rest}`;
+  const hours = whole.format(Math.floor(total / 3600));
+  return `${hours}:${two.format(Math.floor(total / 60) % 60)}:${rest}`;
 }
 
 /**
  * A duration as a reader reads it: `41 ms` under a second, `4.2 s` under a
- * minute, `2:07` beyond one. The Run page's transport and its transcript both
+ * minute, `2:07` beyond one, and `1:02:03` from an hour. The Run page's transport and its transcript both
  * print elapsed time, and a run's own scale spans four orders of magnitude, so
  * one unit for all of it would read as either noise or nothing.
  */

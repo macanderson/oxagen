@@ -5175,6 +5175,24 @@
       }
     },
     {
+      "name": "seal_run",
+      "file": "run.seal.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "summarize_run",
       "file": "run.summarize.ts",
       "domain": "run",

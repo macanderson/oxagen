@@ -156,6 +156,7 @@ import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runSeal } from "@oxagen/oxagen/contracts/run.seal";
 import { tachoEnrollmentCreate } from "@oxagen/oxagen/contracts/tacho.enrollment.create";
 import { tachoEnrollmentRevoke } from "@oxagen/oxagen/contracts/tacho.enrollment.revoke";
 import { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
@@ -293,6 +294,7 @@ import { mandateRequestRoute } from "./mandate.request";
 import { mandateRevokeRoute } from "./mandate.revoke";
 import { runGetRoute } from "./run.get";
 import { runListRoute } from "./run.list";
+import { runSealRoute } from "./run.seal";
 import { tachoEnrollmentCreateRoute } from "./tacho.enrollment.create";
 import { tachoEnrollmentRevokeRoute } from "./tacho.enrollment.revoke";
 import { tachoHostListRoute } from "./tacho.host.list";
@@ -1940,6 +1942,20 @@ const ROUTES: ThinRoute[] = [
     body: {},
     expectedInput: { limit: 50 },
     invalidBody: { limit: 0 },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "run.seal",
+    route: runSealRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: runSeal.name,
+    body: {
+      runId: "tse_0192d4a87c1e7a0080000000",
+      reason: "the agent answered and the terminal sat open",
+    },
+    // The reason lands on the kill command: an empty one is refused, not stored.
+    invalidBody: { runId: "tse_0192d4a87c1e7a0080000000", reason: "" },
     jsonGuard: true,
     status: 200,
   },

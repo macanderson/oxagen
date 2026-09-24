@@ -221,10 +221,17 @@ export function addressOf(target: CommandTarget): string {
 
 // ---- The store seam ------------------------------------------------------------------
 
+/**
+ * A command this store writes: an operator's run command, or the `kill`
+ * `seal_run` queues for the agent of a run it seals (#4073). `kill` is not
+ * one of `dispatch_command`'s commands.
+ */
+export type StoredCommand = RunCommand | "kill";
+
 export type CommandRowInput = {
   scope: RunScope;
   session: RecipientSession;
-  command: RunCommand;
+  command: StoredCommand;
   payload: Record<string, unknown>;
   requestedMode: TachoDeliveryMode | null;
   deliveryMode: TachoDeliveryMode | null;
@@ -270,7 +277,7 @@ export interface CommandStore {
   supersede(args: {
     scope: RunScope;
     runPublicId: string;
-    command: RunCommand;
+    command: StoredCommand;
     successorPublicId: string;
     now: Date;
   }): Promise<number>;
