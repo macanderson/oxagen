@@ -6,7 +6,7 @@
 // this panel and the Issues tab's Linked work cannot name a different pull
 // request. The files are the ones the outputs recorded with a line stat. A
 // fact neither read carries (the base branch, a release) reads as not
-// recorded or is left out, never guessed.
+// recorded, never guessed.
 import { useLocale, useTranslations } from "next-intl";
 import { use } from "react";
 import type { RunOutputNode, RunOutputs } from "@/data/contracts/run";
@@ -152,6 +152,9 @@ function ChangesBody({
         </Row>
         <Row label={t("base")}>
           <span className="text-dim">{t("baseNotRecorded")}</span>
+        </Row>
+        <Row label={t("release")}>
+          <span className="text-dim">{t("releaseNotRecorded")}</span>
         </Row>
         <Row label={t("checks")}>
           {ci === null ? (

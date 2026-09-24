@@ -91,11 +91,31 @@ describe("runMetrics", () => {
     expect(m.priced?.byClass.reasoning).not.toBeNull();
   });
 
-  it("counts the prompts and calls every one after the first corrective", () => {
+  it("counts the operator's prompts and calls every one after the first corrective", () => {
+    const m = runMetrics({
+      run: runRow(),
+      cost: readOk(runCost()),
+      transcript: readOk(mockupTranscript()),
+      book: null,
+    });
+    expect(m.prompts).toEqual({ count: 2, corrective: 1 });
+  });
+
+  it("counts neither a model request nor a subagent's turn as the operator prompting (negative)", () => {
+    // The contract's `prompt` kind is the request half of a model call, and a
+    // subagent's turn opens on words its parent sent. Neither is the operator.
     const entries = mockupTranscript().entries.map((entry) =>
-      entry.type === "turn_start"
-        ? { ...entry, kinds: [...entry.kinds, "prompt" as const] }
-        : entry,
+      entry.type === "turn_start" && entry.turn === 2
+        ? {
+            ...entry,
+            subagent: {
+              chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+              type: "Explore",
+            },
+          }
+        : entry.type === "model.request"
+          ? { ...entry, kinds: [...entry.kinds, "prompt" as const] }
+          : entry,
     );
     const m = runMetrics({
       run: runRow(),
@@ -103,7 +123,7 @@ describe("runMetrics", () => {
       transcript: readOk(mockupTranscript({ entries })),
       book: null,
     });
-    expect(m.prompts).toEqual({ count: 2, corrective: 1 });
+    expect(m.prompts).toEqual({ count: 1, corrective: 0 });
   });
 
   it("reads the per-turn ledger and the tool calls off the transcript", () => {

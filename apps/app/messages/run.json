@@ -1100,6 +1100,8 @@
       "more": "{count} more in the outputs",
       "base": "Base",
       "baseNotRecorded": "not recorded",
+      "release": "Release",
+      "releaseNotRecorded": "not recorded",
       "checks": "Checks",
       "noChecks": "none reported",
       "ci": {

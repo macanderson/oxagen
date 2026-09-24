@@ -13,6 +13,7 @@ import type {
   RunTranscript,
   TranscriptBody,
   TranscriptEntry,
+  TranscriptKind,
   TranscriptZoom,
 } from "@/data/contracts/run";
 import type {
@@ -343,6 +344,22 @@ export function mockupTranscript(
       decision: "deny",
     },
   ];
+  /**
+   * The chips a frame answers to, as `frameKinds` in `@oxagen/run-ledger`
+   * assigns them: `prompt` is the request half of a model call, not the
+   * operator's words, and a decision adds `policy` to the entry it rides.
+   */
+  const kindsOf = (spec: Spec, request: boolean): TranscriptKind[] => {
+    const kinds: TranscriptKind[] = [];
+    if (spec.kind === "model_call")
+      kinds.push(request ? "prompt" : "responses");
+    if (spec.kind === "tool_call") kinds.push("tools");
+    if (spec.type === "policy_decision" || spec.decision !== undefined)
+      kinds.push("policy");
+    if (spec.type === "context.assembled") kinds.push("recall");
+    if (spec.costMicros !== undefined) kinds.push("usage");
+    return kinds;
+  };
   // The run's own prefix sum, exactly as `get_run_transcript` computes it:
   // an entry's cumulative cost is what the run had spent by then.
   let running: bigint | null = null;
@@ -360,6 +377,7 @@ export function mockupTranscript(
     });
     const request = REQUEST_TYPES.has(spec.type);
     return transcriptEntry({
+      kinds: kindsOf(spec, request),
       seq: String(spec.seq),
       endSeq: String(spec.seq),
       at: at(-3600 + spec.seq * 2),

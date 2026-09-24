@@ -5039,6 +5039,8 @@ type Messages = {
       more: string;
       base: string;
       baseNotRecorded: string;
+      release: string;
+      releaseNotRecorded: string;
       checks: string;
       noChecks: string;
       ci: {

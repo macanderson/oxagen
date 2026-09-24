@@ -1218,6 +1218,17 @@ function recallOf(step: TranscriptStep): FeedRecall {
   };
 }
 
+/**
+ * Whether a frame records the operator prompting the run: a `turn_start` on
+ * the run's own chain. A subagent's turn opens on the words its parent sent,
+ * which the parent's tool call already shows. The contract's `prompt` kind is
+ * something else, the request half of a model call, so it is not read here.
+ * The feed's prompt rows and the stat row's Prompts figure both read this.
+ */
+export function isOperatorPrompt(frame: TranscriptEntry): boolean {
+  return frame.type === "turn_start" && frame.subagent === undefined;
+}
+
 /** Frame types that frame the run rather than record what it did: no row unless they failed or were decided on. */
 function isQuiet(type: string): boolean {
   return (
@@ -1232,7 +1243,7 @@ function eventRows(step: TranscriptStep): FeedRow[] {
   const spent = step.last.cumulativeCost;
   const text = soleText(step.frames);
   const own = first.subagent === undefined;
-  if (first.type === "turn_start" && own) {
+  if (isOperatorPrompt(first)) {
     if (text === null) return [];
     return [
       {

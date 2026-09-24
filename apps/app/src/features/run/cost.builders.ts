@@ -40,7 +40,11 @@ type StepSpec =
   | { kind: "tools"; calls: ToolCallSpec[] };
 
 export type TurnSpec = {
-  /** The turn opens on words from the operator. */
+  /**
+   * The turn opens on words from the operator: a `turn_start` on the run's
+   * own chain, which is what the Prompts figure counts. A turn without one
+   * is numbered on its frames alone.
+   */
   prompt: boolean;
   steps: StepSpec[];
 };
@@ -88,16 +92,17 @@ export function costTranscript(
       micros: null,
       usage: null,
     };
-    push(
-      {
-        ...frame,
-        type: "turn_start",
-        kind: "frame",
-        label: "turn_start",
-        kinds: spec.prompt ? ["prompt"] : [],
-      },
-      t,
-    );
+    if (spec.prompt)
+      push(
+        {
+          ...frame,
+          type: "turn_start",
+          kind: "frame",
+          label: "turn_start",
+          kinds: [],
+        },
+        t,
+      );
     t += TICK;
     for (const step of spec.steps) {
       if (step.kind === "model") {

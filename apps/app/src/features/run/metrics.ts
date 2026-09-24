@@ -36,6 +36,7 @@ import { groupOf, type ToolGroup } from "./tool-detail";
 import {
   buildTranscript,
   frameCost,
+  isOperatorPrompt,
   stepDigest,
   type TranscriptStep,
   type TranscriptTurn,
@@ -93,7 +94,7 @@ export type PricedClasses = {
 };
 
 type Prompts = {
-  /** Entries that carry the operator's words: the first prompt and every one after it. */
+  /** The times the operator prompted the run: the first prompt and every one after it. */
   count: number;
   /** A prompt after the first fixes or fills what the first left out. */
   corrective: number;
@@ -537,9 +538,7 @@ export function runMetrics({
   const runCost = rollup?.cost ?? run.cost;
   const tokens = rollup === null ? null : tokenFigures(rollup);
   const promptCount =
-    entries === null
-      ? null
-      : entries.filter((entry) => entry.kinds.includes("prompt")).length;
+    entries === null ? null : entries.filter(isOperatorPrompt).length;
   return {
     whole: transcript.ok && isWhole(transcript.value),
     tokens,

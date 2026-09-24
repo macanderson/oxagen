@@ -29,6 +29,7 @@ import { StatRow, SummaryPanel } from "./stats";
 import type { RunTabProps } from "./tab-props";
 import { RunTabs, type Tab, type TabFigure, tabOf } from "./tabs";
 import { TranscriptTab } from "./transcript";
+import { buildFeed } from "./transcript-model";
 import { readWholeTranscript } from "./whole-transcript";
 import { ChangesLoading, ChangesPanel } from "./work";
 import { readRunWork } from "./work-ci";
@@ -62,7 +63,13 @@ function Tabs({
   // the frame player, and it counts the frames.
   const governed = policy !== null && policy.length > 0;
   const figures: Record<Tab, TabFigure> = {
-    transcript: { count: String(run.steps) },
+    // The rows the Transcript tab opens with, which its header line counts
+    // as entries, so the tab and the line cannot disagree.
+    transcript: {
+      count: everything.ok
+        ? floor(buildFeed(everything.value.entries).length)
+        : undefined,
+    },
     issues: { count: run.taskRef === null ? "0" : "1" },
     actions: governed
       ? { count: floor(policy.length), parked }

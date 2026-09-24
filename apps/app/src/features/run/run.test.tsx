@@ -777,6 +777,18 @@ describe("tabs", () => {
       "true",
     );
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("1");
+    // Transcript counts the rows its feed opens with, the entries its header
+    // line names, not the run's steps.
+    const entries = /(\d+) entries/.exec(
+      screen.getByTestId("transcript").textContent ?? "",
+    )?.[1];
+    expect(entries).toBeDefined();
+    expect(screen.getByTestId("run-tab-count-transcript")).toHaveTextContent(
+      entries ?? "",
+    );
+    expect(screen.getByTestId("run-tab-count-transcript").textContent).not.toBe(
+      String(runDetail().run.steps),
+    );
     // A run with no policy decision has nothing governed to list: the tab is
     // the frame player, and it counts the frames.
     expect(tabs.getByRole("tab", { name: /Player/ })).toBeTruthy();
@@ -1506,7 +1518,13 @@ describe("figures", () => {
       transcript: ok(
         runTranscript({
           entries: [
-            transcriptEntry({ seq: "1", endSeq: "1", kinds: ["prompt"] }),
+            transcriptEntry({
+              seq: "1",
+              endSeq: "1",
+              type: "turn_start",
+              kind: "frame",
+              kinds: [],
+            }),
             transcriptEntry(),
           ],
         }),
@@ -1535,7 +1553,13 @@ describe("figures", () => {
       transcript: ok(
         runTranscript({
           entries: ["1", "2", "3"].map((seq) =>
-            transcriptEntry({ seq, endSeq: seq, kinds: ["prompt"] }),
+            transcriptEntry({
+              seq,
+              endSeq: seq,
+              type: "turn_start",
+              kind: "frame",
+              kinds: [],
+            }),
           ),
         }),
       ),
@@ -1552,7 +1576,9 @@ describe("figures", () => {
       transcript: ok(
         runTranscript({
           complete: false,
-          entries: [transcriptEntry({ kinds: ["prompt"] })],
+          entries: [
+            transcriptEntry({ type: "turn_start", kind: "frame", kinds: [] }),
+          ],
         }),
       ),
     });
@@ -1587,8 +1613,17 @@ describe("the work", () => {
         "src/release/cut.ts",
       ),
     ).toBeTruthy();
-    // No read carries the base branch, so it is not named.
-    expect(changes.getByText("not recorded")).toBeTruthy();
+    // No read carries the base branch or a release, so each row the design
+    // draws says so rather than naming one.
+    const rows = changes
+      .getAllByRole("term")
+      .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        ["Base", "not recorded"],
+        ["Release", "not recorded"],
+      ]),
+    );
     await expectNoAxe(container);
   });
 
