@@ -1,65 +1,105 @@
 // The Run page while its reads are in flight (the page spec's loading state):
-// the shell stays, and the page body is replaced by the skeleton the spec
-// draws, four tile blocks and a panel of seven rows, so a person keeps their
-// bearings and nothing on screen is a figure. No zero, no stale row and no
-// run id reaches the page before the read does.
+// the shell stays, and the page body is replaced by a skeleton shaped like
+// what is coming: the header's strips, then the two columns, with the
+// summary, the six stat tiles, the tab strip and a panel of rows on the left
+// and the three side panels on the right.
 //
-// Next replaces page.tsx's whole return value with this default export while
-// the route segment suspends, so this reproduces `<main id="main">`: the
-// skip-to-content link keeps a target, and the frame does not jump once the
-// read finishes and the real page takes over the same container.
+// A skeleton in the shape of the answer is the point: a spinner in the middle
+// of the page would move every element once the reads land, and a person who
+// has already started reading the header would lose their place.
+//
+// Next renders this default export as the route segment's Suspense fallback,
+// so it reproduces the page's container and header: the frame does not jump
+// once the read finishes and the real page takes over. The container is not
+// the page's main landmark: while the page streams in, this fallback and the page
+// are in the document together, and two main#main elements gave the skip
+// link two targets and failed page-load's strict locator (Billing's fallback,
+// 2026-09-24; arch/loading-landmarks.test.ts). The run's id is not known
+// here, so the h1 says "Run" until the page lands.
 import { useTranslations } from "next-intl";
 import { panel } from "@/ui/control-styles";
+import { PageHeader } from "@/ui/page-header";
 
-/** The four tile blocks the spec's skeleton opens with. */
-const TILES = [0, 1, 2, 3];
-/** The panel's seven rows. */
+/** The stat row: tokens, prompts, cost, wasted, wall clock, cache hit. */
+const TILES = [0, 1, 2, 3, 4, 5];
+/** The seven tabs. */
+const TABS = [0, 1, 2, 3, 4, 5, 6];
+/** The open section's rows. */
 const ROWS = [0, 1, 2, 3, 4, 5, 6];
+/** Changes, Outputs and Spend by area. */
+const SIDE = [0, 1, 2];
 
-const bar =
-  "block animate-pulse rounded-lg bg-muted motion-reduce:animate-none";
+const bar = "block animate-pulse rounded bg-muted motion-reduce:animate-none";
 
 export function RunLoading() {
-  const t = useTranslations("run");
+  const t = useTranslations();
   return (
-    <main
-      id="main"
+    <div
+      data-testid="run-loading-frame"
       className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10"
     >
+      <PageHeader eyebrow={t("pages.run")} title={t("pages.run")} />
       <div
         role="status"
         aria-busy="true"
         data-testid="run-loading"
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-6"
       >
-        <span className="sr-only">{t("loading")}</span>
-        <div
-          aria-hidden="true"
-          className="grid grid-cols-2 gap-3.5 lg:grid-cols-4"
-        >
-          {TILES.map((tile) => (
-            <span
-              key={tile}
-              data-testid="run-loading-tile"
-              className={`${bar} h-16 border border-border`}
-            />
-          ))}
+        <span className="sr-only">{t("run.loading")}</span>
+        <div aria-hidden="true" className="flex flex-col gap-2">
+          <span className={`${bar} h-6 w-72`} />
+          <span className={`${bar} h-4 w-96 max-w-full`} />
+          <span className={`${bar} h-4 w-80 max-w-full`} />
         </div>
-        <div aria-hidden="true" className={`${panel} flex flex-col`}>
-          <span className="block border-b border-border bg-muted/40 px-4 py-3.5">
-            <span className={`${bar} h-4 w-44`} />
-          </span>
-          <span className="flex flex-col gap-2.5 p-4">
-            {ROWS.map((row) => (
-              <span
-                key={row}
-                data-testid="run-loading-row"
-                className={`${bar} h-9 w-full`}
-              />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+            <div className={`${panel} flex flex-col gap-2 p-4`}>
+              <span aria-hidden="true" className={`${bar} h-4 w-24`} />
+              <span aria-hidden="true" className={`${bar} h-4 w-full`} />
+              <span aria-hidden="true" className={`${bar} h-4 w-2/3`} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+              {TILES.map((tile) => (
+                <span
+                  key={tile}
+                  aria-hidden="true"
+                  className="flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2.5"
+                >
+                  <span className={`${bar} h-3 w-14`} />
+                  <span className={`${bar} h-5 w-20`} />
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-4 overflow-hidden border-b border-border pb-3">
+              {TABS.map((tab) => (
+                <span
+                  key={tab}
+                  aria-hidden="true"
+                  className={`${bar} h-4 w-20 shrink-0`}
+                />
+              ))}
+            </div>
+            <div className={`${panel} flex flex-col gap-2 p-4`}>
+              {ROWS.map((row) => (
+                <span
+                  key={row}
+                  aria-hidden="true"
+                  className={`${bar} h-4 w-full`}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-col gap-6">
+            {SIDE.map((side) => (
+              <div key={side} className={`${panel} flex flex-col gap-2 p-4`}>
+                <span aria-hidden="true" className={`${bar} h-4 w-24`} />
+                <span aria-hidden="true" className={`${bar} h-4 w-full`} />
+                <span aria-hidden="true" className={`${bar} h-4 w-3/4`} />
+              </div>
             ))}
-          </span>
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
