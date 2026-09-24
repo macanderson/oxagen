@@ -2191,7 +2191,7 @@ async function initializeDaemon(
    * The conflict is permanent: the WAL already holds that seq with another
    * hash, so every retry fails the same way. The git lane used to requeue it
    * on every tick, and one host logged the same conflict over a thousand
-   * times while the session's end never landed (#4086). The events go to
+   * times while the session's end never landed (#4093). The events go to
    * `quarantine/` as evidence, where `tacho status` counts them and the
    * retention sweep ages them out. Their bodies do not go with them: content
    * whose event can never reach the chain would outlive every sweep that
@@ -2317,11 +2317,12 @@ async function initializeDaemon(
    * A hook is spooled whenever its client gets no good answer: the daemon was
    * down, or it answered with an error or past the hook's time budget. Only
    * the first is an outage. Every drain used to seal a gap for every session
-   * it replayed, so a hook the daemon refused while it was up, and #4051 has
-   * it refuse a hook whose write failed so the replay can land it, sealed a
-   * `daemon_down` gap each time it was replayed. One host chained about 70 in
-   * twenty minutes with the daemon running throughout. The startup gap below
-   * and `drainSpool` both add here, so one outage gives a session one gap.
+   * it replayed. A hook the daemon refused while it was up sealed a
+   * `daemon_down` gap each time it was replayed, and #4051 has the daemon
+   * refuse a hook whose write failed so the replay can land it. One host
+   * chained about 70 in twenty minutes with the daemon running throughout
+   * (#4094). The startup gap below and `drainSpool` both add here, so one
+   * outage gives a session one gap.
    */
   let servingSince: number | undefined;
   const outageGapped = new Set<string>();

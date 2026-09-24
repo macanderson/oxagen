@@ -449,7 +449,8 @@ export class TranscriptTailer {
       fed += 1;
     }
     // One gap for the whole transcript. A subagent whose chain refused every
-    // line sealed one gap per line, 608 of them in one second on one host.
+    // line sealed one gap per line, 608 of them in one second on one host
+    // (#4094).
     // A gap that cannot be written throws here, before the subagent is
     // marked fed, so its transcript is read again later.
     if (refused > 0)

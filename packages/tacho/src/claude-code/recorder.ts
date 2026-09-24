@@ -458,7 +458,7 @@ export class SessionRecorder {
    * tick that writes it keeps failing, so a crash can drop a session or a
    * subagent the WAL holds hundreds of events for. Opened at genesis, every
    * write to that chain was refused because the file already held seq 0, and
-   * a session end sealed there could never land (#4086). Answers whether any
+   * a session end sealed there could never land (#4093). Answers whether any
    * cursor moved.
    */
   continueFromDisk(): boolean {
