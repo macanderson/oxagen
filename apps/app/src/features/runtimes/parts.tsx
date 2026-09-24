@@ -5,10 +5,7 @@
 // translated text or reads its own namespace.
 import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
-import type {
-  RuntimeEnrollment,
-  RuntimePlatform,
-} from "@/data/contracts/runtimes";
+import type { RuntimeEnrollment } from "@/data/contracts/runtimes";
 import { Badge } from "@/ui/badge";
 import {
   mono,
@@ -42,6 +39,8 @@ const GAPS = {
   smoke: "#3819",
   /** The trace id of a failed read and the policy id that refused one. */
   decision: "#3841",
+  /** A version for every harness on the host: enrollment records Claude Code's alone. */
+  version: "#3919",
 } as const;
 type GapKey = keyof typeof GAPS;
 
@@ -80,7 +79,8 @@ export function Panel({
   title: string;
   /** A header richer than the title alone (the host panel's subtitle); the h2 still carries `title`. */
   titleNode?: ReactNode;
-  count?: number;
+  /** The badge: a count, or a not-recorded value where no store counts it. */
+  count?: number | ReactNode;
   /** A badge or control at the header's right edge. */
   aside?: ReactNode;
   children: ReactNode;
@@ -96,7 +96,7 @@ export function Panel({
         </div>
         {count === undefined ? null : (
           <Badge tone="quiet" dot={false} data-testid={`${id}-count`}>
-            {String(count)}
+            {typeof count === "number" ? String(count) : count}
           </Badge>
         )}
         {aside}
@@ -185,8 +185,32 @@ export function Sub({
  * that read only the stored word would call a host enrolled while every
  * request it makes is refused.
  */
-function isEnrolled(host: RuntimeEnrollment, now: number): boolean {
+export function isEnrolled(host: RuntimeEnrollment, now: number): boolean {
   return host.status !== "revoked" && Date.parse(host.expiresAt) > now;
+}
+
+/**
+ * The five command hooks Tacho writes into Claude Code's settings, in the
+ * order the design prints them (`COMMAND_HOOK_EVENTS`,
+ * packages/tacho/src/host/settings-writer.ts). They are event names, printed
+ * as the harness spells them.
+ */
+export const COMMAND_HOOKS =
+  "SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop";
+
+/**
+ * Whether the record holds all five command hooks as written: a host whose
+ * only harness is Claude Code, whose settings file the collector last read
+ * back with every hook in place (`hooksOk`). `false` names no count, and no
+ * other harness reports a read-back, so every other host's hooks are not
+ * recorded (#3818).
+ */
+export function hooksReadBack(host: RuntimeEnrollment): boolean {
+  return (
+    host.hooksOk === true &&
+    host.harnesses.length === 1 &&
+    host.harnesses[0] === "claude-code"
+  );
 }
 
 /**
@@ -221,9 +245,19 @@ export function HealthBadge({
   );
 }
 
-export function PlatformName({ platform }: { platform: RuntimePlatform }) {
-  const t = useTranslations("runtimes.platform");
-  return t(platform);
+/**
+ * The operating system as the host reported it at enrollment, the way the
+ * design prints it: "macOS 15.6 · arm64". A host whose installer predates the
+ * two fields reported neither, and the line says so rather than stopping at
+ * the platform's name.
+ */
+export function OsLine({ host }: { host: RuntimeEnrollment }) {
+  const t = useTranslations("runtimes");
+  const name = t(`platform.${host.platform}`);
+  const os = host.osVersion === null ? name : `${name} ${host.osVersion}`;
+  if (host.osVersion === null && host.arch === null)
+    return t("os.unreported", { os });
+  return host.arch === null ? os : `${os} · ${host.arch}`;
 }
 
 const HARNESS_NAMES = [
@@ -240,10 +274,17 @@ function isHarnessName(value: string): value is HarnessName {
   return HARNESS_NAMES.some((name) => name === value);
 }
 
+/** A harness by its product name; a name this build does not know, as the daemon sent it. */
+export function HarnessLabel({ harness }: { harness: string }) {
+  const t = useTranslations("runtimes.harness");
+  return isHarnessName(harness) ? t(harness) : harness;
+}
+
 /**
- * The harnesses the daemon reported, each by its product name, with the
- * Claude Code version recorded at enrollment beside Claude Code. A name this
- * build does not know is printed as the daemon sent it.
+ * The harnesses the daemon reported, each by its product name and its
+ * version in mono, as the design draws them. Enrollment records Claude Code's
+ * version alone, and only as it was at enrollment, so that version says "at
+ * enrollment" and every other harness's version is not recorded (#3919).
  */
 export function HarnessNames({ host }: { host: RuntimeEnrollment }) {
   const t = useTranslations("runtimes.harness");
@@ -252,13 +293,18 @@ export function HarnessNames({ host }: { host: RuntimeEnrollment }) {
   return (
     <span className="flex flex-col gap-0.5">
       {host.harnesses.map((harness) => (
-        <span key={harness}>
-          {isHarnessName(harness) ? t(harness) : harness}
+        <span key={harness} data-harness={harness}>
+          <HarnessLabel harness={harness} />{" "}
           {harness === "claude-code" && host.claudeVersionAtEnroll !== null ? (
-            <span className={`${mono} ml-1 text-muted-foreground`}>
-              {host.claudeVersionAtEnroll}
+            <span className="text-muted-foreground">
+              <span className={mono}>{host.claudeVersionAtEnroll}</span>{" "}
+              <span className="text-xs">{t("atEnrollment")}</span>
             </span>
-          ) : null}
+          ) : (
+            <span className="text-xs">
+              <NotBacked gap="version">{t("versionUnrecorded")}</NotBacked>
+            </span>
+          )}
         </span>
       ))}
     </span>

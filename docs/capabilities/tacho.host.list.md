@@ -1,6 +1,6 @@
 # list_tacho_hosts
 
-List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents). Cursor-paginated.
+List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, the operating system version and CPU architecture the host reported at enrollment (`osVersion`, `arch`, null when it reported none), harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents). Cursor-paginated.
 
 ## Mode
 
@@ -11,7 +11,7 @@ List the machines enrolled as Tacho hosts in this workspace, newest first, with 
 - API: `POST /v1/:org_slug/:workspace_slug/tacho/hosts`
 - MCP: `list_tacho_hosts`
 - CLI: `oxagen tacho hosts [--status <state>] [--limit <n>] [--json]`
-- App: Fleet, at `/{orgSlug}/{workspaceSlug}/fleet`
+- App: Runtimes, at `/{orgSlug}/{workspaceSlug}/runtimes`, and one runtime at `/{orgSlug}/{workspaceSlug}/runtimes/{hostEnrollmentId}`
 - Authentication: session (org Owner or Admin; workspace Owner, Member or Viewer)
 - Capability name: `list_tacho_hosts`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity for the enrollment, ingest, bundle, and command capabilities, medium for the reads
