@@ -24,6 +24,7 @@ import { createPgSsoProvisioningStore } from "./sso/pg-store";
 import { authMethodForPath, lookupSsoProviderDomain } from "./sso/policy";
 import { createSsoDomainGuard } from "./sso/domain-guard";
 import { requireSsoPlugin } from "./sso/require-sso-plugin";
+import { selectSsoProviderPlugin } from "./sso/select-provider-plugin";
 import {
   sendEmailFireAndForget,
   resetPasswordEmailTemplate,
@@ -335,6 +336,9 @@ export const auth = betterAuth({
     ssoPlugin,
     // "Require SSO" at password and social sign-in (./sso/require-sso-plugin.ts).
     requireSsoPlugin(),
+    // Names the verified provider for /sign-in/sso so only its secrets are
+    // opened (./sso/select-provider-plugin.ts).
+    selectSsoProviderPlugin(),
   ],
   // The SSO plugin's provider-management endpoints; the org.sso.* capabilities
   // replace them (./sso/plugin.ts).

@@ -112,6 +112,7 @@ export function proposalOutput(
     pr: {
       number: 519,
       url: PR_URL,
+      provider: "github",
       repository: "acme/core-platform",
       branch: `context/${LINEAGE}`,
     },
@@ -142,6 +143,7 @@ export function contextPrOutput(
     pr: {
       number: 519,
       url: PR_URL,
+      provider: "github",
       repository: "acme/core-platform",
       baseRef: "main",
       branch: `context/${LINEAGE}`,

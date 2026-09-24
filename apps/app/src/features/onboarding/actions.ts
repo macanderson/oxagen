@@ -20,7 +20,9 @@ import { OrganizationForm, type OrganizationField } from "./org-form";
 /**
  * A field the form refuses is `invalid` with the field and its
  * `onboarding.errors` key as the code, and no capability runs. A taken address
- * is the handler's `conflict` with code `slug_taken`.
+ * is the handler's `conflict` with code `slug_taken`, a taken namespace the
+ * same with `namespace_taken`. A created organization continues to the gate's
+ * Wrap an agent step.
  */
 export async function createOrganizationAction(
   input: Record<OrganizationField, string>,
@@ -36,17 +38,24 @@ export async function createOrganizationAction(
       field: issue?.path.map(String).join(".") ?? "",
     };
   }
-  const { name, slug, workspaceName, workspaceSlug } = parsed.data;
+  const { name, slug, namespace, workspaceName, workspaceSlug } = parsed.data;
   const result = await kernelWrite(ctx, organizationCreate, {
     name,
     slug,
+    namespace,
     workspace: { name: workspaceName, slug: workspaceSlug },
   });
+  // The gate's next step is Wrap an agent, outside the app shell; Fleet opens
+  // once the first frame arrives (or on Cancel).
   return result.ok
     ? {
         ok: true,
         value: {
-          to: routes.fleet(result.value.slug, result.value.workspace.slug),
+          to: routes.welcome(
+            result.value.slug,
+            result.value.workspace.slug,
+            "wrap",
+          ),
         },
       }
     : result;
@@ -55,9 +64,6 @@ export async function createOrganizationAction(
 export type RegisteredAgent = {
   agentId: string;
   agentKey: string | null;
-  /** Shown once, at registration, and never recoverable. */
-  secret: string;
-  expiresAt: string;
   /** The wrap step for this identity. */
   to: SafePath;
 };
@@ -65,6 +71,9 @@ export type RegisteredAgent = {
 /**
  * Mints the identity, its delegated principal and its long-lived credential.
  * The definition file is committed separately, so registration writes none.
+ * The credential's secret stays on the server: the register gate shows none
+ * on the name step, and the SDK path issues its own with
+ * `rotate_agent_credential` when the operator asks for it.
  */
 export async function registerAgent(
   org: string,
@@ -95,8 +104,6 @@ export async function registerAgent(
         value: {
           agentId: result.value.agentId,
           agentKey: result.value.agentKey,
-          secret: result.value.credential.secret,
-          expiresAt: result.value.credential.expiresAt,
           to: routes.register(org, ws, "wrap", {
             agent: result.value.agentId,
           }),

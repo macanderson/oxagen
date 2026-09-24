@@ -197,6 +197,7 @@ describe("Related › a read that did not answer", () => {
       <IntlProvider>
         <Related
           at={at}
+          workspace="Core platform"
           kind="constraint"
           read={readError("steering_unavailable", 503)}
         />
@@ -216,6 +217,7 @@ describe("Related › a read that did not answer", () => {
       <IntlProvider>
         <Related
           at={at}
+          workspace="Core platform"
           kind="constraint"
           read={readOk({
             records: [
@@ -260,14 +262,18 @@ describe("KindPanel › a field the record never stated", () => {
   const renderPanel = (kind: RecordKind) =>
     render(
       <IntlProvider>
-        <KindPanel detail={bare(kind)} />
+        <KindPanel
+          detail={bare(kind)}
+          bundleVersion={null}
+          publishedTotal={null}
+        />
       </IntlProvider>,
     );
 
   it("cannot place a rule whose force is unstated", () => {
     renderPanel("rule");
     const placement = document.querySelector("[data-placement]");
-    expect(placement).toHaveAttribute("data-placement", "relevance");
+    expect(placement).toHaveAttribute("data-placement", "unknown");
     expect(placement?.textContent).toContain("no force");
   });
 
@@ -294,10 +300,10 @@ describe("KindPanel › a field the record never stated", () => {
     (kind) => {
       renderPanel(kind);
       const when = document.querySelector(
-        kind === "fact" ? '[data-fact="valid-from"]' : '[data-fact="when"]',
+        kind === "fact" ? '[data-fact="valid-from"]' : '[data-fact="recorded"]',
       );
       const count = document.querySelector(
-        kind === "fact" ? '[data-fact="read"]' : '[data-fact="recalled"]',
+        kind === "fact" ? '[data-fact="confirmed"]' : '[data-fact="selection"]',
       );
       expect(when?.textContent).not.toContain("1970");
       expect(count?.textContent).not.toMatch(/\b0\b/);
@@ -305,43 +311,34 @@ describe("KindPanel › a field the record never stated", () => {
   );
 });
 
-// A blank is honest where a value was never recorded. An invented "unknown"
-// author or a zero version would read as a fact the repository never stated.
+// A blank is honest where a value was never recorded. An invented author, a
+// zero or an empty commit would read as a fact the repository never stated.
 describe("LineagePanel › what was never recorded", () => {
-  it("says so for the path, the author's login, the summary, and the version", () => {
+  it("falls back to the lineage's own path and says an unread history is not recorded", () => {
     render(
       <IntlProvider>
         <LineagePanel
+          repository={null}
           detail={recordDetail({
             record: {
-              ...publishedRecord({ path: null, version: null }),
+              ...publishedRecord({ path: null, commit: null }),
               status: "active",
             },
-            provenance: {
-              commit: "4d5e6f7a8b9c1d2e3f4a5b6c7d8e9f0a1b2c3d4e",
-              authorName: "Dana Reyes",
-              authorLogin: null,
-              committedAt: "2026-09-12T09:16:40.000Z",
-              summary: "",
-            },
+            provenance: null,
+            effect: null,
           })}
         />
       </IntlProvider>,
     );
     const panel = screen.getByTestId("record-lineage");
+    const fact = (name: string) => panel.querySelector(`[data-fact="${name}"]`);
+    expect(fact("file")?.textContent).toBe(`.oxagen/rules/${LINEAGE}.toml`);
     expect(
-      within(panel)
-        .getByText(
-          (_, node) => node?.getAttribute("data-state") === "not-recorded",
-        )
-        .closest("[data-fact]"),
-    ).toHaveAttribute("data-fact", "path");
-    // The author reads as the name alone, with no login in parentheses.
-    const author = within(panel).getByText("Dana Reyes").closest("[data-fact]");
-    expect(author).toHaveAttribute("data-fact", "author");
-    expect(author?.textContent).not.toContain("(");
-    // A blank summary and a null version draw no fact at all.
-    expect(panel.querySelector('[data-fact="summary"]')).toBeNull();
-    expect(panel.querySelector('[data-fact="version"]')).toBeNull();
+      fact("published")?.querySelector('[data-state="not-recorded"]'),
+    ).not.toBeNull();
+    expect(
+      fact("effect")?.querySelector('[data-state="not-recorded"]'),
+    ).not.toBeNull();
+    expect(panel.textContent).not.toMatch(/rendered 0/);
   });
 });

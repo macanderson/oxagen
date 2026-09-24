@@ -49,3 +49,4 @@ The handler reads the branch through the workspace's installation and, when it d
 | `conflict` | `github_not_connected` | the workspace has no installation to read through |
 | `not_found` | `repository_not_installed` | the installation cannot see the repository, or it was re-created under the same name |
 | `not_found` | `branch_not_found` | GitHub has no branch by that name |
+| `conflict` | `repository_host_unsupported` | the main repository is a GitLab project; this capability reads and writes through a GitHub App installation and has no GitLab implementation yet (#3762) |

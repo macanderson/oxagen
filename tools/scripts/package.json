@@ -9,6 +9,7 @@
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/gitlab": "workspace:*",
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",
     "@oxagen/ontology": "workspace:*",

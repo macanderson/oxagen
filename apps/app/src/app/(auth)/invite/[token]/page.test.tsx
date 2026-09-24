@@ -7,10 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InvitationView } from "@/data/contracts/invitations";
 import type { Read } from "@/data/read";
 import { translator } from "@/test/intl";
-import { expectPageTitle, routeProps } from "@/test/render-page";
+import { expectPageTitle, renderPage, routeProps } from "@/test/render-page";
 
-const { loadInvitation } = vi.hoisted(() => ({
+const { loadInvitation, getAuthUser } = vi.hoisted(() => ({
   loadInvitation: vi.fn<(token: string) => Promise<Read<InvitationView>>>(),
+  getAuthUser: vi.fn<() => Promise<{ email: string } | null>>(),
 }));
 vi.mock("next/server", () => ({ connection: () => Promise.resolve() }));
 vi.mock("next-intl/server", () => ({
@@ -22,9 +23,12 @@ vi.mock("@/features/auth", async () => ({
     "@/features/auth/invitation",
   )),
   loadInvitation,
-  getAuthUser: () => Promise.resolve(null),
+  getAuthUser,
   InvitationBody: () => <section data-testid="invite-body" />,
   InvitationNotFound: () => <section data-testid="invite-not-found" />,
+  InvitationWrongAccount: ({ signedInAs }: { signedInAs: string }) => (
+    <section data-testid="invite-wrong-account">{signedInAs}</section>
+  ),
 }));
 
 const page = await import("./page");
@@ -40,10 +44,14 @@ const invitation: InvitationView = {
   status: "pending",
   invitedAt: "2026-09-10T12:00:00.000Z",
   expiresAt: null,
+  inviterName: "Priya Natarajan",
+  inviterRole: "owner",
 };
 
 beforeEach(() => {
   loadInvitation.mockReset();
+  getAuthUser.mockReset();
+  getAuthUser.mockResolvedValue(null);
 });
 
 describe("/invite/[token]", () => {
@@ -71,6 +79,18 @@ describe("/invite/[token]", () => {
       pages("invitationNotFound"),
     );
     expect(screen.getByTestId("invite-not-found")).toBeInTheDocument();
+    expect(screen.queryByTestId("invite-body")).toBeNull();
+  });
+
+  it("signed in as another address, one full card replaces the page (negative)", async () => {
+    loadInvitation.mockResolvedValue({ ok: true, value: invitation });
+    getAuthUser.mockResolvedValue({ email: "dana@a-intel.com" });
+    const props = routeProps({ token: TOKEN });
+    const container = await renderPage(page.default(props));
+    expect(screen.getByTestId("invite-wrong-account")).toHaveTextContent(
+      "dana@a-intel.com",
+    );
+    expect(container.querySelector("h1")).toBeNull();
     expect(screen.queryByTestId("invite-body")).toBeNull();
   });
 });

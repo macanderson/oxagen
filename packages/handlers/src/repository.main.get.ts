@@ -193,6 +193,7 @@ export function createMainRepositoryGetHandler(
         const rows = await tx
           .select({
             bindingId: schema.repositoryBindings.publicId,
+            provider: schema.repositoryBindings.provider,
             owner: schema.repositoryBindings.providerOwner,
             name: schema.repositoryBindings.providerName,
             fullName: schema.repositoryBindings.providerFullName,
@@ -245,6 +246,7 @@ export function createMainRepositoryGetHandler(
       repository: binding
         ? {
             bindingId: binding.bindingId,
+            provider: binding.provider === "gitlab" ? "gitlab" : "github",
             owner: binding.owner,
             name: binding.name,
             fullName: binding.fullName,
@@ -252,7 +254,11 @@ export function createMainRepositoryGetHandler(
             // The bind persists no html url — the provider's canonical one is
             // derived from the full name it does persist, so a rename that
             // has not been re-observed still links somewhere GitHub redirects.
-            htmlUrl: `https://github.com/${binding.fullName}`,
+            // GitLab likewise redirects a moved project's old path.
+            htmlUrl:
+              binding.provider === "gitlab"
+                ? `https://gitlab.com/${binding.fullName}`
+                : `https://github.com/${binding.fullName}`,
             boundAt: binding.boundAt.toISOString(),
             // The same judgement `readGitHubConnection` makes before it will
             // resolve steering, said out loud. False means the head still

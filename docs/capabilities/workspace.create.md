@@ -6,6 +6,8 @@ A workspace owns its own membership roster, its default tool registry and its sl
 
 The caller names the repository, never an installation. The workspace does not exist yet, so it has no GitHub connection to take an installation from. The organization's stored GitHub authorization does exist (`ingestion.oauth_accounts` is keyed by org), so the installation is the one `GET /user/installations` answers for that authorization on the repository's owner account, matched case-insensitively. This is the reachability rule `attach_github_installation` applies. An installation id the caller could choose would let one tenant mint tokens for another account's installation, so there is no such field.
 
+A gitlab.com main project (#3762) needs no GitHub authorization. `mainRepo: { provider: "gitlab", projectPath, token }` carries a project access token, which the handler verifies exactly as [`attach_gitlab_project`](repository.gitlab.attach.md) does, then writes a GitLab connection holding the token encrypted instead of a GitHub one, and registers the project webhook as the transaction's last step. The GitLab arm is accepted only from the web app or the HTTP API outside a chat turn. MCP, a runner, and the in-app agent are refused with `conflict: gitlab_token_surface`, because their tool input lands in a transcript, and the MCP tool offers the GitHub arm only.
+
 **Surfaces:** api, mcp, agent
 
 ## Mode
@@ -27,9 +29,11 @@ The caller names the repository, never an installation. The workspace does not e
 |---|---|---|---|
 | `name` | string | yes | 1 to 120 characters |
 | `slug` | string | yes | the shared workspace-slug shape (`packages/oxagen/src/workspace-slug.ts`): lowercase letters, digits, hyphens; reserved org-route segments refused |
-| `mainRepo.provider` | `"github"` | no | defaults to `github`, the only provider |
-| `mainRepo.owner` | string | yes | a GitHub login, the same shape `bind_main_repository` takes |
-| `mainRepo.name` | string | yes | a GitHub repository name, the same shape `bind_main_repository` takes |
+| `mainRepo.provider` | `"github"` \| `"gitlab"` | no | defaults to `github` |
+| `mainRepo.owner` | string | GitHub | a GitHub login, the same shape `bind_main_repository` takes |
+| `mainRepo.name` | string | GitHub | a GitHub repository name, the same shape `bind_main_repository` takes |
+| `mainRepo.projectPath` | string | GitLab | `group/project` or `group/subgroup/project` on gitlab.com |
+| `mainRepo.token` | string | GitLab | a project access token for that project; stored encrypted, never returned |
 
 ## Output
 
@@ -41,8 +45,9 @@ The caller names the repository, never an installation. The workspace does not e
 | `orgSlug` | string | for client-side routing |
 | `createdAt` | string | RFC 3339 |
 | `mainRepo.bindingId` | string | `rpb_…`, the version-1 binding the main head points at |
-| `mainRepo.connectionId` | string | `con_…`, the GitHub connection written with the workspace |
-| `mainRepo.fullName` | string | `owner/name` as GitHub reports it |
+| `mainRepo.connectionId` | string | `con_…`, the GitHub or GitLab connection written with the workspace |
+| `mainRepo.provider` | `"github"` \| `"gitlab"` | the host the main repository is on |
+| `mainRepo.fullName` | string | `owner/name` (GitHub) or `group/sub/project` (GitLab) as the host reports it |
 | `mainRepo.defaultRef` | string | GitHub's default branch at creation, recorded as the binding's configured ref; `bind_main_repository`'s re-approval is how it later moves |
 
 ## Side effects
@@ -67,6 +72,9 @@ One Postgres transaction: `workspace.workspaces`, `workspace.workspace_users` (t
 | `conflict` | `main_repo_claimed` | another workspace already steers by that repository |
 | `conflict` | `repository_linked_elsewhere` | another workspace has linked that repository; a repository that receives one workspace's Context PRs cannot hold another's `.oxagen/` governance tree |
 | `conflict` | `main_repo_plane_unsupported` | a dedicated Postgres plane is in use, so the cross-workspace claim cannot be checked (ADR-042) |
+| `conflict` | `gitlab_token_surface` | a GitLab main project sent from MCP, a runner, or the in-app agent's chat turn |
+| `conflict` | `invalid_project_path`, `gitlab_token_invalid`, `gitlab_token_scope`, `gitlab_token_not_project_scoped`, `repository_archived`, `repository_empty` | the GitLab token or project fails the checks `attach_gitlab_project` applies |
+| `not_found` | `repository_not_found` | the GitLab token cannot see the project |
 | `invalid_input` | | the slug or the repository name fails the contract's validator (kernel) |
 
 The GitHub reads run before the transaction opens, so every refusal above writes nothing. `main_repo_claimed` and `repository_linked_elsewhere` are checked twice: once by a cross-tenant read for the sentence, and once by the store. The global unique index `repository_binding_heads_main_repository_uq` on (provider, repository) where `role = 'main'` holds main against main, and the trigger `repository_binding_heads_exclusive_main` serialises every head write for one repository on a repository-keyed advisory lock and refuses a main head where another workspace holds any head for the repository. Both turn a lost race into the same refusal. Neither refusal names the organization or the workspace holding the repository.

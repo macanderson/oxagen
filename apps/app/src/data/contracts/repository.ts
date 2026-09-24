@@ -35,6 +35,8 @@
 
 type MainRepository = {
   bindingId: string;
+  /** The host: a GitHub repository or a gitlab.com project (#3762). */
+  provider: "github" | "gitlab";
   owner: string;
   name: string;
   /** `owner/name` as GitHub reports it; what the dialog cites. */
@@ -266,7 +268,11 @@ export type InitPullRequest = {
  */
 export type RepositoryChange = {
   proposalId: string;
+  /** The record's lineage: the file stem under `.oxagen/rules/`, and the row's title. */
+  lineage: string;
   statement: string;
+  /** Why it was proposed, as the proposal recorded it. */
+  why: string;
   kind: "context_record";
   pullRequest: {
     number: number;

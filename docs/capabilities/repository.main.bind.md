@@ -4,6 +4,10 @@ Bind a GitHub repository as this workspace's main repo (MC spec App. F "Bind <re
 
 The GitHub App installation reaches the workspace through the connect flow the API already runs (`/connections/github/auth-url` → GitHub → the HMAC-verified callback), which attaches the installation id to the workspace's GitHub connection. This write names only the repository: the handler takes the installation from that connection and never from the caller, because an installation id a caller could choose would let one tenant mint tokens for another account's installation. It reads the repository through the installation's token — a repository the installation cannot see is `not_found: repository_not_installed` — and writes, in one transaction, the version-1 repository binding and its head (`ingestion.repository_bindings` / `repository_binding_heads`, the rows the run ledger pins and `commit_agent_definition` commits to), marks the connection `connected` (the row `resolveGitHubToken` mints from), and sets `org.onboarding_state.main_repo_bound_at` when the workspace is the gate's, which is what lets `publish_context_record` write again.
 
+## GitLab
+
+`{ provider: "gitlab", projectPath }` binds a gitlab.com project the workspace connected with [`attach_gitlab_project`](repository.gitlab.attach.md) (#3762). The handler finds the live GitLab connection for that path, reads the project by its numeric id through the connection's project access token, and writes the binding and head with `provider = 'gitlab'`. `provider_owner` is the full namespace, so a project in nested groups binds as `owner = acme/platform`, `name = rules`. The same idempotency, re-approval, repair and cross-workspace refusals apply, keyed on the provider and the project id together, so a GitLab project never collides with a GitHub repository that carries the same number. A workspace with no live GitLab connection for the path is `conflict: gitlab_not_connected`; a project the token can no longer see is `not_found: repository_not_installed`.
+
 ## Mode
 
 **sync**
@@ -20,16 +24,19 @@ The GitHub App installation reaches the workspace through the connect flow the A
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `owner` | string | yes | a GitHub login |
-| `name` | string | yes | a GitHub repository name |
+| `provider` | `"github"` \| `"gitlab"` | no | omitted means GitHub |
+| `owner` | string | GitHub | a GitHub login |
+| `name` | string | GitHub | a GitHub repository name |
+| `projectPath` | string | GitLab | `group/project` or `group/subgroup/project` on gitlab.com |
 
 ## Output
 
 | Field | Type | Description |
 |---|---|---|
 | `bindingId` | string | `rpb_…` |
-| `connectionId` | string | `con_…`, the workspace's GitHub connection |
-| `fullName` | string | `owner/name` as GitHub reports it |
+| `connectionId` | string | `con_…`, the workspace's GitHub or GitLab connection |
+| `provider` | `"github"` \| `"gitlab"` | the host the main repository is on |
+| `fullName` | string | `owner/name` (GitHub) or `group/sub/project` (GitLab) as the host reports it |
 | `defaultRef` | string | the repository's default branch, pinned as the binding's configured ref |
 | `boundAt` | string | RFC 3339 |
 | `provisionalClosed` | boolean | true when this call closed the gate's provisional window |

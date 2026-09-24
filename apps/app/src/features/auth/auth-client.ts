@@ -17,6 +17,21 @@ type BetterAuthReply = {
 
 /** Where a sign-in that stopped for a second factor resumes. Read by the two-factor form. */
 const PENDING_NEXT_KEY = "oxagen.auth.next";
+/** The address a sign-in that stopped for a second factor was for, shown back on the two-factor screen. */
+const PENDING_EMAIL_KEY = "oxagen.auth.email";
+/** A one-shot notice the next sign-in screen shows (the reset form's "Password set"). */
+const NOTICE_KEY = "oxagen.auth.notice";
+
+export type AuthNotice = "passwordSet";
+
+/**
+ * Set just before a sign-in leaves for its destination: the password form on
+ * success, the two-factor form on success, and a social or SSO sign-in as it
+ * leaves for the provider. The organization shell reads it once and shows
+ * "Signed in as …" (mockups `obSignedIn`). A sign-in that fails comes back to
+ * /login, which clears it, so a stale mark never reaches the shell.
+ */
+const SIGNED_IN_KEY = "oxagen.auth.signedIn";
 
 async function client() {
   const { authClient } = await import("@oxagen/auth/client");
@@ -134,5 +149,62 @@ export function takePendingNext(): string | null {
     return value;
   } catch {
     return null;
+  }
+}
+
+export function rememberPendingEmail(email: string): void {
+  try {
+    sessionStorage.setItem(PENDING_EMAIL_KEY, email);
+  } catch {
+    // Storage can be unavailable; the two-factor lead then omits the address.
+  }
+}
+
+/** The address the password step was for. Read once; it is shown back to the person who typed it and never looked up. */
+export function takePendingEmail(): string | null {
+  try {
+    const value = sessionStorage.getItem(PENDING_EMAIL_KEY);
+    sessionStorage.removeItem(PENDING_EMAIL_KEY);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberNotice(notice: AuthNotice): void {
+  try {
+    sessionStorage.setItem(NOTICE_KEY, notice);
+  } catch {
+    // Storage can be unavailable; the next screen then shows no notice.
+  }
+}
+
+/** The notice left for this screen, read once. Anything but a known notice reads as none. */
+export function takeNotice(): AuthNotice | null {
+  try {
+    const value = sessionStorage.getItem(NOTICE_KEY);
+    sessionStorage.removeItem(NOTICE_KEY);
+    return value === "passwordSet" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberSignedIn(): void {
+  try {
+    sessionStorage.setItem(SIGNED_IN_KEY, "1");
+  } catch {
+    // Storage can be unavailable; the destination then shows no toast.
+  }
+}
+
+/** Whether a sign-in just landed here. Read once: the mark is removed as it is read. */
+export function takeSignedIn(): boolean {
+  try {
+    const value = sessionStorage.getItem(SIGNED_IN_KEY);
+    sessionStorage.removeItem(SIGNED_IN_KEY);
+    return value === "1";
+  } catch {
+    return false;
   }
 }

@@ -1,7 +1,6 @@
 "use client";
 // A labelled input with its hint and error wired for assistive technology:
 // the error is announced through aria-describedby and marks the input invalid.
-import { Eye, EyeOff } from "lucide-react";
 import { type InputHTMLAttributes, type ReactNode, useState } from "react";
 import { inputBase } from "./control-styles";
 
@@ -77,7 +76,11 @@ export type PasswordFieldProps = Omit<FieldProps, "type"> & {
   hideLabel: string;
 };
 
-/** A password input with a show/hide toggle that keeps focus order and announces its state. */
+/**
+ * A password input with a Show/Hide toggle that keeps focus order. The toggle
+ * is the word alone (the design draws no eye), and its label is its state, so
+ * it carries no aria-pressed to announce the state a second time.
+ */
 export function PasswordField({
   showLabel,
   hideLabel,
@@ -94,15 +97,9 @@ export function PasswordField({
           onClick={() => {
             setShown((s) => !s);
           }}
-          aria-pressed={shown}
           aria-controls={props.id}
-          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          className="inline-flex items-center rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
         >
-          {shown ? (
-            <EyeOff aria-hidden className="size-3.5" />
-          ) : (
-            <Eye aria-hidden className="size-3.5" />
-          )}
           {shown ? hideLabel : showLabel}
         </button>
       }

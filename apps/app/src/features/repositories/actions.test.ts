@@ -33,10 +33,14 @@ const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   attachGithubInstallation,
   bindWorkspaceRepository,
+  connectGitLabProject,
   linkWorkspaceRepository,
   listGithubInstallations,
+  closeRepositoryChange,
   listInstallationRepositories,
+  mergeRepositoryChange,
   openInitPullRequest,
+  readRepositoryChange,
   readRepositoryChanges,
   readRepositoryTree,
   readWorkspaceRepositories,
@@ -71,6 +75,7 @@ const UNBOUND = {
 const BOUND = {
   repository: {
     bindingId: "rpb_0a1b2c",
+    provider: "github",
     owner: "acme",
     name: "platform",
     fullName: "acme/platform",
@@ -119,6 +124,7 @@ const REPOSITORIES = {
   repositories: [
     {
       bindingId: "rpb_0a1b2c",
+      provider: "github",
       role: "main",
       owner: "acme",
       name: "platform",
@@ -131,6 +137,7 @@ const REPOSITORIES = {
     },
     {
       bindingId: "rpb_0d1e2f",
+      provider: "github",
       role: "linked",
       owner: "acme",
       name: "docs-site",
@@ -254,6 +261,7 @@ describe("bindWorkspaceRepository", () => {
   it("binds the picked repository and answers with what the handler wrote", async () => {
     invoke.mockResolvedValue({
       bindingId: "rpb_0a1b2c",
+      provider: "github",
       connectionId: "con_01hq",
       fullName: "acme/platform",
       defaultRef: "main",
@@ -278,6 +286,7 @@ describe("bindWorkspaceRepository", () => {
   it("names only the repository: the installation comes from the workspace's connection", async () => {
     invoke.mockResolvedValue({
       bindingId: "rpb_0a1b2c",
+      provider: "github",
       connectionId: "con_01hq",
       fullName: "acme/platform",
       defaultRef: "main",
@@ -814,6 +823,7 @@ describe("readRepositoryChanges", () => {
       ? {
           number: 42,
           url: "https://github.com/acme/platform/pull/42",
+          provider: "github",
           repository: "acme/platform",
           branch: `oxagen/${id}`,
         }
@@ -859,5 +869,242 @@ describe("readRepositoryChanges", () => {
       reason: "denied",
       code: "repository.read",
     });
+  });
+});
+
+describe("connectGitLabProject", () => {
+  const TOKEN = "glpat-abcdefghijklmnopqrstuvwxyz";
+  const ATTACHED = {
+    connectionId: "con_gl1",
+    projectId: "4242",
+    fullName: "acme/platform/rules",
+    defaultRef: "main",
+    tokenExpiresAt: null,
+    rotated: false,
+    webhook: { status: "registered" as const },
+  };
+  const BOUND_GITLAB = {
+    bindingId: "rpb_0a1b2d",
+    connectionId: "con_gl1",
+    provider: "gitlab",
+    fullName: "acme/platform/rules",
+    defaultRef: "main",
+    boundAt: "2026-09-23T10:00:00.000Z",
+    provisionalClosed: true,
+  };
+
+  beforeEach(() => {
+    invoke.mockReset();
+    requireViewer.mockResolvedValue(ctx);
+  });
+
+  it("attaches the token, then binds the project GitLab reported, and never answers the token", async () => {
+    invoke.mockResolvedValueOnce(ATTACHED).mockResolvedValueOnce(BOUND_GITLAB);
+    const result = await connectGitLabProject("acme", "core-platform", {
+      projectPath: "acme/platform/rules",
+      token: TOKEN,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        fullName: "acme/platform/rules",
+        defaultRef: "main",
+        boundAt: "2026-09-23T10:00:00.000Z",
+        webhook: "registered",
+      },
+    });
+    expect(invoke.mock.calls.map((c) => [c[0], c[1]])).toEqual([
+      [
+        "attach_gitlab_project",
+        { projectPath: "acme/platform/rules", token: TOKEN },
+      ],
+      [
+        "bind_main_repository",
+        { provider: "gitlab", projectPath: "acme/platform/rules" },
+      ],
+    ]);
+    expect(JSON.stringify(result)).not.toContain(TOKEN);
+  });
+
+  it("stops at a refused attach and binds nothing (negative)", async () => {
+    invoke.mockRejectedValueOnce({
+      code: "conflict",
+      reason: "gitlab_token_not_project_scoped",
+    });
+    const result = await connectGitLabProject("acme", "core-platform", {
+      projectPath: "acme/platform/rules",
+      token: TOKEN,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      code: "gitlab_token_not_project_scoped",
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("readRepositoryChange", () => {
+  const CONTEXT_PR = {
+    proposalId: "prp_1",
+    lineageId: "ctx.scr.001-never-push-to-main",
+    status: "merged",
+    governanceMode: "team",
+    pr: {
+      number: 42,
+      url: "https://github.com/acme/platform/pull/42",
+      provider: "github",
+      repository: "acme/platform",
+      baseRef: "main",
+      branch: "oxagen/prp_1",
+      headSha: "0123456789abcdef",
+      path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+    },
+    record: null,
+    body: "Why this record",
+    checks: [
+      {
+        name: "schema",
+        status: "passed",
+        summary: "The record parses.",
+        detailsUrl: null,
+        startedAt: null,
+        completedAt: null,
+      },
+    ],
+    onMerge: {
+      publishes: {
+        lineageId: "ctx.scr.001-never-push-to-main",
+        path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+      },
+      bundleVersion: { current: 7, afterMerge: 8 },
+      review: null,
+    },
+    merged: {
+      commit: "fedcba9876543210",
+      at: "2026-09-19T10:00:00.000Z",
+      byUserId: null,
+      promotionEventId: "pev_1",
+      recordId: "rec_1",
+    },
+  };
+
+  it("maps get_context_pr onto what the detail draws, the merge included", async () => {
+    invoke.mockResolvedValue(CONTEXT_PR);
+    const result = await readRepositoryChange("acme", "core-platform", "prp_1");
+    expect(invoke).toHaveBeenCalledWith(
+      "get_context_pr",
+      { proposalId: "prp_1" },
+      expect.objectContaining({ surface: "app" }),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        proposalId: "prp_1",
+        lineage: "ctx.scr.001-never-push-to-main",
+        status: "merged",
+        governanceMode: "team",
+        pr: {
+          number: 42,
+          url: "https://github.com/acme/platform/pull/42",
+          repository: "acme/platform",
+          baseRef: "main",
+          branch: "oxagen/prp_1",
+          headSha: "0123456789abcdef",
+        },
+        body: "Why this record",
+        checks: [
+          { name: "schema", status: "passed", summary: "The record parses." },
+        ],
+        onMerge: {
+          path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+          bundleVersion: { current: 7, afterMerge: 8 },
+        },
+        merged: {
+          commit: "fedcba9876543210",
+          at: "2026-09-19T10:00:00.000Z",
+          promotionEventId: "pev_1",
+          recordId: "rec_1",
+        },
+      },
+    });
+  });
+
+  it("keeps a proposal with no pull request and no merge as nulls", async () => {
+    invoke.mockResolvedValue({
+      ...CONTEXT_PR,
+      status: "proposed",
+      governanceMode: null,
+      pr: null,
+      merged: null,
+    });
+    const result = await readRepositoryChange("acme", "core-platform", "prp_1");
+    expect(result.ok && result.value.pr).toBeNull();
+    expect(result.ok && result.value.merged).toBeNull();
+  });
+
+  it("carries a refusal to read across (negative)", async () => {
+    invoke.mockRejectedValue({ code: "authz_denied" });
+    const result = await readRepositoryChange("acme", "core-platform", "prp_1");
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("mergeRepositoryChange and closeRepositoryChange", () => {
+  it("merges through merge_context_pr and answers the merged commit", async () => {
+    invoke.mockResolvedValue({
+      proposalId: "prp_1",
+      status: "merged",
+      record: {
+        id: "rec_1",
+        lineageId: "ctx.scr.001-never-push-to-main",
+        version: 1,
+        path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+      },
+      mergedCommit: "fedcba9876543210",
+      promotionEvent: { id: "pev_1", seq: 1, chainDigest: "d1" },
+      bundleVersion: { before: 7, after: 8 },
+    });
+    expect(
+      await mergeRepositoryChange("acme", "core-platform", "prp_1"),
+    ).toEqual({ ok: true, value: { commit: "fedcba9876543210" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "merge_context_pr",
+      { proposalId: "prp_1" },
+      expect.objectContaining({ surface: "app" }),
+    );
+  });
+
+  it("carries a merge refusal across (negative)", async () => {
+    invoke.mockRejectedValue({ code: "conflict", reason: "head_moved" });
+    expect(
+      await mergeRepositoryChange("acme", "core-platform", "prp_1"),
+    ).toEqual({ ok: false, reason: "conflict", code: "head_moved" });
+  });
+
+  it("closes through dismiss_proposal with the previewed comment, trimmed, as the reason", async () => {
+    invoke.mockResolvedValue({ proposalId: "prp_1", status: "rejected" });
+    expect(
+      await closeRepositoryChange(
+        "acme",
+        "core-platform",
+        "prp_1",
+        "  Closed by Mac Anderson  ",
+      ),
+    ).toEqual({ ok: true, value: { status: "rejected" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "dismiss_proposal",
+      { proposalId: "prp_1", reason: "Closed by Mac Anderson" },
+      expect.objectContaining({ surface: "app" }),
+    );
+  });
+
+  it("carries a close refusal across (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "not_found",
+      reason: "proposal_not_found",
+    });
+    expect(
+      await closeRepositoryChange("acme", "core-platform", "prp_1", "Closed"),
+    ).toEqual({ ok: false, reason: "not_found", code: "proposal_not_found" });
   });
 });

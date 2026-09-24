@@ -182,7 +182,7 @@ describe("Agent header and tabs", () => {
     ).toHaveTextContent("Oxagen records no ceiling for one agent");
     expect(
       within(panel).getByRole("link", { name: "Set ceilings on Spend" }),
-    ).toHaveAttribute("href", "/acme/core-platform/spend?tab=budgets");
+    ).toHaveAttribute("href", "/acme/core-platform/spend/budgets");
     expect(calls.budgets).toHaveLength(1);
     expect(calls.toolbelt).toEqual([]);
     expect(calls.incidents).toEqual([]);
