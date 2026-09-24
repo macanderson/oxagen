@@ -47,3 +47,4 @@ Format: `- [title](file-name.md) — one-line hook · type (bug|observation) · 
 - [A timestamptz arrives as a Date or an ISO string, depending on the path](timestamptz-arrives-as-date-or-iso-string.md) — row types declare one shape and receive the other; fixtures cannot catch it · observation · 2026-09-11 07:35pm GMT
 - [Run commands refused on every observe-tier run](run-commands-refused-on-observe-tier.md) — the tier gate conflated policy enforcement with host reachability · bug · 2026-09-23 09:00pm GMT
 - [policy_source lives in the frame body, command.name in attrs](policy-source-lives-in-the-frame-body.md) — read the wrong column and every decision reads unsourced · observation · 2026-09-23 09:00pm GMT
+- [Wall-clock perf assertions fail main under coverage](wall-clock-perf-assertions-fail-main-under-coverage.md) — a timing ratio in a unit test red-lined main and skipped the api deploy; count work, not time · bug · 2026-09-24 02:55am GMT
