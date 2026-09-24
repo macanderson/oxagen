@@ -132,8 +132,6 @@ describe("AgentHeader", () => {
       identity: agentDetail({ identity: { status: "suspended" } }).identity,
     });
     expect(actions()).not.toContain("Suspend");
-    expect(
-      actions().some((l) => l !== null && /resume|reinstate/i.test(l)),
-    ).toBe(true);
+    expect(actions().some((l) => /resume|reinstate/i.test(l))).toBe(true);
   });
 });

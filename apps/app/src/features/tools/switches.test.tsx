@@ -18,6 +18,7 @@ import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
+import type { killSwitchListOutput } from "@/test/tools-outputs";
 
 const { router, flipKillSwitch } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
@@ -28,7 +29,6 @@ vi.mock("./actions", () => ({ flipKillSwitch }));
 
 const { Switches } = await import("./switches");
 const { killSwitchBoard } = await import("./tools.builders");
-const { killSwitchListOutput } = await import("@/test/tools-outputs");
 
 const at = { org: "acme", ws: "core-platform" };
 const SELF_WS = "7b000000-0000-4000-8000-000000000001";

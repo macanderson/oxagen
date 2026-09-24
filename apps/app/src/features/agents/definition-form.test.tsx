@@ -110,6 +110,12 @@ async function committedSource(): Promise<string> {
   return source;
 }
 
+/** The option values a select offers, in order. */
+function optionValues(select: HTMLElement): string[] {
+  if (!(select instanceof HTMLSelectElement)) throw new Error("not a select");
+  return Array.from(select.options, (option) => option.value);
+}
+
 describe("DefinitionForm", () => {
   it("patches a text field on blur, keeps the rest of the file, and offers Discard and Save", async () => {
     const container = renderForm();
@@ -550,14 +556,17 @@ describe("DefinitionForm over a file it cannot fully read", () => {
     );
     const tier = screen.getByRole("combobox", { name: "Model tier" });
     expect(tier).toHaveValue("mega");
-    expect(
-      Array.from((tier as HTMLSelectElement).options).map((o) => o.value),
-    ).toEqual(["complex", "light", "mega"]);
+    expect(optionValues(tier)).toEqual(["complex", "light", "mega"]);
     const color = screen.getByRole("combobox", { name: "Color" });
     expect(color).toHaveValue("purple");
-    expect(
-      Array.from((color as HTMLSelectElement).options).map((o) => o.value),
-    ).toEqual(["blue", "green", "gold", "red", "gray", "purple"]);
+    expect(optionValues(color)).toEqual([
+      "blue",
+      "green",
+      "gold",
+      "red",
+      "gray",
+      "purple",
+    ]);
   });
 
   it("reads a budget that is not a table, or a harness key that is not a table, as unset (negative)", () => {

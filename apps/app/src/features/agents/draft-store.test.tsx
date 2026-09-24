@@ -20,15 +20,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function useDraft(agent = "release-bot", base = "base") {
-  return renderHook(({ a, b }) => useDefinitionDraft(a, b), {
+function useDraftOf({ a, b }: { a: string; b: string }) {
+  return useDefinitionDraft(a, b);
+}
+
+function renderDraft(agent = "release-bot", base = "base") {
+  return renderHook(useDraftOf, {
     initialProps: { a: agent, b: base },
   });
 }
 
 describe("useDefinitionDraft", () => {
   it("opens on the base, stores an edit against it, and clears the store when the edit returns to the base", () => {
-    const { result } = useDraft();
+    const { result } = renderDraft();
     expect(result.current[0]).toBe("base");
     act(() => {
       result.current[1]("edited");
@@ -54,7 +58,7 @@ describe("useDefinitionDraft", () => {
       KEY,
       JSON.stringify({ base: "old", draft: "stale edit" }),
     );
-    const { result } = useDraft("release-bot", "new");
+    const { result } = renderDraft("release-bot", "new");
     expect(result.current[0]).toBe("new");
     // An updater starts from the new base, not from the stale draft.
     act(() => {
@@ -73,7 +77,7 @@ describe("useDefinitionDraft", () => {
     ["JSON null", "null"],
   ])("reads %s as no draft (negative)", (_, raw) => {
     window.sessionStorage.setItem(KEY, raw);
-    const { result } = useDraft();
+    const { result } = renderDraft();
     expect(result.current[0]).toBe("base");
   });
 
@@ -84,14 +88,14 @@ describe("useDefinitionDraft", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(refuse);
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(refuse);
     vi.spyOn(Storage.prototype, "removeItem").mockImplementation(refuse);
-    const { result } = useDraft("memory-bot");
+    const { result } = renderDraft("memory-bot");
     expect(result.current[0]).toBe("base");
     act(() => {
       result.current[1]("kept in memory");
     });
     expect(result.current[0]).toBe("kept in memory");
     // Another hook on the same agent reads the same memory.
-    const other = useDraft("memory-bot");
+    const other = renderDraft("memory-bot");
     expect(other.result.current[0]).toBe("kept in memory");
     act(() => {
       result.current[1]("base");

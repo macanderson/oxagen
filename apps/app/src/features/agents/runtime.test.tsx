@@ -32,7 +32,14 @@ const { RuntimeSection } = await import("./runtime");
 type Props = ComponentProps<typeof RuntimeSection>;
 type Host = AgentDetail["hosts"][number];
 
-const [BASE_HOST] = agentDetail().hosts as [Host];
+/** The builder's first row; a builder that returns none is a broken fixture. */
+function first<T>(rows: readonly T[]): T {
+  const row = rows[0];
+  if (row === undefined) throw new Error("the builder returned no rows");
+  return row;
+}
+
+const BASE_HOST: Host = first(agentDetail().hosts);
 const host = (overrides: Partial<Host> = {}): Host => ({
   ...BASE_HOST,
   ...overrides,

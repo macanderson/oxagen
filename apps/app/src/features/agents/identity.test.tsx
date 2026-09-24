@@ -43,8 +43,15 @@ const PLACE = { org: "acme", ws: "core-platform", agent: "release-bot" };
 /** The instant the agent was read; every credential clock is judged against it. */
 const NOW = Date.parse("2026-09-16T12:00:00.000Z");
 
-const [BASE_CREDENTIAL] = agentDetail().credentials as [Credential];
-const [BASE_HOST] = agentDetail().hosts as [Host];
+/** The builder's first row; a builder that returns none is a broken fixture. */
+function first<T>(rows: readonly T[]): T {
+  const row = rows[0];
+  if (row === undefined) throw new Error("the builder returned no rows");
+  return row;
+}
+
+const BASE_CREDENTIAL: Credential = first(agentDetail().credentials);
+const BASE_HOST: Host = first(agentDetail().hosts);
 
 function credential(overrides: Partial<Credential> = {}): Credential {
   return { ...BASE_CREDENTIAL, ...overrides };
