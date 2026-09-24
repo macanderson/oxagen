@@ -61,10 +61,16 @@ beforeEach(() => {
   revise.mockReset();
   onOpened.mockReset();
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("Propose a change", () => {
-  it("keeps unchanged lines as context in the diff, with no repository badge when none was read", async () => {
+  it("keeps unchanged lines as context in the diff, with no repository badge when none was read", () => {
     render(<Harness repository={null} />);
     const diff = screen.getByTestId("record-diff");
     expect(screen.getByTestId("record-diff-stat")).toHaveTextContent("+1 −0");
@@ -77,7 +83,6 @@ describe("Propose a change", () => {
     expect(screen.getByTestId("record-propose")).toHaveTextContent(
       "constraint_effect",
     );
-    await expectNoAxe(screen.getByTestId("record-propose"));
   });
 
   it("says the proposal is raised when its pull request has not opened yet", async () => {
@@ -97,7 +102,6 @@ describe("Propose a change", () => {
     );
     expect(onOpened).toHaveBeenCalledWith(`context/${LINEAGE}`);
     expect(screen.queryByTestId("record-propose-submit")).toBeNull();
-    await expectNoAxe(screen.getByTestId("record-propose"));
   });
 
   it("numbers the pull request without a repository it could not read", async () => {

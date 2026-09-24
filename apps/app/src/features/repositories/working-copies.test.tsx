@@ -55,18 +55,23 @@ function Harness() {
   );
 }
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("Working copies", () => {
-  it("draws Connect a directory as the small secondary when the tab does not hold the gold", async () => {
-    const { container } = render(
+  it("draws Connect a directory as the small secondary when the tab does not hold the gold", () => {
+    render(
       <IntlProvider>
         <WorkingCopies primary={false} onConnect={vi.fn()} />
       </IntlProvider>,
     );
     const connect = screen.getByTestId("working-copies-connect");
     expect(connect.className).not.toContain("bg-button-primary-bg");
-    await expectNoAxe(container);
   });
 
   it("copies the command and says so, then forgets it once the dialog closes", async () => {
@@ -88,7 +93,6 @@ describe("Working copies", () => {
         "oxagen init --org acme --workspace core-platform",
       );
       expect(copy).toHaveTextContent("Copied");
-      await expectNoAxe(dialog);
 
       await user.keyboard("{Escape}");
       await waitFor(() => {

@@ -6,9 +6,9 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import type { SpendReport } from "@/data/contracts/spend";
 import { readError, readOk } from "@/data/read";
-import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { TokensSection } from "./tokens";
 
@@ -41,11 +41,17 @@ const report = (rows: SpendReport["rows"]): SpendReport => ({
   rows,
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("Tokens", () => {
-  it("prints no share of a month with no tokens, and nothing per run for an agent with no runs", async () => {
-    const { container } = render(
+  it("prints no share of a month with no tokens, and nothing per run for an agent with no runs", () => {
+    render(
       <IntlProvider>
         <TokensSection
           month={report([])}
@@ -84,7 +90,6 @@ describe("Tokens", () => {
       ),
     ).toHaveAttribute("href", "/acme/core-platform/agents/stella-ci");
     expect(agent?.textContent).toContain("not recorded");
-    await expectNoAxe(container);
   });
 
   it("says the agents read failed in its own panel (negative)", () => {

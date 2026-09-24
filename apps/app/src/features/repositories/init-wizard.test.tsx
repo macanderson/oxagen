@@ -128,7 +128,13 @@ beforeEach(() => {
     fn.mockReset();
   actions.readWorkspaceRepository.mockReturnValue(new Promise(() => {}));
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("the init wizard", () => {
   it("binds the repository as main when the workspace has none, finds its binding, moves the branch, then opens the pull request", async () => {
@@ -167,7 +173,6 @@ describe("the init wizard", () => {
     expect(within(root).getByTestId("init-wizard-role-note")).toHaveTextContent(
       "acme/infra is this workspace’s main repo.",
     );
-    await expectNoAxe(root);
     await toLastStep(user, root, "release");
     await user.click(within(root).getByTestId("init-wizard-open"));
     expect(
@@ -191,7 +196,6 @@ describe("the init wizard", () => {
       bindingId: "rpb_new01",
     });
     expect(onOpened).toHaveBeenCalledTimes(1);
-    await expectNoAxe(root);
   });
 
   it("prints the bind's refusal and writes nothing else (negative)", async () => {

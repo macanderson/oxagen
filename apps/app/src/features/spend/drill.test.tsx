@@ -7,8 +7,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SpendDrill } from "@/data/contracts/spend";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import type { SpendDrill } from "@/data/contracts/spend";
 import { IntlProvider } from "@/test/intl";
 import { DrillSection } from "./drill";
 
@@ -40,11 +40,17 @@ const drill = (over: Partial<SpendDrill> = {}): SpendDrill => ({
   ...over,
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("the drill", () => {
-  it("names an operator the rollup cannot name by their key, and says what could not be read", async () => {
-    const { container } = render(
+  it("names an operator the rollup cannot name by their key, and says what could not be read", () => {
+    render(
       <IntlProvider>
         <DrillSection drill={drill()} findings={null} operator={null} at={AT} />
       </IntlProvider>,
@@ -66,11 +72,10 @@ describe("the drill", () => {
       ?.closest("section")
       ?.querySelector("polyline");
     expect(line?.getAttribute("points")).toBe("0,48");
-    await expectNoAxe(container);
   });
 
-  it("says no finding names the key when the findings read answered with none", async () => {
-    const { container } = render(
+  it("says no finding names the key when the findings read answered with none", () => {
+    render(
       <IntlProvider>
         <DrillSection
           drill={drill({ kind: "agent", key: "a-intel.core.stella-ci" })}
@@ -82,6 +87,5 @@ describe("the drill", () => {
     );
     expect(screen.getByText("No open finding names this key.")).toBeTruthy();
     expect(screen.getByText("none identified")).toBeTruthy();
-    await expectNoAxe(container);
   });
 });
