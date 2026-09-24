@@ -733,6 +733,40 @@ describe("createFunction adapter", () => {
       ]);
     });
 
+    // #4113: the enrichment job skips a sweep event by its age, and read an
+    // age of undefined while the wrapper dropped `ts`.
+    it("keeps each event's receive time for the handler", async () => {
+      const config: DurableFunctionConfig = {
+        id: "batch-fn",
+        batchEvents: { maxSize: 5, timeout: "30s" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/batch" };
+      let seen: unknown;
+      const handler: DurableFunctionHandler = async ({ event, events }) => {
+        seen = { event: event.ts, events: events?.map((e) => e.ts) };
+      };
+      createFunction(config, trigger, handler);
+
+      await capturedHandlers[0]!({
+        event: { name: "test/batch", data: {}, ts: 1_790_276_776_000 },
+        events: [
+          { name: "test/batch", data: {}, ts: 1_790_276_776_000 },
+          { name: "test/batch", data: {}, ts: 1_790_276_777_000 },
+        ],
+        step: {
+          run: vi.fn(),
+          sendEvent: vi.fn(),
+          waitForEvent: vi.fn(),
+          sleep: vi.fn(),
+        },
+      });
+
+      expect(seen).toEqual({
+        event: 1_790_276_776_000,
+        events: [1_790_276_776_000, 1_790_276_777_000],
+      });
+    });
+
     it("falls back to a single-element ctx.events for non-batched runs", async () => {
       const config: DurableFunctionConfig = { id: "plain-fn" };
       const trigger: DurableFunctionTrigger = { event: "test/plain" };
