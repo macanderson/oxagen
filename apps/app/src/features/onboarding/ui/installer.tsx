@@ -186,7 +186,9 @@ export function InstallerScreens({
         >
           <i
             className="block h-full bg-accent-text transition-[width]"
-            style={{ width: `${Math.round((done / STEPS.length) * 100)}%` }}
+            style={{
+              width: `${String(Math.round((done / STEPS.length) * 100))}%`,
+            }}
           />
         </div>
         <ol className="flex flex-col gap-1.5 font-mono text-[12px]">

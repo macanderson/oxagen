@@ -67,7 +67,7 @@ export function RegisterAgentForm({
   const errorsT = useTranslations("onboarding.errors");
   const failureText = useOnboardingFailure();
   const navigate = useNavigate();
-  const ids = useId();
+  const baseId = useId();
   const [slug, setSlug] = useState(reserved?.slug ?? "");
   const [harness, setHarness] = useState<Harness>(
     reserved?.harness ?? "claude-code",
@@ -124,10 +124,10 @@ export function RegisterAgentForm({
     }
   }
 
-  const slugId = `${ids}-slug`;
-  const workspaceId = `${ids}-workspace`;
-  const harnessId = `${ids}-harness`;
-  const tierId = `${ids}-tier`;
+  const slugId = `${baseId}-slug`;
+  const workspaceId = `${baseId}-workspace`;
+  const harnessId = `${baseId}-harness`;
+  const tierId = `${baseId}-tier`;
   const locked = reserved !== null;
 
   return (

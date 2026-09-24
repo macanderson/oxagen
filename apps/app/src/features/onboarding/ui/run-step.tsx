@@ -109,10 +109,9 @@ function Waiting({
         text: host.hooksOk ? t("log.hooksOk") : t("log.hooksMissing"),
       });
   }
-  const harnessName =
-    agent.harness in HARNESS_KEYS
-      ? harness(agent.harness as HarnessKey)
-      : agent.harness;
+  const harnessName = isHarnessKey(agent.harness)
+    ? harness(agent.harness)
+    : agent.harness;
   return (
     <section data-testid="first-frame-waiting" className={panel}>
       <div className={cardHeader}>
@@ -180,6 +179,9 @@ const HARNESS_KEYS = {
   custom: true,
 } as const;
 type HarnessKey = keyof typeof HARNESS_KEYS;
+function isHarnessKey(value: string): value is HarnessKey {
+  return Object.hasOwn(HARNESS_KEYS, value);
+}
 
 function Received({ received }: { received: ReceivedFrame }) {
   const t = useTranslations("onboarding.welcome.run");

@@ -55,7 +55,7 @@ type Token = { token: string; expiresAt: string; enrollCommand: string };
 type Credential = { secret: string };
 
 /** Arrow keys move along a tab list and select as they move (WAI-ARIA tabs, automatic activation). */
-function useTabKeys<T extends string>(
+function tabKeyHandler<T extends string>(
   items: readonly T[],
   current: T,
   select: (next: T) => void,
@@ -212,10 +212,10 @@ function Download({
   onToken: (token: Token) => void;
 }) {
   const t = useTranslations("onboarding.register.wrap.download");
-  const ids = useId();
+  const baseId = useId();
   const [os, setOs] = useState<Os>("macos");
-  const tabId = (item: Os) => `${ids}-os-${item}`;
-  const onKey = useTabKeys(OPERATING_SYSTEMS, os, setOs, tabId);
+  const tabId = (item: Os) => `${baseId}-os-${item}`;
+  const onKey = tabKeyHandler(OPERATING_SYSTEMS, os, setOs, tabId);
   return (
     <div className={`${panel} flex flex-col gap-3 p-3.5`}>
       <p className={eyebrow}>{t("eyebrow")}</p>
@@ -242,14 +242,14 @@ function Download({
         type="button"
         disabled
         data-testid="download-installer"
-        aria-describedby={`${ids}-unpublished`}
+        aria-describedby={`${baseId}-unpublished`}
         className={`${buttonPrimary} w-full`}
       >
         {t("button", { os: t(`os.${os}`) })}
       </button>
       {/* Not backed until #3897 lands. */}
       <p
-        id={`${ids}-unpublished`}
+        id={`${baseId}-unpublished`}
         data-testid="not-backed"
         data-element="signed-installer"
         className="text-xs text-muted-foreground"
@@ -416,14 +416,14 @@ export function WrapAgent({
   const credentialT = useTranslations("onboarding.register.wrap.credential");
   const failureText = useOnboardingFailure();
   const navigate = useNavigate();
-  const ids = useId();
-  const [tab, setTab] = useState<WrapTab>(wrapTabFor(harness));
+  const baseId = useId();
+  const [tab, setTab] = useState<WrapTab>(() => wrapTabFor(harness));
   const [token, setToken] = useState<Token | null>(null);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const tabId = (item: WrapTab) => `${ids}-tab-${item}`;
-  const panelId = `${ids}-panel`;
-  const onKey = useTabKeys(WRAP_TABS, tab, setTab, tabId);
+  const tabId = (item: WrapTab) => `${baseId}-tab-${item}`;
+  const panelId = `${baseId}-panel`;
+  const onKey = tabKeyHandler(WRAP_TABS, tab, setTab, tabId);
 
   async function advance() {
     if (pending) return;

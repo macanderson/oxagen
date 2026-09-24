@@ -267,7 +267,7 @@ export function WrapStep({
   const [status, setStatus] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
   const [advanceFailure, setAdvanceFailure] = useState<string | null>(null);
-  const minted = useRef(false);
+  const mintedRef = useRef(false);
   const agentId = agent?.id ?? null;
 
   const mint = useCallback(async () => {
@@ -301,9 +301,9 @@ export function WrapStep({
   // rather than showing one nobody can read back. The mint runs off a timer so
   // a development double mount, which cancels the first, still mints once.
   useEffect(() => {
-    if (minted.current || agentId === null) return;
+    if (mintedRef.current || agentId === null) return;
     const timer = setTimeout(() => {
-      minted.current = true;
+      mintedRef.current = true;
       void mint();
     }, 0);
     return () => {

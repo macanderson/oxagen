@@ -202,7 +202,10 @@ describe("WrapStep", () => {
 
   it("the SDK tab has no gold action, shows the credential prefix, and copies the five lines", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
     renderStep({ agent: { ...AGENT, harness: "claude-agent-sdk" } });
     const panel = screen.getByRole("tabpanel");
     expect(panel).toHaveAttribute("data-tab", "sdk");

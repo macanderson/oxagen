@@ -157,7 +157,9 @@ describe("readRegisterPlace", () => {
   it("carries a refused read across as denied, building no key (negative)", async () => {
     invoke.mockImplementation((name: string) =>
       name === "get_main_repository"
-        ? Promise.reject({ code: "authz_denied" })
+        ? Promise.reject(
+            new kernel.CapabilityError(name, "authz_denied", "denied"),
+          )
         : Promise.resolve(WORKSPACES),
     );
     const result = await readRegisterPlace("a-intel", "core-platform");

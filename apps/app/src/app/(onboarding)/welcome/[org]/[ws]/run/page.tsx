@@ -27,17 +27,23 @@ export default function WelcomeRunPage(props: WelcomeRunPageProps) {
   );
 }
 
+/** The request's clock and poll revision, read once per request outside render. */
+function requestClock(): { now: number; pollRevision: string } {
+  return { now: Date.now(), pollRevision: randomUUID() };
+}
+
 async function WelcomeRunStep({ params, searchParams }: WelcomeRunPageProps) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
   const agent = firstParam((await searchParams).agent) ?? null;
+  const { now, pollRevision } = requestClock();
   return (
     <WelcomeRun
       ctx={ctx}
       source={dataSource()}
       agent={agent}
-      now={Date.now()}
-      pollRevision={randomUUID()}
+      now={now}
+      pollRevision={pollRevision}
     />
   );
 }
