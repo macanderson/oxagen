@@ -449,6 +449,31 @@ describe("Agents, loaded", () => {
     expect(cellsOf(pending)[6]).toBe("prn_pending");
   });
 
+  it("reads tamper before retired or suspended, so an open incident is never hidden behind a status", async () => {
+    await renderAgents({
+      list: agentPage([
+        agentRow({
+          id: "agt_r",
+          slug: "r",
+          status: "retired",
+          host: null,
+          tamperIncidents: 1,
+        }),
+        agentRow({
+          id: "agt_s",
+          slug: "s",
+          status: "suspended",
+          tamperIncidents: 3,
+        }),
+      ]),
+    });
+    expect(rows().map((row) => cellsOf(row)[7])).toEqual([
+      "tamper1 open incident",
+      "tamper3 open incidents",
+    ]);
+    expect(document.querySelectorAll('[data-health="tamper"]')).toHaveLength(2);
+  });
+
   it("prints the tier alone under the dash when an agent with a recorded tier has no host", async () => {
     await renderAgents({
       list: agentPage([agentRow({ host: null, enforcementTier: "gateway" })]),
