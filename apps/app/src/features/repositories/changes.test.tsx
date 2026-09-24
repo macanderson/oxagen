@@ -10,7 +10,6 @@ import type {
   RepositoryChange,
   RepositoryChanges,
 } from "@/data/contracts/repository";
-import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { Changes, CiLight } from "./changes";
 

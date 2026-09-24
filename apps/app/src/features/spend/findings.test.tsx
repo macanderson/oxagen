@@ -22,7 +22,6 @@ import type {
   SpendReport,
 } from "@/data/contracts/spend";
 import { readOk } from "@/data/read";
-import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));

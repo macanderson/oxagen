@@ -8,7 +8,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import type { RepositoryTree } from "@/data/contracts/repository";
-import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { RepositoriesTab, TreeBadge } from "./repositories-tab";
 import type { RepositoryRow } from "./view";

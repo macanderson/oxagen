@@ -9,7 +9,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import type { SpendReport } from "@/data/contracts/spend";
 import { readError, readOk } from "@/data/read";
-import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { TokensSection } from "./tokens";
 
