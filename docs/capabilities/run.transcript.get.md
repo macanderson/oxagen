@@ -59,7 +59,7 @@ Claude Code's own permission check (`tool_decision` and `tool.blocked_on_user` i
 
 The filter selects frames and the fold runs over what is left, so a filtered transcript is the transcript of those frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
 
-The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query hides every chip and reads nothing.
+The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query opens the Transcript tab with every chip off. The tab filters the whole-run read the page already made, so no chip setting reads again.
 
 ## Output
 

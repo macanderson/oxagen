@@ -46,7 +46,10 @@ export interface ModelRate {
   cacheWritePer1M: number;
 }
 
-/** One priced model family. Matched by longest `family` prefix on the slug. */
+/**
+ * One priced model family. {@link rateFor} takes the first row, in card order,
+ * whose `family` prefixes the slug. It does not look for the longest match.
+ */
 export interface RateCardEntry {
   /** Bare family prefix matched against the slug (e.g. "claude-opus"). */
   family: string;
@@ -55,6 +58,14 @@ export interface RateCardEntry {
   /** Provider, so cost projections can group/compare by vendor. */
   vendor: string;
   rate: ModelRate;
+  /**
+   * Set on a second spelling of a model that already has a row, such as the
+   * dotted gateway id `claude-opus-4.8` beside `claude-opus-4-8`. The row still
+   * prices slugs, but {@link listRateCard} and {@link compareModels} skip it,
+   * so `oxagen cost` lists each model once. It MUST carry the same label,
+   * vendor and rate as the row it spells, and `rate-card.test.ts` checks that.
+   */
+  alias?: true;
 }
 
 /**
@@ -82,8 +93,9 @@ export interface RateCardEntry {
  */
 export const RATE_CARD: RateCardEntry[] = [
   // Fable 5.1 and Opus 5.5 break from their family's price, so each gets a row
-  // for both the hyphenated and the dotted gateway spelling. Their cache reads
-  // (0.025x and 0.05x input) are the list prices, not typos.
+  // for both the hyphenated and the dotted gateway spelling, the dotted one
+  // marked `alias`. Their cache reads (0.025x and 0.05x input) are the list
+  // prices, not typos.
   {
     family: "claude-fable-5-1",
     label: "Claude Fable 5.1",
@@ -99,6 +111,7 @@ export const RATE_CARD: RateCardEntry[] = [
     family: "claude-fable-5.1",
     label: "Claude Fable 5.1",
     vendor: "anthropic",
+    alias: true,
     rate: {
       inputPer1M: 10.0,
       outputPer1M: 50.0,
@@ -121,6 +134,7 @@ export const RATE_CARD: RateCardEntry[] = [
     family: "claude-opus-5.5",
     label: "Claude Opus 5.5",
     vendor: "anthropic",
+    alias: true,
     rate: {
       inputPer1M: 4.0,
       outputPer1M: 20.0,
@@ -180,6 +194,7 @@ export const RATE_CARD: RateCardEntry[] = [
     family: "claude-opus-4.8",
     label: "Claude Opus 4.8",
     vendor: "anthropic",
+    alias: true,
     rate: {
       inputPer1M: 5.0,
       outputPer1M: 25.0,
@@ -191,6 +206,7 @@ export const RATE_CARD: RateCardEntry[] = [
     family: "claude-opus-4.7",
     label: "Claude Opus 4.7",
     vendor: "anthropic",
+    alias: true,
     rate: {
       inputPer1M: 5.0,
       outputPer1M: 25.0,
@@ -202,6 +218,7 @@ export const RATE_CARD: RateCardEntry[] = [
     family: "claude-opus-4.6",
     label: "Claude Opus 4.6",
     vendor: "anthropic",
+    alias: true,
     rate: {
       inputPer1M: 5.0,
       outputPer1M: 25.0,
@@ -213,6 +230,7 @@ export const RATE_CARD: RateCardEntry[] = [
     family: "claude-opus-4.5",
     label: "Claude Opus 4.5",
     vendor: "anthropic",
+    alias: true,
     rate: {
       inputPer1M: 5.0,
       outputPer1M: 25.0,
@@ -572,12 +590,17 @@ export const RATE_CARD: RateCardEntry[] = [
   },
 ];
 
-/** Sonnet — used when a slug matches no family, so a run is never zero-charged. */
+/**
+ * Sonnet 5, used when a slug matches no family, so a run is never zero-charged.
+ * Billing prices the same miss at its `FALLBACK_RATE_MODEL`, `claude-sonnet-5`,
+ * and `rate-card-parity.test.ts` fails when the two differ, so `oxagen cost`
+ * projects an unknown model at the price the invoice will charge.
+ */
 export const FALLBACK_RATE: ModelRate = {
-  inputPer1M: 3.0,
-  outputPer1M: 15.0,
-  cachedInputPer1M: 0.3,
-  cacheWritePer1M: 3.75,
+  inputPer1M: 2.0,
+  outputPer1M: 10.0,
+  cachedInputPer1M: 0.2,
+  cacheWritePer1M: 2.5,
 };
 
 /** Strip "vendor/" and match the bare family. Exported for display/grouping. */
@@ -744,12 +767,12 @@ export function projectCost(model: string, usage: TokenUsage): CostProjection {
  * one vendor.
  */
 export function compareModels(usage: TokenUsage): CostProjection[] {
-  return RATE_CARD.map((e) =>
-    projectCost(`${e.vendor}/${e.family}`, usage),
-  ).sort((a, b) => a.totalUsd - b.totalUsd);
+  return listRateCard()
+    .map((e) => projectCost(`${e.vendor}/${e.family}`, usage))
+    .sort((a, b) => a.totalUsd - b.totalUsd);
 }
 
-/** The full rate card (for `oxagen cost --rates`). */
+/** One row per model, without the `alias` spellings (for `oxagen cost --rates`). */
 export function listRateCard(): RateCardEntry[] {
-  return RATE_CARD;
+  return RATE_CARD.filter((e) => !e.alias);
 }

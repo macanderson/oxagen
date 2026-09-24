@@ -86,10 +86,7 @@ export function dueForEnrichment(
       isNotNull(table.summaryError),
       or(
         changed,
-        lt(
-          table.summaryObservedAt,
-          new Date(now.getTime() - FAILED_RETRY_MS),
-        ),
+        lt(table.summaryObservedAt, new Date(now.getTime() - FAILED_RETRY_MS)),
       ),
     ),
   );

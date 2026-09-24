@@ -244,7 +244,11 @@ describe("selectTachoEvents", () => {
   });
   it("reads the effort a model call ran at, and an empty string where none was recorded", async () => {
     chSelect.mockResolvedValueOnce({
-      data: [{ seq: "1", effort: "high" }, { seq: "2", effort: "" }, { seq: "3" }],
+      data: [
+        { seq: "1", effort: "high" },
+        { seq: "2", effort: "" },
+        { seq: "3" },
+      ],
     });
     const rows = await selectTachoEvents({
       sessionUuid: SESSION,
