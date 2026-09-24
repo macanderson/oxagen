@@ -563,6 +563,7 @@
       "tokensNotRecorded": "tokens not recorded",
       "costNotRecorded": "cost not recorded",
       "costReported": "agent reported",
+      "costEstimate": "estimate",
       "started": "started",
       "sealed": "sealed",
       "closedIdle": "closed",

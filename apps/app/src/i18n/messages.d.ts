@@ -5157,6 +5157,7 @@ type Messages = {
       tokensNotRecorded: string;
       costNotRecorded: string;
       costReported: string;
+      costEstimate: string;
       started: string;
       sealed: string;
       closedIdle: string;

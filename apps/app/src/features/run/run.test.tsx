@@ -158,8 +158,10 @@ async function renderRun(
   // render inside a synchronous act never flushes that retry, so the strips
   // stayed on their fallback; awaiting act lets the resolved read land.
   let container!: HTMLElement;
-  await act(async () => {
+  // act awaits a callback that returns a promise, which is what flushes it.
+  await act(() => {
     ({ container } = render(<IntlProvider>{element}</IntlProvider>));
+    return Promise.resolve();
   });
   return { container, calls };
 }
@@ -180,7 +182,9 @@ describe("header", () => {
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("Cut the 3.2 release branch");
     expect(h1.className).not.toContain("font-mono");
-    expect(screen.getByRole("button", { name: "Copy tse_7k2m9q" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeTruthy();
     // The title is the h1's alone, never repeated in the when line.
     expect(screen.getByTestId("run-when")).not.toHaveTextContent(
       "Cut the 3.2 release branch",
@@ -231,7 +235,9 @@ describe("header", () => {
 
   it("reads sealed from the run's status in the when line, the same status the record actions gate on", async () => {
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "halted", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "halted", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const when = screen.getByTestId("run-when");
@@ -239,7 +245,9 @@ describe("header", () => {
     expect(when).not.toHaveTextContent("still running");
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "live", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-when")).toHaveTextContent("still running");
@@ -305,7 +313,9 @@ describe("header", () => {
     );
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ operatorAttribution: "initiator" }) })),
+      detail: ok(
+        runDetail({ run: runRow({ operatorAttribution: "initiator" }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator");
@@ -345,14 +355,18 @@ describe("header", () => {
   it("titles a run that carries no name and no task reference by its id in mono (negative)", async () => {
     await renderRun({
       detail: ok(
-        runDetail({ run: runRow({ name: null, taskRef: null, summary: null }) }),
+        runDetail({
+          run: runRow({ name: null, taskRef: null, summary: null }),
+        }),
       ),
       transcript: ok(runTranscript()),
     });
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("tse_7k2m9q");
     expect(h1.className).toContain("font-mono");
-    expect(screen.queryByRole("button", { name: "Copy tse_7k2m9q" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeNull();
   });
 
   it("titles a run whose read failed by the id the URL named", async () => {
@@ -419,9 +433,11 @@ describe("header", () => {
     expect(usage.getByText("340 output")).toBeTruthy();
     expect(usage.getByText("56,000 cache read")).toBeTruthy();
     expect(usage.getByText("7,800 cache write")).toBeTruthy();
-    // The row carries a finalized cost, so it is not marked as reported.
+    // The row carries a finalized cost, so it is marked neither reported
+    // nor an estimate.
     expect(usage.getByTestId("run-usage-cost")).toHaveTextContent("$4.13");
     expect(usage.queryByText("agent reported")).toBeNull();
+    expect(usage.queryByTestId("run-usage-cost-estimate")).toBeNull();
   });
 
   it("marks an agent-reported cost and says when no tokens were recorded", async () => {
@@ -2193,9 +2209,7 @@ describe("the work", () => {
     expect(screen.getByTestId("run-spend-provisional").textContent).toBe(
       "Provisional until the rollup. Priced from the cost each call reported.",
     );
-    expect(
-      screen.queryByText("No cost rollup yet. It is built after the run seals."),
-    ).toBeNull();
+    expect(spend.queryByText(/No cost rollup yet/)).toBeNull();
   });
 
   it("draws no provisional label once the rollup exists (negative)", async () => {
@@ -2232,6 +2246,34 @@ describe("an open run's cost and the idle close (#3980)", () => {
     expect(screen.getByTestId("run-spend-estimate")).toHaveTextContent(
       "Estimate while the run is open",
     );
+  });
+
+  it("marks the header's cost an estimate while the run is open", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ sealedAt: null, costIsEstimate: true }) }),
+      ),
+      transcript: ok(runTranscript()),
+      cost: ok(estimate()),
+    });
+    const usage = within(screen.getByTestId("run-usage"));
+    expect(usage.getByTestId("run-usage-cost")).toHaveTextContent("$4.13");
+    expect(usage.getByTestId("run-usage-cost-estimate")).toHaveTextContent(
+      "estimate",
+    );
+    expect(usage.queryByText("agent reported")).toBeNull();
+  });
+
+  it("marks the header's cost an estimate for a sealed run whose row predates the seal", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ costIsEstimate: true }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(
+      within(screen.getByTestId("run-usage")).getByTestId(
+        "run-usage-cost-estimate",
+      ),
+    ).toBeTruthy();
   });
 
   it("says above the Cost tab's figures that they are an estimate", async () => {

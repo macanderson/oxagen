@@ -325,7 +325,9 @@ function Checkout({
       {primary?.branch == null ? (
         <span className={missing}>{t("branchNotRecorded")}</span>
       ) : (
-        <span data-testid="run-branch" className={chip}>{primary.branch}</span>
+        <span data-testid="run-branch" className={chip}>
+          {primary.branch}
+        </span>
       )}
       {recordedPulls.length === 0 ? (
         <PullChips pulls={pulls} />
@@ -444,8 +446,9 @@ function WorkStripsLoading() {
 
 /**
  * Token counts and cost. The counts are the session's sums over its `llm_call`
- * frames. The cost is the finalized rollup when there is one, and otherwise
- * what the agent reported, marked as such.
+ * frames. The cost is the rollup when there is one, marked as an estimate
+ * while the run is open or its row was built before the seal (#3980), and
+ * otherwise what the agent reported, marked as such.
  */
 function Usage({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
@@ -480,6 +483,13 @@ function Usage({ run }: { run: RunRow }) {
           <Money value={cost} />
           {run.cost === null ? (
             <span className="text-muted-foreground">{t("costReported")}</span>
+          ) : run.sealedAt === null || run.costIsEstimate === true ? (
+            <span
+              data-testid="run-usage-cost-estimate"
+              className="text-muted-foreground"
+            >
+              {t("costEstimate")}
+            </span>
           ) : null}
         </span>
       )}
@@ -579,8 +589,7 @@ function When({ run }: { run: RunRow }) {
         </span>
       ) : run.endedAt != null ? (
         <span data-testid="run-ended">
-          {t("ended")}{" "}
-          <time dateTime={run.endedAt}>{when(run.endedAt)}</time>
+          {t("ended")} <time dateTime={run.endedAt}>{when(run.endedAt)}</time>
         </span>
       ) : run.sealedAt === null ? (
         <span>{t("sealNotRecorded")}</span>

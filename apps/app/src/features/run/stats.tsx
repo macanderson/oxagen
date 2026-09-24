@@ -119,9 +119,10 @@ export function StatRow({
   const waste = wasted(rollup?.cost ?? null, rollup?.productiveRatio ?? null);
   // The recorder's end time, else the seal, which is receipt time.
   const endedAt = run.endedAt ?? run.sealedAt;
-  // Before the rollup rebuilds a sealed run, the session's own sums over its
-  // llm_call frames stand in, so a live run shows its tokens too. Those sums
-  // are labelled provisional, since the rollup may still reprice or recount.
+  // Before the rollup has built a row for the run, the session's own sums
+  // over its llm_call frames stand in, so a live run shows its tokens too.
+  // Those sums are labelled provisional, since the rollup may still reprice
+  // or recount.
   const reported = run.reportedTokens ?? null;
   const tokens =
     rollup === null
