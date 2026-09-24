@@ -514,6 +514,8 @@ describe("AssistantFlyout", () => {
     ["conflict", "engine_aborted", "assistant-aborted", true],
     ["exhausted", "insufficient_credits", "assistant-noCredit", false],
     ["exhausted", "assistant_spend_cap", "assistant-spendCap", false],
+    ["exhausted", "assistant_model_key_limit", "assistant-keyLimit", false],
+    ["unavailable", "model_call_failed", "assistant-model", true],
     ["unavailable", "kernel_failure", "assistant-unavailable", true],
   ] as const)(
     "tells a %s refusal coded %s apart (negative)",

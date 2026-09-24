@@ -171,10 +171,12 @@ type Refusal =
   | "exhausted"
   | "noCredit"
   | "spendCap"
+  | "keyLimit"
   | "parked"
   | "engine"
   | "unrecorded"
   | "aborted"
+  | "model"
   | "unavailable";
 
 /** The refusals worth asking again: the service, not the question, failed. */
@@ -182,6 +184,7 @@ const RETRYABLE: ReadonlySet<Refusal> = new Set([
   "engine",
   "unrecorded",
   "aborted",
+  "model",
   "unavailable",
 ]);
 
@@ -301,6 +304,7 @@ function refusalKey(result: Refused): Refusal {
     case "exhausted":
       if (result.code === "insufficient_credits") return "noCredit";
       if (result.code === "assistant_spend_cap") return "spendCap";
+      if (result.code === "assistant_model_key_limit") return "keyLimit";
       return "exhausted";
     case "conflict":
       return result.code === "engine_aborted" ? "aborted" : "unavailable";
@@ -308,6 +312,7 @@ function refusalKey(result: Refused): Refusal {
     case "unavailable":
       if (result.code === "engine_unavailable") return "engine";
       if (result.code === "assistant_run_not_recorded") return "unrecorded";
+      if (result.code === "model_call_failed") return "model";
       return "unavailable";
   }
 }
@@ -335,6 +340,8 @@ function RefusalText({ code }: { code: Refusal }) {
       return <>{t("noCredit")}</>;
     case "spendCap":
       return <>{t("spendCap")}</>;
+    case "keyLimit":
+      return <>{t("keyLimit")}</>;
     case "parked":
       return <>{t("parked")}</>;
     case "engine":
@@ -343,6 +350,8 @@ function RefusalText({ code }: { code: Refusal }) {
       return <>{t("unrecorded")}</>;
     case "aborted":
       return <>{t("aborted")}</>;
+    case "model":
+      return <>{t("model")}</>;
     case "unavailable":
       return <>{t("unavailable")}</>;
   }

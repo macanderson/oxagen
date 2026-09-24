@@ -700,6 +700,7 @@ describe("errorMiddleware assistant turn failures", () => {
     ["engine_unavailable", 503],
     ["assistant_run_not_recorded", 503],
     ["engine_aborted", 409],
+    ["model_call_failed", 502],
   ] as const)(
     "%s → %i with its code and message, never the 500 catch-all",
     async (code, expected) => {

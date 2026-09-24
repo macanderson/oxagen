@@ -100,7 +100,8 @@ export type ActionResult<O> =
         | "billing_suspended"
         | "budget_exceeded"
         | "insufficient_credits"
-        | "assistant_spend_cap";
+        | "assistant_spend_cap"
+        | "assistant_model_key_limit";
     };
 
 type ExhaustedCode = Extract<
@@ -129,18 +130,25 @@ const EXHAUSTED_CODES: readonly string[] = [
   // of platform-paid agent tokens (ADR-053 §3).
   "insufficient_credits",
   "assistant_spend_cap",
+  // The key Oxagen minted for the organization reached its daily ceiling
+  // (`@oxagen/ai` assistant-model-key-limit.ts, ADR-131 §3).
+  "assistant_model_key_limit",
 ] satisfies readonly ExhaustedCode[];
 
 /**
  * The in-app agent's service failures (`@oxagen/agent`), with the status the
  * API gives each (`apps/api/src/middleware/error.ts`,
- * `ASSISTANT_TURN_ERROR_STATUS`). The engine is down or unconfigured, or the
- * evidence ledger would not admit the turn as a run: the service could not
- * answer, and the code says which part of it.
+ * `ASSISTANT_TURN_ERROR_STATUS`). The engine is down or unconfigured, the
+ * evidence ledger would not admit the turn as a run, or the model provider
+ * failed the call: the service could not answer, and the code says which part
+ * of it.
  */
 const ASSISTANT_SERVICE_CODES: Readonly<Record<string, number>> = {
   engine_unavailable: 503,
   assistant_run_not_recorded: 503,
+  // The model provider refused or failed a call the engine asked for
+  // (`@oxagen/agent` governed-turn.ts, `ModelCallFailedError`).
+  model_call_failed: 502,
 };
 
 const isExhaustedCode = (code: string): code is ExhaustedCode =>

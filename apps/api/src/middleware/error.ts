@@ -65,11 +65,15 @@ const HANDLER_ERROR_STATUS: Record<HandlerErrorCode, 403 | 404 | 409> = {
 // The in-app agent's turn failures (`ask_assistant`, @oxagen/agent), by code.
 // The engine being down and a turn the ledger could not record are the service
 // being unable to answer; a turn cancelled before it answered (a per-turn
-// budget stop) conflicts with the state the caller asked in.
-export const ASSISTANT_TURN_ERROR_STATUS: Record<string, 409 | 503> = {
+// budget stop) conflicts with the state the caller asked in. A model call the
+// provider refused or failed (`ModelCallFailedError`) is an upstream failure,
+// so a 502; its message names the provider's status and nothing the vendor
+// said.
+export const ASSISTANT_TURN_ERROR_STATUS: Record<string, 409 | 502 | 503> = {
   engine_unavailable: 503,
   assistant_run_not_recorded: 503,
   engine_aborted: 409,
+  model_call_failed: 502,
 };
 
 // A store that is up and refusing work it cannot take right now
@@ -98,7 +102,7 @@ function isStoreOverloadedError(err: unknown): err is StoreOverloadedError {
 
 function assistantTurnFailure(
   err: unknown,
-): { code: string; status: 409 | 503 } | null {
+): { code: string; status: 409 | 502 | 503 } | null {
   if (typeof err !== "object" || err === null) return null;
   const code = (err as Record<string, unknown>).code;
   if (typeof code !== "string") return null;

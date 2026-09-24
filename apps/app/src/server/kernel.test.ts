@@ -487,6 +487,18 @@ describe("kernelWrite", () => {
       1,
     ],
     [
+      "model_call_failed",
+      new Coded("model_call_failed"),
+      { ok: false, reason: "unavailable", code: "model_call_failed" },
+      1,
+    ],
+    [
+      "assistant_model_key_limit",
+      new Coded("assistant_model_key_limit"),
+      { ok: false, reason: "exhausted", code: "assistant_model_key_limit" },
+      0,
+    ],
+    [
       "engine_aborted",
       new Coded("engine_aborted"),
       { ok: false, reason: "conflict", code: "engine_aborted" },

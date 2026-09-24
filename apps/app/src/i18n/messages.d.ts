@@ -5023,10 +5023,12 @@ type Messages = {
         exhausted: string;
         noCredit: string;
         spendCap: string;
+        keyLimit: string;
         parked: string;
         engine: string;
         unrecorded: string;
         aborted: string;
+        model: string;
         unavailable: string;
       };
       retry: string;
