@@ -37,6 +37,12 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("baseMoved");
           case "github_refused":
             return t("githubRefused");
+          case "gitlab_refused":
+            return t("gitlabRefused");
+          case "gitlab_credential_rejected":
+            return t("gitlabCredentialRejected");
+          case "repository_host_changed":
+            return t("repositoryHostChanged");
           case "merge_time_unknown":
             return t("mergeTimeUnknown");
           case "already_merged":

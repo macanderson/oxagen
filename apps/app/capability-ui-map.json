@@ -60,6 +60,15 @@
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
     },
+    "attach_gitlab_project": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › main repository: “Connect and bind” in the GitLab project form, and the same form repairing a GitLab binding whose token was revoked (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "testid": "workspace-gitlab-connect",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_012RZnK27nmESrihQgUhwwFk"
+    },
     "authorize_cli": {
       "route": "/cli/authorize",
       "page": "apps/app/src/app/cli/authorize/page.tsx",

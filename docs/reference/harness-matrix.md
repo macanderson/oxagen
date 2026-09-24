@@ -50,28 +50,34 @@ A new adapter would map vendor hook names and decisions, then add enrollment, re
 
 Aider exposes conversation-history files and an OpenAI API-base option. Its documented lint and test commands operate after edits, so they cannot enforce a pre-edit refusal. A history tailer plus a routed model endpoint could add partial recording and metering. Estimate: 4 to 6 engineer-days, with tool denial and ask still unsupported. Containment would require a separate OS boundary. No adapter or live enrollment was verified. [Options][AI].
 
-## GitLab gap
+## GitLab
 
-GitHub is the only implemented repository host. The provider columns in [the binding schema](../../packages/database/src/schema/ingestion.ts) leave room for another host, but contracts, token resolution, and handlers still select GitHub. Ingestion connectors do not provide a governed merge-request workflow.
+Updated 2026-09-23 for [#3762](https://github.com/macanderson/oxagen/issues/3762). The harness rows above are unchanged. gitlab.com is now a second repository host for steering: a workspace can bind a gitlab.com project as its main repository, and a context record publishes as a merge request on it. Self-managed GitLab is not supported. Every call goes to gitlab.com until a host setting and an outbound-network review exist.
 
-This inventory uses registered capability names. Their source files retain dotted names in [the contract directory](../../packages/oxagen/src/contracts/). “Adapt” means the capability can keep its purpose and most fields, with a provider implementation. It does not promise a drop-in handler.
+The implementation sits behind one provider seam. [The steering host](../../packages/handlers/src/context.steering.host.ts) reads the provider of the workspace's main binding head and sends every steering call to [the GitHub implementation](../../packages/handlers/src/context.steering.github.ts) or [the GitLab implementation](../../packages/handlers/src/context.steering.gitlab.ts). The GitLab side uses [the `@oxagen/gitlab` client](../../packages/gitlab/src/client.ts): merge requests, commit statuses, repository files, branches and compare, and project hooks. It authenticates with a project access token and addresses the project by its numeric id, so a project moved to another group keeps working.
 
-| Current capability or seam | GitLab equivalent | Contract work |
+Evidence in this revision is unit and component tests against an in-memory gitlab.com project ([the fake](../../packages/handlers/src/context.steering.gitlab.test-support.ts)). No live gitlab.com project exercise has been recorded yet. [The exercise script](../../tools/scripts/gitlab-steering-exercise.ts) runs one against a real project with a project access token.
+
+This inventory uses registered capability names. Their source files retain dotted names in [the contract directory](../../packages/oxagen/src/contracts/).
+
+| Current capability or seam | GitLab equivalent | Status |
 |---|---|---|
-| `get_pr`, `get_pr_diff` | Merge request, diffs, notes | Adapt repository identity and provider-specific status fields |
-| `get_ci_status`, `list_branches` | Commit statuses, pipelines, branches | Adapt check conclusions and project identity |
-| `open_context_pr`, `get_context_pr`, `merge_context_pr` | Open, read, merge a merge request | Reuse governance intent; translate checks and enforce the reviewed head |
-| `propose_record`, `revise_context_record`, `publish_context_record`, `set_governance_mode`, `get_steering_freshness` | Branch/file changes and merge history | Route through a provider-neutral version of the steering port |
-| `list_proposals`, `dismiss_proposal`, `list_context_records`, `promote_context_record` | Local proposal and record state | Keep local semantics; audit any provider-specific downstream side effects |
-| `commit_agent_definition`, `propose_agent`, `propose_skill`, `update_skill_config`, `propose_configuration_clone` | Repository commits and merge requests | Move direct GitHub calls behind provider dispatch |
-| `create_workspace` | Create a workspace with a GitLab main project | Replace the `mainRepo.provider` GitHub literal, GitHub App installation lookup, and GitHub source-connection write; a workspace requires a main repository |
-| `bind_main_repository`, `link_repository`, `list_repositories`, `unlink_repository`, `set_production_branch` | Projects, branches, binding lifecycle | Add provider support and nested project paths; preserve tenant scope |
-| `get_main_repository`, `get_repository_tree`, `open_init_pr` | Project metadata, repository tree, merge requests | Replace GitHub-specific output fields and refusals deliberately |
-| `attach_github_installation`, `list_github_installations`, `list_installation_repositories` | Token or OAuth connection and project discovery | Separate connect flow; a GitLab token is not an App installation |
-| `configure_repo`, `sync_repo`, `pause_repo`, `resume_repo`, `get_repo_metrics` | Connector configuration, sync, local metrics | Audit connector dispatch; these operations do not by themselves implement PR governance |
-| [App authentication](../../packages/github/src/app-auth.ts), [workspace tokens](../../packages/github/src/workspace-token.ts) | Project token or OAuth token | New encrypted credential resolver and revocation path |
-| [Webhook ingress](../../apps/api/src/routes/v1/github-webhook.ts), [GitHub ingestion](../../packages/ingestion/src/connectors/github/) | Project/group webhook events | New authentication and event translation; no reuse of GitHub HMAC assumptions |
+| `get_pr`, `get_pr_diff` | Merge request, diffs, notes | Not implemented. These read GitHub PRs for agents and remain GitHub-only |
+| `get_ci_status`, `list_branches` | Commit statuses, pipelines, branches | Not implemented; GitHub-only |
+| `open_context_pr`, `get_context_pr`, `merge_context_pr` | Open, read, merge a merge request | Implemented through the provider seam. Checks are commit statuses; the merge squashes with `sha` pinned to the checked head; a proposal records which host issued its number |
+| `propose_record`, `revise_context_record`, `publish_context_record`, `set_governance_mode`, `get_steering_freshness` | Branch/file changes and merge history | Implemented through the provider seam. `get_steering_freshness` names the host so the CLI matches a gitlab.com remote, nested groups included |
+| `list_proposals`, `dismiss_proposal`, `list_context_records`, `promote_context_record` | Local proposal and record state | Local semantics kept. `dismiss_proposal` closes the merge request and deletes its branch, and leaves alone a PR opened on the other host |
+| `propose_agent`, `propose_skill`, `propose_configuration_clone` | Repository commits and merge requests | Implemented through the provider seam |
+| `commit_agent_definition`, `update_skill_config` | Repository commits and merge requests | Refused on a GitLab binding with `conflict: repository_host_unsupported` |
+| `create_workspace` | Create a workspace with a GitLab main project | Implemented: `mainRepo: { provider: "gitlab", projectPath, token }`, no GitHub installation needed. Accepted only from the web app or the HTTP API outside a chat turn, so a token never enters a transcript |
+| `bind_main_repository`, `list_repositories`, `get_main_repository` | Projects, binding lifecycle | Implemented: provider plus project id is the identity; nested groups bind as a full namespace owner |
+| `link_repository`, `unlink_repository` | Linked projects | Not implemented. Linking stays GitHub-only |
+| `get_repository_tree`, `set_production_branch`, `open_init_pr` | Project tree, branches, merge requests | Refused on a GitLab binding with `conflict: repository_host_unsupported` |
+| `attach_github_installation`, `list_github_installations`, `list_installation_repositories` | Token connection and project discovery | `attach_gitlab_project` connects one project with a project access token, verified to be that project's own, stored encrypted; `delete_connection` disconnects it. No project discovery: a project token reaches one project |
+| `configure_repo`, `sync_repo`, `pause_repo`, `resume_repo`, `get_repo_metrics` | Connector configuration, sync, local metrics | Not implemented. GitLab has no ingestion connector |
+| [App authentication](../../packages/github/src/app-auth.ts), [workspace tokens](../../packages/github/src/workspace-token.ts) | Project access token | [The GitLab credential reader](../../packages/handlers/src/lib/gitlab-credential.ts) decrypts the token for one live connection and fails closed; there is no process-wide fallback token |
+| [Webhook ingress](../../apps/api/src/routes/v1/github-webhook.ts), [GitHub ingestion](../../packages/ingestion/src/connectors/github/) | Project webhooks | [`POST /webhooks/gitlab/:connection`](../../packages/handlers/src/gitlab.webhook.ts) checks `X-Gitlab-Token` in constant time, then re-reads the merge request through the API: a merge request closed on GitLab rejects its proposal, a revoked token marks the connection errored, and a project move updates the path label. Duplicate and out-of-order deliveries change nothing twice |
 
-The implementation starting point is [the steering repository port](../../packages/handlers/src/context.steering.github.ts). Its GitHub provider filters, check-run model, and credential lookup need explicit dispatch. GitLab provides [merge requests](https://docs.gitlab.com/api/merge_requests/), [project access tokens](https://docs.gitlab.com/api/project_access_tokens/), [commit statuses](https://docs.gitlab.com/api/commits/), and [webhooks](https://docs.gitlab.com/user/project/integrations/webhooks/); their identifiers and authentication differ from GitHub's.
+A token GitLab no longer accepts refuses with `conflict: gitlab_credential_rejected`, which names the project and nothing about the token. The app's Repositories page connects and binds a project, and repairs a revoked token with a new one for the same project.
 
-The complete GitLab handoff is [#3762](https://github.com/macanderson/oxagen/issues/3762), under the innovation pillar. It requires a real project exercise from workspace creation and binding through an approved merge and steering publication, alongside tenant, credential, and duplicate-webhook regression coverage. Estimate: 3 to 4 engineer-weeks for gitlab.com. Self-managed hosts need an explicit server and network policy before support is claimed.
+What remains before #3762 closes: a recorded exercise against a real gitlab.com project (workspace creation, bind, proposal, checks, approved merge, steering publication), the GitHub-only capabilities in the table above, and the create-workspace form in the app, which still offers GitHub only.

@@ -283,7 +283,7 @@ describe("the sentence for each refusal", () => {
     ],
     [
       { reason: "not_found", code: "workspace_repository_missing" },
-      "This workspace has no connected GitHub repository",
+      "This workspace has no connected repository",
     ],
     [
       { reason: "conflict", code: "checks_not_passed" },
