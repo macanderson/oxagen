@@ -174,7 +174,9 @@ describe("header", () => {
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("Cut the 3.2 release branch");
     expect(h1.className).not.toContain("font-mono");
-    expect(screen.getByRole("button", { name: "Copy tse_7k2m9q" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeTruthy();
     // The title is the h1's alone, never repeated in the when line.
     expect(screen.getByTestId("run-when")).not.toHaveTextContent(
       "Cut the 3.2 release branch",
@@ -225,7 +227,9 @@ describe("header", () => {
 
   it("reads sealed from the run's status in the when line, the same status the record actions gate on", async () => {
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "halted", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "halted", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const when = screen.getByTestId("run-when");
@@ -233,7 +237,9 @@ describe("header", () => {
     expect(when).not.toHaveTextContent("still running");
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "live", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-when")).toHaveTextContent("still running");
@@ -299,7 +305,9 @@ describe("header", () => {
     );
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ operatorAttribution: "initiator" }) })),
+      detail: ok(
+        runDetail({ run: runRow({ operatorAttribution: "initiator" }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator");
@@ -339,14 +347,18 @@ describe("header", () => {
   it("titles a run that carries no name and no task reference by its id in mono (negative)", async () => {
     await renderRun({
       detail: ok(
-        runDetail({ run: runRow({ name: null, taskRef: null, summary: null }) }),
+        runDetail({
+          run: runRow({ name: null, taskRef: null, summary: null }),
+        }),
       ),
       transcript: ok(runTranscript()),
     });
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("tse_7k2m9q");
     expect(h1.className).toContain("font-mono");
-    expect(screen.queryByRole("button", { name: "Copy tse_7k2m9q" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeNull();
   });
 
   it("titles a run whose read failed by the id the URL named", async () => {
@@ -1064,7 +1076,7 @@ describe("transcript", () => {
       expect.stringContaining("turn 2"),
     ]);
     expect(turns[1]).toHaveTextContent("done");
-    expect(turns[1]).toHaveTextContent("4 steps");
+    expect(turns[1]).toHaveTextContent("2 steps");
     expect(turns[1]).toHaveTextContent("seq 2 to 8");
     // What was asked sits above the turn it opened, outside the disclosure,
     // so a collapsed turn still shows it.
@@ -1080,9 +1092,17 @@ describe("transcript", () => {
       .getAllByTestId("transcript-step")
       .map((step) => step.getAttribute("data-node"));
     // A step with nothing to read (a context assembly with no body, a model
-    // call the recorder kept only a digest of) draws no row; the Frames tab
-    // still has it. What is left is what the run did.
-    expect(nodes).toEqual(["control", "model", "tool", "control", "deny"]);
+    // call the recorder kept only a digest of) draws no row, and neither does
+    // the turn_start or turn_end whose text is already the prompt above the
+    // turn and the reply inside it. The Frames tab still has every one. What
+    // is left is what the run did.
+    expect(nodes).toEqual(["model", "tool", "deny"]);
+    expect(turns[1]).not.toHaveTextContent(
+      "Cut the 2026.9.2 release candidate.",
+    );
+    expect(
+      screen.getAllByText(/Both failures predate the release scope/),
+    ).toHaveLength(1);
     await expectNoAxe(container);
   });
 
@@ -1132,9 +1152,10 @@ describe("transcript", () => {
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript", zoom: "everything" },
     );
-    // Nine frames across the steps that have something to read; the frames
-    // of the steps with nothing to read are the Frames tab's.
-    expect(screen.getAllByTestId("transcript-frame")).toHaveLength(9);
+    // Seven frames across the steps that have something to read; the frames
+    // of the steps with nothing to read, and of the turn_start and turn_end
+    // the prompt and reply already show, are the Frames tab's.
+    expect(screen.getAllByTestId("transcript-frame")).toHaveLength(7);
     expect(screen.getByText('{"open":34}')).toBeTruthy();
     // The digest-only model call has no row, so nothing says it has no body.
     expect(screen.queryByText(/kept a digest and no body/)).toBeNull();
@@ -2186,7 +2207,9 @@ describe("the work", () => {
       "Provisional until the rollup. Priced from the cost each call reported.",
     );
     expect(
-      screen.queryByText("No cost rollup yet. It is built after the run seals."),
+      screen.queryByText(
+        "No cost rollup yet. It is built after the run seals.",
+      ),
     ).toBeNull();
   });
 
