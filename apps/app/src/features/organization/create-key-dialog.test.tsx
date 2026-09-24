@@ -132,7 +132,7 @@ describe("create", () => {
       `The key stops working at ${day}T23:59:59.999Z.`,
     );
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     expect(createApiKey).toHaveBeenCalledWith("acme", WS, "CI runner", day);
     const panel = await screen.findByTestId("api-key-secret");
@@ -150,7 +150,7 @@ describe("create", () => {
     const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     expect(await screen.findByTestId("api-key-secret")).toBeInTheDocument();
 
@@ -190,7 +190,7 @@ describe("create", () => {
     const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     expect(await screen.findByTestId("api-key-secret")).toBeInTheDocument();
 
@@ -221,7 +221,7 @@ describe("create", () => {
     const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.getByTestId("create-api-key")).toBeInTheDocument();
@@ -244,7 +244,7 @@ describe("create", () => {
     const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     await screen.findByTestId("api-key-secret");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -309,7 +309,7 @@ describe("create", () => {
       render(createDialog());
       const dialog = await openDialog("Create key", "create-api-key");
       await userEvent.click(
-        within(dialog).getByRole("button", { name: "Create it" }),
+        within(dialog).getByRole("button", { name: "Create key" }),
       );
       expect(
         await screen.findByTestId("create-api-key-failure"),
@@ -328,7 +328,7 @@ describe("create", () => {
     render(createDialog());
     const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     await screen.findByTestId("create-api-key-failure");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -342,7 +342,7 @@ describe("create", () => {
     render(createDialog());
     const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     expect(
       await screen.findByTestId("create-api-key-failure"),
@@ -369,7 +369,7 @@ describe("rotate", () => {
       "Requests presenting the old key are refused from that moment",
     );
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
     expect(rotateApiKey).toHaveBeenCalledWith("acme", WS, KEY);
     expect(
@@ -392,7 +392,7 @@ describe("rotate", () => {
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
     await screen.findByTestId("api-key-secret");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -409,7 +409,7 @@ describe("rotate", () => {
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
     expect(
       await screen.findByTestId("rotate-api-key-failure"),
@@ -437,7 +437,7 @@ describe("a key that may not be rotated", () => {
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
     expect(
       await screen.findByTestId("rotate-api-key-failure"),
@@ -521,7 +521,7 @@ describe("leaving the page", () => {
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
 
     expect(tryToLeave()).toBe(true);
@@ -541,7 +541,7 @@ describe("leaving the page", () => {
     const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     await screen.findByTestId("api-key-secret");
 
@@ -586,7 +586,7 @@ describe("leaving the page", () => {
     const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     await screen.findByTestId("api-key-secret");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));

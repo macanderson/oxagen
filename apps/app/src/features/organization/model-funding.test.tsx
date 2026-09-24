@@ -294,6 +294,19 @@ describe("Funding source", () => {
 });
 
 describe("Model routes", () => {
+  it("states the design's fact in a caption with no comma, and the second fact in a note", async () => {
+    await renderTab(readOk(STORED));
+    const panel = routesPanel();
+    const caption = panel.querySelector("[data-caption]");
+    expect(caption).toHaveTextContent(
+      /^customer agents call their providers with their own keys$/,
+    );
+    expect(caption?.textContent).not.toContain(",");
+    expect(panel).toHaveTextContent(
+      "Oxagen records what each harness reports.",
+    );
+  });
+
   it("draws the design's columns and §4.5's four tiers", async () => {
     await renderTab(readOk(STORED));
     const table = within(routesPanel()).getByRole("table", {

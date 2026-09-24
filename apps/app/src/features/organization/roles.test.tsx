@@ -262,6 +262,22 @@ describe("whether these grants are resolved", () => {
 });
 
 describe("IdP group mappings", () => {
+  it("keeps the heading's subtext to one sentence and puts the rules in a note", async () => {
+    await renderRoles();
+    const section = screen.getByRole("region", { name: "IdP group mappings" });
+    const heading = within(section).getByRole("heading", {
+      name: "IdP group mappings",
+    });
+    expect(heading.nextElementSibling).toHaveTextContent(
+      /^Map each identity provider group to an organization role\.$/,
+    );
+    expect(
+      within(section).getByTestId("sso-group-mappings-rules"),
+    ).toHaveTextContent(
+      "When a person's groups match more than one row, the highest role wins.",
+    );
+  });
+
   it("points to Single sign-on when the organization has no provider", async () => {
     await renderRoles();
     const section = screen.getByRole("region", { name: "IdP group mappings" });

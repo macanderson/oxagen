@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-// The two writes on a member's row: each dialog calls its action for the member
+// A member's row: the member dialog, whose footer opens Change role, and the
+// two writes. Each write dialog carries the design's title with the person as
+// its subtitle and Cancel beside the confirm, calls its action for the member
 // and the organization the page names, reloads the roster once the write
 // answered, names every refusal without reloading, and renders the refusal in
 // place of both buttons for a role that may not write membership.
@@ -33,6 +35,7 @@ const member: MemberList["members"][number] = {
 function renderActions(
   overrides: Partial<MemberList["members"][number]> = {},
   allowed = true,
+  details?: string,
 ) {
   render(
     <IntlProvider>
@@ -41,6 +44,7 @@ function renderActions(
         member={{ ...member, ...overrides }}
         allowed={allowed}
         after={HERE}
+        details={details === undefined ? undefined : <p>{details}</p>}
       />
     </IntlProvider>,
   );
@@ -68,7 +72,16 @@ describe("change role", () => {
     changeMemberRole.mockResolvedValue({ ok: true, value: { role: "admin" } });
     renderActions();
     const dialog = await openDialog("Change role", "change-member-role");
-    expect(dialog).toHaveTextContent("Change the role of Marcus Bell");
+    expect(within(dialog).getByRole("heading")).toHaveTextContent(
+      /^Change role$/,
+    );
+    expect(dialog).toHaveTextContent("marcus.bell@acme.example");
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .slice(-2),
+    ).toEqual(["Cancel", "Change it"]);
     const picker = within(dialog).getByLabelText("Role");
     expect(picker).toHaveValue("billing");
     await userEvent.selectOptions(picker, "admin");
@@ -87,7 +100,7 @@ describe("change role", () => {
       within(dialog)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Owner", "Admin", "Billing", "Compliance"]);
+    ).toEqual(["org.owner", "org.admin", "org.billing", "org.compliance"]);
   });
 
   it("opens on Admin for a member whose stored role this organization cannot grant", async () => {
@@ -105,9 +118,10 @@ describe("remove", () => {
     });
     renderActions();
     const dialog = await openDialog("Remove", "remove-member");
-    expect(dialog).toHaveTextContent(
-      "Remove Marcus Bell from the organization",
+    expect(within(dialog).getByRole("heading")).toHaveTextContent(
+      /^Remove from the organization$/,
     );
+    expect(dialog).toHaveTextContent("Marcus Bell");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Remove" }),
     );
@@ -118,9 +132,35 @@ describe("remove", () => {
   it("names the person by their email when they never set a name", async () => {
     renderActions({ name: null });
     const dialog = await openDialog("Remove", "remove-member");
-    expect(dialog).toHaveTextContent(
-      "Remove marcus.bell@acme.example from the organization",
+    expect(dialog).toHaveTextContent("marcus.bell@acme.example");
+  });
+});
+
+describe("the member dialog", () => {
+  it("shows the facts with Close and Change role, and Change role opens the role dialog", async () => {
+    renderActions({}, true, "Org role facts");
+    const dialog = await openDialog("Open", `member-${member.id}`);
+    expect(dialog).toHaveTextContent("Org role facts");
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .slice(-2),
+    ).toEqual(["Close", "Change role"]);
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Change role" }),
     );
+    expect(screen.queryByTestId(`member-${member.id}`)).toBeNull();
+    const role = screen.getByTestId("change-member-role");
+    expect(within(role).getByLabelText("Role")).toHaveValue("billing");
+  });
+
+  it("offers no Change role to a viewer who may not write membership (negative)", async () => {
+    renderActions({}, false, "Org role facts");
+    const dialog = await openDialog("Open", `member-${member.id}`);
+    expect(
+      within(dialog).queryByRole("button", { name: "Change role" }),
+    ).toBeNull();
   });
 });
 
@@ -233,7 +273,7 @@ describe("a refused write", () => {
     expect(
       await screen.findByTestId("remove-member-failure"),
     ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(screen.queryByTestId("remove-member-failure")).toBeNull();
   });

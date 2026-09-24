@@ -197,7 +197,7 @@ describe("People", () => {
     );
     expect(cells[0]).toHaveTextContent("Marcus Bell");
     expect(cells[0]).toHaveTextContent("marcus.bell@acme.example");
-    expect(cells[1]).toHaveTextContent("Owner");
+    expect(cells[1]).toHaveTextContent("org.owner");
     for (const index of [2, 3, 4]) {
       expect(cells[index]).toHaveTextContent("not recorded");
     }
@@ -253,9 +253,9 @@ describe("People", () => {
     const owner = panel.querySelector('[data-role-in-use="owner"]');
     const admin = panel.querySelector('[data-role-in-use="admin"]');
     expect(owner).toHaveTextContent(
-      "Owner1everything, including the data plane and funding",
+      "org.owner1everything, including the data plane and funding",
     );
-    expect(admin).toHaveTextContent("Admin2no description recorded");
+    expect(admin).toHaveTextContent("org.admin2no description recorded");
     expect(panel).toHaveTextContent("2 agent roles are on the Roles tab.");
   });
 
@@ -299,7 +299,7 @@ describe("Invitations", () => {
     const row = rowOf("invi_9z8y7x6w5v4t3s2r1q0p9n");
     const cells = within(row).getAllByRole("cell");
     expect(cells[0]).toHaveTextContent("audit@acme.example");
-    expect(cells[1]).toHaveTextContent("Compliance");
+    expect(cells[1]).toHaveTextContent("org.compliance");
     expect(cells[2]).toHaveTextContent("not recorded");
     expect(cells[4]).toHaveTextContent("Never");
     expect(within(row).getByRole("button", { name: "Resend" })).toBeTruthy();

@@ -36,7 +36,6 @@ import { InviteDialog } from "./invite-dialog";
 import { type ListRow, ListTable } from "./list-table";
 import { MemberRowActions } from "./member-row-actions";
 import { DateCell, NotRecorded, note } from "./parts";
-import { DetailsDialog } from "./stub-dialog";
 
 type Member = MemberList["members"][number];
 
@@ -167,17 +166,14 @@ export function PeopleTab({
       <Badge key="status" tone="allowed" data-status="active">
         {t("statusActive")}
       </Badge>,
-      <div key="actions" className="flex flex-wrap gap-2">
-        <DetailsDialog
-          open={t("open")}
-          title={member.name ?? member.email}
-          subtitle={member.email}
-          testId={`member-${member.id}`}
-        >
-          <MemberFacts member={member} />
-        </DetailsDialog>
-        <MemberRowActions org={org} member={member} allowed after={here} />
-      </div>,
+      <MemberRowActions
+        key="actions"
+        org={org}
+        member={member}
+        allowed
+        after={here}
+        details={<MemberFacts member={member} />}
+      />,
     ],
   }));
   return (

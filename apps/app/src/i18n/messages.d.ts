@@ -2750,6 +2750,7 @@ type Messages = {
       twoFactorOptional: string;
     };
     actions: {
+      cancel: string;
       readOnly: string;
       denied: string;
       fields: {
@@ -2887,6 +2888,7 @@ type Messages = {
       };
     };
     invite: {
+      cancel: string;
       open: string;
       title: string;
       confirm: string;
@@ -3294,7 +3296,8 @@ type Messages = {
       };
       routes: {
         title: string;
-        badge: string;
+        caption: string;
+        harnesses: string;
         columns: {
           tier: string;
           provider: string;
@@ -3453,6 +3456,7 @@ type Messages = {
     ssoGroups: {
       title: string;
       lead: string;
+      rules: string;
       noProviders: string;
       openSso: string;
       provider: string;
@@ -3576,6 +3580,10 @@ type Messages = {
     dataPlane: {
       title: string;
       on: string;
+      modeWords: {
+        shared: string;
+        dedicated: string;
+      };
       modesLabel: string;
       modes: {
         shared: string;

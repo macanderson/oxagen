@@ -339,12 +339,16 @@ function ModelRoutes() {
       data-issue="4006"
     >
       <div className={panelHeader}>
-        <h2 id="org-model-routes" className={panelTitle}>
-          {t("title")}
-        </h2>
-        <Badge tone="quiet" dot={false}>
-          {t("badge")}
-        </Badge>
+        {/* The design's badge carried two facts joined by a comma; a label
+            states one, so the fact is a caption and the second is the note's. */}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 id="org-model-routes" className={panelTitle}>
+            {t("title")}
+          </h2>
+          <span className="text-xs text-dim" data-caption="">
+            {t("caption")}
+          </span>
+        </div>
       </div>
       <Table
         label={t("title")}
@@ -408,7 +412,8 @@ function ModelRoutes() {
           <td className={cell} />
         </tr>
       </Table>
-      <div className={panelBody}>
+      <div className={`${panelBody} flex flex-col gap-2`}>
+        <p className={note}>{t("harnesses")}</p>
         <p className={note}>{t("unrecorded")}</p>
       </div>
     </section>

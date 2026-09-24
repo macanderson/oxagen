@@ -109,7 +109,7 @@ describe("the form", () => {
       within(role)
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["Member", "Admin", "Owner"]);
+    ).toEqual(["org.member", "org.admin", "org.owner"]);
     expect(role).toHaveValue("member");
     expect(within(dialog).queryByLabelText(/note/i)).toBeNull();
     expect(dialog).toHaveTextContent(
@@ -160,7 +160,7 @@ describe("an invitation that was made", () => {
     const panel = await screen.findByTestId("invitation-sent");
     expect(panel).toHaveTextContent("Invitation sent");
     expect(panel).toHaveTextContent(
-      "dana.reyes@acme.example was invited as Admin.",
+      "dana.reyes@acme.example was invited as org.admin.",
     );
     expect(screen.queryByTestId("invitation-already")).toBeNull();
   });

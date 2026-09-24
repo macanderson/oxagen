@@ -624,13 +624,18 @@ describe("the workspace a key names", () => {
       </IntlProvider>,
     );
     expect(screen.getByTestId("api-keys-archived-workspace")).toHaveTextContent(
-      "Its keys still authenticate, so they are listed here until they are revoked — but no new key is issued into it.",
+      "This workspace is archived. Its keys stop working while it is archived and are listed so they can be revoked. No new key is issued into it.",
     );
+    // The resolver refuses a key into an archived workspace
+    // (`workspace_archived`), so the note never says the keys still work.
+    expect(
+      screen.getByTestId("api-keys-archived-workspace"),
+    ).not.toHaveTextContent("still authenticate");
   });
 
   it("offers no Create in an archived workspace, and says the page will not issue one (negative)", async () => {
     // The page lists an archived workspace's keys for one reason and says so:
-    // they still authenticate and have to be revocable. Minting another there
+    // they stop working while it is archived and have to be revocable. Minting another there
     // is the opposite of winding down, and `create_api_key` refuses it
     // (conflict / workspace_archived) — this is the courtesy above it.
     const ctx = unsafeMint(WsCtx, {
@@ -656,7 +661,7 @@ describe("the workspace a key names", () => {
     );
     expect(screen.queryByRole("button", { name: "Create key" })).toBeNull();
     expect(screen.getByTestId("api-keys-archived-workspace")).toHaveTextContent(
-      "no new key is issued into it",
+      "No new key is issued into it.",
     );
     // The keys themselves are still listed, with Revoke and no Rotate: a
     // rotation mints fresh material for a workspace meant to be inert, while
@@ -760,7 +765,9 @@ describe("a read that did not list", () => {
     expect(panel).toHaveTextContent(
       "You cannot see this organization’s API keys",
     );
-    expect(panel).toHaveTextContent("Signed in as Member. Needed: org.admin.");
+    expect(panel).toHaveTextContent(
+      "Signed in as org.member. Needed: org.admin.",
+    );
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryAllByRole("button")).toEqual([]);
   });

@@ -56,7 +56,7 @@ describe("the segmented control", () => {
     expect(
       within(modes()).getByRole("button", { name: "Behind the firewall" }),
     ).toBeInTheDocument();
-    expect(plane()).toHaveTextContent("Acme Robotics is on Shared");
+    expect(plane()).toHaveTextContent("Acme Robotics is on shared");
   });
 
   it("previews another mode under a note and draws that mode's facts", async () => {

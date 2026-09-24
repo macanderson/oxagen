@@ -88,8 +88,8 @@ export function chooseWorkspace(
   const named = mine.find((ws) => ws.slug === wanted);
   if (named) return named.slug;
   // Nothing named: land on a workspace still in use. An archived one is
-  // reachable — its keys still authenticate and have to be revocable — but it
-  // is not where a page opens.
+  // reachable, because its keys stop working but stay unrevoked and have to
+  // be revocable, but it is not where a page opens.
   const live = mine.find((ws) => ws.archivedAt === null);
   return live?.slug ?? mine[0]?.slug ?? null;
 }
@@ -359,8 +359,9 @@ function WorkspacePicker({
       tabs={workspaces.map((ws) => ({
         to: apiKeysLink(orgSlug, { workspace: ws.slug, show }),
         // An archived workspace is named as archived. It is here because its
-        // keys still authenticate and a key nobody can reach is a key nobody
-        // can revoke; the label says it is not a workspace in use.
+        // keys stay unrevoked, and restoring the workspace restores them, so a
+        // key nobody can reach is a key nobody can revoke. The label says it
+        // is not a workspace in use.
         label:
           ws.archivedAt === null
             ? ws.name

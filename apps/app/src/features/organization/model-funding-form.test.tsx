@@ -104,6 +104,12 @@ describe("ModelFundingForm: the design's customer-key state", () => {
     expect(screen.queryByLabelText("Endpoint URL")).toBeNull();
     expect(screen.queryByTestId("funding-models")).toBeNull();
   });
+
+  it("draws Test and save plain, because the header's Create a workspace is the one gold action", () => {
+    renderForm();
+    const save = screen.getByRole("button", { name: "Test and save" });
+    expect(save.className).not.toContain("bg-button-primary-bg");
+  });
 });
 
 describe("ModelFundingForm: another vendor's fields follow the vendor", () => {

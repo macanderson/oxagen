@@ -219,7 +219,7 @@ function Binding({ org, plane }: { org: string; plane: DataPlane }) {
           {t("title")}
         </h2>
         <Badge tone="allowed" data-plane-mode={plane.mode}>
-          {t("on", { org, mode: t(`modes.${plane.mode}`) })}
+          {t("on", { org, mode: t(`modeWords.${plane.mode}`) })}
         </Badge>
       </div>
       <div className={`${panelBody} flex flex-col gap-3.5`}>

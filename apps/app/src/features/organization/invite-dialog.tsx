@@ -182,11 +182,25 @@ export function InviteDialog({
             ? t("title")
             : t(`${outcome.already ? "already" : "sent"}.title`)
         }
-        closeLabel={outcome === null ? undefined : t("close")}
+        // The design's footer reads Cancel then Send the invitation; once the
+        // answer is on screen there is nothing to cancel, so it reads Done.
+        closeLabel={outcome === null ? t("cancel") : t("close")}
+        footer={
+          outcome === null ? (
+            <SubmitButton
+              form="send-invitation-form"
+              pending={pending}
+              label={t("confirm")}
+              pendingLabel={t("pending")}
+              fullWidth={false}
+            />
+          ) : undefined
+        }
         testId="send-invitation"
       >
         {outcome === null ? (
           <form
+            id="send-invitation-form"
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
@@ -237,11 +251,6 @@ export function InviteDialog({
             {failure === null ? null : (
               <FormAlert testId="send-invitation-failure">{failure}</FormAlert>
             )}
-            <SubmitButton
-              pending={pending}
-              label={t("confirm")}
-              pendingLabel={t("pending")}
-            />
           </form>
         ) : (
           <OutcomeText outcome={outcome} />

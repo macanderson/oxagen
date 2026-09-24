@@ -349,6 +349,10 @@ function GroupMappings({
           ))}
         </>
       )}
+      {/* The heading takes one sentence; how the rows combine is a note. */}
+      <p className={note} data-testid="sso-group-mappings-rules">
+        {t("rules")}
+      </p>
     </section>
   );
 }

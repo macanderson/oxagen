@@ -13,12 +13,12 @@
       "costCenters": "Cost centers"
     },
     "roles": {
-      "owner": "Owner",
-      "admin": "Admin",
-      "member": "Member",
-      "billing": "Billing",
-      "compliance": "Compliance",
-      "viewer": "Viewer"
+      "owner": "org.owner",
+      "admin": "org.admin",
+      "member": "org.member",
+      "billing": "org.billing",
+      "compliance": "org.compliance",
+      "viewer": "org.viewer"
     },
     "people": {
       "title": "People",
@@ -76,6 +76,7 @@
       "twoFactorOptional": "two-factor optional"
     },
     "actions": {
+      "cancel": "Cancel",
       "readOnly": "An owner or an admin makes these changes.",
       "denied": "Changing a role and removing a member are Owner and Admin actions.",
       "fields": {
@@ -143,7 +144,7 @@
       },
       "role": {
         "open": "Change role",
-        "title": "Change the role of {name}",
+        "title": "Change role",
         "body": "This replaces the role they hold across the organization. The record keeps the change with your name on it.",
         "label": "Role",
         "confirm": "Change it",
@@ -151,7 +152,7 @@
       },
       "remove": {
         "open": "Remove",
-        "title": "Remove {name} from the organization",
+        "title": "Remove from the organization",
         "body": "They lose {role} and every workspace grant, and Oxagen revokes the command-line keys they minted. Runs stay attributed to them. Only a new invitation brings them back.",
         "confirm": "Remove",
         "pending": "Removing"
@@ -213,6 +214,7 @@
       }
     },
     "invite": {
+      "cancel": "Cancel",
       "open": "Invite",
       "title": "Invite a person",
       "confirm": "Send the invitation",
@@ -256,7 +258,7 @@
           "name": "Name",
           "expires": "Expires",
           "expiresAt": "The key stops working at {at}.",
-          "confirm": "Create it",
+          "confirm": "Create key",
           "pending": "Creating",
           "expiresOptions": {
             "d90": "90 days",
@@ -268,7 +270,7 @@
           "open": "Rotate",
           "title": "Rotate this key",
           "body": "This issues a replacement with the same expiry and ends this key in the same transaction. Requests presenting the old key are refused from that moment, so put the new one in place first. An expired key cannot be rotated, because the replacement would carry the expiry that ended it.",
-          "confirm": "Rotate it",
+          "confirm": "Rotate",
           "pending": "Rotating"
         },
         "revoke": {
@@ -300,7 +302,7 @@
       "workspace": {
         "label": "Workspace",
         "archived": "{name} (archived)",
-        "archivedNote": "This workspace is archived. Its keys still authenticate, so they are listed here until they are revoked — but no new key is issued into it."
+        "archivedNote": "This workspace is archived. Its keys stop working while it is archived and are listed so they can be revoked. No new key is issued into it."
       },
       "noWorkspace": {
         "title": "A key needs a workspace",
@@ -406,9 +408,9 @@
         "nameNewHint": "Immutable once created. Use the kind as the prefix: agent., org., workspace., svc.",
         "nameHint": "Names are immutable. Duplicate the role to rename it.",
         "description": "Description",
-        "descriptionFixed": "The description is set when the role is created.",
+        "descriptionFixed": "The description is set when the role is created. No capability changes it yet (#4038).",
         "kind": "Kind",
-        "kindHint": "Who can hold it. A custom role is held by agents, which assign_agent_role binds.",
+        "kindHint": "Who can hold it. A custom role is held by agents, which assign_agent_role binds. Human roles wait on #4038, and service roles on #3937.",
         "scope": "Scope",
         "scopeHint": "An organization role applies everywhere. A workspace role is assigned in one workspace at a time.",
         "permissions": "Permissions",
@@ -620,7 +622,8 @@
       },
       "routes": {
         "title": "Model routes",
-        "badge": "customer agents call their providers with their own keys, and Oxagen records what each harness reports",
+        "caption": "customer agents call their providers with their own keys",
+        "harnesses": "These routes carry Oxagen’s own work. Oxagen records what each harness reports.",
         "columns": {
           "tier": "Tier",
           "provider": "Provider",
@@ -778,7 +781,8 @@
     },
     "ssoGroups": {
       "title": "IdP group mappings",
-      "lead": "Map each identity provider group to an organization role. A group with no row grants nothing. A person whose groups match no row loses their organization role at their next SSO sign-in. When a person's groups match more than one row, the highest role wins.",
+      "lead": "Map each identity provider group to an organization role.",
+      "rules": "A group with no row grants nothing. A person whose groups match no row loses their organization role at their next SSO sign-in. When a person's groups match more than one row, the highest role wins.",
       "noProviders": "No identity provider yet.",
       "openSso": "Add one on the Single sign-on page.",
       "provider": "{name} ({domain})",
@@ -902,6 +906,10 @@
     "dataPlane": {
       "title": "Data plane",
       "on": "{org} is on {mode}",
+      "modeWords": {
+        "shared": "shared",
+        "dedicated": "dedicated"
+      },
       "modesLabel": "Deployment mode",
       "modes": {
         "shared": "Shared",
