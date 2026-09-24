@@ -199,7 +199,7 @@ describe("Agent tabs", () => {
         ["Definition in git", "definition"],
       ].map(([label, id]) => [
         label,
-        `/acme/core-platform/agents/release-bot/${id}`,
+        `/acme/core-platform/agents/release-bot/${String(id)}`,
       ]),
     );
     expect(selected()).toEqual(["overview"]);
@@ -625,10 +625,11 @@ describe("Activity", () => {
     ).toBeVisible();
     expect(within(last30).getByRole("link", { name: "Fix" })).toBeVisible();
     const [panel] = screen.getAllByTestId("incident-panel");
+    if (panel === undefined) throw new Error("no incident panel rendered");
     expect(panel).toHaveTextContent("hooks_removed");
     expect(panel).toHaveTextContent("Incidenttin_1");
     expect(
-      within(panel as HTMLElement).getByRole("link", { name: "Open on Audit" }),
+      within(panel).getByRole("link", { name: "Open on Audit" }),
     ).toHaveAttribute("href", "/acme/audit");
   });
 

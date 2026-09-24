@@ -68,7 +68,7 @@ export function ProviderRow({
           <span
             className={`${mono} w-fit rounded border border-border px-1.5 py-0.5 text-[11px]`}
           >
-            mcp
+            {t("transportMcp")}
           </span>
           <span
             className={`${mono} break-all text-[10.5px] text-muted-foreground`}

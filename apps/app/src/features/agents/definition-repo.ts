@@ -7,5 +7,7 @@ export function repositoryOf(pullRequestUrl: string): string | null {
   const match = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/\d+/.exec(
     pullRequestUrl,
   );
-  return match === null ? null : `${match[1]}/${match[2]}`;
+  const owner = match?.[1];
+  const repo = match?.[2];
+  return owner === undefined || repo === undefined ? null : `${owner}/${repo}`;
 }

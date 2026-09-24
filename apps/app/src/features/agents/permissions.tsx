@@ -21,6 +21,7 @@ import type { OrgRole } from "@/data/contracts/common";
 import type { MandateList } from "@/data/contracts/mandates";
 import { isEffective } from "@/data/contracts/mandates";
 import {
+  compareMicros,
   type Money as MoneyValue,
   ratioOfMicros,
 } from "@/data/contracts/money";
@@ -176,7 +177,7 @@ function Roles({
                 ) : (
                   <span>
                     <Money value={perRun} />{" "}
-                    <span className="text-xs text-dim">USD</span>
+                    <span className="text-xs text-dim">{perRun.currency}</span>
                   </span>
                 )}
                 <Sub>{t("perRunSub")}</Sub>
@@ -184,7 +185,9 @@ function Roles({
                   <>
                     <span>
                       <Money value={perDay} />{" "}
-                      <span className="text-xs text-dim">USD</span>
+                      <span className="text-xs text-dim">
+                        {perDay.currency}
+                      </span>
                     </span>
                     <Sub>{t("perDaySub")}</Sub>
                   </>
@@ -273,9 +276,7 @@ function Budgets({
   );
   const highest = priced.reduce<(typeof priced)[number] | null>(
     (top, run) =>
-      top === null || BigInt(run.cost.micros) > BigInt(top.cost.micros)
-        ? run
-        : top,
+      top === null || compareMicros(run.cost, top.cost) > 0 ? run : top,
     null,
   );
   return (

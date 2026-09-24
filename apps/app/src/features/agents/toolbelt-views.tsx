@@ -14,7 +14,7 @@
 // so a miss can say whether the tool exists in the registry and why it is
 // off. A search never returns a tool outside the belt.
 import { useLocale, useTranslations } from "next-intl";
-import { type FormEvent, useMemo, useState } from "react";
+import { type SubmitEvent, useMemo, useState } from "react";
 import type { Toolbelt } from "@/data/contracts/agents";
 import { Badge } from "@/ui/badge";
 import {
@@ -170,7 +170,7 @@ export function BeltSearch({ belt }: { belt: Toolbelt }) {
     setRan(text);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     run(query);
   }
@@ -183,7 +183,7 @@ export function BeltSearch({ belt }: { belt: Toolbelt }) {
         className="flex items-center gap-2 rounded-lg border border-border bg-hl px-3 py-1.5"
       >
         <span className={`${mono} text-dim`} aria-hidden="true">
-          search_tools(
+          {t("call")}
         </span>
         <input
           type="text"

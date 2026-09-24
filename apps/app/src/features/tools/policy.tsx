@@ -70,7 +70,7 @@ function PolicyVersions({ canDraft }: { canDraft: boolean }) {
           <span
             className={`${mono} rounded border border-border px-1.5 py-0.5 text-[10.5px] text-muted-foreground`}
           >
-            tools.policy_versions
+            {t("versionsTable")}
           </span>
           {canDraft ? (
             <StubAction

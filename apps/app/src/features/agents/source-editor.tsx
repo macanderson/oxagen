@@ -304,8 +304,8 @@ export function SourceEditor({
   const [caret, setCaret] = useState(0);
   const [find, setFind] = useState("");
   const [current, setCurrent] = useState<number | null>(null);
-  const textarea = useRef<HTMLTextAreaElement>(null);
-  const findInput = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
   const parsed = useMemo(() => parseTomlSubset(draft), [draft]);
   const matches = useMemo(() => findAll(draft, find), [draft, find]);
   const dirty = draft !== base;
@@ -316,7 +316,7 @@ export function SourceEditor({
     setDraft(edit.value);
     setCaret(edit.start);
     requestAnimationFrame(() => {
-      textarea.current?.setSelectionRange(edit.start, edit.end);
+      textareaRef.current?.setSelectionRange(edit.start, edit.end);
     });
   }
 
@@ -331,8 +331,8 @@ export function SourceEditor({
     const at = matches[index] ?? 0;
     setCurrent(index);
     setCaret(at);
-    textarea.current?.focus();
-    textarea.current?.setSelectionRange(at, at + find.length);
+    textareaRef.current?.focus();
+    textareaRef.current?.setSelectionRange(at, at + find.length);
   }
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -348,8 +348,8 @@ export function SourceEditor({
       setCommitting(true);
     } else if (mod && key === "f") {
       event.preventDefault();
-      findInput.current?.focus();
-      findInput.current?.select();
+      findInputRef.current?.focus();
+      findInputRef.current?.select();
     } else if (mod && event.key === "/") {
       event.preventDefault();
       apply(toggleComment(value, start, end));
@@ -460,7 +460,7 @@ export function SourceEditor({
           </span>
           <label className="ml-auto flex items-center gap-2">
             <input
-              ref={findInput}
+              ref={findInputRef}
               type="search"
               value={find}
               placeholder={t("find.placeholder")}
@@ -479,7 +479,7 @@ export function SourceEditor({
                   event.stopPropagation();
                   setFind("");
                   setCurrent(null);
-                  textarea.current?.focus();
+                  textareaRef.current?.focus();
                 }
               }}
             />
@@ -506,7 +506,7 @@ export function SourceEditor({
           label={path}
           onCaret={setCaret}
           onKeyDown={onKey}
-          textareaRef={textarea}
+          textareaRef={textareaRef}
         />
         <div
           data-testid="editor-status"
@@ -515,10 +515,10 @@ export function SourceEditor({
           <span data-testid="caret">
             {t("position", { line: position.line, col: position.col })}
           </span>
-          <span>TOML</span>
+          <span>{t("format")}</span>
           <span>{t("spaces")}</span>
-          <span>LF</span>
-          <span>UTF-8</span>
+          <span>{t("lineEndings")}</span>
+          <span>{t("encoding")}</span>
           <span className="ml-auto text-dim">{t("keys")}</span>
         </div>
       </section>

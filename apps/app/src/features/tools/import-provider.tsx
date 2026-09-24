@@ -139,7 +139,9 @@ export function ImportProvider({
   const [pick, setPick] = useState<string>(NEW);
   const [strategy, setStrategy] = useState<McpAuthStrategy>("none");
   const [connected, setConnected] = useState<Connected | null>(null);
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [selected, setSelected] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState<{
     published: number;

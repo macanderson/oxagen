@@ -408,7 +408,8 @@
           "zero": "Zero results.",
           "nothing": "Nothing on this agent’s belt matches that.",
           "outside": "{tool} exists in the registry, but it is not on this agent’s belt:",
-          "never": "A search never returns a tool outside the belt. What the model cannot call, it cannot find, and so cannot be prompt-injected into calling."
+          "never": "A search never returns a tool outside the belt. What the model cannot call, it cannot find, and so cannot be prompt-injected into calling.",
+          "call": "search_tools("
         },
         "rules": {
           "title": "Per-tool decision rules",
@@ -1210,7 +1211,10 @@
       },
       "position": "Ln {line}, Col {col}",
       "spaces": "Spaces: 2",
-      "keys": "⌘S save · Tab indent · ⇧Tab outdent · ⌘/ comment · ⌘F find · ⌘Z undo"
+      "keys": "⌘S save · Tab indent · ⇧Tab outdent · ⌘/ comment · ⌘F find · ⌘Z undo",
+      "format": "TOML",
+      "lineEndings": "LF",
+      "encoding": "UTF-8"
     },
     "mandates": {
       "title": "Mandates held",
@@ -1289,7 +1293,8 @@
         "thisAgent": "this agent",
         "decision": "Decision",
         "decisionValue": "· mandate ledger unchanged · no credential minted",
-        "denied": "denied"
+        "denied": "denied",
+        "noMandate": "no_mandate"
       }
     },
     "states": {

@@ -866,8 +866,10 @@
           "gate": "Gate today",
           "agents": "Agents",
           "calls": "Calls 30d"
-        }
-      }
+        },
+        "transportMcp": "mcp"
+      },
+      "transportMcp": "mcp"
     },
     "toolbelts": {
       "title": "Toolbelts",
@@ -949,7 +951,8 @@
       "sequence": {
         "title": "Sequence rule",
         "plain": "A rule names the call it governs, then the condition that lets it through. This one denies a payment unless the same run already priced it."
-      }
+      },
+      "versionsTable": "tools.policy_versions"
     }
   }
 }

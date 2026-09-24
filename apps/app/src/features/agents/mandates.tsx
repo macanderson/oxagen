@@ -126,7 +126,7 @@ function DenialChain({ agentKey }: { agentKey: string | null }) {
               {step.key === "decision" ? (
                 <>
                   <Badge tone="denied">{t("denied")}</Badge>{" "}
-                  <span className={mono}>no_mandate</span> {step.body}
+                  <span className={mono}>{t("noMandate")}</span> {step.body}
                 </>
               ) : (
                 step.body

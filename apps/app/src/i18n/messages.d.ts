@@ -466,6 +466,7 @@ type Messages = {
           nothing: string;
           outside: string;
           never: string;
+          call: string;
         };
         rules: {
           title: string;
@@ -1268,6 +1269,9 @@ type Messages = {
       position: string;
       spaces: string;
       keys: string;
+      format: string;
+      lineEndings: string;
+      encoding: string;
     };
     mandates: {
       title: string;
@@ -1347,6 +1351,7 @@ type Messages = {
         decision: string;
         decisionValue: string;
         denied: string;
+        noMandate: string;
       };
     };
     states: {
@@ -7310,7 +7315,9 @@ type Messages = {
           agents: string;
           calls: string;
         };
+        transportMcp: string;
       };
+      transportMcp: string;
     };
     toolbelts: {
       title: string;
@@ -7393,6 +7400,7 @@ type Messages = {
         title: string;
         plain: string;
       };
+      versionsTable: string;
     };
   };
   ui: {

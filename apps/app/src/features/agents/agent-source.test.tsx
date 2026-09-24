@@ -273,9 +273,11 @@ describe("SourceEditor", () => {
     expect(screen.getByTestId("find-count")).toHaveTextContent("1 of 3");
   });
 
-  it("indents with Tab, comments with ⌘/ and opens the commit dialog with ⌘S", async () => {
+  it("indents with Tab, comments with ⌘/ and opens the commit dialog with ⌘S", () => {
     renderEditor('schema = "agent-definition/v0.1"\nslug = "release-bot"\n');
-    const area = editor() as HTMLTextAreaElement;
+    const area = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: PATH,
+    });
     area.setSelectionRange(0, 0);
     fireEvent.keyDown(area, { key: "Tab" });
     expect(area.value.startsWith('  schema = "agent-definition/v0.1"')).toBe(

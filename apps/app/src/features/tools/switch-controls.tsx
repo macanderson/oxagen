@@ -21,7 +21,7 @@ import {
   KILL_SWITCH_KINDS,
 } from "@/data/contracts/tools";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";

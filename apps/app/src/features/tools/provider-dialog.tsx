@@ -381,7 +381,7 @@ export function ProviderDialog({
           <Row term={t("facts.system")}>{server.name}</Row>
           <Row term={t("facts.transport")}>
             <span className="flex flex-col gap-0.5">
-              <span className={mono}>mcp</span>
+              <span className={mono}>{t("transportMcp")}</span>
               <span className="text-xs text-muted-foreground">
                 {t("transportLine")}
               </span>
