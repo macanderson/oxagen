@@ -35,10 +35,11 @@ None. The org and workspace come from the capability context.
 | `repositories[].name` | string | the repository name as the binding recorded it |
 | `repositories[].fullName` | string | `owner/name` as GitHub reported it when the binding was written |
 | `repositories[].defaultRef` | string | the approved default ref, the binding's `configured_default_ref` |
-| `repositories[].htmlUrl` | string | the repository on GitHub, derived from `fullName` |
+| `repositories[].provider` | `"github"` \| `"gitlab"` | the host (#3762) |
+| `repositories[].htmlUrl` | string | the repository on GitHub or the project on gitlab.com, derived from `fullName` |
 | `repositories[].boundAt` | string | RFC 3339; when the head was written |
 | `repositories[].connectionLive` | boolean | false when the connection behind the head is retired |
-| `repositories[].events` | `installed`, `suspended`, `uninstalled`, `paused`, `retired`, `unknown` | whether GitHub can deliver the repository's events: the App installation's lifecycle and the connection's state. `installed` is the precondition for delivery, not a claim that an event arrived |
+| `repositories[].events` | `installed`, `suspended`, `uninstalled`, `paused`, `retired`, `unknown` | whether GitHub can deliver the repository's events: the App installation's lifecycle and the connection's state. `installed` is the precondition for delivery, not a claim that an event arrived. A GitLab project reads `installed` when its connection is live and Oxagen registered the project webhook, and `unknown` when no webhook is registered |
 
 ## Refusals
 

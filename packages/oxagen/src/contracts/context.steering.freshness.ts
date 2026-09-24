@@ -148,6 +148,12 @@ export const contextSteeringFreshness = registerCapability({
      * steering is off for the workspace until one is.
      */
     repository: z.string().nullable(),
+    /**
+     * The host `repository` is on, so a checkout matches it against the right
+     * remote: `github` is github.com, `gitlab` is gitlab.com, where a
+     * repository may sit in nested groups (#3762). Null while none is bound.
+     */
+    provider: z.enum(["github", "gitlab"]).nullable(),
     defaultBranch: z.string().nullable(),
     /** The workspace's two gates. Both off unless the workspace turned one on. */
     policy: steeringGatePolicy,

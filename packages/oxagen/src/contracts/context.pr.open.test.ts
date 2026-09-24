@@ -9,6 +9,7 @@ export const contextPrFixture = {
   pr: {
     number: 519,
     url: "https://github.com/a-intel/platform/pull/519",
+    provider: "github",
     repository: "a-intel/platform",
     baseRef: "main",
     branch: "context/ctx.release.no-reread-changelog",
