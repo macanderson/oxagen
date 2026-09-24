@@ -271,7 +271,9 @@ export function agentPage(
     totals: {
       identities: agents.length,
       enrolled: agents.filter((a) => a.status === "enrolled").length,
+      unenrolled: agents.filter((a) => a.status === "unenrolled").length,
       holdingMandate: null,
+      mandateHolders: [],
       tamperIncidents: 0,
       tamper: { recorded: 0, open: 0, newest: null },
     },
@@ -347,7 +349,12 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     runs: {
       list: refuse,
       get: refuse,
@@ -359,7 +366,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       work: refuse,
       outcomesSettings: refuse,
     },
-    approvals: { pending: refuse, resolved: refuse },
+    approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     agents: {
       list: () => Promise.resolve(reads.agents),
       get: refuse,

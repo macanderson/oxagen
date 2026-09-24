@@ -89,7 +89,12 @@ export function RequestAccess({
     >
       <label className="flex flex-col gap-1">
         {t("stubs.requestRole")}
-        <input readOnly value={permission} className={`${inputBase} ${mono}`} />
+        <input
+          readOnly
+          value={permission}
+          data-touch-target=""
+          className={`${inputBase} ${mono}`}
+        />
       </label>
       <p>{t("stubs.requestBody")}</p>
       <SafeLink to={routes.roles(org)} className={`${linkText} self-start`}>

@@ -907,6 +907,60 @@ describe("visibleSteps", () => {
     expect(turn.steps.map((s) => s.id)).toEqual(["s0", "s2", "s3", "s4"]);
     expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s2", "s3"]);
   });
+
+  it("drops the steps that repeat the turn's prompt or reply, and keeps their frames on the turn", () => {
+    const said = (seq: number, type: string, text: string) =>
+      transcriptEntry({
+        seq: String(seq),
+        endSeq: String(seq),
+        kind: "frame",
+        type,
+        label: type,
+        request: null,
+        response: transcriptBody({ seq: String(seq), text }),
+        turn: 1,
+      });
+    const [turn] = buildTranscript([
+      said(1, "turn_start", "Fix the build."),
+      // A transcript copy of the prompt, as a recorder before the prompt
+      // dedupe sealed it: the same text on a second frame.
+      said(2, "oxagen:message", "Fix the build."),
+      transcriptEntry({ seq: "3", endSeq: "3", turn: 1 }),
+      said(4, "oxagen:message", "Running the tests next."),
+      said(5, "turn_end", "The build is fixed."),
+    ]);
+    if (turn === undefined) throw new Error("expected a turn");
+    expect(turn.prompt).toBe("Fix the build.");
+    expect(turn.reply).toBe("The build is fixed.");
+    expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s3", "s4"]);
+    expect(turn.frames).toHaveLength(5);
+  });
+
+  it("keeps a subagent's prompt step even when it matches the turn's text (negative)", () => {
+    const [turn] = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        endSeq: "1",
+        kind: "frame",
+        type: "turn_start",
+        request: null,
+        response: transcriptBody({ seq: "1", text: "Review it." }),
+        turn: 1,
+      }),
+      transcriptEntry({
+        seq: "2",
+        endSeq: "2",
+        kind: "frame",
+        type: "turn_start",
+        request: null,
+        response: transcriptBody({ seq: "2", text: "Review it." }),
+        turn: 1,
+        subagent: { chainRef: "chain-sub", type: "Explore" },
+      }),
+    ]);
+    if (turn === undefined) throw new Error("expected a turn");
+    expect(visibleSteps(turn).map((s) => s.id)).toEqual(["schain-sub:2"]);
+  });
 });
 
 describe("a subagent's entries in the run's transcript", () => {

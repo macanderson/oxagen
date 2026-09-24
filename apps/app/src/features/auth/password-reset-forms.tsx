@@ -66,6 +66,7 @@ export function ForgotPasswordForm({ header = null, footer = null }: Frame) {
           tone="ok"
           testId="forgot-sent"
           title={t("forgot.sentTitle")}
+          announce
           icon={<Inbox aria-hidden className="size-5" />}
         >
           {t.rich("forgot.sentBody", {
@@ -151,7 +152,7 @@ export function ResetPasswordForm({
     try {
       const result = await resetPassword(parsed.data);
       if (result.ok) {
-        // Log in shows "Password set. Every other device was logged out." once.
+        // Log in toasts "Password set. Every other device was logged out." once.
         rememberNotice("passwordSet");
         navigate.replace(routes.login());
         return;
@@ -172,6 +173,9 @@ export function ResetPasswordForm({
         tone="deny"
         testId="reset-expired"
         title={t("reset.expiredTitle")}
+        // A link that arrived with no token opens on this card, so focus stays
+        // put; a submit the server refused replaced the form, so it moves.
+        announce={token !== ""}
         icon={<TriangleAlert aria-hidden className="size-5" />}
         actions={
           <Link href="/forgot-password" className={buttonSecondary}>

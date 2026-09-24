@@ -241,4 +241,23 @@ describe("setAllVersions", () => {
       }),
     ).toBe("2.1.1");
   });
+
+  it("stamps a build of main only when asked to", () => {
+    expect(() => setAllVersions(root, "2.1.2-37")).toThrow(
+      /not a release version/,
+    );
+    expect(() => setAllVersions(root, "2.1.2-rc.1", { build: true })).toThrow(
+      /not a release \(X\.Y\.Z\) or a build \(X\.Y\.Z-N\)/,
+    );
+    setAllVersions(root, "2.1.2-37", { build: true });
+    expect(versionDrift(root)).toMatchObject({
+      version: "2.1.2-37",
+      drift: [],
+    });
+    const lock = readFileSync(
+      join(root, "apps/desktop/src-tauri/Cargo.lock"),
+      "utf8",
+    );
+    expect(lock).toContain('name = "oxagen-desktop"\nversion = "2.1.2-37"');
+  });
 });

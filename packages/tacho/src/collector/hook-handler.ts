@@ -279,24 +279,53 @@ function invocationToolUseId(
 
 /**
  * Whether a message drained at this boundary actually reaches the agent.
- * Claude Code takes `additionalContext` at SessionStart and at
- * UserPromptSubmit; Stella reads only SessionStart stdout as prompt text and
- * answers every other event with a decision document that has nowhere to put
- * prose (`stellaAnswer`). Cursor is the same shape for a different reason:
- * `additional_context` is a field of its sessionStart answer alone, and its
- * beforeSubmitPrompt answer carries only `continue` and a `user_message`
- * shown to the person, not to the agent. Draining at either harness's
- * UserPromptSubmit would seal `message_delivered` and tell the fleet the
- * command applied while the agent never saw a word, so the message stays
- * queued for a boundary that carries it.
+ *
+ * Claude Code takes `additionalContext` at SessionStart, UserPromptSubmit,
+ * PostToolUse and PostToolUseFailure, and a `Stop` answered
+ * `decision: "block"` continues the turn with the reason as the next thing
+ * the model reads. Codex documents the same PostToolUse and Stop answers.
+ * The mid-turn boundaries are what let a steer reach an agent working on its
+ * own: before them a steer waited for a human prompt that an autonomous run
+ * never sends, and expired "before a boundary".
+ *
+ * Stella reads only SessionStart stdout as prompt text and answers every
+ * other event with a decision document that has nowhere to put prose
+ * (`stellaAnswer`, which also turns a `Stop` block into a deny). Cursor's
+ * `additional_context` is a field of its sessionStart answer, its
+ * beforeSubmitPrompt answer carries only a `user_message` shown to the
+ * person, and its stop answer takes a `followup_message` that continues the
+ * agent (`cursorAnswer`). Draining at a boundary that cannot carry the text
+ * would seal `message_delivered` and tell the fleet the command applied while
+ * the agent never saw a word, so the message stays queued for one that can.
+ *
+ * `PreToolUse` carries an `interrupt` steer as the reason a tool call is
+ * refused, which every harness passes to the agent except Stella's.
  */
 function deliversMessages(
   harness: TachoHarness | undefined,
   hookEventName: string,
 ): boolean {
-  if (harness !== "stella" && harness !== "cursor") return true;
-  return hookEventName === "SessionStart";
+  if (harness === "stella") return hookEventName === "SessionStart";
+  if (harness === "cursor")
+    return (
+      hookEventName === "SessionStart" ||
+      hookEventName === "Stop" ||
+      hookEventName === "PreToolUse"
+    );
+  return MESSAGE_BOUNDARIES.has(hookEventName);
 }
+
+const MESSAGE_BOUNDARIES = new Set([
+  "SessionStart",
+  "UserPromptSubmit",
+  "PreToolUse",
+  "PostToolUse",
+  "PostToolUseFailure",
+  "Stop",
+]);
+
+/** What the agent is told when the operator resumes it mid-turn. */
+export const RESUMED_TEXT = "Resumed by the operator. Continue the task.";
 
 /**
  * Inject the queued prompt content at this boundary and chain one
@@ -373,6 +402,62 @@ function drainMessages(
 }
 
 /**
+ * The continuation a resume owes the agent (`SessionControl.resumeOwed`),
+ * sealed as the `oxagen:command_applied` frame of its delivery. The resume
+ * was acknowledged when it applied, so this sends no acknowledgement.
+ */
+function drainContinuation(
+  record: SessionRecord,
+  events: TachoEvent[],
+): string | undefined {
+  const commandId = record.control.resumeOwed;
+  if (commandId === undefined) return undefined;
+  record.control.resumeOwed = undefined;
+  events.push(
+    record.recorder.sealCollectorEvent(
+      "oxagen:command_applied",
+      {
+        policy_decision: "allow",
+        policy_source: "human",
+        policy_reason_code: "resume_delivered",
+        policy_reason_digest: digestText(RESUMED_TEXT),
+      },
+      { attrs: { "command.id": commandId, "command.name": "resume" } },
+    ),
+  );
+  return RESUMED_TEXT;
+}
+
+/**
+ * Everything queued for the agent that this mid-turn boundary delivers: the
+ * operator's messages and steers, then a resume's continuation. Empty when
+ * the boundary cannot carry text for this harness, when it fired inside a
+ * subagent (a steer is addressed to the agent the operator is watching, and
+ * text in a subagent's context never reaches it), or when this is a spool
+ * replay, whose answer reaches no harness. Each item leaves the queue as it
+ * is sealed, and the daemon runs hooks one at a time, so parallel tool calls
+ * cannot deliver the same steer twice.
+ */
+function drainMidTurn(
+  input: HookInput,
+  record: SessionRecord,
+  deps: HookHandlerDeps,
+  events: TachoEvent[],
+  replay: HookReplay | undefined,
+): string[] {
+  if (
+    replay !== undefined ||
+    input.agent_id !== undefined ||
+    !deliversMessages(record.harness, input.hook_event_name)
+  )
+    return [];
+  const texts = drainMessages(record, deps, events).map((m) => m.text);
+  const continuation = drainContinuation(record, events);
+  if (continuation !== undefined) texts.push(continuation);
+  return texts;
+}
+
+/**
  * Map one hook payload to its events and its answer. `agent` names a custom
  * agent (`tacho hook --agent <name>`): its payload is Claude Code's shape and
  * its session is labelled `runtime: "custom"`, `harness: <name>`.
@@ -403,6 +488,15 @@ export async function handleHookEvent(
     agent,
     hookId,
   );
+  // Remembered after the route, not before it: a route that throws (a
+  // policy read, a git lookup, a parse) sends the client a failure, the
+  // client spools the same id, and that replay is the only copy the daemon
+  // will ever see. Remembering an id the ledger already holds is a no-op, so
+  // the dedupe branch passes through here harmlessly. A WAL write that fails
+  // after this point is undone by the daemon with `forgetHookId`.
+  if (hookId !== undefined && outcome.record !== undefined) {
+    rememberHookId(outcome.record, hookId);
+  }
   // Drained after the route, whichever branch returned: every event the
   // route sealed is in `events` by now, so every body is pending on the
   // recorder, and taking them here is what keeps the two lists paired.
@@ -526,12 +620,11 @@ async function routeHook(
   // `UserPromptSubmit`) a phantom prompt nobody sent twice. Nothing new is
   // sealed for the replay; the answer is empty, which is safe here because a
   // replay is fed back into the daemon for its record only, not read by a
-  // harness waiting on stdout.
-  if (hookId !== undefined) {
-    if (sawHookId(record, hookId)) {
-      return { events: [], response: {}, record };
-    }
-    rememberHookId(record, hookId);
+  // harness waiting on stdout. The id is remembered only once the route
+  // succeeds (in `handleHookEvent`), so a live request that threw leaves no
+  // sighting behind and its spool replay is sealed.
+  if (hookId !== undefined && sawHookId(record, hookId)) {
+    return { events: [], response: {}, record };
   }
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
@@ -566,8 +659,11 @@ async function routeHook(
       // A blocked start answers with `continue: false` and carries no
       // context, so a message drained here would be sealed as delivered and
       // dropped. It waits for a start that is not blocked.
+      // A replay's answer reaches no harness, so nothing drains there.
       const messages =
-        block === undefined ? drainMessages(record, deps, events) : [];
+        block === undefined && replay === undefined
+          ? drainMessages(record, deps, events)
+          : [];
       events.push(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
@@ -642,9 +738,12 @@ async function routeHook(
       const block = operatorBlock(view, record);
       const messages =
         block === undefined &&
+        replay === undefined &&
         deliversMessages(record.harness, input.hook_event_name)
           ? drainMessages(record, deps, events)
           : [];
+      // A person prompting supersedes a resume's continuation.
+      if (block === undefined) record.control.resumeOwed = undefined;
       events.push(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
@@ -706,15 +805,58 @@ async function routeHook(
           reason_code: "bundle_stale",
         };
       }
+      // The pause refused the agent a call, so a resume owes it a
+      // continuation (`SessionControl.pauseEffect`). A replay was decided
+      // by `tacho-hook` from the cached bundle, which holds no session state.
+      if (
+        replay === undefined &&
+        evaluation.decision === "deny" &&
+        evaluation.reason_code === "session_paused" &&
+        record.control.pauseEffect === undefined
+      )
+        record.control.pauseEffect = "refused";
+      // An `interrupt` steer lands here: the call the agent is about to make
+      // is refused with the steer as the reason, which the agent reads as
+      // the tool's result, so the steer changes what it does next rather
+      // than what it does after this step. The proxy cut the model call that
+      // produced this one as retryable (`daemon.ts`), so the turn goes on.
+      // Only a call the policy would allow is taken; a denied one already
+      // stops the step, and its steer waits for the PostToolUse or Stop.
+      if (
+        evaluation.decision !== "deny" &&
+        record.control.messages.some(
+          (message) => message.deliveryMode === "interrupt",
+        )
+      ) {
+        const texts = drainMidTurn(input, record, deps, events, replay);
+        if (texts.length > 0) {
+          const reason = `Your Oxagen operator interrupted this step. ${texts.join("\n\n")}`;
+          evaluation = {
+            ...evaluation,
+            decision: "deny",
+            evaluated: "deny",
+            source: "human",
+            reason_code: "steer_interrupt",
+            reason,
+          };
+        }
+      }
       const facts = policyFacts(evaluation, currentView);
       const attrs = policyAttrs(evaluation, replay);
       const toolDrafts = normalizeHook(payload, env, {
         sessionUuid: record.recorder.sessionUuid,
       });
-      const toolBody =
-        toolDrafts.find((draft) => draft.kind === "tool_requested")?.body ?? {};
+      const toolDraft = toolDrafts.find(
+        (draft) => draft.kind === "tool_requested",
+      );
+      const toolBody = toolDraft?.body ?? {};
+      const spawnToolUseId = toolBody["tool_use_id"];
+      // Sealed on the chain the tool request lands on: a subagent's call
+      // is recorded on the subagent chain, and so is its decision.
       events.push(
-        record.recorder.sealCollectorEvent(
+        ...record.recorder.sealCollectorEventOn(
+          toolDraft?.subagent,
+          typeof spawnToolUseId === "string" ? spawnToolUseId : undefined,
           "policy_decision",
           { ...toolBody, ...facts },
           { hook_event_name: "PreToolUse", attrs },
@@ -893,6 +1035,56 @@ async function routeHook(
       return { events, response: {}, record };
     }
 
+    case "PostToolUse":
+    case "PostToolUseFailure": {
+      events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
+      if (operatorBlock(view, record) !== undefined)
+        return { events, response: {}, record };
+      const texts = drainMidTurn(input, record, deps, events, replay);
+      return {
+        events,
+        response:
+          texts.length > 0
+            ? {
+                hookSpecificOutput: {
+                  hookEventName: input.hook_event_name,
+                  additionalContext: texts.join("\n\n"),
+                },
+              }
+            : {},
+        record,
+      };
+    }
+
+    case "Stop":
+    case "StopFailure": {
+      events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
+      const block = operatorBlock(view, record);
+      if (block !== undefined) {
+        // A paused agent ending its turn is let go: blocking this Stop would
+        // send the model back against tools the pause denies, until Claude
+        // Code's cap of eight blocks. Resume reads this to report the agent
+        // idle rather than owe it a continuation it cannot receive.
+        if (block.code === "session_paused" && replay === undefined)
+          record.control.pauseEffect = "stopped";
+        return { events, response: {}, record };
+      }
+      // Claude Code ignores a StopFailure answer, so only Stop drains.
+      if (input.hook_event_name === "StopFailure")
+        return { events, response: {}, record };
+      // A queued steer, or a resume's continuation, keeps the turn going:
+      // `decision: "block"` hands the reason to the model as what to do next.
+      const texts = drainMidTurn(input, record, deps, events, replay);
+      return {
+        events,
+        response:
+          texts.length > 0
+            ? { decision: "block", reason: texts.join("\n\n") }
+            : {},
+        record,
+      };
+    }
+
     case "SessionEnd": {
       events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
       deps.registry.seal(record);
@@ -907,7 +1099,12 @@ async function routeHook(
 }
 
 /** The tools that write a file named by an absolute path in their input. */
-const FILE_WRITING_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+const FILE_WRITING_TOOLS = new Set([
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "NotebookEdit",
+]);
 
 /**
  * The directory of the file a write tool call names, when it names one by

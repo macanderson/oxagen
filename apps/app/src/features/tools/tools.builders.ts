@@ -108,7 +108,10 @@ export function agentPage(
     totals: {
       identities: agents.length,
       enrolled: agents.filter((agent) => agent.status === "enrolled").length,
+      unenrolled: agents.filter((agent) => agent.status === "unenrolled")
+        .length,
       holdingMandate: 0,
+      mandateHolders: [],
       tamperIncidents: 0,
       tamper: { recorded: 0, open: 0, newest: null },
     },
@@ -199,7 +202,12 @@ export function toolsSource(reads: ToolsReads) {
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -219,7 +227,7 @@ export function toolsSource(reads: ToolsReads) {
       work: refuse,
       outcomesSettings: refuse,
     },
-    approvals: { pending: refuse, resolved: refuse },
+    approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     agents: {
       list: answer(
         reads.agents ?? readOk(agentPage([agentPageRow("invoice-bot")])),

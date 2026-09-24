@@ -19,6 +19,8 @@ export function enrollment(
     id: "tch_mbellmbp16aaaaaaaaaaaaa",
     hostname: "mbell-mbp-16",
     platform: "darwin",
+    osVersion: "15.6",
+    arch: "arm64",
     osUser: "mbell",
     status: "active",
     mode: "enforce",
@@ -27,7 +29,8 @@ export function enrollment(
     collectorVersion: "1.6.2",
     modelRoute: "loopback",
     shadowedBy: null,
-    hooksOk: true,
+    managed: false,
+    hooksOk: null,
     lastSeenAt: "2026-09-23T09:12:44.000Z",
     createdAt: "2026-09-01T10:00:00.000Z",
     expiresAt: "2099-09-01T10:00:00.000Z",
@@ -111,7 +114,12 @@ export function runtimesSource(reads: {
   const source: DataSource = {
     runtimes,
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -131,7 +139,7 @@ export function runtimesSource(reads: {
       work: refuse,
       outcomesSettings: refuse,
     },
-    approvals: { pending: refuse, resolved: refuse },
+    approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
     mandates: { list: refuse, get: refuse },
     spend: {

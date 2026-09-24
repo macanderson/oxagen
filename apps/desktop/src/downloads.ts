@@ -16,6 +16,12 @@ export interface Installer {
   contentType: string;
   /** Order on the page: macOS first, then Windows, then Linux. */
   rank: number;
+  /**
+   * The version-free name the newest build is also published under, at
+   * `latest/<name>` on the downloads host. The web app and the docs link
+   * these names, so a rename here breaks their links: change them together.
+   */
+  latest: string;
 }
 
 interface Rule {
@@ -24,6 +30,7 @@ interface Rule {
   variant: string;
   contentType: string;
   rank: number;
+  latest: string;
 }
 
 const RULES: Rule[] = [
@@ -33,6 +40,7 @@ const RULES: Rule[] = [
     variant: "Apple silicon",
     contentType: "application/x-apple-diskimage",
     rank: 0,
+    latest: "Oxagen_aarch64.dmg",
   },
   {
     test: /_x64\.dmg$/,
@@ -40,6 +48,7 @@ const RULES: Rule[] = [
     variant: "Intel",
     contentType: "application/x-apple-diskimage",
     rank: 1,
+    latest: "Oxagen_x64.dmg",
   },
   {
     test: /_x64-setup\.exe$/,
@@ -47,6 +56,7 @@ const RULES: Rule[] = [
     variant: "Installer (.exe, current user)",
     contentType: "application/vnd.microsoft.portable-executable",
     rank: 2,
+    latest: "Oxagen_x64-setup.exe",
   },
   {
     test: /_x64_[a-z]{2}-[A-Z]{2}\.msi$/,
@@ -54,6 +64,7 @@ const RULES: Rule[] = [
     variant: "Installer (.msi)",
     contentType: "application/x-msi",
     rank: 3,
+    latest: "Oxagen_x64_en-US.msi",
   },
   {
     test: /_amd64\.deb$/,
@@ -61,6 +72,7 @@ const RULES: Rule[] = [
     variant: ".deb (Debian, Ubuntu)",
     contentType: "application/vnd.debian.binary-package",
     rank: 4,
+    latest: "Oxagen_amd64.deb",
   },
   {
     test: /\.x86_64\.rpm$/,
@@ -68,6 +80,7 @@ const RULES: Rule[] = [
     variant: ".rpm (Fedora, RHEL)",
     contentType: "application/x-rpm",
     rank: 5,
+    latest: "Oxagen.x86_64.rpm",
   },
   {
     test: /_amd64\.AppImage$/,
@@ -75,6 +88,7 @@ const RULES: Rule[] = [
     variant: "AppImage (any distribution)",
     contentType: "application/x-executable",
     rank: 6,
+    latest: "Oxagen_amd64.AppImage",
   },
 ];
 
@@ -100,6 +114,7 @@ export function classifyInstaller(
     variant: rule.variant,
     contentType: rule.contentType,
     rank: rule.rank,
+    latest: rule.latest,
   };
 }
 
@@ -117,6 +132,162 @@ export function sha256SumsText(
 ): string {
   return entries.map((e) => `${e.sha256}  ${e.file}`).join("\n") + "\n";
 }
+
+/**
+ * `X.Y.Z` is a release, cut by the release workflow and tagged
+ * `desktop-vX.Y.Z`. `X.Y.Z-N` is a build of main that a production deploy
+ * published, N commits after the release before `X.Y.Z` (ADR-158). Both
+ * are valid semver, and semver orders them the way a person expects:
+ * `2.1.1 < 2.1.2-4 < 2.1.2-9 < 2.1.2`.
+ */
+const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-(\d+))?$/;
+
+/** True for a build of main (`X.Y.Z-N`), false for a release (`X.Y.Z`). */
+export function isBuildVersion(version: string): boolean {
+  const match = VERSION.exec(version);
+  return match !== null && match[4] !== undefined;
+}
+
+/**
+ * Semver precedence for the two shapes above: negative when `a` is older,
+ * positive when newer, 0 when equal. A release outranks every build of its
+ * own number. Anything else is refused, because a pointer that moves on a
+ * comparison it cannot make could move backwards.
+ */
+export function compareVersions(a: string, b: string): number {
+  const parse = (v: string) => {
+    const match = VERSION.exec(v);
+    if (match === null)
+      throw new Error(`"${v}" is not a version this host publishes`);
+    return {
+      core: [Number(match[1]), Number(match[2]), Number(match[3])],
+      build: match[4] === undefined ? null : Number(match[4]),
+    };
+  };
+  const x = parse(a);
+  const y = parse(b);
+  for (let i = 0; i < 3; i++) {
+    const d = (x.core[i] ?? 0) - (y.core[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  if (x.build === y.build) return 0;
+  if (x.build === null) return 1;
+  if (y.build === null) return -1;
+  return x.build - y.build;
+}
+
+/**
+ * What `latest.json` on the downloads host says, or null when it is missing
+ * or unreadable. Only the version is needed to decide whether to move it.
+ */
+export function readLatestVersion(text: string | null): string | null {
+  if (text === null || text.trim() === "") return null;
+  try {
+    const parsed = JSON.parse(text) as { version?: unknown };
+    return typeof parsed.version === "string" && VERSION.test(parsed.version)
+      ? parsed.version
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether publishing `candidate` moves `latest/` and the page. A release
+ * build and a deploy build can finish in either order, and two deploy builds
+ * can too, so the pointer only ever moves forward. Republishing the version
+ * it already names (a resumed publish) redraws it.
+ */
+export function advancesLatest(
+  current: string | null,
+  candidate: string,
+): boolean {
+  if (current === null) return true;
+  return compareVersions(candidate, current) >= 0;
+}
+
+export interface LatestManifest {
+  version: string;
+  /** "release" for `X.Y.Z`, "build" for a deploy build `X.Y.Z-N`. */
+  channel: "release" | "build";
+  publishedAt: string;
+  /** Every installer of the version, in page order. */
+  installers: Array<{
+    os: Installer["os"];
+    variant: string;
+    file: string;
+    /** The immutable, versioned URL. */
+    url: string;
+    /** The version-free URL that follows the newest build. */
+    latestUrl: string;
+    bytes: number;
+    sha256: string;
+  }>;
+  checksums: string;
+}
+
+/** The `latest.json` written beside `latest/` on every forward move. */
+export function latestManifest(input: {
+  version: string;
+  publishedAt: string;
+  entries: PageEntry[];
+  host: string;
+}): LatestManifest {
+  const base = `https://${input.host}`;
+  const v = encodeURIComponent(input.version);
+  return {
+    version: input.version,
+    channel: isBuildVersion(input.version) ? "build" : "release",
+    publishedAt: input.publishedAt,
+    installers: sortInstallers(input.entries).map((e) => ({
+      os: e.os,
+      variant: e.variant,
+      file: e.file,
+      url: `${base}/desktop/${v}/${encodeURIComponent(e.file)}`,
+      latestUrl: `${base}/latest/${encodeURIComponent(e.latest)}`,
+      bytes: e.bytes,
+      sha256: e.sha256,
+    })),
+    checksums: `${base}/desktop/${v}/SHA256SUMS.txt`,
+  };
+}
+
+/**
+ * `aws s3 cp` arguments that copy a published installer to its version-free
+ * name, server side. The copy is short-lived in caches because the next
+ * deploy replaces it, and it downloads under its versioned file name so a
+ * saved file still says which build it is.
+ */
+export function latestCopyArgs(input: {
+  bucket: string;
+  version: string;
+  entry: Installer;
+}): string[] {
+  const { bucket, version, entry } = input;
+  return [
+    "s3",
+    "cp",
+    `s3://${bucket}/desktop/${version}/${entry.file}`,
+    `s3://${bucket}/latest/${entry.latest}`,
+    "--metadata-directive",
+    "REPLACE",
+    "--content-type",
+    entry.contentType,
+    "--content-disposition",
+    `attachment; filename="${entry.file}"`,
+    "--cache-control",
+    LATEST_CACHE_CONTROL,
+    "--only-show-errors",
+  ];
+}
+
+/**
+ * Five minutes: long enough to absorb a burst of downloads at the edge,
+ * short enough that a deploy's installers reach every link within minutes of
+ * the invalidation. Everything under `/desktop/` is cached for a year and
+ * must never carry this.
+ */
+export const LATEST_CACHE_CONTROL = "public, max-age=300, must-revalidate";
 
 /** Bytes as a download page prints them: 81.9 MB. */
 export function formatSize(bytes: number): string {
@@ -152,7 +323,11 @@ export const FONT_FILES = [
   "monaspace-neon-latin-wght.woff2",
 ] as const;
 
-/** Where a version's release notes and its GitHub release live. */
+/**
+ * Where a version's release notes and its GitHub release live. A deploy
+ * build has neither: its notes are the next release's, so it links the
+ * release index instead of a page that does not exist.
+ */
 export function releaseLinks(version: string): {
   notes: string;
   allReleases: string;
@@ -160,7 +335,9 @@ export function releaseLinks(version: string): {
 } {
   const v = encodeURIComponent(version);
   return {
-    notes: `https://docs.oxagen.sh/docs/releases/v${v}`,
+    notes: isBuildVersion(version)
+      ? "https://docs.oxagen.sh/docs/releases"
+      : `https://docs.oxagen.sh/docs/releases/v${v}`,
     allReleases: "https://docs.oxagen.sh/docs/releases",
     githubRelease: `https://github.com/macanderson/oxagen/releases/tag/desktop-v${v}`,
   };
@@ -198,6 +375,8 @@ export function renderIndexHtml(input: {
   const version = escapeHtml(input.version);
   const sorted = sortInstallers(input.entries);
   const links = releaseLinks(input.version);
+  // A deploy build has no notes page and no GitHub release of its own.
+  const build = isBuildVersion(input.version);
   const hrefOf = (file: string) =>
     `desktop/${encodeURIComponent(input.version)}/${encodeURIComponent(file)}`;
   const rows = (os: Installer["os"]) =>
@@ -322,7 +501,7 @@ footer a{color:var(--muted)}
 <p class="eyebrow">Workforce management for autonomous agents</p>
 <h1>Download the Oxagen app</h1>
 <p class="lede">The Oxagen app signs this machine in to your organization and registers the Claude Code, Codex, Cursor, and Stella installs it finds. Every run they make is recorded, and every action routed through Oxagen is answered by your rules.</p>
-<p class="meta"><span>Version <code>${version}</code></span><span>Published <code>${escapeHtml(input.publishedAt)}</code></span><span><a href="${links.notes}">Release notes</a></span></p>
+<p class="meta"><span>${build ? "Build" : "Version"} <code>${version}</code></span><span>Published <code>${escapeHtml(input.publishedAt)}</code></span><span><a href="${links.notes}">${build ? "Releases" : "Release notes"}</a></span></p>
 <div class="cta">${primary}<span class="alt" id="alt">Other platforms and architectures are listed below. Each file has a SHA-256.</span></div>
 </section>
 <div class="grid">
@@ -333,12 +512,12 @@ ${section("Linux", "x86_64. Install the package for your distribution. The AppIm
 <section class="verify">
 <div><h2>Verify a download</h2><p>Every file in this version is listed in <a href="desktop/${encodeURIComponent(input.version)}/SHA256SUMS.txt">SHA256SUMS.txt</a>. Put it beside the file you downloaded and run:</p><pre>shasum -a 256 -c SHA256SUMS.txt</pre></div>
 <div><h2>Command line only</h2><p>The <code>tacho</code> and <code>oxagen</code> executables ship inside the app and link onto your PATH on first launch.${
-    input.cliRelease === false
+    input.cliRelease === false || build
       ? ""
       : ` To install them without the app, take the bare binaries from the <a href="${links.githubRelease}">GitHub release</a> for ${version}.`
   }</p></div>
 </section>
-<footer><a href="${links.notes}">What changed in ${version}</a><a href="${links.allReleases}">All releases</a><a href="https://docs.oxagen.sh/docs/cli/desktop">App guide</a><a href="https://oxagen.sh/">oxagen.sh</a></footer>
+<footer>${build ? "" : `<a href="${links.notes}">What changed in ${version}</a>`}<a href="${links.allReleases}">All releases</a><a href="https://docs.oxagen.sh/docs/cli/desktop">App guide</a><a href="https://oxagen.sh/">oxagen.sh</a></footer>
 </div>
 <script>
 (function(){var picks=${picksJson};var el=document.getElementById("pick");var alt=document.getElementById("alt");if(!el)return;var ua=navigator.userAgent||"";var uad=navigator.userAgentData;var p=(uad&&uad.platform)||navigator.platform||"";var os=/Win/i.test(p)||/Windows/i.test(ua)?"Windows":/Mac/i.test(p)||/Mac OS/i.test(ua)?"macOS":/Linux|X11/i.test(p+ua)?"Linux":null;if(!os)return;function apply(key,note){var pick=picks[key];if(!pick)return;el.href=pick.href;el.textContent="Download for "+pick.label;el.setAttribute("data-os",os);var panel=document.getElementById(os.toLowerCase());if(panel)panel.setAttribute("aria-current","true");if(alt&&note)alt.innerHTML=note;}

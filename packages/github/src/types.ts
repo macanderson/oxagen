@@ -1,3 +1,18 @@
+/** An issue a pull request closes, as `listClosingIssues` returns it. */
+export interface GitHubClosingIssue {
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+  state: "open" | "closed";
+}
+
+export interface GitHubClosingIssues {
+  issues: GitHubClosingIssue[];
+  complete: boolean;
+}
+
 /** A pull request's core fields, normalised from the GitHub REST payload. */
 export interface GitHubPullRequest {
   number: number;
@@ -333,6 +348,18 @@ export interface GitHubClient {
     repo: string;
     number: number;
   }): Promise<GitHubPullRequest>;
+
+  /**
+   * The issues a pull request will close on merge, as GitHub itself records
+   * them: closing keywords in the body and issues linked in the sidebar
+   * (GraphQL `closingIssuesReferences`). Reads the first 25; `complete` is
+   * false when the pull request closes more.
+   */
+  listClosingIssues(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<GitHubClosingIssues>;
 
   /**
    * List a PR's issue (conversation) comments and inline review comments.

@@ -39,6 +39,7 @@ export interface VersionReading extends VersionManifest {
 }
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
+const BUILD_SEMVER = /^\d+\.\d+\.\d+(?:-\d+)?$/;
 
 function tracked(root: string, patterns: string[]): string[] {
   // `git ls-files` with no pathspec lists the whole index, so an empty pattern
@@ -288,9 +289,22 @@ export function versionDrift(root: string): {
 export function setAllVersions(
   root: string,
   version: string,
+  options: {
+    /**
+     * Accept a build of main (`X.Y.Z-N`, ADR-158) as well as a release. Only
+     * the desktop workflow passes this, to stamp an uncommitted CI checkout;
+     * a build version is never committed.
+     */
+    build?: boolean;
+  } = {},
 ): Array<VersionReading & { from: string | null }> {
-  if (!SEMVER.test(version))
-    throw new Error(`"${version}" is not a release version (X.Y.Z)`);
+  const accepted = options.build === true ? BUILD_SEMVER : SEMVER;
+  if (!accepted.test(version))
+    throw new Error(
+      options.build === true
+        ? `"${version}" is not a release (X.Y.Z) or a build (X.Y.Z-N) version`
+        : `"${version}" is not a release version (X.Y.Z)`,
+    );
   const planned = discoverManifests(root).map((manifest) => {
     const from = readManifestVersion(root, manifest);
     const path = join(root, manifest.file);

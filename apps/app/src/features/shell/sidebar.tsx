@@ -1,41 +1,43 @@
 "use client";
 // The sidebar (mockup `sidebar()`): brand, the organization and workspace
-// tiles, and the Workspace and Organization sections.
-import { useShellActivity } from "./activity";
+// tiles, the Workspace and Organization sections, and the foot: the assistant
+// launcher, the organization line and the connection badge.
 import { OxagenWordmark } from "@oxagen/ui";
-import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { useId, useSyncExternalStore } from "react";
 import { AssistantLauncher } from "./assistant-launcher";
-import { useId } from "react";
-import {
-  isNavItemCurrent,
-  type NavSection,
-  parseShellPath,
-  sidebarSections,
-} from "./nav";
+import { isNavItemCurrent, type NavKey } from "./nav";
 import { NAV_ICONS } from "./nav-icons";
 import type { ShellData } from "./shell-data";
+import { useSidebarSections } from "./sidebar-sections";
 import { OrgSwitcher, WorkspaceSwitcher } from "./switchers";
+import { type ShellCounts, useShellCounts } from "./use-activity";
 import { routes } from "@/shared/safe-path";
+import { Badge } from "@/ui/badge";
 import { SafeLink } from "@/ui/navigation";
 
+export { useSidebarSections } from "./sidebar-sections";
+
+/** The issue that owns the foot's missing organization read, as a data attribute only. */
+const FOOT_GAP = "#3851";
+
 /**
- * Sidebar sections for the current URL. Shared by the desktop rail, the phone
- * drawer, <ShellMobileNav> and the command menu. The workspace is the one in
- * the URL or, on an organization page, the first `shell.context` lists, so the
- * workspace links always point somewhere the viewer can open.
+ * `.navitem .ct`: a count appears only where something waits on a person
+ * (audit-prompt check 5): Fleet (parked approvals), Steering (proposals) and
+ * Audit (open critical incidents). `hot` is `.ct.hot`, the approval ink.
  */
-export function useSidebarSections(data: ShellData): {
-  sections: NavSection[];
-  ws: string | null;
-  pathname: string;
-} {
-  const pathname = usePathname();
-  const { context } = data;
-  const ws =
-    parseShellPath(pathname).ws ??
-    (context.ok ? (context.value.workspaces[0]?.slug ?? null) : null);
-  return { sections: sidebarSections(data.org.slug, ws), ws, pathname };
+function navCount(
+  key: NavKey,
+  counts: ShellCounts,
+): { value: number | null; hot: boolean; more: boolean } | null {
+  if (key !== "fleet" && key !== "steering" && key !== "audit") return null;
+  const hot = key !== "steering";
+  // A read that landed without a figure says so; it never reads as zero.
+  if (counts.unrecorded.includes(key)) return { value: null, hot, more: false };
+  const value = counts[key];
+  if (value === null || value <= 0) return null;
+  // A queue that ran past the read says "+", as the drawer's header does.
+  return { value, hot, more: key === "fleet" && counts.fleetMore };
 }
 
 export function SidebarNav({
@@ -47,16 +49,15 @@ export function SidebarNav({
 }) {
   const t = useTranslations("shell");
   const { sections, pathname } = useSidebarSections(data);
+  const counts = useShellCounts(data);
   const labelId = useId();
-  const activity = useShellActivity();
-  const currentCounts = activity?.counts;
   return (
     <nav aria-label={t("sidebar.navLabel")} className="flex-1 px-2.5 py-3">
       {sections.map((section) => (
         <div key={section.key} className="mb-3">
           <p
             id={`${labelId}-${section.key}`}
-            className="px-2 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-dim"
+            className="px-2 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-sidebar-nav-label-fg"
           >
             {t(`sidebar.sections.${section.key}`)}
           </p>
@@ -64,18 +65,9 @@ export function SidebarNav({
             {section.items.map((item) => {
               const Icon = NAV_ICONS[item.key];
               const current = isNavItemCurrent(item.key, pathname);
-              // `.navitem .ct.hot`: the one count the workspace nav carries is
-              // what waits on a person (ARCHITECTURE.md §1.2); null is "the
-              // read could not say", and draws nothing rather than a zero.
-              const counts = currentCounts?.ok ? currentCounts.value : null;
-              const waiting =
-                item.key === "fleet"
-                  ? (counts?.approvals ?? data.fleetWaiting)
-                  : item.key === "steering"
-                    ? (counts?.proposals ?? null)
-                    : item.key === "audit"
-                      ? (counts?.incidents ?? null)
-                      : null;
+              // Nothing waiting draws nothing; a count the read could not
+              // give draws "?" and says it is not recorded.
+              const waiting = navCount(item.key, counts);
               return (
                 <li key={item.key}>
                   <SafeLink
@@ -94,12 +86,40 @@ export function SidebarNav({
                       className="size-4 flex-none opacity-85"
                     />
                     <span className="flex-1">{t(`nav.${item.key}`)}</span>
-                    {waiting === null || waiting === 0 ? null : (
+                    {waiting === null ? null : waiting.value === null ? (
                       <span
                         data-count={item.key}
-                        className="rounded-[5px] border border-info/40 bg-card px-[5px] font-mono text-[10.5px] text-info"
+                        data-count-unrecorded=""
+                        title={t("sidebar.countNotRecorded")}
+                        className="rounded-[5px] border border-dashed border-border bg-card px-[5px] font-mono text-[10.5px] text-sidebar-nav-label-fg"
                       >
-                        {waiting}
+                        <span aria-hidden="true">?</span>
+                        <span className="sr-only">
+                          {t("sidebar.countNotRecordedShort")}
+                        </span>
+                      </span>
+                    ) : (
+                      <span
+                        data-count={item.key}
+                        className={`rounded-[5px] border bg-card px-[5px] font-mono text-[10.5px] ${
+                          waiting.hot
+                            ? "border-info/40 text-info"
+                            : "border-border text-sidebar-nav-label-fg"
+                        }`}
+                      >
+                        <span aria-hidden="true">
+                          {waiting.value}
+                          {waiting.more ? "+" : ""}
+                        </span>
+                        <span className="sr-only">
+                          {/* Audit counts open critical incidents, which
+                              are open, not waiting (mobileNav.incidents). */}
+                          {item.key === "audit"
+                            ? t("sidebar.open", { count: waiting.value })
+                            : t("sidebar.waiting", {
+                                count: `${String(waiting.value)}${waiting.more ? "+" : ""}`,
+                              })}
+                        </span>
                       </span>
                     )}
                   </SafeLink>
@@ -131,6 +151,62 @@ export function SidebarHeader({ data }: { data: ShellData }) {
   );
 }
 
+function subscribeOnline(listener: () => void): () => void {
+  window.addEventListener("online", listener);
+  window.addEventListener("offline", listener);
+  return () => {
+    window.removeEventListener("online", listener);
+    window.removeEventListener("offline", listener);
+  };
+}
+
+/**
+ * The connection badge. The chrome rendered from a control-plane read, so it
+ * was reachable then; after that the badge follows the browser's own
+ * connection, and says offline the moment it drops.
+ */
+function ConnectionBadge() {
+  const t = useTranslations("shell.sidebar.foot");
+  const online = useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+  return (
+    <span data-testid="connection" title={online ? t("reachable") : undefined}>
+      <Badge tone={online ? "allowed" : "failed"}>
+        {online ? t("connected") : t("offline")}
+      </Badge>
+    </span>
+  );
+}
+
+/**
+ * `.side-foot`: the assistant launcher, then the organization's agent count
+ * and data plane beside the connection badge. Both are recorded, but no read
+ * an organization member can make answers them for the whole organization
+ * (`list_agents` is per workspace, `get_data_plane` is Owner and Admin), so
+ * the line says they are not read here rather than printing a figure (#3851).
+ */
+export function SidebarFoot({ onNavigate }: { onNavigate?: () => void }) {
+  const t = useTranslations("shell.sidebar.foot");
+  return (
+    <div className="mt-auto border-t border-sidebar-border px-2.5 pb-3 pt-2.5">
+      <AssistantLauncher {...(onNavigate ? { onNavigate } : {})} />
+      <div className="flex items-center justify-between gap-2 px-1">
+        <span
+          data-testid="sidebar-foot-not-backed"
+          data-gap={FOOT_GAP}
+          className="min-w-0 font-mono text-[10.5px] text-sidebar-nav-label-fg"
+        >
+          {t("notBacked")}
+        </span>
+        <ConnectionBadge />
+      </div>
+    </div>
+  );
+}
+
 /** The desktop rail. Hidden below `md`, where the thumb bar and the drawer take over. */
 export function Sidebar({ data }: { data: ShellData }) {
   const t = useTranslations("shell.sidebar");
@@ -141,9 +217,7 @@ export function Sidebar({ data }: { data: ShellData }) {
     >
       <SidebarHeader data={data} />
       <SidebarNav data={data} />
-      <div className="mt-auto px-2.5">
-        <AssistantLauncher />
-      </div>
+      <SidebarFoot />
     </aside>
   );
 }

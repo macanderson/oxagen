@@ -50,7 +50,7 @@ export const DEFAULT_TARGET_MARGIN = 0.65;
 
 /**
  * Vendor that invoices us for a model. Mirrors the `vendor` column of the
- * engine's card (`packages/agent-engine/src/router/rate-card.ts`) — the router
+ * engine's card (`packages/billing/src/rate-card.ts`) — the router
  * can select any of these, so billing must be able to price all of them.
  */
 export type ProviderName =
@@ -89,28 +89,121 @@ export type RateCard = Record<string, ProviderModelRate>;
  * longest matching prefix via {@link resolveRate}.
  */
 export const PROVIDER_RATE_CARD: RateCard = {
-  // Claude Fable 5 is Anthropic's most capable model — priced at (and above) the
-  // Opus tier. The bare `claude-fable-5` / gateway `anthropic/claude-fable-5`
-  // keys never prefix-match any `claude-opus`/`claude-sonnet` row, so without an
-  // explicit entry Fable would fall back to the Sonnet rate and silently
-  // UNDER-charge. Matches the CLI/agent-engine fable rows ($15/$75).
-  // Anthropic cache writes bill at 1.25x base input (5-min TTL) — cacheWritePer1M
-  // = inputPer1M * 1.25. Folding them into fresh input would under-charge the
-  // premium by 25% on every cache-write token.
+  // Anthropic list prices, USD per million tokens, from the published pricing
+  // page. Cache writes bill at 1.25x base input (5-minute TTL), so
+  // cacheWritePer1M = inputPer1M * 1.25 on every Anthropic row. Folding writes
+  // into fresh input would under-charge the premium by 25% per write token.
+  // Cache reads are 0.1x input except where a row says otherwise.
+  //
+  // Claude Fable 5.1: $10/$50. Its cache read is 0.025x input ($0.25), not the
+  // usual 0.1x. That is the list price, not a typo.
+  "claude-fable-5-1": {
+    provider: "anthropic",
+    inputPer1M: 10.0,
+    outputPer1M: 50.0,
+    cachedInputPer1M: 0.25,
+    cacheWritePer1M: 12.5,
+  },
+  "claude-fable-5.1": {
+    provider: "anthropic",
+    inputPer1M: 10.0,
+    outputPer1M: 50.0,
+    cachedInputPer1M: 0.25,
+    cacheWritePer1M: 12.5,
+  },
+  // Claude Fable 5: $10/$50, cache read at the usual 0.1x.
   "claude-fable-5": {
     provider: "anthropic",
-    inputPer1M: 15.0,
-    outputPer1M: 75.0,
-    cachedInputPer1M: 1.5,
-    cacheWritePer1M: 18.75,
+    inputPer1M: 10.0,
+    outputPer1M: 50.0,
+    cachedInputPer1M: 1.0,
+    cacheWritePer1M: 12.5,
+  },
+  // Claude Opus 5.5: $4/$20. Its cache read is 0.05x input ($0.20), not the
+  // usual 0.1x. That is the list price, not a typo.
+  "claude-opus-5-5": {
+    provider: "anthropic",
+    inputPer1M: 4.0,
+    outputPer1M: 20.0,
+    cachedInputPer1M: 0.2,
+    cacheWritePer1M: 5.0,
+  },
+  "claude-opus-5.5": {
+    provider: "anthropic",
+    inputPer1M: 4.0,
+    outputPer1M: 20.0,
+    cachedInputPer1M: 0.2,
+    cacheWritePer1M: 5.0,
+  },
+  // Claude Opus 5 and Opus 4.5 through 4.8: $5/$25. Each release needs its own
+  // key because the `claude-opus-4` prefix below matches all of them and holds
+  // the legacy Opus 4 price. The dotted keys price a gateway id such as
+  // "anthropic/claude-opus-4.8" once resolveRate strips the creator prefix.
+  "claude-opus-5": {
+    provider: "anthropic",
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
   },
   "claude-opus-4-8": {
     provider: "anthropic",
-    inputPer1M: 15.0,
-    outputPer1M: 75.0,
-    cachedInputPer1M: 1.5,
-    cacheWritePer1M: 18.75,
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
   },
+  "claude-opus-4-7": {
+    provider: "anthropic",
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
+  },
+  "claude-opus-4-6": {
+    provider: "anthropic",
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
+  },
+  "claude-opus-4-5": {
+    provider: "anthropic",
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
+  },
+  "claude-opus-4.8": {
+    provider: "anthropic",
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
+  },
+  "claude-opus-4.7": {
+    provider: "anthropic",
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
+  },
+  "claude-opus-4.6": {
+    provider: "anthropic",
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
+  },
+  "claude-opus-4.5": {
+    provider: "anthropic",
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
+  },
+  // Legacy Claude Opus 4 and Opus 4.1 (`claude-opus-4-0`, `claude-opus-4-1`,
+  // `claude-opus-4-20250514`): $15/$75. Every later Opus has its own key above.
   "claude-opus-4": {
     provider: "anthropic",
     inputPer1M: 15.0,
@@ -118,14 +211,14 @@ export const PROVIDER_RATE_CARD: RateCard = {
     cachedInputPer1M: 1.5,
     cacheWritePer1M: 18.75,
   },
-  // Claude Sonnet 5 — same $3/$15 Sonnet-tier rate. An explicit key keeps it off
-  // the fallback path (the `claude-sonnet-4` prefix does not match `-5`).
+  // Claude Sonnet 5: $2/$10. An explicit key keeps it off the fallback path
+  // (the `claude-sonnet-4` prefix does not match `-5`).
   "claude-sonnet-5": {
     provider: "anthropic",
-    inputPer1M: 3.0,
-    outputPer1M: 15.0,
-    cachedInputPer1M: 0.3,
-    cacheWritePer1M: 3.75,
+    inputPer1M: 2.0,
+    outputPer1M: 10.0,
+    cachedInputPer1M: 0.2,
+    cacheWritePer1M: 2.5,
   },
   "claude-sonnet-4-6": {
     provider: "anthropic",
@@ -163,17 +256,17 @@ export const PROVIDER_RATE_CARD: RateCard = {
   // its rate. Every Anthropic tier holds the same 1.25x cache-write premium.
   "claude-fable": {
     provider: "anthropic",
-    inputPer1M: 15.0,
-    outputPer1M: 75.0,
-    cachedInputPer1M: 1.5,
-    cacheWritePer1M: 18.75,
+    inputPer1M: 10.0,
+    outputPer1M: 50.0,
+    cachedInputPer1M: 1.0,
+    cacheWritePer1M: 12.5,
   },
   "claude-opus": {
     provider: "anthropic",
-    inputPer1M: 15.0,
-    outputPer1M: 75.0,
-    cachedInputPer1M: 1.5,
-    cacheWritePer1M: 18.75,
+    inputPer1M: 5.0,
+    outputPer1M: 25.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 6.25,
   },
   "claude-sonnet": {
     provider: "anthropic",
@@ -208,31 +301,19 @@ export const PROVIDER_RATE_CARD: RateCard = {
   // ── Vercel AI Gateway model ids (creator/model form) ───────────────────────
   // When @oxagen/ai routes through the gateway, model.modelId arrives as
   // "anthropic/claude-sonnet-4.6" (slash + dotted version) rather than the bare
-  // "claude-sonnet-4-6" key above. Those bare keys never prefix-match the
-  // gateway form, so without these entries every gateway call would fall back to
-  // the Sonnet rate (over-charging Opus, under-charging Haiku). The `…-4` keys
-  // are deliberate PREFIXES so a future dotted minor (e.g. "…-4.7") still
-  // resolves to the right family via {@link resolveRate}.
-  "anthropic/claude-fable-5": {
-    provider: "anthropic",
-    inputPer1M: 15.0,
-    outputPer1M: 75.0,
-    cachedInputPer1M: 1.5,
-    cacheWritePer1M: 18.75,
-  },
-  "anthropic/claude-opus-4": {
-    provider: "anthropic",
-    inputPer1M: 15.0,
-    outputPer1M: 75.0,
-    cachedInputPer1M: 1.5,
-    cacheWritePer1M: 18.75,
-  },
+  // "claude-sonnet-4-6" key above. {@link resolveRateEntry} tries the full id
+  // first and falls back to the bare id only when no gateway key matches, so a
+  // gateway key here SHADOWS every bare key for the ids it prefixes. Add one
+  // only where a single price holds for the whole family it prefixes. There is
+  // no "anthropic/claude-opus-4" or "anthropic/claude-fable-5" key for that
+  // reason: the first priced Opus 4.5 through 4.8 at the legacy Opus 4 rate (3x
+  // list), and the second would price Fable 5.1 at Fable 5's cache-read rate.
   "anthropic/claude-sonnet-5": {
     provider: "anthropic",
-    inputPer1M: 3.0,
-    outputPer1M: 15.0,
-    cachedInputPer1M: 0.3,
-    cacheWritePer1M: 3.75,
+    inputPer1M: 2.0,
+    outputPer1M: 10.0,
+    cachedInputPer1M: 0.2,
+    cacheWritePer1M: 2.5,
   },
   "anthropic/claude-sonnet-4": {
     provider: "anthropic",
@@ -263,7 +344,7 @@ export const PROVIDER_RATE_CARD: RateCard = {
     cacheWritePer1M: 2.5,
   },
   // ── Every other family the cost router can select ─────────────────────────
-  // Rates mirror the engine's card (packages/agent-engine/src/router/rate-card.ts)
+  // Rates mirror the engine's card (packages/billing/src/rate-card.ts)
   // family for family; `rate-card-parity.test.ts` prices identical usage through
   // both and fails if any family drifts, so these numbers cannot diverge
   // silently. Keys are the BARE family — {@link resolveRate} strips a gateway

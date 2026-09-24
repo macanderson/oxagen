@@ -16,6 +16,7 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary, mono } from "@/ui/control-styles";
+import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
@@ -187,6 +188,7 @@ export function EnrollHost({
       >
         <form onSubmit={(e) => void mint(e)} className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <DesktopDownloads />
           {failure === null ? null : (
             <FormAlert testId="enroll-host-failure">{failure}</FormAlert>
           )}

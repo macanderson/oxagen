@@ -5,8 +5,9 @@ describe("context record names", () => {
   it("derives readable labels without changing record identity", () => {
     expect(contextRecordLabel("release-checklist")).toBe("Release Checklist");
     expect(contextRecordLabel("ctx.product.RELEASE_checklist")).toBe(
-      "Ctx Product Release Checklist",
+      "Release Checklist",
     );
+    expect(contextRecordLabel("ctx.direct-publish")).toBe("Ctx Direct Publish");
     expect(contextRecordLabel("déploiement---réussi!")).toBe(
       "Déploiement Réussi",
     );

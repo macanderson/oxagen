@@ -1,5 +1,5 @@
 // The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's ten
-// links in the mockup's order (Workspace: Fleet, Agent IAM, Tools, Steering,
+// links in the mockup's order (Workspace: Fleet, Agents, Tools, Steering,
 // Runtimes, Repositories, Spend; Organization: Organization, Billing, Audit),
 // the phone's thumb bar and More
 // sheet over the same keys, which item is current, and the breadcrumbs. Pure
@@ -68,7 +68,7 @@ export const THUMB_SLOTS: readonly ThumbSlot[] = [
   "spend",
 ];
 
-/** The rest of the sidebar, one tap away in the phone's More sheet. */
+/** The rest of the sidebar, one tap away in the phone's More sheet (mockup `DLG_EXT.more`). */
 export const MORE_SHEET: readonly NavKey[] = [
   "steering",
   "runtimes",
@@ -168,7 +168,7 @@ export function parseShellPath(pathname: string): ShellPath {
 }
 
 /** The nav item a pathname belongs to, or null for a path no nav item holds. */
-function currentNavKey(pathname: string): NavKey | null {
+export function currentNavKey(pathname: string): NavKey | null {
   const { org, ws, rest } = parseShellPath(pathname);
   if (org === null) return null;
   const [head] = rest;

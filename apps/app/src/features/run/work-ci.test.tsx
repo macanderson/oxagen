@@ -61,6 +61,7 @@ const value: RunWork = {
       headSha: "abc",
       headRef: "fix/work",
       association: "branch",
+      closingIssues: null,
       checkoutRefs: ["one"],
       observedAt: "2026-09-23",
       current: true,
