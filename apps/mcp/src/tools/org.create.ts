@@ -28,6 +28,9 @@ export const schema = {
   employeeSize: organizationCreateInputBase.shape.employeeSize.describe(
     "Employee size range slug (business type only; e.g. '2-10', '51-200')",
   ),
+  namespace: organizationCreateInputBase.shape.namespace.describe(
+    "Immutable agent-key namespace, 2-6 lowercase letters or digits; derived from the slug when omitted",
+  ),
   workspace: organizationCreateInputBase.shape.workspace.describe(
     "The first workspace ({ name, slug }); defaults to 'Default' at slug 'default'",
   ),
