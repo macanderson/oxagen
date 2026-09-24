@@ -58,9 +58,7 @@ function StateWrap({
         {title}
       </h2>
       <p className="text-[13px] text-muted-foreground">{body}</p>
-      <div className="flex flex-wrap justify-center gap-2 max-md:w-full max-md:flex-col">
-        {actions}
-      </div>
+      <div className="flex flex-wrap justify-center gap-2">{actions}</div>
       {children}
     </section>
   );

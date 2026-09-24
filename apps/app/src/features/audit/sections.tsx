@@ -21,7 +21,6 @@ import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import {
-  buttonPrimary,
   buttonSecondary,
   inputBase,
   mono,
@@ -41,7 +40,7 @@ import { DownloadLink } from "@/ui/navigation";
 import { BundleRefresh } from "./bundle-refresh";
 import { IncidentDialog, PolicyDialog, RotateDialog } from "./dialogs";
 import { AUDIT_GAPS } from "./gaps";
-import { useRetentionWindow } from "./retention";
+import { useRetentionWindow, useUnread } from "./retention";
 
 type GapKey = keyof typeof AUDIT_GAPS;
 
@@ -201,7 +200,7 @@ export function ReceiptsTab() {
               type="button"
               disabled
               aria-describedby={note}
-              className="min-h-7 px-2 text-xs text-muted-foreground"
+              className="min-h-7 px-2 text-xs text-muted-foreground max-md:min-h-11"
             >
               {t("clear")}
             </button>
@@ -308,7 +307,7 @@ function BundleCard({
             <DownloadLink
               to={routes.accountExport(org, bundle.exportId)}
               data-export="bundle"
-              className={buttonPrimary}
+              className={buttonSecondary}
             >
               {t("download")}
             </DownloadLink>
@@ -360,13 +359,19 @@ export function ExportsTab({
   const t = useTranslations("audit.exports");
   return (
     <div className="flex flex-col gap-3.5">
-      <p className="border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
-        {t("callout")}
-      </p>
       {bundle === null ? null : (
         <BundleCard org={org} id={bundle.id} read={bundle.read} />
       )}
       <NotBacked gap="exports">{t("notRecorded")}</NotBacked>
+      {/* The design's callout describes the signed evidence bundle. It follows
+          the gap sentence, which says that bundle is built per run and not for
+          the organization, so it never reads as a description of the ZIP card. */}
+      <p
+        data-testid="audit-exports-callout"
+        className="border-l-2 border-gold pl-3 text-[13px] text-muted-foreground"
+      >
+        {t("callout")}
+      </p>
       <div className="grid gap-3.5 md:grid-cols-2">
         <Panel id="audit-verifier" title={t("verifier")}>
           <NotBacked gap="exports">{t("verifierNotRecorded")}</NotBacked>
@@ -385,14 +390,9 @@ export function KeysTab() {
     <Panel
       id="audit-keys"
       title={t("title")}
-      aside={
-        <>
-          <Badge tone="quiet" dot={false} mono>
-            {t("store")}
-          </Badge>
-          <RotateDialog gap={AUDIT_GAPS.keys} />
-        </>
-      }
+      // No store badge: nothing records the keys yet, so naming a store
+      // would claim one the panel cannot show.
+      aside={<RotateDialog gap={AUDIT_GAPS.keys} />}
     >
       <NotBacked gap="keys">{t("notRecorded")}</NotBacked>
     </Panel>
@@ -418,6 +418,15 @@ function PolicyField({
   );
 }
 
+/** A field whose read did not answer: "unread" and the code, marked as such. */
+function Unread({ children }: { children: string }) {
+  return (
+    <span data-recorded="unread" className="font-mono text-xs">
+      {children}
+    </span>
+  );
+}
+
 export function RetentionTab({
   retention,
 }: {
@@ -426,6 +435,8 @@ export function RetentionTab({
   const t = useTranslations("audit.retention");
   const locale = useLocale();
   const windowOf = useRetentionWindow();
+  const unreadOf = useUnread();
+  const unread = retention.ok ? null : unreadOf(retention);
   const policy = retention.ok ? retention.value : null;
   const body = policy === null ? null : windowOf(policy.bodyRetentionDays);
   const rate = policy?.rate ?? null;
@@ -461,13 +472,24 @@ export function RetentionTab({
         }
       >
         <dl className="flex flex-col divide-y divide-border">
+          {/* Body retention and Cold storage cost come from the read, so a
+              read that did not answer says so with its code; the other three
+              have no read at all and are not recorded either way. */}
           <PolicyField term={t("body")}>
-            {body === null ? null : t("bodyValue", { window: body })}
+            {unread === null ? (
+              body === null ? null : (
+                t("bodyValue", { window: body })
+              )
+            ) : (
+              <Unread>{unread}</Unread>
+            )}
           </PolicyField>
           <PolicyField term={t("hot")}>{null}</PolicyField>
           <PolicyField term={t("replay")}>{null}</PolicyField>
           <PolicyField term={t("optDown")}>{null}</PolicyField>
-          <PolicyField term={t("cold")}>{cold}</PolicyField>
+          <PolicyField term={t("cold")}>
+            {unread === null ? cold : <Unread>{unread}</Unread>}
+          </PolicyField>
         </dl>
         <div className="pt-2">
           <NotBacked gap="retention">{t("notRecorded")}</NotBacked>

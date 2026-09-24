@@ -912,6 +912,11 @@ type Messages = {
       anyResult: string;
       severity: string;
       anySeverity: string;
+      severities: {
+        critical: string;
+        info: string;
+        warning: string;
+      };
       severityNotRecorded: string;
       rows: string;
       apply: string;
@@ -957,6 +962,7 @@ type Messages = {
       from: string;
       to: string;
       format: string;
+      formatZip: string;
       formatBundle: string;
       formatCsv: string;
       formatJson: string;
@@ -1040,7 +1046,6 @@ type Messages = {
     };
     keys: {
       title: string;
-      store: string;
       rotate: string;
       notRecorded: string;
     };
@@ -1127,6 +1132,7 @@ type Messages = {
     retentionYears: string;
     retentionDays: string;
     cancel: string;
+    unread: string;
   };
   auth: {
     shell: {

@@ -169,6 +169,9 @@ function When({ iso }: { iso: string }) {
 const label = "sr-only";
 /** The design's actor kinds (audit.md, Events), none of which the record carries yet. */
 const ACTOR_KINDS = ["human", "agent", "service"] as const;
+// The design's Severity filter (rev1 audit.md, Events). The select stays
+// disabled with its note until an audit event records a severity.
+const AUDIT_SEVERITIES = ["critical", "info", "warning"] as const;
 const ACTOR_KIND_NOTE = "audit-actor-kind-note";
 const select = `${inputBase} w-auto max-md:text-base`;
 
@@ -221,6 +224,11 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
             className={select}
           >
             <option value="">{t("anySeverity")}</option>
+            {AUDIT_SEVERITIES.map((severity) => (
+              <option key={severity} value={severity}>
+                {t(`severities.${severity}`)}
+              </option>
+            ))}
           </select>
         </label>
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -402,7 +410,7 @@ function EventsTable({
               // The stored evidence the event carries (#3554): approval-rule
               // invalidation facts and the SSO and governance details.
               <details className="pt-1 text-xs">
-                <summary className="cursor-pointer text-muted-foreground">
+                <summary className="cursor-pointer text-muted-foreground max-md:inline-flex max-md:min-h-11 max-md:items-center">
                   {t("detail")}
                 </summary>
                 <pre className="max-w-prose whitespace-pre-wrap break-all pt-1 font-mono">
@@ -466,7 +474,7 @@ function Pager({
           <SafeLink
             to={routes.audit(org, auditQueryParams(query, { offset: newer }))}
             data-page="newer"
-            className={linkText}
+            className={`${linkText} max-md:inline-flex max-md:min-h-11 max-md:items-center`}
           >
             {t("newer")}
           </SafeLink>
@@ -478,7 +486,7 @@ function Pager({
               auditQueryParams(query, { offset: page.offset + page.limit }),
             )}
             data-page="older"
-            className={linkText}
+            className={`${linkText} max-md:inline-flex max-md:min-h-11 max-md:items-center`}
           >
             {t("older")}
           </SafeLink>

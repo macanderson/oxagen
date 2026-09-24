@@ -48,6 +48,11 @@
       "anyResult": "All · Result",
       "severity": "Severity",
       "anySeverity": "All · Severity",
+      "severities": {
+        "critical": "critical",
+        "info": "info",
+        "warning": "warning"
+      },
       "severityNotRecorded": "An audit event records no severity yet.",
       "rows": "Rows",
       "apply": "Apply",
@@ -87,12 +92,13 @@
     "bundle": {
       "open": "Export evidence bundle",
       "title": "Export an evidence bundle",
-      "subtitle": "segments, attestations, key ids, and the verifier",
+      "subtitle": "The organization's data as one ZIP",
       "scope": "Scope",
       "scopeOrg": "The whole organization",
       "from": "From",
       "to": "To",
       "format": "Format",
+      "formatZip": "Organization ZIP",
       "formatBundle": "Signed bundle (segments + verifier)",
       "formatCsv": "Receipts as CSV",
       "formatJson": "Receipts as JSON",
@@ -176,7 +182,6 @@
     },
     "keys": {
       "title": "Keys",
-      "store": "kms + postgres",
       "rotate": "Rotate KEK",
       "notRecorded": "Keys are not recorded yet. No store lists the organization's key-encryption key, its generations or the signing keys receipts cite."
     },
@@ -262,6 +267,7 @@
     },
     "retentionYears": "{count, plural, one {# year} other {# years}}",
     "retentionDays": "{count, plural, one {# day} other {# days}}",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "unread": "unread ({code})"
   }
 }
