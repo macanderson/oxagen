@@ -1,13 +1,14 @@
-// The three not-loaded states the Tools page can be in (the mockup's states
+// The three not-loaded states a Tools tab can be in (the mockup's states
 // list): access denied, an access request still waiting, and the read error.
-// Each replaces the tab body, never the shell and never the tabs — an operator
-// keeps their bearings, and the switches tab stays reachable from the registry
-// tab's error.
+// Each replaces the tab body, never the shell and never the tabs, so an
+// operator keeps their bearings, and the switches tab stays reachable from the
+// registry tab's error. Each is the shared `StateWrap`, the design's
+// `.state-wrap`, with no panel around it (#4048).
 import { useTranslations } from "next-intl";
 import type { Read } from "@/data/read";
-import { linkText, mono } from "@/ui/control-styles";
-import { OutcomePanel } from "@/ui/form-feedback";
+import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { StateWrap, stateTrace } from "@/ui/state-wrap";
 import { routes } from "@/shared/safe-path";
 import type { OrgRole } from "@/server/viewer";
 import type { ToolsAt } from "./view";
@@ -31,61 +32,67 @@ export function ToolsReadFailure({
   switch (read.reason) {
     case "denied":
       return (
-        <OutcomePanel
-          tone="deny"
+        <StateWrap
+          tone="denied"
           testId="tools-denied"
           title={t("denied.title")}
           actions={
-            <SafeLink to={routes.fleet(at.org, at.ws)} className={linkText}>
+            <SafeLink
+              to={routes.fleet(at.org, at.ws)}
+              className={buttonSecondary}
+            >
               {t("back")}
             </SafeLink>
           }
-        >
-          <span className="flex flex-col gap-2">
-            <span>{t("denied.body")}</span>
-            <span className="flex flex-col gap-0.5 text-left">
-              <span>{t("denied.signedIn", { role: roles(orgRole) })}</span>
-              <span>
+          after={
+            <ul className="mx-auto mt-5 flex max-w-[420px] flex-col gap-[7px] text-left text-[12.5px] text-muted-foreground">
+              <li>{t("denied.signedIn", { role: roles(orgRole) })}</li>
+              <li>
                 {t("denied.needed")}{" "}
-                <span className={mono}>{read.permission}</span>
-              </span>
-              <span>{t("denied.decidedBy")}</span>
-            </span>
-          </span>
-        </OutcomePanel>
+                <span className={`${mono} text-foreground`}>
+                  {read.permission}
+                </span>
+              </li>
+              <li>{t("denied.decidedBy")}</li>
+            </ul>
+          }
+        >
+          {t("denied.body")}
+        </StateWrap>
       );
     case "pending_approval":
       return (
-        <OutcomePanel
+        <StateWrap
           tone="neutral"
+          glyph="lock"
           testId="tools-pending"
           title={t("pending.title")}
         >
           {t("pending.body", { request: read.accessRequestId })}
-        </OutcomePanel>
+        </StateWrap>
       );
     case "error":
       return (
-        <OutcomePanel
-          tone="neutral"
+        <StateWrap
+          tone="failed"
           testId="tools-error"
           title={t("error.title")}
           actions={
-            <SafeLink to={retry} className={linkText}>
+            <SafeLink to={retry} className={buttonPrimary}>
               {t("error.retry")}
             </SafeLink>
           }
-        >
-          <span className="flex flex-col gap-1">
-            <span>{t("error.body")}</span>
-            <span className={mono}>
+          after={
+            <p className={stateTrace}>
               {t("error.code", {
                 status: String(read.status),
                 code: read.code,
               })}
-            </span>
-          </span>
-        </OutcomePanel>
+            </p>
+          }
+        >
+          {t("error.body")}
+        </StateWrap>
       );
   }
 }

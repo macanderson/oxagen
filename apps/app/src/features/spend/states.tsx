@@ -5,7 +5,9 @@
 // one h1 for assistive technology. Request access and Open an incident have no
 // contract yet, so each opens a dialog that says what it would do and that
 // nothing was sent (#3846, #3847); the trace id, the region and the deciding
-// policy are not on a failed read yet (#3841), and the lines say so.
+// policy are not on a failed read yet (#3841), and the lines say so. Each
+// state is the shared `StateWrap`, the design's `.state-wrap`, with no panel
+// around it (#4048).
 import { useTranslations } from "next-intl";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
@@ -13,13 +15,15 @@ import { routes, type SafePath } from "@/shared/safe-path";
 import {
   buttonPrimary,
   buttonSecondary,
+  kvTerm,
+  kvValue,
   mono,
   panel,
   statStrip,
   statTile,
 } from "@/ui/control-styles";
-import { OutcomePanel } from "@/ui/form-feedback";
 import { SafeLink } from "@/ui/navigation";
+import { StateWrap, stateCode, stateFacts, stateTrace } from "@/ui/state-wrap";
 import { GAP_ISSUE } from "./not-backed";
 import { StubDialog } from "./stub-dialog";
 
@@ -83,7 +87,7 @@ export function SpendEmpty({ ctx }: { ctx: WsCtx }) {
   return (
     <div data-state="empty">
       <HiddenTitle />
-      <OutcomePanel
+      <StateWrap
         tone="neutral"
         testId="spend-empty"
         title={t("title")}
@@ -97,7 +101,7 @@ export function SpendEmpty({ ctx }: { ctx: WsCtx }) {
         }
       >
         {t("body")}
-      </OutcomePanel>
+      </StateWrap>
     </div>
   );
 }
@@ -132,8 +136,8 @@ export function SpendReadFailure({
       return (
         <div data-state="denied">
           {heading}
-          <OutcomePanel
-            tone="deny"
+          <StateWrap
+            tone="denied"
             testId="spend-denied"
             title={t("denied.title")}
             actions={
@@ -154,37 +158,29 @@ export function SpendReadFailure({
                 </SafeLink>
               </>
             }
-          >
-            <div className="flex flex-col gap-4">
-              <p>
-                {t("denied.body", { organization: ctx.orgName })}{" "}
-                <code className={mono}>{needed}</code>
-                {t("denied.bodyEnd")}
-              </p>
-              <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-left text-[12.5px]">
-                <dt className="text-muted-foreground">
-                  {t("denied.signedInAs")}
-                </dt>
-                <dd className={`${mono} text-foreground`}>
+            after={
+              <dl className={stateFacts}>
+                <dt className={kvTerm}>{t("denied.signedInAs")}</dt>
+                <dd className={`${kvValue} ${mono}`}>
                   {t("denied.roles", {
                     orgRole: ctx.orgRole,
                     wsRole: ctx.wsRole,
                     workspace: ctx.wsSlug,
                   })}
                 </dd>
-                <dt className="text-muted-foreground">
-                  {t("denied.neededLabel")}
-                </dt>
-                <dd className={`${mono} text-foreground`}>{needed}</dd>
-                <dt className="text-muted-foreground">
-                  {t("denied.decidedByLabel")}
-                </dt>
-                <dd data-issue={GAP_ISSUE.trace} className="text-foreground">
+                <dt className={kvTerm}>{t("denied.neededLabel")}</dt>
+                <dd className={`${kvValue} ${mono}`}>{needed}</dd>
+                <dt className={kvTerm}>{t("denied.decidedByLabel")}</dt>
+                <dd data-issue={GAP_ISSUE.trace} className={kvValue}>
                   {t("denied.decidedBy")}
                 </dd>
               </dl>
-            </div>
-          </OutcomePanel>
+            }
+          >
+            {t("denied.body", { organization: ctx.orgName })}{" "}
+            <code className={stateCode}>{needed}</code>
+            {t("denied.bodyEnd")}
+          </StateWrap>
         </div>
       );
     }
@@ -192,15 +188,16 @@ export function SpendReadFailure({
       return (
         <div data-state="pending_approval">
           {heading}
-          <OutcomePanel
+          <StateWrap
             tone="neutral"
+            glyph="lock"
             testId="spend-pending"
             title={t("pending.title")}
           >
             <span className={mono}>
               {t("pending.body", { request: read.accessRequestId })}
             </span>
-          </OutcomePanel>
+          </StateWrap>
         </div>
       );
     case "error": {
@@ -208,8 +205,8 @@ export function SpendReadFailure({
       return (
         <div data-state="error">
           {heading}
-          <OutcomePanel
-            tone="neutral"
+          <StateWrap
+            tone="failed"
             testId="spend-error"
             title={t("error.title")}
             actions={
@@ -226,17 +223,15 @@ export function SpendReadFailure({
                 />
               </>
             }
-          >
-            <div className="flex flex-col gap-3">
-              <p>
-                {t("error.bodyStart")} <code className={mono}>{code}</code>
-                {t("error.bodyEnd")}
-              </p>
-              <p data-issue={GAP_ISSUE.trace} className={`${mono} text-[11px]`}>
+            after={
+              <p data-issue={GAP_ISSUE.trace} className={stateTrace}>
                 {t("error.trace", { at: readAt })}
               </p>
-            </div>
-          </OutcomePanel>
+            }
+          >
+            {t("error.bodyStart")} <code className={stateCode}>{code}</code>
+            {t("error.bodyEnd")}
+          </StateWrap>
         </div>
       );
     }
