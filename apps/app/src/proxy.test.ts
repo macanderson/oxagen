@@ -118,7 +118,11 @@ describe("proxy", () => {
   });
 });
 
-/** The §1.2 routes: every page.tsx under src/app, route groups removed, as `/[org]/[ws]/steering`. */
+/**
+ * The §1.2 routes: every page.tsx under src/app, route groups removed, as
+ * `/[org]/[ws]/steering`. A page under an optional catch-all
+ * (`spend/[[...tab]]`) also serves the bare path, so both are listed.
+ */
 const PAGE_ROUTES: ReadonlySet<string> = new Set(
   readdirSync(join(import.meta.dirname, "app"), {
     recursive: true,
@@ -126,13 +130,15 @@ const PAGE_ROUTES: ReadonlySet<string> = new Set(
   })
     .map((file) => file.split(sep))
     .filter((parts) => parts.at(-1) === "page.tsx")
-    .map(
-      (parts) =>
-        `/${parts
-          .slice(0, -1)
-          .filter((part) => !part.startsWith("("))
-          .join("/")}`,
-    ),
+    .flatMap((parts) => {
+      const segments = parts
+        .slice(0, -1)
+        .filter((part) => !part.startsWith("("));
+      const route = `/${segments.join("/")}`;
+      return segments.at(-1)?.startsWith("[[...") === true
+        ? [route, `/${segments.slice(0, -1).join("/")}`]
+        : [route];
+    }),
 );
 
 /** A table template as a page route: `/{org}/{ws}/steering` → `/[org]/[ws]/steering`. */

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { getAuthUser } from "@/features/auth";
 import { parseRepositoryView, Repositories } from "@/features/repositories";
-import { getSession } from "@/server/session";
 import { requireViewer } from "@/server/viewer";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -26,7 +26,7 @@ export default async function RepositoriesPage({
   const view = parseRepositoryView(segments);
   if (view === null) notFound();
   const ctx = await requireViewer(org, ws);
-  const session = await getSession();
+  const user = await getAuthUser();
   const query = await searchParams;
   return (
     <main
@@ -40,8 +40,10 @@ export default async function RepositoriesPage({
         wsName={ctx.wsName}
         view={view}
         viewer={{
-          name: session?.user.name ?? session?.user.email ?? ctx.userId,
-          email: session?.user.email ?? "",
+          // getAuthUser gives a missing name as "", so an empty one falls
+          // through to the email, as the Agents route reads it.
+          name: user === null ? ctx.userId : user.name || user.email,
+          email: user?.email ?? "",
           role: `workspace.${ctx.wsRole}`,
         }}
         returning={query.settings === "repository"}

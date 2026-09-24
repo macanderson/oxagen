@@ -179,6 +179,11 @@ vi.mock("@/features/organization/api-key-actions", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  // The Spend and Repositories routes answer a segment they do not know with
+  // Next's 404, which throws, as Next's does.
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
 }));
 // The Skills route only moves to the Steering tab, and the Steering route moves
 // a legacy `?tab=` URL to its path; each redirect throws, as Next's does, with
