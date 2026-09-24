@@ -126,7 +126,13 @@ function costBy(
 
 const SPEEDS = [1, 4, 16] as const;
 
-type Place = { org: string; ws: string; runId: string };
+type Place = {
+  org: string;
+  ws: string;
+  runId: string;
+  /** `?frames=`, the page these frames were read from; null is the first page. */
+  frames: string | null;
+};
 
 function Legend({ frames }: { frames: readonly RunFrame[] }) {
   const t = useTranslations("run.player");
@@ -491,6 +497,7 @@ function FrameDetail({
             <SafeLink
               to={routes.run(place.org, place.ws, place.runId, {
                 tab: "actions",
+                ...(place.frames === null ? {} : { frames: place.frames }),
                 body: frame.seq,
               })}
               className={`${linkText} text-xs`}
@@ -515,7 +522,7 @@ function FrameDetail({
         </dd>
       </dl>
       {frame.body.redactions.length === 0 ? null : (
-        <ul className="flex flex-col gap-0.5">
+        <ul data-testid="frame-redactions" className="flex flex-col gap-0.5">
           {frame.body.redactions.map((redaction) => (
             <li
               key={redaction.originalDigest}

@@ -4565,9 +4565,9 @@ type Messages = {
       cardNotRecorded: string;
       midRunNotRecorded: string;
       notYet: {
-        "skills.resolved": string;
-        "context.assembled": string;
-        "model.request": string;
+        skillsResolved: string;
+        contextAssembled: string;
+        modelRequest: string;
       };
     };
     player: {

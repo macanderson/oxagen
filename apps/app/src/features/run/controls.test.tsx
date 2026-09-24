@@ -41,7 +41,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace, refresh }),
 }));
 
-const { RunControls } = await import("./run-controls");
+const { PauseBannerActions, RunControls } = await import("./run-controls");
 const { ExportAction, SummarizeAction } = await import("./record-actions");
 
 /** The two record writes as the page places them: Summarize in the Summary panel, Export in the header. */
@@ -247,10 +247,10 @@ describe("run controls", () => {
     haltRun.mockRejectedValue(new Error("socket hang up"));
     const user = userEvent.setup();
     renderControls();
-    await user.click(screen.getByTestId("run-resume"));
-    await user.click(screen.getByRole("button", { name: "Queue the resume" }));
+    await user.click(screen.getByTestId("run-pause"));
+    await user.click(screen.getByRole("button", { name: "Queue the pause" }));
     await waitFor(() => {
-      expect(screen.getByTestId("run-resume-failure")).toHaveTextContent(
+      expect(screen.getByTestId("run-pause-failure")).toHaveTextContent(
         "command_failed",
       );
     });
@@ -387,8 +387,10 @@ describe("run controls", () => {
         "tcm_cancel",
       ),
     );
+    // The spec's receipt: the token is revoked, and the process kill is
+    // best effort, so nothing claims the external process stopped.
     expect(screen.getByTestId("run-cancel-dialog")).toHaveTextContent(
-      "external process may still be running",
+      "Cancel issued. Run token revoked; process kill is best effort and recorded.",
     );
     expect(haltRun).toHaveBeenCalledWith(
       "acme",
@@ -415,9 +417,11 @@ describe("run controls", () => {
         />
       </IntlProvider>,
     );
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
     }
+    // Pause or Resume by the run's state, never both.
+    expect(screen.queryByTestId("run-resume")).toBeNull();
     expect(screen.getByTestId("role-no-control")).toHaveTextContent(
       "workspace Owner or Member role",
     );
@@ -446,9 +450,11 @@ describe("run controls", () => {
         />
       </IntlProvider>,
     );
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
     }
+    // Pause or Resume by the run's state, never both.
+    expect(screen.queryByTestId("run-resume")).toBeNull();
     expect(screen.getByTestId("observe-no-control")).toHaveTextContent(
       "Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel.",
     );
@@ -591,5 +597,80 @@ describe("record writes", () => {
     );
     expect(screen.getByTestId("run-export")).toBeDisabled();
     expect(screen.queryByTestId("run-summarize")).toBeNull();
+  });
+});
+
+describe("pause or resume by state", () => {
+  it("offers Resume run and no Pause run on a paused ledger run", () => {
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId="arun_record1"
+          status="live"
+          source="ledger"
+          enforcementTier="harness"
+          ingressPaused
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-resume")).toHaveTextContent("Resume run");
+    expect(screen.queryByTestId("run-pause")).toBeNull();
+  });
+
+  it("resumes from the pause banner, and keeps Open the pause frame off with the reason", async () => {
+    haltRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_r"] } });
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <PauseBannerActions
+          org="acme"
+          ws="core-platform"
+          runId="arun_record1"
+          source="ledger"
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("banner-pause-frame")).toBeDisabled();
+    expect(
+      screen.getByTestId("banner-pause-frame"),
+    ).toHaveAccessibleDescription(
+      "No read names the frame this pause landed on yet (#3972).",
+    );
+    await user.click(screen.getByTestId("banner-resume"));
+    await user.click(
+      screen.getByRole("button", { name: "Resume evidence ingress" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("queued-command")).toHaveTextContent("tcm_r"),
+    );
+    expect(haltRun).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_record1",
+      "resume",
+      "",
+    );
+  });
+
+  it("draws the banner's Resume run disabled for a viewer dispatch_command would refuse (negative)", () => {
+    render(
+      <IntlProvider>
+        <PauseBannerActions
+          org="acme"
+          ws="core-platform"
+          runId="arun_record1"
+          source="ledger"
+          orgRole="viewer"
+          wsRole="viewer"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("banner-resume")).toBeDisabled();
   });
 });

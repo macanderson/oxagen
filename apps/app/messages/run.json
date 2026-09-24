@@ -939,9 +939,9 @@
       "cardNotRecorded": "What this path inherits is not worked out yet (#3941).",
       "midRunNotRecorded": "What a new workspace ships with is not recorded, so this page cannot say what the second path changes in the middle of this run (#3941).",
       "notYet": {
-        "skills.resolved": "waits on the answer",
-        "context.assembled": "waits on the answer",
-        "model.request": "the first model call of the run has not happened"
+        "skillsResolved": "waits on the answer",
+        "contextAssembled": "waits on the answer",
+        "modelRequest": "the first model call of the run has not happened"
       }
     },
     "player": {

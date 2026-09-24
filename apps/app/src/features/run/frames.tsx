@@ -206,7 +206,7 @@ export function GovernedActionsSection({
           tier={run.enforcementTier}
           runCost={run.cost}
           openSeq={body?.seq ?? null}
-          place={place}
+          place={{ ...place, frames }}
         />
       )}
       <Pager

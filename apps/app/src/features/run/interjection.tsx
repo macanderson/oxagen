@@ -30,6 +30,13 @@ const AFTER_ANSWER = [
   "model.request",
 ] as const;
 
+/** The summary each greyed frame carries, keyed for the catalogue (which refuses dots). */
+const NOT_YET = {
+  "skills.resolved": "skillsResolved",
+  "context.assembled": "contextAssembled",
+  "model.request": "modelRequest",
+} as const satisfies Record<(typeof AFTER_ANSWER)[number], string>;
+
 /** The run's interjection frame, when its recording carries one. */
 export function interjectionOf(detail: RunDetail): RunFrame | null {
   return detail.frames.frames.find((frame) => frame.type === INTERJECT) ?? null;
@@ -345,7 +352,11 @@ export function RunInterjection({
             {greyed.map((kind) => (
               <FrameRow
                 key={kind}
-                frame={{ type: kind, summary: t(`notYet.${kind}`), at: null }}
+                frame={{
+                  type: kind,
+                  summary: t(`notYet.${NOT_YET[kind]}`),
+                  at: null,
+                }}
                 pending
               />
             ))}
