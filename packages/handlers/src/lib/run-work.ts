@@ -228,7 +228,11 @@ export async function readSessionConfig(
   return {
     effort: row?.setting.trim() || row?.effort.trim() || null,
     thinking:
-      row?.thinking === "true" ? true : row?.thinking === "false" ? false : null,
+      row?.thinking === "true"
+        ? true
+        : row?.thinking === "false"
+          ? false
+          : null,
   };
 }
 
