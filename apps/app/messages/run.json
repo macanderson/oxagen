@@ -910,6 +910,7 @@
       "sealNotRecorded": "ended with no seal recorded",
       "enrolledBy": "enrolled the host",
       "paused": "Ingress is paused. The agent takes no new step until you resume it.",
+      "pausedSession": "The host refuses the agent's tool calls until you resume it.",
       "copyLabel": "Copy {text}",
       "copied": "Copied {text}",
       "copyFailed": "Copy failed. Select the text and copy it.",

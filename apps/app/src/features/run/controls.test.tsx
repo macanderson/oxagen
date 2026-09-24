@@ -46,7 +46,8 @@ const { ExportAction, SummarizeAction } = await import("./record-actions");
 
 const RUN = "tse_7k2m9q";
 
-function renderControls() {
+/** A live wrapped run; `ingressPaused` says its host last applied a pause. */
+function renderControls(ingressPaused = false) {
   return render(
     <IntlProvider>
       <RunControls
@@ -56,6 +57,7 @@ function renderControls() {
         status="live"
         source="tacho"
         enforcementTier="harness"
+        ingressPaused={ingressPaused}
         orgRole="member"
         wsRole="member"
       />
@@ -237,9 +239,10 @@ describe("run controls", () => {
     expect(screen.getByTestId("steer-no-control")).toHaveTextContent(
       "Pause, resume and cancel still can.",
     );
-    for (const command of ["pause", "resume", "cancel"]) {
+    for (const command of ["pause", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).toBeEnabled();
     }
+    expect(screen.queryByTestId("run-resume")).toBeNull();
     await user.click(screen.getByTestId("run-steer"));
     expect(screen.queryByLabelText("What to tell the agent")).toBeNull();
     await user.click(screen.getByTestId("run-pause"));
@@ -284,7 +287,7 @@ describe("run controls", () => {
   it("names a write that threw before it answered rather than falling silent (negative)", async () => {
     haltRun.mockRejectedValue(new Error("socket hang up"));
     const user = userEvent.setup();
-    renderControls();
+    renderControls(true);
     await user.click(screen.getByTestId("run-resume"));
     await user.click(screen.getByRole("button", { name: "Queue the resume" }));
     await waitFor(() => {
@@ -453,9 +456,10 @@ describe("run controls", () => {
         />
       </IntlProvider>,
     );
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
     }
+    expect(screen.queryByTestId("run-resume")).toBeNull();
     expect(screen.getByTestId("role-no-control")).toHaveTextContent(
       "workspace Owner or Member role",
     );
@@ -483,9 +487,10 @@ describe("run controls", () => {
         />
       </IntlProvider>,
     );
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
+    expect(screen.queryByTestId("run-resume")).toBeNull();
     expect(screen.queryByTestId("host-no-control")).toBeNull();
   });
 
@@ -518,15 +523,73 @@ describe("run controls", () => {
           />
         </IntlProvider>,
       );
-      for (const command of ["pause", "resume", "steer", "cancel"]) {
+      for (const command of ["pause", "steer", "cancel"]) {
         expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
       }
+      expect(screen.queryByTestId("run-resume")).toBeNull();
       expect(screen.getByTestId("host-no-control")).toHaveTextContent(reason);
       expect(screen.queryByTestId("role-no-control")).toBeNull();
       await user.click(screen.getByTestId("run-pause"));
       expect(screen.queryByTestId("run-pause-dialog")).toBeNull();
       expect(haltRun).not.toHaveBeenCalled();
       expect(steerRun).not.toHaveBeenCalled();
+    },
+  );
+
+  // Pause and Resume share one slot, so a live run never offers both (#4112).
+  it.each([false, true])(
+    "offers a wrapped run Pause or Resume by its host's last applied command, never both, paused=%s",
+    async (paused) => {
+      haltRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_2"] } });
+      const user = userEvent.setup();
+      renderControls(paused);
+      const command = paused ? "resume" : "pause";
+      expect(
+        screen.queryByTestId(`run-${paused ? "pause" : "resume"}`),
+      ).toBeNull();
+      expect(screen.getAllByRole("button", { name: /pause|resume/i })).toHaveLength(
+        1,
+      );
+      await user.click(screen.getByTestId(`run-${command}`));
+      await user.click(
+        screen.getByRole("button", { name: `Queue the ${command}` }),
+      );
+      await waitFor(() => {
+        expect(haltRun).toHaveBeenCalledWith(
+          "acme",
+          "core-platform",
+          RUN,
+          command,
+          "",
+        );
+      });
+    },
+  );
+
+  it.each([
+    ["the host is offline", { commandBlock: "host_offline" as const, wsRole: "owner" as const }],
+    ["the viewer's role admits no command", { commandBlock: null, wsRole: "viewer" as const }],
+  ])(
+    "draws only a disabled Resume on a paused run when %s (negative)",
+    (_why, { commandBlock, wsRole }) => {
+      render(
+        <IntlProvider>
+          <RunControls
+            org="acme"
+            ws="core-platform"
+            runId={RUN}
+            status="live"
+            source="tacho"
+            enforcementTier="harness"
+            commandBlock={commandBlock}
+            ingressPaused
+            orgRole="viewer"
+            wsRole={wsRole}
+          />
+        </IntlProvider>,
+      );
+      expect(screen.getByTestId("run-resume")).toBeDisabled();
+      expect(screen.queryByTestId("run-pause")).toBeNull();
     },
   );
 

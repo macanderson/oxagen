@@ -6648,6 +6648,7 @@ type Messages = {
       sealNotRecorded: string;
       enrolledBy: string;
       paused: string;
+      pausedSession: string;
       copyLabel: string;
       copied: string;
       copyFailed: string;
