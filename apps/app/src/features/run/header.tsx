@@ -230,13 +230,40 @@ function PullChips({ pulls }: { pulls: readonly RunOutputNode[] | null }) {
     return <span className={missing}>{t("noPullRequest")}</span>;
   }
   return pulls.map((pull) => (
-    <span key={`${pull.seq ?? ""}${pull.name}`} className={chip}>
-      {pull.name}
+    <span
+      key={`${pull.seq ?? ""}${pull.name}`}
+      data-testid="run-pull"
+      className={chip}
+    >
+      {pull.note?.startsWith("https://") ? (
+        <RepoLink url={pull.note}>{pull.name}</RepoLink>
+      ) : (
+        pull.name
+      )}
       {pull.where === null ? null : (
         <span className="text-muted-foreground">{pull.where}</span>
       )}
     </span>
   ));
+}
+
+/**
+ * The output PR nodes the work read did not already answer. Both reads carry
+ * a harness PR link, so the same PR would otherwise be drawn twice. The work
+ * read wins, since it carries the PR's state from GitHub.
+ */
+function pullsBeyond(
+  pulls: readonly RunOutputNode[] | null,
+  recorded: RunWork["pullRequests"],
+): RunOutputNode[] {
+  const drawn = new Set(
+    recorded.map((pr) =>
+      `${pr.repository.owner}/${pr.repository.name}#${String(pr.number)}`.toLowerCase(),
+    ),
+  );
+  return (pulls ?? []).filter(
+    (node) => !drawn.has(`${node.where ?? ""}${node.name}`.toLowerCase()),
+  );
 }
 
 function Hostname({ run }: { run: RunRow }) {
@@ -278,6 +305,7 @@ function Checkout({
   const { primary, others } = primaryCheckout(work.value);
   const repository = primary?.repository ?? null;
   const recordedPulls = work.value.pullRequests;
+  const extraPulls = pullsBeyond(pulls, recordedPulls);
   return (
     <Strip label={t("checkout")} testId="run-checkout">
       {repository === null ? (
@@ -297,15 +325,19 @@ function Checkout({
       {recordedPulls.length === 0 ? (
         <PullChips pulls={pulls} />
       ) : (
-        recordedPulls.map((pr) => (
-          <span
-            key={`${pr.repository.url}#${String(pr.number)}`}
-            className={chip}
-          >
-            <RepoLink url={pr.url}>{`#${String(pr.number)}`}</RepoLink>
-            <span className="text-muted-foreground">{pr.state}</span>
-          </span>
-        ))
+        <>
+          {recordedPulls.map((pr) => (
+            <span
+              key={`${pr.repository.url}#${String(pr.number)}`}
+              data-testid="run-pull"
+              className={chip}
+            >
+              <RepoLink url={pr.url}>{`#${String(pr.number)}`}</RepoLink>
+              <span className="text-muted-foreground">{pr.state}</span>
+            </span>
+          ))}
+          {extraPulls.length === 0 ? null : <PullChips pulls={extraPulls} />}
+        </>
       )}
       <Hostname run={run} />
       {primary === null ? (

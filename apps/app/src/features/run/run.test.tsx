@@ -217,7 +217,8 @@ describe("header", () => {
     });
     const stats = within(screen.getByTestId("run-stats"));
     expect(stats.getAllByText("not recorded").length).toBeGreaterThanOrEqual(3);
-    expect(stats.getByText("still running")).toBeTruthy();
+    // A sealed run with no seal instant has no wall clock, never "still running".
+    expect(stats.queryByText("still running")).toBeNull();
     expect(screen.queryByText("$0.00")).toBeNull();
   });
 
@@ -440,6 +441,74 @@ describe("header", () => {
       "type not recorded",
     );
     expect(subagents.getByText("no stop recorded")).toBeTruthy();
+  });
+
+  it("draws a PR both reads carry once, and keeps the PR only the outputs recorded", async () => {
+    const repo = {
+      host: "github.com",
+      owner: "Acme",
+      name: "core",
+      url: "https://github.com/Acme/core",
+      connected: true,
+    };
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      outputs: ok(
+        runOutputs([
+          runOutputNode({
+            seq: "20",
+            kind: "pr",
+            name: "#41",
+            where: "acme/core",
+            state: "open",
+            note: "https://github.com/acme/core/pull/41",
+            stat: null,
+          }),
+          runOutputNode({
+            seq: "30",
+            kind: "pr",
+            name: "#7",
+            where: "acme/tools",
+            state: "open",
+            note: "https://github.com/acme/tools/pull/7",
+            stat: null,
+          }),
+        ]),
+      ),
+      work: ok({
+        runId: "tse_7k2m9q",
+        machine: null,
+        checkouts: [],
+        diffs: [],
+        pullRequests: [
+          {
+            repository: repo,
+            number: 41,
+            url: `${repo.url}/pull/41`,
+            title: "Cut the branch",
+            state: "merged",
+            headSha: null,
+            headRef: "release/3.2",
+            association: "recorded",
+            checkoutRefs: [],
+            observedAt: "2026-09-23T10:00:00.000Z",
+            current: true,
+            ci: null,
+            diff: null,
+          },
+        ],
+        subagents: [],
+        complete: true,
+        warnings: [],
+      }),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    const pulls = strip.getAllByTestId("run-pull");
+    expect(pulls).toHaveLength(2);
+    expect(pulls[0]).toHaveTextContent("#41merged");
+    expect(pulls[1]).toHaveTextContent("#7acme/tools");
+    expect(strip.queryByText("no pull request")).toBeNull();
   });
 
   it("says the checkout was not read when the work read fails", async () => {
@@ -1936,7 +2005,7 @@ describe("figures", () => {
     });
     const stats = within(screen.getByTestId("run-stats"));
     expect(stats.getByText("4,600")).toBeTruthy();
-    expect(stats.getByText("200 output")).toBeTruthy();
+    expect(stats.getByText("provisional until the rollup")).toBeTruthy();
   });
 });
 

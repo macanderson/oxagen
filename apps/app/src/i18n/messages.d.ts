@@ -5178,6 +5178,7 @@ type Messages = {
       wallClock: string;
       cacheHit: string;
       tokensNote: string;
+      tokensProvisional: string;
       promptsCut: string;
       wastedNote: string;
       running: string;

@@ -106,7 +106,8 @@ export function StatRow({
   const rollup = cost.ok ? cost.value.rollup : null;
   const waste = wasted(rollup?.cost ?? null, rollup?.productiveRatio ?? null);
   // Before the rollup rebuilds a sealed run, the session's own sums over its
-  // llm_call frames stand in, so a live run shows its tokens too.
+  // llm_call frames stand in, so a live run shows its tokens too. Those sums
+  // are labelled provisional, since the rollup may still reprice or recount.
   const reported = run.reportedTokens ?? null;
   const tokens =
     rollup === null
@@ -137,9 +138,7 @@ export function StatRow({
           rollup === null
             ? reported === null
               ? missingRollup
-              : t("tokensNote", {
-                  output: formatCount(reported.output, locale),
-                })
+              : t("tokensProvisional")
             : t("tokensNote", {
                 output: formatCount(rollup.tokens.output, locale),
               })
@@ -186,13 +185,19 @@ export function StatRow({
         {waste === null ? <NoValue /> : <Money value={waste} />}
       </Stat>
       <Stat label={t("wallClock")}>
-        {run.sealedAt === null
-          ? t("running")
-          : formatDuration(
+        {/* Keyed on the status, as the header's when line is: a run that
+            ended with no seal instant has no wall clock to show. */}
+        {run.status === "live" ? (
+          t("running")
+        ) : run.sealedAt === null ? (
+          <NoValue />
+        ) : (
+          formatDuration(
               new Date(run.sealedAt).getTime() -
                 new Date(run.startedAt).getTime(),
               locale,
-            )}
+            )
+        )}
       </Stat>
       <Stat label={t("cacheHit")} note={missingRollup}>
         {rollup?.cacheHitRate == null ? (

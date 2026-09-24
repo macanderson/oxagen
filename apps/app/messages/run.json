@@ -586,6 +586,7 @@
       "wallClock": "Wall clock",
       "cacheHit": "Cache hit",
       "tokensNote": "{output} output",
+      "tokensProvisional": "provisional until the rollup",
       "promptsCut": "at least this many",
       "wastedNote": "derived from the productive share",
       "running": "still running",
