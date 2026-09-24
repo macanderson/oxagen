@@ -31,7 +31,8 @@ vi.mock("@/features/create", () => ({
 }));
 
 const { AgentsCreate } = await import("./create-actions");
-const { AgentKeyPrefix, keyPrefixOf } = await import("./key-prefix");
+const { AgentKeyPrefix } = await import("./key-prefix");
+const { keyPrefixOf } = await import("./key-prefix-of");
 const t = translator("agents.list.register");
 
 beforeEach(() => {

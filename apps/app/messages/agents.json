@@ -563,7 +563,9 @@
           "tier": "Model tier",
           "tierHint": "complex routes to the workspace's complex model and light to its light one. The harness makes the call with its own key; Oxagen records what it reports.",
           "budget": "Per-run budget (USD)",
-          "budgetHint": "Stored as budget = '{' per_run_micros = {micros} '}'. Once a wrapped session's observed spend reaches it, Oxagen's local model proxy refuses the session's next model call. A per_day_micros figure is kept in the definition and enforces nothing."
+          "budgetHint": "Stored as budget = '{' per_run_micros = {micros} '}'. Once a wrapped session's observed spend reaches it, Oxagen's local model proxy refuses the session's next model call.",
+          "budgetDay": "Per-day budget (USD)",
+          "budgetDayHint": "Stored as budget = '{' per_day_micros = {micros} '}'. A day is a UTC calendar day. Once the agent's observed spend that day, on every host enrolled under it, reaches this figure, the model proxy refuses its next call until 00:00 UTC. Empty or 0 sets no daily ceiling. Hosts older than the daily_budget feature do not receive it."
         },
         "tools": {
           "title": "Tools",

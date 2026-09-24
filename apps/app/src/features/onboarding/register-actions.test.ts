@@ -81,6 +81,7 @@ const WORKSPACES = {
 const BOUND = {
   repository: {
     bindingId: "rpb_0a1b2c",
+    provider: "github",
     owner: "a-intel",
     name: "platform",
     fullName: "a-intel/platform",

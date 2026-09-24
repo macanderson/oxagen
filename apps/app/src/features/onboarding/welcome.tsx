@@ -86,7 +86,7 @@ function permissionFor(step: Step, ctx: WsCtx): string {
 /** The loading state: the shell and the rail stay, the card is the skeleton. */
 export function WelcomeLoading({ step }: { step: Step }) {
   return (
-    <GateShell step={step} email={null} cancel={routes.root()}>
+    <GateShell step={step} email={null} cancel={routes.root()} pending>
       <GateSkeleton />
     </GateShell>
   );
