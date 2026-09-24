@@ -406,6 +406,11 @@ export class SessionRecorder {
    * so it rolls back to this one. See `rollbackToBirth`.
    */
   private readonly birth: ChainMark;
+  /**
+   * Whether this recorder was opened, without restored state, on a chain the
+   * WAL already held. See `continueFromDisk`.
+   */
+  readonly bornOnDisk: boolean = false;
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -439,7 +444,7 @@ export class SessionRecorder {
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
     if (options.restore) this.restore(options.restore);
-    else this.continueFromDisk();
+    else this.bornOnDisk = this.continueFromDisk();
     this.birth = this.markChain();
   }
 

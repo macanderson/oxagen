@@ -25,7 +25,6 @@ import { hookInputSchema } from "../claude-code/hooks";
 import { homedir, hostname as osHostname } from "node:os";
 import { dirname, join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
-import { GENESIS_CURSOR } from "../chain";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type {
@@ -772,18 +771,27 @@ async function initializeDaemon(
     // A session the failed call created has no mark: it did not exist when
     // the marks were taken. Its chain goes back to where it was born, or its
     // unwritten genesis keeps seq 0 and the retry seals a resume after it.
-    // A session whose WAL has moved since then is left alone: the model
-    // proxy runs off the serial queue, and it may have written that session
-    // while the failed call was awaiting. A session born on top of a WAL
-    // file it continues (`continueFromDisk`) goes back like any other.
+    // A session with a WAL file is left alone: the model proxy runs off the
+    // serial queue, and it may have opened and written that session while
+    // the failed call was awaiting. The exception is a session born on a
+    // WAL file it continues (`continueFromDisk`): it goes back too, as long
+    // as that file still ends where it was born.
     const marked = new Set(marks.map(({ session }) => session));
-    for (const session of registry.list()) {
-      if (marked.has(session)) continue;
-      const born = session.recorder.birthCursor;
-      const onDisk =
-        context.chainTail?.(session.recorder.sessionUuid) ?? GENESIS_CURSOR;
-      if (onDisk.seq === born.seq && onDisk.prevHash === born.prevHash)
-        session.recorder.rollbackToBirth();
+    const unmarked = registry.list().filter((session) => !marked.has(session));
+    if (unmarked.length > 0) {
+      const onDisk = new Set(wal.sessions());
+      for (const session of unmarked) {
+        const recorder = session.recorder;
+        if (!onDisk.has(recorder.sessionUuid)) {
+          recorder.rollbackToBirth();
+          continue;
+        }
+        if (!recorder.bornOnDisk) continue;
+        const born = recorder.birthCursor;
+        const tail = context.chainTail?.(recorder.sessionUuid);
+        if (tail?.seq === born.seq && tail.prevHash === born.prevHash)
+          recorder.rollbackToBirth();
+      }
     }
     for (const { session, mark } of [...marks].reverse())
       session.recorder.rollbackChain(mark);
