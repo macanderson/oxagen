@@ -44,6 +44,8 @@ type Over = {
   witnessFor?: string;
   /** The harness title the wrapped session recorded; none by default. */
   sessionTitle?: string;
+  /** The title read rejects, as a ClickHouse outage would. */
+  titleFails?: boolean;
   /** Runs after each fake sleep, with the count so far; a test lands events here. */
   onSleep?: (count: number, log: AttemptEventReadRecord[]) => void;
 };
@@ -80,9 +82,11 @@ function harness(over: Over = {}) {
       ),
     tachoFrames: memoryTachoFrames(SESSION_UUID, over.tachoRows ?? []),
     sessionTitle: (sessionUuid) =>
-      Promise.resolve(
-        sessionUuid === SESSION_UUID ? (over.sessionTitle ?? null) : null,
-      ),
+      over.titleFails === true
+        ? Promise.reject(new Error("clickhouse unreachable"))
+        : Promise.resolve(
+            sessionUuid === SESSION_UUID ? (over.sessionTitle ?? null) : null,
+          ),
     now: () => clock,
     sleep: (ms) => {
       sleeps.push(ms);
@@ -532,5 +536,12 @@ describe("get_run witnessFor (ADR-064)", () => {
     const untitled = harness();
     const plain = await untitled.get(input({ runId: TACHO_ID }), ctx());
     expect(plain.run.name).not.toBe("Fix the billing proration");
+  });
+
+  it("still answers the run when its title cannot be read", async () => {
+    const { get } = harness({ titleFails: true });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    const plain = await harness().get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.name).toBe(plain.run.name);
   });
 });

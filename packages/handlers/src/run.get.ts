@@ -25,6 +25,7 @@ import {
 import type { RunFrame } from "@oxagen/run-ledger";
 import { invalidCursor, microsString } from "./run.list";
 import { readSessionTitle } from "./lib/run-work";
+import { logger } from "./logger";
 import {
   defaultRunReadDeps,
   readFrames,
@@ -134,8 +135,18 @@ export function createRunGetHandler(
     if (cursor === null) throw invalidCursor(runGet.name);
 
     const run = await resolveRun(deps, ctx, input.runId);
+    // The title is ClickHouse's to give. A failed read leaves the heading on
+    // the run id rather than failing the page.
     const title =
-      run.source === "tacho" ? await deps.sessionTitle(run.sessionUuid) : null;
+      run.source === "tacho"
+        ? await deps.sessionTitle(run.sessionUuid).catch((err: unknown) => {
+            logger.warn(
+              { err, runId: input.runId },
+              "get_run: the session title could not be read; the run id stands in",
+            );
+            return null;
+          })
+        : null;
     // One frame past the page tells a full page from the end of the recording.
     // A sealed run whose page had nothing behind it answers no cursor, because
     // nothing will ever lie past it; a live run keeps its resume point, since

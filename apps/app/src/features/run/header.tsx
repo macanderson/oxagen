@@ -487,7 +487,7 @@ function Usage({ run }: { run: RunRow }) {
  * unless the workspace turned automatic names off, then its task reference.
  * Null when the run carries neither.
  */
-export function titleOf(run: RunRow): string | null {
+function titleOf(run: RunRow): string | null {
   return (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
 }
 

@@ -162,7 +162,6 @@ const RunCostProvisional = z.object({
   /** The run's last recorded event, which these figures include. */
   asOf: z.iso.datetime({ offset: true }),
 });
-export type RunCostProvisional = z.infer<typeof RunCostProvisional>;
 
 /**
  * `get_run_cost`: `rollup` is null until the rollup has rebuilt the run after

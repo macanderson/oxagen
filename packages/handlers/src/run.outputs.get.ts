@@ -42,6 +42,7 @@ import {
   tally,
 } from "./lib/run-outputs";
 import { prLinkOf, readWorkPrLinks, WORK_PR_LINK_CAP } from "./lib/run-work";
+import { logger } from "./logger";
 import { runScope } from "./run.list";
 import {
   defaultRunReadDeps,
@@ -79,12 +80,21 @@ async function wrappedNodes(
   sessionUuid: string,
 ): Promise<{ nodes: RunOutputNode[]; complete: boolean }> {
   // One over the cap, so a full page is told apart from a cut read.
+  // The PR receipts come from ClickHouse. A failed read must not hide the
+  // files the Postgres read found, so the spine is drawn without them and
+  // marked incomplete.
   const [rows, links] = await Promise.all([
     deps.outputs.sessionFiles(scope, sessionUuid, RUN_OUTPUT_NODE_MAX + 1),
-    deps.prLinks(sessionUuid),
+    deps.prLinks(sessionUuid).catch((err: unknown) => {
+      logger.warn(
+        { err, sessionUuid },
+        "get_run_outputs: the PR links could not be read; the spine is drawn without them",
+      );
+      return null;
+    }),
   ]);
   const pulls: RunOutputNode[] = [];
-  for (const row of links.slice(0, WORK_PR_LINK_CAP)) {
+  for (const row of (links ?? []).slice(0, WORK_PR_LINK_CAP)) {
     const link = prLinkOf(row);
     if (link === null) continue;
     pulls.push({
@@ -112,6 +122,7 @@ async function wrappedNodes(
     nodes: nodes.slice(0, RUN_OUTPUT_NODE_MAX),
     complete:
       rows.length <= RUN_OUTPUT_NODE_MAX &&
+      links !== null &&
       links.length <= WORK_PR_LINK_CAP &&
       nodes.length <= RUN_OUTPUT_NODE_MAX,
   };

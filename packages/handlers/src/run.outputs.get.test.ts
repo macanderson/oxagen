@@ -15,6 +15,7 @@ import type {
   RunOutputQueries,
   SessionFileRow,
 } from "./lib/run-outputs";
+import { WORK_PR_LINK_CAP } from "./lib/run-work";
 import {
   createRunOutputsGetHandler,
   type RunOutputsGetDeps,
@@ -60,6 +61,8 @@ function harness(opts: {
   events?: ReturnType<typeof event>[];
   approvals?: RunApprovalRow[];
   links?: Awaited<ReturnType<RunOutputsGetDeps["prLinks"]>>;
+  /** The PR-link read rejects, as a ClickHouse outage would. */
+  linksFail?: boolean;
 }) {
   const stores = memoryStores(
     [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
@@ -89,7 +92,11 @@ function harness(opts: {
     tachoFrames: () => Promise.resolve([]),
     outputs,
     prLinks: (sessionUuid) =>
-      Promise.resolve(sessionUuid === SESSION_UUID ? (opts.links ?? []) : []),
+      opts.linksFail === true
+        ? Promise.reject(new Error("clickhouse unreachable"))
+        : Promise.resolve(
+            sessionUuid === SESSION_UUID ? (opts.links ?? []) : [],
+          ),
   };
   return createRunOutputsGetHandler(deps);
 }
@@ -133,6 +140,38 @@ describe("get_run_outputs — a wrapped session", () => {
       observedAt: "2026-09-23T10:00:00.000Z",
     });
     expect(out.tally.artifacts).toBe(3);
+  });
+
+  it("draws the files without PRs, marked incomplete, when the PR links cannot be read", async () => {
+    const outputs = harness({
+      files: [file({ path: "src/a.ts", writes: 1, lastSeq: 10 })],
+      linksFail: true,
+    });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(out.nodes.map((n) => [n.kind, n.name])).toEqual([
+      ["file", "src/a.ts"],
+    ]);
+    expect(out.complete).toBe(false);
+  });
+
+  it("stops at the PR-link cap and says the spine is incomplete", async () => {
+    const links = Array.from({ length: WORK_PR_LINK_CAP + 1 }, (_, i) => ({
+      url: `https://github.com/acme/app/pull/${i + 1}`,
+      number: String(i + 1),
+      repository: "acme/app",
+      seq: i + 1,
+      ts: "2026-09-23 10:00:00.000",
+    }));
+    const outputs = harness({ links });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(out.nodes.filter((n) => n.kind === "pr")).toHaveLength(
+      WORK_PR_LINK_CAP,
+    );
+    expect(out.complete).toBe(false);
   });
 
   it("splits reads from writes and counts them apart", async () => {
