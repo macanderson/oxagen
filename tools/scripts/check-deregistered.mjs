@@ -7,7 +7,7 @@
  * stays in the tree — the marketplace and the plugin catalog, fourteen of the
  * seventeen ingestion connectors, environments, prompt settings, and the reads
  * Appendix E folded into their objects. The spec that de-registered them
- * (`docs/specs/mission-control/spec.md`, App. E) says "dropped", and a session
+ * (`oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md`, App. E) says "dropped", and a session
  * reading that word literally would `git rm` several thousand lines that the
  * product is expected to grow back into.
  *

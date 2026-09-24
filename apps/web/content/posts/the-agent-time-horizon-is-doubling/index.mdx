@@ -1,6 +1,6 @@
 ---
 title: "The agent time horizon is doubling"
-description: "METR measures how long a task an agent can finish on its own. That number has doubled roughly every seven months since 2019. What a week-long run does to supervision."
+description: "METR measures how long a task an agent can finish on its own. That length has doubled about every seven months since 2019. This post covers what week-long runs mean for supervision."
 date: 2026-09-16
 authors:
   - Oxagen Research
@@ -16,59 +16,59 @@ tags:
 draft: false
 ---
 
-You hand an agent a ticket and go get coffee. Ten minutes is about the right length of leash: long enough for it to do something useful, short enough that you can read the whole transcript when you sit back down. That leash is the reason most teams still treat an agent as a faster autocomplete. You watch it because watching is cheap.
+You give an agent a ticket and go get coffee. Ten minutes is about the right length for a run like that. The agent has time to do something useful, and you can read the whole transcript when you come back. Because runs are this short, most teams still treat an agent as a faster autocomplete. They watch it because watching costs little.
 
-The leash is getting longer, and the measurement is public. When it reaches a day, reading the whole transcript stops being a thing a person does. When it reaches a week, the practices built around watching are already gone, whether or not anyone replaced them.
+Runs are getting longer, and the measurements are public. When a run lasts a day, no person reads the whole transcript anymore. When a run lasts a week, the habits built around watching have already stopped working, whether or not anyone replaced them.
 
 ## What METR measures
 
-Kwa and colleagues proposed a metric that translates a benchmark score into something an operator can reason about: the 50 percent task-completion time horizon, defined as the time a human with relevant domain expertise takes on tasks the model finishes with a 50 percent success rate.[^1] They timed people on RE-Bench, HCAST, and 66 shorter tasks they wrote for the purpose, then scored models against the same set.
+Kwa and colleagues proposed a metric that turns a benchmark score into something an operator can use. It is called the 50 percent task-completion time horizon. Take the tasks a model finishes with a 50 percent success rate. The horizon is how long a human with the right domain skills takes on those tasks.[^1] The authors timed people on RE-Bench, HCAST, and 66 shorter tasks they wrote for the study. Then they scored models on the same set.
 
-Two findings came out of it. Frontier models at the time of writing sat at a 50 percent horizon of roughly 50 minutes. And the frontier horizon had been doubling approximately every seven months since 2019.
+They found two things. When they wrote the paper, frontier models had a 50 percent horizon of about 50 minutes. The frontier horizon had also doubled about every seven months since 2019.
 
-METR revised the dataset in January 2026.[^2] The task suite grew to 228 tasks, and the number of tasks taking eight hours or more went from 14 to 31. The revised trend puts the doubling at 196.5 days across the whole period and 130.8 days across models released since 2023. The highest measured 50 percent horizon in that release was 320 minutes, with a confidence interval running from 170 to 729 minutes.
+METR revised the dataset in January 2026.[^2] The task suite grew to 228 tasks. The number of tasks that take eight hours or more went from 14 to 31. The revised trend puts the doubling time at 196.5 days across the whole period. For models released since 2023, it is 130.8 days. The highest measured 50 percent horizon in that release was 320 minutes. Its confidence interval runs from 170 to 729 minutes.
 
-The caveats travel with the number, and METR states them plainly. Human baseline times were measured for only 5 of the 31 long tasks; the rest are estimates. The confidence intervals are wide. The public tracker carries a notice that measurements above 16 hours are unreliable with the current task suite.[^3] A metric that reports its own ceiling is a better metric than one that does not, and the ceiling is the part worth keeping: nobody has a trustworthy measurement of an agent working for a week, because nobody has a task suite that can grade one.
+METR states the limits of these numbers plainly. Human baseline times were measured for only 5 of the 31 long tasks. The rest are estimates. The confidence intervals are wide. The public tracker notes that measurements above 16 hours are unreliable with the current task suite.[^3] That upper limit matters most. No one has a reliable measurement of an agent that works for a week, because no one has a task suite that can grade one.
 
-## The arithmetic, and what it costs to extrapolate it
+## What the doubling times add up to
 
-A doubling time is a small number that behaves badly in a planning conversation. Three doublings sounds like a rounding error and is a factor of eight.
+A doubling time is a small number, and it is easy to misjudge in planning. Three doublings sounds small, but it is a factor of eight.
 
 <Ladder
   title="Doublings from today's highest measured 50 percent horizon"
   axis="Length of task"
   steps={[
-    { label: "About 5 hours", detail: "Where the highest measured 50 percent horizon sat in January 2026 (320 minutes)." },
-    { label: "A working day", detail: "Under one doubling out. Around 7 months at 196 days, around 4 at 131." },
-    { label: "A working week", detail: "About three doublings out. Around 19 months at 196 days, around 13 at 131." },
-    { label: "A month of work", detail: "About five doublings out. Around 32 months at 196 days, around 22 at 131." },
+    { label: "About 5 hours", detail: "The highest measured 50 percent horizon in January 2026 (320 minutes)." },
+    { label: "A working day", detail: "Less than one doubling away. About 7 months at 196 days, about 4 at 131." },
+    { label: "A working week", detail: "About three doublings away. About 19 months at 196 days, about 13 at 131." },
+    { label: "A month of work", detail: "About five doublings away. About 32 months at 196 days, about 22 at 131." },
   ]}
-  caption="Arithmetic on the doubling times METR reports (Time Horizon 1.1, January 2026), starting from its own highest measured point. Illustrative: a trend line is not a forecast, and METR states that its measurements above 16 hours are unreliable."
+  caption="Arithmetic on the doubling times METR reports (Time Horizon 1.1, January 2026), starting from its highest measured point. For illustration only. A trend line is not a forecast, and METR states that its measurements above 16 hours are unreliable."
 />
 
-Read that as arithmetic and not as a roadmap. A line that has held for seven years can stop in the eighth, the confidence intervals on the recent points are wide enough to move every row, and the grading problem arrives before the capability does. What the table is good for is deciding how much of your current practice depends on the leash staying short. If the answer is most of it, your planning horizon is shorter than the capability horizon, which is the uncomfortable part.
+Read the table as arithmetic, not as a roadmap. A trend that held for seven years can stop in the eighth. The confidence intervals on the recent points are wide enough to change every row. The problem of grading long tasks will also arrive before agents can do them. The table helps with one thing. It shows how much of your current practice depends on runs staying short. If most of it does, your plans look less far ahead than the capability trend does.
 
-## The 50 percent line is not the production line
+## Production needs more than a 50 percent success rate
 
-Half is a strange place to draw a line if you are the one shipping the result. It is the right place for a research metric, because it is the steepest part of the curve and the most sensitive to a change in the model. It is the wrong place for a deployment decision, because the thing you are deciding is whether to let a run finish while you sleep.
+If you ship the result, half is an odd place to draw the line. It is the right place for a research metric. That part of the curve is the steepest, so it shows a change in the model most clearly. It is the wrong place for a deployment decision. There, you are deciding whether to let a run finish while you sleep.
 
-Yao and colleagues made the same point with a different metric. Standard practice reports pass@k, the probability that at least one of k attempts succeeds. They define pass^k instead: the probability that all k independent attempts at a task succeed.[^4] State-of-the-art function-calling agents in their study succeeded on under 50 percent of tasks, and pass^8 in the retail domain fell below 25 percent. Sampling more attempts raises the first number and lowers the second, so a system tuned on pass@k can get less consistent while its headline improves.
+Yao and colleagues made the same point with a different metric. The usual metric is pass@k, the chance that at least one of k attempts succeeds. They define pass^k instead, the chance that all k independent attempts at a task succeed.[^4] In their study, the best function-calling agents succeeded on under 50 percent of tasks. In the retail domain, pass^8 fell below 25 percent. More attempts raise pass@k and lower pass^k. So a system tuned on pass@k can get less consistent while its headline score improves.
 
-A five-hour horizon at 50 percent success means the agent gets a five-hour task right about as often as a coin lands heads. Run one such task a day for a week and the chance that all five land is around 3 percent. That is not an argument against long runs. It is an argument that the horizon number tells you what an agent can reach, not what you can ship, and those are two different purchases.
+A five-hour horizon at 50 percent success means the agent gets a five-hour task right about half the time. Run one such task a day for a working week. The chance that all five succeed is about 3 percent. This is not a reason to avoid long runs. It shows that the horizon number measures what an agent can reach. It does not measure what you can ship, and those are separate questions.
 
-## Long runs do not fail the way short runs fail
+## Long runs fail differently from short runs
 
-The obvious theory is that long runs fail because the context window fills up. The measurement says otherwise.
+You might expect long runs to fail because the context window fills up. The measurements do not support that.
 
-Backlund and Petersson built Vending-Bench to test coherence rather than capability: an agent runs a vending machine business, managing inventory, placing orders, setting prices, and covering daily costs.[^5] Each task is simple. The run is not. Individual runs exceed 20 million tokens. What they found is that agents misread delivery schedules, forget orders they placed, and fall into what the authors call tangential meltdown loops from which they rarely recover. They report no clear correlation between failures and the point at which the context window fills, and high variance between runs of the same model on the same task.
+Backlund and Petersson built Vending-Bench to test whether an agent stays coherent over time, rather than what it can do. In the benchmark, an agent runs a vending machine business. It manages inventory, places orders, sets prices, and pays daily costs.[^5] Each task is simple, but the run is long. Single runs go past 20 million tokens. The agents misread delivery schedules and forget orders they placed. They also fall into what the authors call tangential meltdown loops, and they rarely recover. The authors found no clear link between failures and the point where the context window fills. Runs of the same model on the same task also varied a lot.
 
-Sinha and colleagues name a mechanism that fits. Studying long-horizon execution, they find a self-conditioning effect: a model becomes more likely to make mistakes when its context already contains its own errors from earlier turns.[^6] The failure is not that the agent forgot. It is that the agent read its own bad work and treated it as settled. Their other finding is the encouraging half of the same paper: small gains in single-step accuracy compound into large gains in the length of task a model can complete, which is why the horizon curve moves at all.
+Sinha and colleagues describe a cause that fits. They studied long tasks and found a self-conditioning effect. When a model's context already holds its own errors from earlier turns, the model becomes more likely to make new mistakes.[^6] The agent reads its own bad work from earlier and treats it as settled. The same paper also has good news. Small gains in single-step accuracy add up to large gains in how long a task a model can complete. That is why the horizon keeps growing.
 
-Put those together and the shape of a long run is clear enough. It does not degrade smoothly toward the end. It proceeds correctly, takes one wrong turn, writes that turn into its own record, and then spends hours being consistent with it. By the time a person looks, the wrong turn is forty steps back and everything after it is coherent.
+Together, these findings show how a long run goes wrong. It does not get slowly worse toward the end. It works correctly, then takes one wrong turn. It writes that turn into its own record. Then it spends hours staying consistent with it. By the time a person looks, the wrong turn is forty steps back, and everything after it fits with it.
 
-## Supervision does not scale by watching
+## Watching does not scale to long runs
 
-Most teams supervise an agent the way they supervise a new engineer, because that is the process they already had.
+Most teams supervise an agent the way they supervise a new engineer. That is the process they already had.
 
 <Flow
   title="The supervision loop most teams are running"
@@ -79,20 +79,20 @@ Most teams supervise an agent the way they supervise a new engineer, because tha
     { label: "Correct", detail: "Interrupt, re-prompt, restart.", emph: true },
     { label: "Review", detail: "Read the diff, approve or reject." },
   ]}
-  caption="Illustrative. The loop closes because a person is present for the middle two steps. At a week per run, nobody is."
+  caption="Illustrative. The loop works because a person is there for the middle two steps. When a run takes a week, nobody is."
 />
 
-The loop closes because a person is present for the middle two steps. Every property the team relies on comes from that presence: the wrong turn gets caught early, the correction is cheap, and the reviewer has watched enough of the run to know what the diff means. None of those properties survive a horizon the reviewer cannot sit through. The loop does not break loudly. It keeps running with the watching step quietly skipped, and the review step now reads a week of work with no idea which forty steps mattered.
+The loop works because a person is there for the middle two steps. Everything the team relies on comes from that. The person catches the wrong turn early. The correction is cheap. The reviewer has watched enough of the run to know what the diff means. None of this holds when a run is longer than the reviewer can sit through. The loop does not fail in an obvious way. It keeps going with the watching step skipped. The reviewer then reads a week of work with no idea which forty steps mattered.
 
-What replaces presence is not more attention. It is deciding in advance what you used to decide in the moment: what the agent may reach, what it may spend, what it is told before it starts, and which requests stop and wait for a person. Those are the same decisions, moved from the transcript to the mandate. The next posts in this pillar take them one at a time.
+Instead of watching, you decide in advance what you used to decide in the moment. You decide what the agent may reach, what it may spend, what it is told before it starts, and which requests stop and wait for a person. These are the same decisions, moved from the transcript to the mandate. The next posts in this pillar cover them one at a time.
 
-## Where this meets Oxagen
+## Where this fits in Oxagen
 
-Oxagen is workforce management for autonomous agents. It does not run them. What it holds is the mandate: the identity each agent acts as, the systems and data it may request, the budget and rules it runs under, the tools and skills it is equipped with, and the record of what it did.
+Oxagen is workforce management for autonomous agents. It does not run them. It holds each agent's mandate. The mandate covers the identity the agent acts as, the systems and data it may request, the budget and rules it works under, the tools and skills it is equipped with, and the record of what it did.
 
-Three parts of that bear directly on a longer horizon. Requests are answered at the moment of use, so a run that reaches for a system at hour forty gets the same rule it would have got at minute one, and a rule can allow, deny, or route the request to a named person while the run waits. Every governed action is priced and attributed to the person, the agent, the run, the turn, and the step, so a week-long run has a cost you can read per step rather than one line on a monthly bill. And the record keeps each run frame by frame against its mandate, so finding the wrong turn is a query rather than a reread.
+Three parts of the mandate matter most for longer runs. First, Oxagen answers each request at the moment of use. A run that asks for a system at hour forty gets the same rule it would have got at minute one. A rule can allow the request, deny it, or route it to a named person while the run waits. Second, Oxagen prices each governed action. It records the cost against the person, the agent, the run, the turn, and the step. So a week-long run has a cost you can read step by step, not one line on a monthly bill. Third, the record keeps each run as a series of frames, one per recorded event, next to its mandate. Finding the wrong turn becomes a query instead of a reread.
 
-That applies to actions routed through Oxagen. A call that does not pass through it is not governed by it, and no record makes an agent correct. What the record does is make a long run something a person can inspect afterward, which is the property the watching step used to provide.
+This applies to actions routed through Oxagen. Oxagen does not govern a call that does not pass through it. No record makes an agent correct. The record lets a person inspect a long run afterward. The watching step used to give you that.
 
 [^1]: Kwa, T., West, B., Becker, J., Deng, A., Garcia, K., Hasin, M., Jawhar, S., Kinniment, M., Rush, N., Von Arx, S., Bloom, R., Broadley, T., Du, H., Goodrich, B., Jurkovic, N., Miles, L. H., Nix, S., Lin, T., Painter, C., Parikh, N., Rein, D., Sato, L. J. K., Wijk, H., Ziegler, D. M., Barnes, E., & Chan, L. (2025). *Measuring AI Ability to Complete Long Tasks*. arXiv. https://arxiv.org/abs/2503.14499
 [^2]: METR (2026). *Time Horizon 1.1*. https://metr.org/blog/2026-1-29-time-horizon-1-1/

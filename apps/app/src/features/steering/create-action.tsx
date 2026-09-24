@@ -11,7 +11,8 @@ export function SteeringCreate({
   searchParams: Readonly<Record<string, string | string[] | undefined>>;
 }) {
   const t = useTranslations("steering.create");
-  return parseSteeringView(searchParams).tab === "skills" ? (
+  const view = parseSteeringView(searchParams);
+  return view.tab === "library" && view.shelf === "skills" ? (
     <CreateButton kind="skill" label={t("skill")} />
   ) : (
     <CreateButton kind="record" label={t("record")} />

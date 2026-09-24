@@ -27,7 +27,10 @@
 // its target and nothing wider, a command outside the three a row sends is
 // refused before the kernel, and no payload is ever attached, which
 // `dispatch_command` refuses on pause, resume and cancel.
-import { COMMAND_REASON_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import {
+  COMMAND_REASON_MAX,
+  STEER_TEXT_MAX,
+} from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
@@ -52,8 +55,13 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { dispatchRunCommand, readApprovalEligibility, resolveApprovalAction } =
-  await import("./actions");
+const {
+  dispatchRunCommand,
+  exportFleetRun,
+  readApprovalEligibility,
+  resolveApprovalAction,
+  steerFleet,
+} = await import("./actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -373,6 +381,133 @@ describe("dispatchRunCommand", () => {
     );
     expect(
       await dispatchRunCommand("acme", "core-platform", RUN, "pause", ""),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+// Steer the fleet: one `steer` per selected agent, addressed to the agent so
+// the control plane fans it out to that agent's runs in flight, always at the
+// turn boundary (the design's Interrupt is not offered).
+describe("steerFleet", () => {
+  const KEYS = ["acme.core.release-bot", "acme.core.docs"];
+
+  it("queues one steer per agent at the turn boundary and answers every run it reached", async () => {
+    invoke
+      .mockResolvedValueOnce({ commandIds: ["tcm_1", "tcm_2"] })
+      .mockResolvedValueOnce({ commandIds: [] });
+    expect(
+      await steerFleet("acme", "core-platform", {
+        agentKeys: KEYS,
+        text: "  Skip the mobile repo this cycle.  ",
+      }),
+    ).toEqual({
+      ok: true,
+      value: { commandIds: ["tcm_1", "tcm_2"], refused: [] },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledTimes(2);
+    for (const agentKey of KEYS)
+      expect(invoke).toHaveBeenCalledWith(
+        "dispatch_command",
+        {
+          target: { kind: "agent", id: agentKey },
+          command: "steer",
+          payload: {
+            text: "Skip the mobile repo this cycle.",
+            requestedMode: "turn_boundary",
+          },
+        },
+        expect.objectContaining(TENANT),
+      );
+  });
+
+  it("sends one steer for an agent named twice", async () => {
+    invoke.mockResolvedValue({ commandIds: ["tcm_1"] });
+    await steerFleet("acme", "core-platform", {
+      agentKeys: ["acme.core.docs", "acme.core.docs"],
+      text: "Hold the release.",
+    });
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the steers that were queued and names the agents that refused one", async () => {
+    invoke
+      .mockResolvedValueOnce({ commandIds: ["tcm_1"] })
+      .mockRejectedValueOnce(
+        new kernel.CapabilityError(
+          "dispatch_command",
+          "authz_denied",
+          "denied",
+        ),
+      );
+    const result = await steerFleet("acme", "core-platform", {
+      agentKeys: KEYS,
+      text: "Hold the release.",
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        commandIds: ["tcm_1"],
+        refused: [{ agentKey: "acme.core.docs" }],
+      },
+    });
+  });
+
+  it("answers the refusal itself when every agent was refused (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.CapabilityError("dispatch_command", "authz_denied", "denied"),
+    );
+    expect(
+      await steerFleet("acme", "core-platform", {
+        agentKeys: KEYS,
+        text: "Hold the release.",
+      }),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+
+  it.each([
+    ["an empty text", { agentKeys: KEYS, text: "   " }, "steer_text", "text"],
+    [
+      "a text past the contract's ceiling",
+      { agentKeys: KEYS, text: "x".repeat(STEER_TEXT_MAX + 1) },
+      "steer_text",
+      "text",
+    ],
+    ["no agent", { agentKeys: [], text: "Hold." }, "steer_agents", "agents"],
+  ])(
+    "refuses %s before the kernel runs (negative)",
+    async (_case, input, code, field) => {
+      expect(await steerFleet("acme", "core-platform", input)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code,
+        field,
+      });
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("exportFleetRun", () => {
+  it("queues the run's evidence bundle and answers the export id", async () => {
+    invoke.mockResolvedValue({ exportId: "rexp_1", status: "queued" });
+    expect(
+      await exportFleetRun("acme", "core-platform", "arun_7k2m9q"),
+    ).toEqual({ ok: true, value: { exportId: "rexp_1" } });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "export_run",
+      { runId: "arun_7k2m9q" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("carries the handler's role refusal back as denied (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.CapabilityError("export_run", "authz_denied", "denied"),
+    );
+    expect(
+      await exportFleetRun("acme", "core-platform", "arun_7k2m9q"),
     ).toMatchObject({ ok: false, reason: "denied" });
   });
 });

@@ -110,6 +110,11 @@ export const routes = {
     withQuery(mint("/cli/authorize"), query),
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
+  organization: (
+    org: string,
+    tab: "people" | "invitations" | "workspaces" | "costCenters",
+  ): SafePath =>
+    withQuery(pathOf(org), { tab: tab === "people" ? undefined : tab }),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
   /**
@@ -340,27 +345,44 @@ export const routes = {
     tab === undefined
       ? pathOf(org, ws, "repositories")
       : pathOf(org, ws, "repositories", tab),
+  /** Runtimes: the hosts agents run on (roadmap mockups/pages/runtimes.md). */
+  runtimes: (org: string, ws: string): SafePath => pathOf(org, ws, "runtimes"),
+  /** One runtime, addressed by its enrollment's public id (`tch_…`). */
+  runtime: (org: string, ws: string, runtime: string): SafePath =>
+    pathOf(org, ws, "runtimes", runtime),
   /** Steering filters, a selected proposal, and a Skills inventory cursor. */
   steering: (
     org: string,
     ws: string,
     q: {
       tab?: string;
+      shelf?: string;
+      section?: string;
       kind?: string;
       offset?: string;
       proposal?: string;
       cursor?: string;
       view?: string;
     } = {},
-  ): SafePath =>
-    withQuery(pathOf(org, ws, "steering"), {
-      tab: q.tab,
+  ): SafePath => {
+    const canonical =
+      q.tab !== undefined &&
+      ["library", "proposals", "freshness", "deliveries"].includes(q.tab)
+        ? q.tab
+        : null;
+    const segments = canonical === null ? [] : [canonical];
+    if (q.tab === "library" && q.shelf && q.shelf !== "all")
+      segments.push(q.shelf);
+    return withQuery(pathOf(org, ws, "steering", ...segments), {
+      tab: canonical === null ? q.tab : undefined,
       kind: q.kind,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,
       view: q.view,
-    }),
+      section: q.section,
+    });
+  },
   /**
    * One published record, by its lineage (#3395). The lineage is a file stem
    * under `.oxagen/rules/`, so it reaches here from the repository rather

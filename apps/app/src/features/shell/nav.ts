@@ -1,6 +1,7 @@
-// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's nine
-// links in the mockup's order (Workspace: Fleet, Agent IAM, Tools,
-// Steering, Repositories, Spend; Organization: Organization, Billing, Audit), the phone's thumb bar and More
+// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's ten
+// links in the mockup's order (Workspace: Fleet, Agent IAM, Tools, Steering,
+// Runtimes, Repositories, Spend; Organization: Organization, Billing, Audit),
+// the phone's thumb bar and More
 // sheet over the same keys, which item is current, and the breadcrumbs. Pure
 // functions of the URL, so the sidebar, top bar, command menu and <MobileNav>
 // agree on one model. Run has no entry: it opens from the Fleet runs table.
@@ -14,6 +15,7 @@ export type WorkspaceNavKey =
   | "agents"
   | "tools"
   | "steering"
+  | "runtimes"
   | "repositories"
   | "spend";
 export type OrgNavKey = "organization" | "billing" | "audit";
@@ -26,6 +28,7 @@ export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "agents",
   "tools",
   "steering",
+  "runtimes",
   "repositories",
   "spend",
 ];
@@ -68,6 +71,7 @@ export const THUMB_SLOTS: readonly ThumbSlot[] = [
 /** The rest of the sidebar, one tap away in the phone's More sheet. */
 export const MORE_SHEET: readonly NavKey[] = [
   "steering",
+  "runtimes",
   "repositories",
   "organization",
   "billing",
@@ -100,6 +104,7 @@ const WORKSPACE_SEGMENT: Record<Exclude<WorkspaceNavKey, "fleet">, string> = {
   agents: "agents",
   tools: "tools",
   steering: "steering",
+  runtimes: "runtimes",
   repositories: "repositories",
   spend: "spend",
 };
@@ -232,10 +237,18 @@ export type Crumb =
   | { kind: "name"; text: string; href: SafePath | null }
   | { kind: "id"; text: string; href: SafePath | null };
 
-/** Breadcrumbs for a pathname, per the mockup's `crumbs()`. The last crumb has no href. */
+/**
+ * Breadcrumbs for a pathname, per the mockup's `crumbs()`. The last crumb has
+ * no href. `record` is what the page declared it is showing (`PageRecord`),
+ * so a route whose segment is a key can end on the record's name.
+ */
 export function breadcrumbs(
   pathname: string,
-  names: { org: string; ws: string | null },
+  names: {
+    org: string;
+    ws: string | null;
+    record?: { id: string | null; label: string | null } | null;
+  },
 ): Crumb[] {
   const { org, ws, rest } = parseShellPath(pathname);
   if (org === null) return [];
@@ -276,6 +289,22 @@ export function breadcrumbs(
       // ends at Agents → the mandate id, mirroring the runs → fleet case.
       out.push({ kind: "nav", key: "agents", href: pathOf(org, ws, "agents") });
       if (id !== undefined) out.push({ kind: "id", text: id, href: null });
+      break;
+    case "runtimes":
+      // One runtime ends the trail on the runtime's name, under Runtimes
+      // (mockup `crumbs()`: the list is a link, the name is mono). The
+      // segment is the enrollment id, so the name is the one the page
+      // declared for that id; until it has, the id stands in. The id stays
+      // copyable on the page, in the rollback command.
+      out.push({
+        kind: "nav",
+        key: "runtimes",
+        href: pathOf(org, ws, "runtimes"),
+      });
+      if (id !== undefined) {
+        const label = names.record?.id === id ? (names.record.label ?? id) : id;
+        out.push({ kind: "id", text: label, href: null });
+      }
       break;
     default: {
       const key = currentNavKey(pathname);

@@ -8,11 +8,11 @@ import {
   AlertTriangle,
   Clock,
   RefreshCw,
-  GithubIcon,
   MoreHorizontal,
   Settings2,
   Trash2,
 } from "lucide-react";
+import { GithubIcon } from "@/components/brand/github-icon";
 import { GitHubConnectionWizard } from "./github-connection-wizard";
 import {
   clearPendingGithubConnection,

@@ -1367,6 +1367,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
 
   // ── Linear (capability provenance) ───────────────────────────────────────────
+  LINEAR_OAUTH_CLIENT_ID: {
+    group: "Linear",
+    description:
+      "Linear OAuth application client ID for customer-authorized Run follow-through. Uses PKCE with the app callback URL.",
+    secret: false,
+    clientExposed: false,
+    services: ["app", "api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   LINEAR_API_KEY: {
     group: "Linear",
     description:
@@ -2057,6 +2067,33 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "origin/main",
   },
+  GITLAB_TOKEN: {
+    group: "Operator scripts",
+    description:
+      "A gitlab.com project access token that `tools/scripts/gitlab-steering-exercise.ts` " +
+      "publishes one context record with, as recorded evidence for #3762. Set it in the " +
+      "shell for one run only; the platform never reads it, and workspaces store their own " +
+      "tokens through attach_gitlab_project.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "glpat-...",
+  },
+  GITLAB_PROJECT: {
+    group: "Operator scripts",
+    description:
+      "The gitlab.com project, `group/project`, that `tools/scripts/gitlab-steering-exercise.ts` " +
+      "publishes its exercise record to. Use a scratch project: a run with --merge adds a " +
+      "file to its default branch.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "acme/oxagen-steering-scratch",
+  },
   DB_LINT_HEAD_REF: {
     group: "Operator scripts",
     description:
@@ -2200,6 +2237,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "12",
+  },
+  DEPLOYMENT_FAILURE_RUN_ID: {
+    group: "Operator scripts",
+    description:
+      "The CI run on main that deployment-failure-issue.mjs records. deployment-failure.yml sets it from the workflow_run event, or from the run_id input on a manual replay.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "35930652260",
   },
   SCR_OWNER: {
     group: "Operator scripts",

@@ -16,7 +16,7 @@
 import "server-only";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { AuditBundle, EvidenceRetention } from "@/data/contracts/audit";
+import type { AuditBundle, AuditRetention } from "@/data/contracts/audit";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
@@ -420,7 +420,7 @@ function PolicyField({
 export function RetentionTab({
   retention,
 }: {
-  retention: Read<EvidenceRetention>;
+  retention: Read<AuditRetention>;
 }) {
   const t = useTranslations("audit.retention");
   const format = useFormatter();

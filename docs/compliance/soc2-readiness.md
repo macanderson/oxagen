@@ -19,7 +19,7 @@ The [AICPA trust services criteria](https://www.aicpa-cima.com/resources/downloa
 
 | Decision | Handoff | Cost status |
 | --- | --- | --- |
-| Select an auditor and report scope | [#3756](https://github.com/macanderson/oxagen/issues/3756) | No quote obtained. Estimate remains unpriced until written scope and at least two quotes exist. |
+| Select an auditor and report scope | [#3756](https://github.com/macanderson/oxagen/issues/3756), with the [decision prepared on 2026-09-23](https://github.com/macanderson/oxagen/issues/3756#issuecomment-5800937888) | No quote obtained. The decision carries published price bands, not quotes. The estimate remains unpriced until written scope and at least two quotes exist. |
 | Choose manual or vendor-assisted evidence collection | [#3757](https://github.com/macanderson/oxagen/issues/3757) | No quote obtained. Compare software fees and recurring staff time. |
 | Select an independent penetration tester | [#3758](https://github.com/macanderson/oxagen/issues/3758) | No quote obtained. Require remediation retest costs in the estimate. |
 

@@ -177,6 +177,17 @@ export interface SessionRecord extends SessionFacts {
    * `invocationToolUseId` in the hook handler.
    */
   toolUseIds: Record<string, string>;
+  /**
+   * The most recent `hook_id`s this session recorded, oldest first, bounded
+   * to `HOOK_ID_LEDGER_CAPACITY`. `tacho-hook` generates one when it reads
+   * stdin and sends it on both the live request and the spool file it falls
+   * back to when that request times out on the client's own side. A client
+   * timeout does not mean the daemon never got the hook — only that this
+   * process stopped waiting for the answer — so the same hook can arrive
+   * twice: once live, once as a later spool replay. See `sawHookId` and
+   * `rememberHookId`.
+   */
+  recentHookIds: string[];
 }
 
 export interface PersistedSession extends SessionFacts {
@@ -192,6 +203,8 @@ export interface PersistedSession extends SessionFacts {
   ambient: boolean;
   /** Absent in files written before derived tool-use ids were numbered. */
   toolUseIds?: Record<string, string>;
+  /** Absent in files written before the hook-id replay ledger existed. */
+  recentHookIds?: string[];
 }
 
 /** One kind of agent this host has run. */
@@ -498,6 +511,7 @@ export class SessionRegistry {
       lastCheckpointSeq: -1,
       ambient: facts.ambient ?? false,
       toolUseIds: {},
+      recentHookIds: [],
       ...optionalFacts(facts),
     };
     this.sessions.set(this.key(harnessSessionId, facts), record);
@@ -590,6 +604,9 @@ export class SessionRegistry {
         ...(Object.keys(record.toolUseIds).length > 0
           ? { toolUseIds: { ...record.toolUseIds } }
           : {}),
+        ...(record.recentHookIds.length > 0
+          ? { recentHookIds: [...record.recentHookIds] }
+          : {}),
         ...optionalFacts(record),
       })),
       agents: [...this.roster.values()].map((entry) => ({ ...entry })),
@@ -633,6 +650,7 @@ export class SessionRegistry {
         lastCheckpointSeq: persisted.lastCheckpointSeq,
         ambient: persisted.ambient,
         toolUseIds: { ...persisted.toolUseIds },
+        recentHookIds: [...(persisted.recentHookIds ?? [])],
         ...optionalFacts(persisted),
       });
     }
@@ -640,6 +658,37 @@ export class SessionRegistry {
       this.roster.set(entry.key, { ...entry });
     }
   }
+}
+
+/**
+ * The most recent hook ids one session's replay-dedup ledger keeps. A
+ * client's fallback spool never queues faster than a person or an agent
+ * drives hooks, so a few dozen is generous room for a spool replay to still
+ * find its live sighting.
+ */
+export const HOOK_ID_LEDGER_CAPACITY = 64;
+
+/**
+ * Whether this session's ledger already holds this hook id — a client-side
+ * timeout followed by a spool replay of the hook the daemon already
+ * processed live. See `SessionRecord.recentHookIds`.
+ */
+export function sawHookId(
+  record: Pick<SessionRecord, "recentHookIds">,
+  hookId: string,
+): boolean {
+  return record.recentHookIds.includes(hookId);
+}
+
+/** Record a hook id as seen, bounded to `HOOK_ID_LEDGER_CAPACITY`. */
+export function rememberHookId(
+  record: Pick<SessionRecord, "recentHookIds">,
+  hookId: string,
+): void {
+  if (record.recentHookIds.includes(hookId)) return;
+  record.recentHookIds.push(hookId);
+  const over = record.recentHookIds.length - HOOK_ID_LEDGER_CAPACITY;
+  if (over > 0) record.recentHookIds.splice(0, over);
 }
 
 /**

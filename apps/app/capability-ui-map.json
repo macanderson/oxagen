@@ -1,9 +1,9 @@
 {
-  "$doc": "UI Capability Parity (CLAUDE.md): every capability whose contract declares the `app` layer is bound here to the page a person operates it on, and to the runtime artifact that proves that page works. Law: a capability that declares \"app\" MUST have a binding whose `page` exists and renders without an error page. Enforced by `pnpm check:ui-parity --strict` (tools/scripts/check_ui_parity.mjs), which reads this file because tools/scripts/lib/app-dir.mjs now points APP_DIR at apps/app (WL-50). A capability with no rev1 surface does not get a binding here — its `app` layer is retired instead, and ADR-081 names it with the lane that restores it.",
+  "$doc": "UI Capability Parity (CLAUDE.md): every capability whose contract declares the `app` layer is bound here to the page a person operates it on, and to the runtime artifact that proves that page works. Law: a capability that declares \"app\" MUST have a binding whose `page` exists and renders without an error page. Enforced by `pnpm check:ui-parity --strict` (tools/scripts/check_ui_parity.mjs), which reads this file because tools/scripts/lib/app-dir.mjs now points APP_DIR at apps/app (WL-50). A capability with no rev1 surface does not get a binding here \u2014 its `app` layer is retired instead, and ADR-081 names it with the lane that restores it.",
   "$binding_shape": {
     "route": "URL path pattern the human navigates to, e.g. /[org]/[ws]/tools",
     "page": "repo-relative page.tsx (or route.ts) that renders/handles the surface",
-    "entry": "the concrete UI affordance that invokes the capability — human-readable",
+    "entry": "the concrete UI affordance that invokes the capability \u2014 human-readable",
     "testid": "optional data-testid on the entry-point element",
     "proof": "path to the runtime proof: an apps/app component or action test, or verifications/<session>/<name>.png",
     "verifiedAt": "YYYY-MM-DD the proof was captured against a working page",
@@ -14,7 +14,7 @@
     "accept_member_invite": {
       "route": "/invite/[token]",
       "page": "apps/app/src/app/(auth)/invite/[token]/page.tsx",
-      "entry": "/invite/[token] — the rev1 surface that invokes accept_member_invite (features/auth/invite-actions.ts, server/kernel.ts)",
+      "entry": "/invite/[token] \u2014 the rev1 surface that invokes accept_member_invite (features/auth/invite-actions.ts, server/kernel.ts)",
       "proof": "apps/app/src/features/auth/invite-actions.test.ts",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -22,7 +22,7 @@
     "advance_onboarding": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
-      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes advance_onboarding (features/onboarding/actions.ts)",
+      "entry": "/[org]/[ws]/register/[step] \u2014 the rev1 surface that invokes advance_onboarding (features/onboarding/actions.ts)",
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -30,7 +30,7 @@
     "archive_workspace": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — the rev1 surface that invokes archive_workspace (features/organization/actions.ts)",
+      "entry": "/[org] \u2014 the rev1 surface that invokes archive_workspace (features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -38,7 +38,7 @@
     "ask_assistant": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Ask the assistant at the foot of the sidebar, and of the phone's nav drawer — the shell's assistant flyout, whose composer invokes ask_assistant inside a workspace (features/shell/assistant-flyout.tsx, features/shell/assistant-actions.ts)",
+      "entry": "Ask the assistant at the foot of the sidebar, and of the phone's nav drawer \u2014 the shell's assistant flyout, whose composer invokes ask_assistant inside a workspace (features/shell/assistant-flyout.tsx, features/shell/assistant-actions.ts)",
       "testid": "assistant-send",
       "proof": "apps/app/src/features/shell/assistant-flyout.test.tsx",
       "verifiedAt": "2026-09-17",
@@ -47,7 +47,7 @@
     "assign_agent_role": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Assign a role on the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=identity \u2014 Assign a role on the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
       "proof": "apps/app/src/features/agents/role-controls.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-mc-3-roles"
@@ -55,15 +55,24 @@
     "attach_github_installation": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › GitHub connection and main repository — “Use this installation” on the picked GitHub account (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a GitHub connection and main repository \u2014 \u201cUse this installation\u201d on the picked GitHub account (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
     },
+    "attach_gitlab_project": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › main repository: “Connect and bind” in the GitLab project form, and the same form repairing a GitLab binding whose token was revoked (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "testid": "workspace-gitlab-connect",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_012RZnK27nmESrihQgUhwwFk"
+    },
     "authorize_cli": {
       "route": "/cli/authorize",
       "page": "apps/app/src/app/cli/authorize/page.tsx",
-      "entry": "/cli/authorize — the rev1 surface that invokes authorize_cli (features/auth/cli-actions.ts, features/auth/cli-authorize.ts)",
+      "entry": "/cli/authorize \u2014 the rev1 surface that invokes authorize_cli (features/auth/cli-actions.ts, features/auth/cli-authorize.ts)",
       "proof": "apps/app/src/features/auth/cli-consent.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -71,7 +80,7 @@
     "bind_main_repository": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › GitHub connection and main repository — “Bind as main repo” on the picked repository (features/repositories/main-repository.tsx, features/repositories/actions.ts); also the onboarding gate's provisional banner at /[org]/[ws]/register/[step] (features/onboarding/ui/bind-repository.tsx, features/onboarding/actions.ts)",
+      "entry": "Repositories \u203a GitHub connection and main repository \u2014 \u201cBind as main repo\u201d on the picked repository (features/repositories/main-repository.tsx, features/repositories/actions.ts); also the onboarding gate's provisional banner at /[org]/[ws]/register/[step] (features/onboarding/ui/bind-repository.tsx, features/onboarding/actions.ts)",
       "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -79,7 +88,7 @@
     "bisect_runs": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Bisect compares this run with another and names the first frame at which they diverge (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Bisect compares this run with another and names the first frame at which they diverge (features/run/actions.ts, features/run/replay-actions.tsx)",
       "proof": "apps/app/src/features/run/replay.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
@@ -87,7 +96,7 @@
     "change_member_role": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — the rev1 surface that invokes change_member_role (features/organization/actions.ts)",
+      "entry": "/[org] \u2014 the rev1 surface that invokes change_member_role (features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/member-row-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -95,7 +104,7 @@
     "commit_agent_definition": {
       "route": "/[org]/[ws]/agents/[agent]/source",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/source/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]/source — the rev1 surface that invokes commit_agent_definition (features/agents/actions.ts, features/agents/agent-source.tsx)",
+      "entry": "/[org]/[ws]/agents/[agent]/source \u2014 the rev1 surface that invokes commit_agent_definition (features/agents/actions.ts, features/agents/agent-source.tsx)",
       "proof": "apps/app/src/features/agents/agent-source.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -103,7 +112,7 @@
     "create_api_key": {
       "route": "/[org]/api-keys",
       "page": "apps/app/src/app/[org]/api-keys/page.tsx",
-      "entry": "/[org]/api-keys — the rev1 surface that invokes create_api_key (features/organization/api-key-actions.ts)",
+      "entry": "/[org]/api-keys \u2014 the rev1 surface that invokes create_api_key (features/organization/api-key-actions.ts)",
       "proof": "apps/app/src/features/organization/create-key-dialog.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -111,7 +120,7 @@
     "create_connection": {
       "route": "/[org]/[ws]/tools?tab=connections",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools › Connections: “Add a connection” opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
+      "entry": "Tools \u203a Connections: \u201cAdd a connection\u201d opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
       "testid": "connection-add-open",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-20",
@@ -120,7 +129,7 @@
     "create_enrollment_token": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
-      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes create_enrollment_token (features/onboarding/actions.ts)",
+      "entry": "/[org]/[ws]/register/[step] \u2014 the rev1 surface that invokes create_enrollment_token (features/onboarding/actions.ts)",
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover",
@@ -128,7 +137,7 @@
         {
           "route": "/[org]/[ws]/agents/[agent]",
           "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-          "entry": "/[org]/[ws]/agents/[agent]?tab=enrollment — Enroll a host mints the token and shows the oxagen agent enroll command once (features/agents/enrollment-controls.tsx, features/agents/actions.ts)",
+          "entry": "/[org]/[ws]/agents/[agent]?tab=enrollment \u2014 Enroll a host mints the token and shows the oxagen agent enroll command once (features/agents/enrollment-controls.tsx, features/agents/actions.ts)",
           "testid": "enroll-host",
           "proof": "apps/app/src/features/agents/enrollment-controls.test.tsx",
           "verifiedAt": "2026-09-20",
@@ -139,7 +148,7 @@
     "create_org": {
       "route": "/new-organization",
       "page": "apps/app/src/app/(onboarding)/new-organization/page.tsx",
-      "entry": "/new-organization — the rev1 surface that invokes create_org (features/onboarding/actions.ts, features/onboarding/org-form.ts)",
+      "entry": "/new-organization \u2014 the rev1 surface that invokes create_org (features/onboarding/actions.ts, features/onboarding/org-form.ts)",
       "proof": "apps/app/src/features/onboarding/new-organization.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -147,7 +156,7 @@
     "create_role": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
-      "entry": "/[org]/roles — the rev1 surface that invokes create_role (features/organization/actions.ts)",
+      "entry": "/[org]/roles \u2014 the rev1 surface that invokes create_role (features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/roles.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -163,7 +172,7 @@
     "create_workspace": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — Organization › Workspaces › “Create a workspace”: name, slug and the main repository as owner/name, which create_workspace binds in the same transaction (features/organization/workspace-actions.tsx, features/organization/actions.ts)",
+      "entry": "/[org] \u2014 Organization \u203a Workspaces \u203a \u201cCreate a workspace\u201d: name, slug and the main repository as owner/name, which create_workspace binds in the same transaction (features/organization/workspace-actions.tsx, features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-m0-workspace-repositories"
@@ -171,7 +180,7 @@
     "decline_member_invite": {
       "route": "/invite/[token]",
       "page": "apps/app/src/app/(auth)/invite/[token]/page.tsx",
-      "entry": "/invite/[token] — the rev1 surface that invokes decline_member_invite (features/auth/invite-actions.ts, server/kernel.ts)",
+      "entry": "/invite/[token] \u2014 the rev1 surface that invokes decline_member_invite (features/auth/invite-actions.ts, server/kernel.ts)",
       "proof": "apps/app/src/features/auth/invite-actions.test.ts",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -179,7 +188,7 @@
     "delete_approval_rule": {
       "route": "/[org]/[ws]/tools?tab=autoapprovals",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools › Auto-approvals › Delete on a row (features/tools/approval-rule-controls.tsx RuleDelete, deleteApprovalRule in features/tools/actions.ts)",
+      "entry": "Tools \u203a Auto-approvals \u203a Delete on a row (features/tools/approval-rule-controls.tsx RuleDelete, deleteApprovalRule in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-tools-gaps"
@@ -195,7 +204,7 @@
     "delete_role": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
-      "entry": "/[org]/roles — the rev1 surface that invokes delete_role (features/organization/actions.ts)",
+      "entry": "/[org]/roles \u2014 the rev1 surface that invokes delete_role (features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/role-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -211,7 +220,7 @@
     "dismiss_finding": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes dismiss_finding (features/spend/actions.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes dismiss_finding (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -219,7 +228,7 @@
     "dismiss_proposal": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes dismiss_proposal (features/steering/actions.ts)",
+      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes dismiss_proposal (features/steering/actions.ts)",
       "proof": "apps/app/src/features/steering/write-controls.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -227,7 +236,7 @@
     "dispatch_command": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command, and an observe-tier run draws all four disabled with the recorded reason (features/run/actions.ts, features/run/run-controls.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command, and an observe-tier run draws all four disabled with the recorded reason (features/run/actions.ts, features/run/run-controls.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-018UrgFq-mc1-columns",
@@ -235,17 +244,17 @@
         {
           "route": "/[org]/[ws]",
           "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-          "entry": "/[org]/[ws] (Fleet) — Pause, Resume and Cancel on a live wrapped run's row queue dispatch_command (features/fleet/actions.ts, features/fleet/run-row-controls.tsx). Steer stays on the run page: the contract requires a payload on it",
-          "proof": "apps/app/src/features/fleet/run-row-controls.test.tsx",
-          "verifiedAt": "2026-09-20",
-          "verifiedBy": "session-018UrgFq-mc1-controls"
+          "entry": "/[org]/[ws] (Fleet) \u2014 Pause on a live run's row opens the pause dialog, which queues dispatch_command for that run, and Steer in the header queues one steer per selected agent at the turn boundary (features/fleet/actions.ts, features/fleet/board.tsx, features/fleet/steer-fleet.tsx)",
+          "proof": "apps/app/src/features/fleet/fleet.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session-01GDv3vs-fleet-rev1"
         }
       ]
     },
     "export_audit_events": {
       "route": "/[org]/audit/export",
       "page": "apps/app/src/app/[org]/audit/export/route.ts",
-      "entry": "/[org]/audit/export — the rev1 surface that invokes export_audit_events (data/live/audit.ts, data/live/mappers/audit.ts)",
+      "entry": "/[org]/audit/export \u2014 the rev1 surface that invokes export_audit_events (data/live/audit.ts, data/live/mappers/audit.ts)",
       "proof": "apps/app/src/features/audit/export.test.ts",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -255,22 +264,32 @@
       "page": "apps/app/src/app/[org]/layout.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-514c860f-account-dialog-w11",
-      "entry": "Privacy and data in the user menu opens the Account dialog's Privacy tab; “Export my activity” and “Export the organization” queue export_data (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "entry": "Privacy and data in the user menu opens the Account dialog's Privacy tab; \u201cExport my activity\u201d and \u201cExport the organization\u201d queue export_data (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
       "testid": "account-export-user",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
     "export_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Export on a sealed run queues export_run for an org Owner or Admin (features/run/actions.ts, features/run/record-actions.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Export on a sealed run queues export_run for an org Owner or Admin (features/run/actions.ts, features/run/record-actions.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedBy": "session-c2f283fb-3282-review",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+          "entry": "/[org]/[ws] (Fleet) \u2014 Export on an ended run's row queues export_run and says the bundle was queued, or why it was not (features/fleet/actions.ts, features/fleet/board.tsx)",
+          "proof": "apps/app/src/features/fleet/fleet.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session-01GDv3vs-fleet-rev1"
+        }
+      ]
     },
     "get_run_export": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — after Export queues a bundle, the dialog reads get_run_export on a bounded poll and offers the download once it is ready, for an org Owner or Admin (features/run/actions.ts, features/run/record-actions.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 after Export queues a bundle, the dialog reads get_run_export on a bounded poll and offers the download once it is ready, for an org Owner or Admin (features/run/actions.ts, features/run/record-actions.tsx)",
       "proof": "apps/app/src/features/run/record-actions.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-ddcac89d-run-export-verify"
@@ -278,7 +297,7 @@
     "export_statement": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes export_statement (features/spend/actions.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes export_statement (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -286,7 +305,7 @@
     "fork_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Fork replay on a sealed ledger run graded fork calls fork_run from the dialog; a wrapped session or a weaker grade draws the control disabled with the reason (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Fork replay on a sealed ledger run graded fork calls fork_run from the dialog; a wrapped session or a weaker grade draws the control disabled with the reason (features/run/actions.ts, features/run/replay-actions.tsx)",
       "proof": "apps/app/src/features/run/replay.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
@@ -294,7 +313,7 @@
     "get_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes get_agent (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts)",
+      "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes get_agent (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts)",
       "proof": "apps/app/src/features/agents/agent.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -302,30 +321,19 @@
     "get_agent_toolbelt": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes get_agent_toolbelt (data/live/agents.ts, data/live/mappers/agents.ts)",
+      "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes get_agent_toolbelt (data/live/agents.ts, data/live/mappers/agents.ts)",
       "proof": "apps/app/src/features/agents/toolbelt.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-mc-3-schemas"
     },
     "get_auto_eligibility": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] — opening the decision dialog reads get_auto_eligibility, so the eligibility line and who has already resolved the call are current at the moment of the decision rather than as old as the page render (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the card on the Approvals tab draws the recorded eligibility line, and opening its decision dialog reads get_auto_eligibility again, so who has already resolved the call is current at the moment of the decision (features/fleet/approval-decision.tsx, features/fleet/actions.ts). Fleet draws no approval card since its rev1 rebuild; the shell's approvals drawer draws the same card",
       "testid": "eligibility",
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-018UrgFq-mc-1-approve",
-      "also": [
-        {
-          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
-          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-          "entry": "/[org]/[ws]/runs/[run]?tab=approvals — the card on the Approvals tab draws the recorded eligibility line, and opening its dialog reads get_auto_eligibility again (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
-          "testid": "eligibility",
-          "proof": "apps/app/src/features/run/run.test.tsx",
-          "verifiedAt": "2026-09-20",
-          "verifiedBy": "session-018UrgFq-mc1-review"
-        }
-      ]
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-01GDv3vs-fleet-rev1"
     },
     "get_clone_draft": {
       "route": "/[org]/[ws]/steering",
@@ -339,7 +347,7 @@
     "get_connection": {
       "route": "/[org]/[ws]/tools?tab=connections",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools › Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
+      "entry": "Tools \u203a Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
       "testid": "connection-open-con_01k5n1",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-20",
@@ -348,7 +356,7 @@
     "get_context_pr": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes get_context_pr (data/live/mappers/steering.ts, data/live/steering.ts)",
+      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes get_context_pr (data/live/mappers/steering.ts, data/live/steering.ts)",
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -356,15 +364,23 @@
     "get_contract_rate": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — the rev1 surface that invokes get_contract_rate (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "entry": "/[org]/billing \u2014 the rev1 surface that invokes get_contract_rate (data/live/billing.ts, data/live/mappers/billing.ts)",
       "proof": "apps/app/src/features/billing/contract-rate.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_evidence_retention": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — the Retained evidence tile, the Evidence retention line, the Retained evidence meter and the price list's retention row (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "proof": "apps/app/src/features/billing/billing.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01KQMbiwCu2aE7XKFbVByBng"
+    },
     "get_export_status": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Account dialog › Privacy: a queued export is polled with get_export_status until it is ready, then the bundle is fetched from /[org]/account/export/[exportId], which streams the private object after checking the viewer (features/shell/account-dialog.tsx, features/shell/export-download.ts)",
+      "entry": "Account dialog \u203a Privacy: a queued export is polled with get_export_status until it is ready, then the bundle is fetched from /[org]/account/export/[exportId], which streams the private object after checking the viewer (features/shell/account-dialog.tsx, features/shell/export-download.ts)",
       "testid": "account-export-download",
       "proof": "apps/app/src/features/shell/export-download.test.ts",
       "verifiedAt": "2026-09-18",
@@ -373,7 +389,7 @@
     "get_finding_evidence": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_finding_evidence (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_finding_evidence (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -381,7 +397,7 @@
     "get_first_frame": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
-      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes get_first_frame (data/live/mappers/mappers.type-test.ts, data/live/mappers/onboarding.ts, data/live/onboarding.ts)",
+      "entry": "/[org]/[ws]/register/[step] \u2014 the rev1 surface that invokes get_first_frame (data/live/mappers/mappers.type-test.ts, data/live/mappers/onboarding.ts, data/live/onboarding.ts)",
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -389,7 +405,7 @@
     "get_gau_bucket": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — the rev1 surface that invokes get_gau_bucket (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "entry": "/[org]/billing \u2014 the rev1 surface that invokes get_gau_bucket (data/live/billing.ts, data/live/mappers/billing.ts)",
       "proof": "apps/app/src/features/billing/billing.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -397,7 +413,7 @@
     "get_main_repository": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › GitHub connection and main repository — the panel every visit reads (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a GitHub connection and main repository \u2014 the panel every visit reads (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -405,7 +421,7 @@
     "get_mandate": {
       "route": "/[org]/[ws]/mandates/[mandate]",
       "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
-      "entry": "/[org]/[ws]/mandates/[mandate] — the rev1 surface that invokes get_mandate (data/live/mandates.ts, data/live/mappers/mandates.ts)",
+      "entry": "/[org]/[ws]/mandates/[mandate] \u2014 the rev1 surface that invokes get_mandate (data/live/mandates.ts, data/live/mappers/mandates.ts)",
       "proof": "apps/app/src/features/mandate/mandate.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
@@ -421,7 +437,7 @@
     "get_onboarding_state": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
-      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes get_onboarding_state (data/live/mappers/mappers.type-test.ts, data/live/mappers/onboarding.ts, data/live/onboarding.ts)",
+      "entry": "/[org]/[ws]/register/[step] \u2014 the rev1 surface that invokes get_onboarding_state (data/live/mappers/mappers.type-test.ts, data/live/mappers/onboarding.ts, data/live/onboarding.ts)",
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -429,7 +445,7 @@
     "get_record": {
       "route": "/[org]/[ws]/steering/records/[lineage]",
       "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
-      "entry": "/[org]/[ws]/steering/records/[lineage] — the page for one published record, which reads it through get_record (data/live/steering.ts, features/record/record.tsx)",
+      "entry": "/[org]/[ws]/steering/records/[lineage] \u2014 the page for one published record, which reads it through get_record (data/live/steering.ts, features/record/record.tsx)",
       "proof": "apps/app/src/features/record/record.test.tsx",
       "verifiedAt": "2026-09-21",
       "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
@@ -437,7 +453,7 @@
     "get_repository_tree": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › the .oxagen/ column, the repository dialog opened by “Details”, and the Configuration tab (features/repositories/repositories.tsx, features/repositories/repository-dialog.tsx, features/repositories/configuration.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a the .oxagen/ column, the repository dialog opened by \u201cDetails\u201d, and the Configuration tab (features/repositories/repositories.tsx, features/repositories/repository-dialog.tsx, features/repositories/configuration.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -445,7 +461,7 @@
     "get_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Run page's header and its Frames tab read get_run once per render (data/live/runs.ts, features/run/run.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 the Run page's header and its Frames tab read get_run once per render (data/live/runs.ts, features/run/run.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-c2f283fb-3282-review"
@@ -453,7 +469,7 @@
     "get_run_chain": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=chain — the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=chain \u2014 the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
       "proof": "apps/app/src/features/run/chain.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
@@ -461,7 +477,7 @@
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=cost — the Cost tab reads get_run_cost for the rollup, under the run waterfall (data/live/runs.ts, features/run/cost.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=cost \u2014 the Cost tab reads get_run_cost for the rollup, under the run waterfall (data/live/runs.ts, features/run/cost.tsx)",
       "proof": "apps/app/src/features/run/waterfall.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
@@ -469,7 +485,7 @@
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Frames tab's Open body link reads get_run_frame_body for ?body=<seq> (data/live/runs.ts, features/run/frames.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 the Frames tab's Open body link reads get_run_frame_body for ?body=<seq> (data/live/runs.ts, features/run/frames.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-c2f283fb-3282-review"
@@ -477,7 +493,7 @@
     "get_run_outputs": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the outputs spine between the run header and the tabs reads get_run_outputs and draws what the run produced in the order it produced it, with `?reads=hide` folding the read marks and `?spine=` opening a folded group (data/live/runs.ts, features/run/outputs.tsx). It is not a tab: the spine renders on every tab.",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 the outputs spine between the run header and the tabs reads get_run_outputs and draws what the run produced in the order it produced it, with `?reads=hide` folding the read marks and `?spine=` opening a folded group (data/live/runs.ts, features/run/outputs.tsx). It is not a tab: the spine renders on every tab.",
       "testid": "run-outputs",
       "proof": "apps/app/src/features/run/outputs.test.tsx",
       "verifiedAt": "2026-09-20",
@@ -486,7 +502,7 @@
     "get_run_transcript": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=transcript — the Transcript tab reads get_run_transcript through the chips the URL pressed, groups it into turns and steps under a transport, and pages the cursor as the playhead moves; the Cost tab reads the run's own per-turn ledger for the waterfall (data/live/runs.ts, features/run/transcript.tsx, features/run/transcript-view.tsx, features/run/waterfall.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=transcript \u2014 the Transcript tab reads get_run_transcript through the chips the URL pressed, groups it into turns and steps under a transport, and pages the cursor as the playhead moves; the Cost tab reads the run's own per-turn ledger for the waterfall (data/live/runs.ts, features/run/transcript.tsx, features/run/transcript-view.tsx, features/run/waterfall.tsx)",
       "proof": "apps/app/src/features/run/transcript.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
@@ -502,7 +518,7 @@
     "get_spend": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_spend (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_spend (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -510,7 +526,7 @@
     "get_spend_budget": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_spend_budget (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_spend_budget (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover",
@@ -518,7 +534,7 @@
         {
           "route": "/[org]/[ws]/agents/[agent]",
           "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-          "entry": "/[org]/[ws]/agents/[agent]?tab=budgets — the ceiling this agent runs under, read-only, beside the agent-scope line the contract cannot answer (features/agents/budget-panel.tsx, data/live/agents.ts)",
+          "entry": "/[org]/[ws]/agents/[agent]?tab=budgets \u2014 the ceiling this agent runs under, read-only, beside the agent-scope line the contract cannot answer (features/agents/budget-panel.tsx, data/live/agents.ts)",
           "proof": "apps/app/src/features/agents/budget-panel.test.tsx",
           "verifiedAt": "2026-09-20",
           "verifiedBy": "mc-3-enrollment"
@@ -528,7 +544,7 @@
     "get_spend_drill": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_spend_drill (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_spend_drill (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -536,7 +552,7 @@
     "get_subscription": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — the rev1 surface that invokes get_subscription (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "entry": "/[org]/billing \u2014 the rev1 surface that invokes get_subscription (data/live/billing.ts, data/live/mappers/billing.ts)",
       "proof": "apps/app/src/features/billing/billing.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -544,7 +560,7 @@
     "get_tacho_session_policy": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend?tab=budgets — Gateway sessions, the panel that reads get_tacho_session_policy (data/live/spend.ts, data/live/mappers/spend.ts)",
+      "entry": "/[org]/[ws]/spend?tab=budgets \u2014 Gateway sessions, the panel that reads get_tacho_session_policy (data/live/spend.ts, data/live/mappers/spend.ts)",
       "proof": "apps/app/src/features/spend/gateway-policy.test.tsx",
       "verifiedAt": "2026-09-21",
       "verifiedBy": "session-model-gateway-arming"
@@ -561,7 +577,7 @@
     "grant_mandate": {
       "route": "/[org]/[ws]/tools?tab=mandates",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools?tab=mandates — Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx → features/tools/grant-actions.ts)",
+      "entry": "/[org]/[ws]/tools?tab=mandates \u2014 Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx \u2192 features/tools/grant-actions.ts)",
       "proof": "apps/app/src/features/tools/grant-mandate.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-tools-gaps"
@@ -569,7 +585,7 @@
     "import_tools": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes import_tools (features/tools/actions.ts)",
+      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes import_tools (features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -577,23 +593,41 @@
     "link_repository": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › “Link” on a Not linked row, or on owner/name typed into “Link a repository by name” (features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a \u201cLink\u201d on a Not linked row, or on owner/name typed into \u201cLink a repository by name\u201d (features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
     },
+    "list_agent_roles": {
+      "route": "/[org]/[ws]/agents",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "/[org]/[ws]/agents — a row's Roles and Deregister dialogs read the roles the agent holds, marking a held role in the picker and counting the roles retirement ends (features/agents/role-controls.tsx, agent-actions.tsx, actions.ts)",
+      "proof": "apps/app/src/features/agents/role-controls.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01Hrw12deH1TbfC8FY9cKSre"
+    },
     "list_agents": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
-      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes list_agents (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts, features/onboarding/agent-form.ts)",
+      "entry": "/[org]/[ws]/register/[step] \u2014 the rev1 surface that invokes list_agents (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts, features/onboarding/agent-form.ts)",
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+          "entry": "/[org]/[ws] (Fleet) \u2014 the Live runs tile's workspace total and the agents Steer the fleet selects come from list_agents (features/fleet/fleet.tsx, features/fleet/steer-fleet.tsx)",
+          "proof": "apps/app/src/features/fleet/steer-fleet.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session-01GDv3vs-fleet-rev1"
+        }
+      ]
     },
     "list_api_keys": {
       "route": "/[org]/api-keys",
       "page": "apps/app/src/app/[org]/api-keys/page.tsx",
-      "entry": "/[org]/api-keys — the rev1 surface that invokes list_api_keys (data/live/mappers/mappers.type-test.ts, data/live/mappers/org.ts, data/live/org.ts)",
+      "entry": "/[org]/api-keys \u2014 the rev1 surface that invokes list_api_keys (data/live/mappers/mappers.type-test.ts, data/live/mappers/org.ts, data/live/org.ts)",
       "proof": "apps/app/src/features/organization/api-keys.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -601,7 +635,7 @@
     "list_approval_rules": {
       "route": "/[org]/[ws]/tools?tab=autoapprovals",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools › Auto-approvals: the rules table and its three totals (features/tools/auto-approvals.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "entry": "Tools \u203a Auto-approvals: the rules table and its three totals (features/tools/auto-approvals.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-tools-gaps"
@@ -609,7 +643,7 @@
     "list_approvals": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] — the Fleet approvals panel invokes list_approvals, and /[org]/[ws]/runs/[run]?tab=approvals reads it narrowed to one run (data/live/approvals.ts, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
+      "entry": "/[org]/[ws] \u2014 the Fleet Waiting on a human tile counts list_approvals and marks the runs a parked call names, and /[org]/[ws]/runs/[run]?tab=approvals reads it narrowed to one run (data/live/approvals.ts, features/fleet/board.tsx, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
@@ -617,7 +651,7 @@
     "list_connections": {
       "route": "/[org]/[ws]/tools?tab=connections",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools › Connections: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "entry": "Tools \u203a Connections: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-mc2-connections"
@@ -625,7 +659,7 @@
     "list_credential_grants": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes list_credential_grants (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes list_credential_grants (data/live/mappers/tools.ts, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -633,7 +667,7 @@
     "list_findings": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -641,7 +675,7 @@
     "list_github_installations": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › GitHub connection and main repository — the installation picker, shown when GitHub is authorized and no installation is attached (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a GitHub connection and main repository \u2014 the installation picker, shown when GitHub is authorized and no installation is attached (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -649,7 +683,7 @@
     "list_iam_roles": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
-      "entry": "/[org]/roles — the rev1 surface that invokes list_iam_roles (data/live/mappers/mappers.type-test.ts, data/live/mappers/org.ts, data/live/org.ts)",
+      "entry": "/[org]/roles \u2014 the rev1 surface that invokes list_iam_roles (data/live/mappers/mappers.type-test.ts, data/live/mappers/org.ts, data/live/org.ts)",
       "proof": "apps/app/src/features/organization/roles.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -657,7 +691,7 @@
     "list_incidents": {
       "route": "/[org]/[ws]/agents",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "/[org]/[ws]/agents — the rev1 surface that invokes list_incidents (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts)",
+      "entry": "/[org]/[ws]/agents \u2014 the rev1 surface that invokes list_incidents (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts)",
       "proof": "apps/app/src/features/agents/agents.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -665,7 +699,7 @@
     "list_installation_repositories": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › the Not linked table of repositories the installation reaches, and the main-repository picker (features/repositories/bound-repositories.tsx, features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a the Not linked table of repositories the installation reaches, and the main-repository picker (features/repositories/bound-repositories.tsx, features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -673,7 +707,7 @@
     "list_invoices": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — the rev1 surface that invokes list_invoices (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "entry": "/[org]/billing \u2014 the rev1 surface that invokes list_invoices (data/live/billing.ts, data/live/mappers/billing.ts)",
       "proof": "apps/app/src/features/billing/billing.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -681,7 +715,7 @@
     "list_kill_switches": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes list_kill_switches (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes list_kill_switches (data/live/mappers/tools.ts, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -689,7 +723,7 @@
     "list_mandates": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] — the rev1 surface that invokes list_mandates (data/live/mandates.ts, data/live/mappers/mandates.ts, data/live/mappers/mappers.type-test.ts)",
+      "entry": "/[org]/[ws] \u2014 the rev1 surface that invokes list_mandates (data/live/mandates.ts, data/live/mappers/mandates.ts, data/live/mappers/mappers.type-test.ts)",
       "proof": "apps/app/src/features/agents/mandates.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -697,7 +731,7 @@
     "list_mcp_servers": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools › Registry: the Tool servers section under the registry, and the server picker in the import dialog (features/tools/servers.tsx, features/tools/import-controls.tsx, data/live/tools.ts)",
+      "entry": "Tools \u203a Registry: the Tool servers section under the registry, and the server picker in the import dialog (features/tools/servers.tsx, features/tools/import-controls.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/servers.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-mc2-connections"
@@ -705,7 +739,7 @@
     "list_members": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — the rev1 surface that invokes list_members (data/live/mappers/org.ts, data/live/org.ts)",
+      "entry": "/[org] \u2014 the rev1 surface that invokes list_members (data/live/mappers/org.ts, data/live/org.ts)",
       "proof": "apps/app/src/features/organization/people.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -713,7 +747,7 @@
     "list_orgs": {
       "route": "/new-organization",
       "page": "apps/app/src/app/(onboarding)/new-organization/page.tsx",
-      "entry": "/new-organization — the rev1 surface that invokes list_orgs (data/live/mappers/pretenant.ts, data/live/pretenant.ts, data/live/shell.ts)",
+      "entry": "/new-organization \u2014 the rev1 surface that invokes list_orgs (data/live/mappers/pretenant.ts, data/live/pretenant.ts, data/live/shell.ts)",
       "proof": "apps/app/src/features/onboarding/new-organization.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -721,7 +755,7 @@
     "list_price_entries": {
       "route": "/[org]/[ws]/spend?tab=pricing",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "Spend › Pricing › The price book — the table of list and negotiated rows the tab is built on (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "entry": "Spend \u203a Pricing \u203a The price book \u2014 the table of list and negotiated rows the tab is built on (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
       "proof": "apps/app/src/features/spend/pricing.test.tsx",
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session-cost-price-book-autoseed"
@@ -729,7 +763,7 @@
     "list_proposals": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes list_proposals (data/live/mappers/steering.ts, data/live/steering.ts)",
+      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes list_proposals (data/live/mappers/steering.ts, data/live/steering.ts)",
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -737,7 +771,7 @@
     "list_records": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes list_records (data/live/mappers/steering.ts, data/live/steering.ts)",
+      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes list_records (data/live/mappers/steering.ts, data/live/steering.ts)",
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -745,7 +779,7 @@
     "list_repositories": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › the repository table every visit reads, main first, with role, production branch, .oxagen/, events and symbols (features/repositories/repositories.tsx, features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a the repository table every visit reads, main first, with role, production branch, .oxagen/, events and symbols (features/repositories/repositories.tsx, features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -761,15 +795,15 @@
     "list_runs": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] — the Fleet runs table, whose Tier, Replay and Verdict columns render list_runs' recorded enforcementTier, replayGrade and verdict (features/fleet/runs-table.tsx, ui/enforcement-tier.tsx, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
+      "entry": "/[org]/[ws] \u2014 the Fleet Runs panel and the four summary tiles rolled up from its rows: the Tier and Replay columns render list_runs' recorded enforcementTier and replayGrade, and Spend shown sums the recorded cost with its basis (features/fleet/board.tsx, features/fleet/view.ts, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
       "proof": "apps/app/src/features/fleet/fleet.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-018UrgFq-mc1-columns"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-01GDv3vs-fleet-rev1"
     },
     "list_skills": {
       "route": "/[org]/[ws]/steering?tab=skills",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering › Skills: the tab that invokes list_skills (features/skills/skills.tsx, data/live/skills.ts); /[org]/[ws]/skills redirects here",
+      "entry": "Steering \u203a Skills: the tab that invokes list_skills (features/skills/skills.tsx, data/live/skills.ts); /[org]/[ws]/skills redirects here",
       "proof": "apps/app/src/features/skills/skills.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-creation-wizards"
@@ -790,10 +824,28 @@
         }
       ]
     },
+    "list_tacho_hosts": {
+      "route": "/[org]/[ws]/runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
+      "entry": "/[org]/[ws]/runtimes — the Enrolled hosts table, the stat tiles and one runtime's host panel (data/live/runtimes.ts, features/runtimes/runtimes.tsx, features/runtimes/runtime.tsx)",
+      "testid": "runtime-row",
+      "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01Hrw12deH1TbfC8FY9cKSre runtimes lane",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runtimes/[runtime]",
+          "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
+          "entry": "/[org]/[ws]/runtimes/[runtime] — the host panel of one enrollment (features/runtimes/runtime.tsx)",
+          "testid": "fact-collector",
+          "proof": "apps/app/src/features/runtimes/runtimes.test.tsx"
+        }
+      ]
+    },
     "list_tool_versions": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes list_tool_versions (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes list_tool_versions (data/live/mappers/tools.ts, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -801,7 +853,7 @@
     "list_unpriced_models": {
       "route": "/[org]/[ws]/spend?tab=pricing",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "Spend › Pricing › Models the price book cannot price — the table that explains a run with no cost (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "entry": "Spend \u203a Pricing \u203a Models the price book cannot price \u2014 the table that explains a run with no cost (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
       "proof": "apps/app/src/features/spend/pricing.test.tsx",
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session-cost-price-book-autoseed"
@@ -809,7 +861,7 @@
     "list_waste": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes list_waste (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_waste (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -817,7 +869,7 @@
     "list_workspaces": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — the rev1 surface that invokes list_workspaces (data/live/mappers/mappers.type-test.ts, data/live/mappers/org.ts, data/live/mappers/pretenant.ts, data/live/org.ts, data/live/pretenant.ts, data/live/shell.ts)",
+      "entry": "/[org] \u2014 the rev1 surface that invokes list_workspaces (data/live/mappers/mappers.type-test.ts, data/live/mappers/org.ts, data/live/mappers/pretenant.ts, data/live/org.ts, data/live/pretenant.ts, data/live/shell.ts)",
       "proof": "apps/app/src/features/organization/workspaces.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -825,7 +877,7 @@
     "merge_context_pr": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes merge_context_pr (features/steering/actions.ts)",
+      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes merge_context_pr (features/steering/actions.ts)",
       "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -833,7 +885,7 @@
     "open_context_pr": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes open_context_pr (features/steering/actions.ts)",
+      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes open_context_pr (features/steering/actions.ts)",
       "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -841,7 +893,7 @@
     "open_init_pr": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › “Add Oxagen to a repository” › the five-step init wizard › “Open pull request” (features/repositories/init-wizard.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a \u201cAdd Oxagen to a repository\u201d \u203a the five-step init wizard \u203a \u201cOpen pull request\u201d (features/repositories/init-wizard.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -857,7 +909,7 @@
     "propose_agent": {
       "route": "/[org]/[ws]/agents",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agent IAM › New agent, and ⌘K Create › Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts)",
+      "entry": "Agents › New agent, and ⌘K Create › Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts); Agents › Register an agent opens the same pull request from its dialog (features/agents/register-agent.tsx, features/agents/actions.ts)",
       "proof": "apps/app/src/features/create/agent-wizard.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-wizard-agent"
@@ -874,7 +926,7 @@
     "propose_record": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering › Write a context record (every tab but Skills), and ⌘K Create › Context record: the context-record wizard's pull request step, which proposes the record and opens its Context PR (features/create/record-wizard.tsx, features/create/actions.ts)",
+      "entry": "Steering \u203a Write a context record (every tab but Skills), and \u2318K Create \u203a Context record: the context-record wizard's pull request step, which proposes the record and opens its Context PR (features/create/record-wizard.tsx, features/create/actions.ts)",
       "proof": "apps/app/src/features/create/record-wizard.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-wizard-record"
@@ -882,7 +934,7 @@
     "propose_skill": {
       "route": "/[org]/[ws]/steering?tab=skills",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering › Skills › Add a skill, and ⌘K Create › Skill: the skill wizard's pull request step (features/create/skill-wizard.tsx, features/create/actions.ts)",
+      "entry": "Steering \u203a Skills \u203a Add a skill, and \u2318K Create \u203a Skill: the skill wizard's pull request step (features/create/skill-wizard.tsx, features/create/actions.ts)",
       "proof": "apps/app/src/features/create/skill-wizard.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-creation-wizards"
@@ -890,7 +942,7 @@
     "purchase_credits": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — the rev1 surface that invokes purchase_credits (features/billing/actions.ts, features/billing/billing.tsx)",
+      "entry": "/[org]/billing \u2014 the rev1 surface that invokes purchase_credits (features/billing/actions.ts, features/billing/billing.tsx)",
       "proof": "apps/app/src/features/billing/usage-credits.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -898,7 +950,7 @@
     "purchase_gau_bucket": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — the rev1 surface that invokes purchase_gau_bucket (features/billing/actions.ts, features/billing/billing.tsx)",
+      "entry": "/[org]/billing \u2014 the rev1 surface that invokes purchase_gau_bucket (features/billing/actions.ts, features/billing/billing.tsx)",
       "proof": "apps/app/src/features/billing/purchase-form.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -906,7 +958,7 @@
     "query_audit_log": {
       "route": "/[org]/audit",
       "page": "apps/app/src/app/[org]/audit/page.tsx",
-      "entry": "/[org]/audit — the rev1 surface that invokes query_audit_log (data/live/audit.ts, data/live/mappers/audit.ts, data/live/mappers/mappers.type-test.ts)",
+      "entry": "/[org]/audit \u2014 the rev1 surface that invokes query_audit_log (data/live/audit.ts, data/live/mappers/audit.ts, data/live/mappers/mappers.type-test.ts)",
       "proof": "apps/app/src/features/audit/audit.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -914,7 +966,7 @@
     "record_finding_fix": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes record_finding_fix (features/spend/actions.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes record_finding_fix (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -922,7 +974,7 @@
     "register_agent": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
-      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes register_agent (features/onboarding/actions.ts)",
+      "entry": "/[org]/[ws]/register/[step] \u2014 the rev1 surface that invokes register_agent (features/onboarding/actions.ts)",
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -930,7 +982,7 @@
     "register_mcp_server": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools › Registry › Tool servers: “Register a server” opens the dialog that invokes register_mcp_server (features/tools/register-server.tsx, features/tools/actions.ts)",
+      "entry": "Tools \u203a Registry \u203a Tool servers: \u201cRegister a server\u201d opens the dialog that invokes register_mcp_server (features/tools/register-server.tsx, features/tools/actions.ts)",
       "testid": "server-register-open",
       "proof": "apps/app/src/features/tools/servers.test.tsx",
       "verifiedAt": "2026-09-20",
@@ -939,7 +991,7 @@
     "remove_org_member": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — the rev1 surface that invokes remove_org_member (features/organization/actions.ts)",
+      "entry": "/[org] \u2014 the rev1 surface that invokes remove_org_member (features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/member-row-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -947,7 +999,7 @@
     "remove_price_entry": {
       "route": "/[org]/[ws]/spend?tab=pricing",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "Spend › Pricing › “Remove” on a negotiated row — ends the rate so the model falls back to the list price (features/spend/remove-rate-dialog.tsx, features/spend/actions.ts)",
+      "entry": "Spend \u203a Pricing \u203a \u201cRemove\u201d on a negotiated row \u2014 ends the rate so the model falls back to the list price (features/spend/remove-rate-dialog.tsx, features/spend/actions.ts)",
       "testid": "spend-remove-rate-open",
       "proof": "apps/app/src/features/spend/price-actions.test.ts",
       "verifiedAt": "2026-09-17",
@@ -956,7 +1008,7 @@
     "request_mandate": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes request_mandate (features/agents/actions.ts)",
+      "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes request_mandate (features/agents/actions.ts)",
       "proof": "apps/app/src/features/agents/mandate-request.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -971,29 +1023,18 @@
       "verifiedBy": "assigned-issue-batch; CI pending"
     },
     "resolve_approval": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] — Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam; the same card and dialog are drawn on /[org]/[ws]/runs/[run]?tab=approvals (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx)",
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx, features/run/run.tsx). Fleet draws no approval card since its rev1 rebuild; the shell's approvals drawer draws the same card",
       "testid": "decide",
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-018UrgFq-mc-1-approve",
-      "also": [
-        {
-          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
-          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-          "entry": "/[org]/[ws]/runs/[run]?tab=approvals — the Approvals tab draws the same card and the same Decide dialog Fleet's panel draws, over the same kernel seam (features/fleet/approvals-panel.tsx, features/fleet/approval-decision.tsx, features/run/run.tsx)",
-          "testid": "decide",
-          "proof": "apps/app/src/features/run/run.test.tsx",
-          "verifiedAt": "2026-09-20",
-          "verifiedBy": "session-018UrgFq-mc1-review"
-        }
-      ]
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-01GDv3vs-fleet-rev1"
     },
     "retire_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes retire_agent (features/agents/actions.ts)",
+      "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes retire_agent (features/agents/actions.ts)",
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1001,7 +1042,7 @@
     "revise_context_record": {
       "route": "/[org]/[ws]/steering/records/[lineage]",
       "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
-      "entry": "Record › Revise this statement — the statement editor raises a revision proposal through revise_context_record (features/record/statement-editor.tsx, features/record/actions.ts)",
+      "entry": "Record \u203a Revise this statement \u2014 the statement editor raises a revision proposal through revise_context_record (features/record/statement-editor.tsx, features/record/actions.ts)",
       "proof": "apps/app/src/features/record/record.test.tsx",
       "verifiedAt": "2026-09-21",
       "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
@@ -1009,7 +1050,7 @@
     "revoke_agent_role": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Revoke on each row of the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=identity \u2014 Revoke on each row of the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
       "proof": "apps/app/src/features/agents/role-controls.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-mc-3-roles"
@@ -1017,7 +1058,7 @@
     "revoke_api_key": {
       "route": "/[org]/api-keys",
       "page": "apps/app/src/app/[org]/api-keys/page.tsx",
-      "entry": "/[org]/api-keys — the rev1 surface that invokes revoke_api_key (features/organization/api-key-actions.ts)",
+      "entry": "/[org]/api-keys \u2014 the rev1 surface that invokes revoke_api_key (features/organization/api-key-actions.ts)",
       "proof": "apps/app/src/features/organization/key-row.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1025,7 +1066,7 @@
     "revoke_mandate": {
       "route": "/[org]/[ws]/mandates/[mandate]",
       "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
-      "entry": "/[org]/[ws]/mandates/[mandate] — the Revoke dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
+      "entry": "/[org]/[ws]/mandates/[mandate] \u2014 the Revoke dialog in the mandate header (features/mandate/mandate-actions.tsx \u2192 features/mandate/actions.ts)",
       "proof": "apps/app/src/features/mandate/actions.test.ts",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
@@ -1042,16 +1083,25 @@
     "revoke_tacho_enrollment": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]?tab=enrollment — Revoke on a host row, confirmed by hostname, with an optional reason (features/agents/enrollment-controls.tsx, features/agents/actions.ts)",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=enrollment \u2014 Revoke on a host row, confirmed by hostname, with an optional reason (features/agents/enrollment-controls.tsx, features/agents/actions.ts)",
       "testid": "revoke-host",
       "proof": "apps/app/src/features/agents/enrollment-controls.test.tsx",
       "verifiedAt": "2026-09-20",
-      "verifiedBy": "mc-3-enrollment"
+      "verifiedBy": "mc-3-enrollment",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runtimes/[runtime]",
+          "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
+          "entry": "/[org]/[ws]/runtimes/[runtime] — Unenroll on the Rollback panel, confirmed in a dialog naming the host and the agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+          "testid": "runtime-unenroll",
+          "proof": "apps/app/src/features/runtimes/runtimes.test.tsx"
+        }
+      ]
     },
     "rotate_agent_credential": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes rotate_agent_credential (features/agents/actions.ts)",
+      "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes rotate_agent_credential (features/agents/actions.ts)",
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1059,7 +1109,7 @@
     "rotate_api_key": {
       "route": "/[org]/api-keys",
       "page": "apps/app/src/app/[org]/api-keys/page.tsx",
-      "entry": "/[org]/api-keys — the rev1 surface that invokes rotate_api_key (features/organization/api-key-actions.ts)",
+      "entry": "/[org]/api-keys \u2014 the rev1 surface that invokes rotate_api_key (features/organization/api-key-actions.ts)",
       "proof": "apps/app/src/features/organization/key-row.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1067,7 +1117,7 @@
     "send_workspace_invite": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — Organization › Pending invitations › “Invite”: an email, the role the invitation offers, and an optional note. The contract is scoped, so the kernel enters the org-only workspace sentinel an OrgCtx carries, and the handler records an organization invitation with no workspace, which is why the dialog asks for none (features/organization/invite-dialog.tsx, features/organization/actions.ts)",
+      "entry": "/[org] \u2014 Organization \u203a Pending invitations \u203a \u201cInvite\u201d: an email, the role the invitation offers, and an optional note. The contract is scoped, so the kernel enters the org-only workspace sentinel an OrgCtx carries, and the handler records an organization invitation with no workspace, which is why the dialog asks for none (features/organization/invite-dialog.tsx, features/organization/actions.ts)",
       "testid": "send-invitation",
       "proof": "apps/app/src/features/organization/invite-dialog.test.tsx",
       "verifiedAt": "2026-09-20",
@@ -1076,7 +1126,7 @@
     "set_approval_rule_enabled": {
       "route": "/[org]/[ws]/tools?tab=autoapprovals",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools › Auto-approvals › Switch on or Switch off on a row, and Switch off instead in the delete dialog (features/tools/approval-rule-controls.tsx RuleToggle and RuleDelete, setApprovalRuleEnabled in features/tools/actions.ts)",
+      "entry": "Tools \u203a Auto-approvals \u203a Switch on or Switch off on a row, and Switch off instead in the delete dialog (features/tools/approval-rule-controls.tsx RuleToggle and RuleDelete, setApprovalRuleEnabled in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-tools-gaps"
@@ -1084,7 +1134,7 @@
     "set_approval_rules": {
       "route": "/[org]/[ws]/tools?tab=autoapprovals",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools › Auto-approvals › Create rule, and Edit on a row (features/tools/approval-rule-controls.tsx RuleEditor, saveApprovalRule in features/tools/actions.ts)",
+      "entry": "Tools \u203a Auto-approvals \u203a Create rule, and Edit on a row (features/tools/approval-rule-controls.tsx RuleEditor, saveApprovalRule in features/tools/actions.ts)",
       "testid": "rule-create-open",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
       "verifiedAt": "2026-09-19",
@@ -1093,7 +1143,7 @@
     "set_auto_topup": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — the rev1 surface that invokes set_auto_topup (features/billing/actions.ts)",
+      "entry": "/[org]/billing \u2014 the rev1 surface that invokes set_auto_topup (features/billing/actions.ts)",
       "proof": "apps/app/src/features/billing/auto-topup.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1101,7 +1151,7 @@
     "set_governance_mode": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — Organization › Workspaces › Edit workspace, the Steering governance field, which invokes set_governance_mode beside update_workspace_settings (features/organization/workspace-actions.tsx, features/organization/actions.ts)",
+      "entry": "/[org] \u2014 Organization \u203a Workspaces \u203a Edit workspace, the Steering governance field, which invokes set_governance_mode beside update_workspace_settings (features/organization/workspace-actions.tsx, features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/workspace-governance.test.tsx",
       "verifiedAt": "2026-09-21",
       "verifiedBy": "session-1818a309-workspace-governance-mode"
@@ -1109,7 +1159,7 @@
     "set_kill_switch": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes set_kill_switch (features/tools/actions.ts)",
+      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes set_kill_switch (features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1127,14 +1177,14 @@
       "page": "apps/app/src/app/[org]/layout.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-514c860f-account-dialog-w11",
-      "entry": "Account dialog › Preferences › Save writes locale, time zone and theme through set_preferences (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "entry": "Account dialog \u203a Preferences \u203a Save writes locale, time zone and theme through set_preferences (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
       "testid": "account-preferences-save",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
     "set_price_entry": {
       "route": "/[org]/[ws]/spend?tab=pricing",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "Spend › Pricing › Set a negotiated rate: one set_price_entry call per atomic model card (features/spend/price-dialog.tsx, features/spend/actions.ts)",
+      "entry": "Spend \u203a Pricing \u203a Set a negotiated rate: one set_price_entry call per atomic model card (features/spend/price-dialog.tsx, features/spend/actions.ts)",
       "testid": "spend-price-open",
       "proof": "apps/app/src/features/spend/price-dialog.test.tsx",
       "verifiedAt": "2026-09-21",
@@ -1143,7 +1193,7 @@
     "set_production_branch": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › “Details” › Production branch — “Make <branch> the production branch” or “Set production branch” (features/repositories/repository-dialog.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a \u201cDetails\u201d \u203a Production branch \u2014 \u201cMake <branch> the production branch\u201d or \u201cSet production branch\u201d (features/repositories/repository-dialog.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -1151,7 +1201,7 @@
     "set_role_grants": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
-      "entry": "/[org]/roles — the rev1 surface that invokes set_role_grants (features/organization/actions.ts)",
+      "entry": "/[org]/roles \u2014 the rev1 surface that invokes set_role_grants (features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/role-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1159,7 +1209,7 @@
     "set_spend_budget": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes set_spend_budget (features/spend/actions.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes set_spend_budget (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1183,7 +1233,7 @@
     "set_tool_classification": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes set_tool_classification (features/tools/actions.ts)",
+      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes set_tool_classification (features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1191,7 +1241,7 @@
     "start_subscription_upgrade": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — Change plan, the page's one gold action (features/billing/change-plan.tsx, features/billing/actions.ts)",
+      "entry": "/[org]/billing \u2014 Change plan, the page's one gold action (features/billing/change-plan.tsx, features/billing/actions.ts)",
       "proof": "apps/app/src/features/billing/change-plan.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-9de6756e-billing-layout"
@@ -1199,7 +1249,7 @@
     "summarize_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Summarize on a sealed run queues summarize_run (features/run/actions.ts, features/run/record-actions.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Summarize on a sealed run queues summarize_run (features/run/actions.ts, features/run/record-actions.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-c2f283fb-3282-review"
@@ -1207,7 +1257,7 @@
     "suspend_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes suspend_agent (features/agents/actions.ts)",
+      "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes suspend_agent (features/agents/actions.ts)",
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1215,7 +1265,7 @@
     "unlink_repository": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › “Unlink”, then “Unlink it”, on a linked row; the main row offers none (features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a \u201cUnlink\u201d, then \u201cUnlink it\u201d, on a linked row; the main row offers none (features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -1223,7 +1273,7 @@
     "update_mandate_limits": {
       "route": "/[org]/[ws]/mandates/[mandate]",
       "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
-      "entry": "/[org]/[ws]/mandates/[mandate] — the Change limits dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
+      "entry": "/[org]/[ws]/mandates/[mandate] \u2014 the Change limits dialog in the mandate header (features/mandate/mandate-actions.tsx \u2192 features/mandate/actions.ts)",
       "proof": "apps/app/src/features/mandate/actions.test.ts",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
@@ -1256,7 +1306,7 @@
     "update_tacho_session_policy": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "/[org]/[ws]/spend?tab=budgets — Gateway sessions › Save the policy, which invokes update_tacho_session_policy (features/spend/actions.ts)",
+      "entry": "/[org]/[ws]/spend?tab=budgets \u2014 Gateway sessions \u203a Save the policy, which invokes update_tacho_session_policy (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/gateway-policy.test.tsx",
       "verifiedAt": "2026-09-21",
       "verifiedBy": "session-model-gateway-arming"
@@ -1264,7 +1314,7 @@
     "update_workspace_settings": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — the rev1 surface that invokes update_workspace_settings (features/organization/actions.ts)",
+      "entry": "/[org] \u2014 the rev1 surface that invokes update_workspace_settings (features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/workspaces.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1334,6 +1384,55 @@
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "get_run_work": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "Work and CI reads captured checkout and patch evidence with connected PR status before the transcript.",
+      "testid": "run-work",
+      "proof": "apps/app/src/features/run/work-ci.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "source-review"
+    },
+    "get_run_outcomes_settings": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "Run follow-through consent panel. An organization Owner or Admin enables metered follow-through.",
+      "proof": "apps/app/src/features/run-outcomes/consent.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "run-outcomes-providers"
+    },
+    "set_run_outcomes_settings": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "Run follow-through consent panel. An organization Owner or Admin enables metered follow-through.",
+      "proof": "apps/app/src/features/run-outcomes/consent.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "run-outcomes-providers"
+    },
+    "start_issue_authorization": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "Run issue connections panel. An organization Owner or Admin authorizes GitHub or Linear after enabling follow-through.",
+      "proof": "apps/app/src/features/run-outcomes/connections.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "run-outcomes-providers"
+    },
+    "authorize_issue_provider": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "Run issue connections panel. An organization Owner or Admin authorizes GitHub or Linear after enabling follow-through.",
+      "proof": "apps/app/src/features/run-outcomes/linear-callback.test.ts",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "run-outcomes-providers"
+    },
+    "get_run_issue_providers": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "Run issue connections panel. An organization Owner or Admin authorizes GitHub or Linear after enabling follow-through.",
+      "proof": "apps/app/src/features/run-outcomes/connections.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "run-outcomes-providers"
     },
     "get_steering_deliveries": {
       "route": "/[org]/[ws]/steering?tab=deliveries",

@@ -192,7 +192,7 @@ describe("Dismiss", () => {
     submitReason("Duplicate of ctx.release.notes-format");
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/steering?tab=proposals",
+        "/acme/core-platform/steering/proposals",
       );
     });
     expect(dismissProposal).toHaveBeenCalledWith(
@@ -283,7 +283,7 @@ describe("the sentence for each refusal", () => {
     ],
     [
       { reason: "not_found", code: "workspace_repository_missing" },
-      "This workspace has no connected GitHub repository",
+      "This workspace has no connected repository",
     ],
     [
       { reason: "conflict", code: "checks_not_passed" },

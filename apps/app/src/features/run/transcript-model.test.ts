@@ -9,6 +9,7 @@ import {
 } from "./run.builders";
 import {
   buildTranscript,
+  entryKey,
   idsAt,
   openAtZoom,
   playDelay,
@@ -67,6 +68,40 @@ describe("buildTranscript", () => {
       transcriptEntry({ seq: "2", turn: null }),
     ]);
     expect(flat).toHaveLength(1);
+  });
+
+  it("reads the reply from the agent's reported message when the turn closed without one", () => {
+    // Cursor reports the agent's message apart from `stop`. When `stop`
+    // lands first, the turn_end carries no body and the message frame is
+    // the only copy of the reply.
+    const cursor = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        type: "turn_start",
+        kind: "frame",
+        turn: 1,
+        request: transcriptBody({ seq: "1", text: "Fix the build." }),
+        response: null,
+      }),
+      transcriptEntry({
+        seq: "2",
+        type: "turn_end",
+        kind: "frame",
+        turn: 1,
+        request: null,
+        response: null,
+      }),
+      transcriptEntry({
+        seq: "3",
+        type: "oxagen:message",
+        kind: "frame",
+        turn: 1,
+        request: null,
+        response: transcriptBody({ seq: "3", text: "The build is fixed." }),
+      }),
+    ]);
+    expect(cursor[0]?.prompt).toBe("Fix the build.");
+    expect(cursor[0]?.reply).toBe("The build is fixed.");
   });
 
   it("leaves the prompt null rather than guessing when turn_start carries both halves (negative)", () => {
@@ -864,5 +899,62 @@ describe("visibleSteps", () => {
     if (turn === undefined) throw new Error("expected a turn");
     expect(turn.steps.map((s) => s.id)).toEqual(["s0", "s2", "s3", "s4"]);
     expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s2", "s3"]);
+  });
+});
+
+describe("a subagent's entries in the run's transcript", () => {
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c1";
+  const sub = { chainRef: CHAIN, type: "Explore" };
+
+  it("names each entry by chain and seq, so a subagent's seq 2 is not the run's", () => {
+    const own = transcriptEntry({ seq: "2", turn: 1 });
+    const theirs = transcriptEntry({ seq: "2", turn: 1, subagent: sub });
+    expect(entryKey(own)).toBe("2");
+    expect(entryKey(theirs)).toBe(`${CHAIN}:2`);
+    const [turn] = buildTranscript([own, theirs]);
+    const ids = turn?.steps.map((s) => s.id) ?? [];
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("reads the turn's prompt and reply from the run's own frames, not the subagent's", () => {
+    const [turn] = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        type: "turn_start",
+        kind: "frame",
+        turn: 1,
+        request: transcriptBody({ seq: "1", text: "Find the flaky test." }),
+        response: null,
+      }),
+      transcriptEntry({
+        seq: "0",
+        type: "turn_start",
+        kind: "frame",
+        turn: 1,
+        subagent: sub,
+        request: transcriptBody({ seq: "0", text: "Search the test tree." }),
+        response: null,
+      }),
+      transcriptEntry({
+        seq: "3",
+        type: "turn_end",
+        kind: "frame",
+        turn: 1,
+        subagent: sub,
+        request: null,
+        response: transcriptBody({ seq: "3", text: "Three candidates." }),
+      }),
+      transcriptEntry({
+        seq: "5",
+        type: "turn_end",
+        kind: "frame",
+        turn: 1,
+        request: null,
+        response: null,
+      }),
+    ]);
+    expect(turn?.prompt).toBe("Find the flaky test.");
+    // The run's turn_end kept no reply; the subagent's is not the run's.
+    expect(turn?.reply).toBeNull();
   });
 });

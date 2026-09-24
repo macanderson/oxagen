@@ -12,6 +12,36 @@ import {
 // Wrapped in `registerHandlersOnce` so a dev bundler re-evaluating this module
 // on hot reload is a no-op instead of tripping the kernel's duplicate guard.
 registerHandlersOnce("@oxagen/handlers", () => {
+  registerHandler("get_run_issue_providers", () =>
+    import("./run.issue.providers.get").then(
+      (m) => m.handler as CapabilityHandlerFn,
+    ),
+  );
+  registerHandler("authorize_issue_provider", () =>
+    import("./run.issue.authorization.complete").then(
+      (m) => m.handler as CapabilityHandlerFn,
+    ),
+  );
+  registerHandler("start_issue_authorization", () =>
+    import("./run.issue.authorization.begin").then(
+      (m) => m.handler as CapabilityHandlerFn,
+    ),
+  );
+  registerHandler("get_run_outcomes_settings", () =>
+    import("./run.outcomes.settings.get").then(
+      (m) => m.runOutcomesSettingsGetHandler as CapabilityHandlerFn,
+    ),
+  );
+  registerHandler("set_run_outcomes_settings", () =>
+    import("./run.outcomes.settings.set").then(
+      (m) => m.runOutcomesSettingsSetHandler as CapabilityHandlerFn,
+    ),
+  );
+  registerHandler("set_run_outcomes_access", () =>
+    import("./run.outcomes.access.set").then(
+      (m) => m.runOutcomesAccessSetHandler as CapabilityHandlerFn,
+    ),
+  );
   registerHandler("revoke_member_invite", () =>
     import("./org.member_invite.revoke").then(
       (m) => m.handler as CapabilityHandlerFn,
@@ -1253,6 +1283,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./run.cost")).runCostHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_work",
+    async () =>
+      (await import("./run.work.get")).runWorkGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_run_outputs",
     async () =>
       (await import("./run.outputs.get"))
@@ -1882,6 +1917,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./repository.installation.attach"))
         .repositoryInstallationAttachHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "attach_gitlab_project",
+    async () =>
+      (await import("./repository.gitlab.attach"))
+        .repositoryGitlabAttachHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "create_enrollment_token",

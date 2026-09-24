@@ -24,6 +24,8 @@ function row(overrides: Record<string, unknown>) {
   return {
     bindingId: "rpb_0123abcd",
     role: "linked",
+    provider: "github",
+    deliveryConfig: { installationId: "555" } as unknown,
     owner: "acme",
     name: "docs",
     fullName: "acme/docs",
@@ -92,6 +94,7 @@ describe("list_repositories", () => {
     expect(out.repositories[0]).toEqual({
       bindingId: "rpb_ffffaaaa",
       role: "main",
+      provider: "github",
       owner: "acme",
       name: "widgets",
       fullName: "acme/widgets",
@@ -102,6 +105,35 @@ describe("list_repositories", () => {
       events: "installed",
     });
     expect(repositoryList.output.safeParse(out).success).toBe(true);
+  });
+
+  it("lists a GitLab project with its host, a gitlab.com link, and webhook delivery (#3762)", async () => {
+    const gitlab = (webhookId: number | null) =>
+      row({
+        bindingId: "rpb_00000abc",
+        role: "main",
+        provider: "gitlab",
+        owner: "acme/platform",
+        name: "rules",
+        fullName: "acme/platform/rules",
+        installationRowId: null,
+        deliveryConfig: {
+          projectId: "4242",
+          projectPath: "acme/platform/rules",
+          webhookId,
+        },
+      });
+    wire([gitlab(901)]);
+    const [listed] = (await repositoryListHandler({}, makeCTX())).repositories;
+    expect(listed).toMatchObject({
+      provider: "gitlab",
+      htmlUrl: "https://gitlab.com/acme/platform/rules",
+      events: "installed",
+    });
+    wire([gitlab(null)]);
+    const [unhooked] = (await repositoryListHandler({}, makeCTX()))
+      .repositories;
+    expect(unhooked!.events).toBe("unknown");
   });
 
   it("reports connectionLive false for a head whose connection is retired, without dropping the repository", async () => {

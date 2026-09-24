@@ -117,6 +117,15 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "attach_gitlab_project",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "attach_memory_evidence",
       "reads": [],
@@ -132,6 +141,15 @@
       "name": "authorize_cli",
       "reads": [],
       "surfaces": [],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "authorize_issue_provider",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
       "writes": []
     },
     {
@@ -1424,6 +1442,24 @@
     },
     {
       "domain": "run",
+      "name": "get_run_issue_providers",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_outcomes_settings",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
       "name": "get_run_outputs",
       "reads": [],
       "surfaces": [
@@ -1447,6 +1483,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_work",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3306,6 +3351,22 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "set_run_outcomes_access",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "set_run_outcomes_settings",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "set_secret_value",
       "reads": [],
@@ -3367,6 +3428,15 @@
         "api",
         "cli",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "start_issue_authorization",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3857,7 +3927,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0fd0f8b81e08b91f8ffb5205a6eed1b93a72c638aac630dd3875e57c32acdd20",
+  "contentHash": "59cbcb30c7887d3307fbf641b0ab611e7e82fda91c7130d88923af9216010386",
   "domains": [
     {
       "name": "agent",
@@ -7298,6 +7368,24 @@
           "type": "text"
         },
         {
+          "name": "summary_input_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_observed_revision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "spec_version",
           "nullable": false,
           "primaryKey": false,
@@ -8354,6 +8442,12 @@
         },
         {
           "name": "governance_mode",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
@@ -21854,6 +21948,24 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_input_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_observed_revision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         }
       ],
       "domain": "tacho",

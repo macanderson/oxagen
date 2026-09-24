@@ -195,59 +195,68 @@ describe("WAL body failure isolation", () => {
     expect(new Wal(paths.wal).unshipped(100)).toEqual([]);
   });
 
-  it("persists sealed events when the actual body path is unwritable and later resumes body storage", () => {
+  it("throws and persists neither the event nor its body when the body path is unwritable", () => {
     const { paths, session, uuid, report, wal, bodyPath, body } = setup();
     mkdirSync(bodyPath);
-    wal.append(session.slice(0, 2), [body(1)]);
-    expect(wal.read(uuid)).toEqual(session.slice(0, 2));
-    expect(() => wal.bodiesFor(session.slice(0, 2))).toThrow();
+    // A body write failure must surface, not persist the event it belongs
+    // to over lost content: the caller's rollback (the daemon's
+    // mark/seal/append/rollback helper) depends on this throwing.
+    expect(() => wal.append(session.slice(0, 2), [body(1)])).toThrow();
+    expect(wal.read(uuid)).toEqual([]);
     expect(report).toHaveBeenCalledWith({
       session_uuid: uuid,
       operation: "append",
       code: "EISDIR",
     });
-    expect(report).toHaveBeenCalledWith({
-      session_uuid: uuid,
-      operation: "read",
-      code: "EISDIR",
-    });
     rmSync(bodyPath, { recursive: true });
     const restarted = new Wal(paths.wal, report);
+    // A retry once the body path is writable again lands cleanly: the
+    // failed attempt left nothing half-durable to conflict with.
+    restarted.append(session.slice(0, 2), [body(1)]);
     restarted.append(session.slice(2), [body(2)]);
     expect(restarted.unshipped(100)).toEqual(session);
     expect(
       restarted.bodiesFor(session).map((value) => value.event_id_idem),
-    ).toEqual([body(2).event_id_idem]);
+    ).toEqual([body(1).event_id_idem, body(2).event_id_idem]);
     restarted.markShipped(uuid, session.at(-1)?.seq as number);
     expect(new Wal(paths.wal, report).unshipped(100)).toEqual([]);
   });
 
-  it("keeps prior and later bodies readable around an actual partial append after restart", () => {
+  it("keeps prior and later bodies readable around a partial append that throws, once retried", () => {
     const { paths, session, uuid, report, wal, bodyPath, body } = setup();
     wal.append(session.slice(0, 1), [body(0)]);
     fault.partialBodyWrite = true;
-    wal.append(session.slice(1, 2), [body(1)]);
+    expect(() => wal.append(session.slice(1, 2), [body(1)])).toThrow(
+      /disk failed during body append/,
+    );
     expect(readFileSync(bodyPath, "utf8").endsWith("\n")).toBe(false);
     expect(report).toHaveBeenCalledWith({
       session_uuid: uuid,
       operation: "append",
       code: "ENOSPC",
     });
-    const restarted = new Wal(paths.wal, report);
-    restarted.append(session.slice(2), [body(2)]);
-    expect(restarted.read(uuid)).toEqual(session);
-    expect(
-      restarted.bodiesFor(session).map((value) => value.event_id_idem),
-    ).toEqual([body(0).event_id_idem, body(2).event_id_idem]);
+    // Nothing landed for the event this call was sealing.
+    expect(wal.read(uuid)).toEqual(session.slice(0, 1));
+    // A retry succeeds: `writeBodies` always leads with a "\n", which
+    // separates this attempt's lines from the torn tail the failed one left.
+    wal.append(session.slice(1, 2), [body(1)]);
+    wal.append(session.slice(2), [body(2)]);
+    expect(wal.read(uuid)).toEqual(session);
+    expect(wal.bodiesFor(session).map((value) => value.event_id_idem)).toEqual([
+      body(0).event_id_idem,
+      body(1).event_id_idem,
+      body(2).event_id_idem,
+    ]);
     expect(report).toHaveBeenCalledWith({
       session_uuid: uuid,
       operation: "read",
       code: "invalid_body_record",
     });
-    expect(restarted.dropBodies([session[0] as (typeof session)[number]])).toBe(
-      2,
-    );
-    expect(restarted.bodiesFor(session)).toHaveLength(1);
+    // Dropping body(0) also cuts the torn line beside it: `rewriteBodies`
+    // drops anything that does not parse as a kept record, not only what is
+    // named.
+    expect(wal.dropBodies([session[0] as (typeof session)[number]])).toBe(2);
+    expect(wal.bodiesFor(session)).toHaveLength(2);
   });
 
   it("reports malformed records once per session read", () => {
@@ -257,20 +266,33 @@ describe("WAL body failure isolation", () => {
     expect(report).toHaveBeenCalledTimes(1);
   });
 
-  it("does not let a failing diagnostic sink block event persistence", () => {
+  it("surfaces the real body-write failure even when the diagnostic sink itself throws", () => {
     const { paths, session, uuid, bodyPath, body } = setup();
     mkdirSync(bodyPath);
     const wal = new Wal(paths.wal, () => {
       throw new Error("logger unavailable");
     });
-    expect(() => wal.append(session, [body(1)])).not.toThrow();
-    expect(wal.read(uuid)).toEqual(session);
+    // The sink's own failure must not replace or hide the EISDIR the body
+    // write actually raised, and the event this call sealed must not persist
+    // over the body that never landed.
+    expect(() => wal.append(session, [body(1)])).toThrow(/EISDIR/);
+    expect(wal.read(uuid)).toEqual([]);
   });
 
-  it("keeps event corruption visible rather than skipping a broken chain", () => {
+  it("skips a torn event line and reports it, rather than throwing", () => {
     const { paths, session, uuid, wal } = setup();
     wal.append(session);
     appendFileSync(join(paths.wal, `${uuid}.ndjson`), "{torn-event");
-    expect(() => wal.read(uuid)).toThrow();
+    const parseFailures: Array<{ session_uuid: string; reason: string }> = [];
+    // A crash mid-append (a torn last line) must not turn every reader of
+    // this session — `unshipped`, `stats`, `head`, `compact` all reach the
+    // file through `read` — into a daemon that stops shipping the whole
+    // host. The failure is still visible, just not fatal to the read.
+    const reopened = new Wal(paths.wal, undefined, undefined, (failure) =>
+      parseFailures.push(failure),
+    );
+    expect(reopened.read(uuid)).toEqual(session);
+    expect(parseFailures).toHaveLength(1);
+    expect(parseFailures[0]?.session_uuid).toBe(uuid);
   });
 });

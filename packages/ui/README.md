@@ -1,14 +1,73 @@
 # @oxagen/ui
 
-**coss ui** — the shared component system for every Oxagen app (`app`, `docs`,
-`web`, and the rest of the monorepo's apps). Built on **[Base UI](https://base-ui.com/)**
-(not Radix) and **Tailwind v4** with a fully token-driven theme.
+**coss ui** is the shared component system and house token set for Oxagen's
+frontends. It is built on **[Base UI](https://base-ui.com/)** (not Radix) and
+**Tailwind v4** with a fully token-driven theme.
 
-The package ships **raw TypeScript source** — there is no build step. Apps
-consume it via `transpilePackages` and import either from the barrel
-(`@oxagen/ui`) or, in `apps/*`, through the local re-export proxy
-(`@/components/ui/<name>`). App code must **never** import
-`@oxagen/ui/components/*` directly (see root `CLAUDE.md`).
+The package ships **raw TypeScript source** with no build step. The Next apps
+consume it through `transpilePackages`, and `apps/desktop` imports its styles
+through Vite. `apps/docs` and `apps/app_deprecated` import components through
+their local re-export layer (`@/components/ui/<name>`) or the barrel.
+`apps/app` has its own components in `apps/app/src/ui/` and takes only the
+barrel's brand marks and the styles from here. App code must **never** import
+`@oxagen/ui/components/*` directly (see the root `AGENTS.md`, UI Component
+Import Convention).
+
+## Boundary
+
+- **Owns:** the shared components, the house design tokens and fonts
+  (`src/styles/`), the theme provider and cookie, the motion helpers, `cn`,
+  and the Storybook for all of them.
+- **Does not own:** `apps/app`'s own components (`apps/app/src/ui/`, see
+  [`apps/app/README.md`](../../apps/app/README.md)); the public website's
+  stylesheet (`apps/web/assets/oxagen.css`, see
+  [`apps/web/README.md`](../../apps/web/README.md)), which mirrors these
+  tokens without importing the package; the house brand kit itself
+  (`oxagenai/oxagen-brand`, checked by `pnpm check:brand`), from which
+  `src/styles/house-tokens.css` is vendored.
+- **Depends on:** No `@oxagen/*` runtime dependencies. `react`, `react-dom`,
+  and `tailwindcss` are peer dependencies.
+- **Used by:** `apps/app`, `apps/docs`, `apps/app_deprecated`, and
+  `apps/desktop`.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| Barrel (`@oxagen/ui`) | export | `packages/ui/src/index.ts` | `apps/app/src/ui/auth-shell.tsx`, `apps/app/src/features/shell/sidebar.tsx`, `apps/docs`, `apps/app_deprecated` |
+| Deep component import (`@oxagen/ui/components/*`) | export | `packages/ui/src/components/*.tsx` | Only the re-export files in `apps/docs/src/components/ui/` and `apps/app_deprecated/src/components/ui/` |
+| Direct component import ban | boundary | `eslint.next.mjs` (`no-restricted-imports`) | `apps/docs`, `apps/app_deprecated`. `apps/app` has no such rule |
+| Design tokens (`globals.css`, `house-tokens.css`, fonts) | export | `packages/ui/src/styles/` | `apps/app/src/app/globals.css`, `apps/desktop/src/styles.css` |
+| `THEME_COOKIE_NAME` | export | `packages/ui/src/components/theme-config.ts` | `apps/app/src/features/shell/theme.ts` reads the same cookie name |
+
+## Entry points
+
+- `.` → `src/index.ts`: the tree-shakeable component barrel, providers, and
+  `cn`.
+- `./components/*` → `src/components/*.tsx`: one component file, for the
+  re-export layers only.
+- `./styles/globals.css`, `./styles/house-tokens.css`,
+  `./styles/fonts/space-grotesk.css` → the token and font stylesheets.
+- `./lib/motion` → `src/lib/motion.ts`: motion helpers.
+
+## Rules
+
+- Composition uses the `render` prop, never Radix `asChild`.
+- Overlay parts are named `*Popup` or `*Panel`, never `*Content`.
+- Reskin by editing tokens, not component class strings.
+- Add or update a story whenever you add or change a component.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/ui test:unit src/components/button.test.tsx
+```
+
+Never put `--` before the filename. Each component's test sits beside it as
+`src/components/<name>.test.tsx`. Tests for `apps/app`'s own components live
+in `apps/app/src/ui/`, not here.
+
+## Composition
 
 Two rules that catch everyone:
 
@@ -130,8 +189,8 @@ Token values live in `src/styles/house-tokens.css`, vendored from the house kit;
 ```bash
 pnpm typecheck          # tsc --noEmit
 pnpm lint               # eslint, zero warnings
-pnpm test:unit          # vitest
-pnpm test:coverage      # vitest + coverage thresholds
+pnpm test:unit src/components/<name>.test.tsx   # one file; CI runs the suite
+pnpm test:coverage      # vitest + coverage thresholds (CI)
 pnpm storybook          # Storybook dev (:6008)
 pnpm build-storybook    # static Storybook build
 ```

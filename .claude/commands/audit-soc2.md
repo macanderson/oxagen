@@ -62,9 +62,9 @@ Run all checks in parallel after Phase 0. Each maps to a TSC control category.
 
 ## Output
 
-`mkdir -p docs/audits/soc2-audits`
+`mkdir -p verifications/audits/soc2-audits`
 
-Write: `docs/audits/soc2-audits/<SHORT_SHA>_<TIMESTAMP>_soc2-audit.html`
+Write: `verifications/audits/soc2-audits/<SHORT_SHA>_<TIMESTAMP>_soc2-audit.html`
 
 Self-contained HTML (all CSS + JS inline). Must contain:
 

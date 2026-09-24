@@ -117,7 +117,7 @@ Redaction must not break the chain and must remain auditable:
   stays valid, the redaction is visible, and an auditor with lawful access to
   retained raw bytes can still verify them against the digest.
 - Insurer-facing artifacts never require raw bytes (digests and aggregates
-  only — see [insurer-api.md](insurer-api.md)); raw retention is an
+  only — see [insurer-api.md](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/oxagen/specs/tacho/design/insurer-api.md)); raw retention is an
   enterprise-local policy choice.
 
 ## 4. OpenTelemetry mapping

@@ -32,7 +32,7 @@ import {
   type AuditBundle,
   type AuditPage,
   type AuditQuery,
-  type EvidenceRetention,
+  type AuditRetention,
 } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
@@ -83,7 +83,7 @@ type Loaded =
       page: AuditPage | null;
       actors: readonly AuditActor[];
       /** Read on Retention only. */
-      retention: Read<EvidenceRetention> | null;
+      retention: Read<AuditRetention> | null;
       /** The export the Exports URL names, and its read. */
       bundle: { id: string; read: Read<AuditBundle> } | null;
     };

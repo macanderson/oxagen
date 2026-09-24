@@ -7,7 +7,7 @@ import {
   parseApiKeysView,
 } from "@/features/organization";
 import { requireViewer } from "@/server/viewer";
-import { PageHeader } from "@/ui/page-header";
+import { OrganizationHeader } from "@/features/organization";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("pages");
@@ -35,16 +35,12 @@ export default async function ApiKeysPage({
   const view = parseApiKeysView(query);
   const chosen = chooseWorkspace(workspaces, view.workspace);
   const ctx = chosen === null ? orgCtx : await requireViewer(org, chosen);
-  const t = await getTranslations("pages");
   return (
     <main
       id="main"
       className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader
-        eyebrow={t("organizationEyebrow", { organization: orgCtx.orgName })}
-        title={t("apiKeys")}
-      />
+      <OrganizationHeader ctx={ctx} source={dataSource()} />
       <ApiKeys ctx={ctx} source={source} workspaces={workspaces} view={view} />
     </main>
   );

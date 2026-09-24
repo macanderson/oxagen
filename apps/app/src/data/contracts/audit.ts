@@ -123,14 +123,14 @@ export type AuditExport = z.infer<typeof AuditExport>;
  * when none is pinned. The stored volume is null until the accounting job has
  * measured it: a null is "not measured", never "nothing stored".
  */
-export const EvidenceRetention = z.object({
+export const AuditRetention = z.object({
   includedMonths: z.number().int().positive(),
   bodyRetentionDays: z.number().int().positive().nullable(),
   /** The per-GB-month rate past the included months; null when it is not a decimal the money parser takes. */
   rate: Money.nullable(),
   storedGbBeyondIncluded: z.number().nonnegative().nullable(),
 });
-export type EvidenceRetention = z.infer<typeof EvidenceRetention>;
+export type AuditRetention = z.infer<typeof AuditRetention>;
 
 /** Where a queued export has got to (`get_export_status`). */
 export const AuditBundleStatus = z.enum([

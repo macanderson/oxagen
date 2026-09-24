@@ -1,3 +1,4 @@
+import { runOutcomesSettingsRoute } from "./routes/v1/run.outcomes.settings";
 import { configurationCloneGetRoute } from "./routes/v1/configuration.clone.get";
 import { configurationCloneProposeRoute } from "./routes/v1/configuration.clone.propose";
 import { revokeMemberInviteRoute } from "./routes/v1/org.member_invite.revoke";
@@ -234,6 +235,7 @@ import {
   githubOauthCallbackRoute,
 } from "./routes/v1/github-oauth";
 import { githubAppWebhookRoute } from "./routes/v1/github-webhook";
+import { gitlabWebhookRoute } from "./routes/v1/gitlab-webhook";
 import { graphNodeGetRoute } from "./routes/v1/graph.node.get";
 import { graphNodeSearchRoute } from "./routes/v1/graph.node.search";
 import { graphSearchRoute } from "./routes/v1/graph.search";
@@ -281,6 +283,7 @@ import { contextGovernanceModeSetRoute } from "./routes/v1/context.governance_mo
 import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
 import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
 import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
+import { repositoryGitlabAttachRoute } from "./routes/v1/repository.gitlab.attach";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
 import { tachoSessionPolicyReadRoute } from "./routes/v1/tacho.session_policy.read";
 import { tachoSessionPolicyWriteRoute } from "./routes/v1/tacho.session_policy.write";
@@ -327,6 +330,7 @@ import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
 import { findingFixRecordRoute } from "./routes/v1/finding.fix.record";
 import { findingDismissRoute } from "./routes/v1/finding.dismiss";
 import { runCostGetRoute } from "./routes/v1/run.cost";
+import { runWorkGetRoute } from "./routes/v1/run.work.get";
 import { runOutputsGetRoute } from "./routes/v1/run.outputs.get";
 import { runTokenIssueRoute } from "./routes/v1/run.token.issue";
 import { runFramesIngestRoute } from "./routes/v1/run.frames.ingest";
@@ -364,6 +368,9 @@ app.route("/webhooks/stripe", stripeWebhook);
 // installation id. Mounted BEFORE the generic /webhooks route so "/webhooks/github/app"
 // is not captured as connectorId=github, connectionId=app.
 app.route("/webhooks/github/app", githubAppWebhookRoute);
+// GitLab project webhooks (#3762): one hook per connected project, authenticated
+// by its secret token. Mounted BEFORE the generic /webhooks route for the same reason.
+app.route("/webhooks/gitlab", gitlabWebhookRoute);
 // Connector webhooks: unauthenticated — HMAC validation is the security boundary.
 app.route("/webhooks", webhookRoute);
 // Inngest cloud polls /api/inngest for the function manifest; signing-key
@@ -704,6 +711,9 @@ orgScoped.route(
   "/repository/installation/attach",
   repositoryInstallationAttachRoute,
 );
+// A gitlab.com project connects with a project access token instead of an App
+// installation (attach_gitlab_project, #3762).
+orgScoped.route("/repository/gitlab/attach", repositoryGitlabAttachRoute);
 // Run controls (dispatch_command, list_commands): addressed to runs, agents
 // and the workspace rather than to a host, so they sit beside /runs.
 orgScoped.route("/commands", tachoCommandDispatchRoute);
@@ -764,6 +774,7 @@ orgScoped.route("/spend/findings/fix", findingFixRecordRoute);
 orgScoped.route("/spend/findings/dismiss", findingDismissRoute);
 orgScoped.route("/runs/cost", runCostGetRoute);
 orgScoped.route("/runs/outputs", runOutputsGetRoute);
+orgScoped.route("/runs/work", runWorkGetRoute);
 // Proof (ADR-064): a run's witness record and the workspace's disclosure grain.
 // Both handlers refuse an API-key caller; the session auth above is the path.
 orgScoped.route("/runs/proof", runProofGetRoute);
@@ -952,6 +963,7 @@ orgScoped.route("/org/data-plane", orgDataPlaneRoute);
 orgScoped.route("/org/model-credential", orgModelCredentialRoute);
 orgScoped.route("/org/sso", orgSsoRoute);
 orgScoped.route("/org/settings", orgSettingsWriteRoute);
+orgScoped.route("/run-outcomes/settings", runOutcomesSettingsRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsReadRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsWriteRoute);
 orgScoped.route("/asset/upload", assetUploadRoute);
