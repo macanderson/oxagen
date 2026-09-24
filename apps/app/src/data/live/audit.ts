@@ -22,7 +22,7 @@ import {
   AuditExport,
   AuditPage,
   type AuditWindow,
-  EvidenceRetention,
+  AuditRetention,
 } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
@@ -31,7 +31,7 @@ import {
   toAuditBundle,
   toAuditExport,
   toAuditPage,
-  toEvidenceRetention,
+  toAuditRetention,
 } from "./mappers/audit";
 
 function toView<O, V extends z.ZodType>(
@@ -100,7 +100,7 @@ export const audit: DataSource["audit"] = {
       input: {},
       page: "audit",
     });
-    return toView(read, EvidenceRetention, toEvidenceRetention, {
+    return toView(read, AuditRetention, toAuditRetention, {
       orgId: ctx.orgId,
       method: "retention",
     });

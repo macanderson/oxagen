@@ -11,7 +11,7 @@ import type {
   AuditBundle,
   AuditExport,
   AuditPage,
-  EvidenceRetention,
+  AuditRetention,
 } from "@/data/contracts/audit";
 import { microsFromDecimal } from "@/data/contracts/money";
 import type { ContractOutput } from "@/server/kernel";
@@ -56,9 +56,9 @@ export function toAuditExport(
  * A rate that parser refuses (an exponent, more than six decimals) is left
  * null rather than rounded, and the page says it is not recorded.
  */
-export function toEvidenceRetention(
+export function toAuditRetention(
   out: ContractOutput<typeof billingEvidenceRetention>,
-): z.input<typeof EvidenceRetention> {
+): z.input<typeof AuditRetention> {
   const micros = microsFromDecimal(String(out.usdPerGbMonth));
   return {
     includedMonths: out.includedMonths,

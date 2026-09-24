@@ -22,6 +22,7 @@ import {
   type TachoHarness,
   tachoHarnessSchema,
 } from "../wire";
+import { COMMAND_HOOK_TIMEOUTS_S } from "../host/settings-writer";
 import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
 import {
   cursorAnswer,
@@ -205,6 +206,17 @@ export interface HookRunDeps {
   harnessInstance?: (pid: number) => string | undefined;
   /** `win32` has no Unix socket, so the hook posts over loopback TCP. */
   platform?: NodeJS.Platform;
+  /**
+   * Identifies this one hook invocation across the live request and its
+   * spool fallback, so a daemon that already recorded the live request does
+   * not record the spool replay of the same hook a second time (a client
+   * timeout does not mean the daemon never got it). Generated once, when
+   * stdin is read — `runHookProcess` does this rather than leaving it to
+   * default here, so the id is fixed before the network attempt that might
+   * time out, not after. Defaults to a fresh id for a caller (a test, an
+   * SDK adapter) that has no earlier point to generate one from.
+   */
+  hookId?: string;
 }
 
 export interface HookRunResult {
@@ -216,8 +228,22 @@ export interface HookRunResult {
   evaluation?: Evaluation;
 }
 
+/**
+ * A margin under the harness's own timeout for a hook whose budget derives
+ * from one, so this process's own answer (fallback to a local decision) is
+ * what a slow request gets, not Claude Code timing the command out itself
+ * and treating the hook as failed.
+ */
+const HARNESS_TIMEOUT_MARGIN_MS = 5_000;
+
 const RESPONSE_BUDGET_MS: Record<string, number> = {
-  PermissionRequest: 600_000,
+  // Strictly less than `COMMAND_HOOK_TIMEOUTS_S.PermissionRequest` (the
+  // harness's own timeout, 600s): equalling it left no room for this
+  // process to still answer locally before Claude Code's own clock ran out
+  // first, which is a daemon-down failure this budget exists to avoid.
+  PermissionRequest:
+    COMMAND_HOOK_TIMEOUTS_S.PermissionRequest * 1_000 -
+    HARNESS_TIMEOUT_MARGIN_MS,
   PreToolUse: 10_000,
   SessionStart: 5_000,
   UserPromptSubmit: 5_000,
@@ -512,8 +538,61 @@ function codexAnswer(
   };
 }
 
+/** The most a quarantined unreadable payload keeps, so one huge stdin cannot fill the disk. */
+const MAX_QUARANTINED_PAYLOAD_BYTES = 65_536;
+
+/**
+ * A payload this process could not even parse, kept where a person can find
+ * it, bounded so an oversized or runaway stdin does not turn the record
+ * itself into the next problem. Best-effort and silent on its own failure:
+ * this runs from a branch that has already decided its answer, and a write
+ * failure here must not turn that answer into an unhandled rejection.
+ *
+ * `paths.quarantine`, not `paths.spool`: the spool is for a hook the daemon
+ * never got to see and should still process once reachable, and the daemon
+ * already reads every file there as a replay candidate. This payload was
+ * never going to become an event — nothing here would replay it — so it
+ * goes where "the control plane refused this, kept for inspection" already
+ * lives, and the daemon's existing sweep and count age it out the same way.
+ */
+function quarantineUnreadablePayload(
+  deps: HookRunDeps,
+  hookId: string,
+  receivedAt: string,
+  reason: string,
+  rawText: string,
+  label: Record<string, string>,
+): void {
+  try {
+    ensureDir(deps.paths.quarantine);
+    const truncated = rawText.length > MAX_QUARANTINED_PAYLOAD_BYTES;
+    writeSensitiveFileAtomic(
+      join(deps.paths.quarantine, `${hookId}.hook-payload.json`),
+      JSON.stringify({
+        schema: "tacho.quarantined-hook-payload.v1",
+        received_at: receivedAt,
+        hook_id: hookId,
+        reason,
+        payload_truncated: truncated,
+        raw: truncated
+          ? rawText.slice(0, MAX_QUARANTINED_PAYLOAD_BYTES)
+          : rawText,
+        ...label,
+      }),
+    );
+  } catch {
+    // Best-effort; the caller already has its answer.
+  }
+}
+
 export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const now = deps.now ?? (() => Date.now());
+  const hookId = deps.hookId ?? ulid(now());
+  // Captured once, here, rather than after the daemon POST fails: a spool
+  // fallback used to stamp `received_at` at the moment the request timed
+  // out, which for `PermissionRequest`'s 600s budget could read minutes
+  // after the hook actually arrived. This is when the hook did.
+  const receivedAt = toProtocolTimestamp(now());
   const platform = deps.platform ?? process.platform;
   const agent = deps.agent;
   const agentProblem =
@@ -541,6 +620,18 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   try {
     raw = JSON.parse(deps.stdin);
   } catch {
+    // Neither spooled (there is no parsed payload to replay) nor recorded
+    // anywhere before this fix — the loss was in a log line only. The raw
+    // bytes go to quarantine, bounded, so a person can see what arrived and
+    // why nothing was recorded for it.
+    quarantineUnreadablePayload(
+      deps,
+      hookId,
+      receivedAt,
+      "stdin is not JSON",
+      deps.stdin,
+      agent !== undefined ? { agent } : { harness },
+    );
     return {
       // Truncated or malformed JSON is the likeliest way a payload arrives
       // unreadable, and it is answered the same way a readable payload that
@@ -574,6 +665,18 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   if (cursor) raw = translateCursorPayload(raw);
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {
+    // JSON that parsed but does not read as a hook Oxagen knows: also
+    // quarantined, so a schema drift on the harness side leaves the same
+    // durable trace a malformed body does, rather than only the refusal
+    // reason below.
+    quarantineUnreadablePayload(
+      deps,
+      hookId,
+      receivedAt,
+      `payload is not a ${stella ? "Stella" : cursor ? "Cursor" : "Claude Code"} hook`,
+      JSON.stringify(raw),
+      agent !== undefined ? { agent } : { harness },
+    );
     return {
       // A payload this hook cannot parse is not a reason to let the call
       // through on Cursor. `{}` reads as no opinion to Claude Code, and
@@ -676,7 +779,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         Authorization: `Bearer ${host.local_token}`,
         "x-tacho-envelope": "1",
       },
-      body: JSON.stringify({ payload: raw, env, ...label }),
+      body: JSON.stringify({ payload: raw, env, hook_id: hookId, ...label }),
       connectTimeoutMs: deps.connectTimeoutMs ?? 50,
       responseTimeoutMs: RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
     });
@@ -705,25 +808,41 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       `daemon answered ${result.status}: ${result.body.slice(0, 200)}`,
     );
   } catch (error) {
-    const at = toProtocolTimestamp(now());
     const local = decideLocally(host, input, now());
-    ensureDir(deps.paths.spool);
-    writeSensitiveFileAtomic(
-      join(deps.paths.spool, `${ulid(now())}.json`),
-      JSON.stringify({
-        schema: "tacho.spool.v1",
-        received_at: at,
-        payload: raw,
-        env,
-        ...label,
-        ...(local.evaluation !== undefined
-          ? { evaluation: local.evaluation }
-          : {}),
-      }),
-    );
+    // The spool write is best-effort, not a precondition for answering.
+    // Losing it used to lose the local decision too — the throw escaped
+    // before `stdout`/`stderr` were ever built, so a deny this process just
+    // computed became an unhandled rejection instead of an answer, which a
+    // harness that gets no output at all treats as an allow. The write is
+    // wrapped so a full disk or an unwritable spool dir costs the replay,
+    // noted on stderr, not the decision already made.
+    let spoolError: unknown;
+    try {
+      ensureDir(deps.paths.spool);
+      writeSensitiveFileAtomic(
+        join(deps.paths.spool, `${hookId}.json`),
+        JSON.stringify({
+          schema: "tacho.spool.v1",
+          received_at: receivedAt,
+          hook_id: hookId,
+          payload: raw,
+          env,
+          ...label,
+          ...(local.evaluation !== undefined
+            ? { evaluation: local.evaluation }
+            : {}),
+        }),
+      );
+    } catch (writeError) {
+      spoolError = writeError;
+    }
+    const spoolNote =
+      spoolError !== undefined
+        ? ` (also failed to spool for replay: ${spoolError instanceof Error ? spoolError.message : String(spoolError)})`
+        : "";
     return {
       stdout: answer(local.response),
-      stderr: `tacho-hook: ${local.note} (${error instanceof Error ? error.message : String(error)})\n`,
+      stderr: `tacho-hook: ${local.note} (${error instanceof Error ? error.message : String(error)})${spoolNote}\n`,
       exitCode: 0,
       path: "local",
       ...(local.evaluation !== undefined

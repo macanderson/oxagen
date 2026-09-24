@@ -53,8 +53,10 @@ export function Records({
   kind,
   offset,
   read,
+  shelf = "records",
 }: {
   at: SteeringAt;
+  shelf?: "all" | "records" | "memory";
   kind: RecordKind | null;
   offset: number;
   read: Read<RecordPage>;
@@ -81,7 +83,7 @@ export function Records({
   }
   return (
     <Section id="steering-records" title={title} lead={t("lead")}>
-      <KindFilter at={at} kind={kind} />
+      {shelf === "memory" ? null : <KindFilter at={at} kind={kind} />}
       {records.length === 0 ? (
         <p data-state="empty" className="text-sm text-muted-foreground">
           {t("emptyKind")}
@@ -140,7 +142,14 @@ export function Records({
         offset={offset}
         shown={records.length}
         total={total}
-        link={(to) => steeringLink(at, { tab: "records", kind, offset: to })}
+        link={(to) =>
+          steeringLink(at, {
+            tab: "library",
+            shelf: shelf === "memory" ? "memory" : "records",
+            kind,
+            offset: to,
+          })
+        }
       />
       <p className="max-w-prose text-xs text-muted-foreground">
         {t("authority")}

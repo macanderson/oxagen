@@ -192,7 +192,7 @@ describe("Dismiss", () => {
     submitReason("Duplicate of ctx.release.notes-format");
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/steering?tab=proposals",
+        "/acme/core-platform/steering/proposals",
       );
     });
     expect(dismissProposal).toHaveBeenCalledWith(

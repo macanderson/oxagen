@@ -45,7 +45,7 @@ function renderControl({
   return {
     region,
     toggle: within(region).getByRole("switch", {
-      name: "Top up automatically when the bucket is empty",
+      name: "Buy more automatically when this period's allowance runs out",
     }),
     stepper: within(region).getByRole("spinbutton", {
       name: "Blocks per top-up",
@@ -79,7 +79,7 @@ describe("Auto top-up", () => {
     await userEvent.clear(stepper);
     await userEvent.type(stepper, "4");
     expect(region.querySelector("[data-per-topup]")).toHaveTextContent(
-      /^= 40,000 GAU per top-up$/,
+      /^= 40,000 governed actions per top-up$/,
     );
     await save();
     expect(setAutoTopup).toHaveBeenCalledOnce();
@@ -90,7 +90,7 @@ describe("Auto top-up", () => {
     expect(toggle).toBeChecked();
     expect(stepper).toHaveValue(2);
     expect(region.querySelector("[data-per-topup]")).toHaveTextContent(
-      /^= 20,000 GAU per top-up$/,
+      /^= 20,000 governed actions per top-up$/,
     );
     expect(within(region).getByRole("status")).toHaveTextContent(
       "Auto top-up saved.",
@@ -195,10 +195,10 @@ describe("Auto top-up", () => {
     expect(toggle).toBeEnabled();
     expect(stepper).toHaveValue(1);
     expect(region.querySelector("[data-per-topup]")).toHaveTextContent(
-      /^= 5,000 GAU per top-up$/,
+      /^= 5,000 governed actions per top-up$/,
     );
     expect(region.querySelector("[data-card=none]")).toHaveTextContent(
-      /^no saved payment method — your next purchase saves one, and auto top-up runs from then on$/,
+      /^No saved payment method\. Your next purchase saves one, and auto top-up runs from then on\.$/,
     );
   });
 
@@ -231,9 +231,9 @@ describe("Auto top-up", () => {
   });
 
   it.each([
-    ["paid", "Last top-up Sep 14, 2026: paid"],
-    ["open", "Last top-up Sep 14, 2026: open, its invoice is under Invoices"],
-    ["failed", "Last top-up Sep 14, 2026: failed"],
+    ["paid", "Last top-up 2026-09-14: paid"],
+    ["open", "Last top-up 2026-09-14: open, its invoice is under Invoices"],
+    ["failed", "Last top-up 2026-09-14: failed"],
   ] as const)("prints a %s last attempt", (status, text) => {
     const { region } = renderControl({
       bucket: readOk(

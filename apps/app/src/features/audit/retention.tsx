@@ -9,7 +9,7 @@
 // its segment says so instead of "forever".
 import "server-only";
 import { useTranslations } from "next-intl";
-import type { EvidenceRetention } from "@/data/contracts/audit";
+import type { AuditRetention } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx } from "@/server/viewer";
@@ -35,7 +35,7 @@ function RetentionLine({
   read,
 }: {
   org: string;
-  read: Read<EvidenceRetention>;
+  read: Read<AuditRetention>;
 }) {
   const t = useTranslations("audit");
   const windowOf = useRetentionWindow();

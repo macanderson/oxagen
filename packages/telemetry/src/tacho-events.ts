@@ -8,7 +8,7 @@
  * construction: chInsert stamps the authenticated ambient scope, and
  * `chain_verified` is the control plane's verdict, never the producer's.
  */
-import { flattenEvent, type TachoEvent } from "@oxagen/tacho";
+import { ENVELOPE_COLUMNS, flattenEvent, type TachoEvent } from "@oxagen/tacho";
 import { TACHO_EVENTS_TABLE, tachoEventsColumns } from "./tacho-events-ddl";
 import { chInsert, chSelect } from "./tenant";
 
@@ -103,6 +103,21 @@ export interface TachoFrameRow {
   ttftMs?: number | null;
   /** The provider call's wall time; null when it was not timed. */
   apiDurationMs?: number | null;
+  /**
+   * The chain the frame was recorded on, and where that chain sits in the
+   * run. Set only by {@link selectTachoSubagentEvents}, which reads frames
+   * from more than one chain; a read of one session's chain leaves them unset.
+   */
+  sessionUuid?: string;
+  rootSessionUuid?: string;
+  /** The chain that spawned this one; null on the run's own chain. */
+  parentSessionUuid?: string | null;
+  /** The harness's id for the subagent; empty on the run's own chain. */
+  subagentId?: string;
+  subagentType?: string;
+  /** The parent's tool call that spawned the subagent; empty when none was recorded. */
+  spawnToolUseId?: string;
+  spawnDepth?: number;
 }
 
 interface RawTachoFrameRow {
@@ -131,6 +146,22 @@ interface RawTachoFrameRow {
   api_duration_ms: string | number | null;
 }
 
+interface RawTachoChainFrameRow extends RawTachoFrameRow {
+  session_uuid: string;
+  root_session_uuid: string;
+  parent_session_uuid: string | null;
+  subagent_id: string;
+  subagent_type: string;
+  spawn_tool_use_id: string;
+  spawn_depth: string | number;
+}
+
+/** The frame columns every read of `tacho_events` projects, in one place. */
+const FRAME_COLUMNS = `
+        seq, toString(ts) AS ts, event_id, kind, prev_hash, hash, content_digest, bytes_ref,
+        redactions, body, source, fidelity, attrs, tool_name, tool_status, tool_use_id, model, provider,
+        policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms`;
+
 /**
  * A wrapped session's frames past `afterSeq`, in sequence order. The table is
  * a ReplacingMergeTree keyed on (org, workspace, session, seq); `FINAL`
@@ -153,10 +184,7 @@ export async function selectTachoEvents(args: {
 }): Promise<TachoFrameRow[]> {
   const res = await chSelect<RawTachoFrameRow>({
     query: `
-      SELECT
-        seq, toString(ts) AS ts, event_id, kind, prev_hash, hash, content_digest, bytes_ref,
-        redactions, body, source, fidelity, attrs, tool_name, tool_status, tool_use_id, model, provider,
-        policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms
+      SELECT${FRAME_COLUMNS}
       FROM ${TACHO_EVENTS_TABLE} FINAL
       WHERE org_id = {orgId:UUID}
         AND workspace_id = {workspaceId:UUID}
@@ -171,7 +199,12 @@ export async function selectTachoEvents(args: {
       limit: args.limit,
     },
   });
-  return res.data.map((r) => ({
+  return res.data.map(frameRowOf);
+}
+
+/** A raw `tacho_events` read as the Run page's frame row. */
+function frameRowOf(r: RawTachoFrameRow): TachoFrameRow {
+  return {
     seq: Number(r.seq),
     ts: r.ts,
     eventId: r.event_id,
@@ -203,5 +236,177 @@ export async function selectTachoEvents(args: {
     // no clock, so a reassembly's time to first token comes from here.
     ttftMs: nullableCount(r.ttft_ms),
     apiDurationMs: nullableCount(r.api_duration_ms),
+  };
+}
+
+/** Where a read of a run's subagent chains resumes: the last (session, seq) read. */
+export interface TachoChainPosition {
+  sessionUuid: string;
+  seq: number;
+}
+
+/**
+ * The frames of every subagent chain under a root session, in (session, seq)
+ * order, strictly after `after`, at most `limit`.
+ *
+ * A subagent records on its own chain (its own `session_uuid`, dense `seq`
+ * from 0), with `root_session_uuid` naming the run it belongs to. The run's
+ * cost already counts those chains (`cost-frames.ts` reads on the root), so a
+ * reader of the run's frames reads them too, and this is that read. Each row
+ * carries its chain's identity so the caller can put the chain where it was
+ * spawned. `FINAL` like the single-chain read, so a redelivered row appears
+ * once. Tenant-filtered by the ambient scope through chSelect.
+ */
+export async function selectTachoSubagentEvents(args: {
+  rootSessionUuid: string;
+  after: TachoChainPosition | null;
+  limit: number;
+}): Promise<TachoFrameRow[]> {
+  const res = await chSelect<RawTachoChainFrameRow>({
+    query: `
+      SELECT${FRAME_COLUMNS},
+        session_uuid, root_session_uuid, parent_session_uuid, subagent_id,
+        subagent_type, spawn_tool_use_id, spawn_depth
+      FROM ${TACHO_EVENTS_TABLE} FINAL
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND root_session_uuid = {rootSessionUuid:UUID}
+        AND session_uuid != {rootSessionUuid:UUID}
+        ${
+          args.after === null
+            ? ""
+            : "AND (session_uuid, seq) > ({afterSession:UUID}, {afterSeq:UInt64})"
+        }
+      ORDER BY session_uuid ASC, seq ASC
+      LIMIT {limit:UInt32}
+    `,
+    params: {
+      rootSessionUuid: args.rootSessionUuid,
+      ...(args.after === null
+        ? {}
+        : { afterSession: args.after.sessionUuid, afterSeq: args.after.seq }),
+      limit: args.limit,
+    },
+  });
+  return res.data.map((r) => ({
+    ...frameRowOf(r),
+    sessionUuid: r.session_uuid,
+    rootSessionUuid: r.root_session_uuid,
+    parentSessionUuid: r.parent_session_uuid ?? null,
+    subagentId: r.subagent_id ?? "",
+    subagentType: r.subagent_type ?? "",
+    spawnToolUseId: r.spawn_tool_use_id ?? "",
+    spawnDepth: Number(r.spawn_depth ?? 0),
   }));
+}
+
+/** The projected columns beside the envelope that a frame row reads. */
+const FRAME_BODY_COLUMNS = [
+  "tool_name",
+  "tool_status",
+  "tool_use_id",
+  "model",
+  "provider",
+  "policy_decision",
+  "cost_usd_micros",
+  "ttft_ms",
+  "api_duration_ms",
+] as const;
+
+/** One stored event: the frame row, and the envelope columns it came from. */
+export interface TachoEventRecord {
+  frame: TachoFrameRow;
+  /**
+   * Every envelope column of the row, as ClickHouse reads it back, with
+   * `ts` as `toString(ts)`. `bytes_ref` is left out: the stored column is
+   * where the control plane kept the body, not the event's own member, so it
+   * would mislead `unflattenEvent`. The frame row carries it.
+   */
+  envelope: Record<string, unknown>;
+}
+
+/**
+ * A wrapped session's events past `afterSeq` with every envelope column, for
+ * the run export, which rebuilds each sealed event with `unflattenEvent`. The
+ * same fence and ordering as `selectTachoEvents`.
+ */
+export async function selectTachoEventRecords(args: {
+  sessionUuid: string;
+  afterSeq: number;
+  limit: number;
+}): Promise<TachoEventRecord[]> {
+  const columns = [...ENVELOPE_COLUMNS, ...FRAME_BODY_COLUMNS].map((name) =>
+    name === "ts" ? "toString(ts) AS ts" : `\`${name}\``,
+  );
+  const res = await chSelect<RawTachoFrameRow & Record<string, unknown>>({
+    query: `
+      SELECT ${columns.join(", ")}
+      FROM ${TACHO_EVENTS_TABLE} FINAL
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND session_uuid = {sessionUuid:UUID}
+        AND seq > {afterSeq:Int64}
+      ORDER BY seq ASC
+      LIMIT {limit:UInt32}
+    `,
+    params: {
+      sessionUuid: args.sessionUuid,
+      afterSeq: args.afterSeq,
+      limit: args.limit,
+    },
+  });
+  return res.data.map((r) => {
+    const envelope: Record<string, unknown> = {};
+    for (const name of ENVELOPE_COLUMNS) {
+      if (name !== "bytes_ref") envelope[name] = r[name];
+    }
+    return { frame: frameRowOf(r), envelope };
+  });
+}
+
+/**
+ * The stored hash and body reference of each of `seqs` on one chain, keyed
+ * by seq. A seq with no stored row is absent from the map.
+ *
+ * The intake asks this of every event a batch re-sends below the recorded
+ * head: a re-sent seq whose stored hash differs is a different frame
+ * claiming a position the chain already holds, and it is refused rather than
+ * written over the stored one. `FINAL`, so the answer is the row a reader
+ * sees.
+ */
+export async function selectTachoStoredFrames(args: {
+  sessionUuid: string;
+  seqs: readonly number[];
+}): Promise<
+  Map<number, { hash: string; contentDigest: string; bytesRef: string }>
+> {
+  const out = new Map<
+    number,
+    { hash: string; contentDigest: string; bytesRef: string }
+  >();
+  if (args.seqs.length === 0) return out;
+  const res = await chSelect<{
+    seq: string | number;
+    hash: string;
+    content_digest: string;
+    bytes_ref: string;
+  }>({
+    query: `
+      SELECT seq, hash, content_digest, bytes_ref
+      FROM ${TACHO_EVENTS_TABLE} FINAL
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND session_uuid = {sessionUuid:UUID}
+        AND seq IN {seqs:Array(UInt64)}
+    `,
+    params: { sessionUuid: args.sessionUuid, seqs: [...args.seqs] },
+  });
+  for (const r of res.data) {
+    out.set(Number(r.seq), {
+      hash: r.hash,
+      contentDigest: r.content_digest,
+      bytesRef: r.bytes_ref,
+    });
+  }
+  return out;
 }

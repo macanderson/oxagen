@@ -6,15 +6,20 @@ contract, handler, route, tool, page, component and package stay exactly where
 they are, keep compiling, and keep their tests. What it loses is reach: it is no
 longer offered to a user, an agent or an API caller.
 
-This file is the reference for that distinction. `docs/specs/mission-control/spec.md`
+This file is the reference for that distinction. `oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md`
 Appendix E decides *which* features come off the surfaces for rev1; this file
 records *what that means for the code* and where the code is, so a later session
 reshaping the product can find a capability it needs rather than rebuild one that
 already exists.
 
 **Status:** opened 2026-09-16, ahead of the rev1 app cutover
-(`docs/specs/mission-control/plan.md`, integration branch `app-rebuild`). Every
+(`oxagen-roadmap:docs/oxagen/specs/mission-control/plan.md`, integration branch `app-rebuild`). Every
 path below exists on `main` today.
+
+A path written `oxagen-roadmap:<path>` is in
+https://github.com/macanderson/oxagen-roadmap. The rev1 spec and plan moved
+there from this repository's `docs/` on 2026-09-23 (#3895), and the copies this
+file cites are kept there unchanged.
 
 ---
 
@@ -444,3 +449,7 @@ packages/oxagen/src/contracts/router.policy.get.ts
 The app's Knip configuration excludes only this retained file from unused-file reporting. The two retained exports carry `@deregistered`. They still compile and their tests remain. No production route imports the component. The shrink-only baseline stays empty.
 
 On 2026-09-23 the Run page spec (`mockups/pages/run.md` in the roadmap repository) restored the Chain and seal tab and the replay grade badge, which it marks as built. `chain.tsx`, `replay-grade.tsx` and `ChainCheckpoint` left this register then. Fork and Bisect stay here because the same spec marks them as later work.
+
+### Run summary implementation (ADR-153)
+
+`packages/inngest-functions/src/functions/run.summarize.ts` is preserved but no longer registered. Nothing sends its `run/summarize` event any more: `summarize_run` sends `run/enrich`, which uses Stella and the workspace enrichment setting. A `run/summarize` event still queued when this shipped is not replayed. The five-minute sweep enriches that run instead. The manual `summarize_run` capability remains available.

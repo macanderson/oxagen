@@ -523,6 +523,16 @@ export const agentRuns = agentSchema.table(
       mode: "date",
     }),
     summaryModel: text("summary_model"),
+    summaryInputDigest: text("summary_input_digest"),
+    summaryObservedAt: timestamp("summary_observed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    // The row's updated_at as the last enrichment read saw it (ADR-153).
+    summaryObservedRevision: timestamp("summary_observed_revision", {
+      withTimezone: true,
+      mode: "date",
+    }),
 
     // ── RunSpecV2 typed identity (docs/specs/run-evidence-ingress) ───────────
     //

@@ -6,7 +6,7 @@
 | **Date** | 2026-09-18 |
 | **Owner** | platform |
 | **Builds on** | ADR-094 (the loopback model proxy), ADR-095 (the tier ladder), ADR-096 (the contained tier), ADR-078 (wrapped and connected), ADR-043 (Oxagen governs, it does not run) |
-| **Related** | `docs/specs/tacho/spec.md`, `packages/tacho/README.md` section "The gateway", `docs/specs/mission-control/spec.md` §8 |
+| **Related** | `docs/specs/tacho/spec.md`, `packages/tacho/README.md` section "The gateway", `oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md` §8 |
 | **Source** | Read at `main` after the merge that brought #3319 (Phase 4) |
 
 ---
@@ -228,7 +228,7 @@ the turn's outcome before it raises anything.
 - **Re-specifying the proxy.** It is built. Only the delta is here.
 - **A per-workspace or per-session model key.** `docs/specs/model-funding-source/spec.md`
   §5 rules the first out. The second has no decision behind it.
-- **The witness protocol.** `docs/specs/tacho/witness-protocol.md` is a separate
+- **The witness protocol.** `oxagen-roadmap:docs/oxagen/specs/tacho/witness-protocol.md` is a separate
   line of work and does not block any gap above.
 
 ## 5. Build order and acceptance

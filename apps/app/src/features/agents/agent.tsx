@@ -1,3 +1,4 @@
+import { HarnessLabel } from "@/ui/harness-icon";
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -68,7 +69,9 @@ function Header({
         />
         <p className="flex flex-wrap items-center gap-3 text-xs">
           <AgentStatusBadge status={identity.status} />
-          <span>{t(`harness.${identity.harness}`)}</span>
+          <HarnessLabel harness={identity.harness}>
+            {t(`harness.${identity.harness}`)}
+          </HarnessLabel>
         </p>
         {identity.description === null ? null : (
           <p className="max-w-prose text-sm text-muted-foreground">
@@ -93,6 +96,7 @@ function Header({
               ws={ws}
               agentId={identity.id}
               name={identity.name}
+              slug={identity.slug}
               suspended={identity.status === "suspended"}
               here={routes.agent(org, ws, identity.slug)}
               list={routes.agents(org, ws)}

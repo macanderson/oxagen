@@ -65,6 +65,7 @@ import { StepIcon } from "./tool-icon";
 import { kindsParam } from "./transcript";
 import {
   buildTranscript,
+  entryKey,
   decisionSubject,
   type Frames,
   frameAt,
@@ -229,13 +230,21 @@ function FrameHalf({
           data-testid="entry-truncated"
           className="m-0 text-xs text-muted-foreground"
         >
-          {t("truncated")}{" "}
-          <SafeLink
-            to={routes.run(org, ws, runId, { tab: "actions", body: seq })}
-            className={linkText}
-          >
-            {t("openFrame", { seq })}
-          </SafeLink>
+          {t("truncated")}
+          {/* A subagent's frame is on its own chain, which the Frames tab
+              does not read: a link by seq would open the run's own frame of
+              that number, a different frame. */}
+          {body.chainRef === undefined ? (
+            <>
+              {" "}
+              <SafeLink
+                to={routes.run(org, ws, runId, { tab: "actions", body: seq })}
+                className={linkText}
+              >
+                {t("openFrame", { seq })}
+              </SafeLink>
+            </>
+          ) : null}
         </p>
       ) : null}
     </div>
@@ -286,6 +295,16 @@ function FrameDetail({
         <span className="font-mono text-[11px] text-foreground">
           {frame.type}
         </span>
+        {frame.subagent === undefined ? null : (
+          <span
+            data-testid="transcript-subagent"
+            className="rounded-md bg-hl px-1.5 text-[10.5px] text-muted-foreground"
+          >
+            {frame.subagent.type === null
+              ? t("subagent")
+              : t("subagentTyped", { type: frame.subagent.type })}
+          </span>
+        )}
         <span className="ml-auto font-mono text-[10.5px] text-muted-foreground">
           {t("frameHead", {
             seq: frame.seq,
@@ -354,7 +373,7 @@ function FrameDetail({
             )}
           </>
         )}
-        {headline?.truncated === true ? null : (
+        {headline?.truncated === true || frame.subagent !== undefined ? null : (
           <SafeLink
             to={routes.run(org, ws, runId, { tab: "actions", body: frame.seq })}
             className={`${linkText} self-start text-[11px]`}
@@ -568,7 +587,7 @@ function StepRow({
           {panes === null ? (
             <div className="overflow-hidden rounded-md border border-border bg-background">
               {visibleFrames(step).map((frame) => (
-                <FrameDetail key={frame.seq} frame={frame} {...place} />
+                <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
               ))}
             </div>
           ) : (
@@ -583,7 +602,7 @@ function StepRow({
                 {t("frameCount", { count: step.frames.length })}
               </summary>
               {visibleFrames(step).map((frame) => (
-                <FrameDetail key={frame.seq} frame={frame} {...place} />
+                <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
               ))}
             </details>
           )}

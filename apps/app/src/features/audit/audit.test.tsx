@@ -20,7 +20,7 @@ import type {
   AuditBundle,
   AuditEvent,
   AuditPage,
-  EvidenceRetention,
+  AuditRetention,
 } from "@/data/contracts/audit";
 import type { MemberList, WorkspaceList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
@@ -103,6 +103,7 @@ const members = vi.fn<DataSource["org"]["members"]>();
 const workspaces = vi.fn<DataSource["org"]["workspaces"]>();
 const refuse = () => Promise.reject(new Error("not an Audit read"));
 const source: DataSource = {
+  runtimes: { list: refuse, agents: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: { context: refuse, preferences },
   runs: {
@@ -113,6 +114,8 @@ const source: DataSource = {
     transcript: refuse,
     chain: refuse,
     outputs: refuse,
+    work: refuse,
+    outcomesSettings: refuse,
   },
   approvals: { pending: refuse, resolved: refuse },
   agents: {
@@ -124,6 +127,7 @@ const source: DataSource = {
   billing: {
     plan: refuse,
     usageCredits: refuse,
+    retention: refuse,
     bucket: refuse,
     contractRate: refuse,
     invoices: refuse,
@@ -173,7 +177,7 @@ const source: DataSource = {
 };
 
 /** A pinned seven-year policy, with the volume past the included year measured. */
-const POLICY: EvidenceRetention = {
+const POLICY: AuditRetention = {
   includedMonths: 12,
   bodyRetentionDays: 2555,
   rate: { micros: "23000", currency: "USD" },

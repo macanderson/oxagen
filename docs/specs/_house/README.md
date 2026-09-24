@@ -11,7 +11,7 @@ with one shell, so they all carry the same branding.
   Source, and so on). Every `##` becomes a line in the contents rail.
 
 ```sh
-python3 docs/specs/_house/render.py docs/specs/mission-control/plan.md
+python3 docs/specs/_house/render.py docs/specs/oxagen-desktop/spec.md
 python3 docs/specs/_house/render.py some-doc.md --kind Plan --out elsewhere/some-doc.html
 ```
 

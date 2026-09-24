@@ -6,8 +6,8 @@
 | **Date** | 2026-09-18 |
 | **Reviewed at** | oxagen `main` `85377729a`. Read-only review, no code changed. Re-verified against `main` `02278c913` on the same day: see the addendum at the end. Phase 0 merged later that day as `c9db463e9` (PR #3289), so where the body and the addendum say `context.system` is hardcoded `null`, that was true at the commits they name and is not true on `main` now |
 | **What it changed** | The design moved from "one store" to **one assembler**: `assembleSteering(run, budget)` with a stable prefix, a volatile selection and a `steering.manifest` frame. Storage stays plural with one writer per fact. Steering and gating became two planes, authored on one surface and compiled twice. `tachod` grows into the gateway (a loopback model proxy and an MCP aggregator). The enforcement tier became a four-word ladder: observe, harness, gateway, contained. The sandbox became the top tier, with `oxagen run -- <agent>`, and ADR-043 was revised by one sentence. Skills became governed files under Steering, and Steering became the hub with seven tabs. The work became a six-phase refactor path, with new governance ceremony frozen until Phase 0 lands |
-| **Spec sections** | `docs/specs/mission-control/spec.md`: §4.2 (stores, one writer per fact), §7.1 to §7.5 (the gateway, the tier ladder, the adapters, the five injection points), §9 (where a record lives), §10.4 (delivery, and what is true today), §10.5 (the assembler contract), §10.6 (skills), §10.7 (the Steering hub), §12.5 and §12.6 (budgets, and the basis of a spend number), §17.2 (the refactor path), §13.6 (bodies and the gateway), §18 (the closed risk), §21 (the decisions) |
-| **Plan phases** | `docs/specs/mission-control/plan.md` §8: Phase 0, make one record steer one agent. Phase 1, one type, one assembler. Phase 2, one screen. Phase 3, the graph becomes the index. Phase 4, the gateway. Phase 5, the contained tier. §0.2 lists the decisions and §8.8 reconciles the phases with the batches, lanes and milestones |
+| **Spec sections** | `oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md`: §4.2 (stores, one writer per fact), §7.1 to §7.5 (the gateway, the tier ladder, the adapters, the five injection points), §9 (where a record lives), §10.4 (delivery, and what is true today), §10.5 (the assembler contract), §10.6 (skills), §10.7 (the Steering hub), §12.5 and §12.6 (budgets, and the basis of a spend number), §17.2 (the refactor path), §13.6 (bodies and the gateway), §18 (the closed risk), §21 (the decisions) |
+| **Plan phases** | `oxagen-roadmap:docs/oxagen/specs/mission-control/plan.md` §8: Phase 0, make one record steer one agent. Phase 1, one type, one assembler. Phase 2, one screen. Phase 3, the graph becomes the index. Phase 4, the gateway. Phase 5, the contained tier. §0.2 lists the decisions and §8.8 reconciles the phases with the batches, lanes and milestones |
 | **Other documents amended** | `docs/specs/oxagen-desktop/spec.md` §14, `docs/specs/tacho/spec.md` §7.5, `packages/tacho/README.md`, `packages/context-provider/README.md`, `docs/VISION.md` (`packages/engram` has no README, and none was created). The DoD, witness, walkthrough and scope-review documents live in the roadmap repository and were amended there |
 | **ADRs** | ADR-091, Phase 0 (oxagen PR #3289). In oxagen draft PR #3294 (branch `steering-gateway-adrs`): ADR-097 "Steering and gating are two planes, authored on one surface and compiled twice". ADR-093 "One assembler decides what reaches the agent, and records what it cut". ADR-094 "tachod grows into the gateway: a loopback model proxy and an MCP aggregator". ADR-095 "The tier ladder is four words, computed from what was routed". ADR-096 "Oxagen may contain the process that runs turns: the contained tier". Amended there: ADR-008, 043, 051, 056, 064, 078 and 090 |
 | **Build order and issues** | The phase names and numbers are the review's. The order of build is Phase 0 merged (PR #3289, `c9db463e9`, 2026-09-18), Phase 4 in build (branches `gateway-model-proxy` and `desktop-install-hardening`), then Phases 1, 2, 3 and 5. Issues, all in macanderson/oxagen: epic #3295. Phase 0 #2592 (reopened, P0). Phase 1 #3296. Phase 2 #3297. Phase 3 #3298. Phase 4 #3299 (P0, in build). Phase 5 #3300. Desktop review #3301. Defects #3302, #3303, #3304 and #3305 |
@@ -38,7 +38,7 @@ Every claim below was read in code unless marked "docs only".
 2. The real problem is worse than "disconnected sources". On `main`, almost **nothing
    reaches an agent at all**. There is nothing to feel connected.
 3. The wrapped tier is, in production, a recorder plus a kill switch. No rule can fire.
-4. The design you want already exists in your own spec (`docs/specs/mission-control/spec.md`
+4. The design you want already exists in your own spec (`oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md`
    §4.2, §7, §10.4). The code diverged from it. This is a spec-to-code gap, not a missing idea.
 5. Yes, Oxagen should become an egress gateway, with a sandbox as its top tier. No, the
    sandbox should not be the only tier, and hooks should not be removed.
@@ -301,7 +301,7 @@ Each phase ships alone and is useful alone.
 
 ## 7. Documentation drift found along the way
 
-- `docs/specs/mission-control/spec.md` §7 describes the model proxy, base URL enrollment,
+- `oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md` §7 describes the model proxy, base URL enrollment,
   run tokens and proxy budgets as present. None exist.
 - ADR-008 describes a skills package, tables and loader that do not exist.
 - ADR-056 says no producer appends to the run ledger. `assistant-run.ts` and `run.fork.ts` now do.

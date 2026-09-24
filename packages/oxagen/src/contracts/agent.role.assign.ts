@@ -50,6 +50,15 @@ export const agentRoleAssign = registerCapability({
       .describe(
         "IAM role name to attach (e.g. 'Agent Contributor' or a custom role name)",
       ),
+    reason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe(
+        "Why the role is assigned. Kept in the audit event's recorded input, where an approver reads it.",
+      ),
   }),
   output: z.object({
     assigned: z.boolean().describe("True when the role is now attached"),
