@@ -93,10 +93,7 @@ import {
   promotedTier,
 } from "./lib/tacho-containment";
 import { machineSnapshotOf } from "./lib/machine-facts";
-import {
-  rollupFiles,
-  sessionChangedFilesWhere,
-} from "./lib/file-facts-rollup";
+import { rollupFiles, sessionChangedFilesWhere } from "./lib/file-facts-rollup";
 import { latestHarnessTitle } from "./lib/harness-title";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
@@ -1587,7 +1584,8 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       // host's.
       const resumed =
         !!existing?.sealedAt &&
-        (existing.sealSource === "agent_stop" || existing.sealSource === null) &&
+        (existing.sealSource === "agent_stop" ||
+          existing.sealSource === null) &&
         fresh.some(isRestart);
       const openExisting =
         existing && (idleClosed || resumed)

@@ -5256,10 +5256,7 @@ describe("running cost and the idle close", () => {
     await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
     const { sealedAt, finalHash } = sealByOperator(db);
 
-    await tachoEventsIngestHandler(
-      batch(resumed(events.slice(0, 3))),
-      CONTEXT,
-    );
+    await tachoEventsIngestHandler(batch(resumed(events.slice(0, 3))), CONTEXT);
     expect(db.sessions.get(SESSION)).toMatchObject({
       sealedAt,
       sealSource: "operator",

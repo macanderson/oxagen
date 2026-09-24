@@ -142,9 +142,9 @@ export function sweepCandidates(
       workspaceId: table.workspaceId,
       runPublicId: table.publicId,
       revision: sql<string>`${table.updatedAt}::text`.as("revision"),
-      observedAt: sql<
-        string | null
-      >`${table.summaryObservedAt}::text`.as("observed_at"),
+      observedAt: sql<string | null>`${table.summaryObservedAt}::text`.as(
+        "observed_at",
+      ),
       rank: sql<number>`row_number() over (partition by ${table.orgId} order by ${sql.join(enrichmentPriority(table), sql`, `)})`.as(
         "rank",
       ),

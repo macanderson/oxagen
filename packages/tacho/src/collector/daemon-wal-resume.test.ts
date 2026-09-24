@@ -149,9 +149,7 @@ describe("a chain reopened over its own WAL", () => {
     second.wal.append = () => {
       throw new Error("ENOSPC: no space left on device");
     };
-    await expect(second.api.handleHook(hook("Stop"))).rejects.toThrow(
-      /ENOSPC/,
-    );
+    await expect(second.api.handleHook(hook("Stop"))).rejects.toThrow(/ENOSPC/);
     second.wal.append = append;
     await second.api.handleHook(hook("Stop"));
 

@@ -642,14 +642,18 @@ describe("header", () => {
     expect(operator).toHaveTextContent(/^not recorded$/);
   });
 
-  it("draws the pause banner only while ingress is paused", async () => {
+  it("draws the pause banner only while the run is paused", async () => {
     await renderRun({
       detail: ok(
         runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
       ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
+    // A wrapped run's host refuses tool calls. It holds no ingress fence.
+    expect(screen.getByTestId("run-paused")).toHaveTextContent(
+      "Paused. The host refuses the agent's tool calls until you resume it.",
+    );
+    expect(screen.getByTestId("run-paused")).not.toHaveTextContent("Ingress");
     cleanup();
     await renderRun({
       detail: ok(runDetail()),
@@ -690,7 +694,9 @@ describe("header", () => {
       approvals: ok({ items: [approval()], more: false }),
     });
     expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
-    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
+    expect(screen.getByTestId("run-paused")).toHaveTextContent(
+      "Paused. Ingress is paused.",
+    );
     // Resume sits with Pause and Cancel in the header; the banner only says
     // why the run is waiting.
     expect(screen.getByTestId("run-resume")).toHaveTextContent("Resume run");
@@ -991,14 +997,29 @@ describe("header", () => {
 });
 
 describe("controls", () => {
-  it("draws pause, resume, steer and cancel on a live wrapped run", async () => {
+  it("draws pause, steer and cancel on a live wrapped run, and no Resume", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ status: "live" }) })),
       transcript: ok(runTranscript()),
     });
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
+    expect(screen.queryByTestId("run-resume")).toBeNull();
+  });
+
+  it("draws Resume in Pause's place once a wrapped run's host has paused it (#4112)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
+    for (const command of ["resume", "steer", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
+    }
+    expect(screen.queryByTestId("run-pause")).toBeNull();
   });
 
   it("disables only Steer on a live run whose harness carries no mid-session prompt", async () => {
@@ -1011,7 +1032,7 @@ describe("controls", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-steer")).toBeDisabled();
-    for (const command of ["pause", "resume", "cancel"]) {
+    for (const command of ["pause", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
   });
@@ -1050,13 +1071,20 @@ describe("controls", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-pause")).toHaveTextContent("❙❙ Pause run");
-    expect(screen.getByTestId("run-resume")).toHaveTextContent("▶ Resume run");
     expect(screen.getByTestId("run-cancel").className).toContain(
       "text-error-ink",
     );
     expect(screen.getByTestId("run-steer").className).not.toContain(
       "text-error-ink",
     );
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-resume")).toHaveTextContent("▶ Resume run");
   });
 
   it("ends a live run's actions on Export, drawn disabled until the run seals", async () => {

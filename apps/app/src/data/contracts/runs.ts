@@ -299,6 +299,11 @@ export const RunRow = z.object({
   /** Why a steer cannot reach this run; null or absent when it can. */
   steerBlock: SteerBlock.nullable().optional(),
   ingressRevoked: z.boolean().optional(),
+  /**
+   * The run is paused until someone resumes it. A ledger run reads this from
+   * its ingress fence. A live wrapped run reads it from the last pause or
+   * resume its host applied (#4112). A sealed wrapped run is never paused.
+   */
   ingressPaused: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */
   completenessGaps: z.array(CompletenessGap),

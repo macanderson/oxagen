@@ -310,9 +310,7 @@ describe("TranscriptTailer", () => {
     });
     await instance.tick();
     expect(recorded.filter((e) => e.kind === "telemetry_gap")).toEqual([]);
-    expect(log.some((l) => l.includes("failed this tick: ENOSPC"))).toBe(
-      true,
-    );
+    expect(log.some((l) => l.includes("failed this tick: ENOSPC"))).toBe(true);
     gapWritable = true;
     appendFileSync(path, "BAD2\n");
     await instance.tick();

@@ -149,6 +149,7 @@ const events = schema.agentRunEvents;
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
 const hosts = schema.tachoHosts;
+const commands = schema.tachoControlCommands;
 
 /** Millisecond precision, so a cursor built from a JS Date compares exactly. */
 const ms = (column: SQL | typeof sessions.startedAt) =>
@@ -570,6 +571,25 @@ const tachoColumns = {
     outputTokens: sessions.outputTokens,
     cacheReadTokens: sessions.cacheReadTokens,
     cacheCreationTokens: sessions.cacheCreationTokens,
+    // Whether the host holds the session paused: the last pause or resume it
+    // acknowledged `applied`. Dispatch writes one `run` row per session,
+    // addressed by public id, so `tacho_control_commands_target_idx` answers
+    // it. A pause still queued, or one the host refused, does not count: the
+    // pause dialog promises that the run's status says when it has applied.
+    // The subquery names the outer table the way `machineSnapshot` does, so
+    // it depends on the same unaliased `.from(sessions)`.
+    paused: sql<boolean>`coalesce((
+      select ${commands.command} = 'pause'
+      from ${commands}
+      where ${commands.orgId} = ${sessions.orgId}
+        and ${commands.workspaceId} = ${sessions.workspaceId}
+        and ${commands.targetKind} = 'run'
+        and ${commands.targetId} = ${sessions.publicId}
+        and ${commands.command} in ('pause', 'resume')
+        and ${commands.outcome} = 'applied'
+      order by ${commands.appliedAt} desc nulls last, ${commands.issuedAt} desc
+      limit 1
+    ), false)`,
     // What the page lists beside the run: how many `pr_open` calls ingest
     // counted, and the harness's own line totals from the session's end.
     pullRequests: sessions.pullRequests,
@@ -829,6 +849,11 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   enforcementTier: string;
   /** The sealed commitment for the whole session; null while open. */
   finalHash: string | null;
+  /**
+   * The last pause or resume the host applied was a pause. Absent where a
+   * reader did not select it.
+   */
+  paused?: boolean;
 };
 
 /**
@@ -1313,6 +1338,11 @@ export function toTachoRunItem(
     verdict: totals?.verdict ?? null,
     enforcementTier: publishedTier(session.enforcementTier),
     ...tachoCommandBlock(row, now),
+    // Only a live session can be paused. A sealed one has ended, whatever
+    // pause it ended under.
+    ...(session.paused === undefined
+      ? {}
+      : { ingressPaused: status === "live" && session.paused }),
     // Whether a steer can reach it (`steerBlockOf`); omitted when the reader
     // selected no runtime.
     ...(session.runtime === undefined

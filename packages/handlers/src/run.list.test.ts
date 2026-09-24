@@ -1149,6 +1149,71 @@ describe("a run row says whether a command can reach it", () => {
   });
 });
 
+describe("a wrapped run row says whether its host holds it paused (#4112)", () => {
+  const live = { outcome: "running", sealedAt: null };
+
+  it("reads the last applied pause or resume in the page's own statement", () => {
+    const db = drizzle.mock({ schema });
+    const page = tachoPageQuery(db, SCOPE, {
+      cursor: null,
+      limit: 50,
+      withoutWitnessRuns: false,
+    }).toSQL();
+    const one = tachoSessionQuery(db, SCOPE, "tse_a").toSQL();
+    for (const query of [page, one]) {
+      expect(query.sql).toContain('from "tacho"."control_commands"');
+      // Correlated on the outer session, through the target index's columns.
+      expect(query.sql).toContain(
+        '"tacho"."control_commands"."target_id" = "tacho"."sessions"."public_id"',
+      );
+      expect(query.sql).toContain("in ('pause', 'resume')");
+      expect(query.sql).toContain(
+        `"tacho"."control_commands"."outcome" = 'applied'`,
+      );
+    }
+  });
+
+  it("answers paused for a live run whose host applied a pause, and not once it applied a resume", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_paused",
+          session: { ...live, paused: true },
+        }),
+        tachoSession({
+          publicId: "tse_resumed",
+          session: { ...live, paused: false },
+        }),
+      ],
+    );
+    const byId = new Map(
+      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+    );
+    expect(byId.get("tse_paused")?.ingressPaused).toBe(true);
+    expect(byId.get("tse_resumed")?.ingressPaused).toBe(false);
+  });
+
+  it("reads a sealed run as not paused, whatever pause it ended under (negative)", async () => {
+    const { list } = handlerOver(
+      [],
+      [tachoSession({ publicId: "tse_sealed", session: { paused: true } })],
+    );
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run?.status).toBe("sealed");
+    expect(run?.ingressPaused).toBe(false);
+  });
+
+  it("omits the flag where the reader selected no commands", async () => {
+    const { list } = handlerOver(
+      [],
+      [tachoSession({ publicId: "tse_unread", session: live })],
+    );
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run).not.toHaveProperty("ingressPaused");
+  });
+});
+
 describe("a run row names who ran it, on what, with which model", () => {
   const db = drizzle.mock({ schema });
   const page = { cursor: null, limit: 50, withoutWitnessRuns: false };
@@ -1156,8 +1221,11 @@ describe("a run row names who ran it, on what, with which model", () => {
   it("reads the host and the operator's name in the page's own statement, not per row", () => {
     const query = tachoPageQuery(db, SCOPE, page).toSQL();
     // One statement for the whole page. A lookup per row would be a hundred
-    // round trips at the contract's maximum limit.
-    expect(query.sql.match(/\bselect\b/gi)).toHaveLength(1);
+    // round trips at the contract's maximum limit. The second `select` is
+    // the correlated read of the last applied pause or resume, which runs
+    // inside this same statement.
+    expect(query.sql.match(/\bselect\b/gi)).toHaveLength(2);
+    expect(query.sql).toMatch(/coalesce\(\(\s*select\b/i);
     expect(query.sql).toContain('left join "tacho"."hosts"');
     expect(query.sql).toContain("machine_snapshot");
     // `to_jsonb` takes the FROM-clause's own correlation name, which is

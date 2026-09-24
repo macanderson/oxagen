@@ -2456,9 +2456,7 @@ async function initializeDaemon(
       // A hook spooled since this process began serving was refused or
       // answered late, not missed: its replay here recovers it, and nothing
       // else the daemon receives directly was lost.
-      const spooledWhileDown = !(
-        Date.parse(file.received_at) >= servingSince
-      );
+      const spooledWhileDown = !(Date.parse(file.received_at) >= servingSince);
       if (sessionId !== undefined && spooledWhileDown && !gapped.has(sessionId))
         gapped.set(sessionId, file.received_at);
       try {

@@ -711,7 +711,11 @@ function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
   );
 }
 
-/** "Paused" or "Paused at …": the banner under the header while ingress is held. */
+/**
+ * The banner under the header while the run is paused. A ledger run's ingress
+ * fence holds every step. A wrapped run's host refuses its tool calls, and the
+ * model may still write text, so each source gets its own sentence.
+ */
 function PauseBanner({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
   if (run.ingressPaused !== true) return null;
@@ -721,7 +725,8 @@ function PauseBanner({ run }: { run: RunRow }) {
       data-testid="run-paused"
       className="mb-3.5 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
     >
-      <b className="text-info">{t("pausedTitle")}</b> {t("paused")}
+      <b className="text-info">{t("pausedTitle")}</b>{" "}
+      {run.source === "tacho" ? t("pausedSession") : t("paused")}
     </p>
   );
 }
