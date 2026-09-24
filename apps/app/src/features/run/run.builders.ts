@@ -872,7 +872,9 @@ export function runRoster(
     totals: {
       identities: 1,
       enrolled: 1,
+      unenrolled: 0,
       holdingMandate: 0,
+      mandateHolders: [],
       tamperIncidents: 0,
       tamper: { recorded: 0, open: 0, newest: null },
     },

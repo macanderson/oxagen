@@ -136,6 +136,8 @@
     },
     "listTable": {
       "search": "Search this list",
+      "facetAll": "All · {column}",
+      "facetLabel": "Filter by {column}",
       "rows": "Rows",
       "all": "All",
       "noMatch": "No rows match.",
