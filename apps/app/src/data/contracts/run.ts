@@ -119,8 +119,6 @@ const TokenCounts = z.object({
   output: Count,
   reasoning: Count,
 });
-export type TokenCounts = z.infer<typeof TokenCounts>;
-
 const RunCostByModel = z.object({
   model: z.string().min(1),
   provider: z.string().nullable(),
@@ -276,7 +274,7 @@ export const TranscriptBody = z.object({
 export type TranscriptBody = z.infer<typeof TranscriptBody>;
 
 /** A decision a rule or a person made about the call the entry records. */
-export const TranscriptDecision = z.object({
+const TranscriptDecision = z.object({
   seq: z.string().regex(/^\d+$/),
   /** The subagent chain the decision was recorded on; absent on the run's own. */
   chainRef: z.string().optional(),
@@ -290,7 +288,6 @@ export const TranscriptDecision = z.object({
   source: z.string().nullable().optional(),
   at: z.iso.datetime({ offset: true }),
 });
-export type TranscriptDecision = z.infer<typeof TranscriptDecision>;
 
 export const TranscriptUsage = z.object({
   inputUncached: Count.nullable(),

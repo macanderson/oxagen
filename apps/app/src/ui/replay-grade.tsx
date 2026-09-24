@@ -2,33 +2,32 @@
 // can apply to the recording. The vocabulary is closed and ordered, weakest
 // first, and it is computed once at seal, so this renders the recorded word
 // and never a stronger one, and never derives a grade from anything on screen.
+//
+// It is the mockup's `gradeBadge`: a state pill (`.b.b-<tone>`) whose tint
+// says how much of the run the recording can bring back, with what the grade
+// allows on hover.
 import { useTranslations } from "next-intl";
 import type { ReplayGrade } from "@/data/contracts/runs";
+import { Badge, type BadgeTone } from "./badge";
 
-/** Weakest first, so a caller can read the ladder's rank off the array. */
-const REPLAY_GRADES = ["inspect", "view", "fork", "retry"] as const;
+/** `gradeBadge`'s tint, strongest first: a replay the record carries whole reads allowed. */
+const TONE: Record<ReplayGrade, BadgeTone> = {
+  retry: "allowed",
+  fork: "allowed",
+  view: "approval",
+  inspect: "quiet",
+};
 
 export function ReplayGradeBadge({ grade }: { grade: ReplayGrade }) {
   const t = useTranslations("ui.replayGrade");
   return (
-    <span
-      data-grade={grade}
+    <Badge
+      tone={TONE[grade]}
+      dot={false}
       title={t(`${grade}.help`)}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
+      data-grade={grade}
     >
-      <span aria-hidden="true" className="flex items-center gap-0.5">
-        {REPLAY_GRADES.map((step, index) => (
-          <span
-            key={step}
-            className={`h-2.5 w-1 rounded-[1px] ${
-              index <= REPLAY_GRADES.indexOf(grade)
-                ? "bg-foreground"
-                : "bg-border"
-            }`}
-          />
-        ))}
-      </span>
-      {t(`${grade}.label`)}
-    </span>
+      {t(`${grade}.badge`)}
+    </Badge>
   );
 }

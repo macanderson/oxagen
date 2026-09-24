@@ -1,228 +1,151 @@
+// The Run page (mockup `pRun`, pages/run.md in the roadmap repository): the
+// header, then two columns. The main column, two thirds wide, holds the
+// generated summary, the six figures and the tabs with Transcript open; the
+// side column, "The work", holds the Changes panel and the Outputs spine.
+//
+// The page makes the reads every part shares (the run, the whole-run
+// transcript, the cost rollup, the outputs, the work, the agent, the price
+// book and the approvals parked on the run), derives the figures once
+// (`runMetrics`), and hands the open tab the whole bundle. A tab's own heavy
+// read (the chain, a frame body) happens only when that tab is open.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
-import { TranscriptZoom } from "@/data/contracts/run";
-import type {
-  ApprovalQueue,
-  ResolvedApprovalItem,
-} from "@/data/contracts/approvals";
-import type { MandateRow } from "@/data/contracts/mandates";
-import type { RunCost, RunTranscript } from "@/data/contracts/run";
-import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
-import { PAGE_FAILURES, type Read, readError } from "@/data/read";
-import { ApprovalsPanel } from "@/features/fleet";
-import {
-  RunOutcomesConsent,
-  RunIssueConnections,
-} from "@/features/run-outcomes";
+import { PAGE_FAILURES, readError } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
-import { routes } from "@/shared/safe-path";
-import { panel } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
 import { Money } from "@/ui/money";
-import { ReadFailure } from "@/ui/read-failure";
-import { ChainSection } from "./chain";
-import { CostSection } from "./cost";
-import { FramesSection } from "./frames";
-import { RunHeader, RunTitle } from "./header";
+import { GovernedActionsTab } from "./actions-tab";
+import { ChainTab } from "./chain";
+import { CostTab } from "./cost";
+import { RunHeader } from "./header";
+import { IssuesCount } from "./issues-tab";
+import { runMetrics } from "./metrics";
 import { OutputsSpine } from "./outputs";
-import { ResolvedApprovalsPanel } from "./resolved-approvals";
-import {
-  ContextSection,
-  entriesOf,
-  IssuesSection,
-  PolicySection,
-} from "./sections";
+import { isHarnessCheck } from "./policy-tab";
+import { ContextTab, entriesOf, IssuesTab, PolicyTab } from "./sections";
+import { RunDenied, RunEmpty, RunError, RunPending } from "./states";
 import { StatRow, SummaryPanel } from "./stats";
-import {
-  type KindFilter,
-  kindsParam,
-  parseKinds,
-  TranscriptSection,
-} from "./transcript";
-import { ChangesPanel, SpendByArea } from "./work";
-import { isWhole, readWholeTranscript } from "./whole-transcript";
-import { RunWork, RunWorkLoading, readRunWork } from "./work-ci";
+import type { RunTabProps } from "./tab-props";
+import { RunTabs, type Tab, type TabFigure, tabOf } from "./tabs";
+import { parseKinds, TranscriptTab } from "./transcript";
+import { buildFeed } from "./transcript-model";
+import { readWholeTranscript } from "./whole-transcript";
+import { ChangesLoading, ChangesPanel } from "./work";
+import { readRunWork } from "./work-ci";
 
-/** The seven tabs, in the spec's order (pages/run.md). */
-const TABS = [
-  "transcript",
-  "issues",
-  "actions",
-  "cost",
-  "policy",
-  "context",
-  "chain",
-] as const;
-type Tab = (typeof TABS)[number];
-
-/**
- * Tab names an older link may still carry. Frames and Approvals became one
- * Governed actions tab, so a bookmark to either opens it.
- */
-const TAB_ALIASES: Record<string, Tab> = {
-  frames: "actions",
-  approvals: "actions",
-};
-
-/** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
-const FRAME_SEQ = /^\d{1,19}$/;
-
-type Place = { org: string; ws: string; runId: string };
-
-type Counted = {
-  run: RunRow;
-  everything: Read<RunTranscript>;
-  cost: Read<RunCost>;
-  pending: Read<ApprovalQueue>;
-  resolved: Read<ResolvedApprovalItem[]>;
-};
-
-/**
- * What each tab holds, beside its name. A count read from a transcript that
- * stopped short is a floor and says so with a plus; a tab whose read failed
- * shows no count rather than a zero.
- */
-function useTabCounts({
-  run,
-  everything,
-  cost,
-  pending,
-  resolved,
-}: Counted): Partial<Record<Tab, ReactNode>> {
+/** The tab strip, with what each tab carries beside its name, from the reads the page already made. */
+function Tabs({
+  props,
+  parked,
+  selected,
+}: {
+  props: RunTabProps;
+  /** A call is parked for approval on this run. */
+  parked: boolean;
+  selected: Tab;
+}) {
   const t = useTranslations("run.tabs");
-  // The page's whole-run read is one page of entries. Past that page, or past
-  // the read's frame cap, a count is a floor.
+  const { run, everything, metrics, view, place } = props;
+  // A count read from a transcript that stopped short of the run is a floor.
   const floor = (count: number) =>
-    everything.ok && !isWhole(everything.value)
-      ? t("atLeast", { count })
-      : String(count);
+    metrics.whole ? String(count) : t("atLeast", { count });
   const policy = entriesOf(everything, "policy");
   const recall = entriesOf(everything, "recall");
-  const runCost = cost.ok ? (cost.value.rollup?.cost ?? run.cost) : run.cost;
-  return {
-    transcript: String(run.steps),
-    issues: run.taskRef === null ? "0" : "1",
-    actions:
-      pending.ok && resolved.ok
-        ? pending.value.more
-          ? t("atLeast", {
-              count: pending.value.items.length + resolved.value.length,
-            })
-          : String(pending.value.items.length + resolved.value.length)
+  // A run with no policy decision has nothing governed to list: the tab is
+  // the frame player, and it counts the frames.
+  const governed = policy !== null && policy.length > 0;
+  const figures: Record<Tab, TabFigure> = {
+    // The rows the Transcript tab opens with, which its header line counts
+    // as entries, so the tab and the line cannot disagree.
+    transcript: {
+      count: everything.ok
+        ? floor(buildFeed(everything.value.entries).length)
         : undefined,
-    cost: runCost === null ? undefined : <Money value={runCost} />,
-    policy: policy === null ? undefined : floor(policy.length),
-    context: recall === null ? undefined : floor(recall.length),
-    chain: t(`status.${run.status}`),
+    },
+    // The task reference now, and the issues the run's pull requests close
+    // once GitHub answers; the table under the tab counts the same rows.
+    issues: {
+      count: (
+        <Suspense
+          fallback={t("atLeast", { count: run.taskRef === null ? 0 : 1 })}
+        >
+          <IssuesCount run={run} work={props.work} />
+        </Suspense>
+      ),
+    },
+    actions: governed
+      ? { count: floor(policy.length), parked }
+      : { label: t("player"), count: String(run.frames), parked },
+    cost: {
+      count: metrics.cost === null ? undefined : <Money value={metrics.cost} />,
+      money: true,
+    },
+    // The rows the Policy table lists: the harness's own checks fold below
+    // it and are not counted here.
+    policy: {
+      count:
+        policy === null
+          ? undefined
+          : floor(policy.filter((entry) => !isHarnessCheck(entry)).length),
+      parked,
+    },
+    context: { count: recall === null ? undefined : floor(recall.length) },
+    chain: { count: t(`status.${run.sealedAt === null ? "live" : "sealed"}`) },
   };
-}
-
-/** The side column: what the run changed, what it produced, and where it spent. */
-function Work({ children }: { children: ReactNode }) {
-  const t = useTranslations("run.work");
   return (
-    <aside aria-label={t("label")} className="flex min-w-0 flex-col gap-6">
-      {children}
-    </aside>
-  );
-}
-
-function Tabs({
-  selected,
-  zoom,
-  kinds,
-  counts,
-  org,
-  ws,
-  runId,
-}: {
-  selected: Tab;
-  zoom: TranscriptZoom;
-  kinds: KindFilter;
-  /** The reads each tab's count comes from. */
-  counts: Counted;
-} & Place) {
-  const t = useTranslations("run.tabs");
-  const shown = useTabCounts(counts);
-  return (
-    <nav
-      aria-label={t("label")}
-      className="overflow-x-auto border-b border-border"
-    >
-      <ul className="flex min-w-max gap-1">
-        {TABS.map((tab) => (
-          <li key={tab}>
-            <SafeLink
-              // The Transcript tab keeps the zoom and the chips a person chose,
-              // so leaving it for the chain and coming back does not reset the
-              // view they built.
-              to={routes.run(
-                org,
-                ws,
-                runId,
-                tab === "transcript"
-                  ? { tab, zoom, kinds: kindsParam(kinds) }
-                  : { tab },
-              )}
-              aria-current={tab === selected ? "page" : undefined}
-              className="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
-            >
-              {t(tab)}
-              {shown[tab] === undefined ? null : (
-                <span
-                  data-testid={`run-tab-count-${tab}`}
-                  className="rounded-md bg-hl px-1.5 text-[11px] tabular-nums text-muted-foreground"
-                >
-                  {shown[tab]}
-                </span>
-              )}
-            </SafeLink>
-          </li>
-        ))}
-      </ul>
-    </nav>
+    <RunTabs
+      selected={selected}
+      figures={figures}
+      kinds={view.kinds}
+      place={place}
+    />
   );
 }
 
 /**
- * The run's pending approvals, the mandates their cards draw a bar from, and
- * the instant their clocks start from.
- *
- * The ledger is read only when a parked call names a mandate, the same rule
- * `readFleet` follows, so a run whose approvals drew on none makes one read and
- * a viewer who may not read the ledger sees the cards without their bars. It
- * used to pass an empty map here, which made every card on this page say the
- * mandate could not be read: the card showed a mandate id and no authority, on
- * the one page where the call's own run is in front of you.
- *
- * `Date.now()` lives here rather than in the page or the component body: a
- * component's render must be pure, and the route's render is a render too, so
- * the React compiler's rule refuses the call in either place. An async read
- * function is neither, and the clock belongs beside the read anyway. This is
- * the same shape `readFleet` uses in features/fleet.
- *
- * `fixed` is how a test pins the countdown.
+ * The open tab's body. Each tab is a function the page awaits, not an
+ * element it renders: a tab makes its own reads and answers the tree of
+ * synchronous components those reads fill, so the page renders the same way
+ * on the server and in a test.
  */
-async function readApprovals(
+function sectionOf(
+  tab: Tab,
+  props: RunTabProps,
+): Promise<ReactNode> | ReactNode {
+  switch (tab) {
+    case "transcript":
+      return TranscriptTab(props);
+    case "issues":
+      return IssuesTab(props);
+    case "actions":
+      return GovernedActionsTab(props);
+    case "cost":
+      return CostTab(props);
+    case "policy":
+      return PolicyTab(props);
+    case "context":
+      return ContextTab(props);
+    case "chain":
+      return ChainTab(props);
+  }
+}
+
+/**
+ * `get_run`, and the instant it answered. `Date.now()` lives here rather
+ * than in the component: a component's render must be pure, and an async
+ * read function is not a render. The error state prints the instant. `fixed`
+ * is how a test pins it.
+ */
+async function readRun(
   source: DataSource,
   ctx: WsCtx,
   runId: string,
+  frames: string | null,
   fixed: number | undefined,
 ) {
-  const approvals = await source.approvals.pending(ctx, { runId });
-  const named =
-    approvals.ok &&
-    approvals.value.items.some((item) => item.mandateId !== null);
-  const mandates = new Map<string, MandateRow>();
-  if (named) {
-    const read = await source.mandates.list(ctx, { agentId: null });
-    if (read.ok)
-      for (const mandate of read.value.mandates)
-        mandates.set(mandate.id, mandate);
-  }
-  return { approvals, mandates, at: fixed ?? Date.now() };
+  const read = await source.runs.get(ctx, runId, { framesAfter: frames });
+  return { read, at: fixed ?? Date.now() };
 }
 
 export async function Run({
@@ -230,7 +153,6 @@ export async function Run({
   source,
   runId,
   tab,
-  zoom,
   kinds,
   frames,
   body,
@@ -242,11 +164,9 @@ export async function Run({
   source: DataSource;
   /** The run's public id, as the URL names it (`arun_…` or `tse_…`). */
   runId: string;
-  /** `?tab=`; anything but a section's name opens Transcript. */
+  /** `?tab=`; anything but a tab's name or an old alias opens Transcript. */
   tab: string | null;
-  /** `?zoom=`; anything but a level opens the transcript at steps. */
-  zoom: string | null;
-  /** `?kinds=`, the kinds the chips show, comma-separated, or `none`; an unknown word is dropped. */
+  /** `?kinds=`, the chips a link opens with, comma-separated, or `none`; an unknown word is dropped. */
   kinds: string | null;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
@@ -256,45 +176,45 @@ export async function Run({
   reads: string | null;
   /** `?spine=`, the spine groups a person opened, comma-separated. */
   spine: string | null;
-  /**
-   * Pins the instant the approvals strip counts down from. Only a test passes
-   * it; the page leaves it out and `readApprovals` reads the clock beside the
-   * read it belongs to.
-   */
+  /** Pins the instant a clock counts from. Only a test passes it. */
   now?: number;
 }) {
-  const selected =
-    TABS.find((name) => name === tab) ??
-    (tab === null ? undefined : TAB_ALIASES[tab]) ??
-    "transcript";
-  const level = TranscriptZoom.safeParse(zoom);
-  const zoomed = level.success ? level.data : "steps";
-  const chips = parseKinds(kinds);
-  const read = await source.runs.get(ctx, runId, { framesAfter: frames });
+  const selected = tabOf(tab);
+  const view = {
+    kinds: parseKinds(kinds),
+    frames,
+    body,
+  };
+  const { read, at } = await readRun(source, ctx, runId, frames, now);
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
+    if (read.reason === "denied")
+      return <RunDenied permission={read.permission} ctx={ctx} />;
+    if (read.reason === "pending_approval")
+      return <RunPending accessRequestId={read.accessRequestId} />;
     return (
-      <>
-        <RunTitle id={runId} run={null} />
-        <div className={`${panel} p-4`}>
-          <ReadFailure read={read} section={runId} />
-        </div>
-      </>
+      <RunError
+        code={read.code}
+        status={read.status}
+        ws={ctx.wsSlug}
+        readAt={at}
+      />
     );
   }
   const detail = read.value;
   const run = detail.run;
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug, runId: run.id };
-  // The header, the stat row, the side column and the tab counts all read
-  // from these, whichever tab is open, so they are read together rather than
-  // one after another. The whole-run transcript serves the Prompts figure,
-  // the Policy and Context tabs and their counts, and the Transcript tab too
-  // when no chip is pressed.
+  if (run.frames === 0)
+    return <RunEmpty run={run} org={place.org} ws={place.ws} />;
   const agentSlug = run.agentKey?.split(".").at(-1) ?? null;
-  const [outputs, everything, cost, pending, resolved, agent] =
+  // Started, never awaited here: provider latency (GitHub pull requests,
+  // checks, diffs) streams inside the boundaries that draw it and cannot hold
+  // the rest of the page.
+  const work = readRunWork(ctx, source, run.id);
+  const [outputs, everything, cost, pending, agent, book, roster] =
     await Promise.all([
-      // A thrown outputs read folds to the Run page's own read error, so
-      // the spine says the read failed rather than the page throwing.
+      // A thrown outputs read folds to the Run page's own read error, so the
+      // spine says the read failed rather than the page throwing.
       source.runs
         .outputs(ctx, run.id)
         .catch(() =>
@@ -303,178 +223,117 @@ export async function Run({
             PAGE_FAILURES.run.error.status,
           ),
         ),
-      source.runs.transcript(ctx, run.id, "everything"),
+      readWholeTranscript(source, ctx, run.id, "everything"),
       source.runs.cost(ctx, run.id),
-      readApprovals(source, ctx, run.id, now),
-      source.approvals.resolved(ctx, { runId: run.id }),
+      source.approvals.pending(ctx, { runId: run.id }),
       agentSlug === null ? null : source.agents.get(ctx, agentSlug),
+      // The book prices the token classes and the cache's saving; a viewer who
+      // may not read it sees those figures as not recorded.
+      source.spend
+        .priceBook(ctx)
+        .then((answer) => (answer.ok ? answer.value : null))
+        .catch(() => null),
+      // The agent card's 30-day runs and spend are the Agents table's row. An
+      // agent past the first page, or a refused read, draws the card without
+      // them rather than a figure nobody read.
+      run.agentKey === null
+        ? null
+        : source.agents
+            .list(ctx, { cursor: null })
+            .then((answer) =>
+              answer.ok
+                ? (answer.value.agents.find(
+                    (row) => row.agentKey === run.agentKey,
+                  ) ?? null)
+                : null,
+            )
+            .catch(() => null),
     ]);
-  // The consent read is started here and awaited in the render, so it
-  // overlaps the section read below rather than queueing behind it.
-  const outcomesPolicy = source.runs
-    .outcomesSettings(ctx)
-    .catch(() =>
-      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
-    );
-  // Started, never awaited here: provider latency (GitHub PRs, CI, diffs)
-  // streams inside the work section's Suspense boundary and cannot hold the
-  // rest of the page.
-  const work = readRunWork(ctx, source, run.id);
-  const canManageOutcomes = ctx.orgRole === "owner" || ctx.orgRole === "admin";
-  let section: ReactNode;
-  switch (selected) {
-    case "transcript":
-      section = (
-        <TranscriptSection
-          // No chip on (`none`) reads nothing: the section draws the chips
-          // and says so. No filter is the whole-run read already in hand.
-          read={
-            chips === "none" || chips.length === 0
-              ? everything
-              : await source.runs.transcript(ctx, run.id, "everything", {
-                  kinds: [...chips],
-                })
-          }
-          tally={everything}
-          zoom={zoomed}
-          kinds={chips}
-          run={run}
-          {...place}
-        />
-      );
-      break;
-    case "issues":
-      section = <IssuesSection run={run} work={work} />;
-      break;
-    case "actions": {
-      const seq = body !== null && FRAME_SEQ.test(body) ? body : null;
-      section = (
-        <div className="flex flex-col gap-6">
-          <ApprovalsPanel
-            approvals={pending.approvals}
-            mandates={pending.mandates}
-            now={pending.at}
-            on="run"
-            org={place.org}
-            ws={place.ws}
-          />
-          <ResolvedApprovalsPanel approvals={resolved} />
-          <FramesSection
-            read={read}
-            frames={frames}
-            body={
-              seq === null
-                ? null
-                : { seq, read: await source.runs.frameBody(ctx, run.id, seq) }
-            }
-            {...place}
-          />
-        </div>
-      );
-      break;
-    }
-    case "cost": {
-      // The waterfall is the run's own per-turn ledger: the turns carry the
-      // bars and their running totals, the steps carry what sits inside each
-      // one. Both are the transcript, so the figures on this tab and the
-      // figures on the Transcript tab come from one derivation.
-      // Both read to the end: a run with more steps than one page used to
-      // draw its later turns with no steps inside them.
-      const [turns, steps] = await Promise.all([
-        readWholeTranscript(source, ctx, run.id, "turns"),
-        readWholeTranscript(source, ctx, run.id, "steps"),
-      ]);
-      section = <CostSection read={cost} turns={turns} steps={steps} />;
-      break;
-    }
-    // Each reads only its own entries, to the end of the run. The page's
-    // whole-run read is its first page, which listed a long run's first
-    // decisions as if they were all of them.
-    case "policy":
-      section = (
-        <PolicySection
-          read={
-            await readWholeTranscript(source, ctx, run.id, "everything", [
-              "policy",
-            ])
-          }
-          place={place}
-        />
-      );
-      break;
-    case "context":
-      section = (
-        <ContextSection
-          read={
-            await readWholeTranscript(source, ctx, run.id, "everything", [
-              "recall",
-            ])
-          }
-          place={place}
-        />
-      );
-      break;
-    case "chain":
-      section = <ChainSection read={await source.runs.chain(ctx, run.id)} />;
-      break;
-  }
-  const outcomes = await outcomesPolicy;
+  const metrics = runMetrics({ run, cost, transcript: everything, book });
+  const props: RunTabProps = {
+    ctx,
+    source,
+    run,
+    detail,
+    place,
+    view,
+    metrics,
+    everything,
+    cost,
+    outputs,
+    work,
+    agent,
+    book,
+    now,
+  };
+  const parked = pending.ok && pending.value.items.length > 0;
+  const section = await sectionOf(selected, props);
   return (
-    <div className="flex flex-col gap-6">
-      <RunTitle id={run.id} run={run} />
+    <div data-testid="run-page" className="flex flex-col">
       <RunHeader
         run={run}
         agent={agent}
+        roster={roster}
+        work={work}
         pulls={
           outputs.ok
             ? outputs.value.nodes.filter((node) => node.kind === "pr")
             : null
         }
-        work={work}
+        metrics={metrics}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
-        org={place.org}
-        ws={place.ws}
+        place={place}
       />
-      <Suspense fallback={<RunWorkLoading />}>
-        <RunWork read={work} {...place} />
-      </Suspense>
-      <RunOutcomesConsent
-        at={place}
-        policy={outcomes}
-        canManage={canManageOutcomes}
-      />
-      <RunIssueConnections
-        at={place}
-        runId={run.id}
-        enabled={outcomes.ok && outcomes.value.effectiveEnabled}
-        canManage={canManageOutcomes}
-      />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
-          <SummaryPanel run={run} org={place.org} ws={place.ws} />
-          <StatRow run={run} cost={cost} transcript={everything} />
-          <Tabs
-            selected={selected}
-            zoom={zoomed}
-            kinds={chips}
-            counts={{
-              run,
-              everything,
-              cost,
-              pending: pending.approvals,
-              resolved,
-            }}
+      <div className="grid grid-cols-1 items-start gap-3.5 min-[67.5rem]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col">
+          <SummaryPanel
+            run={run}
+            agent={agent}
+            place={place}
+            orgRole={ctx.orgRole}
+            canEditEnrichment={
+              ["owner", "admin"].includes(ctx.orgRole) ||
+              ["owner", "admin"].includes(ctx.wsRole)
+            }
+          />
+          <StatRow run={run} metrics={metrics} />
+          <Tabs props={props} parked={parked} selected={selected} />
+          <div
+            data-testid={`run-tab-${selected}`}
+            className="flex flex-col gap-3.5"
+          >
+            {section}
+          </div>
+        </div>
+        <RunSide>
+          <Suspense fallback={<ChangesLoading />}>
+            <ChangesPanel
+              work={work}
+              outputs={outputs}
+              run={run}
+              place={place}
+            />
+          </Suspense>
+          <OutputsSpine
+            read={outputs}
+            reads={reads}
+            spine={spine}
+            live={run.status === "live"}
             {...place}
           />
-          {section}
-        </div>
-        <Work>
-          <ChangesPanel read={outputs} place={place} />
-          <OutputsSpine read={outputs} reads={reads} spine={spine} {...place} />
-          <SpendByArea read={cost} />
-        </Work>
+        </RunSide>
       </div>
     </div>
+  );
+}
+
+/** `.run-side`: the work the run touched, beside the main column. */
+function RunSide({ children }: { children: ReactNode }) {
+  const t = useTranslations("run.work");
+  return (
+    <aside aria-label={t("label")} className="grid min-w-0 gap-3">
+      {children}
+    </aside>
   );
 }
