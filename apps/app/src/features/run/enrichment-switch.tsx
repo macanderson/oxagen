@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useNavigate } from "@/ui/navigation";
 import { useActionFailure, UNANSWERED } from "@/ui/command-failure";
@@ -10,22 +10,33 @@ export function EnrichmentSwitch({
   ws,
   enabled,
   canEdit,
+  compact = false,
 }: {
   org: string;
   ws: string;
   enabled: boolean;
   canEdit: boolean;
+  /**
+   * One small line under the Summary: the description moves to the label's
+   * hover and to assistive tech, where it still explains the switch.
+   */
+  compact?: boolean;
 }) {
+  const descriptionId = useId();
   const t = useTranslations("run.enrichment");
   const navigate = useNavigate();
   const failureText = useActionFailure();
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   return (
-    <div className="max-w-prose text-sm">
-      <label className="flex items-center gap-2">
+    <div className={`max-w-prose ${compact ? "text-xs" : "text-sm"}`}>
+      <label
+        className={`flex items-center gap-2 ${compact ? "text-muted-foreground" : ""}`}
+        title={compact ? t("description") : undefined}
+      >
         <input
           type="checkbox"
+          aria-describedby={descriptionId}
           checked={enabled}
           disabled={!canEdit || pending}
           onChange={(event) => {
@@ -47,7 +58,12 @@ export function EnrichmentSwitch({
         />
         {t("label")}
       </label>
-      <p className="mt-1 text-xs text-muted-foreground">{t("description")}</p>
+      <p
+        id={descriptionId}
+        className={compact ? "sr-only" : "mt-1 text-xs text-muted-foreground"}
+      >
+        {t("description")}
+      </p>
       {failure ? (
         <p role="alert" className="text-xs text-destructive">
           {failure}

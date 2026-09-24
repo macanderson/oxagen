@@ -59,6 +59,46 @@ export type SteeringItemKind = (typeof STEERING_ITEM_KINDS)[number];
 /** The forces the session-start prefix delivers. */
 export const PREFIX_FORCES: readonly SteeringForce[] = ["must", "should"];
 
+/**
+ * The most text each wrapped harness puts into the model's context from one
+ * hook answer, in characters, where the harness documents a limit. Past it,
+ * the agent reads a file path and a short preview, not the text.
+ *
+ * - Claude Code caps `additionalContext` and hook stdout at 10,000
+ *   characters, with no setting to raise it
+ *   (https://code.claude.com/docs/en/hooks).
+ * - Codex caps `additionalContext` at about 2,500 tokens by default
+ *   (`additionalContextLimit`, https://learn.chatgpt.com/docs/hooks). Its
+ *   count is an estimate, so 2,500 tokens is taken as 10,000 characters.
+ * - Cursor documents no limit on `additional_context`.
+ * - Stella reads `SessionStart` stdout whole.
+ */
+export const HARNESS_CONTEXT_MAX_CHARS: Readonly<
+  Record<"claude-code" | "codex" | "cursor" | "stella", number | null>
+> = {
+  "claude-code": 10_000,
+  codex: 10_000,
+  cursor: null,
+  stella: null,
+};
+
+/** The smallest documented limit in `HARNESS_CONTEXT_MAX_CHARS`. */
+export const SMALLEST_HARNESS_CONTEXT_MAX_CHARS = Math.min(
+  ...Object.values(HARNESS_CONTEXT_MAX_CHARS).filter(
+    (max): max is number => max !== null,
+  ),
+);
+
+/**
+ * The budget for the session-start prefix, in budget tokens
+ * (`ceil(utf8_bytes / 4)`). One bundle serves every harness on a host, so
+ * the prefix has to fit the smallest limit above. 2,000 tokens is at most
+ * 8,000 bytes, and so at most 8,000 characters: under Claude Code's hard
+ * 10,000, with a fifth to spare for Codex, whose own token estimate can
+ * count more tokens than bytes divided by four.
+ */
+export const PREFIX_BUDGET_TOKENS = 2_000;
+
 /** One thing a run could be told. Adapters produce these and own nothing else. */
 export interface SteeringCandidate {
   /** Stable identity: a record's slug, a steer command's public id, a skill's name. */

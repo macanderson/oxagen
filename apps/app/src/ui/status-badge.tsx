@@ -51,20 +51,33 @@ export function StatusBadge({
 }) {
   const t = useTranslations("ui.runStatus");
   const lifecycle = vocabulary === "lifecycle";
-  const word = status === "live" ? "live" : lifecycle ? status : outcome;
-  const tone = lifecycle
-    ? LIFECYCLE_TONE[status]
-    : status === "live"
-      ? TONE.running
-      : TONE[outcome];
+  // `.live { font-size:11px; font-weight:600; color:var(--st-allowed) }` and
+  // `.live .p { width:6px; height:6px; animation:pulse }`: an open run is
+  // not a pill but a breathing dot and the word, in the allowed hue.
+  if (status === "live")
+    return (
+      <span
+        data-status={status}
+        data-outcome={outcome}
+        className="inline-flex items-center gap-[5px] text-[11px] font-semibold text-success"
+      >
+        <span
+          aria-hidden="true"
+          data-pulse="true"
+          className="size-1.5 flex-none animate-pulse rounded-full bg-current motion-reduce:animate-none"
+        />
+        {t("live")}
+      </span>
+    );
+  const word = lifecycle ? status : outcome;
+  const tone = lifecycle ? LIFECYCLE_TONE[status] : TONE[outcome];
   return (
     <Badge
       tone={tone}
-      // A run that is open is happening now, and its dot breathes to say so.
-      dot={status === "live" ? "pulse" : true}
+      dot
       data-status={status}
       data-outcome={outcome}
-      {...(lifecycle && status !== "live" ? { title: t(outcome) } : {})}
+      {...(lifecycle ? { title: t(outcome) } : {})}
     >
       {t(word)}
     </Badge>

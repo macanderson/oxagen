@@ -183,16 +183,16 @@ const bar = "block animate-pulse rounded bg-muted motion-reduce:animate-none";
 /**
  * The loading state: the shell stays, and the body is four tile blocks and a
  * panel of seven rows (spec, States), so no figure flashes as a zero before
- * the reads land. Next replaces page.tsx's whole return while the segment
- * suspends, so this keeps `<main id="main">` for the skip link.
+ * the reads land. The frame keeps the page's container classes but is not
+ * `main#main`: while the page streams in, the document holds this fallback
+ * and the hidden page together, and only the page may own the landmark, or
+ * the skip link gets two targets and page-load's strict locator fails
+ * (#4036, and Billing on 2026-09-24).
  */
 export function AgentLoading() {
   const t = useTranslations("agents.states");
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10">
       <div
         role="status"
         aria-busy="true"
@@ -219,6 +219,6 @@ export function AgentLoading() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
