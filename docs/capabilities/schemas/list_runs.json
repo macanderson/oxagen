@@ -102,6 +102,20 @@
                 }
               ]
             },
+            "operatorAttribution": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "initiator",
+                    "host_enroller"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "status": {
               "type": "string",
               "enum": [
@@ -173,6 +187,9 @@
                 }
               ]
             },
+            "costIsEstimate": {
+              "type": "boolean"
+            },
             "reportedCost": {
               "anyOf": [
                 {
@@ -220,6 +237,30 @@
               "type": "string"
             },
             "sealedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sealSource": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "agent_stop",
+                    "idle_timeout"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "endedAt": {
               "anyOf": [
                 {
                   "type": "string"
@@ -291,6 +332,35 @@
             },
             "canSummarize": {
               "type": "boolean"
+            },
+            "commandBlock": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "run_sealed",
+                    "no_host",
+                    "host_revoked",
+                    "host_offline"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "steerBlock": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "no_prompt_carrier"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "model": {
               "anyOf": [
@@ -547,6 +617,9 @@
             "enrichmentEnabled": {
               "type": "boolean"
             },
+            "enrichmentError": {
+              "type": "string"
+            },
             "name": {
               "anyOf": [
                 {
@@ -592,6 +665,7 @@
             "operatorId",
             "operatorKind",
             "operatorName",
+            "operatorAttribution",
             "status",
             "outcome",
             "turns",
@@ -601,6 +675,7 @@
             "taskRef",
             "startedAt",
             "sealedAt",
+            "endedAt",
             "replayGrade",
             "verdict",
             "enforcementTier",

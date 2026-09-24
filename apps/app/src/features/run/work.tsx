@@ -1,199 +1,264 @@
-// The Run page's side column panels (mockup `pRun`, spec pages/run.md):
-// Changes, from the outputs the run recorded, and Spend by area, from the
-// cost rollup's per-model rows (or a wrapped run's provisional figures until
-// the rollup exists). The Outputs spine sits between them and is
-// drawn by outputs.tsx.
+// The side column's first panel (mockup `runSide`, pages/run.md, Side
+// column): Changes. The pull requests the run pushed to with their state,
+// the base, the checks, the diff, and one row per changed file.
 //
-// Changes counts only what the outputs read carries: pull requests, commits
-// and file changes with a line stat. A read that stopped at its cap says the
-// totals are a prefix, and a failed read says it failed; neither prints zero.
+// It reads the same work read the header's checkout strip does, so the strip,
+// this panel and the Issues tab's Linked work cannot name a different pull
+// request. The files are the ones the outputs recorded with a line stat. A
+// fact neither read carries (the base branch, a release) reads as not
+// recorded, never guessed.
 import { useLocale, useTranslations } from "next-intl";
-import type { RunCost, RunOutputNode, RunOutputs } from "@/data/contracts/run";
+import { use } from "react";
+import type { RunOutputNode, RunOutputs } from "@/data/contracts/run";
+import type { RunWork } from "@/data/contracts/run-work";
+import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
+import { parseGitHubUrl } from "@/shared/github-url";
 import { routes } from "@/shared/safe-path";
-import { linkText, mono } from "@/ui/control-styles";
-import { Money } from "@/ui/money";
+import { Badge, type BadgeTone } from "@/ui/badge";
+import { buttonSecondary, kvTerm, kvValue } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { SafeLink } from "@/ui/navigation";
+import { GitHubLink, SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
-import { NoValue, Panel } from "./parts";
+import { Panel } from "./parts";
+import type { Place } from "./tab-props";
 
-/** How many changed files the panel lists before it points at the spine. */
+/** How many changed files the panel lists before it says how many more. */
 const FILE_ROWS = 8;
 
-type Place = { org: string; ws: string; runId: string };
+type Pull = RunWork["pullRequests"][number];
+type CiOverall = NonNullable<Pull["ci"]>["overall"];
 
-function isFileChange(node: RunOutputNode) {
+/** `artState`: a check's or a pull request's state as its pill. */
+const CI_TONE: Record<CiOverall, BadgeTone> = {
+  passing: "allowed",
+  failing: "failed",
+  pending: "approval",
+  neutral: "quiet",
+  unknown: "quiet",
+};
+const PR_TONE: Record<Pull["state"], BadgeTone> = {
+  open: "approval",
+  merged: "allowed",
+  closed: "quiet",
+};
+
+/** One file the run changed, with a stat the record carries. */
+export function isFileChange(node: RunOutputNode) {
   return (node.kind === "file" || node.kind === "change") && node.stat !== null;
 }
 
-export function ChangesPanel({
-  read,
+/** The whole set's state: failing wins over pending, which wins over passing. */
+function ciOf(pulls: readonly Pull[]): CiOverall | null {
+  const states = pulls.flatMap((pr) => (pr.ci === null ? [] : [pr.ci.overall]));
+  if (states.length === 0) return null;
+  for (const state of ["failing", "pending", "passing", "neutral"] as const)
+    if (states.includes(state)) return state;
+  return "unknown";
+}
+
+function Row({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <dt className={`${kvTerm} text-[11px]`}>{label}</dt>
+      <dd className={`${kvValue} text-xs`}>{children}</dd>
+    </>
+  );
+}
+
+function Stat({ added, removed }: { added: number; removed: number }) {
+  const locale = useLocale();
+  return (
+    <span className="whitespace-nowrap font-mono">
+      <b className="text-success">+{formatCount(added, locale)}</b>{" "}
+      <b className="text-warning">−{formatCount(removed, locale)}</b>
+    </span>
+  );
+}
+
+function ChangesBody({
+  work,
+  outputs,
+  run,
   place,
 }: {
-  read: Read<RunOutputs>;
+  work: Read<RunWork>;
+  outputs: Read<RunOutputs>;
+  run: RunRow;
   place: Place;
 }) {
   const t = useTranslations("run.work");
-  const locale = useLocale();
-  if (!read.ok) {
-    return (
-      <Panel title={t("changes")}>
-        <ReadFailure read={read} section={t("changes")} />
-      </Panel>
-    );
-  }
-  const { nodes } = read.value;
-  const pulls = nodes.filter((node) => node.kind === "pr");
-  const commits = nodes.filter((node) => node.kind === "commit").length;
-  const files = nodes.filter(isFileChange);
+  const pulls = work.ok ? work.value.pullRequests : [];
+  const ci = ciOf(pulls);
+  const files = outputs.ok ? outputs.value.nodes.filter(isFileChange) : [];
   const added = files.reduce((sum, node) => sum + (node.stat?.added ?? 0), 0);
   const removed = files.reduce(
     (sum, node) => sum + (node.stat?.removed ?? 0),
     0,
   );
-  const count = (value: number) => formatCount(value, locale);
+  const head =
+    ci !== null ? (
+      <Badge tone={CI_TONE[ci]}>{t(`ci.${ci}`)}</Badge>
+    ) : pulls[0] !== undefined ? (
+      <Badge tone={PR_TONE[pulls[0].state]}>{t(`pr.${pulls[0].state}`)}</Badge>
+    ) : undefined;
   return (
-    <Panel title={t("changes")}>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-        <dt className="text-muted-foreground">{t("pullRequest")}</dt>
-        <dd className="flex min-w-0 flex-wrap gap-1.5">
-          {pulls.length === 0 ? (
-            <span className="text-muted-foreground">{t("noPullRequest")}</span>
+    <Panel title={t("changes")} aside={head} testId="run-changes">
+      <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px]">
+        <Row label={t("pullRequest")}>
+          {!work.ok ? (
+            <ReadFailure read={work} section={t("pullRequest")} />
+          ) : pulls.length === 0 ? (
+            <span className="text-dim">
+              {run.status === "live"
+                ? t("noPullRequestLive")
+                : t("noPullRequest")}
+            </span>
           ) : (
-            pulls.map((pull) => (
-              <span
-                key={`${pull.seq ?? ""}${pull.name}`}
-                className={`${mono} truncate`}
-                title={pull.where ?? undefined}
-              >
-                {pull.name}
+            <span className="flex flex-col gap-1">
+              {pulls.map((pr) => {
+                const target = parseGitHubUrl(pr.url);
+                const name = `${pr.repository.owner}/${pr.repository.name}#${String(pr.number)}`;
+                return (
+                  <span
+                    key={`${pr.repository.url}/${String(pr.number)}`}
+                    className="flex flex-wrap items-center gap-1.5"
+                  >
+                    {target === null ? (
+                      <span className="font-mono">{name}</span>
+                    ) : (
+                      <GitHubLink
+                        to={target}
+                        title={pr.title}
+                        className="font-mono text-link hover:underline"
+                      >
+                        {name}
+                      </GitHubLink>
+                    )}
+                    <Badge tone={PR_TONE[pr.state]}>
+                      {t(`pr.${pr.state}`)}
+                    </Badge>
+                  </span>
+                );
+              })}
+            </span>
+          )}
+        </Row>
+        <Row label={t("base")}>
+          <span className="text-dim">{t("baseNotRecorded")}</span>
+        </Row>
+        <Row label={t("release")}>
+          <span className="text-dim">{t("releaseNotRecorded")}</span>
+        </Row>
+        <Row label={t("checks")}>
+          {ci === null ? (
+            <span className="text-dim">{t("noChecks")}</span>
+          ) : (
+            <span className="flex flex-wrap items-center gap-1.5">
+              <Badge tone={CI_TONE[ci]}>{t(`ci.${ci}`)}</Badge>
+              <span className="text-dim">
+                {pulls
+                  .flatMap((pr) => pr.ci?.runs ?? [])
+                  .map((check) =>
+                    t("check", {
+                      name: check.name,
+                      state: check.conclusion ?? check.status,
+                    }),
+                  )
+                  .join(", ")}
               </span>
-            ))
+            </span>
           )}
-        </dd>
-        <dt className="text-muted-foreground">{t("commits")}</dt>
-        <dd className="tabular-nums">
-          {count(commits)}
-          {read.value.complete ? "" : "+"}
-        </dd>
-        <dt className="text-muted-foreground">{t("diff")}</dt>
-        <dd>
-          {files.length === 0 ? (
-            <span className="text-muted-foreground">{t("noDiff")}</span>
+        </Row>
+        <Row label={t("diff")}>
+          {!outputs.ok ? (
+            <ReadFailure read={outputs} section={t("diff")} />
+          ) : files.length === 0 ? (
+            <span className="text-dim">{t("noDiff")}</span>
           ) : (
-            t("diffStat", {
-              added: count(added),
-              removed: count(removed),
-              files: files.length,
-            })
+            <span>
+              <Stat added={added} removed={removed} />{" "}
+              <span className="text-dim">
+                {t("inFiles", { count: files.length })}
+                {outputs.value.complete ? "" : "+"}
+              </span>
+            </span>
           )}
-        </dd>
+        </Row>
       </dl>
       {files.length === 0 ? null : (
-        <ul
-          data-testid="run-changed-files"
-          className="mt-3 flex flex-col gap-1"
-        >
-          {files.slice(0, FILE_ROWS).map((node) => (
-            <li
-              key={`${node.seq ?? ""}${node.name}`}
-              className="flex items-center justify-between gap-3 text-xs"
-            >
-              <span className={`${mono} min-w-0 truncate`} title={node.name}>
-                {node.name}
-              </span>
-              <span className="shrink-0 tabular-nums">
-                <span className="text-success">
-                  +{count(node.stat?.added ?? 0)}
-                </span>{" "}
-                <span className="text-error">
-                  −{count(node.stat?.removed ?? 0)}
+        <>
+          <ul
+            data-testid="run-changed-files"
+            className="mt-2 border-t border-border"
+          >
+            {files.slice(0, FILE_ROWS).map((node) => (
+              <li
+                key={`${node.seq ?? ""}${node.name}`}
+                className="flex min-w-0 justify-between gap-2.5 border-b border-border py-[5px] text-[11.5px]"
+              >
+                <span className="min-w-0 truncate font-mono" title={node.name}>
+                  {node.name}
                 </span>
-              </span>
-            </li>
-          ))}
-          {files.length > FILE_ROWS ? (
-            <li className="text-xs text-muted-foreground">
-              {t("more", { count: files.length - FILE_ROWS })}
-            </li>
-          ) : null}
-        </ul>
-      )}
-      {files.length === 0 ? null : (
-        <SafeLink
-          to={routes.run(place.org, place.ws, place.runId, {
-            tab: "transcript",
-            zoom: "everything",
-            kinds: "tools",
-          })}
-          className={`${linkText} mt-3 inline-block text-xs`}
-        >
-          {t("openDiff")}
-        </SafeLink>
+                <Stat
+                  added={node.stat?.added ?? 0}
+                  removed={node.stat?.removed ?? 0}
+                />
+              </li>
+            ))}
+            {files.length > FILE_ROWS ? (
+              <li className="py-[5px] text-[11.5px] text-dim">
+                {t("more", { count: files.length - FILE_ROWS })}
+              </li>
+            ) : null}
+          </ul>
+          <div className="mt-2 flex">
+            <SafeLink
+              to={routes.run(place.org, place.ws, place.runId, {
+                tab: "transcript",
+                kinds: "tools",
+              })}
+              className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
+            >
+              {t("openDiff")}
+            </SafeLink>
+          </div>
+        </>
       )}
     </Panel>
   );
 }
 
-export function SpendByArea({ read }: { read: Read<RunCost> }) {
+/** The panel, once the work read the page started has answered. */
+export function ChangesPanel({
+  work,
+  ...rest
+}: {
+  work: Promise<Read<RunWork>>;
+  outputs: Read<RunOutputs>;
+  run: RunRow;
+  place: Place;
+}) {
+  return <ChangesBody work={use(work)} {...rest} />;
+}
+
+export function ChangesLoading() {
   const t = useTranslations("run.work");
-  const locale = useLocale();
-  if (!read.ok) {
-    return (
-      <Panel title={t("spend")}>
-        <ReadFailure read={read} section={t("spend")} />
-      </Panel>
-    );
-  }
-  // The rollup is the figure of record. Before it exists, a wrapped run's
-  // running figures stand in, labelled provisional.
-  const figures = read.value.rollup ?? read.value.provisional ?? null;
-  if (figures === null) {
-    return (
-      <Panel title={t("spend")}>
-        <p className="text-sm text-muted-foreground">{t("noSpend")}</p>
-      </Panel>
-    );
-  }
-  const provisional = read.value.rollup === null;
   return (
-    <Panel title={t("spend")}>
-      {provisional ? (
-        <p
-          data-testid="run-spend-provisional"
-          className="mb-2 text-xs text-muted-foreground"
-        >
-          {t("spendProvisional")}
-        </p>
-      ) : null}
-      <ul
-        data-testid="run-spend"
-        className="flex flex-col divide-y divide-border text-sm"
+    <Panel title={t("changes")}>
+      <p
+        role="status"
+        aria-busy="true"
+        className="text-xs text-muted-foreground"
       >
-        {figures.byModel.map((row) => (
-          <li
-            key={`${row.provider ?? ""}/${row.model}`}
-            className="flex items-baseline justify-between gap-3 py-2"
-          >
-            <span className="flex min-w-0 flex-col">
-              <span className={`${mono} truncate`}>{row.model}</span>
-              <span className="text-xs text-muted-foreground">
-                {t("callCount", { count: row.calls })}
-              </span>
-            </span>
-            <span className="shrink-0 tabular-nums">
-              {row.cost === null ? <NoValue /> : <Money value={row.cost} />}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <dl className="mt-3 flex gap-2 text-xs">
-        <dt className="text-muted-foreground">{t("toolCalls")}</dt>
-        <dd className="tabular-nums">
-          {formatCount(figures.toolCalls, locale)}
-        </dd>
-      </dl>
+        {t("loading")}
+      </p>
     </Panel>
   );
 }

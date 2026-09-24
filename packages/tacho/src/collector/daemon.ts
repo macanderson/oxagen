@@ -34,7 +34,7 @@ import type {
 } from "../claude-code/recorder";
 import { tachoEventSchema, type TachoEvent } from "../envelope";
 import { type FrameBody, retentionAllows } from "../evidence/frame-body";
-import { verifyBundle } from "../host/bundle";
+import { pollEtag, verifyBundle } from "../host/bundle";
 import {
   ControlError,
   createControlClient,
@@ -136,6 +136,7 @@ import {
   type ModelUpstreams,
 } from "./model-routes";
 import {
+  forgetHookId,
   parseRegistryState,
   sessionMapKey,
   type SessionRecord,
@@ -565,9 +566,10 @@ async function initializeDaemon(
    *
    * A poll that answers `not_modified` is a confirmation: it says the etag in
    * force is still this one. Freshness has to be measured from here, because
-   * the etag covers policy content only, so an unchanged mandate is never
-   * re-sent and its signed `expires_at` cannot be renewed on the host. See
-   * `isStale` in host/bundle.ts.
+   * the etag covers policy content only, so an unchanged mandate is re-signed
+   * only once the cached copy is past half its window (`pollEtag`). Between
+   * re-signings its signed `expires_at` does not move. See `isStale` in
+   * host/bundle.ts.
    *
    * Undefined until the control plane confirms something in this process,
    * and deliberately not seeded from `bundle_fetched_at`. That field is
@@ -753,6 +755,20 @@ async function initializeDaemon(
   function rollbackEveryChain(
     marks: Array<{ session: SessionRecord; mark: ChainMark }>,
   ): void {
+    // A session the failed call created has no mark: it did not exist when
+    // the marks were taken. Its chain goes back to where it was born, or its
+    // unwritten genesis keeps seq 0 and the retry seals a resume after it.
+    // A session with a WAL file is left alone: the model proxy runs off the
+    // serial queue, and it may have opened and written that session while
+    // the failed call was awaiting.
+    const marked = new Set(marks.map(({ session }) => session));
+    const unmarked = registry.list().filter((session) => !marked.has(session));
+    if (unmarked.length > 0) {
+      const onDisk = new Set(wal.sessions());
+      for (const session of unmarked)
+        if (!onDisk.has(session.recorder.sessionUuid))
+          session.recorder.rollbackToBirth();
+    }
     for (const { session, mark } of [...marks].reverse())
       session.recorder.rollbackChain(mark);
   }
@@ -1072,7 +1088,15 @@ async function initializeDaemon(
 
   async function refreshBundle(): Promise<boolean> {
     try {
-      const response = await client.bundle(host.bundle.etag);
+      // Past half its signed window the poll sends no etag, so an unchanged
+      // mandate comes back freshly signed and the copy on disk stays fresh
+      // across a restart and for the hook when this daemon is down. A cached
+      // copy that did not verify sends none either: its etag would earn a
+      // `not_modified`, and the edited file would stand until the mandate
+      // next changed.
+      const response = await client.bundle(
+        bundleVerified ? pollEtag(host.bundle, now()) : undefined,
+      );
       lastControlAt = now();
       // `not_modified` is the confirmation freshness is measured from: it
       // says the etag in force is still the current one, which is the only
@@ -1153,8 +1177,12 @@ async function initializeDaemon(
       host_status: control.host_status,
       deny_generation: control.deny_generation,
     });
-    if (control.bundle_etag === host.bundle.etag) mandateConfirmedAt = now();
-    else await refreshBundle();
+    // A cached bundle that did not verify is never confirmed by its etag: an
+    // edited host.json keeps the etag it was signed with, so a match says
+    // nothing about the rest of the file. It is fetched again instead.
+    if (bundleVerified && control.bundle_etag === host.bundle.etag) {
+      mandateConfirmedAt = now();
+    } else await refreshBundle();
     if (control.commands.length > 0) {
       const result = await recordSealedAsync(
         () =>
@@ -2111,6 +2139,13 @@ async function initializeDaemon(
         record(outcome.events, outcome.bodies);
       } catch (error) {
         rollbackEveryChain(marks);
+        // The chain rollback does not reach the hook-id ledger, which lives
+        // on the session record. Left in place, the id would make the
+        // client's spool replay of this same hook look like a repeat, and
+        // the hook would be lost.
+        if (envelope.hook_id !== undefined && outcome.record !== undefined) {
+          forgetHookId(outcome.record, envelope.hook_id);
+        }
         throw error;
       }
     }

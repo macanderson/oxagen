@@ -61,6 +61,7 @@
         "noBasis": "no basis recorded",
         "unbased": "basis not recorded",
         "unpriced": "{count, plural, one {# run has no cost recorded} other {# runs have no cost recorded}}",
+        "estimated": "{count, plural, one {includes # estimate} other {includes # estimates}}",
         "notRecorded": "not recorded",
         "mixed": "more than one currency"
       },
@@ -172,6 +173,7 @@
       "parked": "parked for approval",
       "notRecorded": "not recorded",
       "basisNotRecorded": "basis not recorded",
+      "estimate": "estimate",
       "source": {
         "ledger": "evidence ledger",
         "tacho": "wrapped agent"

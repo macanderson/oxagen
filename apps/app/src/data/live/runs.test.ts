@@ -72,6 +72,7 @@ const run = {
   // the mapping carries it through rather than merely tolerating the field.
   operatorKind: "human",
   operatorName: "Ada Lovelace",
+  operatorAttribution: "host_enroller",
   status: "live",
   outcome: "running",
   turns: null,
@@ -90,6 +91,7 @@ const run = {
   canSummarize: false,
   startedAt: "2026-09-15T08:55:00.000Z",
   sealedAt: null,
+  endedAt: null,
 };
 
 beforeEach(() => {
@@ -111,17 +113,21 @@ describe("runs.list", () => {
             operatorId: null,
             operatorKind: "human",
             operatorName: "Ada Lovelace",
+            operatorAttribution: "host_enroller",
             status: "live",
             outcome: "running",
             turns: null,
             steps: 3,
             frames: 9,
             cost: null,
+            costIsEstimate: false,
             reportedCost: null,
-            reportedTokens: null,
+            // #4018's session facts: a row that recorded none maps each to
+            // null, never to a guess.
             effort: null,
             thinking: null,
             permissionMode: null,
+            reportedTokens: null,
             model: viewModel,
             harness: null,
             machine,
@@ -131,6 +137,8 @@ describe("runs.list", () => {
             replayGrade: null,
             verdict: null,
             enforcementTier: "observe",
+            commandBlock: null,
+            steerBlock: null,
             enrichmentEnabled: true,
             ingressPaused: false,
             ingressRevoked: false,
@@ -138,6 +146,8 @@ describe("runs.list", () => {
             canSummarize: false,
             startedAt: "2026-09-15T08:55:00.000Z",
             sealedAt: null,
+            sealSource: null,
+            endedAt: null,
           },
         ],
         nextCursor: "c2",
@@ -840,6 +850,7 @@ describe("runs.work", () => {
         headSha: "abc123",
         headRef: "release/3.2",
         association: "recorded",
+        closingIssues: null,
         checkoutIds: ["chk_1"],
         observedAt: "2026-09-15T08:58:00.000Z",
         current: true,
@@ -879,8 +890,7 @@ describe("runs.work", () => {
       checkoutRefs: ["chk_1"],
     });
     expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
-    // The harness mints a subagent's id, so the view carries it as `agentRef`
-    // rather than an `id` a reader would take for a public id (INV-11).
+    // A subagent's id is the harness's own, so the view names it a ref (INV-11).
     expect(read.value.subagents?.[0]).toMatchObject({
       agentRef: "a0182b6cd3a21d284",
       type: "Explore",

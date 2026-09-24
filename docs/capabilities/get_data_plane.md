@@ -58,7 +58,18 @@ platform state that always lives on the shared plane — see ADR-042 §2), filte
 to the caller's org. The KMS envelope is opened only for a `dedicated` row, and
 only to recover the host and database name.
 
+## Where it is read
+
+The app's Organization › Data plane tab (`/{org}?tab=dataPlane`) reads the
+Postgres binding through it, which is why the contract declares
+`mutates: false` and the `app` layer.
+
 ## Errors
+
+- The handler checks the caller's organization role against the contract's
+  `defaultRoles` (Owner or Admin) before it reads anything, the way
+  `set_data_plane` does. The kernel's IAM gate allows every capability for a
+  non-enterprise organization, so the contract's roles alone would not hold.
 
 - `data_plane_unavailable` is **not** raised by this capability — a degraded or
   disabled plane is exactly what an operator calls this to see. That error comes

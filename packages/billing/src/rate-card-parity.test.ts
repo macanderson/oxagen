@@ -1,6 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { RATE_CARD, estimateCostUsd } from "./rate-card";
-import { providerCostUsd, isRateCardMiss, PROVIDER_RATE_CARD } from "./pricing";
+import {
+  FALLBACK_RATE,
+  RATE_CARD,
+  estimateCostUsd,
+  rateFor,
+  type ModelRate,
+} from "./rate-card";
+import {
+  FALLBACK_RATE_MODEL,
+  providerCostUsd,
+  isRateCardMiss,
+  PROVIDER_RATE_CARD,
+  resolveRate,
+} from "./pricing";
+
+/** Billing's rate for a model id, cut to the four fields the engine card holds. */
+function billingRate(id: string): ModelRate {
+  const rate = resolveRate(id);
+  return {
+    inputPer1M: rate.inputPer1M,
+    outputPer1M: rate.outputPer1M,
+    cachedInputPer1M: rate.cachedInputPer1M,
+    cacheWritePer1M: rate.cacheWritePer1M,
+  };
+}
 
 /**
  * The two rate cards, held together.
@@ -89,14 +112,51 @@ describe("rate-card parity: engine card vs billing card", () => {
   }
 });
 
+describe("rate-card parity: model ids as callers send them (#3944)", () => {
+  // The walk above prices each card family by its own name, so it cannot see a
+  // dated or dotted id that the engine's first-match order sends to a different
+  // row than billing's longest-prefix match does. Opus 4.1 was one: billing
+  // priced it at $15/$75 and the engine card at the $5/$25 family rate.
+  //
+  // The ids come from billing's own Claude keys, each in the three shapes
+  // callers send: bare, dated, and through the gateway. A typed list missed
+  // six engine rows (Opus 4.5 to 4.8 in one spelling or the other), which
+  // could be deleted without failing anything.
+  const CLAUDE_KEYS = Object.keys(PROVIDER_RATE_CARD).filter((k) =>
+    k.startsWith("claude-"),
+  );
+  const IDS = [
+    ...new Set([
+      ...CLAUDE_KEYS.flatMap((k) => [k, `${k}-20260101`, `anthropic/${k}`]),
+      // Real ids that no key spells out, so they reach a row only by prefix.
+      "claude-opus-4-20250514",
+      "claude-opus-4-1-20250805",
+      "anthropic/claude-opus-4.1",
+      "claude-opus-4-5-20251101",
+      "claude-haiku-4-5-20251001",
+    ]),
+  ];
+
+  it("reads billing's Claude keys, not an empty list", () => {
+    expect(CLAUDE_KEYS.length).toBeGreaterThanOrEqual(20);
+  });
+
+  for (const id of IDS) {
+    it(`${id} resolves to the same rate in both cards`, () => {
+      expect(rateFor(id)).toEqual(billingRate(id));
+    });
+  }
+});
+
 describe("rate-card parity: the prices #1412 measured", () => {
   // The exact table from the issue — what the engine's card says a 1M-in /
   // 1M-out call costs, against what billing charged for it before the rows
   // existed. Every row but the three controls was metered at the Sonnet
-  // fallback's $18.00.
+  // fallback's $18.00. The two Claude controls were then at $15/$75 and $3/$15;
+  // #3944 moved them to list price ($5/$25 and $2/$10).
   const MEASURED: ReadonlyArray<readonly [string, number]> = [
-    ["anthropic/claude-opus-4-8", 90.0],
-    ["anthropic/claude-sonnet-5", 18.0],
+    ["anthropic/claude-opus-4-8", 30.0],
+    ["anthropic/claude-sonnet-5", 12.0],
     ["openai/gpt-4o", 12.5],
     ["openai/gpt-5", 11.25],
     ["openai/gpt-5-mini", 2.25],
@@ -121,6 +181,38 @@ describe("rate-card parity: the prices #1412 measured", () => {
       ).toBeCloseTo(expectedUsd, 9);
     });
   }
+});
+
+describe("rate-card parity: a model neither card knows", () => {
+  // Billing prices a miss at FALLBACK_RATE_MODEL's row and the engine card at
+  // FALLBACK_RATE. #3944 moved that row to Sonnet 5's $2/$10 while the engine
+  // fallback stayed at $3/$15, so `oxagen cost` quoted an unknown model at
+  // half again what the invoice charged. The walks above never reach a miss.
+  const UNKNOWN = ["mistral-large-2", "mistral/mistral-large-2"];
+
+  for (const id of UNKNOWN) {
+    it(`${id} is a miss priced at the same rate in both cards`, () => {
+      expect(isRateCardMiss(id)).toBe(true);
+      expect(rateFor(id)).toEqual(billingRate(id));
+    });
+  }
+
+  it("the engine fallback is billing's fallback row", () => {
+    expect(FALLBACK_RATE).toEqual(billingRate(FALLBACK_RATE_MODEL));
+  });
+
+  it("charges an unknown 1M in and 1M out at Sonnet 5's $12", () => {
+    // Pinned in dollars so moving FALLBACK_RATE_MODEL, or repricing its row,
+    // fails here and gets decided on purpose.
+    const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000 };
+    expect(
+      providerCostUsd({ model: "mistral/mistral-large-2", ...usage }),
+    ).toBeCloseTo(12, 9);
+    expect(estimateCostUsd("mistral/mistral-large-2", usage)).toBeCloseTo(
+      12,
+      9,
+    );
+  });
 });
 
 describe("isRateCardMiss", () => {

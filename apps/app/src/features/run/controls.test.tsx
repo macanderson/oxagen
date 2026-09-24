@@ -42,7 +42,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { RunControls } = await import("./run-controls");
-const { RecordActions } = await import("./record-actions");
+const { ExportAction, SummarizeAction } = await import("./record-actions");
 
 const RUN = "tse_7k2m9q";
 
@@ -192,6 +192,68 @@ describe("run controls", () => {
       );
     });
     expect(screen.queryByTestId("queued-command")).toBeNull();
+  });
+
+  // #4023: a Stella run reads steering text only at session start.
+  it("says why a steer to a Stella run was refused (negative)", async () => {
+    steerRun.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "no_prompt_carrier",
+    });
+    const user = userEvent.setup();
+    renderControls();
+    await user.click(screen.getByTestId("run-steer"));
+    await user.type(screen.getByLabelText("What to tell the agent"), "go on");
+    await user.click(screen.getByRole("button", { name: "Send it" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("run-steer-failure")).toHaveTextContent(
+        "This agent reads steering text only when a session starts",
+      );
+    });
+    expect(screen.queryByTestId("queued-command")).toBeNull();
+  });
+
+  // #4023: the row says so up front, so Steer is disabled before anyone types.
+  it("disables Steer on a Stella run and keeps pause and cancel open (negative)", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          status="live"
+          source="tacho"
+          enforcementTier="harness"
+          steerBlock="no_prompt_carrier"
+          orgRole="member"
+          wsRole="member"
+        />
+      </IntlProvider>,
+    );
+    await expectNoAxe(container);
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    expect(screen.getByTestId("steer-no-control")).toHaveTextContent(
+      "Pause, resume and cancel still can.",
+    );
+    for (const command of ["pause", "resume", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).toBeEnabled();
+    }
+    await user.click(screen.getByTestId("run-steer"));
+    expect(screen.queryByLabelText("What to tell the agent")).toBeNull();
+    await user.click(screen.getByTestId("run-pause"));
+    await user.type(screen.getByLabelText("Reason"), "hold");
+    await user.click(screen.getByRole("button", { name: "Queue the pause" }));
+    await waitFor(() => {
+      expect(haltRun).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        RUN,
+        "pause",
+        "hold",
+      );
+    });
   });
 
   it("offers no delivery mode on a halt, which the contract refuses a payload on (negative)", async () => {
@@ -402,12 +464,10 @@ describe("run controls", () => {
     expect(haltRun).not.toHaveBeenCalled();
   });
 
-  // An observe-tier session records what an agent did and gives Oxagen no
-  // connection point, so a queued command would have nowhere to travel. The
-  // tier is read before the ledger and the role branches, because it holds
-  // whatever those two say (#3285).
-  it("disables every control, with the reason, on an observe-tier run (negative)", async () => {
-    const user = userEvent.setup();
+  // The tier does not decide whether a command reaches a run: the host's
+  // command poll does (ADR-163, #4023). An observe-tier run whose row names no
+  // block takes every control.
+  it("offers every control on an observe-tier run whose host is live", () => {
     render(
       <IntlProvider>
         <RunControls
@@ -417,24 +477,58 @@ describe("run controls", () => {
           status="live"
           source="tacho"
           enforcementTier="observe"
+          commandBlock={null}
           orgRole="owner"
           wsRole="owner"
         />
       </IntlProvider>,
     );
     for (const command of ["pause", "resume", "steer", "cancel"]) {
-      expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
+      expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
-    expect(screen.getByTestId("observe-no-control")).toHaveTextContent(
-      "Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel.",
-    );
-    expect(screen.queryByTestId("ledger-no-control")).toBeNull();
-    expect(screen.queryByTestId("role-no-control")).toBeNull();
-    await user.click(screen.getByTestId("run-pause"));
-    expect(screen.queryByTestId("run-pause-dialog")).toBeNull();
-    expect(haltRun).not.toHaveBeenCalled();
-    expect(steerRun).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("host-no-control")).toBeNull();
   });
+
+  // A row that says a command cannot reach the run draws every control
+  // disabled with the reason, before the role branch, because no role makes
+  // a silent host read a command (#3285, #4023).
+  it.each([
+    ["no_host", "This run names no enrolled host."],
+    ["host_revoked", "This run's host was revoked."],
+    [
+      "host_offline",
+      "This run's host has not checked for commands in the last five minutes.",
+    ],
+  ] as const)(
+    "disables every control, with the reason, when the row says %s (negative)",
+    async (block, reason) => {
+      const user = userEvent.setup();
+      render(
+        <IntlProvider>
+          <RunControls
+            org="acme"
+            ws="core-platform"
+            runId={RUN}
+            status="live"
+            source="tacho"
+            enforcementTier="gateway"
+            commandBlock={block}
+            orgRole="owner"
+            wsRole="owner"
+          />
+        </IntlProvider>,
+      );
+      for (const command of ["pause", "resume", "steer", "cancel"]) {
+        expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
+      }
+      expect(screen.getByTestId("host-no-control")).toHaveTextContent(reason);
+      expect(screen.queryByTestId("role-no-control")).toBeNull();
+      await user.click(screen.getByTestId("run-pause"));
+      expect(screen.queryByTestId("run-pause-dialog")).toBeNull();
+      expect(haltRun).not.toHaveBeenCalled();
+      expect(steerRun).not.toHaveBeenCalled();
+    },
+  );
 
   it("admits a workspace Member who is only an organization Viewer, as dispatch_command does", () => {
     render(
@@ -464,13 +558,20 @@ describe("record writes", () => {
   ) {
     return render(
       <IntlProvider>
-        <RecordActions
+        <SummarizeAction
           org="acme"
           ws="core-platform"
           runId={RUN}
           sealed
           hasSummary={hasSummary}
           summarizable={summarizable}
+          orgRole={orgRole}
+        />
+        <ExportAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
           orgRole={orgRole}
         />
       </IntlProvider>,
@@ -533,7 +634,8 @@ describe("record writes", () => {
     renderRecord(true, "member");
     const button = screen.getByTestId("run-export");
     expect(button).toBeDisabled();
-    expect(screen.getByTestId("export-no-role")).toHaveTextContent(
+    expect(button).toHaveAttribute("data-reason", "export-no-role");
+    expect(button.getAttribute("title")).toContain(
       "needs an organization Owner or Admin role",
     );
     await user.click(button);
@@ -545,16 +647,20 @@ describe("record writes", () => {
   it("draws Summarize disabled, with the reason, for an organization Viewer (negative)", () => {
     renderRecord(false, "viewer");
     expect(screen.getByTestId("run-summarize")).toBeDisabled();
-    expect(screen.getByTestId("summarize-no-role")).toHaveTextContent(
+    expect(screen.getByTestId("run-summarize")).toHaveAttribute(
+      "data-reason",
+      "summarize-no-role",
+    );
+    expect(screen.getByTestId("run-summarize").getAttribute("title")).toContain(
       "Owner, Admin or Member role",
     );
     expect(screen.getByTestId("run-export")).toBeDisabled();
   });
 
-  it("offers neither write while the run is live (negative)", () => {
+  it("offers no summary while the run is live, and draws Export disabled until it seals (negative)", () => {
     render(
       <IntlProvider>
-        <RecordActions
+        <SummarizeAction
           org="acme"
           ws="core-platform"
           runId={RUN}
@@ -563,9 +669,19 @@ describe("record writes", () => {
           summarizable={false}
           orgRole="owner"
         />
+        <ExportAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed={false}
+          orgRole="owner"
+        />
       </IntlProvider>,
     );
-    expect(screen.queryByTestId("run-export")).toBeNull();
     expect(screen.queryByTestId("run-summarize")).toBeNull();
+    expect(screen.getByTestId("run-export")).toBeDisabled();
+    expect(screen.getByTestId("run-export").getAttribute("title")).toContain(
+      "Export this run once it seals",
+    );
   });
 });

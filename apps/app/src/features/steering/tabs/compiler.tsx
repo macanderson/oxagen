@@ -97,7 +97,11 @@ function Part({
   sub: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-1.5" data-part={id}>
+    <section
+      aria-labelledby={id}
+      className="flex flex-col gap-1.5"
+      data-part={id}
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 id={id} className={eyebrow}>
           {title}

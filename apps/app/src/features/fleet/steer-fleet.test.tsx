@@ -179,7 +179,7 @@ describe("Steer the fleet", () => {
       ok: true,
       value: {
         commandIds: ["tcm_1"],
-        refused: [{ agentKey: "acme.core.docs", code: "observe_tier" }],
+        refused: [{ agentKey: "acme.core.docs", code: "host_offline" }],
       },
     });
     renderDialog();
@@ -197,7 +197,7 @@ describe("Steer the fleet", () => {
     const receipt = await screen.findByTestId("steer-receipt");
     expect(receipt).toHaveTextContent("Steer queued for 1 run in flight.");
     expect(receipt).toHaveTextContent(
-      "1 agent refused the steer: acme.core.docs (observe_tier).",
+      "1 agent refused the steer: acme.core.docs (host_offline).",
     );
     expect(refresh).toHaveBeenCalled();
     expect(

@@ -116,7 +116,19 @@ export async function resolveRun(
   run.item = {
     ...run.item,
     enrichmentEnabled: enabled,
-    ...(enabled ? {} : { name: null, summary: null, canSummarize: false }),
+    ...(enabled
+      ? {}
+      : {
+          // Turning automatic accounts off hides what Oxagen wrote, not the
+          // title the harness gave the session.
+          name:
+            run.source === "tacho"
+              ? (run.row.session.harnessTitle ?? null)
+              : null,
+          summary: null,
+          canSummarize: false,
+          enrichmentError: undefined,
+        }),
   };
   const witnessFor = await deps.readWitnessFor(scope, publicId);
   if (witnessFor !== null && ctx.apiKeyId !== null) throw runNotFound();

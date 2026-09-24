@@ -33,7 +33,15 @@ export const contextRecordPublishShape = z
         "The record's stable id — the .stella/rules/<record_id>.toml file stem; the workspace-unique key",
       ),
     title: z.string().min(1).describe("Human-readable record title"),
-    label: z.string().trim().min(1).max(200).optional(),
+    label: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe(
+        "Display name only. Omit it to keep the current label; changing it never creates a version.",
+      ),
     body: z
       .string()
       .min(1)
@@ -60,7 +68,7 @@ export const contextRecordPublish = registerCapability({
   name: "publish_context_record",
   domain: "context",
   description:
-    "Publish a steering context record into the workspace agent-asset registry. Upserts the agent.context_records row by (workspace, record_id) and writes a new immutable version row whenever the body checksum or the classification (kind, force, constraintEffect, statement) differs from the latest version. A publish that repeats all five is idempotent and answers published: false. The checksum alone is not the key: a record whose classification was wrong is corrected by republishing the same body under the right kind and force, and that correction has to land as a new version or the record never reaches readWorkspaceSteering. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout. Requires the same classification a merged Context PR carries (#3302), because readWorkspaceSteering only ever delivers a must or should record to an agent: a record with no force sits in the registry and never steers anything.",
+    "Publish a steering context record into the workspace agent-asset registry. Upserts the agent.context_records row by (workspace, record_id) and writes a new immutable version row whenever the body checksum or the classification (kind, force, constraintEffect, statement) differs from the latest version. A publish that repeats all five writes no version and answers published: false; if it carries a new label, it updates only the label. The checksum alone is not the key: a record whose classification was wrong is corrected by republishing the same body under the right kind and force, and that correction has to land as a new version or the record never reaches readWorkspaceSteering. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout. Requires the same classification a merged Context PR carries (#3302), because readWorkspaceSteering only ever delivers a must or should record to an agent: a record with no force sits in the registry and never steers anything.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "docs", "unit"],

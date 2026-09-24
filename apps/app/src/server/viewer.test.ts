@@ -30,12 +30,14 @@ const {
   getSessionMock,
   resolveMock,
   invitationByToken,
+  mfaPolicy,
   freePlanIncludedGau,
 } = vi.hoisted(() => ({
   requestHeaders: new Headers(),
   getSessionMock: vi.fn(),
   resolveMock: vi.fn<() => Promise<ViewerResolution>>(),
   invitationByToken: vi.fn<() => Promise<InvitationRecord | null>>(),
+  mfaPolicy: vi.fn(),
   freePlanIncludedGau: vi.fn<() => Promise<number | null>>(),
 }));
 
@@ -50,7 +52,12 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("./session", () => ({ getSession: getSessionMock }));
 vi.mock("./tenancy-lookups", () => ({
-  systemLookups: { name: "live", invitationByToken, freePlanIncludedGau },
+  systemLookups: {
+    name: "live",
+    invitationByToken,
+    mfaPolicy,
+    freePlanIncludedGau,
+  },
 }));
 vi.mock("./viewer-resolution", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./viewer-resolution")>()),
@@ -63,6 +70,7 @@ import { systemLookups } from "./tenancy-lookups";
 import {
   InviteeCtx,
   OrgCtx,
+  orgTwoFactorPolicy,
   type OrgFields,
   PretenantCtx,
   readFreePlanAllowance,
@@ -301,6 +309,34 @@ describe("requireViewer", () => {
       "NEXT_PERMANENT_REDIRECT",
     );
     expect(nav.permanentRedirect).toHaveBeenLastCalledWith("/acme");
+  });
+});
+
+describe("orgTwoFactorPolicy", () => {
+  it("reads the organization's policy row, the one the MFA gate enforces", async () => {
+    mfaPolicy.mockResolvedValue({
+      mfaRequired: true,
+      mfaGraceHours: 72,
+      updatedAt: new Date("2026-09-01T00:00:00Z"),
+    });
+    expect(await orgTwoFactorPolicy(unsafeMint(OrgCtx, orgFields))).toEqual({
+      required: true,
+    });
+    expect(mfaPolicy).toHaveBeenCalledWith(orgFields.orgId);
+  });
+
+  it("requires nothing when the organization has no policy row", async () => {
+    mfaPolicy.mockResolvedValue(null);
+    expect(await orgTwoFactorPolicy(unsafeMint(OrgCtx, orgFields))).toEqual({
+      required: false,
+    });
+  });
+
+  it("refuses a forged context (negative)", async () => {
+    await expect(
+      // @ts-expect-error -- a context not minted by viewer-mint.ts
+      orgTwoFactorPolicy({ ...orgFields }),
+    ).rejects.toThrow(TypeError);
   });
 });
 

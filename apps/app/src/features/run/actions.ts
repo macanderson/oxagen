@@ -243,6 +243,7 @@ function toTranscriptPage(
             subagent: {
               chainRef: entry.subagent.sessionUuid,
               type: entry.subagent.type,
+              spawnKey: entry.subagent.spawnCallId ?? null,
             },
           }),
       at: entry.at,
@@ -251,6 +252,8 @@ function toTranscriptPage(
       type: entry.type,
       label: entry.label,
       callKey: entry.callId,
+      target: entry.target ?? null,
+      effort: entry.effort ?? null,
       usage: entry.usage ?? null,
       kinds: entry.kinds,
       turn: entry.turn,
@@ -344,7 +347,6 @@ export async function readTranscriptPage(
  * attempt; the harness that admitted the run is what resumes it (ADR-043), so
  * this answers the attempt, not a running agent.
  */
-/** @deregistered Retained with the replay UI under ADR-130. */
 export async function forkRun(
   org: string,
   ws: string,
@@ -372,7 +374,6 @@ export async function forkRun(
  * recordings are aligned frame by frame on each frame's kind and call
  * identity; bodies are not read, so this works at grade `inspect` and above.
  */
-/** @deregistered Retained with the replay UI under ADR-130. */
 export async function bisectRuns(
   org: string,
   ws: string,

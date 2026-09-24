@@ -9,13 +9,9 @@
 // recorded without one; the response names the refusal so the host can
 // correct its collector, and the session seals with a `body_missing` gap.
 import {
-  type CompletenessGapKind,
-  computeReplayGrade,
   digestBytes,
-  isCompletenessGapKind,
   isContentBearingFrame,
   redactBytes,
-  type ReplayGrade,
   type TachoBody,
   type TachoEvent,
 } from "@oxagen/tacho";
@@ -114,66 +110,9 @@ export function countContentFrames(events: readonly TachoEvent[]): number {
   ).length;
 }
 
-interface TachoSealInput {
-  /** The gaps the host reported on `agent_stop`. */
-  hostGaps: readonly string[];
-  chainVerified: boolean;
-  unobservedTail: boolean;
-  telemetryGapCount: number;
-  /** The workspace's retention mode at seal. */
-  retentionMode: string;
-  contentFrames: number;
-  bodyFrames: number;
-  /** Tool calls the session counted, and how many kept a result body. */
-  toolCalls: number;
-  toolBodyFrames: number;
-  enforcementTier: string;
-}
-
-interface TachoSeal {
-  completenessGaps: string[];
-  replayGrade: ReplayGrade;
-}
-
 /**
- * The seal for a wrapped session: the host's gaps plus what the control
- * plane observed. `tool_bodies` is derived from the session's own counters,
- * the same rule the ledger seal applies to its rows, so a host's self-report
- * can add the gap and never remove it. A gap kind outside the vocabulary is
- * kept on the record and grades `inspect`: a word nobody can grade cannot
- * raise a grade. `retry` needs a harness that reports a reproducible run; no
- * wrapped harness does, so `harnessReproducible` is false here.
+ * The seal grading for a wrapped session lives beside the grade it computes,
+ * in `@oxagen/tacho`, so ingest and the control plane's idle close
+ * (`tacho.session-idle-close`) grade a session with the same rule.
  */
-export function sealTachoSession(input: TachoSealInput): TachoSeal {
-  const gaps = new Set<string>(input.hostGaps);
-  if (!input.chainVerified) gaps.add("chain_break");
-  if (input.unobservedTail) gaps.add("unobserved_tail");
-  if (input.telemetryGapCount > 0) gaps.add("telemetry_gap");
-  if (input.retentionMode === "digest_only") gaps.add("digest_only");
-  else if (input.bodyFrames < input.contentFrames) gaps.add("body_missing");
-  if (input.toolCalls > 0 && input.toolBodyFrames === 0)
-    gaps.add("tool_bodies");
-  const known: CompletenessGapKind[] = [];
-  let unknown = false;
-  for (const gap of gaps) {
-    if (isCompletenessGapKind(gap)) known.push(gap);
-    else unknown = true;
-  }
-  const tier =
-    input.enforcementTier === "contained" ||
-    input.enforcementTier === "gateway" ||
-    input.enforcementTier === "harness"
-      ? input.enforcementTier
-      : "observe";
-  return {
-    completenessGaps: [...gaps],
-    replayGrade: unknown
-      ? "inspect"
-      : computeReplayGrade({
-          gaps: known,
-          enforcementTier: tier,
-          harnessReproducible: false,
-          retainedBodies: input.bodyFrames,
-        }),
-  };
-}
+export { sealTachoSession } from "@oxagen/tacho";

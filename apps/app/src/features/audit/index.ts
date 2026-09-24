@@ -1,6 +1,11 @@
-// The Audit lane's public surface (#3097). The Audit route renders <Audit>
-// under its header with the viewer it resolved and the live data source, shows
-// <AuditSkeleton> while the record is read, and its export route delegates to
+// The Audit lane's public surface (#3097). Both Audit routes render
+// <AuditHeaderAction> and <AuditRetentionLine> in their header and <Audit>
+// under it with the viewer they resolved, the live data source and the tab
+// their segment names, show
+// <AuditSkeleton> while the record is read, and the export route delegates to
 // handleAuditExport.
 export { Audit, AuditSkeleton } from "./audit";
+export { AuditHeaderAction } from "./header-action";
+export { AuditRetentionLine } from "./retention";
 export { handleAuditExport } from "./export";
+export { auditTabOf } from "./tabs";

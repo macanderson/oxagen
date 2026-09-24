@@ -30,13 +30,28 @@ describe("familyOf", () => {
 });
 
 describe("rateFor", () => {
-  it("prices Opus at the frontier rate", () => {
+  it("prices Opus 4.8 at its $5/$25 list price", () => {
     expect(rateFor("anthropic/claude-opus-4.8")).toEqual({
-      inputPer1M: 15.0,
-      outputPer1M: 75.0,
-      cachedInputPer1M: 1.5,
-      cacheWritePer1M: 18.75,
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
     });
+  });
+
+  it("prices Opus 5.5 and Fable 5.1 on their own rows, not the family row", () => {
+    for (const slug of ["anthropic/claude-opus-5.5", "claude-opus-5-5"]) {
+      expect(rateFor(slug)).toEqual({
+        inputPer1M: 4.0,
+        outputPer1M: 20.0,
+        cachedInputPer1M: 0.2,
+        cacheWritePer1M: 5.0,
+      });
+    }
+    for (const slug of ["anthropic/claude-fable-5.1", "claude-fable-5-1"]) {
+      expect(rateFor(slug).cachedInputPer1M).toBe(0.25);
+    }
+    expect(rateFor("anthropic/claude-fable-5").cachedInputPer1M).toBe(1.0);
   });
 
   it("prices Sonnet distinctly from Opus", () => {
@@ -93,7 +108,7 @@ describe("rateFor", () => {
     });
   });
 
-  it("falls back to the Sonnet-equivalent rate for an unknown family", () => {
+  it("falls back to the Sonnet 5 rate for an unknown family", () => {
     expect(rateFor("mistral/mistral-large-2")).toEqual(FALLBACK_RATE);
   });
 
@@ -212,19 +227,19 @@ describe("entryFor", () => {
 
 describe("estimateCostUsd", () => {
   it("prices input and output tokens at the family rate", () => {
-    // 1M in @ $15 + 1M out @ $75 = $90 on Opus.
+    // 1M in @ $5 + 1M out @ $25 = $30 on Opus 4.8.
     expect(
       estimateCostUsd("anthropic/claude-opus-4.8", {
         inputTokens: 1_000_000,
         outputTokens: 1_000_000,
       }),
-    ).toBe(90);
+    ).toBe(30);
   });
 
   it("treats a missing direction as zero tokens", () => {
     expect(
       estimateCostUsd("anthropic/claude-sonnet-5", { inputTokens: 1_000_000 }),
-    ).toBe(3);
+    ).toBe(2);
     expect(estimateCostUsd("anthropic/claude-sonnet-5", {})).toBe(0);
   });
 
@@ -311,20 +326,20 @@ describe("projectCost", () => {
     expect(p.vendor).toBe("unknown");
     expect(p.family).toBe("mistral-large");
     expect(p.label).toBe("mistral-large");
-    expect(p.inputCostUsd).toBeCloseTo(3, 5);
+    expect(p.inputCostUsd).toBeCloseTo(2, 5);
     expect(p.outputTokens).toBe(0);
   });
 
   it("prices the cached subset at the cache-read rate (does not overstate)", () => {
-    // Anthropic Sonnet: fresh input 3/1M, cache-read 0.3/1M. Half the input
-    // tokens are cache reads → 0.5M×3 + 0.5M×0.3 = 1.5 + 0.15 = 1.65.
+    // Sonnet 5: fresh input 2/1M, cache-read 0.2/1M. Half the input tokens
+    // are cache reads → 0.5M×2 + 0.5M×0.2 = 1.0 + 0.1 = 1.1.
     const p = projectCost("anthropic/claude-sonnet-5", {
       inputTokens: 1_000_000,
       cachedTokens: 500_000,
     });
     expect(p.cachedTokens).toBe(500_000);
-    expect(p.inputCostUsd).toBeCloseTo(1.65, 5);
-    expect(p.totalUsd).toBeCloseTo(1.65, 5);
+    expect(p.inputCostUsd).toBeCloseTo(1.1, 5);
+    expect(p.totalUsd).toBeCloseTo(1.1, 5);
   });
 
   it("omitting cachedTokens reproduces the full-price (pre-cache) number", () => {
@@ -332,7 +347,7 @@ describe("projectCost", () => {
       inputTokens: 1_000_000,
     });
     expect(p.cachedTokens).toBe(0);
-    expect(p.inputCostUsd).toBeCloseTo(3, 5);
+    expect(p.inputCostUsd).toBeCloseTo(2, 5);
   });
 
   it("agrees with estimateCostUsd on totalUsd for a cache-heavy usage", () => {
@@ -355,7 +370,7 @@ describe("compareModels", () => {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
     });
-    expect(rows).toHaveLength(RATE_CARD.length);
+    expect(rows).toHaveLength(listRateCard().length);
     // Sorted ascending by total cost.
     for (let i = 1; i < rows.length; i++) {
       expect(rows[i]!.totalUsd).toBeGreaterThanOrEqual(rows[i - 1]!.totalUsd);
@@ -368,8 +383,31 @@ describe("compareModels", () => {
 });
 
 describe("listRateCard", () => {
-  it("returns the full card", () => {
-    expect(listRateCard()).toBe(RATE_CARD);
-    expect(listRateCard().length).toBeGreaterThan(0);
+  it("returns every row but the alias spellings", () => {
+    const listed = listRateCard();
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed).toEqual(RATE_CARD.filter((e) => !e.alias));
+  });
+
+  it("lists each model once, so `oxagen cost` shows no label twice", () => {
+    // The dotted gateway rows (claude-opus-4.8 beside claude-opus-4-8) carry
+    // the same label, and before they were marked alias every one of them
+    // printed twice in `oxagen cost` and `--rates` (#3944).
+    const labels = listRateCard().map((e) => e.label);
+    expect(new Set(labels).size).toBe(labels.length);
+    const compared = compareModels({ inputTokens: 1, outputTokens: 1 });
+    expect(new Set(compared.map((r) => r.label)).size).toBe(compared.length);
+  });
+
+  it("hides only rows that spell a listed model at the same price", () => {
+    const aliases = RATE_CARD.filter((e) => e.alias);
+    expect(aliases.length).toBeGreaterThan(0);
+    for (const alias of aliases) {
+      const listed = listRateCard().find((e) => e.label === alias.label);
+      expect(listed, alias.family).toBeDefined();
+      expect(listed!.family).not.toBe(alias.family);
+      expect(listed!.vendor).toBe(alias.vendor);
+      expect(listed!.rate).toEqual(alias.rate);
+    }
   });
 });

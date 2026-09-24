@@ -2,7 +2,8 @@
 // on a drill): Spend with its basis and currency, the month's tokens with the
 // share served from cache, the share of tokens the gateway observed, and the
 // wasted spend in the critical ink. Each is a rollup of the rows beneath it:
-// Spend is the model rollup's total, the Total row of By model; Tokens is the
+// Spend is the model rollup's total, the Total row of By model, and says when
+// it includes open runs' running estimates; Tokens is the
 // sum of the model rows' classes, the By token class total.
 import { useLocale, useTranslations } from "next-intl";
 import type { SpendReport, SpendWaste } from "@/data/contracts/spend";
@@ -26,6 +27,8 @@ export function SummaryTiles({
   const tokens = totalOf(classes);
   const cache = cacheHitRate(classes);
   const cost = month.total.cost;
+  // Open runs whose running cost is in `cost` (#3980); final once they seal.
+  const estimatedRuns = month.estimatedRuns ?? 0;
   const wasted = waste.ok ? waste.value : null;
   return (
     <section aria-label={t("label")} data-testid="spend-summary">
@@ -38,6 +41,11 @@ export function SummaryTiles({
               <span>{t("currency", { currency: cost.currency })}</span>
             )}
           </span>
+          {cost === null || estimatedRuns === 0 ? null : (
+            <span className={statNote} data-testid="spend-estimate">
+              {t("estimated", { count: estimatedRuns })}
+            </span>
+          )}
         </Tile>
         <Tile
           term={t("tokens")}

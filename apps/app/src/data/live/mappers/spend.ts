@@ -48,6 +48,7 @@ export function toSpendReport(
   return {
     period: out.period,
     total: toFigure(out.total),
+    estimatedRuns: out.estimatedRuns,
     rows: out.rows.map((row) => ({
       ...toFigure(row),
       key: row.key,

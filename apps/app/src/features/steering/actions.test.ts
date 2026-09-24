@@ -292,7 +292,8 @@ describe("forgetMemory", () => {
     nodeRef: "workspace",
     memoryClass: "OBSERVATION",
     memoryKind: "gotcha",
-    lesson: "The checkout e2e suite failed twice on Safari and passed on retry.",
+    lesson:
+      "The checkout e2e suite failed twice on Safari and passed on retry.",
     source: "fix",
     confidenceScore: 60,
     enforcementScore: null,

@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
-// The Policy and Context tabs: each lists the entries of its own chip, links a
-// frame on the run's own chain, names a subagent's frame without a link (the
-// Frames tab reads the run's chain, where that seq is a different frame), and
-// says the list is a prefix whenever another page lies past it.
-import type { ReactNode } from "react";
+// The Policy tab (mockup `pRun`, the policy branch) and `entriesOf`, which the
+// tab strip counts with: one row per decision frame, Frame, Call and Outcome
+// from the record, and the rules, taint and latency the transcript does not
+// carry said to be not recorded rather than guessed. A frame on a subagent's
+// chain is named and not linked, a list read short says it is a prefix, and a
+// failed read says it failed.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { runTranscript, transcriptEntry } from "./run.builders";
+import { evidenceTranscript } from "./sections.builders";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -17,7 +20,8 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-const { ContextSection, PolicySection } = await import("./sections");
+const { PolicyDecisions } = await import("./policy-tab");
+const { entriesOf } = await import("./sections");
 
 afterEach(cleanup);
 
@@ -32,7 +36,7 @@ const policyEntry = (seq: string, chainRef?: string) =>
     type: "policy_decision",
     kind: "frame",
     kinds: ["policy"],
-    label: `deny Bash`,
+    label: "deny Bash",
     decision: {
       seq,
       ...(chainRef === undefined ? {} : { chainRef }),
@@ -45,140 +49,291 @@ const policyEntry = (seq: string, chainRef?: string) =>
       : { subagent: { chainRef, type: "Explore" } }),
   });
 
-const recallEntry = (seq: string, chainRef?: string) =>
-  transcriptEntry({
-    seq,
-    endSeq: seq,
-    type: "context.assembled",
-    kind: "frame",
-    kinds: ["recall"],
-    label: "rows=3",
-    decision: null,
-    ...(chainRef === undefined
-      ? {}
-      : { subagent: { chainRef, type: "Explore" } }),
-  });
+function renderPolicy(read: Parameters<typeof PolicyDecisions>[0]["read"]) {
+  return render(
+    <IntlProvider>
+      <PolicyDecisions read={read} place={PLACE} />
+    </IntlProvider>,
+  );
+}
 
-describe("PolicySection", () => {
-  it("links the run's own decision, names a subagent's without a link, and says nothing is cut when the read is whole", async () => {
-    const { container } = render(
-      <IntlProvider>
-        <PolicySection
-          read={readOk(
-            runTranscript({
-              entries: [policyEntry("4"), policyEntry("4", CHAIN)],
-              cursor: null,
-              complete: true,
-            }),
-          )}
-          place={PLACE}
-        />
-      </IntlProvider>,
-    );
-    const rows = screen.getAllByRole("row").slice(1);
+describe("PolicyDecisions", () => {
+  it("draws the design's six columns, one row per decision, with the call, the outcome and the frame link", async () => {
+    const { container } = renderPolicy(readOk(evidenceTranscript()));
+    const table = screen.getByRole("table", { name: "Policy decisions" });
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent),
+    ).toEqual([
+      "Frame",
+      "Call",
+      "Outcome",
+      "Rules that fired",
+      "Taint",
+      "Latency",
+    ]);
+    const rows = screen.getAllByTestId("run-policy-decision");
     expect(rows).toHaveLength(2);
-    const [own, subagent] = rows;
-    if (own === undefined || subagent === undefined)
-      throw new Error("expected two rows");
-    expect(within(own).queryByRole("link")).not.toBeNull();
-    expect(within(subagent).queryByRole("link")).toBeNull();
-    expect(rows[1]?.textContent).toContain("4");
-    expect(screen.queryByText(/prefix|first|cut/i)).toBeNull();
+    const [allow, ask] = rows;
+    if (allow === undefined || ask === undefined) throw new Error("two rows");
+    expect(within(allow).getByRole("link", { name: "7" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=7",
+    );
+    expect(within(allow).getByText("github__list_pull_requests")).toBeTruthy();
+    expect(within(allow).getByText("allow")).toBeTruthy();
+    expect(within(ask).getByText("github__create_release")).toBeTruthy();
+    expect(within(ask).getByText("ask")).toBeTruthy();
     await expectNoAxe(container);
   });
 
-  it("says the list is a prefix when another page lies past it", () => {
-    const { container } = render(
-      <IntlProvider>
-        <PolicySection
-          read={readOk(
-            runTranscript({
-              entries: [policyEntry("4")],
-              cursor: "t:4",
-              complete: true,
-            }),
-          )}
-          place={PLACE}
-        />
-      </IntlProvider>,
-    );
-    expect(container.querySelector("p.pt-3")).not.toBeNull();
+  it("says the rules, taint and latency are not recorded rather than drawing a guess (negative)", () => {
+    renderPolicy(readOk(evidenceTranscript()));
+    const [row] = screen.getAllByTestId("run-policy-decision");
+    if (row === undefined) throw new Error("a row");
+    const cells = within(row).getAllByRole("cell");
+    expect(cells.slice(3).map((cell) => cell.textContent)).toEqual([
+      "not recorded",
+      "not recorded",
+      "not recorded",
+    ]);
+    expect(screen.queryByText(/\d+ ms/)).toBeNull();
+    expect(screen.getByText(/not on the transcript yet/)).toBeTruthy();
   });
 
-  it("shows the read failure instead of a list", () => {
-    const { container } = render(
-      <IntlProvider>
-        <PolicySection
-          read={readError("frame_store_unreachable", 502)}
-          place={PLACE}
-        />
-      </IntlProvider>,
+  it("links the run's own decision and names a subagent's without a link, because the player reads the run's chain", () => {
+    renderPolicy(
+      readOk(
+        runTranscript({
+          entries: [policyEntry("4"), policyEntry("4", CHAIN)],
+        }),
+      ),
     );
-    expect(container.querySelector("table")).toBeNull();
+    const [own, subagent] = screen.getAllByTestId("run-policy-decision");
+    if (own === undefined || subagent === undefined)
+      throw new Error("two rows");
+    expect(within(own).getByRole("link", { name: "4" })).toBeTruthy();
+    expect(within(subagent).queryByRole("link", { name: "4" })).toBeNull();
+    expect(within(subagent).getByText("4")).toBeTruthy();
+    expect(within(own).getByText("Bash")).toBeTruthy();
+    expect(within(own).getByText("deny")).toBeTruthy();
+    expect(
+      screen.queryByText(
+        "The transcript read stopped short, so later decisions are missing here.",
+      ),
+    ).toBeNull();
+  });
+
+  it("says the list is a prefix when another page lies past it (negative)", () => {
+    renderPolicy(
+      readOk(runTranscript({ entries: [policyEntry("4")], cursor: "dDo0MQ" })),
+    );
+    expect(
+      screen.getByText(
+        "The transcript read stopped short, so later decisions are missing here.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says there is nothing to list when the run recorded no decision", () => {
+    renderPolicy(readOk(runTranscript({ entries: [transcriptEntry()] })));
+    expect(
+      screen.getByText("No policy decision was recorded on this run."),
+    ).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("lists a policy entry with no decision folded in by its own frame and type, and says the call and outcome were not recorded (negative)", () => {
+    const bare = (seq: string, chainRef?: string) =>
+      transcriptEntry({
+        seq,
+        endSeq: seq,
+        type: "policy_decision",
+        kind: "frame",
+        kinds: ["policy"],
+        // `policy deny` names a decision and no call.
+        label: "policy deny",
+        decision: null,
+        ...(chainRef === undefined
+          ? {}
+          : { subagent: { chainRef, type: "Explore" } }),
+      });
+    renderPolicy(
+      readOk(runTranscript({ entries: [bare("9"), bare("9", CHAIN)] })),
+    );
+    const [own, subagent] = screen.getAllByTestId("run-policy-decision");
+    if (own === undefined || subagent === undefined)
+      throw new Error("two rows");
+    expect(within(own).getByRole("link", { name: "9" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=9",
+    );
+    // The entry's own chain decides the link when no decision names one.
+    expect(within(subagent).queryByRole("link")).toBeNull();
+    for (const row of [own, subagent]) {
+      const cells = within(row).getAllByRole("cell");
+      expect(cells[1]).toHaveTextContent("not recordedpolicy_decision");
+      expect(cells[2]).toHaveTextContent(/^not recorded$/);
+    }
+  });
+
+  it.each<[string, string]>([
+    ["approval", "text-info"],
+    ["approve", "text-info"],
+    ["ask", "text-info"],
+    ["allow", "text-success"],
+    ["deny", "text-warning"],
+    ["route", "text-muted-foreground"],
+  ])(
+    "draws a %s decision in its state's hue, and a word it does not know as a quiet fact",
+    (word, hue) => {
+      renderPolicy(
+        readOk(
+          runTranscript({
+            entries: [
+              transcriptEntry({
+                seq: "4",
+                endSeq: "4",
+                type: "policy_decision",
+                kind: "frame",
+                kinds: ["policy"],
+                label: `${word} Bash`,
+                decision: {
+                  seq: "4",
+                  decision: word,
+                  type: "policy_decision",
+                  at: AT,
+                },
+              }),
+            ],
+          }),
+        ),
+      );
+      const [row] = screen.getAllByTestId("run-policy-decision");
+      if (row === undefined) throw new Error("a row");
+      expect(within(row).getByText(word).className).toContain(hue);
+    },
+  );
+
+  it("shows the read failure instead of a list (negative)", () => {
+    renderPolicy(readError("frame_store_unreachable", 502));
+    expect(
+      screen.queryByText("No policy decision was recorded on this run."),
+    ).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(
+      within(
+        screen.getByRole("region", { name: "Policy decisions" }),
+      ).getByText(/frame_store_unreachable|could not|failed/i),
+    ).toBeTruthy();
   });
 });
 
-describe("ContextSection", () => {
-  it("links the run's own recall, names a subagent's without a link, and marks a cut list", async () => {
-    const { container } = render(
-      <IntlProvider>
-        <ContextSection
-          read={readOk(
-            runTranscript({
-              entries: [recallEntry("7"), recallEntry("2", CHAIN)],
-              cursor: null,
-              complete: false,
-            }),
-          )}
-          place={PLACE}
-        />
-      </IntlProvider>,
+describe("entriesOf", () => {
+  it("narrows the whole-run read to one chip, and answers null for a failed read rather than an empty list", () => {
+    const read = readOk(evidenceTranscript());
+    expect(entriesOf(read, "policy")?.map((entry) => entry.seq)).toEqual([
+      "7",
+      "10",
+    ]);
+    expect(entriesOf(read, "recall")?.map((entry) => entry.seq)).toEqual([
+      "1",
+      "2",
+    ]);
+    expect(entriesOf(readError("frame_store_unreachable", 502), "policy")).toBe(
+      null,
     );
-    const rows = screen.getAllByRole("row").slice(1);
+  });
+});
+
+describe("PolicyDecisions by who decided", () => {
+  const decided = (
+    seq: string,
+    decision: string,
+    source: string | null,
+    label = "Bash",
+  ) =>
+    transcriptEntry({
+      seq,
+      endSeq: seq,
+      type: source === "human" ? "oxagen:command_applied" : "policy_decision",
+      kind: "frame",
+      kinds: ["policy"],
+      label: `${decision} ${label}`,
+      decision: {
+        seq,
+        decision,
+        type: source === "human" ? "command" : "policy_decision",
+        at: AT,
+        ...(source === null ? {} : { source }),
+      },
+    });
+
+  it("lists Oxagen policy and operator decisions with who decided, and folds the harness's own checks below", async () => {
+    const { container } = renderPolicy(
+      readOk(
+        runTranscript({
+          entries: [
+            decided("3", "deny", "bundle"),
+            decided("5", "allow", "harness"),
+            decided("6", "allow", "managed_settings"),
+            decided("8", "pause", "human", "run"),
+          ],
+        }),
+      ),
+    );
+    const table = screen.getByRole("table", { name: "Policy decisions" });
+    const rows = within(table).getAllByTestId("run-policy-decision");
     expect(rows).toHaveLength(2);
-    const [own, subagent] = rows;
-    if (own === undefined || subagent === undefined)
-      throw new Error("expected two rows");
-    expect(within(own).queryByRole("link")).not.toBeNull();
-    expect(within(subagent).queryByRole("link")).toBeNull();
-    expect(container.querySelector("p.pt-3")).not.toBeNull();
+    expect(
+      rows.map(
+        (row) => within(row).getByTestId("policy-decided-by").textContent,
+      ),
+    ).toEqual(["decided by Oxagen policy", "decided by an operator"]);
+    const checks = screen.getByTestId("harness-checks");
+    expect(checks).not.toHaveAttribute("open");
+    expect(within(checks).getByText("2 harness checks")).toBeTruthy();
+    const folded = within(checks).getAllByTestId("run-policy-decision");
+    expect(
+      folded.map(
+        (row) => within(row).getByTestId("policy-decided-by").textContent,
+      ),
+    ).toEqual(["decided by the agent harness", "decided by managed settings"]);
     await expectNoAxe(container);
   });
 
-  it("says there is nothing to list, and shows a failed read instead of a list", () => {
-    const empty = render(
-      <IntlProvider>
-        <ContextSection
-          read={readOk(runTranscript({ entries: [], cursor: null }))}
-          place={PLACE}
-        />
-      </IntlProvider>,
+  it("says only the harness decided when neither Oxagen nor an operator did (negative)", () => {
+    renderPolicy(
+      readOk(runTranscript({ entries: [decided("5", "allow", "harness")] })),
     );
-    expect(empty.container.querySelector("table")).toBeNull();
-    cleanup();
-    const failed = render(
-      <IntlProvider>
-        <ContextSection
-          read={readError("frame_store_unreachable", 502)}
-          place={PLACE}
-        />
-      </IntlProvider>,
-    );
-    expect(failed.container.querySelector("table")).toBeNull();
+    expect(
+      screen.getByText(
+        "Neither Oxagen policy nor an operator made a decision on this run. The agent harness's own checks are listed below.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("table", { name: "Policy decisions" }),
+    ).toBeNull();
+    expect(screen.getByText("1 harness check")).toBeTruthy();
   });
-});
 
-describe("PolicySection with no decisions", () => {
-  it("says there is nothing to list", () => {
-    const { container } = render(
-      <IntlProvider>
-        <PolicySection
-          read={readOk(runTranscript({ entries: [], cursor: null }))}
-          place={PLACE}
-        />
-      </IntlProvider>,
+  it("says who decided is not recorded, and prints a source word it has no name for as recorded (negative)", () => {
+    renderPolicy(
+      readOk(
+        runTranscript({
+          entries: [
+            decided("3", "deny", null),
+            decided("4", "deny", "sandbox"),
+          ],
+        }),
+      ),
     );
-    expect(container.querySelector("table")).toBeNull();
-    expect(container.textContent.length).toBeGreaterThan(0);
+    expect(
+      screen
+        .getAllByTestId("policy-decided-by")
+        .map((line) => line.textContent),
+    ).toEqual(["who decided is not recorded", "decided by sandbox"]);
+    expect(screen.queryByTestId("harness-checks")).toBeNull();
   });
 });

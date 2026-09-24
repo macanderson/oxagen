@@ -127,6 +127,13 @@ function fakeControlPlane(bundleEtag: string) {
   const calls: string[] = [];
   /** Every daemon health report the plane received, newest last. */
   const reported: unknown[] = [];
+  /**
+   * The etag each bundle poll sent, newest last, `undefined` for a poll that
+   * sent none. The real control plane answers `not_modified` when the etag
+   * matches (`get_tacho_bundle`) and signs afresh when it is absent, so what
+   * the daemon sends decides whether a quiet mandate ever renews.
+   */
+  const bundleEtags: Array<string | undefined> = [];
   const fetch: FetchLike = async (url, init) => {
     calls.push(url);
     if (down) throw new Error("ECONNREFUSED");
@@ -165,6 +172,9 @@ function fakeControlPlane(bundleEtag: string) {
       };
     }
     if (url.endsWith("/bundle")) {
+      bundleEtags.push(
+        typeof body["etag"] === "string" ? body["etag"] : undefined,
+      );
       return {
         ok: true,
         status: 200,
@@ -213,6 +223,7 @@ function fakeControlPlane(bundleEtag: string) {
     acks,
     calls,
     reported,
+    bundleEtags,
     queue: (
       command: Omit<
         DeliveredCommand,
@@ -437,6 +448,71 @@ describe("tachod", () => {
 
     releaseForward?.();
     expect((await forward).status).toBe(200);
+  });
+
+  it("seals the spool replay of a hook whose live write failed", async () => {
+    // The hook-id ledger drops a replay whose id the session already holds.
+    // It used to remember the id before the frames reached the WAL, so a
+    // failed write left the id behind. The client saw a 500, spooled the
+    // hook under the same id, and the daemon dropped that replay as a
+    // repeat. The hook never reached the record.
+    //
+    // The same failure also lost the session's genesis. The session was
+    // created inside the failed call, after every chain was marked, so the
+    // rollback never reached it: the retry sealed a resume at seq 1 on a
+    // chain whose seq 0 nothing held.
+    const plane = fakeControlPlane("etag-3");
+    const { handle, host } = await boot(plane);
+    const port = handle.port as number;
+    const start = fixtures().find(
+      (f) => f.stdin["hook_event_name"] === "SessionStart",
+    ) as Fixture;
+    const envelope = {
+      payload: start.stdin,
+      env: start.env,
+      hook_id: "hook_write_failed",
+    };
+    const asEnvelope = { "x-tacho-envelope": "1" };
+
+    const append = handle.wal.append.bind(handle.wal);
+    handle.wal.append = () => {
+      throw new Error("ENOSPC: no space left on device");
+    };
+    const live = await postHttp(
+      port,
+      host.local_token,
+      "/hook",
+      envelope,
+      asEnvelope,
+    );
+    expect(live.status).toBe(500);
+    handle.wal.append = append;
+
+    const replay = await postHttp(
+      port,
+      host.local_token,
+      "/hook",
+      envelope,
+      asEnvelope,
+    );
+    expect(replay.status).toBe(200);
+    await handle.tick();
+    const started = plane.ingested.filter(
+      (e) =>
+        e.kind === "agent_start" &&
+        (e.body as { session_start_source?: string }).session_start_source ===
+          "startup",
+    );
+    expect(started).toHaveLength(1);
+    const [genesis] = started as [TachoEvent];
+    expect(genesis.seq).toBe(0);
+    expect(
+      (genesis.body as { resume_of_session_id?: string }).resume_of_session_id,
+    ).toBeUndefined();
+    const chain = plane.ingested.filter(
+      (e) => e.session_uuid === genesis.session_uuid,
+    );
+    expect(verifyChain(chain, { expectGenesis: true }).violations).toEqual([]);
   });
 
   it(
@@ -1127,6 +1203,137 @@ describe("tachod", () => {
 
       expect(plane.ingestedBodies).toEqual([]);
       expect(walBodyTexts(paths.wal)).toEqual([]);
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "renews a quiet mandate on disk once it is past half its signed window",
+    async () => {
+      // The defect this covers (#3944): the daemon sent its etag on every
+      // poll, an unchanged mandate answered `not_modified` for ever, and the
+      // signed copy on disk kept its first window. The daemon's confirmation
+      // lives in memory, so the hook, reading host.json with the daemon down,
+      // denied every mutating tool a day after the mandate's last edit.
+      const plane = fakeControlPlane("etag-3");
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      const hour = 60 * 60_000;
+      const day = 24 * hour;
+      const issued = Date.parse("2026-09-10T00:00:00.000Z");
+      const signedAt = (at: number) =>
+        signer.sign(
+          unsignedBundle({
+            permissions: { allow: ["Bash(make*)"], deny: [], ask: [] },
+            issued_at: new Date(at).toISOString(),
+            expires_at: new Date(at + day).toISOString(),
+          }),
+        );
+      writeHostFile(paths.hostFile, testHostFile(signer, signedAt(issued)));
+      let clock = issued + hour;
+      const { handle } = await boot(plane, paths, {
+        now: () => clock,
+        // No periodic refresh: this test makes every poll itself, so a
+        // background tick cannot take the poll an assertion is about.
+        timers: {
+          detectorMs: 0,
+          sweepMs: 0,
+          checkpointMs: 0,
+          commandsPollMs: 0,
+          bundleRefreshMs: Number.MAX_SAFE_INTEGER,
+        },
+      });
+      // A day and six hours after the first signing: outside the first
+      // window, inside the one a re-signing at thirteen hours opens.
+      const later = issued + day + 6 * hour;
+      const makeWithDaemonDown = async () =>
+        JSON.parse(
+          (
+            await runTachoHook({
+              paths,
+              env: {},
+              stdin: JSON.stringify({
+                session_id: "11111111-1111-4111-8111-11111111eeee",
+                hook_event_name: "PreToolUse",
+                tool_name: "Bash",
+                tool_input: { command: "make" },
+                cwd: "/home/dev/proj",
+              }),
+              post: async () => {
+                throw new Error("daemon unreachable");
+              },
+              now: () => later,
+            })
+          ).stdout,
+        ) as unknown;
+
+      // Early in the window the poll sends the etag, and an unchanged
+      // mandate stays as it was.
+      expect(await handle.refreshBundle()).toBe(false);
+      expect(plane.bundleEtags.at(-1)).toBe("etag-3");
+      expect(readHostFile(paths.hostFile)?.bundle.issued_at).toBe(
+        new Date(issued).toISOString(),
+      );
+      // Negative control: the first signed copy has lapsed by `later`.
+      expect(await makeWithDaemonDown()).toMatchObject({
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason: expect.stringContaining("stale"),
+        },
+      });
+
+      // Past half the window the poll sends no etag, and the control plane
+      // signs the same mandate again with a new window.
+      clock = issued + 13 * hour;
+      const resigned = signedAt(clock);
+      plane.setBundle(resigned);
+      expect(await handle.refreshBundle()).toBe(true);
+      expect(plane.bundleEtags.at(-1)).toBeUndefined();
+      expect(readHostFile(paths.hostFile)?.bundle).toMatchObject({
+        etag: "etag-3",
+        issued_at: resigned.issued_at,
+        expires_at: resigned.expires_at,
+      });
+
+      // The renewed copy is what the hook reads with the daemon down, so the
+      // same call at the same moment is allowed by the mandate's rule.
+      expect(await makeWithDaemonDown()).toMatchObject({
+        hookSpecificOutput: { permissionDecision: "allow" },
+      });
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "replaces an edited host.json that kept its etag instead of confirming it",
+    async () => {
+      // The defect this covers (#3944): the control poll confirmed the cached
+      // mandate whenever the etags matched, and the bundle poll sent the
+      // cached etag. An edit that left the etag alone therefore earned a
+      // confirmation, never a fresh copy, and stood until the mandate changed.
+      const plane = fakeControlPlane("etag-3");
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      const signed = signer.sign(unsignedBundle({}));
+      const edited = { ...signed, mode: "observe" as const };
+      writeHostFile(paths.hostFile, testHostFile(signer, edited));
+      const { handle } = await boot(plane, paths, {
+        // No timed refresh, so only the control poll can fetch a bundle.
+        timers: {
+          detectorMs: 0,
+          sweepMs: 0,
+          checkpointMs: 0,
+          commandsPollMs: 0,
+          bundleRefreshMs: Number.MAX_SAFE_INTEGER,
+        },
+      });
+      plane.setBundle(signed);
+
+      await handle.tick();
+
+      expect(plane.bundleEtags).toEqual([undefined]);
+      expect(handle.host().bundle.mode).toBe("enforce");
+      expect(readHostFile(paths.hostFile)?.bundle.mode).toBe("enforce");
     },
     DAEMON_TEST_TIMEOUT_MS,
   );

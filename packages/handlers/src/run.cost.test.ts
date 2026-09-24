@@ -64,6 +64,21 @@ describe("get_run_cost", () => {
       byTool: [{ name: "Read", calls: 2 }],
       priceEntryIds: ["0192d4a8-7c1e-7a00-8000-0000000000e1"],
       rolledUpAt: ROLLED_UP_AT.toISOString(),
+      // The fixture's row was rebuilt after the run sealed.
+      isEstimate: false,
+    });
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("marks a row built while the run was open as an estimate (#3980)", async () => {
+    const row = pricedRun(900n, { sealedAt: null });
+    const h = harness([row]);
+    const out = await h.handler({ runId: row.runId }, ctx());
+    expect(out.rollup?.isEstimate).toBe(true);
+    expect(out.rollup?.cost).toEqual({
+      micros: "900",
+      currency: "USD",
+      basis: "client_attested",
     });
     expect(() => runCostGet.output.parse(out)).not.toThrow();
   });

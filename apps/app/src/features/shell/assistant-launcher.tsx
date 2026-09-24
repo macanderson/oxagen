@@ -16,8 +16,9 @@
 // the line under the label says the two are not read here (#2968, which adds
 // the `shell.assistantEngine` port), and a turn that cannot reach the engine
 // says so in the flyout, where the person is looking when it matters.
-import { ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { StellaIcon } from "@/ui/stella-mark";
 import { useShellState } from "./shell-state";
 
 export const ASSISTANT_PANEL_ID = "shell-assistant";
@@ -53,11 +54,12 @@ export function AssistantLauncher({
         assistantOpen ? "border-gold" : "border-border"
       }`}
     >
+      {/* Stella's asterisk is the mark, and gold is the mark's colour. */}
       <span
         aria-hidden="true"
-        className="grid size-6 flex-none place-items-center rounded-md bg-gold text-on-gold"
+        className="grid size-6 flex-none place-items-center rounded-md border border-border bg-background"
       >
-        <Sparkles className="size-3.5" />
+        <StellaIcon className="size-5" data-testid="assistant-launcher-icon" />
       </span>
       <span className="min-w-0 flex-1">
         <b className="block text-[13px] font-semibold">{t("launcher")}</b>

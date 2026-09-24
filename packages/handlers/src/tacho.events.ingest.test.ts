@@ -8,7 +8,7 @@ import {
   sessionUuid,
 } from "@oxagen/tacho";
 import { resetColumnProbesForTests, schema } from "@oxagen/database";
-import { Column, Param, SQL } from "drizzle-orm";
+import { Column, eq, Param, SQL } from "drizzle-orm";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   loggerError: vi.fn(),
   unlockOnboardingGate: vi.fn(),
   recordSpend: vi.fn(),
+  recordGovernedActions: vi.fn(),
   sendEvent: vi.fn(),
   bodyPut: vi.fn(),
   recordProofFrames: vi.fn(),
@@ -75,7 +76,16 @@ vi.mock("@oxagen/iam/fetch-agent-authz", async (importOriginal) => {
   return { ...original, fetchAgentRunAuthzIn: mocks.fetchAgentRunAuthzIn };
 });
 
-vi.mock("@oxagen/billing", () => ({ recordSpend: mocks.recordSpend }));
+// The recorders are mocked. The ledger helpers stay real, so the keys these
+// tests read are the keys production writes.
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@oxagen/billing")>();
+  return {
+    ...original,
+    recordSpend: mocks.recordSpend,
+    recordGovernedActions: mocks.recordGovernedActions,
+  };
+});
 vi.mock("./event-client", () => ({
   eventClient: { send: mocks.sendEvent },
 }));
@@ -83,12 +93,16 @@ vi.mock("./event-client", () => ({
 import { digestBytes } from "@oxagen/tacho";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { clearSteeringCacheForTests } from "./lib/tacho-steering";
+import { idleCloseColumns } from "@oxagen/inngest-functions/tacho-idle-close";
 import {
+  IDLE_CLOSE_UNDONE,
   enforcementTierOf,
   foldDelta,
+  isBillableToolCall,
   isObservedModelCall,
   lastRecordedContext,
   tachoEventsIngestHandler,
+  tachoToolCallEntries,
   usageCountedEvents,
 } from "./tacho.events.ingest";
 
@@ -308,6 +322,10 @@ function forgedGatewaySession(
 
 interface FakeDb {
   activeDefinition?: string;
+  /** The registered agent's public id, for the ledger's agent attribution. */
+  agentPublicId?: string;
+  /** Every `agents` lookup's arguments, so a test can pin the predicate. */
+  agentLookups?: ReturnType<typeof vi.fn>;
   hosts: Array<Record<string, unknown>>;
   principals: Array<Record<string, unknown>>;
   principalLookups: ReturnType<typeof vi.fn>;
@@ -351,6 +369,12 @@ interface FakeDb {
    * — the read returns values, and the row moves on under them.
    */
   advanceSeqCountOnRead: number | undefined;
+  /**
+   * The control plane's idle close commits between this request's read and
+   * its write: the row is sealed `idle_timeout` and its head does not move.
+   * One-shot, like `advanceSeqCountOnRead`.
+   */
+  closeOnRead: boolean;
   containedLaunches: Array<{ sessionUuid: string; genesisHash: string }>;
   gatewayChains: Array<{
     chainSessionUuid: string;
@@ -429,6 +453,7 @@ function fakeDb(): FakeDb {
     promoteTierOnRead: undefined,
     hideSessionFromNextRead: false,
     advanceSeqCountOnRead: undefined,
+    closeOnRead: false,
     pendingColumns: new Set<string>(),
     gatewayChains: [],
     containedLaunches: [],
@@ -532,6 +557,38 @@ function boundColumns(node: unknown): Array<[string, unknown]> {
   return pairs;
 }
 
+/**
+ * The columns an `IS NULL` predicate names. `isNull(col)` compiles to the
+ * chunks `[Column, " is null"]` and binds no parameter, so `boundColumns`
+ * cannot see it, and a fixture that ignored it would report the guard on the
+ * idle close's race working when it was absent.
+ */
+function nullColumns(node: unknown): string[] {
+  if (!(node instanceof SQL)) return [];
+  const out: string[] = [];
+  let pending: string | null = null;
+  for (const chunk of node.queryChunks) {
+    if (chunk instanceof Column) {
+      pending = chunk.name.replace(/_([a-z])/g, (_, c: string) =>
+        c.toUpperCase(),
+      );
+      continue;
+    }
+    if (chunk instanceof SQL) {
+      out.push(...nullColumns(chunk));
+      pending = null;
+      continue;
+    }
+    // A string chunk carries its text as an array; a Param's value is data.
+    const value =
+      chunk instanceof Param ? undefined : (chunk as { value?: unknown }).value;
+    const text = Array.isArray(value) ? value.join("") : "";
+    if (pending !== null && /^\s*is null/i.test(text)) out.push(pending);
+    pending = null;
+  }
+  return out;
+}
+
 function sessionNamed(db: FakeDb, where: unknown) {
   for (const value of boundValues(where)) {
     const row = db.sessions.get(value as string);
@@ -614,6 +671,14 @@ function wire(db: FakeDb): void {
                 row["enforcementTier"] = db.promoteTierOnRead;
                 db.promoteTierOnRead = undefined;
               }
+              if (db.closeOnRead) {
+                Object.assign(row, {
+                  sealedAt: new Date("2026-09-09T00:00:00.000Z"),
+                  sealSource: "idle_timeout",
+                  outcome: "unknown",
+                });
+                db.closeOnRead = false;
+              }
               return snapshot;
             },
           },
@@ -636,10 +701,17 @@ function wire(db: FakeDb): void {
           // envelope carries the empty permission set and the observed
           // budget; `tacho-host-bundle.test.ts` covers a mandate that is not.
           agents: {
-            findFirst: async () =>
-              db.activeDefinition === undefined
+            findFirst: async (args: unknown) => {
+              db.agentLookups?.(args);
+              if (db.activeDefinition !== undefined)
+                return {
+                  activeVersionId: "version-active",
+                  publicId: db.agentPublicId,
+                };
+              return db.agentPublicId === undefined
                 ? undefined
-                : { activeVersionId: "version-active" },
+                : { publicId: db.agentPublicId };
+            },
           },
           agentVersions: {
             findFirst: async () =>
@@ -826,6 +898,10 @@ function wire(db: FakeDb): void {
                   if (current[column] === undefined) continue;
                   if (current[column] !== value) return [];
                 }
+                for (const column of nullColumns(condition)) {
+                  if (current[column] !== undefined && current[column] !== null)
+                    return [];
+                }
                 Object.assign(current, values);
                 return [{ id: current["id"] ?? "s1" }];
               }
@@ -863,6 +939,7 @@ beforeEach(() => {
   }));
   mocks.unlockOnboardingGate.mockResolvedValue(false);
   mocks.recordSpend.mockResolvedValue(undefined);
+  mocks.recordGovernedActions.mockResolvedValue({ billedUnits: 0 });
   mocks.sendEvent.mockResolvedValue(undefined);
   mocks.recordProofFrames.mockResolvedValue({ written: 0, witnessRunIds: [] });
   mocks.fetchAgentRunAuthzIn.mockResolvedValue({
@@ -4362,6 +4439,784 @@ describe("observed metering from the model proxy", () => {
     expect(
       dialect.sqlToQuery(update?.values["numModelCalls"] as SQL).params,
     ).toEqual([0]);
+  });
+});
+
+/**
+ * A run's cost as it goes, and the control plane's idle close (#3980).
+ *
+ * The close itself is written by `tacho.session-idle-close` in
+ * `@oxagen/inngest-functions`; these cases put a row in the state that job
+ * leaves and check what ingest does with the session's next batch.
+ */
+describe("running cost and the idle close", () => {
+  const RUN_ID = "tse_fake0000000000000001";
+
+  /** Every event name sent, flattened across single and batched sends. */
+  function sentNames(): string[] {
+    return mocks.sendEvent.mock.calls.flatMap(([sent]) =>
+      (Array.isArray(sent) ? sent : [sent]).map(
+        (event: { name: string }) => event.name,
+      ),
+    );
+  }
+
+  /** The columns the real idle close writes, on the fake's row. */
+  function closeForIdleness(db: FakeDb, uuid: string = SESSION): void {
+    const row = db.sessions.get(uuid)!;
+    Object.assign(
+      row,
+      idleCloseColumns(
+        {
+          id: String(row["id"]),
+          publicId: String(row["publicId"]),
+          orgId: CONTEXT.orgId,
+          workspaceId: CONTEXT.workspaceId,
+          parentSessionUuid: null,
+          seqCount: Number(row["seqCount"] ?? 0),
+          lastHash: (row["lastHash"] as string | undefined) ?? null,
+          lastEventAt: new Date("2026-09-08T10:06:03.000Z"),
+          chainVerified: true,
+          telemetryGapCount: 0,
+          contentFrames: 0,
+          bodyFrames: 0,
+          numToolCalls: 0,
+          toolBodyFrames: 0,
+          enforcementTier: "observe",
+        },
+        "content_exact",
+        new Date("2026-09-09T00:00:00.000Z"),
+      ),
+    );
+  }
+
+  it("undoes on reopen every column the idle close writes", () => {
+    const closed = idleCloseColumns(
+      {
+        id: "s1",
+        publicId: "tse_1",
+        orgId: CONTEXT.orgId,
+        workspaceId: CONTEXT.workspaceId,
+        parentSessionUuid: null,
+        seqCount: 1,
+        lastHash: null,
+        lastEventAt: new Date(),
+        chainVerified: true,
+        telemetryGapCount: 0,
+        contentFrames: 0,
+        bodyFrames: 0,
+        numToolCalls: 0,
+        toolBodyFrames: 0,
+        enforcementTier: "observe",
+      },
+      "content_exact",
+      new Date(),
+    );
+    const { updatedAt: _, ...written } = closed;
+    expect(Object.keys(IDLE_CLOSE_UNDONE).sort()).toEqual(
+      Object.keys(written).sort(),
+    );
+  });
+
+  it("asks for a running rollup of an open run that recorded a model call", async () => {
+    const db = fakeDb();
+    wire(db);
+    // Everything but the `agent_stop`: the run is still open.
+    await tachoEventsIngestHandler(batch(session().slice(0, -1)), CONTEXT);
+    expect(mocks.sendEvent).toHaveBeenCalledWith([
+      {
+        name: "cost/run.progressed",
+        data: {
+          runId: RUN_ID,
+          orgId: CONTEXT.orgId,
+          workspaceId: CONTEXT.workspaceId,
+        },
+      },
+    ]);
+    expect(sentNames()).not.toContain("cost/run.sealed");
+    // After the append, for the reason the seal event is.
+    expect(mocks.insertTachoEvents.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendEvent.mock.invocationCallOrder[0] as number,
+    );
+  });
+
+  it("sends nothing for a batch with no model or tool frame", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session().slice(0, 2)), CONTEXT);
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
+  it("leaves a batch that seals the run to the seal event alone", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(sentNames()).toEqual(["cost/run.sealed"]);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      outcome: "completed",
+      sealSource: "agent_stop",
+    });
+  });
+
+  it("still survives a progress dispatch that fails", async () => {
+    const db = fakeDb();
+    wire(db);
+    mocks.sendEvent.mockRejectedValueOnce(new Error("inngest down"));
+    const out = await tachoEventsIngestHandler(
+      batch(session().slice(0, -1)),
+      CONTEXT,
+    );
+    expect(out.accepted).toBe(session().length - 1);
+  });
+
+  it("reopens an idle-closed session when it reports again", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    closeForIdleness(db);
+    mocks.sendEvent.mockClear();
+
+    // The harness was alive all along: a tool call, no stop.
+    await tachoEventsIngestHandler(batch(events.slice(3, -1)), CONTEXT);
+
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt: null,
+      sealSource: null,
+      outcome: "running",
+      endedAt: null,
+      finalHash: null,
+      unobservedTail: false,
+      completenessGaps: [],
+      replayGrade: null,
+    });
+    // Open again, so its cost is an estimate again and is rolled up as one.
+    expect(sentNames()).toEqual(["cost/run.progressed"]);
+  });
+
+  it("replaces an idle close with the host's own seal", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    closeForIdleness(db);
+    mocks.sendEvent.mockClear();
+
+    // The daemon comes back and ships the rest, `agent_stop` included.
+    await tachoEventsIngestHandler(batch(events.slice(3)), CONTEXT);
+
+    const row = db.sessions.get(SESSION)!;
+    expect(row).toMatchObject({
+      outcome: "completed",
+      sealSource: "agent_stop",
+      finalHash: events.at(-1)!.hash,
+      unobservedTail: false,
+    });
+    expect(row["sealedAt"]).not.toEqual(new Date("2026-09-09T00:00:00.000Z"));
+    expect(sentNames()).toEqual(["cost/run.sealed"]);
+  });
+
+  /** A subagent's chain under SESSION, with a model call. */
+  function subagentChain(): TachoEvent[] {
+    const child = sessionUuid(HOST_PUBLIC, "sess-1-sub");
+    const extra = {
+      session_id: "sess-1-sub",
+      session_uuid: child,
+      root_session_uuid: SESSION,
+      parent_session_uuid: SESSION,
+    };
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const out: TachoEvent[] = [];
+    for (const draft of [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup" },
+        "hook",
+        CLAUDE_CODE,
+        extra,
+      ),
+      unsealed(
+        "llm_call",
+        {
+          model: "claude-haiku-4-5-20251001",
+          input_tokens: 8,
+          output_tokens: 3,
+          cost_usd_micros: 500,
+        },
+        "otel_log",
+        CLAUDE_CODE,
+        extra,
+      ),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      out.push(sealed.event);
+    }
+    return out;
+  }
+
+  const ROOT_ID = "tse_root0000000000000001";
+
+  it("rolls a subagent's frames up under its root's run", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session().slice(0, -1)), CONTEXT);
+    db.sessions.get(SESSION)!["publicId"] = ROOT_ID;
+    mocks.sendEvent.mockClear();
+
+    await tachoEventsIngestHandler(batch(subagentChain()), CONTEXT);
+    expect(mocks.sendEvent).toHaveBeenCalledWith([
+      {
+        name: "cost/run.progressed",
+        data: {
+          runId: ROOT_ID,
+          orgId: CONTEXT.orgId,
+          workspaceId: CONTEXT.workspaceId,
+        },
+      },
+    ]);
+  });
+
+  it("rolls up a sealed root again when its subagent's frames land after the seal", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    db.sessions.get(SESSION)!["publicId"] = ROOT_ID;
+    mocks.sendEvent.mockClear();
+
+    await tachoEventsIngestHandler(batch(subagentChain()), CONTEXT);
+    // Nothing else counts these frames: the nightly sweep passes a sealed
+    // row rolled up after its seal.
+    expect(sentNames()).toEqual(["cost/run.progressed"]);
+    expect(mocks.sendEvent.mock.calls[0]?.[0]).toMatchObject([
+      { data: { runId: ROOT_ID } },
+    ]);
+  });
+
+  it("refuses a batch an idle close overtook, and reopens the session on its re-send", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+
+    // The close commits after this batch read the row open and before it
+    // wrote: the batch's frames must not land on the closed row unreopened.
+    db.closeOnRead = true;
+    const refused = await tachoEventsIngestHandler(
+      batch(events.slice(3, -1)),
+      CONTEXT,
+    ).catch((err: unknown) => err);
+    expect(isHandlerError(refused) && refused.code).toBe("conflict");
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealSource: "idle_timeout",
+      outcome: "unknown",
+    });
+
+    // The daemon's spool re-sends it, and the next read sees the close.
+    await tachoEventsIngestHandler(batch(events.slice(3, -1)), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt: null,
+      sealSource: null,
+      outcome: "running",
+    });
+  });
+
+  it("does not reopen an idle-closed session for a re-send of frames it already holds (negative)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    closeForIdleness(db);
+
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealSource: "idle_timeout",
+      outcome: "unknown",
+    });
+  });
+
+  it("asks for a rollup when a batch with no model or tool frame reopens a session", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    // Through `file_io`: the next frame is `turn_end`.
+    await tachoEventsIngestHandler(batch(events.slice(0, 7)), CONTEXT);
+    closeForIdleness(db);
+    mocks.sendEvent.mockClear();
+
+    await tachoEventsIngestHandler(batch(events.slice(7, 8)), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({ outcome: "running" });
+    // The row the close sealed would read final until it is rebuilt open.
+    expect(sentNames()).toEqual(["cost/run.progressed"]);
+  });
+
+  it("reopens an idle-closed root when one of its subagents reports", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session().slice(0, -1)), CONTEXT);
+    db.sessions.get(SESSION)!["publicId"] = ROOT_ID;
+    closeForIdleness(db);
+    mocks.sendEvent.mockClear();
+
+    await tachoEventsIngestHandler(batch(subagentChain()), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt: null,
+      sealSource: null,
+      outcome: "running",
+    });
+    expect(mocks.sendEvent.mock.calls[0]?.[0]).toMatchObject([
+      { name: "cost/run.progressed", data: { runId: ROOT_ID } },
+    ]);
+  });
+
+  it("asks for a rollup when a re-send writes model frames an append lost", async () => {
+    const db = fakeDb();
+    wire(db);
+    const open = session().slice(0, -1);
+    mocks.insertTachoEvents.mockRejectedValueOnce(new Error("clickhouse down"));
+    await expect(
+      tachoEventsIngestHandler(batch(open), CONTEXT),
+    ).rejects.toThrow("clickhouse down");
+    mocks.sendEvent.mockClear();
+
+    // The spool re-sends it. Postgres already folded it, so the delta is
+    // empty, and ClickHouse holds none of it.
+    await tachoEventsIngestHandler(batch(open), CONTEXT);
+    expect(sentNames()).toEqual(["cost/run.progressed"]);
+  });
+
+  it("keeps a seal recorded before the column existed final (negative)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    // A row sealed before `seal_source` shipped holds null.
+    db.sessions.get(SESSION)!["sealSource"] = null;
+    const sealedAt = db.sessions.get(SESSION)!["sealedAt"];
+    const last = events.at(-1)!;
+    const late = sealEvent(
+      unsealed(
+        "llm_call",
+        {
+          model: "claude-haiku-4-5-20251001",
+          input_tokens: 1,
+          output_tokens: 1,
+        },
+        "otel_log",
+      ),
+      { seq: last.seq + 1, prevHash: last.hash as ChainCursor["prevHash"] },
+    ).event;
+    await tachoEventsIngestHandler(batch([late]), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt,
+      outcome: "completed",
+    });
+  });
+
+  it("keeps a host's seal final when frames arrive after it", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    const sealedAt = db.sessions.get(SESSION)!["sealedAt"];
+    mocks.sendEvent.mockClear();
+
+    // A harness that carried on after the daemon's sweep sealed it.
+    const last = events.at(-1)!;
+    const late = sealEvent(
+      unsealed(
+        "llm_call",
+        {
+          model: "claude-haiku-4-5-20251001",
+          input_tokens: 4,
+          output_tokens: 2,
+          cost_usd_micros: 300,
+        },
+        "otel_log",
+      ),
+      { seq: last.seq + 1, prevHash: last.hash as ChainCursor["prevHash"] },
+    ).event;
+    await tachoEventsIngestHandler(batch([late]), CONTEXT);
+
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt,
+      sealSource: "agent_stop",
+      outcome: "completed",
+    });
+    // The late frame's cost is still counted: the sealed run is rolled up
+    // again, as the final figure it is.
+    expect(sentNames()).toEqual(["cost/run.progressed"]);
+  });
+});
+
+describe("governed action billing for wrapped-harness tool calls (ADR-165)", () => {
+  const CHILD = sessionUuid(HOST_PUBLIC, "sess-child");
+
+  function chain(drafts: UnsealedTachoEvent[]): TachoEvent[] {
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    return drafts.map((draft) => {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      return sealed.event;
+    });
+  }
+  const start = () =>
+    unsealed("agent_start", { session_start_source: "startup" });
+  const call = (
+    body: Record<string, unknown>,
+    source: TachoEvent["source"] = "hook",
+    extra: Partial<UnsealedTachoEvent> = {},
+  ) =>
+    unsealed(
+      "tool_call",
+      { tool_name: "Bash", tool_status: "ok", ...body },
+      source,
+      CLAUDE_CODE,
+      extra,
+    );
+
+  /** The entries each `recordGovernedActions` call was handed, in order. */
+  function offered(): Array<Array<Record<string, unknown>>> {
+    return mocks.recordGovernedActions.mock.calls.map(
+      (args) =>
+        (args[0] as { entries: Array<Record<string, unknown>> }).entries,
+    );
+  }
+
+  /**
+   * The ledger's one rule, in memory: a key bills the first time it is
+   * offered and never again. Each call resolves to the units it billed, the
+   * way `debitWithLedger` reports them, so a test reads what a customer pays.
+   * The returned set holds every key billed so far.
+   */
+  function fakeLedger(): Set<string> {
+    const keys = new Set<string>();
+    mocks.recordGovernedActions.mockImplementation(
+      async (args: {
+        entries: Array<{ idempotencyKey: string; units: number }>;
+      }) => {
+        let billedUnits = 0;
+        for (const entry of args.entries) {
+          if (keys.has(entry.idempotencyKey)) continue;
+          keys.add(entry.idempotencyKey);
+          billedUnits += entry.units;
+        }
+        return { billedUnits };
+      },
+    );
+    return keys;
+  }
+
+  it("bills one unit for an allowed call, attributed to the agent, operator, run and session", async () => {
+    const db = fakeDb();
+    Object.assign(db.hosts[0] as Record<string, unknown>, {
+      agentKey: "acme.core.cc-laptop",
+      agentId: "44444444-4444-4444-8444-444444444444",
+      agentPrincipalId: "55555555-5555-4555-8555-555555555555",
+    });
+    db.agentPublicId = "agt_0123456789abcdefghjkmn";
+    db.agentLookups = vi.fn();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    // The fake answers any lookup, so the predicate is pinned here: the
+    // agent is the host's, by its row id.
+    expect(db.agentLookups).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: eq(schema.agents.id, "44444444-4444-4444-8444-444444444444"),
+        columns: { publicId: true },
+      }),
+    );
+
+    expect(mocks.recordGovernedActions).toHaveBeenCalledOnce();
+    expect(mocks.recordGovernedActions.mock.calls[0]?.[0]).toMatchObject({
+      orgId: CONTEXT.orgId,
+      label: "tacho:tool_calls",
+    });
+    // `session()` is a PreToolUse, a PostToolUse and the shell effect frame
+    // for one call, plus model traffic: one entry.
+    expect(offered()).toEqual([
+      [
+        {
+          idempotencyKey: `tacho:${SESSION}:toolu_1`,
+          source: "tacho",
+          units: 1,
+          occurredAt: new Date("2026-09-08T10:06:03.000Z"),
+          capability: null,
+          toolName: "Bash",
+          mcpServer: null,
+          surface: "tacho",
+          harness: "claude-code",
+          workspaceId: CONTEXT.workspaceId,
+          agentId: "agt_0123456789abcdefghjkmn",
+          principalId: "55555555-5555-4555-8555-555555555555",
+          principalKind: "agent",
+          operatorUserId: ENROLLER_PRINCIPAL_ID,
+          runId: "tse_fake0000000000000001",
+          sessionId: SESSION,
+          toolCallId: "toolu_1",
+          requestId: CONTEXT.requestId,
+        },
+      ],
+    ]);
+  });
+
+  it("names the host's agent key when the host enrolled as no registered agent", async () => {
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["agentKey"] =
+      "acme.core.cc-laptop";
+    wire(db);
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(offered()[0]?.[0]).toMatchObject({
+      agentId: "acme.core.cc-laptop",
+      principalId: null,
+      principalKind: null,
+    });
+  });
+
+  it("bills nothing for a denial, a rejection, a failure, or a sighting the hook did not make", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = chain([
+      start(),
+      // Denied before the call ran: PermissionDenied, and a Tacho deny.
+      unsealed("policy_decision", {
+        tool_name: "Bash",
+        tool_use_id: "toolu_deny",
+        policy_decision: "deny",
+        policy_source: "harness",
+        tool_decision: "reject",
+      }),
+      unsealed("token_denied", {
+        tool_name: "Bash",
+        tool_use_id: "toolu_token",
+        policy_decision: "deny",
+      }),
+      unsealed("tool_requested", { tool_name: "Bash", tool_use_id: "toolu_p" }),
+      call({ tool_use_id: "toolu_rej", tool_status: "rejected" }),
+      call({ tool_use_id: "toolu_can", tool_status: "cancelled" }),
+      call({ tool_use_id: "toolu_err", tool_status: "error" }),
+      // Observed, not governed.
+      call({ tool_use_id: "toolu_otel" }, "otel_log"),
+      call({ tool_use_id: "toolu_tx" }, "transcript"),
+      // The daemon's own frame for a gateway call, which the kernel bills.
+      call(
+        {
+          tool_name: "query_ontology",
+          tool_source: "mcp",
+          mcp_server_name: "oxagen",
+        },
+        "collector",
+      ),
+      // The harness calling Oxagen's MCP server: `invoke()` bills it.
+      call({
+        tool_name: "mcp__oxagen__query_ontology",
+        tool_use_id: "toolu_ox",
+        tool_source: "mcp",
+        mcp_server_name: "oxagen",
+        mcp_tool_name: "query_ontology",
+      }),
+    ]);
+    expect(events.filter(isBillableToolCall)).toEqual([]);
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(mocks.recordGovernedActions).not.toHaveBeenCalled();
+  });
+
+  it("bills a third-party MCP tool the harness called, naming its server", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(
+      batch(
+        chain([
+          start(),
+          call({
+            tool_name: "mcp__github__create_pull_request",
+            tool_use_id: "toolu_gh",
+            tool_source: "mcp",
+            mcp_server_name: "github",
+            mcp_tool_name: "create_pull_request",
+          }),
+        ]),
+      ),
+      CONTEXT,
+    );
+    expect(offered()[0]).toEqual([
+      expect.objectContaining({
+        idempotencyKey: `tacho:${SESSION}:toolu_gh`,
+        toolName: "mcp__github__create_pull_request",
+        mcpServer: "github",
+      }),
+    ]);
+  });
+
+  it("offers one key for every frame of one call, so the ledger bills it once", async () => {
+    const db = fakeDb();
+    wire(db);
+    const ledger = fakeLedger();
+    await tachoEventsIngestHandler(
+      batch(
+        chain([
+          start(),
+          unsealed("tool_requested", {
+            tool_name: "Bash",
+            tool_use_id: "toolu_9",
+          }),
+          call({ tool_use_id: "toolu_9" }),
+          // A second hook frame for the same call: a body-bearing repeat the
+          // recorder stamps rather than drops.
+          call({ tool_use_id: "toolu_9" }, "hook", {
+            attrs: { "oxagen.tool_call_duplicate_of": "hook" },
+          }),
+          call({ tool_use_id: "toolu_9" }, "otel_log"),
+        ]),
+      ),
+      CONTEXT,
+    );
+    const keys = (offered()[0] ?? []).map((e) => e["idempotencyKey"]);
+    expect(new Set(keys)).toEqual(new Set([`tacho:${SESSION}:toolu_9`]));
+    expect([...ledger]).toEqual([`tacho:${SESSION}:toolu_9`]);
+    const billed = await mocks.recordGovernedActions.mock.results[0]?.value;
+    expect(billed).toEqual({ billedUnits: 1 });
+  });
+
+  it("offers a re-sent batch the same keys, so it bills nothing new", async () => {
+    const db = fakeDb();
+    wire(db);
+    fakeLedger();
+    const events = session();
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    // The host did not see the answer and ships the batch again. Every event
+    // is now below the recorded head, and the calls are still offered.
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(offered()).toHaveLength(2);
+    expect(offered()[1]).toEqual(offered()[0]);
+    const results = await Promise.all(
+      mocks.recordGovernedActions.mock.results.map((r) => r.value),
+    );
+    expect(results).toEqual([{ billedUnits: 1 }, { billedUnits: 0 }]);
+  });
+
+  it("keys a call with no tool_use_id by its event's idempotency id, which a re-send repeats", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = chain([start(), call({})]);
+    const frame = events[1] as TachoEvent;
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(offered()[0]).toEqual([
+      expect.objectContaining({
+        idempotencyKey: `tacho:${SESSION}:event:${frame.event_id_idem}`,
+        toolCallId: null,
+      }),
+    ]);
+  });
+
+  it("refuses the batch when billing fails, keeps the commands queued, and bills and delivers on the re-send", async () => {
+    const db = fakeDb();
+    wire(db);
+    const ledger = fakeLedger();
+    mocks.recordGovernedActions.mockRejectedValueOnce(
+      new Error("billing store unavailable"),
+    );
+    const events = session();
+    await expect(
+      tachoEventsIngestHandler(batch(events), CONTEXT),
+    ).rejects.toThrow("billing store unavailable");
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ alert: "tacho_tool_call_billing_failed" }),
+      expect.any(String),
+    );
+    // The record landed before the charge was attempted.
+    expect(db.sessions.get(SESSION)).toBeDefined();
+    expect(mocks.insertTachoEvents).toHaveBeenCalledOnce();
+    // The response never left, so no command was marked delivered.
+    expect(db.controlCommands[0]?.["outcome"]).toBe("queued");
+    expect(ledger.size).toBe(0);
+
+    const retried = await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect([...ledger]).toEqual([`tacho:${SESSION}:toolu_1`]);
+    expect(retried.control.commands.map((c) => c.id)).toEqual(["tcm_1"]);
+    expect(db.controlCommands[0]?.["outcome"]).toBe("sent");
+  });
+
+  it("keeps the commands queued when the ClickHouse append fails after the commit", async () => {
+    const db = fakeDb();
+    wire(db);
+    mocks.insertTachoEvents.mockRejectedValueOnce(new Error("clickhouse down"));
+    await expect(
+      tachoEventsIngestHandler(batch(session()), CONTEXT),
+    ).rejects.toThrow("clickhouse down");
+    expect(db.controlCommands[0]?.["outcome"]).toBe("queued");
+    expect(mocks.recordGovernedActions).not.toHaveBeenCalled();
+  });
+
+  it("bills a subagent's call to the run its root session is", async () => {
+    const db = fakeDb();
+    db.sessions.set(SESSION, {
+      id: "root-row",
+      publicId: "tse_root00000000000000001",
+      sessionUuid: SESSION,
+      parentSessionUuid: null,
+      hostId: HOST_ID,
+    });
+    wire(db);
+    const child = { session_id: "sess-child", session_uuid: CHILD };
+    await tachoEventsIngestHandler(
+      batch(
+        chain([
+          unsealed(
+            "agent_start",
+            { session_start_source: "startup" },
+            "hook",
+            CLAUDE_CODE,
+            { ...child, parent_session_uuid: SESSION },
+          ),
+          call({ tool_use_id: "toolu_sub" }, "hook", {
+            ...child,
+            parent_session_uuid: SESSION,
+          }),
+        ]),
+      ),
+      CONTEXT,
+    );
+    expect(offered()[0]).toEqual([
+      expect.objectContaining({
+        idempotencyKey: `tacho:${CHILD}:toolu_sub`,
+        sessionId: CHILD,
+        runId: "tse_root00000000000000001",
+      }),
+    ]);
+  });
+
+  it("builds entries from the attribution it is given and names nothing it was not", () => {
+    const events = chain([
+      start(),
+      unsealed("tool_call", {
+        mcp_tool_name: "search",
+        tool_use_id: "t",
+        tool_status: "ok",
+      }),
+      unsealed("tool_call", { tool_use_id: "u", tool_status: "ok" }),
+    ]);
+    // The envelope refuses an unparseable `ts`, so this frame is edited after
+    // sealing: the fallback is for a value that parses and dates nothing.
+    events[2] = { ...(events[2] as TachoEvent), ts: "not a timestamp" };
+    const now = new Date("2026-09-23T00:00:00.000Z");
+    const entries = tachoToolCallEntries(events, () => undefined, {
+      // The org-only sentinel is not a workspace to attribute to.
+      workspaceId: "00000000-0000-0000-0000-000000000000",
+      requestId: null,
+      now,
+    });
+    expect(entries.map((e) => e.toolName)).toEqual(["search", "unnamed tool"]);
+    expect(entries[1]?.occurredAt).toEqual(now);
+    for (const entry of entries) {
+      expect(entry).toMatchObject({
+        workspaceId: null,
+        agentId: null,
+        operatorUserId: null,
+        runId: null,
+        harness: "claude-code",
+      });
+    }
   });
 });
 

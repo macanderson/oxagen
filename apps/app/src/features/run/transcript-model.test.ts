@@ -1,30 +1,26 @@
-// The transcript's grouping, digests and transport arithmetic, without a render.
+// The transcript's grouping and digests, and the feed the Transcript tab
+// draws from them, without a render.
 import { describe, expect, it } from "vitest";
-import type { TranscriptBody } from "@/data/contracts/run";
-import type { TranscriptEntry } from "@/data/contracts/run";
+import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
 import {
   mockupTranscript,
   transcriptBody,
   transcriptEntry,
 } from "./run.builders";
+import { releaseTranscript } from "./transcript.builders";
 import {
+  buildFeed,
   buildTranscript,
   decisionSubject,
   entryKey,
-  type Frames,
-  frameAt,
+  type FeedRow,
+  flatSteps,
   frameCost,
-  idsAt,
-  isNonEmpty,
-  openAtZoom,
-  playDelay,
+  type Frames,
+  isOperatorPrompt,
   stepDigest,
-  stepModel,
   stepTool,
   type TranscriptStep,
-  toolExchange,
-  visibleFrames,
-  visibleSteps,
 } from "./transcript-model";
 
 const { entries } = mockupTranscript();
@@ -61,13 +57,6 @@ describe("buildTranscript", () => {
     ]);
   });
 
-  it("takes the prompt from turn_start and the reply from turn_end, and leaves both null when no body was kept", () => {
-    expect(turns[1]?.prompt).toBe("Cut the 2026.9.2 release candidate.");
-    expect(turns[1]?.reply).toBe("Both failures predate the release scope.");
-    expect(turns[2]?.prompt).toBeNull();
-    expect(turns[2]?.reply).toBeNull();
-  });
-
   it("is empty for no entries, and one group for a run with no turns", () => {
     expect(buildTranscript([])).toEqual([]);
     const flat = buildTranscript([
@@ -75,57 +64,6 @@ describe("buildTranscript", () => {
       transcriptEntry({ seq: "2", turn: null }),
     ]);
     expect(flat).toHaveLength(1);
-  });
-
-  it("reads the reply from the agent's reported message when the turn closed without one", () => {
-    // Cursor reports the agent's message apart from `stop`. When `stop`
-    // lands first, the turn_end carries no body and the message frame is
-    // the only copy of the reply.
-    const cursor = buildTranscript([
-      transcriptEntry({
-        seq: "1",
-        type: "turn_start",
-        kind: "frame",
-        turn: 1,
-        request: transcriptBody({ seq: "1", text: "Fix the build." }),
-        response: null,
-      }),
-      transcriptEntry({
-        seq: "2",
-        type: "turn_end",
-        kind: "frame",
-        turn: 1,
-        request: null,
-        response: null,
-      }),
-      transcriptEntry({
-        seq: "3",
-        type: "oxagen:message",
-        kind: "frame",
-        turn: 1,
-        request: null,
-        response: transcriptBody({ seq: "3", text: "The build is fixed." }),
-      }),
-    ]);
-    expect(cursor[0]?.prompt).toBe("Fix the build.");
-    expect(cursor[0]?.reply).toBe("The build is fixed.");
-  });
-
-  it("leaves the prompt null rather than guessing when turn_start carries both halves (negative)", () => {
-    // soleBody (module-private) is what `prompt`/`reply` read a body through:
-    // an entry carrying both halves refuses rather than picking one, so a
-    // turn_start folded with a result still reads as no recorded prompt
-    // instead of silently showing the wrong half.
-    const folded = buildTranscript([
-      transcriptEntry({
-        seq: "1",
-        type: "turn_start",
-        turn: 1,
-        request: transcriptBody({ seq: "1", text: "Cut the release." }),
-        response: transcriptBody({ seq: "1", text: "Cutting it now." }),
-      }),
-    ]);
-    expect(folded[0]?.prompt).toBeNull();
   });
 
   it("pairs the in-app assistant's engine_call halves into one model step and one tool step", () => {
@@ -412,28 +350,6 @@ describe("the transport", () => {
     expect(entries[0]?.elapsedMs).toBe(0);
     expect(entries[12]?.elapsedMs).toBe(24_000);
   });
-
-  it("paces playback on the recorded gap, held between 120 ms and 2 s and divided by the speed", () => {
-    expect(playDelay(entries, 0, 1)).toBe(2000);
-    expect(playDelay(entries, 0, 2)).toBe(1000);
-    const burst = [
-      transcriptEntry({ seq: "1", at: "2026-09-15T08:00:00.000Z" }),
-      transcriptEntry({ seq: "2", at: "2026-09-15T08:00:00.010Z" }),
-    ];
-    expect(playDelay(burst, 0, 1)).toBe(120);
-    expect(playDelay(burst, 1, 1)).toBe(400);
-  });
-
-  it("opens nothing at Turns, the turns at Steps, and turns and steps at Everything", () => {
-    expect(openAtZoom(turns, "turns").size).toBe(0);
-    expect([...openAtZoom(turns, "steps")]).toEqual(["t0", "t2", "t9"]);
-    expect(openAtZoom(turns, "everything").has("s5")).toBe(true);
-  });
-
-  it("finds the turn and step holding a position", () => {
-    expect(idsAt(turns, 6)).toEqual(["t2", "s5"]);
-    expect(idsAt(turns, 99)).toEqual([]);
-  });
 });
 
 describe("effect frames fold into the call they belong to", () => {
@@ -645,31 +561,6 @@ describe("repeated bookkeeping frames", () => {
   });
 });
 
-describe("toolExchange", () => {
-  it("reads a wrapped tool receipt apart into its input and its output", () => {
-    const body = JSON.stringify({
-      input: { command: "ls", description: "List" },
-      output: { stdout: "a\nb\n", stderr: "", interrupted: false },
-    });
-    expect(toolExchange(body)).toEqual({
-      input: '{\n  "command": "ls",\n  "description": "List"\n}',
-      output: "a\nb\n",
-    });
-  });
-
-  it("keeps a non-stream output as JSON and a string as itself", () => {
-    expect(
-      toolExchange(JSON.stringify({ input: "x", output: { file: { n: 1 } } })),
-    ).toEqual({ input: "x", output: '{\n  "file": {\n    "n": 1\n  }\n}' });
-  });
-
-  it("is null for a body that is not the receipt shape (negative)", () => {
-    expect(toolExchange("not json")).toBeNull();
-    expect(toolExchange('{"path":"README.md"}')).toBeNull();
-    expect(toolExchange("[1,2]")).toBeNull();
-  });
-});
-
 describe("a tool call sealed by three sources", () => {
   const call = "toolu_01dupe";
   const digestOnly = (seq: number) =>
@@ -739,15 +630,16 @@ describe("a tool call sealed by three sources", () => {
     ]);
   });
 
-  it("draws only the copy that carries the body", () => {
+  it("reads the copy that carries the body, passing over the digest-only ones", () => {
     const [turn] = buildTranscript(frames);
     const step = turn?.steps[0];
     if (step === undefined) throw new Error("expected the tool step");
-    expect(visibleFrames(step).map((f) => f.seq)).toEqual(["0", "1"]);
-    // Every copy digest-only: nothing to prefer, so every copy stays (negative).
+    expect(stepTool(step)?.output).toBe("x");
+    // Every copy digest-only: the label still names the tool, and nothing
+    // is read out of a body that was not kept (negative).
     const bare = buildTranscript([digestOnly(0), digestOnly(1)])[0]?.steps[0];
     if (bare === undefined) throw new Error("expected the bare step");
-    expect(visibleFrames(bare).map((f) => f.seq)).toEqual(["0", "1"]);
+    expect(stepTool(bare)).toMatchObject({ name: "Read", output: null });
   });
 
   it("does not fold a call with no call id, or a different one (negative)", () => {
@@ -758,154 +650,6 @@ describe("a tool call sealed by three sources", () => {
       throw new Error("expected the request and the call");
     const [turn] = buildTranscript([requested, called, other, none]);
     expect(turn?.steps.map((s) => s.id)).toEqual(["s0", "s3", "s4"]);
-  });
-});
-
-describe("a model step reads as what it did", () => {
-  const reply = (blocks: NonNullable<TranscriptBody["blocks"]>) =>
-    transcriptEntry({
-      seq: "3",
-      endSeq: "3",
-      kind: "model_call",
-      type: "llm_call",
-      label: "anthropic/claude-opus-5",
-      request: null,
-      response: transcriptBody({
-        seq: "3",
-        type: "llm_call",
-        text: null,
-        blocks,
-      }),
-      turn: 1,
-    });
-
-  it("names the tool the reply called, with the command's first line, and keeps the model as a chip", () => {
-    const [turn] = buildTranscript([
-      reply([
-        { kind: "text", text: "Checking the tree." },
-        {
-          kind: "tool_use",
-          name: "Bash",
-          input: {
-            command: "git status --short\ngit log -3",
-            description: "Tree",
-          },
-          callKey: "toolu_1",
-        },
-        {
-          kind: "tool_use",
-          name: "Read",
-          input: { file_path: "/repo/README.md" },
-          callKey: "toolu_2",
-        },
-      ]),
-    ]);
-    const step = turn?.steps[0];
-    if (step === undefined) throw new Error("expected the model step");
-    const detail = stepModel(step);
-    expect(detail?.name).toBe("Bash");
-    expect(detail?.group).toBe("shell");
-    expect(detail?.headline).toBe("git status --short");
-    expect(detail?.multiline).toBe(true);
-    expect(detail?.detail).toBe("+1");
-    expect(detail?.panes.map((pane) => pane.label)).toEqual(["command"]);
-    expect(stepDigest(step).name).toBe("claude-opus-5");
-  });
-
-  it("reads a reply with no call as a reply, first line first", () => {
-    const [turn] = buildTranscript([
-      reply([{ kind: "text", text: "Done.\nThe pager reaches every run." }]),
-    ]);
-    const step = turn?.steps[0];
-    if (step === undefined) throw new Error("expected the model step");
-    const detail = stepModel(step);
-    expect(detail?.name).toBe("reply");
-    expect(detail?.headline).toBe("Done.");
-    expect(detail?.multiline).toBe(true);
-    expect(detail?.panes).toEqual([
-      {
-        kind: "note",
-        label: "reply",
-        text: "Done.\nThe pager reaches every run.",
-      },
-    ]);
-  });
-
-  it("is null without blocks, and for a tool step (negative)", () => {
-    const [turn] = buildTranscript([
-      transcriptEntry({ seq: "3", endSeq: "3", turn: 1 }),
-      transcriptEntry({
-        seq: "4",
-        endSeq: "4",
-        kind: "tool_call",
-        type: "tool_call",
-        label: "Read ok",
-        turn: 1,
-      }),
-    ]);
-    const [plain, tool] = turn?.steps ?? [];
-    if (plain === undefined || tool === undefined)
-      throw new Error("expected a model step and a tool step");
-    expect(stepModel(plain)).toBeNull();
-    expect(stepModel(tool)).toBeNull();
-  });
-});
-
-describe("visibleSteps", () => {
-  it("drops steps with nothing to read and keeps decisions and bodies", () => {
-    const bare = (seq: number, type: string) =>
-      transcriptEntry({
-        seq: String(seq),
-        endSeq: String(seq),
-        kind: "frame",
-        type,
-        label: type,
-        request: null,
-        response: null,
-        decision: null,
-        turn: 1,
-        cost: null,
-        cumulativeCost: null,
-        kinds: [],
-      });
-    const [turn] = buildTranscript([
-      bare(0, "oxagen:hook_health"),
-      bare(1, "oxagen:hook_health"),
-      transcriptEntry({ seq: "2", endSeq: "2", turn: 1 }),
-      transcriptEntry({
-        seq: "3",
-        endSeq: "3",
-        kind: "policy",
-        type: "policy_decision",
-        label: "policy deny",
-        request: null,
-        response: null,
-        decision: {
-          seq: "3",
-          decision: "deny",
-          type: "policy_decision",
-          at: transcriptEntry().at,
-        },
-        turn: 1,
-      }),
-      transcriptEntry({
-        seq: "4",
-        endSeq: "4",
-        kind: "model_call",
-        type: "llm_call",
-        request: null,
-        response: transcriptBody({
-          seq: "4",
-          fidelity: "digest_only",
-          bytesRef: null,
-          text: null,
-        }),
-        turn: 1,
-      }),
-    ]);
-    if (turn === undefined) throw new Error("expected a turn");
-    expect(turn.steps.map((s) => s.id)).toEqual(["s0", "s2", "s3", "s4"]);
-    expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s2", "s3"]);
   });
 });
 
@@ -922,60 +666,703 @@ describe("a subagent's entries in the run's transcript", () => {
     const ids = turn?.steps.map((s) => s.id) ?? [];
     expect(new Set(ids).size).toBe(ids.length);
   });
+});
 
-  it("reads the turn's prompt and reply from the run's own frames, not the subagent's", () => {
-    const [turn] = buildTranscript([
-      transcriptEntry({
-        seq: "1",
-        type: "turn_start",
-        kind: "frame",
-        turn: 1,
-        request: transcriptBody({ seq: "1", text: "Find the flaky test." }),
-        response: null,
-      }),
-      transcriptEntry({
-        seq: "0",
-        type: "turn_start",
-        kind: "frame",
-        turn: 1,
-        subagent: sub,
-        request: transcriptBody({ seq: "0", text: "Search the test tree." }),
-        response: null,
-      }),
-      transcriptEntry({
-        seq: "3",
-        type: "turn_end",
-        kind: "frame",
-        turn: 1,
-        subagent: sub,
-        request: null,
-        response: transcriptBody({ seq: "3", text: "Three candidates." }),
-      }),
-      transcriptEntry({
-        seq: "5",
-        type: "turn_end",
-        kind: "frame",
-        turn: 1,
-        request: null,
-        response: null,
+// ── The feed ────────────────────────────────────────────────────────────────
+
+/** The one row of `kind` the feed drew, or a failing test. */
+function only<K extends FeedRow["kind"]>(
+  rows: readonly FeedRow[],
+  kind: K,
+): Extract<FeedRow, { kind: K }> {
+  const found = rows.filter(
+    (row): row is Extract<FeedRow, { kind: K }> => row.kind === kind,
+  );
+  if (found.length !== 1)
+    throw new Error(`expected one ${kind} row, got ${String(found.length)}`);
+  const [row] = found;
+  if (row === undefined) throw new Error(`no ${kind} row`);
+  return row;
+}
+
+function tools(rows: readonly FeedRow[]) {
+  return rows.flatMap((row) => (row.kind === "tool" ? [row] : []));
+}
+
+const frame = (over: Partial<TranscriptEntry>): TranscriptEntry =>
+  transcriptEntry({
+    endSeq: over.seq ?? "11",
+    kind: "frame",
+    request: null,
+    response: null,
+    decision: null,
+    cost: null,
+    cumulativeCost: null,
+    usage: null,
+    kinds: [],
+    turn: 1,
+    ...over,
+  });
+
+describe("buildFeed over the release run", () => {
+  const rows = buildFeed(releaseTranscript().entries);
+
+  it("reads as the design's rows, in the order the run happened", () => {
+    expect(rows.map((row) => row.kind)).toEqual([
+      "prompt",
+      "recall",
+      "thinking",
+      "text",
+      "usage",
+      "tool",
+      "text",
+      "usage",
+      "tool",
+      "text",
+      "usage",
+      "tool",
+      "tool",
+      "thinking",
+      "text",
+      "usage",
+      "tool",
+      "text",
+      "usage",
+      "tool",
+    ]);
+    // The agent's start and the model's request carry nothing to read: no row.
+    expect(rows.some((row) => row.key === "s0")).toBe(false);
+  });
+
+  it("files every row under the chip that shows it", () => {
+    const count = (group: string) =>
+      rows.filter((row) => row.group === group).length;
+    expect(
+      [
+        "prompt",
+        "responses",
+        "thinking",
+        "tools",
+        "usage",
+        "recall",
+        "seal",
+      ].map(count),
+    ).toEqual([1, 5, 2, 6, 5, 1, 0]);
+  });
+
+  it("marks the run's first prompt, and reads it from turn_start", () => {
+    const prompt = only(rows, "prompt");
+    expect(prompt.first).toBe(true);
+    expect(prompt.turn).toBe(1);
+    expect(prompt.text).toMatch(/^Cut the 4\.11\.0 release notes/);
+  });
+
+  it("draws a call the reply named and a tool step recorded as one row, with the decision keyed to it", () => {
+    const list = tools(rows).filter(
+      (row) => row.call.name === "github__list_pull_requests",
+    );
+    expect(list).toHaveLength(1);
+    const [row] = list;
+    expect(row?.call.arg).toBe("a-intel/platform · state closed · base main");
+    expect(row?.call.durationMs).toBe(1100);
+    expect(row?.call.gates).toEqual([
+      {
+        decision: "allow",
+        frame: { seq: "6", type: "policy_decision", chainRef: null },
+      },
+    ]);
+    expect(row?.call.output?.split("\n")).toHaveLength(7);
+    expect(row?.call.frame.seq).toBe("7");
+  });
+
+  it("names a Read by its path and reads the file it returned", () => {
+    const read = tools(rows).find((row) => row.call.name === "Read");
+    expect(read?.call.arg).toBe("…/platform/CHANGELOG.md");
+    expect(read?.call.output).toMatch(/^# Changelog/);
+    expect(read?.call.diffs).toEqual([]);
+  });
+
+  it("reads a new file as a diff of additions, and an edit as its change", () => {
+    const write = tools(rows).find((row) => row.call.name === "Write");
+    expect(write?.call.diffs).toHaveLength(1);
+    expect(write?.call.diffs[0]?.created).toBe(true);
+    expect(write?.call.diffs[0]?.diff.removed).toBe(0);
+    expect(write?.call.diffs[0]?.diff.added).toBe(13);
+    const edit = tools(rows).find((row) => row.call.name === "Edit");
+    expect(edit?.call.diffs[0]?.created).toBe(false);
+    expect(edit?.call.diffs[0]?.diff).toMatchObject({ added: 2, removed: 2 });
+  });
+
+  it("marks the call the recorder filed under errors as failed, and only that one", () => {
+    const failed = rows.filter((row) => row.failed);
+    expect(failed).toHaveLength(1);
+    const [bash] = failed;
+    expect(bash?.kind === "tool" && bash.call.name).toBe("Bash");
+    expect(bash?.kind === "tool" && bash.call.output).toMatch(
+      /error: heading order/,
+    );
+  });
+
+  it("parks a call on an approval nobody answered, and states no duration for it", () => {
+    const release = tools(rows).find(
+      (row) => row.call.name === "github__create_release",
+    );
+    expect(release?.call.parked).toEqual({
+      seq: "17",
+      type: "approval_request",
+      chainRef: null,
+    });
+    expect(release?.call.pending).toBe(false);
+    expect(release?.call.durationMs).toBeNull();
+  });
+
+  it("reads what a model step cost, its tokens and the frame that carried them", () => {
+    const [first] = rows.flatMap((row) => (row.kind === "usage" ? [row] : []));
+    expect(first).toMatchObject({
+      model: "claude-opus-5",
+      cost: { micros: "412600", currency: "USD", basis: "gateway_observed" },
+      usage: { inputUncached: 3368, cacheRead: 12000, output: 412 },
+      frame: { seq: "4", type: "model.response", chainRef: null },
+      spent: { micros: "412600" },
+    });
+  });
+
+  it("reads what was recalled from the frame's own list", () => {
+    const recall = only(rows, "recall");
+    expect(recall.recall).toMatchObject({
+      unit: "frames",
+      count: 6,
+      tokens: 11204,
+      cut: null,
+    });
+    expect(recall.recall.items[0]).toEqual({
+      kind: "fact",
+      label: "Repository a-intel/platform @ a4c91e2",
+      tokens: 1204,
+    });
+  });
+});
+
+describe("buildFeed, a reply's own shapes", () => {
+  const reply = (over: Partial<TranscriptEntry>) =>
+    frame({
+      seq: "3",
+      kind: "model_call",
+      type: "llm_call",
+      label: "anthropic/claude-opus-5",
+      ...over,
+    });
+
+  it("draws a call no tool step recorded from the reply's block, with the result a tool_result block kept", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: null,
+          blocks: [
+            { kind: "text", text: "Checking the tree." },
+            {
+              kind: "tool_use",
+              name: "Bash",
+              input: { command: "git status --short\ngit log -3" },
+              callKey: "toolu_1",
+            },
+            {
+              kind: "tool_result",
+              forRef: "toolu_1",
+              ok: false,
+              summary: "fatal: not a git repository",
+            },
+          ],
+        }),
       }),
     ]);
-    expect(turn?.prompt).toBe("Find the flaky test.");
-    // The run's turn_end kept no reply; the subagent's is not the run's.
-    expect(turn?.reply).toBeNull();
+    expect(rows.map((row) => row.kind)).toEqual(["text", "tool"]);
+    const [tool] = tools(rows);
+    expect(tool?.call).toMatchObject({
+      name: "Bash",
+      arg: "git status --short",
+      raw: "git status --short\ngit log -3",
+      output: "fatal: not a git repository",
+      pending: false,
+    });
+    expect(tool?.failed).toBe(true);
+  });
+
+  it("names a call by the tool step of the same name when neither side kept a key", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: null,
+          blocks: [
+            {
+              kind: "tool_use",
+              name: "Read",
+              input: { file_path: "/repo/a.ts" },
+              callKey: null,
+            },
+          ],
+        }),
+      }),
+      frame({
+        seq: "4",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Read ok",
+        response: transcriptBody({
+          seq: "4",
+          text: '{"input":{"file_path":"/repo/a.ts"},"output":"x"}',
+        }),
+      }),
+    ]);
+    expect(tools(rows)).toHaveLength(1);
+    expect(tools(rows)[0]?.key).toBe("s4");
+  });
+
+  it("reads the Messages API's JSON as blocks, never as a body to open", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: JSON.stringify({
+            content: [
+              { type: "thinking", thinking: "Read it first." },
+              { type: "text", text: "Reading the file." },
+              {
+                type: "tool_use",
+                id: "toolu_9",
+                name: "Read",
+                input: { file_path: "/repo/b.ts" },
+              },
+            ],
+          }),
+        }),
+        cost: { micros: "1200", currency: "USD", basis: "gateway_observed" },
+      }),
+    ]);
+    expect(rows.map((row) => row.kind)).toEqual([
+      "thinking",
+      "text",
+      "usage",
+      "tool",
+    ]);
+    expect(tools(rows)[0]?.call.pending).toBe(true);
+  });
+
+  it("reads a chat completion's message as blocks", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: "Listing.",
+                  tool_calls: [
+                    {
+                      id: "call_1",
+                      function: {
+                        name: "list_dir",
+                        arguments: '{"path":"src"}',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        }),
+      }),
+    ]);
+    expect(rows.map((row) => row.kind)).toEqual(["text", "tool"]);
+    expect(tools(rows)[0]?.call).toMatchObject({
+      name: "list_dir",
+      arg: "src",
+    });
+  });
+
+  it("draws a JSON reply it cannot read by its cost alone (negative)", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({ seq: "3", text: '{"id":"msg_1"}' }),
+        cost: { micros: "1200", currency: "USD", basis: null },
+      }),
+    ]);
+    expect(rows.map((row) => row.kind)).toEqual(["usage"]);
+  });
+
+  it("draws nothing for a model step with no words, no tokens and no cost (negative)", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          fidelity: "digest_only",
+          bytesRef: null,
+          text: null,
+        }),
+      }),
+    ]);
+    expect(rows).toEqual([]);
+  });
+
+  it("names no model when the label names only the frame's type", () => {
+    const rows = buildFeed([
+      reply({
+        label: "llm_call",
+        usage: {
+          inputUncached: 5,
+          cacheRead: null,
+          cacheWrite: null,
+          output: 2,
+          reasoning: null,
+        },
+      }),
+    ]);
+    expect(only(rows, "usage").model).toBeNull();
+    expect(only(rows, "usage").cost).toBeNull();
+  });
+});
+
+describe("buildFeed, the turn's frames", () => {
+  it("draws a turn's closing message once when it repeats the model's words", () => {
+    const rows = buildFeed([
+      frame({
+        seq: "1",
+        type: "turn_start",
+        request: transcriptBody({ seq: "1", text: "Fix the build." }),
+      }),
+      frame({
+        seq: "2",
+        kind: "model_call",
+        type: "model.response",
+        label: "anthropic/claude-opus-5",
+        response: transcriptBody({ seq: "2", text: "The build is fixed." }),
+      }),
+      frame({
+        seq: "3",
+        type: "turn_end",
+        response: transcriptBody({ seq: "3", text: "The build is fixed." }),
+      }),
+    ]);
+    expect(rows.map((row) => row.kind)).toEqual(["prompt", "text"]);
+  });
+
+  it("reads the reply from the agent's reported message when the turn closed without one", () => {
+    // Cursor reports the agent's message apart from `stop`. When `stop`
+    // lands first, the turn_end carries no body and the message frame is
+    // the only copy of the reply.
+    const rows = buildFeed([
+      frame({
+        seq: "1",
+        type: "turn_start",
+        request: transcriptBody({ seq: "1", text: "Fix the build." }),
+      }),
+      frame({ seq: "2", type: "turn_end" }),
+      frame({
+        seq: "3",
+        type: "oxagen:message",
+        response: transcriptBody({ seq: "3", text: "The build is fixed." }),
+      }),
+    ]);
+    expect(rows.map((row) => [row.kind, row.group])).toEqual([
+      ["prompt", "prompt"],
+      ["text", "responses"],
+    ]);
+  });
+
+  it("draws the prompt once when the transcript's copy of it was sealed with its text", () => {
+    // Before #4051 the recorder sealed Claude Code's transcript copy of each
+    // prompt with the full text, as a message frame beside the turn_start.
+    // It can land on either side of the turn_start.
+    const prompt = (seq: string) =>
+      frame({
+        seq,
+        type: "turn_start",
+        request: transcriptBody({ seq, text: "Fix the build." }),
+      });
+    const copy = (seq: string) =>
+      frame({
+        seq,
+        type: "oxagen:message",
+        request: transcriptBody({ seq, text: "Fix the build.\n" }),
+      });
+    const reply = frame({
+      seq: "3",
+      kind: "model_call",
+      type: "model.response",
+      label: "anthropic/claude-opus-5",
+      response: transcriptBody({ seq: "3", text: "The build is fixed." }),
+    });
+    for (const entries of [
+      [prompt("1"), copy("2"), reply],
+      [copy("1"), prompt("2"), reply],
+    ]) {
+      const rows = buildFeed(entries);
+      expect(rows.map((row) => row.kind)).toEqual(["prompt", "text"]);
+      expect(only(rows, "text").text).toBe("The build is fixed.");
+    }
+  });
+
+  it("keeps a subagent's message that repeats the operator's words (negative)", () => {
+    const sub = {
+      chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+      type: "Explore",
+    };
+    const rows = buildFeed([
+      frame({
+        seq: "1",
+        type: "turn_start",
+        request: transcriptBody({ seq: "1", text: "Find the flaky test." }),
+      }),
+      frame({
+        seq: "2",
+        type: "oxagen:message",
+        subagent: sub,
+        response: transcriptBody({ seq: "2", text: "Find the flaky test." }),
+      }),
+    ]);
+    expect(rows.map((row) => row.kind)).toEqual(["prompt", "text"]);
+    expect(rows[1]?.subagent).toEqual(sub);
+  });
+
+  it("reads no prompt when turn_start carries both halves, rather than guess which (negative)", () => {
+    const rows = buildFeed([
+      frame({
+        seq: "1",
+        type: "turn_start",
+        request: transcriptBody({ seq: "1", text: "Cut the release." }),
+        response: transcriptBody({ seq: "1", text: "Cutting it now." }),
+      }),
+    ]);
+    expect(rows).toEqual([]);
+  });
+
+  it("reads the operator's prompt from the run's own chain, not a subagent's", () => {
+    const sub = {
+      chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+      type: "Explore",
+    };
+    const rows = buildFeed([
+      frame({
+        seq: "1",
+        type: "turn_start",
+        request: transcriptBody({ seq: "1", text: "Find the flaky test." }),
+      }),
+      frame({
+        seq: "0",
+        type: "turn_start",
+        subagent: sub,
+        request: transcriptBody({ seq: "0", text: "Search the test tree." }),
+      }),
+      frame({
+        seq: "3",
+        type: "turn_end",
+        subagent: sub,
+        response: transcriptBody({ seq: "3", text: "Three candidates." }),
+      }),
+    ]);
+    // The subagent's brief is the parent's call, which the call's row
+    // already holds; its closing words are its own, marked as its.
+    expect(rows.map((row) => row.kind)).toEqual(["prompt", "text"]);
+    expect(rows[0]?.subagent).toBeUndefined();
+    expect(rows[1]?.subagent).toEqual(sub);
+  });
+
+  it("draws the run's stop as its seal, and a subagent's stop as nothing of the run's (negative)", () => {
+    const rows = buildFeed([
+      frame({
+        seq: "2",
+        type: "agent_stop",
+        turn: null,
+        subagent: {
+          chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+          type: null,
+        },
+      }),
+      frame({
+        seq: "8",
+        type: "agent_stop",
+        label: "agent_stop completed",
+        turn: null,
+      }),
+    ]);
+    expect(rows.map((row) => [row.kind, row.group])).toEqual([
+      ["seal", "seal"],
+    ]);
+    expect(only(rows, "seal").label).toBe("agent_stop completed");
+  });
+
+  it("reads a steering manifest's included items, its cut and its tokens", () => {
+    const rows = buildFeed([
+      frame({
+        seq: "1",
+        type: "steering.manifest",
+        kinds: ["recall"],
+        turn: null,
+        response: transcriptBody({
+          seq: "1",
+          text: JSON.stringify({
+            schema: "oxagen.steering.manifest/1",
+            included: 2,
+            cut: 1,
+            spent_tokens: 340,
+            items: [
+              { id: "rec_1", kind: "rule", tokens: 200, outcome: "included" },
+              { id: "rec_2", kind: "fact", tokens: 140, outcome: "included" },
+              {
+                id: "rec_3",
+                kind: "fact",
+                tokens: 900,
+                outcome: "cut",
+                reason: "budget",
+              },
+            ],
+          }),
+        }),
+      }),
+    ]);
+    expect(only(rows, "recall").recall).toEqual({
+      unit: "items",
+      count: 2,
+      tokens: 340,
+      cut: 1,
+      items: [
+        { kind: "rule", label: "rec_1", tokens: 200 },
+        { kind: "fact", label: "rec_2", tokens: 140 },
+      ],
+    });
+  });
+
+  it("reads the ledger's frame count from the label when the body carried none", () => {
+    const rows = buildFeed([
+      frame({
+        seq: "1",
+        type: "context.frames_selected",
+        label: "frames=6",
+        kinds: ["recall"],
+      }),
+    ]);
+    expect(only(rows, "recall").recall).toMatchObject({ count: 6, items: [] });
+  });
+
+  it("draws an error frame and a decision on no call, and nothing for bookkeeping", () => {
+    const rows = buildFeed([
+      frame({ seq: "0", type: "oxagen:hook_health" }),
+      frame({ seq: "1", type: "oxagen:hook_health" }),
+      frame({
+        seq: "2",
+        type: "error",
+        kinds: ["errors"],
+        response: transcriptBody({
+          seq: "2",
+          text: "upstream timeout\nretrying",
+        }),
+      }),
+      frame({
+        seq: "3",
+        kind: "policy",
+        type: "policy_decision",
+        label: "deny create_tag",
+        decision: {
+          seq: "3",
+          decision: "deny",
+          type: "policy_decision",
+          at: transcriptEntry().at,
+        },
+      }),
+      frame({
+        seq: "4",
+        type: "agent_start",
+        turn: null,
+        response: transcriptBody({ seq: "4", text: '{"model":"x"}' }),
+      }),
+    ]);
+    expect(rows.map((row) => [row.kind, row.failed])).toEqual([
+      ["event", true],
+      ["event", true],
+    ]);
+    const [error, gate] = rows;
+    expect(error?.kind === "event" && error.name).toBe("error");
+    expect(gate?.kind === "event" && gate.name).toBe("create_tag");
+    expect(gate?.kind === "event" && gate.gates[0]?.decision).toBe("deny");
+  });
+});
+
+describe("decisionSubject", () => {
+  it("names the call a gate frame decided on", () => {
+    expect(
+      decisionSubject(
+        transcriptEntry({
+          type: "policy_decision",
+          kind: "frame",
+          label: "deny Bash",
+        }),
+      ),
+    ).toBe("Bash");
+  });
+
+  it("names a tool call entry by its tool, whatever frame opened it", () => {
+    expect(
+      decisionSubject(
+        transcriptEntry({ kind: "tool_call", label: "create_tag v4.11.0" }),
+      ),
+    ).toBe("create_tag");
+  });
+
+  it("names no call for a gate that recorded only its decision, or a model call (negative)", () => {
+    expect(
+      decisionSubject(
+        transcriptEntry({
+          type: "policy_decision",
+          kind: "frame",
+          label: "policy deny",
+        }),
+      ),
+    ).toBeNull();
+    expect(decisionSubject(transcriptEntry())).toBeNull();
+  });
+});
+
+describe("isOperatorPrompt", () => {
+  it("reads a turn_start on the run's own chain as the operator prompting", () => {
+    expect(
+      isOperatorPrompt(transcriptEntry({ type: "turn_start", kind: "frame" })),
+    ).toBe(true);
+  });
+
+  it("reads neither a subagent's turn nor a model request as the operator (negative)", () => {
+    expect(
+      isOperatorPrompt(
+        transcriptEntry({
+          type: "turn_start",
+          kind: "frame",
+          subagent: {
+            chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+            type: "Explore",
+          },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isOperatorPrompt(
+        transcriptEntry({ type: "model.request", kinds: ["prompt"] }),
+      ),
+    ).toBe(false);
   });
 });
 
 // ── Edges of the grouping and the readers ────────────────────────────────────
 //
-// Every frame below is built from `frame()`, which starts from nothing: no
+// Every frame below is built from `edgeFrame()`, which starts from nothing: no
 // halves, no decision, no cost and no call key. Each test names the fields its
 // case depends on, so what a test exercises is readable at the call site
 // rather than inherited from the builder's model-call defaults.
 
 const T0 = "2026-09-15T08:00:00.000Z";
 
-function frame(over: Partial<TranscriptEntry> = {}): TranscriptEntry {
+function edgeFrame(over: Partial<TranscriptEntry> = {}): TranscriptEntry {
   return transcriptEntry({
     kind: "frame",
     type: "oxagen:note",
@@ -1042,22 +1429,12 @@ function stepOver(
   };
 }
 
-describe("frameAt and isNonEmpty", () => {
-  it("holds a position inside the transcript at both ends", () => {
-    expect(isNonEmpty([])).toBe(false);
-    if (!isNonEmpty(entries)) throw new Error("expected the mockup's frames");
-    expect(frameAt(entries, -4).seq).toBe(entries[0].seq);
-    expect(frameAt(entries, 3).seq).toBe(entries[3]?.seq);
-    expect(frameAt(entries, 10_000).seq).toBe(entries[entries.length - 1]?.seq);
-  });
-});
-
-describe("buildTranscript: turns, prompts and replies", () => {
+describe("buildTranscript: turns", () => {
   it("keeps a turn number reused after a gap as its own group, in recorded order", () => {
     const built = buildTranscript([
-      frame({ seq: "1", turn: 1 }),
-      frame({ seq: "2", turn: 2 }),
-      frame({ seq: "3", turn: 1 }),
+      edgeFrame({ seq: "1", turn: 1 }),
+      edgeFrame({ seq: "2", turn: 2 }),
+      edgeFrame({ seq: "3", turn: 1 }),
     ]);
     expect(built.map((t) => [t.id, t.turn])).toEqual([
       ["t1", 1],
@@ -1067,46 +1444,20 @@ describe("buildTranscript: turns, prompts and replies", () => {
     // Positions stay the transcript's own, not the group's.
     expect(built[2]?.steps.map((s) => [s.from, s.to])).toEqual([[2, 2]]);
   });
-
-  it("reads the prompt from the first turn_start that kept text, skipping a digest-only one", () => {
-    const [turn] = buildTranscript([
-      frame({ seq: "1", type: "turn_start", request: body("1", null) }),
-      frame({ seq: "2", type: "turn_start", request: body("2", "Ship it.") }),
-    ]);
-    expect(turn?.prompt).toBe("Ship it.");
-  });
-
-  it("reads the reply from the last turn_end that kept text, and prefers it to a message frame", () => {
-    const [turn] = buildTranscript([
-      frame({ seq: "1", type: "turn_end", response: body("1", "Early.") }),
-      frame({ seq: "2", type: "oxagen:message", response: body("2", "Said.") }),
-      frame({ seq: "3", type: "turn_end", response: body("3", "Final.") }),
-    ]);
-    expect(turn?.reply).toBe("Final.");
-  });
-
-  it("leaves the reply null when neither a turn_end nor a message kept text (negative)", () => {
-    const [turn] = buildTranscript([
-      frame({ seq: "1", type: "turn_end", response: body("1", null) }),
-      frame({ seq: "2", type: "oxagen:message", response: body("2", null) }),
-    ]);
-    expect(turn?.prompt).toBeNull();
-    expect(turn?.reply).toBeNull();
-  });
 });
 
 describe("pairing a model call's halves", () => {
   it("pairs a keyed request with its response by key, across another frame of the same call", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "model_call",
         type: "model.request",
         label: "anthropic/claude-opus-5",
         callKey: "m1",
       }),
-      frame({ seq: "2", type: "oxagen:stream_tick", callKey: "m1" }),
-      frame({
+      edgeFrame({ seq: "2", type: "oxagen:stream_tick", callKey: "m1" }),
+      edgeFrame({
         seq: "3",
         kind: "model_call",
         type: "model.response",
@@ -1123,21 +1474,21 @@ describe("pairing a model call's halves", () => {
 
   it("pairs a keyed engine call with its receipt, not with a wrapped response of the same key", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "model_call",
         type: "model.engine_call_started",
         label: "m",
         callKey: "m1",
       }),
-      frame({
+      edgeFrame({
         seq: "2",
         kind: "model_call",
         type: "model.response",
         label: "m",
         callKey: "m1",
       }),
-      frame({
+      edgeFrame({
         seq: "3",
         kind: "model_call",
         type: "model.engine_call_completed",
@@ -1153,14 +1504,14 @@ describe("pairing a model call's halves", () => {
 
   it("leaves a keyed request whose response never came as a one-frame step (negative)", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "model_call",
         type: "model.request",
         label: "m",
         callKey: "m1",
       }),
-      frame({
+      edgeFrame({
         seq: "2",
         kind: "model_call",
         type: "model.response",
@@ -1177,14 +1528,14 @@ describe("pairing a model call's halves", () => {
 
   it("does not pair an unkeyed request with a response that is not next to it (negative)", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "model_call",
         type: "model.request",
         label: "m",
       }),
-      frame({ seq: "2", type: "oxagen:stream_tick" }),
-      frame({
+      edgeFrame({ seq: "2", type: "oxagen:stream_tick" }),
+      edgeFrame({
         seq: "3",
         kind: "model_call",
         type: "model.response",
@@ -1202,7 +1553,7 @@ describe("pairing a model call's halves", () => {
 describe("pairing a tool call's halves", () => {
   it("leaves a keyed request whose call never came as a one-frame tool step", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_requested",
@@ -1224,20 +1575,20 @@ describe("pairing a tool call's halves", () => {
 
   it("ends an unkeyed request at the first frame that is neither a gate nor its call (negative)", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_requested",
         label: "Bash",
       }),
-      frame({
+      edgeFrame({
         seq: "2",
         kind: "policy",
         type: "policy_decision",
         label: "allow Bash",
       }),
-      frame({ seq: "3", kind: "model_call", type: "llm_call", label: "m" }),
-      frame({
+      edgeFrame({ seq: "3", kind: "model_call", type: "llm_call", label: "m" }),
+      edgeFrame({
         seq: "4",
         kind: "tool_call",
         type: "tool_call",
@@ -1253,13 +1604,13 @@ describe("pairing a tool call's halves", () => {
 
   it("does not fold a keyed effect frame into a call that recorded no key (negative)", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_call",
         label: "Bash ok",
       }),
-      frame({
+      edgeFrame({
         seq: "2",
         type: "command",
         label: "command",
@@ -1273,45 +1624,20 @@ describe("pairing a tool call's halves", () => {
   });
 });
 
-describe("toolExchange on the shapes it refuses and the streams it reads", () => {
-  it("is null for JSON that is not an object carrying both halves (negative)", () => {
-    expect(toolExchange("null")).toBeNull();
-    expect(toolExchange("42")).toBeNull();
-    expect(toolExchange('"text"')).toBeNull();
-    expect(toolExchange('{"input":{"command":"ls"}}')).toBeNull();
-  });
-
-  const outputOf = (output: unknown) =>
-    toolExchange(JSON.stringify({ input: "x", output }))?.output;
-
-  it("joins stdout and stderr, and reads either alone when the other is empty", () => {
-    expect(outputOf({ stdout: "built", stderr: "1 warning" })).toBe(
-      "built\n1 warning",
-    );
-    expect(outputOf({ stdout: "", stderr: "boom" })).toBe("boom");
-    expect(outputOf({ stdout: "done" })).toBe("done");
-  });
-
-  it("prints the JSON when the streams hold nothing to read (negative)", () => {
-    expect(outputOf({ stdout: "", stderr: "" })).toBe(
-      '{\n  "stdout": "",\n  "stderr": ""\n}',
-    );
-    expect(outputOf({ stdout: 7 })).toBe('{\n  "stdout": 7\n}');
-    expect(outputOf(["a"])).toBe('[\n  "a"\n]');
-    expect(outputOf(null)).toBe("null");
-  });
-});
-
 describe("decisionSubject", () => {
   it("names the call a gate decided on, and nothing when the gate named none", () => {
     expect(
       decisionSubject(
-        frame({ kind: "policy", type: "policy_decision", label: "deny Bash" }),
+        edgeFrame({
+          kind: "policy",
+          type: "policy_decision",
+          label: "deny Bash",
+        }),
       ),
     ).toBe("Bash");
     expect(
       decisionSubject(
-        frame({
+        edgeFrame({
           kind: "policy",
           type: "policy_decision",
           label: "policy deny",
@@ -1320,7 +1646,7 @@ describe("decisionSubject", () => {
     ).toBeNull();
     expect(
       decisionSubject(
-        frame({
+        edgeFrame({
           kind: "policy",
           type: "approval_request",
           label: "approval_request",
@@ -1332,17 +1658,17 @@ describe("decisionSubject", () => {
   it("names a tool frame by its own tool, for each spelling of a call", () => {
     expect(
       decisionSubject(
-        frame({ kind: "tool_call", type: "tool_call", label: "Bash ok" }),
+        edgeFrame({ kind: "tool_call", type: "tool_call", label: "Bash ok" }),
       ),
     ).toBe("Bash");
     expect(
       decisionSubject(
-        frame({ kind: "tool_call", type: "tool_requested", label: "Read" }),
+        edgeFrame({ kind: "tool_call", type: "tool_requested", label: "Read" }),
       ),
     ).toBe("Read");
     expect(
       decisionSubject(
-        frame({
+        edgeFrame({
           kind: "tool_call",
           type: "tool.engine_call_completed",
           label: "list_pull_requests completed",
@@ -1354,12 +1680,12 @@ describe("decisionSubject", () => {
   it("claims no subject for a tool frame whose label is only its type, or a frame that is no call (negative)", () => {
     expect(
       decisionSubject(
-        frame({ kind: "tool_call", type: "tool_call", label: "tool_call" }),
+        edgeFrame({ kind: "tool_call", type: "tool_call", label: "tool_call" }),
       ),
     ).toBeNull();
     expect(
       decisionSubject(
-        frame({
+        edgeFrame({
           kind: "model_call",
           type: "llm_call",
           label: "anthropic/claude-opus-5",
@@ -1367,7 +1693,7 @@ describe("decisionSubject", () => {
       ),
     ).toBeNull();
     expect(
-      decisionSubject(frame({ type: "turn_start", label: "turn_start" })),
+      decisionSubject(edgeFrame({ type: "turn_start", label: "turn_start" })),
     ).toBeNull();
   });
 });
@@ -1376,7 +1702,11 @@ describe("stepDigest edges", () => {
   it("names a model step by its whole label when the label carries no provider", () => {
     const d = stepDigest(
       stepOver("model", [
-        frame({ kind: "model_call", type: "llm_call", label: "claude-opus-5" }),
+        edgeFrame({
+          kind: "model_call",
+          type: "llm_call",
+          label: "claude-opus-5",
+        }),
       ]),
     );
     expect(d).toMatchObject({
@@ -1391,7 +1721,7 @@ describe("stepDigest edges", () => {
     for (const status of ["error", "failed", "timeout"]) {
       const d = stepDigest(
         stepOver("tool", [
-          frame({
+          edgeFrame({
             kind: "tool_call",
             type: "tool_call",
             label: `Bash ${status}`,
@@ -1409,7 +1739,7 @@ describe("stepDigest edges", () => {
     expect(
       stepDigest(
         stepOver("tool", [
-          frame({ kind: "tool_call", type: "tool_call", label: "Bash ok" }),
+          edgeFrame({ kind: "tool_call", type: "tool_call", label: "Bash ok" }),
         ]),
       ).node,
     ).toBe("tool");
@@ -1417,14 +1747,14 @@ describe("stepDigest edges", () => {
 
   it("reads a tool step's gate from the folded decision before its label, and times it end to end", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_requested",
         label: "Bash",
         at: T0,
       }),
-      frame({
+      edgeFrame({
         seq: "2",
         kind: "policy",
         type: "policy_decision",
@@ -1436,7 +1766,7 @@ describe("stepDigest edges", () => {
           at: T0,
         },
       }),
-      frame({
+      edgeFrame({
         seq: "3",
         kind: "tool_call",
         type: "tool_call",
@@ -1456,13 +1786,13 @@ describe("stepDigest edges", () => {
 
   it("keeps the request's label as the argument when it says more than the tool's name", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_requested",
         label: "Read src/app.ts",
       }),
-      frame({
+      edgeFrame({
         seq: "2",
         kind: "tool_call",
         type: "tool_call",
@@ -1479,7 +1809,7 @@ describe("stepDigest edges", () => {
   const gateStep = (over: Partial<TranscriptEntry>) =>
     stepDigest(
       stepOver("event", [
-        frame({ kind: "policy", type: "policy_decision", ...over }),
+        edgeFrame({ kind: "policy", type: "policy_decision", ...over }),
       ]),
     );
 
@@ -1527,7 +1857,7 @@ describe("stepDigest edges", () => {
 
   it("draws admission and oxagen frames as control, and keeps a label that says more than the type", () => {
     const event = (type: string, label: string) =>
-      stepDigest(stepOver("event", [frame({ type, label })]));
+      stepDigest(stepOver("event", [edgeFrame({ type, label })]));
     expect(event("admission.checked", "admission.checked")).toMatchObject({
       node: "control",
       arg: null,
@@ -1549,21 +1879,23 @@ describe("stepTool", () => {
   it("is null for a step that is not a tool call (negative)", () => {
     expect(
       stepTool(
-        stepOver("model", [frame({ kind: "model_call", type: "llm_call" })]),
+        stepOver("model", [
+          edgeFrame({ kind: "model_call", type: "llm_call" }),
+        ]),
       ),
     ).toBeNull();
   });
 
   it("reads the call's receipt before the request, which holds the input alone", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_requested",
         label: "Bash",
         request: body("1", '{"command":"ls"}'),
       }),
-      frame({
+      edgeFrame({
         seq: "2",
         kind: "tool_call",
         type: "tool_call",
@@ -1580,7 +1912,7 @@ describe("stepTool", () => {
 
   it("falls back to the request's input when the call never completed", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_requested",
@@ -1596,7 +1928,7 @@ describe("stepTool", () => {
 
   it("takes the tool's name from the body when the label is only the frame's type", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_call",
@@ -1616,7 +1948,7 @@ describe("stepTool", () => {
 
   it("still names the tool from its label when every copy was digest-only", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_call",
@@ -1627,13 +1959,14 @@ describe("stepTool", () => {
     expect(stepTool(nth(steps, 0))).toMatchObject({
       name: "Grep",
       headline: null,
-      panes: [],
+      output: null,
+      diffs: [],
     });
   });
 
   it("is null when neither the label nor a body names the tool (negative)", () => {
     const steps = stepsIn([
-      frame({
+      edgeFrame({
         seq: "1",
         kind: "tool_call",
         type: "tool_call",
@@ -1642,173 +1975,6 @@ describe("stepTool", () => {
       }),
     ]);
     expect(stepTool(nth(steps, 0))).toBeNull();
-  });
-});
-
-describe("stepModel edges", () => {
-  const withBlocks = (
-    half: "request" | "response",
-    blocks: NonNullable<TranscriptBody["blocks"]>,
-  ) =>
-    stepOver("model", [
-      frame({
-        kind: "model_call",
-        type: "llm_call",
-        label: "anthropic/claude-opus-5",
-        [half]: transcriptBody({ seq: "1", text: null, blocks }),
-      }),
-    ]);
-
-  it("reads the blocks from whichever half kept them, and a one-line reply is not multiline", () => {
-    expect(
-      stepModel(withBlocks("request", [{ kind: "text", text: "Done." }])),
-    ).toMatchObject({
-      name: "reply",
-      headline: "Done.",
-      multiline: false,
-    });
-  });
-
-  it("keeps a single call's own detail rather than a count", () => {
-    const detail = stepModel(
-      withBlocks("response", [
-        {
-          kind: "tool_use",
-          name: "Read",
-          input: { file_path: "a.ts", offset: 9, limit: 10 },
-          callKey: "t1",
-        },
-      ]),
-    );
-    expect(detail).toMatchObject({
-      name: "Read",
-      headline: "a.ts",
-      detail: "lines 10–19",
-    });
-  });
-
-  it("is null when the blocks hold only thinking, or are empty (negative)", () => {
-    expect(
-      stepModel(withBlocks("response", [{ kind: "thinking", text: "Hmm." }])),
-    ).toBeNull();
-    expect(stepModel(withBlocks("response", []))).toBeNull();
-  });
-});
-
-describe("visibleSteps and visibleFrames edges", () => {
-  it("keeps a gate that recorded no decision and no body, and a step whose request alone has text", () => {
-    const [turn] = buildTranscript([
-      frame({
-        seq: "1",
-        kind: "policy",
-        type: "policy_decision",
-        label: "policy_decision",
-      }),
-      frame({ seq: "2", type: "oxagen:note", request: body("2", "kept") }),
-      frame({ seq: "3", type: "oxagen:tick" }),
-    ]);
-    if (turn === undefined) throw new Error("expected a turn");
-    expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s1", "s2"]);
-  });
-
-  it("returns a model step's frames as they are", () => {
-    const step = stepOver("model", [
-      frame({
-        seq: "1",
-        kind: "model_call",
-        type: "model.request",
-        response: body("1", null),
-      }),
-      frame({
-        seq: "2",
-        kind: "model_call",
-        type: "model.response",
-        response: body("2", null),
-      }),
-    ]);
-    expect(visibleFrames(step).map((f) => f.seq)).toEqual(["1", "2"]);
-  });
-
-  it("drops a digest-only copy of the call but keeps its gate, its effect frame and an unkeyed request", () => {
-    const steps = stepsIn([
-      frame({
-        seq: "1",
-        kind: "tool_call",
-        type: "tool_requested",
-        label: "Bash",
-        request: body("1", null),
-      }),
-      frame({
-        seq: "2",
-        kind: "policy",
-        type: "policy_decision",
-        label: "allow Bash",
-      }),
-      frame({
-        seq: "3",
-        kind: "tool_call",
-        type: "tool_call",
-        label: "Bash ok",
-        callKey: "toolu_k",
-        response: body("3", '{"input":{},"output":"ok"}'),
-      }),
-    ]);
-    expect(shape(steps)).toEqual([["s1", ["1", "2", "3"]]]);
-    expect(visibleFrames(nth(steps, 0)).map((f) => f.seq)).toEqual([
-      "1",
-      "2",
-      "3",
-    ]);
-
-    const keyed = stepsIn([
-      frame({
-        seq: "1",
-        kind: "tool_call",
-        type: "tool_call",
-        label: "Bash ok",
-        callKey: "toolu_k",
-        response: body("1", '{"input":{},"output":"ok"}'),
-      }),
-      frame({
-        seq: "2",
-        type: "command",
-        label: "command",
-        callKey: "toolu_k",
-      }),
-      frame({
-        seq: "3",
-        kind: "tool_call",
-        type: "tool_call",
-        label: "Bash ok",
-        callKey: "toolu_k",
-        response: body("3", null),
-      }),
-    ]);
-    expect(shape(keyed)).toEqual([["s1", ["1", "2", "3"]]]);
-    expect(visibleFrames(nth(keyed, 0)).map((f) => f.seq)).toEqual(["1", "2"]);
-  });
-
-  it("keeps a digest-only copy when no copy of that same call carries the body (negative)", () => {
-    // The body of call A is no reason to hide call B's only copy.
-    const step = stepOver("tool", [
-      frame({
-        seq: "1",
-        kind: "tool_call",
-        type: "tool_call",
-        label: "Bash ok",
-        callKey: "toolu_a",
-        response: body("1", '{"input":{},"output":"ok"}'),
-      }),
-      frame({
-        seq: "2",
-        kind: "tool_call",
-        type: "tool_call",
-        label: "Bash ok",
-        callKey: "toolu_b",
-        response: body("2", null),
-      }),
-    ]);
-    expect(visibleFrames(step).map((f) => f.seq)).toEqual(["1", "2"]);
   });
 });
 
@@ -1821,15 +1987,15 @@ describe("frameCost", () => {
 
   it("is null when no frame carried a cost, rather than a zero (negative)", () => {
     expect(frameCost([])).toBeNull();
-    expect(frameCost([frame(), frame()])).toBeNull();
+    expect(frameCost([edgeFrame(), edgeFrame()])).toBeNull();
   });
 
   it("sums the frames that carried one and skips the ones that did not", () => {
     expect(
       frameCost([
-        frame({ cost: usd("380000") }),
-        frame(),
-        frame({ cost: usd("120000") }),
+        edgeFrame({ cost: usd("380000") }),
+        edgeFrame(),
+        edgeFrame({ cost: usd("120000") }),
       ]),
     ).toEqual({
       micros: "500000",
@@ -1840,9 +2006,258 @@ describe("frameCost", () => {
   it("refuses a total across currencies (negative)", () => {
     expect(
       frameCost([
-        frame({ cost: usd("1") }),
-        frame({ cost: { micros: "1", currency: "EUR", basis: null } }),
+        edgeFrame({ cost: usd("1") }),
+        edgeFrame({ cost: { micros: "1", currency: "EUR", basis: null } }),
       ]),
     ).toBeNull();
+  });
+});
+
+// ── A wrapped Claude Code session ────────────────────────────────────────────
+//
+// The shape of run bcfb444f: Oxagen's gate decides each call, Claude Code's
+// own permission check writes a `harness_permission` frame for the same call,
+// and the call's receipt lands later, often with other calls' frames between.
+// Each group below shares one `tool_use_id`.
+
+describe("a wrapped Claude Code session", () => {
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c2";
+  const gate = (
+    seq: string,
+    key: string,
+    target: string | null,
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "policy",
+      type: "policy_decision",
+      label: "allow Bash",
+      callKey: key,
+      target,
+      decision: { seq, decision: "allow", type: "policy_decision", at: T0 },
+      ...over,
+    });
+  const harness = (seq: string, key: string | null, verdict = "allow") =>
+    frame({
+      seq,
+      type: "harness_permission",
+      label: `${verdict} Bash`,
+      callKey: key,
+    });
+  const call = (
+    seq: string,
+    key: string,
+    label: string,
+    response: TranscriptBody | null = body(seq, null),
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "tool_call",
+      type: "tool_call",
+      label,
+      callKey: key,
+      response,
+      ...over,
+    });
+  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_C" };
+  // Claude Code fires PreToolUse inside a subagent too, so Oxagen gates the
+  // subagent's calls on the subagent's chain.
+  const subGate = (seq: string, key: string, tool: string, target: string) =>
+    gate(seq, key, target, {
+      label: `allow ${tool}`,
+      subagent: sub,
+    });
+
+  const entries = [
+    frame({
+      seq: "1",
+      type: "turn_start",
+      request: body("1", "Fetch main and find the flaky test."),
+    }),
+    gate("2", "toolu_A", "git fetch origin main"),
+    gate("3", "toolu_B", "git status"),
+    harness("4", "toolu_A"),
+    harness("5", "toolu_B"),
+    call("6", "toolu_A", "Bash ok"),
+    call(
+      "7",
+      "toolu_B",
+      "Bash ok",
+      body(
+        "7",
+        JSON.stringify({
+          name: "Bash",
+          input: { command: "git status" },
+          output: { stdout: "nothing to commit" },
+        }),
+      ),
+    ),
+    gate("8", "toolu_C", null),
+    harness("9", "toolu_C"),
+    frame({ seq: "10", type: "subagent_start", callKey: "toolu_C" }),
+    subGate("0", "toolu_X1", "Grep", "flaky"),
+    call("1", "toolu_X1", "Grep ok", body("1", null), { subagent: sub }),
+    subGate("2", "toolu_X2", "Read", "apps/app/src/flaky.test.ts"),
+    call("3", "toolu_X2", "Read ok", body("3", null), { subagent: sub }),
+    call("11", "toolu_C", "Task ok"),
+    harness("12", "toolu_D", "deny"),
+    harness("13", "toolu_E"),
+  ];
+  const steps = stepsIn(entries);
+  const turn = buildTranscript(entries)[0];
+  if (turn === undefined) throw new Error("expected a turn");
+  // The rows the Transcript tab draws. The branch this merged into reads the
+  // run as a feed of rows (`buildFeed`) where main read it as visible steps
+  // under a zoom; each assertion below states the same behaviour of #4026 on
+  // the feed.
+  const rows = buildFeed(entries);
+  const callRows = tools(rows);
+  const stepFor = (key: string) => {
+    const found = turn.steps.find((s) => s.first.callKey === key);
+    if (found === undefined) throw new Error(`expected the ${key} step`);
+    return found;
+  };
+  const rowFor = (key: string) => {
+    const id = stepFor(key).id;
+    const found = callRows.find((row) => row.key === id);
+    if (found === undefined) throw new Error(`expected the ${key} row`);
+    return found;
+  };
+
+  it("draws one step per call, not one row per permission check", () => {
+    const calls = turn.steps.filter((s) => s.kind === "tool");
+    expect(calls.map((s) => stepDigest(s).name)).toEqual([
+      "Bash",
+      "Bash",
+      "Task",
+    ]);
+    expect(calls[0]?.frames.map((f) => f.seq)).toEqual(["2", "4", "6"]);
+    expect(calls[1]?.frames.map((f) => f.seq)).toEqual(["3", "5", "7"]);
+    expect(
+      callRows.filter((row) => row.parent === null).map((row) => row.call.name),
+    ).toEqual(["Bash", "Bash", "Task"]);
+  });
+
+  it("shows the command the gate recorded when the call kept no body", () => {
+    const fetch = stepFor("toolu_A");
+    expect(stepDigest(fetch)).toMatchObject({
+      node: "tool",
+      arg: "git fetch origin main",
+    });
+    const detail = stepTool(fetch);
+    expect(detail?.headline).toBe("git fetch origin main");
+    // Main drew the target as a command pane; the feed draws the call as it
+    // was made in the row's fold (`raw`), and its headline as the argument.
+    expect(detail?.raw).toBe("git fetch origin main");
+    expect(rowFor("toolu_A").call).toMatchObject({
+      name: "Bash",
+      arg: "git fetch origin main",
+      raw: "git fetch origin main",
+    });
+  });
+
+  it("shows the command and its output when the call kept its body", () => {
+    const detail = stepTool(stepFor("toolu_B"));
+    expect(detail?.headline).toBe("git status");
+    expect(detail?.output).toBe("nothing to commit");
+    // The harness's allow says nothing the call does not: the row carries
+    // Oxagen's gate and no chip for the harness's check.
+    expect(
+      rowFor("toolu_B").call.gates.map((gate) => [
+        gate.frame.type,
+        gate.frame.seq,
+      ]),
+    ).toEqual([["policy_decision", "3"]]);
+  });
+
+  it("nests the subagent's calls under the Task call that spawned it", () => {
+    const task = stepFor("toolu_C");
+    expect(task.frames.map((f) => f.type)).toContain("subagent_start");
+    expect(task.children?.map((s) => stepDigest(s).name)).toEqual([
+      "Grep",
+      "Read",
+    ]);
+    expect(steps.some((s) => s.first.subagent !== undefined)).toBe(false);
+    // In the feed the subagent's rows follow the Task row and name it.
+    const nested = callRows.filter((row) => row.parent === task.id);
+    expect(nested.map((row) => [row.call.name, row.call.arg])).toEqual([
+      ["Grep", "flaky"],
+      ["Read", "apps/app/src/flaky.test.ts"],
+    ]);
+    const order = callRows.map((row) => row.call.name);
+    expect(order.indexOf("Grep")).toBe(order.indexOf("Task") + 1);
+    // A reader that counts steps still sees the subagent's, in recorded order.
+    expect(flatSteps(turn).map((s) => s.id)).toContain(task.children?.[0]?.id);
+  });
+
+  it("shows a harness refusal and hides a harness allow with nothing else", () => {
+    const refused = rows.filter((row) => row.key === stepFor("toolu_D").id);
+    expect(refused).toEqual([
+      expect.objectContaining({ kind: "event", name: "Bash", failed: true }),
+    ]);
+    expect(rows.some((row) => row.key === stepFor("toolu_E").id)).toBe(false);
+    const harnessRows = rows.filter((row) =>
+      turn.steps.some(
+        (s) => s.id === row.key && s.first.type === "harness_permission",
+      ),
+    );
+    expect(harnessRows).toHaveLength(1);
+  });
+});
+
+describe("a call whose step opens on Oxagen's gate", () => {
+  // Oxagen decides before the call's own frames land, so a step gathered on
+  // the call key opens on the gate. The receipt and the frame a row links are
+  // looked for among the call's frames, never taken from the first.
+  const gate = frame({
+    seq: "1",
+    kind: "policy",
+    type: "policy_decision",
+    label: "allow Bash",
+    callKey: "tc_1",
+    decision: { seq: "1", decision: "allow", type: "policy_decision", at: T0 },
+  });
+  const request = frame({
+    seq: "2",
+    kind: "tool_call",
+    type: "tool_requested",
+    label: "Bash",
+    callKey: "tc_1",
+  });
+  // A completed call in the ledger's own vocabulary, not a wrapped tool_call.
+  const receipt = frame({
+    seq: "3",
+    kind: "tool_call",
+    type: "tool.call_completed",
+    label: "Bash ok",
+    callKey: "tc_1",
+    response: body("3", null),
+  });
+  const callOf = (entries: TranscriptEntry[]) => {
+    const row = buildFeed(entries).find((r) => r.kind === "tool");
+    if (row?.kind !== "tool") throw new Error("expected a tool row");
+    return row.call;
+  };
+
+  it("reads the call done and links its receipt", () => {
+    const call = callOf([gate, request, receipt]);
+    expect(call.pending).toBe(false);
+    expect(call.frame).toEqual({
+      seq: "3",
+      type: "tool.call_completed",
+      chainRef: null,
+    });
+  });
+
+  it("links a call still waiting to its request, never to the gate (negative)", () => {
+    const call = callOf([gate, request]);
+    expect(call.pending).toBe(true);
+    expect(call.frame).toEqual({
+      seq: "2",
+      type: "tool_requested",
+      chainRef: null,
+    });
   });
 });

@@ -14,6 +14,7 @@ import type {
   StepContext,
   EventPayload,
 } from "@oxagen/functions";
+import { INNGEST_APP_ID } from "./app-id";
 import { inngest } from "./inngest";
 
 /**
@@ -222,6 +223,10 @@ function buildInngestConfig(
     // Inngest-native shape: { maxSize, timeout, key? }.
     inngestConfig.batchEvents = config.batchEvents;
   }
+  if (config.debounce) {
+    // Inngest-native shape: { period, key?, timeout? }.
+    inngestConfig.debounce = config.debounce;
+  }
   return inngestConfig;
 }
 
@@ -292,7 +297,9 @@ export function createFunction(
     const failureConfig = buildInngestConfig({ id: companionId });
     const failureTrigger = {
       event: "inngest/function.failed",
-      if: `event.data.function_id == '${config.id}'`,
+      // The failed event names the function by its app-prefixed id. Matching
+      // the bare id never fired, so no companion ran before this was fixed.
+      if: `event.data.function_id == '${INNGEST_APP_ID}-${config.id}'`,
     };
     const wrappedFailureHandler = wrapHandler(config.onFailure);
 

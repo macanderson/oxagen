@@ -27,8 +27,12 @@ export const orgDataPlaneGet = registerCapability({
     "Read the organisation's data-plane binding for one store (postgres, neo4j, or clickhouse): shared or dedicated, its health status, endpoint host and database name, applied schema version, and the last verification/rotation timestamps. Never returns credentials or a connection string.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
+  // A read: the app's read path binds only a contract that declares it
+  // (`capabilityMutates` treats an absent flag as mutating), and the
+  // Organization › Data plane tab reads the Postgres binding through it.
+  mutates: false,
   agent: {
     requiresApproval: true,
     riskLevel: "high",

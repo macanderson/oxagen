@@ -115,6 +115,29 @@ describe("createFunction adapter", () => {
       expect(inngestConfig.timeouts).toEqual({ finish: "16m" });
     });
 
+    it("passes debounce through in Inngest's own shape", () => {
+      createFunction(
+        {
+          id: "cost.run-progress",
+          debounce: { key: "event.data.runId", period: "30s", timeout: "2m" },
+        },
+        { event: "cost/run.progressed" },
+        async () => undefined,
+      );
+      expect((capturedConfigs[0] as Record<string, unknown>).debounce).toEqual({
+        key: "event.data.runId",
+        period: "30s",
+        timeout: "2m",
+      });
+    });
+
+    it("sends no debounce for a function that sets none (negative)", () => {
+      createFunction({ id: "plain" }, { event: "x/y" }, async () => undefined);
+      expect(capturedConfigs[0] as Record<string, unknown>).not.toHaveProperty(
+        "debounce",
+      );
+    });
+
     it("translates event trigger to Inngest format", () => {
       const config: DurableFunctionConfig = { id: "test" };
       const trigger: DurableFunctionTrigger = { event: "my/event" };
@@ -439,7 +462,9 @@ describe("createFunction adapter", () => {
       // Second call is the on-failure function
       const failureTrigger = capturedTriggers[1] as Record<string, unknown>;
       expect(failureTrigger.event).toBe("inngest/function.failed");
-      expect(failureTrigger.if).toBe("event.data.function_id == 'my-function'");
+      expect(failureTrigger.if).toBe(
+        "event.data.function_id == 'oxagen-runner-my-function'",
+      );
     });
 
     it("companion handler invokes the onFailure handler with adapted step", async () => {

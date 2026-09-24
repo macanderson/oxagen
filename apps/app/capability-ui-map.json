@@ -259,6 +259,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "export_billing_statement": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "Billing › Statements: the period picker with Download CSV and Download HTML (features/billing/statements.tsx, features/billing/statement-actions.ts)",
+      "proof": "apps/app/src/features/billing/statements.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-018ETvVQctfM9iFxyLSZjRBU"
+    },
     "export_data": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
@@ -329,11 +337,11 @@
     "get_auto_eligibility": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the card on the Approvals tab draws the recorded eligibility line, and opening its decision dialog reads get_auto_eligibility again, so who has already resolved the call is current at the moment of the decision (features/fleet/approval-decision.tsx, features/fleet/actions.ts). Fleet draws no approval card since its rev1 rebuild; the shell's approvals drawer draws the same card",
+      "entry": "/[org]/[ws]/runs/[run]?tab=actions \u2014 the parked call's card inside its approval frame draws the recorded eligibility line, and opening its decision dialog reads get_auto_eligibility again, so who has already resolved the call is current at the moment of the decision (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/run/parked-calls.tsx). The shell's approvals drawer draws the same card",
       "testid": "eligibility",
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
-      "verifiedAt": "2026-09-23",
-      "verifiedBy": "session-01GDv3vs-fleet-rev1"
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
     "get_clone_draft": {
       "route": "/[org]/[ws]/steering",
@@ -369,10 +377,18 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_data_plane": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=dataPlane: the Data plane tab reads the Postgres binding through get_data_plane (data/live/org.ts, data/live/mappers/org.ts, features/organization/data-plane.tsx)",
+      "proof": "apps/app/src/features/organization/data-plane.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+    },
     "get_evidence_retention": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — the Retained evidence tile, the Evidence retention line, the Retained evidence meter and the price list's retention row (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "entry": "/[org]/billing \u2014 the Retained evidence tile, the Evidence retention line, the Retained evidence meter and the price list's retention row (data/live/billing.ts, data/live/mappers/billing.ts)",
       "proof": "apps/app/src/features/billing/billing.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01KQMbiwCu2aE7XKFbVByBng"
@@ -461,10 +477,10 @@
     "get_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] \u2014 the Run page's header and its Frames tab read get_run once per render (data/live/runs.ts, features/run/run.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 the Run page's header, figures and Governed actions tab read get_run once per render (data/live/runs.ts, features/run/run.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
     "get_run_chain": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -477,18 +493,18 @@
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=cost \u2014 the Cost tab reads get_run_cost for the rollup, under the run waterfall (data/live/runs.ts, features/run/cost.tsx)",
-      "proof": "apps/app/src/features/run/waterfall.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
+      "entry": "/[org]/[ws]/runs/[run]?tab=cost \u2014 the page reads get_run_cost once for the six figures, and the Cost tab lays its token classes, instruments and waterfall out from the same rollup (data/live/runs.ts, features/run/metrics.ts, features/run/cost.tsx)",
+      "proof": "apps/app/src/features/run/cost.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] \u2014 the Frames tab's Open body link reads get_run_frame_body for ?body=<seq> (data/live/runs.ts, features/run/frames.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq> \u2014 the Governed actions tab's frame player reads get_run_frame_body for the open frame when the URL names it (data/live/runs.ts, features/run/actions-tab.tsx, features/run/frame-player.tsx)",
+      "proof": "apps/app/src/features/run/actions-tab.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
     "get_run_outputs": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -601,7 +617,7 @@
     "list_agent_roles": {
       "route": "/[org]/[ws]/agents",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "/[org]/[ws]/agents — a row's Roles and Deregister dialogs read the roles the agent holds, marking a held role in the picker and counting the roles retirement ends (features/agents/role-controls.tsx, agent-actions.tsx, actions.ts)",
+      "entry": "/[org]/[ws]/agents \u2014 a row's Roles and Deregister dialogs read the roles the agent holds, marking a held role in the picker and counting the roles retirement ends (features/agents/role-controls.tsx, agent-actions.tsx, actions.ts)",
       "proof": "apps/app/src/features/agents/role-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01Hrw12deH1TbfC8FY9cKSre"
@@ -621,6 +637,14 @@
           "proof": "apps/app/src/features/fleet/steer-fleet.test.tsx",
           "verifiedAt": "2026-09-23",
           "verifiedBy": "session-01GDv3vs-fleet-rev1"
+        },
+        {
+          "route": "/[org]?tab=workspaces",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "Organization › Workspaces: the Agents count of each workspace the viewer may enter, and the Agents fact in Edit workspace (data/live/org.ts org.workspaceFacts, features/organization/workspaces.tsx)",
+          "proof": "apps/app/src/data/live/org.test.ts",
+          "verifiedAt": "2026-09-24",
+          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
         }
       ]
     },
@@ -643,10 +667,10 @@
     "list_approvals": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] \u2014 the Fleet Waiting on a human tile counts list_approvals and marks the runs a parked call names, and /[org]/[ws]/runs/[run]?tab=approvals reads it narrowed to one run (data/live/approvals.ts, features/fleet/board.tsx, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
+      "entry": "/[org]/[ws] \u2014 the Fleet Waiting on a human tile counts list_approvals and marks the runs a parked call names, and the Run page reads it narrowed to one run for the tab's parked dot and the Governed actions cards (data/live/approvals.ts, features/fleet/board.tsx, features/fleet/approvals-panel.tsx, features/run/run.tsx, features/run/actions-tab.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
     "list_connections": {
       "route": "/[org]/[ws]/tools/providers",
@@ -702,7 +726,17 @@
       "entry": "Repositories \u203a the Not linked table of repositories the installation reaches, and the main-repository picker (features/repositories/bound-repositories.tsx, features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
+      "verifiedBy": "session-mc-repositories-page",
+      "also": [
+        {
+          "route": "/[org]",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "Organization › Create a workspace: the Main repository select offers the repositories the organization's installations reach, and Production branch the default branch create_workspace records (features/organization/workspace-reads.ts, features/organization/workspace-actions.tsx)",
+          "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
+          "verifiedAt": "2026-09-24",
+          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+        }
+      ]
     },
     "list_invoices": {
       "route": "/[org]/billing",
@@ -782,15 +816,26 @@
       "entry": "Repositories \u203a the repository table every visit reads, main first, with role, production branch, .oxagen/, events and symbols (features/repositories/repositories.tsx, features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
+      "verifiedBy": "session-mc-repositories-page",
+      "also": [
+        {
+          "route": "/[org]?tab=workspaces",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "Organization › Workspaces: Main repo, Production branch and Linked repos, read inside each workspace the viewer may enter, and the main repository and branch in Edit workspace (data/live/org.ts org.workspaceFacts, features/organization/workspaces.tsx, features/organization/workspace-actions.tsx)",
+          "proof": "apps/app/src/features/organization/workspaces.test.tsx",
+          "verifiedAt": "2026-09-24",
+          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+        }
+      ]
     },
     "list_resolved_approvals": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=approvals: the Resolved section reads list_resolved_approvals narrowed to the run, showing the rule that auto-approved a call with no person (features/run/resolved-approvals.tsx, features/run/run.tsx, data/live/approvals.ts)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT",
+      "entry": "/[org]/[ws]/runs/[run]?tab=actions \u2014 an approval frame's detail on the Governed actions tab reads list_resolved_approvals narrowed to the run and says who decided the call and when, or the rule that released a call with no person (features/run/actions-tab.tsx, features/run/parked-calls.tsx, data/live/approvals.ts)",
+      "proof": "apps/app/src/features/run/actions-tab.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn",
+
       "also": [
         {
           "route": "/[org]",
@@ -838,7 +883,7 @@
     "list_tacho_hosts": {
       "route": "/[org]/[ws]/runtimes",
       "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
-      "entry": "/[org]/[ws]/runtimes — the Enrolled hosts table, the stat tiles and one runtime's host panel (data/live/runtimes.ts, features/runtimes/runtimes.tsx, features/runtimes/runtime.tsx)",
+      "entry": "/[org]/[ws]/runtimes \u2014 the Enrolled hosts table, the stat tiles and one runtime's host panel (data/live/runtimes.ts, features/runtimes/runtimes.tsx, features/runtimes/runtime.tsx)",
       "testid": "runtime-row",
       "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
       "verifiedAt": "2026-09-23",
@@ -847,7 +892,7 @@
         {
           "route": "/[org]/[ws]/runtimes/[runtime]",
           "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
-          "entry": "/[org]/[ws]/runtimes/[runtime] — the host panel of one enrollment (features/runtimes/runtime.tsx)",
+          "entry": "/[org]/[ws]/runtimes/[runtime] \u2014 the host panel of one enrollment (features/runtimes/runtime.tsx)",
           "testid": "fact-collector",
           "proof": "apps/app/src/features/runtimes/runtimes.test.tsx"
         }
@@ -920,7 +965,7 @@
     "propose_agent": {
       "route": "/[org]/[ws]/agents",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › New agent, and ⌘K Create › Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts); Agents › Register an agent opens the same pull request from its dialog (features/agents/register-agent.tsx, features/agents/actions.ts)",
+      "entry": "Agents \u203a New agent, and \u2318K Create \u203a Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts); Agents \u203a Register an agent opens the same pull request from its dialog (features/agents/register-agent.tsx, features/agents/actions.ts)",
       "proof": "apps/app/src/features/create/agent-wizard.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-wizard-agent"
@@ -1036,11 +1081,12 @@
     "resolve_approval": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx, features/run/run.tsx). Fleet draws no approval card since its rev1 rebuild; the shell's approvals drawer draws the same card",
+      "entry": "/[org]/[ws]/runs/[run]?tab=actions \u2014 a parked call's card sits inside the approval frame that records it on the Governed actions tab, and Decide opens the approve or deny dialog, which invokes resolve_approval through the kernel seam (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx, features/run/parked-calls.tsx). The shell's approvals drawer draws the same card",
       "testid": "decide",
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
-      "verifiedAt": "2026-09-23",
-      "verifiedBy": "session-01GDv3vs-fleet-rev1",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn",
+
       "also": [
         {
           "route": "/[org]",
@@ -1124,7 +1170,7 @@
         {
           "route": "/[org]/[ws]/runtimes/[runtime]",
           "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
-          "entry": "/[org]/[ws]/runtimes/[runtime] — Unenroll on the Rollback panel, confirmed in a dialog naming the host and the agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+          "entry": "/[org]/[ws]/runtimes/[runtime] \u2014 Unenroll on the Rollback panel, confirmed in a dialog naming the host and the agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
           "testid": "runtime-unenroll",
           "proof": "apps/app/src/features/runtimes/runtimes.test.tsx"
         }
@@ -1466,11 +1512,11 @@
     "get_run_work": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "Work and CI reads captured checkout and patch evidence with connected PR status before the transcript.",
-      "testid": "run-work",
-      "proof": "apps/app/src/features/run/work-ci.test.tsx",
-      "verifiedAt": "2026-09-23",
-      "verifiedBy": "source-review"
+      "entry": "/[org]/[ws]/runs/[run]?tab=issues Linked work: the recorded checkouts by repository, the connected pull requests with their checks, and the changed files with the forge's patch and the captured diffs (features/run/linked-work.tsx). The header's checkout strip and the Changes panel read the same get_run_work answer.",
+      "testid": "run-linked-work",
+      "proof": "apps/app/src/features/run/issues-tab.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
     "get_run_outcomes_settings": {
       "route": "/[org]/[ws]/runs/[run]",
