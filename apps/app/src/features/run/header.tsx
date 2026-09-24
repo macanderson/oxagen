@@ -1,6 +1,7 @@
 // The Run page's header (mockup `pRun`, spec pages/run.md): who ran it and
 // under what tier, the rig it ran on, where it ran, when, and the controls the
-// run's status allows. The run id is the page's h1, drawn by page.tsx.
+// run's status allows. RunTitle draws the page's h1: the run's human title,
+// with the id under it, or the id alone when the run has no title.
 //
 // Every chip shows what the record holds. The rig reads the session row
 // (model, effort, permission mode), the checkout and subagent strips read
@@ -27,6 +28,7 @@ import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
+import { PageHeader } from "@/ui/page-header";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyText } from "./copy-text";
@@ -448,7 +450,35 @@ function Usage({ run }: { run: RunRow }) {
   );
 }
 
-/** "<task> · started <t> by <operator> · sealed <t>". */
+/**
+ * The run's human title: the name its harness gave it or Oxagen generated,
+ * unless the workspace turned automatic names off, then its task reference.
+ * Null when the run carries neither.
+ */
+export function titleOf(run: RunRow): string | null {
+  return (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
+}
+
+/**
+ * The page's h1 (spec pages/run.md). A run with a title leads with it and
+ * keeps its id under it in mono with a copy button. A run with no title is
+ * named by its id. The error path passes the id alone, since no run was read.
+ */
+export function RunTitle({ id, run }: { id: string; run: RunRow | null }) {
+  const t = useTranslations("pages");
+  const title = run === null ? null : titleOf(run);
+  return title === null ? (
+    <PageHeader eyebrow={t("run")} title={id} mono />
+  ) : (
+    <PageHeader
+      eyebrow={t("run")}
+      title={title}
+      description={<CopyText text={id} />}
+    />
+  );
+}
+
+/** "started <t> by <operator> · sealed <t>". */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
   const tr = useTranslations("run");
@@ -478,19 +508,11 @@ function When({ run }: { run: RunRow }) {
           ))}
       </OperatorName>
     );
-  const title =
-    (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
   return (
     <p
       data-testid="run-when"
       className="flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground"
     >
-      {title === null ? null : (
-        <>
-          <span className="font-medium text-foreground">{title}</span>
-          <span aria-hidden="true">·</span>
-        </>
-      )}
       <span>
         {t("started")}{" "}
         <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
@@ -568,7 +590,7 @@ export function RunHeader({
             {run.replayGrade === null ? null : (
               <ReplayGradeBadge grade={run.replayGrade} />
             )}
-            {run.taskRef === null ? null : (
+            {run.taskRef === null || titleOf(run) === run.taskRef ? null : (
               <span data-testid="run-task" className={chip}>
                 {run.taskRef}
               </span>

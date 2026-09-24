@@ -165,12 +165,17 @@ afterEach(() => {
 });
 
 describe("header", () => {
-  it("titles the when line with the generated name and draws the model's summary as generated", async () => {
+  it("titles the page with the run's name, keeps the id under it, and draws the model's summary as generated", async () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-when")).toHaveTextContent(
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1).toHaveTextContent("Cut the 3.2 release branch");
+    expect(h1.className).not.toContain("font-mono");
+    expect(screen.getByRole("button", { name: "Copy tse_7k2m9q" })).toBeTruthy();
+    // The title is the h1's alone, never repeated in the when line.
+    expect(screen.getByTestId("run-when")).not.toHaveTextContent(
       "Cut the 3.2 release branch",
     );
     const summary = screen.getByTestId("generated-summary");
@@ -180,14 +185,15 @@ describe("header", () => {
     await expectNoAxe(container);
   });
 
-  it("titles a run with its task reference when no generated name exists", async () => {
+  it("titles a run with its task reference when no generated name exists, and drops the task chip that would repeat it", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ name: null, summary: null }) })),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-when")).toHaveTextContent(
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "ENG-4121 cut the 3.2 release",
     );
+    expect(screen.queryByTestId("run-task")).toBeNull();
     expect(screen.queryByTestId("generated-summary")).toBeNull();
     expect(
       screen.getByText(/No summary yet\. Open the transcript/),
@@ -230,16 +236,37 @@ describe("header", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.queryByText("Old generated name")).toBeNull();
-    expect(
-      within(screen.getByTestId("run-when")).getByText(
-        "A derived project label",
-      ),
-    ).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "A derived project label",
+    );
     expect(
       screen.getByRole("checkbox", {
         name: "Automatic run names and summaries",
       }),
     ).not.toBeChecked();
+  });
+
+  it("titles a run that carries no name and no task reference by its id in mono (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ name: null, taskRef: null, summary: null }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1).toHaveTextContent("tse_7k2m9q");
+    expect(h1.className).toContain("font-mono");
+    expect(screen.queryByRole("button", { name: "Copy tse_7k2m9q" })).toBeNull();
+  });
+
+  it("titles a run whose read failed by the id the URL named", async () => {
+    await renderRun({
+      detail: readError("run_index_unavailable", 503),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "tse_7k2m9q",
+    );
   });
 
   it("draws the agent, status and tier chips, and the rig the run ran on", async () => {
