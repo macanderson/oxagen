@@ -68,13 +68,15 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { TranscriptSection } = await import("./transcript");
+type KindFilter = import("./transcript").KindFilter;
 
 const PLACE = { org: "acme", ws: "core-platform", runId: "tse_7k2m9q" };
 const RUN = runRow();
 
 type SectionView = {
   read?: Read<RunTranscript>;
-  kinds?: TranscriptKind[];
+  tally?: Read<RunTranscript>;
+  kinds?: KindFilter;
   zoom?: RunTranscript["zoom"];
   status?: RunRow["status"];
 };
@@ -82,6 +84,7 @@ type SectionView = {
 function renderSection(view: SectionView = {}) {
   const {
     read = readOk(mockupTranscript()),
+    tally,
     kinds = [],
     zoom = "steps",
     status = RUN.status,
@@ -90,6 +93,7 @@ function renderSection(view: SectionView = {}) {
     <IntlProvider>
       <TranscriptSection
         read={read}
+        tally={tally}
         zoom={zoom}
         kinds={kinds}
         run={{ status, replayGrade: RUN.replayGrade }}
@@ -430,27 +434,82 @@ describe("a decision on a subagent's chain", () => {
   });
 });
 
+describe("the effort a model call ran at", () => {
+  it("maps the server's effort, and reads a missing one as unrecorded (negative)", () => {
+    const first = runTranscript({ entries: [transcriptEntry()] }).entries[0];
+    if (!first) throw new Error("Missing transcript fixture entry");
+    const { subagent: _appSubagent, ...entry } = first;
+    const wire = (seq: string, effort?: string | null) => ({
+      ...entry,
+      seq,
+      endSeq: seq,
+      callId: null,
+      cost: null,
+      cumulativeCost: null,
+      request: null,
+      response: null,
+      ...(effort === undefined ? {} : { effort }),
+    });
+    const mapped = RunTranscript.parse(
+      toRunTranscript({
+        ...runTranscript(),
+        entries: [wire("5", "high"), wire("6", null), wire("7")],
+      }),
+    );
+    expect(mapped.entries.map((e) => e.effort)).toEqual(["high", null, null]);
+  });
+});
+
 describe("the filter chips", () => {
-  it("draws one chip per kind the contract publishes, and no proof chip, which it does not publish (negative)", () => {
+  const RUN_URL = "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns";
+  const chipOrder = () =>
+    within(screen.getByTestId("transcript-chips"))
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("data-testid"));
+
+  it("draws the mockup's chips in the mockup's order, then all/none and errors, and no policy or proof chip (negative)", () => {
     renderSection();
-    for (const kind of [
-      "prompt",
-      "responses",
-      "thinking",
-      "tools",
-      "policy",
-      "recall",
-      "usage",
-      "seal",
-      "errors",
-    ]) {
-      expect(screen.getByTestId(`chip-${kind}`)).toBeInTheDocument();
-    }
+    expect(chipOrder()).toEqual([
+      "chip-prompt",
+      "chip-responses",
+      "chip-thinking",
+      "chip-tools",
+      "chip-usage",
+      "chip-recall",
+      "chip-seal",
+      "chip-all",
+      "chip-errors",
+    ]);
+    expect(screen.queryByTestId("chip-policy")).toBeNull();
     expect(screen.queryByTestId("chip-proof")).toBeNull();
   });
 
-  it("marks a pressed chip with aria-current, which is the attribute a link may carry", () => {
-    renderSection({ kinds: ["tools"] });
+  it("draws every chip on when nothing is filtered, and offers none", () => {
+    renderSection({ zoom: "turns" });
+    for (const chip of ["prompt", "tools", "seal", "thinking"]) {
+      expect(screen.getByTestId(`chip-${chip}`)).toHaveAttribute(
+        "aria-current",
+        "true",
+      );
+    }
+    expect(screen.getByTestId("chip-errors")).not.toHaveAttribute(
+      "aria-current",
+    );
+    const toggle = screen.getByTestId("chip-all");
+    expect(toggle).toHaveTextContent("none");
+    expect(toggle).toHaveAttribute("href", `${RUN_URL}&kinds=none`);
+  });
+
+  it("turns a chip off by linking to every other chip's kinds, in the contract's own order", () => {
+    renderSection({ zoom: "turns" });
+    expect(screen.getByTestId("chip-tools")).toHaveAttribute(
+      "href",
+      `${RUN_URL}&kinds=prompt%2Cresponses%2Cthinking%2Cusage%2Crecall%2Cseal`,
+    );
+  });
+
+  it("files the tools chip over tools and their gate decisions, and offers all when a chip is off", () => {
+    renderSection({ kinds: ["tools", "policy"], zoom: "turns" });
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "aria-current",
       "true",
@@ -458,36 +517,100 @@ describe("the filter chips", () => {
     expect(screen.getByTestId("chip-prompt")).not.toHaveAttribute(
       "aria-current",
     );
-  });
-
-  it("links a chip that is off to the filter with it added, in the contract's own order", () => {
-    renderSection({ kinds: ["tools"], zoom: "turns" });
-    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+    expect(screen.getByTestId("chip-prompt")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=tools%2Cerrors",
+      `${RUN_URL}&kinds=prompt%2Ctools%2Cpolicy`,
     );
-  });
-
-  it("links a chip that is on to the filter with it taken off again", () => {
-    renderSection({ kinds: ["tools"], zoom: "turns" });
+    // Turning off the last chip that is on is an explicit none, never the
+    // empty list, which would mean every kind.
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+      `${RUN_URL}&kinds=none`,
+    );
+    const toggle = screen.getByTestId("chip-all");
+    expect(toggle).toHaveTextContent("all");
+    expect(toggle).toHaveAttribute("href", RUN_URL);
+  });
+
+  it("draws every chip off for none, reads no entries, and says how to get the run back", () => {
+    renderSection({
+      // A failed read must not show: none reads nothing.
+      read: readError("frame_store_unreachable", 502),
+      kinds: "none",
+      zoom: "turns",
+    });
+    expect(screen.getByTestId("chip-prompt")).not.toHaveAttribute(
+      "aria-current",
+    );
+    expect(screen.getByTestId("chip-prompt")).toHaveAttribute(
+      "href",
+      `${RUN_URL}&kinds=prompt`,
+    );
+    expect(screen.getByTestId("chip-all")).toHaveAttribute("href", RUN_URL);
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Choose all",
+    );
+    expect(screen.queryByTestId("transcript")).toBeNull();
+  });
+
+  it("shows only failed calls behind errors, and links back to everything from it", () => {
+    renderSection({ zoom: "turns" });
+    const errors = screen.getByTestId("chip-errors");
+    expect(errors).toHaveAttribute("title", "Show only failed calls");
+    expect(errors).toHaveAttribute("href", `${RUN_URL}&kinds=errors`);
+    cleanup();
+    renderSection({ kinds: ["errors"], zoom: "turns" });
+    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    expect(screen.getByTestId("chip-errors")).toHaveAttribute("href", RUN_URL);
+    // Errors alone is not a chip of its own kind: every chip reads off.
+    expect(screen.getByTestId("chip-tools")).not.toHaveAttribute(
+      "aria-current",
     );
   });
 
-  it("offers no clear link when nothing is filtered (negative)", () => {
-    renderSection();
-    expect(screen.queryByTestId("chip-clear")).toBeNull();
+  it("counts each chip's entries from the whole-run read", () => {
+    const tally = readOk(
+      runTranscript({
+        entries: [
+          transcriptEntry({ seq: "1", kinds: ["tools"] }),
+          transcriptEntry({ seq: "2", kinds: ["policy"] }),
+          transcriptEntry({ seq: "3", kinds: ["tools", "errors"] }),
+        ],
+      }),
+    );
+    renderSection({ tally });
+    expect(screen.getByTestId("chip-tools-count")).toHaveTextContent("3");
+    expect(screen.getByTestId("chip-errors-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("chip-prompt-count")).toHaveTextContent("0");
   });
 
-  it("keeps the chips on screen when the read was refused, so the filter can be cleared from the failure", () => {
+  it("marks a count from a read that stopped short as a floor", () => {
+    const tally = readOk(
+      runTranscript({
+        entries: [transcriptEntry({ kinds: ["tools"] })],
+        complete: false,
+        cursor: "ZjoxMQ",
+      }),
+    );
+    renderSection({ tally });
+    expect(screen.getByTestId("chip-tools-count")).toHaveTextContent("1+");
+  });
+
+  it("draws no counts when the whole-run read failed, rather than zeros (negative)", () => {
+    renderSection({ tally: readError("frame_store_unreachable", 502) });
+    expect(screen.queryByTestId("chip-tools-count")).toBeNull();
+  });
+
+  it("keeps the chips on screen when the read was refused, so the filter can be undone from the failure", () => {
     renderSection({
       read: readError("frame_store_unreachable", 502),
       kinds: ["policy"],
     });
     expect(screen.getByTestId("transcript-chips")).toBeInTheDocument();
-    expect(screen.getByTestId("chip-clear")).toBeInTheDocument();
+    expect(screen.getByTestId("chip-all")).toHaveTextContent("all");
   });
 
   it("says no entry answers the filter rather than saying the run has no frames (negative)", () => {
@@ -496,7 +619,7 @@ describe("the filter chips", () => {
       kinds: ["policy", "recall"],
     });
     expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
-      "Clear the filter",
+      "Choose all",
     );
   });
 
@@ -564,6 +687,151 @@ describe("the filter chips", () => {
   it("passes an axe check with a filter applied", async () => {
     const { container } = renderSection({ kinds: ["tools", "errors"] });
     await expectNoAxe(container);
+  });
+});
+
+describe("searching the transcript", () => {
+  const search = (text: string) => {
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search the transcript" }),
+      { target: { value: text } },
+    );
+  };
+
+  it("draws only the turns and steps that match, opens them, and counts what it found", () => {
+    renderSection({ zoom: "turns" });
+    expect(screen.queryByTestId("transcript-search-count")).toBeNull();
+    search("Open Pull Requests");
+    expect(screen.getByTestId("transcript-search-count")).toHaveTextContent(
+      "1 of 13 entries",
+    );
+    const turns = screen.getAllByTestId("transcript-turn");
+    expect(turns).toHaveLength(1);
+    expect(turns[0]).toHaveAttribute("open");
+    expect(screen.getAllByTestId("transcript-step")).toHaveLength(1);
+  });
+
+  it("keeps a found step's run-wide number", () => {
+    renderSection({ zoom: "everything" });
+    const numberOf = () =>
+      screen
+        .getAllByTestId("transcript-step")
+        .find((step) => step.textContent?.includes("create_tag"))
+        ?.querySelector("[data-testid=step-number]")?.textContent;
+    const before = numberOf();
+    expect(before).toBeDefined();
+    search("create_tag");
+    expect(numberOf()).toBe(before);
+  });
+
+  it("says nothing matches rather than drawing an empty transcript (negative)", () => {
+    renderSection();
+    search("no-such-words");
+    expect(screen.getByTestId("transcript-search-empty")).toHaveTextContent(
+      "Nothing matches this search.",
+    );
+    expect(screen.queryAllByTestId("transcript-turn")).toHaveLength(0);
+  });
+
+  it("draws the whole transcript again when the search is cleared", () => {
+    renderSection();
+    const all = screen.getAllByTestId("transcript-turn").length;
+    search("create_tag");
+    search("   ");
+    expect(screen.getAllByTestId("transcript-turn")).toHaveLength(all);
+    expect(screen.queryByTestId("transcript-search-count")).toBeNull();
+  });
+});
+
+describe("thinking and effort on a model step", () => {
+  const usage = {
+    inputUncached: 10,
+    cacheRead: 0,
+    cacheWrite: 0,
+    output: 5,
+    reasoning: 42,
+  };
+  /** A model call that thought, then a tool call after it, so the model step is not the head. */
+  const thought = (withBlocks: boolean) =>
+    readOk(
+      runTranscript({
+        entries: [
+          transcriptEntry({
+            seq: "1",
+            endSeq: "1",
+            frames: 1,
+            kind: "model_call",
+            type: "llm_call",
+            label: "anthropic/claude-fable-5-1",
+            kinds: ["responses", "thinking", "usage"],
+            effort: "high",
+            usage,
+            response: transcriptBody({
+              seq: "1",
+              type: "llm_call",
+              text: "Tagging now.",
+              blocks: withBlocks
+                ? [
+                    { kind: "thinking", text: "Check the tag is free first." },
+                    { kind: "text", text: "Tagging now." },
+                  ]
+                : [{ kind: "text", text: "Tagging now." }],
+            }),
+          }),
+          transcriptEntry({
+            seq: "2",
+            endSeq: "2",
+            frames: 1,
+            kind: "tool_call",
+            type: "tool_call",
+            label: "create_tag ok",
+            callKey: "call_1",
+            kinds: ["tools"],
+            response: transcriptBody({
+              seq: "2",
+              type: "tool_call",
+              text: '{"ok":true}',
+            }),
+          }),
+        ],
+      }),
+    );
+
+  it("names the effort and the thinking tokens on the step", () => {
+    renderSection({ read: thought(true) });
+    expect(screen.getByTestId("step-effort")).toHaveTextContent("effort high");
+    expect(screen.getByTestId("step-thinking-tokens")).toHaveTextContent(
+      "42 thinking tokens",
+    );
+  });
+
+  it("opens every kept thought on expand thinking, and closes them again", () => {
+    renderSection({ read: thought(true) });
+    expect(screen.queryByTestId("step-thinking")).toBeNull();
+    const toggle = screen.getByTestId("expand-thinking");
+    expect(toggle).toHaveTextContent("expand thinking");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).toHaveTextContent("collapse thinking");
+    const pane = screen.getByTestId("step-thinking");
+    expect(pane).toHaveAttribute("open");
+    expect(pane).toHaveTextContent("Check the tag is free first.");
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId("step-thinking")).toBeNull();
+  });
+
+  it("says the harness kept no thought where only the token count was recorded (negative)", () => {
+    renderSection({ read: thought(false), zoom: "everything" });
+    expect(screen.queryByTestId("step-thinking")).toBeNull();
+    expect(screen.getByTestId("step-thinking-unkept")).toHaveTextContent(
+      "The model spent 42 tokens thinking.",
+    );
+  });
+
+  it("draws no effort or thinking chip on a step that recorded neither (negative)", () => {
+    renderSection();
+    expect(screen.queryByTestId("step-effort")).toBeNull();
+    expect(screen.queryByTestId("step-thinking-tokens")).toBeNull();
   });
 });
 

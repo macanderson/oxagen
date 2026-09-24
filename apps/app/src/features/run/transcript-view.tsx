@@ -11,8 +11,13 @@
 // the step holding it is marked.
 //
 // Zoom is which disclosures start open (Turns: none, Steps: the turns,
-// Everything: the turns and their steps), not a different read, so a change
-// of level keeps the position and rewrites only the query value.
+// Everything: the turns and their steps), read once from `?zoom=`. The page
+// draws no zoom tabs, because the mockup of record has none: the chips,
+// search and "expand thinking" are how a reader narrows the transcript.
+//
+// Search narrows what is drawn, never what is read. A step shows when any of
+// its frames matches, a turn when any of its steps does, and the step
+// numbers stay the run's, so a found step keeps the number it had before.
 //
 // A live run follows its own head over the SSE route
 // (`GET /v1/:org/:ws/runs/:run_id/stream`, reached same-origin through the
@@ -43,7 +48,6 @@ import type { Money as MoneyValue } from "@/data/contracts/money";
 import {
   type RunTranscript,
   TRANSCRIPT_ENTRY_DEFAULT,
-  TRANSCRIPT_ZOOMS,
   type TranscriptBody,
   type TranscriptDecision,
   type TranscriptEntry,
@@ -62,10 +66,10 @@ import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
 import type { ToolDetail } from "./tool-detail";
 import { StepIcon } from "./tool-icon";
-import { kindsParam } from "./transcript";
 import {
   buildTranscript,
   entryKey,
+  entryText,
   decisionSubject,
   type Frames,
   frameAt,
@@ -77,6 +81,7 @@ import {
   type StepNode,
   stepDigest,
   stepModel,
+  stepThinking,
   stepTool,
   toolExchange,
   type TranscriptStep,
@@ -455,6 +460,7 @@ function StepRow({
   place,
   number,
   nested,
+  thinkingOpen,
 }: {
   step: TranscriptStep;
   digest: StepDigest;
@@ -468,10 +474,14 @@ function StepRow({
   place: Place;
   /** The rows of the subagent this step spawned, drawn inside it. */
   nested?: ReactNode;
+  /** "Expand thinking" is on: a step with a kept thought opens on it. */
+  thinkingOpen: boolean;
 }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const { first } = step;
+  const thinking = useMemo(() => stepThinking(step), [step]);
+  const opened = open || (thinkingOpen && thinking?.text != null);
   const isNow = pos >= step.from && pos <= step.to;
   const isFuture = step.from > pos;
   // Held across renders because it parses the recorded body, where the digest
@@ -500,7 +510,7 @@ function StepRow({
       data-testid="transcript-step"
       data-node={digest.node}
       data-now={isNow ? "true" : undefined}
-      open={open}
+      open={opened}
       onToggle={(e) => {
         onToggle(step.id, e.currentTarget.open);
       }}
@@ -555,6 +565,22 @@ function StepRow({
                   <span data-testid="step-model">{digest.name}</span>
                 </Chip>
               ) : null}
+              {thinking?.effort == null ? null : (
+                <Chip>
+                  <span data-testid="step-effort">
+                    {t("effort", { effort: thinking.effort })}
+                  </span>
+                </Chip>
+              )}
+              {thinking?.tokens == null ? null : (
+                <Chip>
+                  <span data-testid="step-thinking-tokens">
+                    {t("thinkingTokens", {
+                      count: formatCount(thinking.tokens, locale),
+                    })}
+                  </span>
+                </Chip>
+              )}
               {digest.outcome === null ? null : (
                 <Chip tone={digest.node === "deny" ? "warn" : undefined}>
                   {digest.outcome}
@@ -590,8 +616,40 @@ function StepRow({
           </span>
         </div>
       </summary>
-      {open ? (
+      {opened ? (
         <div className="pr-3 pb-2.5 pl-3 md:pl-[76px]">
+          {thinking === null ? null : thinking.text !== null ? (
+            <details
+              // Keyed on the toggle so "expand thinking" opens or closes
+              // every thought, whatever a reader did to one of them since.
+              key={thinkingOpen ? "open" : "shut"}
+              data-testid="step-thinking"
+              open={thinkingOpen}
+              className="group/think mb-2 overflow-hidden rounded-md border border-border bg-background"
+            >
+              <summary className="cursor-pointer list-none px-3 py-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+                <span
+                  aria-hidden="true"
+                  className="mr-1.5 inline-block text-[8px] transition-transform group-open/think:rotate-90"
+                >
+                  ▶
+                </span>
+                {t("pane.thinking")}
+              </summary>
+              <p className="m-0 max-w-[70ch] whitespace-pre-wrap border-t border-border px-3 py-2 text-[12.5px] leading-relaxed text-muted-foreground italic">
+                {thinking.text}
+              </p>
+            </details>
+          ) : thinking.tokens === null ? null : (
+            <p
+              data-testid="step-thinking-unkept"
+              className="m-0 mb-2 max-w-prose text-[11.5px] text-muted-foreground"
+            >
+              {t("thinkingUnkept", {
+                count: formatCount(thinking.tokens, locale),
+              })}
+            </p>
+          )}
           {panes === null ? null : <ToolPanes detail={panes} />}
           {/* The record under the reading of it. Where the panes above already
               say what the step did, the envelopes they were read from fold
@@ -666,6 +724,8 @@ function TurnBlock({
   openIds,
   onToggle,
   place,
+  matched,
+  thinkingOpen,
 }: {
   turn: TranscriptTurn;
   /** The run-wide number of this turn's first drawn step. */
@@ -675,6 +735,9 @@ function TurnBlock({
   openIds: Set<string>;
   onToggle: (id: string, open: boolean) => void;
   place: Place;
+  /** The keys of the entries a search found; null when nothing is searched. */
+  matched: ReadonlySet<string> | null;
+  thinkingOpen: boolean;
 }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
@@ -682,6 +745,13 @@ function TurnBlock({
   const cost = frameCost(turn.frames);
   const seconds = (Date.parse(last.at) - Date.parse(first.at)) / 1000;
   const steps = visibleSteps(turn);
+  // A search draws the turn only where something in it matched, and opens
+  // it, so a found step is on screen rather than behind a closed turn.
+  if (matched !== null && !turn.frames.some((f) => matched.has(entryKey(f)))) {
+    return null;
+  }
+  const found = (step: TranscriptStep) =>
+    matched === null || stepMatches(step, matched);
   return (
     <>
       {/* What was asked sits ABOVE the turn it opened, outside the
@@ -693,7 +763,7 @@ function TurnBlock({
       {turn.prompt === null ? null : <Role who="you" text={turn.prompt} />}
       <details
         data-testid="transcript-turn"
-        open={openIds.has(turn.id)}
+        open={matched !== null || openIds.has(turn.id)}
         onToggle={(e) => {
           onToggle(turn.id, e.currentTarget.open);
         }}
@@ -744,8 +814,13 @@ function TurnBlock({
           </div>
         </summary>
         {steps.map((step, index) => {
-          const children = visibleChildren(step);
+          // Numbered before the search filters, so a found step keeps the
+          // number it has in the whole run.
           const number = firstStep + index;
+          if (!found(step)) return null;
+          const children = visibleChildren(step).flatMap((child, at) =>
+            found(child) ? [{ child, at }] : [],
+          );
           return (
             <StepRow
               key={step.id}
@@ -756,19 +831,21 @@ function TurnBlock({
               open={openIds.has(step.id)}
               onToggle={onToggle}
               place={place}
+              thinkingOpen={thinkingOpen}
               nested={
                 children.length === 0
                   ? null
-                  : children.map((child, childIndex) => (
+                  : children.map(({ child, at }) => (
                       <StepRow
                         key={child.id}
                         step={child}
-                        number={`${number}.${childIndex + 1}`}
+                        number={`${number}.${at + 1}`}
                         digest={stepDigest(child)}
                         pos={pos}
                         open={openIds.has(child.id)}
                         onToggle={onToggle}
                         place={place}
+                        thinkingOpen={thinkingOpen}
                       />
                     ))
               }
@@ -778,6 +855,14 @@ function TurnBlock({
         {turn.reply === null ? null : <Role who="agent" text={turn.reply} />}
       </details>
     </>
+  );
+}
+
+/** Whether a step, or a subagent step under it, holds an entry the search found. */
+function stepMatches(step: TranscriptStep, matched: ReadonlySet<string>): boolean {
+  return (
+    step.frames.some((frame) => matched.has(entryKey(frame))) ||
+    (step.children ?? []).some((child) => stepMatches(child, matched))
   );
 }
 
@@ -819,7 +904,8 @@ export function TranscriptView({
   transcript,
   entries: first,
   kinds,
-  zoom: initialZoom,
+  chips,
+  zoom,
   status,
   org,
   ws,
@@ -829,8 +915,10 @@ export function TranscriptView({
   transcript: Pick<RunTranscript, "complete" | "cursor">;
   /** The first page of the transcript's frames, at least one. */
   entries: Frames;
-  /** The chips the URL pressed; a later page is read through the same filter. */
+  /** The kinds the chips show; a later page is read through the same filter. */
   kinds: readonly TranscriptKind[];
+  /** The filter chips, drawn in the toolbar after the search. */
+  chips?: ReactNode;
   /** The level the URL asked for: which disclosures start open. */
   zoom: TranscriptZoom;
   status: RunStatus;
@@ -874,9 +962,8 @@ export function TranscriptView({
   }, [turns]);
   const live = status === "live";
 
-  const [zoom, setZoom] = useState<TranscriptZoom>(initialZoom);
   const [openIds, setOpenIds] = useState(() => {
-    const open = openAtZoom(turns, initialZoom);
+    const open = openAtZoom(turns, zoom);
     for (const id of idsAt(turns, head)) open.add(id);
     return open;
   });
@@ -884,6 +971,20 @@ export function TranscriptView({
   const [pinned, setPinned] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  const [query, setQuery] = useState("");
+  const [thinkingOpen, setThinkingOpen] = useState(false);
+  const needle = query.trim().toLowerCase();
+  const matched = useMemo(
+    () =>
+      needle === ""
+        ? null
+        : new Set(
+            entries
+              .filter((entry) => entryText(entry).includes(needle))
+              .map(entryKey),
+          ),
+    [entries, needle],
+  );
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const following = pinned === null;
@@ -1069,22 +1170,6 @@ export function TranscriptView({
     });
   }, []);
 
-  const chooseZoom = (level: TranscriptZoom) => {
-    setZoom(level);
-    const open = openAtZoom(turns, level);
-    if (level !== "turns") for (const id of idsAt(turns, pos)) open.add(id);
-    setOpenIds(open);
-    window.history.replaceState(
-      null,
-      "",
-      routes.run(org, ws, runId, {
-        tab: "transcript",
-        zoom: level,
-        kinds: kindsParam(kinds),
-      }),
-    );
-  };
-
   const lastTurnId = turns[turns.length - 1]?.id;
 
   return (
@@ -1093,6 +1178,31 @@ export function TranscriptView({
       data-testid="transcript"
       className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
     >
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
+        <input
+          type="search"
+          data-testid="transcript-search"
+          value={query}
+          placeholder={t("searchPlaceholder")}
+          aria-label={t("searchLabel")}
+          onChange={(e) => {
+            setQuery(e.currentTarget.value);
+          }}
+          className="h-8 min-w-0 flex-[1_1_220px] rounded-md border border-border bg-background px-2.5 text-[12.5px] text-foreground placeholder:text-muted-foreground"
+        />
+        {matched === null ? null : (
+          <span
+            data-testid="transcript-search-count"
+            className="font-mono text-[11px] tabular-nums text-muted-foreground"
+          >
+            {t("searchCount", {
+              shown: formatCount(matched.size, locale),
+              total: formatCount(entries.length, locale),
+            })}
+          </span>
+        )}
+        {chips}
+      </div>
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted px-3 py-2.5">
         {stream === "denied" ? null : status !== "live" ? (
           <span className="inline-flex shrink-0 items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
@@ -1227,25 +1337,17 @@ export function TranscriptView({
             </button>
           ))}
         </span>
-        <span
-          role="group"
-          aria-label={t("zoomLabel")}
-          className="flex shrink-0 overflow-hidden rounded-md border border-border"
+        <button
+          type="button"
+          data-testid="expand-thinking"
+          aria-pressed={thinkingOpen}
+          onClick={() => {
+            setThinkingOpen((was) => !was);
+          }}
+          className={`${segButton} shrink-0 rounded-md border`}
         >
-          {TRANSCRIPT_ZOOMS.map((level) => (
-            <button
-              key={level}
-              type="button"
-              aria-pressed={zoom === level}
-              onClick={() => {
-                chooseZoom(level);
-              }}
-              className={segButton}
-            >
-              {t(`zoom.${level}`)}
-            </button>
-          ))}
-        </span>
+          {thinkingOpen ? t("collapseThinking") : t("expandThinking")}
+        </button>
         <p className="m-0 basis-full text-[11px] leading-snug text-muted-foreground">
           {t("transportNote")}
         </p>
@@ -1264,8 +1366,18 @@ export function TranscriptView({
             openIds={shown}
             onToggle={toggle}
             place={place}
+            matched={matched}
+            thinkingOpen={thinkingOpen}
           />
         ))}
+        {matched !== null && matched.size === 0 ? (
+          <p
+            data-testid="transcript-search-empty"
+            className="m-0 px-3 py-4 text-sm text-muted-foreground"
+          >
+            {t("searchEmpty")}
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t border-border bg-muted px-3 py-2.5 text-xs text-muted-foreground">
         <span

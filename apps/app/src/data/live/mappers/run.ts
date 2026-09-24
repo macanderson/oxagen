@@ -263,6 +263,7 @@ export function toRunTranscript(
       label: entry.label,
       callKey: entry.callId,
       target: entry.target ?? null,
+      effort: entry.effort ?? null,
       usage: entry.usage ?? null,
       kinds: entry.kinds,
       request: toTranscriptBody(entry.request),

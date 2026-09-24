@@ -313,6 +313,8 @@ export const TranscriptEntry = z.object({
   callKey: z.string().nullable(),
   /** What the tool call acts on (a command, path or URL); null when unrecorded. */
   target: z.string().nullable().optional(),
+  /** The reasoning effort the model call ran at; null when unrecorded. */
+  effort: z.string().nullable().optional(),
   usage: TranscriptUsage.nullable().optional(),
   /** The chips this entry answers to. */
   kinds: z.array(TranscriptKind),

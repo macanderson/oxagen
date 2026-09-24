@@ -4637,12 +4637,6 @@ type Messages = {
     };
     transcript: {
       title: string;
-      zoomLabel: string;
-      zoom: {
-        turns: string;
-        steps: string;
-        everything: string;
-      };
       digestOnly: string;
       noBody: string;
       truncated: string;
@@ -4699,8 +4693,21 @@ type Messages = {
         seal: string;
         errors: string;
       };
-      chipsClear: string;
+      chipsAll: string;
+      chipsNone: string;
+      chipCount: string;
+      chipCountFloor: string;
+      errorsTitle: string;
       emptyFiltered: string;
+      searchLabel: string;
+      searchPlaceholder: string;
+      searchCount: string;
+      searchEmpty: string;
+      expandThinking: string;
+      collapseThinking: string;
+      effort: string;
+      thinkingTokens: string;
+      thinkingUnkept: string;
       more: string;
       readingMore: string;
       loadedMore: string;
@@ -4728,6 +4735,7 @@ type Messages = {
         plan: string;
         input: string;
         reply: string;
+        thinking: string;
       };
     };
     frames: {

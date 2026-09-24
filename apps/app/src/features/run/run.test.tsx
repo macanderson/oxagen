@@ -616,10 +616,12 @@ describe("tabs", () => {
       "everything",
       { kinds: [] },
     ]);
-    expect(screen.getByRole("button", { name: "Steps" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    // Steps opens every turn.
+    expect(
+      screen
+        .getAllByTestId("transcript-turn")
+        .every((turn) => turn.hasAttribute("open")),
+    ).toBe(true);
   });
 
   it("opens the transcript at the level the URL asked for, from the same read", async () => {
@@ -633,9 +635,9 @@ describe("tabs", () => {
       "everything",
       { kinds: [] },
     ]);
-    expect(screen.getByRole("button", { name: "Turns" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    // Turns opens none but the one holding the newest frame.
+    expect(screen.getAllByTestId("transcript-turn")[0]).not.toHaveAttribute(
+      "open",
     );
   });
 
@@ -800,26 +802,21 @@ describe("transcript", () => {
     );
   });
 
-  it("closes everything at Turns and keeps the position", async () => {
-    const replaceState = vi.spyOn(window.history, "replaceState");
+  it("draws no zoom tabs, and keeps the URL's zoom on the Transcript tab's link", async () => {
     await renderRun(
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript", zoom: "everything" },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Turns" }));
-    expect(screen.queryAllByTestId("transcript-frame")).toHaveLength(0);
-    expect(
-      screen
-        .getAllByTestId("transcript-turn")
-        .every((turn) => !turn.hasAttribute("open")),
-    ).toBe(true);
-    expect(screen.getByTestId("transport-readout")).toHaveTextContent("frame 13 /");
-    expect(replaceState).toHaveBeenCalledWith(
-      null,
-      "",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+    for (const name of ["Turns", "Steps", "Everything"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    const tabs = within(
+      screen.getByRole("navigation", { name: "Run sections" }),
     );
-    replaceState.mockRestore();
+    expect(tabs.getByRole("link", { name: /Transcript/ })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=everything",
+    );
   });
 
   it("says which half a frame carried, and the decision a rule made about the call", async () => {
@@ -1329,14 +1326,37 @@ describe("chips", () => {
       },
       { tab: "transcript", zoom: "turns", kinds: "tools" },
     );
-    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+    // Turning a chip on adds its kinds; tools brings its gate decisions.
+    expect(screen.getByTestId("chip-prompt")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=tools%2Cerrors",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=prompt%2Ctools%2Cpolicy",
     );
-    // Pressing a chip that is on takes it off again.
+    // Turning off the one chip that is on turns every chip off.
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=none",
+    );
+    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=errors",
+    );
+  });
+
+  it("reads nothing more when every chip is off, and says how to get the run back", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript", kinds: "none" },
+    );
+    expect(calls.transcript).toEqual([
+      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
+    ]);
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Choose all",
+    );
+    expect(screen.queryByTestId("transcript")).toBeNull();
+    expect(screen.getByTestId("chip-all")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=steps",
     );
   });
 
@@ -1349,7 +1369,7 @@ describe("chips", () => {
       { tab: "transcript", kinds: "policy" },
     );
     expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
-      "Clear the filter",
+      "Choose all",
     );
     expect(screen.queryByTestId("run-transport")).toBeNull();
   });

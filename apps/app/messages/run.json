@@ -45,12 +45,6 @@
     },
     "transcript": {
       "title": "Transcript",
-      "zoomLabel": "Zoom level",
-      "zoom": {
-        "turns": "Turns",
-        "steps": "Steps",
-        "everything": "Everything"
-      },
       "digestOnly": "The recorder kept a digest and no body, so there is nothing to read here.",
       "noBody": "No body was retained for this entry, or the bytes are not text.",
       "truncated": "Cut at the length one entry carries.",
@@ -107,8 +101,21 @@
         "seal": "Seal",
         "errors": "Errors"
       },
-      "chipsClear": "Clear the filter",
-      "emptyFiltered": "No entry in this run answers to the {count} chips you pressed. Clear the filter to read the whole run.",
+      "chipsAll": "all",
+      "chipsNone": "none",
+      "chipCount": "{count}",
+      "chipCountFloor": "{count}+",
+      "errorsTitle": "Show only failed calls",
+      "emptyFiltered": "Nothing in this run matches these filters. Choose all to read the whole run.",
+      "searchLabel": "Search the transcript",
+      "searchPlaceholder": "Search the transcript…",
+      "searchCount": "{shown} of {total} entries",
+      "searchEmpty": "Nothing matches this search.",
+      "expandThinking": "expand thinking",
+      "collapseThinking": "collapse thinking",
+      "effort": "effort {effort}",
+      "thinkingTokens": "{count} thinking tokens",
+      "thinkingUnkept": "The model spent {count} tokens thinking. The harness did not record what it thought.",
       "more": "Read more",
       "readingMore": "Reading",
       "loadedMore": "{count} entries read so far. More lie past this page.",
@@ -135,7 +142,8 @@
         "brief": "Brief",
         "plan": "Plan",
         "input": "Input",
-        "reply": "Reply"
+        "reply": "Reply",
+        "thinking": "Thinking"
       }
     },
     "frames": {

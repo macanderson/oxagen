@@ -813,6 +813,63 @@ export function stepModel(step: TranscriptStep): ToolDetail | null {
   };
 }
 
+/** What a model step recorded of its thinking; see `stepThinking`. */
+export type StepThinking = {
+  /** The thinking blocks the reply kept, joined; null when none was kept. */
+  text: string | null;
+  /** Reasoning tokens the calls reported; null when none reported any. */
+  tokens: number | null;
+  /** The effort the call ran at, as the harness recorded it; null when unrecorded. */
+  effort: string | null;
+};
+
+/**
+ * What a model step recorded of its thinking: the thinking blocks of its
+ * reply, the reasoning tokens its usage reported, and the effort it ran at.
+ * Only the reply's blocks count, because a request carries the history the
+ * model was sent, and a thought in it belongs to an earlier step. Null for a
+ * tool step, and for a model step that recorded none of the three.
+ */
+export function stepThinking(step: TranscriptStep): StepThinking | null {
+  if (step.kind !== "model") return null;
+  const text = step.frames
+    .flatMap((frame) => frame.response?.blocks ?? [])
+    .flatMap((block) => (block.kind === "thinking" ? [block.text] : []))
+    .join("\n\n")
+    .trim();
+  const reported = step.frames.flatMap((frame) =>
+    frame.usage?.reasoning == null ? [] : [frame.usage.reasoning],
+  );
+  const tokens =
+    reported.length === 0 ? 0 : reported.reduce((sum, n) => sum + n, 0);
+  const effort =
+    step.frames.find((frame) => frame.effort != null && frame.effort !== "")
+      ?.effort ?? null;
+  if (text === "" && tokens === 0 && effort === null) return null;
+  return {
+    text: text === "" ? null : text,
+    tokens: tokens === 0 ? null : tokens,
+    effort,
+  };
+}
+
+/**
+ * The words an entry is found by: what it said, what it acted on, and what
+ * it is called. Lower-cased once so a search compares lower-cased text.
+ */
+export function entryText(entry: TranscriptEntry): string {
+  return [
+    entry.label,
+    entry.type,
+    entry.target ?? "",
+    entry.request?.text ?? "",
+    entry.response?.text ?? "",
+    entry.subagent?.type ?? "",
+  ]
+    .join("\n")
+    .toLowerCase();
+}
+
 /**
  * The steps of a turn worth a row. A step with nothing to read on any frame
  * and no decision is bookkeeping (a hook registering, a queue tick) or a
@@ -840,6 +897,10 @@ function isVisible(step: TranscriptStep): boolean {
     (frame) =>
       hasContent(frame) ||
       frame.decision !== null ||
+      // A seal or a thought is its own row: the chips can ask for either
+      // alone, and a chip that is on must never draw an empty transcript.
+      frame.kinds.includes("seal") ||
+      frame.kinds.includes("thinking") ||
       TOOL_GATE.has(frame.type) ||
       harnessDenied(frame),
   );

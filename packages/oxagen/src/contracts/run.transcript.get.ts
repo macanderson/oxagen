@@ -351,6 +351,11 @@ export const transcriptEntrySchema = z
      * names none.
      */
     target: z.string().nullable().optional(),
+    /**
+     * The reasoning effort the model call ran at (`low`, `medium`, `high`),
+     * as the harness recorded it. Null when none was recorded.
+     */
+    effort: z.string().max(32).nullable().optional(),
     usage: transcriptUsageSchema.nullable().optional(),
     /** The chips this entry answers to, from the frames it folds. */
     kinds: z.array(transcriptKindSchema),

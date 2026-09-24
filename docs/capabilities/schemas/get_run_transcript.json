@@ -194,6 +194,17 @@
                 }
               ]
             },
+            "effort": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "usage": {
               "anyOf": [
                 {
