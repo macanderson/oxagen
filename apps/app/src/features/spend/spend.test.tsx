@@ -1058,6 +1058,50 @@ describe("Spend › drill", () => {
     ).toBeInTheDocument();
     expect(tile("Budget position")).toHaveTextContent("not recorded");
   });
+
+  it("says the findings could not be read, and that the key's runs called no tools, rather than drawing zeros (negative)", async () => {
+    drill.mockResolvedValue(
+      readOk(
+        drillOf({
+          tools: [],
+          share: null,
+          series: [{ day: "2026-09-15", cost: null, calls: 0, runs: 0 }],
+        }),
+      ),
+    );
+    findings.mockResolvedValue(readError("findings_down", 503));
+    await renderSpend(["agent", "a-intel.core.stella-ci"]);
+    const savings = screen
+      .getByRole("heading", { name: "Potential savings" })
+      .closest("section");
+    if (savings === null) throw new Error("no savings panel");
+    expect(savings).toHaveTextContent("not recorded");
+    expect(savings).toHaveTextContent("The findings could not be read.");
+    expect(
+      screen.getByText("Its runs called no tools in this window."),
+    ).toBeInTheDocument();
+    const own = screen
+      .getByRole("heading", { name: "Findings" })
+      .closest("section");
+    expect(own).toHaveTextContent("The findings could not be read.");
+    expect(document.querySelector("[data-finding]")).toBeNull();
+  });
+
+  it("says none identified when no open finding names the key", async () => {
+    drill.mockResolvedValue(
+      readOk(drillOf({ key: "a-intel.core.quiet-agent" })),
+    );
+    findings.mockResolvedValue(readOk(listing()));
+    await renderSpend(["agent", "a-intel.core.quiet-agent"]);
+    const savings = screen
+      .getByRole("heading", { name: "Potential savings" })
+      .closest("section");
+    expect(savings).toHaveTextContent("none identified");
+    expect(savings).toHaveTextContent("0 findings on this agent directly");
+    expect(
+      screen.getByText("No open finding names this key."),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("Spend › states", () => {
@@ -1207,5 +1251,97 @@ describe("Spend › this build's own tabs", () => {
     await renderSpend(["task"]);
     const task = rowOf("Cut the 4.11 release notes");
     expect(within(task).queryByRole("link")).toBeNull();
+  });
+});
+
+describe("Spend › what a read did not record", () => {
+  it("prints Wasted spend with nothing recorded as not recorded, not as zeros (negative)", async () => {
+    loaded();
+    waste.mockResolvedValue(
+      readOk({
+        wasted: null,
+        share: null,
+        runsWithWaste: 0,
+        largestCause: null,
+        causes: [],
+      }),
+    );
+    await renderSpend(["waste"]);
+    const wasted = screen
+      .getAllByText("Wasted", { selector: "dt" })
+      .map((dt) => dt.closest("div"))
+      .find((box) => box?.textContent.includes("not recorded"));
+    expect(wasted).toBeTruthy();
+    expect(tile("Share of spend")).toHaveTextContent("not recorded");
+    expect(tile("Largest cause")).toHaveTextContent("No waste found");
+    expect(
+      screen.getByText("No run in this period shows waste in its frames."),
+    ).toBeInTheDocument();
+    expect(document.querySelector("[data-run]")).toBeNull();
+  });
+
+  it("draws a cause's bar empty when the total wasted is not recorded", async () => {
+    loaded();
+    waste.mockResolvedValue(
+      readOk({ ...wasteRead, wasted: null, share: null }),
+    );
+    await renderSpend(["waste"]);
+    const cause = document.querySelector(
+      'li[data-cause="cache_write_never_read"]',
+    );
+    if (!(cause instanceof HTMLElement)) throw new Error("no cause");
+    expect(cause.querySelector('[style*="width"]')).toHaveStyle({
+      width: "0%",
+    });
+  });
+
+  it("says why By agent is missing when its read is refused, and prints no share of an empty month (negative)", async () => {
+    byGroup.mockImplementation((_ctx, groupBy) =>
+      Promise.resolve(
+        groupBy === "agent" ? readError("rollup_down", 503) : report([]),
+      ),
+    );
+    findings.mockResolvedValue(readOk(listing()));
+    waste.mockResolvedValue(readOk(wasteRead));
+    budgets.mockResolvedValue(readOk(budgetRows));
+    gatewayPolicy.mockResolvedValue(readError("gateway_down", 503));
+    await renderSpend(["tokens"]);
+    const byAgent = screen
+      .getByRole("heading", { name: "By agent" })
+      .closest("section");
+    if (byAgent === null) throw new Error("no By agent panel");
+    expect(within(byAgent).queryByRole("table")).toBeNull();
+    expect(byAgent).toHaveTextContent("rollup_down");
+    const output = document.querySelector('tr[data-token-class="output"]');
+    expect(output).toHaveTextContent("0");
+    expect(output).toHaveTextContent("not recorded");
+  });
+
+  it("prints no per-run figure for an agent with no runs, and no basis for a row without a cost", async () => {
+    loaded({
+      agent: report([
+        row("a-intel.core.idle", {
+          runs: 0,
+          cost: null,
+          tokens: {
+            input_uncached: 0,
+            cache_read: 0,
+            cache_write_5m: 0,
+            cache_write_1h: 0,
+            output: 0,
+            reasoning: 0,
+          },
+        }),
+      ]),
+    });
+    await renderSpend(["tokens"]);
+    const idle = rowOf("a-intel.core.idle");
+    expect(
+      within(idle).getAllByText("not recorded").length,
+    ).toBeGreaterThanOrEqual(4);
+    expect(within(idle).getByRole("link")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents/idle",
+    );
   });
 });
