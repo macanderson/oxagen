@@ -73,8 +73,9 @@ export const TACHO_SESSION_OUTCOMES = [
   "unknown",
 ] as const;
 /**
- * What sealed a session. `agent_stop` is the host's own end, a seal that is
- * final. `idle_timeout` is the control plane closing a session that sent no
+ * What sealed a session. `agent_stop` is the host's own end, a seal that
+ * holds until the host seals an `agent_start` on the same chain, which
+ * reopens it (ADR-170). `idle_timeout` is the control plane closing a session that sent no
  * event for `TACHO_IDLE_CLOSE_AFTER_MS`: a later event reopens it and a later
  * `agent_stop` replaces it. `operator` is a person sealing the run through
  * `seal_run` (ADR-169), final like the host's own. Null on an open session,
