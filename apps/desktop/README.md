@@ -130,6 +130,17 @@ the listing page, opens the GitHub release with the bare `tacho` and `oxagen`
 binaries attached, and moves the updater feed. Nothing below is needed for
 that path.
 
+Every production deploy publishes too (ADR-158). Once `deploy-node` has
+shipped, `publish-installers` in `pipeline.yml` dispatches `desktop.yml` with
+`publish: true` and the deployed commit. The build is numbered
+`X.Y.(Z+1)-N`, N commits after release `X.Y.Z`, and lands under
+`desktop/<version>/` like a release, without a tag, a GitHub release, or an
+updater entry. Whichever version is newest also sits at
+`https://downloads.oxagen.sh/latest/<name>` with `latest.json` beside it; the
+web app's enrollment screens and the docs link those names, which
+`src/downloads.ts` owns. To publish the build of one commit by hand:
+`gh workflow run desktop.yml --ref main -f publish=true -f sha=<commit>`.
+
 For a build made some other way:
 
 ```

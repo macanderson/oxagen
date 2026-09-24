@@ -2,7 +2,8 @@
 // organization's members and its pending invitations read from
 // list_members {scope:"org"}; the role and permission catalogue from
 // list_iam_roles; the organization's workspaces from list_workspaces; and API
-// keys, the keys the organization holds, read from list_api_keys. Fields are
+// keys, the keys the organization holds, read from list_api_keys; and the
+// Postgres data-plane binding from get_data_plane. Fields are
 // nullable exactly where the contract may not record them: a member's display
 // name, an invitation's expiry, a role's description and author, a workspace
 // role the viewer does not hold, an archival date a live workspace has not
@@ -60,6 +61,8 @@ const Role = z.object({
   heldBy: z.number().int().nonnegative(),
   /** The display name of whoever created a custom role, when it was recorded. */
   createdBy: z.string().nullable(),
+  /** When the role was created: the date the Origin column prints beside its author. */
+  createdAt: z.iso.datetime(),
 });
 
 export const RoleCatalog = z.object({
@@ -82,6 +85,8 @@ export type Permission = z.infer<typeof Permission>;
 const Workspace = z.object({
   id: PublicId,
   slug: z.string().min(1),
+  /** The immutable namespace every agent key in the workspace carries. */
+  namespace: z.string().min(1),
   name: z.string().min(1),
   /** The viewer's role in this workspace; null for an org admin with no membership of it. */
   role: z.string().nullable(),
@@ -94,6 +99,40 @@ const Workspace = z.object({
 export const WorkspaceList = z.object({ workspaces: z.array(Workspace) });
 export type WorkspaceList = z.infer<typeof WorkspaceList>;
 export type Workspace = z.infer<typeof Workspace>;
+
+/** One repository a workspace binds, as the Workspaces row and Edit workspace print it. */
+const BoundRepository = z.object({
+  role: z.enum(["main", "linked"]),
+  fullName: z.string().min(1),
+  /** The approved production ref the binding records, never live GitHub's. */
+  defaultRef: z.string().min(1),
+});
+type BoundRepository = z.infer<typeof BoundRepository>;
+
+/**
+ * What one workspace binds and registers, read inside it (`list_repositories`
+ * and `list_agents`): the Workspaces row's Main repo, Production branch,
+ * Linked repos and Agents cells.
+ */
+export const WorkspaceFacts = z.object({
+  /** Main first, then the linked ones by full name, as `list_repositories` orders them. */
+  repositories: z.array(BoundRepository),
+  /** `list_agents` totals.identities: over the whole workspace, never a page. */
+  agents: z.number().int().nonnegative(),
+  /**
+   * The agents `archive_workspace` refuses over (`workspace_has_agents`):
+   * live rows that are not retired and not the built-in interactive agent
+   * every workspace is seeded with, counted on the first `list_agents` page.
+   * `more` is true when that page did not reach the end, so the count is a
+   * floor. The Archive dialog warns and disables its confirm when it is above
+   * zero, which is what the handler would answer.
+   */
+  archiveBlockers: z.object({
+    count: z.number().int().nonnegative(),
+    more: z.boolean(),
+  }),
+});
+export type WorkspaceFacts = z.infer<typeof WorkspaceFacts>;
 
 /**
  * One label on the organization's cost-center list (`list_cost_centers`,
@@ -137,6 +176,23 @@ export const ApiKey = z.object({
 export type ApiKey = z.infer<typeof ApiKey>;
 
 export const ApiKeyList = z.array(ApiKey);
+
+/**
+ * The organisation's Postgres data-plane binding as `get_data_plane` reports
+ * it (ADR-042): shared or dedicated, its health, and for a dedicated plane the
+ * host and database it points at. Redacted at the contract: no credential, no
+ * port, no connection string, and this view model has no field for one.
+ */
+export const DataPlane = z.object({
+  mode: z.enum(["shared", "dedicated"]),
+  status: z.enum(["active", "degraded", "disabled"]),
+  host: z.string().nullable(),
+  database: z.string().nullable(),
+  schemaVersion: z.string().nullable(),
+  lastVerifiedAt: z.iso.datetime({ offset: true }).nullable(),
+  rotatedAt: z.iso.datetime({ offset: true }).nullable(),
+});
+export type DataPlane = z.infer<typeof DataPlane>;
 
 /** The vendors an organisation can bring a model key for (ADR-053 §2). */
 export const ModelProvider = z.enum([

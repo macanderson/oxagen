@@ -38,6 +38,7 @@
       "collector": "tachod {version}",
       "gaps": "gaps in 24h not recorded",
       "hookCount": "count not recorded",
+      "hookCountAll": "5 of 5",
       "note": "The tier is a property of the seam, not of the agent: two agents on one host earn the same tier, and the same agent moved to a weaker host earns less. It is computed per run from what was actually routed and is never upgraded after the fact."
     },
     "modelSurface": {
@@ -62,7 +63,9 @@
       "stella": "Stella",
       "claude-agent-sdk": "Claude Agent SDK",
       "custom": "Custom harness",
-      "none": "none reported"
+      "none": "none reported",
+      "atEnrollment": "at enrollment",
+      "versionUnrecorded": "version not recorded"
     },
     "ladder": {
       "title": "The tier ladder",
@@ -120,7 +123,7 @@
     },
     "detail": {
       "back": "← All runtimes",
-      "subtitle": "<kind>kind</kind> · {platform} · started by <who>who</who>",
+      "subtitle": "<kind>kind</kind> · <os>os</os> · started by <who>who</who>",
       "kindUnrecorded": "kind not recorded",
       "healthUnrecorded": "health not recorded",
       "facts": {
@@ -138,6 +141,7 @@
       "collectorGaps": "telemetry gaps in the last 24h not recorded",
       "hookEnforce": "tacho-hook {version} · fails closed against its cached bundle",
       "hookObserve": "tacho-hook {version} · allows when its bundle is stale, because this host is in observe mode",
+      "hooksFive": "Five run as command hooks. The first four can refuse.",
       "modelLoopback": "every harness config names the loopback proxy, as the daemon last reported them",
       "modelMixed": "some harness configs name the loopback proxy and some send model traffic to the provider direct, as the daemon last reported them",
       "modelDirect": "model traffic goes from the harness to its provider; routing it is the gateway tier",
@@ -161,6 +165,10 @@
         "note": "If hooks are stripped by hand instead, the next run records <code>hooks_removed</code> and the tier falls to <code>observe</code>. It is never upgraded after the fact.",
         "smoke": "Run a smoke session",
         "unenroll": "Unenroll"
+      },
+      "settings": {
+        "managed": "managed settings",
+        "user": "user settings"
       }
     },
     "unenroll": {
@@ -178,6 +186,9 @@
         "pendingApproval": "This write is waiting for approval. Access request {accessRequestId}.",
         "unavailable": "This write could not be answered: {code}. Nothing was changed."
       }
+    },
+    "os": {
+      "unreported": "{os} · version and architecture not reported"
     }
   }
 }

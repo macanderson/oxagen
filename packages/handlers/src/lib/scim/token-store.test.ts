@@ -39,7 +39,10 @@ function renderingTx(): Tx {
 }
 
 /** Every value bound to `<column> = $n`. */
-function boundTo(stmt: { sql: string; params: unknown[] }, column: string): unknown[] {
+function boundTo(
+  stmt: { sql: string; params: unknown[] },
+  column: string,
+): unknown[] {
   const escaped = column.replace(/[.*+?^${}()|[\]\\"]/g, "\\$&");
   return [...stmt.sql.matchAll(new RegExp(`${escaped} = \\$(\\d+)`, "g"))].map(
     (m) => stmt.params[Number(m[1]) - 1],
@@ -56,23 +59,36 @@ beforeEach(() => {
 
 describe("scimBaseUrl", () => {
   it("puts the SCIM root under the app host, however many slashes the host ends with", () => {
-    expect(scimBaseUrl("https://app.oxagen.sh")).toBe("https://app.oxagen.sh/api/scim/v2");
-    expect(scimBaseUrl("https://app.oxagen.sh///")).toBe("https://app.oxagen.sh/api/scim/v2");
+    expect(scimBaseUrl("https://app.oxagen.sh")).toBe(
+      "https://app.oxagen.sh/api/scim/v2",
+    );
+    expect(scimBaseUrl("https://app.oxagen.sh///")).toBe(
+      "https://app.oxagen.sh/api/scim/v2",
+    );
   });
 });
 
 describe("toScimTokenView", () => {
   it("shows the prefix and times, never the row id", () => {
     expect(
-      toScimTokenView({ id: "row", tokenPrefix: "oxscim_abcdefgh", createdAt: T1, lastUsedAt: T2 }),
+      toScimTokenView({
+        id: "row",
+        tokenPrefix: "oxscim_abcdefgh",
+        createdAt: T1,
+        lastUsedAt: T2,
+      }),
     ).toEqual({
       tokenPrefix: "oxscim_abcdefgh",
       createdAt: T1.toISOString(),
       lastUsedAt: T2.toISOString(),
     });
     expect(
-      toScimTokenView({ id: "row", tokenPrefix: "oxscim_abcdefgh", createdAt: T1, lastUsedAt: null })
-        .lastUsedAt,
+      toScimTokenView({
+        id: "row",
+        tokenPrefix: "oxscim_abcdefgh",
+        createdAt: T1,
+        lastUsedAt: null,
+      }).lastUsedAt,
     ).toBeNull();
   });
 });
@@ -108,7 +124,9 @@ describe("readLiveScimToken", () => {
 describe("revokeLiveScimToken", () => {
   it("revokes only this organization's live token and records who did it", async () => {
     rows = [["sct-1", "oxscim_abcdefgh", T1, T2]];
-    await expect(revokeLiveScimToken(renderingTx(), ORG, ACTOR)).resolves.toEqual({
+    await expect(
+      revokeLiveScimToken(renderingTx(), ORG, ACTOR),
+    ).resolves.toEqual({
       id: "sct-1",
       tokenPrefix: "oxscim_abcdefgh",
       createdAt: T1,
@@ -124,7 +142,9 @@ describe("revokeLiveScimToken", () => {
   });
 
   it("answers null when there was nothing to revoke", async () => {
-    await expect(revokeLiveScimToken(renderingTx(), ORG, ACTOR)).resolves.toBeNull();
+    await expect(
+      revokeLiveScimToken(renderingTx(), ORG, ACTOR),
+    ).resolves.toBeNull();
   });
 });
 
@@ -139,7 +159,9 @@ describe("insertScimToken", () => {
     expect(stmt!.sql).toMatch(/^insert into "org"."scim_tokens"/);
     expect(stmt!.params).toContain(ORG);
     expect(stmt!.params).toContain(token.slice(0, 16));
-    expect(stmt!.params).toContain(createHash("sha256").update(token).digest("hex"));
+    expect(stmt!.params).toContain(
+      createHash("sha256").update(token).digest("hex"),
+    );
     expect(stmt!.params).not.toContain(token);
     expect(stmt!.params.filter((p) => p === ACTOR)).toHaveLength(2);
   });

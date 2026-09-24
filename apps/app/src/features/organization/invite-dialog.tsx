@@ -4,8 +4,10 @@
 // every other role reads the refusal in place of the button, which is what
 // `send_workspace_invite` would answer anyway (INV-29).
 //
-// The dialog asks for an email, the role the invitation offers, and an optional
-// note. It asks for no workspace: the capability is named for one and declared
+// The dialog asks for an email and the role the invitation offers, the two
+// fields the design's `invite` draws, and says how an invitation works: it
+// expires in seven days, and accepting it asks for a verified email, plus
+// two-factor when the organization requires it. It asks for no workspace: the capability is named for one and declared
 // `scoped`, but its handler writes an organization row with an organization
 // role and records no workspace, so the copy says the invitation admits the
 // person to the organization and grants nothing else. The scope the kernel
@@ -35,6 +37,7 @@ import {
   useActionFailure,
 } from "./action-failure";
 import { sendInvitation } from "./actions";
+import { recordReceipt } from "./receipt";
 import { INVITABLE_ROLES, type InvitableRole } from "./invitation-roles";
 
 /**
@@ -88,6 +91,7 @@ export function InviteDialog({
   pendingIds,
   allowed,
   after,
+  twoFactorRequired,
 }: {
   org: string;
   /** The pending invitations the server last sent, by id; an answer on it already existed. */
@@ -96,8 +100,11 @@ export function InviteDialog({
   allowed: boolean;
   /** The page, re-read once an invitation answered, so the pending table redraws. */
   after: SafePath;
+  /** The organization requires two-factor, which accepting the invitation then asks for. */
+  twoFactorRequired: boolean;
 }) {
   const t = useTranslations("organization.invite");
+  const tReceipt = useTranslations("organization.receipts");
   const roleName = useTranslations("organization.roles");
   const failureText = useInviteFailure();
   const navigate = useNavigate();
@@ -107,7 +114,6 @@ export function InviteDialog({
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InvitableRole>("member");
-  const [message, setMessage] = useState("");
 
   if (!allowed) {
     return (
@@ -127,7 +133,6 @@ export function InviteDialog({
       setOutcome(null);
       setEmail("");
       setRole("member");
-      setMessage("");
     }
   }
 
@@ -137,11 +142,12 @@ export function InviteDialog({
     setPending(true);
     setFailure(null);
     try {
-      const result = await sendInvitation(org, { email, role, message });
+      const result = await sendInvitation(org, { email, role, message: "" });
       if (!result.ok) {
         setFailure(failureText(result));
         return;
       }
+      recordReceipt(tReceipt("invited", { email: email.trim() }));
       setOutcome({
         email: email.trim(),
         role,
@@ -176,21 +182,34 @@ export function InviteDialog({
             ? t("title")
             : t(`${outcome.already ? "already" : "sent"}.title`)
         }
-        closeLabel={outcome === null ? undefined : t("close")}
+        // The design's footer reads Cancel then Send the invitation; once the
+        // answer is on screen there is nothing to cancel, so it reads Done.
+        headerClose
+        closeLabel={outcome === null ? t("cancel") : t("close")}
+        footer={
+          outcome === null ? (
+            <SubmitButton
+              form="send-invitation-form"
+              pending={pending}
+              label={t("confirm")}
+              pendingLabel={t("pending")}
+              fullWidth={false}
+            />
+          ) : undefined
+        }
         testId="send-invitation"
       >
         {outcome === null ? (
           <form
+            id="send-invitation-form"
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-muted-foreground">{t("body")}</p>
             <Field
               id="invite-email"
               name="email"
               type="email"
               label={t("email")}
-              hint={t("emailHint")}
               required
               autoCapitalize="none"
               autoCorrect="off"
@@ -212,7 +231,6 @@ export function InviteDialog({
                 id="invite-role"
                 name="role"
                 value={role}
-                aria-describedby="invite-role-hint"
                 className={inputBase}
                 onChange={(event) => {
                   // The picker offers exactly what the contract admits, so the
@@ -227,46 +245,13 @@ export function InviteDialog({
                   </option>
                 ))}
               </select>
-              <p
-                id="invite-role-hint"
-                className="text-xs text-muted-foreground"
-              >
-                {t("roleHint")}
-              </p>
             </div>
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <label
-                htmlFor="invite-message"
-                className="text-sm font-medium text-foreground"
-              >
-                {t("message")}
-              </label>
-              <textarea
-                id="invite-message"
-                name="message"
-                rows={3}
-                value={message}
-                aria-describedby="invite-message-hint"
-                className={inputBase}
-                onChange={(event) => {
-                  setMessage(event.currentTarget.value);
-                }}
-              />
-              <p
-                id="invite-message-hint"
-                className="text-xs text-muted-foreground"
-              >
-                {t("messageHint")}
-              </p>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              {twoFactorRequired ? t("bodyTwoFactor") : t("body")}
+            </p>
             {failure === null ? null : (
               <FormAlert testId="send-invitation-failure">{failure}</FormAlert>
             )}
-            <SubmitButton
-              pending={pending}
-              label={t("confirm")}
-              pendingLabel={t("pending")}
-            />
           </form>
         ) : (
           <OutcomeText outcome={outcome} />

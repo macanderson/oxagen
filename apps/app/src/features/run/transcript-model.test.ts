@@ -23,6 +23,7 @@ import {
   stepTool,
   type TranscriptStep,
   toolExchange,
+  visibleChildren,
   visibleFrames,
   visibleSteps,
 } from "./transcript-model";
@@ -906,6 +907,60 @@ describe("visibleSteps", () => {
     if (turn === undefined) throw new Error("expected a turn");
     expect(turn.steps.map((s) => s.id)).toEqual(["s0", "s2", "s3", "s4"]);
     expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s2", "s3"]);
+  });
+
+  it("drops the steps that repeat the turn's prompt or reply, and keeps their frames on the turn", () => {
+    const said = (seq: number, type: string, text: string) =>
+      transcriptEntry({
+        seq: String(seq),
+        endSeq: String(seq),
+        kind: "frame",
+        type,
+        label: type,
+        request: null,
+        response: transcriptBody({ seq: String(seq), text }),
+        turn: 1,
+      });
+    const [turn] = buildTranscript([
+      said(1, "turn_start", "Fix the build."),
+      // A transcript copy of the prompt, as a recorder before the prompt
+      // dedupe sealed it: the same text on a second frame.
+      said(2, "oxagen:message", "Fix the build."),
+      transcriptEntry({ seq: "3", endSeq: "3", turn: 1 }),
+      said(4, "oxagen:message", "Running the tests next."),
+      said(5, "turn_end", "The build is fixed."),
+    ]);
+    if (turn === undefined) throw new Error("expected a turn");
+    expect(turn.prompt).toBe("Fix the build.");
+    expect(turn.reply).toBe("The build is fixed.");
+    expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s3", "s4"]);
+    expect(turn.frames).toHaveLength(5);
+  });
+
+  it("keeps a subagent's prompt step even when it matches the turn's text (negative)", () => {
+    const [turn] = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        endSeq: "1",
+        kind: "frame",
+        type: "turn_start",
+        request: null,
+        response: transcriptBody({ seq: "1", text: "Review it." }),
+        turn: 1,
+      }),
+      transcriptEntry({
+        seq: "2",
+        endSeq: "2",
+        kind: "frame",
+        type: "turn_start",
+        request: null,
+        response: transcriptBody({ seq: "2", text: "Review it." }),
+        turn: 1,
+        subagent: { chainRef: "chain-sub", type: "Explore" },
+      }),
+    ]);
+    if (turn === undefined) throw new Error("expected a turn");
+    expect(visibleSteps(turn).map((s) => s.id)).toEqual(["schain-sub:2"]);
   });
 });
 
@@ -1844,5 +1899,170 @@ describe("frameCost", () => {
         frame({ cost: { micros: "1", currency: "EUR", basis: null } }),
       ]),
     ).toBeNull();
+  });
+});
+
+// ── A wrapped Claude Code session ────────────────────────────────────────────
+//
+// The shape of run bcfb444f: Oxagen's gate decides each call, Claude Code's
+// own permission check writes a `harness_permission` frame for the same call,
+// and the call's receipt lands later, often with other calls' frames between.
+// Each group below shares one `tool_use_id`.
+
+describe("a wrapped Claude Code session", () => {
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c2";
+  const gate = (
+    seq: string,
+    key: string,
+    target: string | null,
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "policy",
+      type: "policy_decision",
+      label: "allow Bash",
+      callKey: key,
+      target,
+      decision: { seq, decision: "allow", type: "policy_decision", at: T0 },
+      ...over,
+    });
+  const harness = (seq: string, key: string | null, verdict = "allow") =>
+    frame({
+      seq,
+      type: "harness_permission",
+      label: `${verdict} Bash`,
+      callKey: key,
+    });
+  const call = (
+    seq: string,
+    key: string,
+    label: string,
+    response: TranscriptBody | null = body(seq, null),
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "tool_call",
+      type: "tool_call",
+      label,
+      callKey: key,
+      response,
+      ...over,
+    });
+  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_C" };
+  // Claude Code fires PreToolUse inside a subagent too, so Oxagen gates the
+  // subagent's calls on the subagent's chain.
+  const subGate = (seq: string, key: string, tool: string, target: string) =>
+    gate(seq, key, target, {
+      label: `allow ${tool}`,
+      subagent: sub,
+    });
+
+  const entries = [
+    frame({
+      seq: "1",
+      type: "turn_start",
+      request: body("1", "Fetch main and find the flaky test."),
+    }),
+    gate("2", "toolu_A", "git fetch origin main"),
+    gate("3", "toolu_B", "git status"),
+    harness("4", "toolu_A"),
+    harness("5", "toolu_B"),
+    call("6", "toolu_A", "Bash ok"),
+    call(
+      "7",
+      "toolu_B",
+      "Bash ok",
+      body(
+        "7",
+        JSON.stringify({
+          name: "Bash",
+          input: { command: "git status" },
+          output: { stdout: "nothing to commit" },
+        }),
+      ),
+    ),
+    gate("8", "toolu_C", null),
+    harness("9", "toolu_C"),
+    frame({ seq: "10", type: "subagent_start", callKey: "toolu_C" }),
+    subGate("0", "toolu_X1", "Grep", "flaky"),
+    call("1", "toolu_X1", "Grep ok", body("1", null), { subagent: sub }),
+    subGate("2", "toolu_X2", "Read", "apps/app/src/flaky.test.ts"),
+    call("3", "toolu_X2", "Read ok", body("3", null), { subagent: sub }),
+    call("11", "toolu_C", "Task ok"),
+    harness("12", "toolu_D", "deny"),
+    harness("13", "toolu_E"),
+  ];
+  const steps = stepsIn(entries);
+  const turn = buildTranscript(entries)[0];
+  if (turn === undefined) throw new Error("expected a turn");
+  const shown = visibleSteps(turn);
+
+  it("draws one step per call, not one row per permission check", () => {
+    const tools = shown.filter((s) => s.kind === "tool");
+    expect(tools.map((s) => stepDigest(s).name)).toEqual([
+      "Bash",
+      "Bash",
+      "Task",
+    ]);
+    expect(tools[0]?.frames.map((f) => f.seq)).toEqual(["2", "4", "6"]);
+    expect(tools[1]?.frames.map((f) => f.seq)).toEqual(["3", "5", "7"]);
+  });
+
+  it("shows the command the gate recorded when the call kept no body", () => {
+    const fetch = shown.find((s) => s.first.callKey === "toolu_A");
+    if (fetch === undefined) throw new Error("expected the fetch");
+    expect(stepDigest(fetch)).toMatchObject({
+      node: "tool",
+      arg: "git fetch origin main",
+    });
+    const detail = stepTool(fetch);
+    expect(detail?.headline).toBe("git fetch origin main");
+    expect(detail?.panes).toEqual([
+      expect.objectContaining({
+        kind: "code",
+        label: "command",
+        text: "git fetch origin main",
+      }),
+    ]);
+  });
+
+  it("shows the command and its output when the call kept its body", () => {
+    const status = shown.find((s) => s.first.callKey === "toolu_B");
+    if (status === undefined) throw new Error("expected the status");
+    const detail = stepTool(status);
+    expect(detail?.headline).toBe("git status");
+    expect(detail?.panes.map((p) => p.label)).toEqual(["command", "output"]);
+    // The harness's allow says nothing the call does not; the frames list
+    // keeps the gate and the receipt.
+    expect(visibleFrames(status).map((f) => f.type)).toEqual([
+      "policy_decision",
+      "tool_call",
+    ]);
+  });
+
+  it("nests the subagent's calls under the Task call that spawned it", () => {
+    const task = shown.find((s) => s.first.callKey === "toolu_C");
+    if (task === undefined) throw new Error("expected the Task call");
+    expect(task.frames.map((f) => f.type)).toContain("subagent_start");
+    expect(visibleChildren(task).map((s) => stepDigest(s).name)).toEqual([
+      "Grep",
+      "Read",
+    ]);
+    expect(steps.some((s) => s.first.subagent !== undefined)).toBe(false);
+    const child = visibleChildren(task)[0];
+    if (child === undefined) throw new Error("expected a child");
+    expect(idsAt([turn], child.from)).toEqual([turn.id, task.id, child.id]);
+    expect(openAtZoom([turn], "everything").has(child.id)).toBe(true);
+  });
+
+  it("shows a harness refusal and hides a harness allow with nothing else", () => {
+    const refused = shown.find((s) => s.first.callKey === "toolu_D");
+    expect(refused).toBeDefined();
+    expect(shown.some((s) => s.first.callKey === "toolu_E")).toBe(false);
+    expect(
+      shown.filter((s) => s.first.type === "harness_permission"),
+    ).toHaveLength(1);
   });
 });

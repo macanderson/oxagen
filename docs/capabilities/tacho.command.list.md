@@ -33,7 +33,7 @@ The status shown is the recorded one, with one derivation: a `queued` command wh
 | `commands[].status` | enum | `draft`, `queued`, `sent`, `received`, `acknowledged`, `applied`, `cancelled`, `expired`, `failed` |
 | `commands[].requestedMode` | enum or null | `next_step`, `interrupt`, `turn_boundary`; null for a command with no prompt content |
 | `commands[].deliveryMode` | enum or null | the mode achieved, at or below the requested one; null until resolved |
-| `commands[].degradedReason` | string or null | why the two differ (`harness_tier`) |
+| `commands[].degradedReason` | string or null | why the two differ: `no_step_carrier` (the host delivers steering only at the next prompt) or `harness_tier` (nothing on the run's path can cut a call in flight) |
 | `commands[].reason` | string or null | the operator's reason |
 | `commands[].issuedAt`, `expiresAt`, `sentAt`, `acknowledgedAt`, `appliedAt` | RFC 3339 or null | |
 | `commands[].appliedAtSeq` | integer or null | the frame sequence the effect landed on |

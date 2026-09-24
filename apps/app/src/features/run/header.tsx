@@ -325,7 +325,9 @@ function Checkout({
       {primary?.branch == null ? (
         <span className={missing}>{t("branchNotRecorded")}</span>
       ) : (
-        <span data-testid="run-branch" className={chip}>{primary.branch}</span>
+        <span data-testid="run-branch" className={chip}>
+          {primary.branch}
+        </span>
       )}
       {recordedPulls.length === 0 ? (
         <PullChips pulls={pulls} />
@@ -366,13 +368,15 @@ function SubagentChip({
 }) {
   const t = useTranslations("run.header");
   return (
-    <span className={chip} title={subagent.id}>
+    <span className={chip} title={subagent.agentRef}>
       {subagent.type ?? (
         <span className="text-muted-foreground">
           {t("subagentTypeNotRecorded")}
         </span>
       )}
-      <span className="text-muted-foreground">{subagent.id.slice(0, 7)}</span>
+      <span className="text-muted-foreground">
+        {subagent.agentRef.slice(0, 7)}
+      </span>
       {subagent.stopped ? null : (
         <span className="text-muted-foreground">
           {live ? t("subagentRunning") : t("subagentNoStop")}
@@ -396,7 +400,7 @@ function Subagents({ run, work }: { run: RunRow; work: Read<RunWork> }) {
         <>
           {subagents.slice(0, SUBAGENT_CHIPS).map((subagent) => (
             <SubagentChip
-              key={subagent.id}
+              key={subagent.agentRef}
               subagent={subagent}
               live={run.status === "live"}
             />
@@ -444,8 +448,9 @@ function WorkStripsLoading() {
 
 /**
  * Token counts and cost. The counts are the session's sums over its `llm_call`
- * frames. The cost is the finalized rollup when there is one, and otherwise
- * what the agent reported, marked as such.
+ * frames. The cost is the rollup when there is one, marked as an estimate
+ * while the run is open or its row was built before the seal (#3980), and
+ * otherwise what the agent reported, marked as such.
  */
 function Usage({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
@@ -480,6 +485,13 @@ function Usage({ run }: { run: RunRow }) {
           <Money value={cost} />
           {run.cost === null ? (
             <span className="text-muted-foreground">{t("costReported")}</span>
+          ) : run.sealedAt === null || run.costIsEstimate === true ? (
+            <span
+              data-testid="run-usage-cost-estimate"
+              className="text-muted-foreground"
+            >
+              {t("costEstimate")}
+            </span>
           ) : null}
         </span>
       )}
@@ -516,7 +528,7 @@ export function RunTitle({ id, run }: { id: string; run: RunRow | null }) {
   );
 }
 
-/** "started <t> by <operator> · ended <t>". */
+/** "started <t> by <operator> · ended <t>", or "closed <t> (why)". */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
   const tr = useTranslations("run");
@@ -569,10 +581,17 @@ function When({ run }: { run: RunRow }) {
           receipt time and can trail the run by the upload. */}
       {run.status === "live" ? (
         <span>{t("running")}</span>
+      ) : run.sealSource === "idle_timeout" && run.sealedAt != null ? (
+        // Oxagen closed it for silence; the host never said it ended, and its
+        // next event reopens it.
+        <span data-testid="run-closed-idle">
+          {t("closedIdle")}{" "}
+          <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time> (
+          {t("closedIdleWhy")})
+        </span>
       ) : run.endedAt != null ? (
         <span data-testid="run-ended">
-          {t("ended")}{" "}
-          <time dateTime={run.endedAt}>{when(run.endedAt)}</time>
+          {t("ended")} <time dateTime={run.endedAt}>{when(run.endedAt)}</time>
         </span>
       ) : run.sealedAt === null ? (
         <span>{t("sealNotRecorded")}</span>
@@ -687,6 +706,7 @@ export function RunHeader({
             source={run.source}
             enforcementTier={run.enforcementTier}
             commandBlock={run.commandBlock}
+            steerBlock={run.steerBlock}
             ingressRevoked={run.ingressRevoked}
             ingressPaused={run.ingressPaused}
             orgRole={orgRole}

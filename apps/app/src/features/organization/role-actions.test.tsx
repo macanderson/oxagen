@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
-// The role editor's writes: each dialog sends what its fields carry, reloads
-// the Roles page once the write answered, and names a refusal without
-// navigating. The permission picker ticks what the role already allows.
+// The role editor `roleedit` and the delete dialog `roledel`
+// (pages/organization-roles.md): one editor behind Create role, Edit, View and
+// Duplicate. Each write sends what its fields carry, reloads the Roles page
+// once the write answered, and names a refusal without navigating. The
+// selected count follows the ticks, a held role carries the holders banner,
+// and a built-in role opens read-only with Duplicate as custom.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,7 +23,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ createRole, deleteRole, setRolePermissions }));
 
 const { permissionEntry, roleRow } = await import("./organization.builders");
-const { CreateRole, DeleteRole, EditRole } = await import("./role-actions");
+const { DeleteRole, RoleEditor } = await import("./role-actions");
+const { Receipts } = await import("./receipt");
 
 const catalog = [
   permissionEntry(),
@@ -50,34 +54,66 @@ async function open(name: string, testId: string) {
   return screen.getByTestId(testId);
 }
 
-describe("CreateRole", () => {
-  it("sends the name, the scope and every ticked permission, then reloads the page", async () => {
+function editor(
+  mode: "create" | "duplicate" | "edit" | "view",
+  role?: ReturnType<typeof roleRow>,
+  openLabel = "Create role",
+) {
+  render(
+    <IntlProvider>
+      <RoleEditor
+        org="acme"
+        catalog={catalog}
+        mode={mode}
+        openLabel={openLabel}
+        {...(role === undefined ? {} : { role })}
+      />
+    </IntlProvider>,
+  );
+}
+
+describe("RoleEditor: create", () => {
+  it("sends the name, the description, the scope and every ticked permission, then reloads Roles", async () => {
     createRole.mockResolvedValue({
       ok: true,
       value: { id: "rol_1", name: "agent.release" },
     });
-    render(
-      <IntlProvider>
-        <CreateRole org="acme" catalog={catalog} />
-      </IntlProvider>,
+    editor("create");
+    const dialog = await open("Create role", "role-editor-create");
+    expect(dialog).toHaveTextContent("Create a role");
+    // The design's header close sits beside the title.
+    expect(dialog.querySelector("[data-header-close]")).toHaveAccessibleName(
+      "Close",
     );
-    const dialog = await open("Create role", "create-role");
+    expect(within(dialog).getByTestId("role-selected-count")).toHaveTextContent(
+      "0 selected",
+    );
     await userEvent.type(
-      within(dialog).getByLabelText("Name"),
+      within(dialog).getByLabelText("Role name"),
       "agent.release",
+    );
+    await userEvent.type(
+      within(dialog).getByLabelText("Description"),
+      "cut a release after approval",
     );
     await userEvent.selectOptions(
       within(dialog).getByLabelText("Scope"),
-      "workspace",
+      "org",
     );
     await userEvent.click(within(dialog).getByLabelText(/run\.read/));
+    expect(within(dialog).getByTestId("role-selected-count")).toHaveTextContent(
+      "1 selected",
+    );
+    expect(dialog).toHaveTextContent(
+      "Saving is a governed action. It passes IAM and writes an audit record.",
+    );
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create" }),
+      within(dialog).getByRole("button", { name: "Create role" }),
     );
     expect(createRole).toHaveBeenCalledWith("acme", {
       name: "agent.release",
-      description: "",
-      scope: "workspace",
+      description: "cut a release after approval",
+      scope: "org",
       permissions: ["run.read"],
     });
     expect(router.replace).toHaveBeenCalledWith("/acme/roles");
@@ -89,49 +125,60 @@ describe("CreateRole", () => {
       reason: "conflict",
       code: "role_exists",
     });
-    render(
-      <IntlProvider>
-        <CreateRole org="acme" catalog={catalog} />
-      </IntlProvider>,
-    );
-    const dialog = await open("Create role", "create-role");
+    editor("create");
+    const dialog = await open("Create role", "role-editor-create");
     await userEvent.type(
-      within(dialog).getByLabelText("Name"),
+      within(dialog).getByLabelText("Role name"),
       "agent.release",
     );
-    await userEvent.click(within(dialog).getByLabelText(/run\.read/));
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create" }),
+      within(dialog).getByRole("button", { name: "Create role" }),
     );
-    expect(await screen.findByTestId("create-role-failure")).toHaveTextContent(
+    expect(await screen.findByTestId("role-editor-failure")).toHaveTextContent(
       "That name is taken in this organization. Pick another.",
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
 });
 
-describe("EditRole", () => {
-  it("opens with what the role already allows and sends the new set", async () => {
+describe("RoleEditor: edit", () => {
+  const id = "rol_7k2m9q4x8r1t5v3w6y0z2a";
+
+  it("opens on what the role allows, names its holders and sends the new set", async () => {
     setRolePermissions.mockResolvedValue({
       ok: true,
-      value: { id: "rol_7k2m9q4x8r1t5v3w6y0z2a", name: "agent.release" },
+      value: { id, name: "agent.release" },
     });
-    render(
-      <IntlProvider>
-        <EditRole org="acme" role={roleRow()} catalog={catalog} />
-      </IntlProvider>,
+    editor("edit", roleRow(), "Edit");
+    const dialog = await open("Edit", `role-editor-edit-${id}`);
+    expect(within(dialog).getByLabelText("Role name")).toHaveAttribute(
+      "readonly",
     );
-    const dialog = await open("Edit", "edit-role-rol_7k2m9q4x8r1t5v3w6y0z2a");
     expect(within(dialog).getByLabelText(/run\.read/)).toBeChecked();
     expect(within(dialog).getByLabelText(/budget\.set/)).not.toBeChecked();
-    await userEvent.click(within(dialog).getByLabelText(/budget\.set/));
-    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(setRolePermissions).toHaveBeenCalledWith(
-      "acme",
-      "rol_7k2m9q4x8r1t5v3w6y0z2a",
-      ["run.read", "budget.set"],
+    expect(within(dialog).getByTestId("role-holders-banner")).toHaveTextContent(
+      "Held by 2 principals. Saving changes their effective permission at the next call",
     );
+    await userEvent.click(within(dialog).getByLabelText(/budget\.set/));
+    expect(within(dialog).getByTestId("role-selected-count")).toHaveTextContent(
+      "2 selected",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
+    expect(setRolePermissions).toHaveBeenCalledWith("acme", id, [
+      "run.read",
+      "budget.set",
+    ]);
     expect(router.replace).toHaveBeenCalledWith("/acme/roles");
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "was saved. Each holder's permission changes at their next call. Recorded in the audit record.",
+    );
   });
 
   it("names a ceiling refusal and changes nothing (negative)", async () => {
@@ -140,47 +187,141 @@ describe("EditRole", () => {
       reason: "denied",
       code: "delegation_ceiling_exceeded",
     });
-    render(
-      <IntlProvider>
-        <EditRole org="acme" role={roleRow()} catalog={catalog} />
-      </IntlProvider>,
+    editor("edit", roleRow(), "Edit");
+    const dialog = await open("Edit", `role-editor-edit-${id}`);
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
     );
-    const dialog = await open("Edit", "edit-role-rol_7k2m9q4x8r1t5v3w6y0z2a");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await screen.findByTestId("role-editor-failure")).toHaveTextContent(
+      "A role cannot grant more than you hold.",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("sends the set without a permission that was unticked", async () => {
+    setRolePermissions.mockResolvedValue({
+      ok: true,
+      value: { id, name: "agent.release" },
+    });
+    editor(
+      "edit",
+      roleRow({ permissions: ["run.read", "budget.set"] }),
+      "Edit",
+    );
+    const dialog = await open("Edit", `role-editor-edit-${id}`);
+    await userEvent.click(within(dialog).getByLabelText(/run\.read/));
+    expect(within(dialog).getByTestId("role-selected-count")).toHaveTextContent(
+      "1 selected",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
+    // Revoking a permission reaches the write: the set is what stays ticked.
+    expect(setRolePermissions).toHaveBeenCalledWith("acme", id, ["budget.set"]);
+  });
+
+  it("names a write that threw and stays open (negative)", async () => {
+    setRolePermissions.mockRejectedValue(new Error("network"));
+    editor("edit", roleRow(), "Edit");
+    const dialog = await open("Edit", `role-editor-edit-${id}`);
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
     expect(
-      await screen.findByTestId("edit-role-rol_7k2m9q4x8r1t5v3w6y0z2a-failure"),
-    ).toHaveTextContent("A role cannot grant more than you hold.");
+      await screen.findByTestId("role-editor-failure"),
+    ).not.toBeEmptyDOMElement();
+    expect(screen.getByTestId(`role-editor-edit-${id}`)).toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
   });
 });
 
+describe("RoleEditor: view and duplicate", () => {
+  const builtIn = roleRow({
+    id: "rol_builtin00000000000000",
+    name: "org.owner",
+    kind: "human",
+    scope: "org",
+    builtIn: true,
+    heldBy: 0,
+  });
+
+  it("opens a built-in role read-only, with no save, and Duplicate as custom turns it into a copy", async () => {
+    createRole.mockResolvedValue({
+      ok: true,
+      value: { id: "rol_2", name: "org.owner.copy" },
+    });
+    editor("view", builtIn, "View");
+    const dialog = await open("View", `role-editor-view-${builtIn.id}`);
+    expect(dialog).toHaveTextContent("Built-in role");
+    expect(dialog).toHaveTextContent("read-only");
+    expect(within(dialog).getByLabelText(/run\.read/)).toBeDisabled();
+    expect(
+      within(dialog).queryByRole("button", { name: "Save changes" }),
+    ).toBeNull();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Duplicate as custom" }),
+    );
+    const copy = screen.getByTestId(`role-editor-duplicate-${builtIn.id}`);
+    expect(within(copy).getByLabelText("Role name")).toHaveValue(
+      "org.owner.copy",
+    );
+    await userEvent.click(
+      within(copy).getByRole("button", { name: "Create role" }),
+    );
+    expect(createRole).toHaveBeenCalledWith("acme", {
+      name: "org.owner.copy",
+      description: builtIn.description,
+      scope: "org",
+      permissions: ["run.read"],
+    });
+  });
+
+  it("opens Duplicate as a new role named after the original", async () => {
+    editor("duplicate", roleRow(), "Duplicate");
+    const dialog = await open(
+      "Duplicate",
+      `role-editor-duplicate-${roleRow().id}`,
+    );
+    expect(within(dialog).getByLabelText("Role name")).toHaveValue(
+      "agent.release.copy",
+    );
+    expect(within(dialog).queryByTestId("role-holders-banner")).toBeNull();
+  });
+});
+
 describe("DeleteRole", () => {
-  it("deletes the role and reloads the page", async () => {
+  const free = roleRow({ heldBy: 0 });
+
+  it("deletes a role nobody holds and reloads the page", async () => {
     deleteRole.mockResolvedValue({
       ok: true,
-      value: { id: "rol_7k2m9q4x8r1t5v3w6y0z2a", name: "agent.release" },
+      value: { id: free.id, name: "agent.release" },
     });
     render(
       <IntlProvider>
-        <DeleteRole org="acme" role={roleRow()} />
+        <DeleteRole org="acme" role={free} />
       </IntlProvider>,
     );
-    const dialog = await open(
-      "Delete",
-      "delete-role-rol_7k2m9q4x8r1t5v3w6y0z2a",
-    );
-    expect(dialog).toHaveTextContent("Delete agent.release");
+    const dialog = await open("Delete", `delete-role-${free.id}`);
+    expect(dialog).toHaveTextContent("Delete role");
+    expect(dialog.querySelector("[data-header-close]")).not.toBeNull();
+    expect(dialog).toHaveTextContent("This removes agent.release from IAM.");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Delete" }),
+      within(dialog).getByRole("button", { name: "Delete role" }),
     );
-    expect(deleteRole).toHaveBeenCalledWith(
-      "acme",
-      "rol_7k2m9q4x8r1t5v3w6y0z2a",
-    );
+    expect(deleteRole).toHaveBeenCalledWith("acme", free.id);
     expect(router.replace).toHaveBeenCalledWith("/acme/roles");
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "agent.release was deleted. Its definition and grants stay in the audit record.",
+    );
   });
 
-  it("names a role someone still holds and deletes nothing (negative)", async () => {
+  it("names a refusal and deletes nothing (negative)", async () => {
     deleteRole.mockResolvedValue({
       ok: false,
       reason: "conflict",
@@ -188,21 +329,62 @@ describe("DeleteRole", () => {
     });
     render(
       <IntlProvider>
-        <DeleteRole org="acme" role={roleRow()} />
+        <DeleteRole org="acme" role={free} />
       </IntlProvider>,
     );
-    const dialog = await open(
-      "Delete",
-      "delete-role-rol_7k2m9q4x8r1t5v3w6y0z2a",
-    );
+    const dialog = await open("Delete", `delete-role-${free.id}`);
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Delete" }),
+      within(dialog).getByRole("button", { name: "Delete role" }),
     );
     expect(
-      await screen.findByTestId(
-        "delete-role-rol_7k2m9q4x8r1t5v3w6y0z2a-failure",
-      ),
+      await screen.findByTestId(`delete-role-${free.id}-failure`),
     ).toHaveTextContent("Principals still hold this role.");
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("names a delete that threw and deletes once however often it is pressed (negative)", async () => {
+    let fail: (error: Error) => void = () => undefined;
+    deleteRole.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
+    render(
+      <IntlProvider>
+        <DeleteRole org="acme" role={free} />
+      </IntlProvider>,
+    );
+    const dialog = await open("Delete", `delete-role-${free.id}`);
+    const confirm = within(dialog).getAllByRole("button").at(-1);
+    if (confirm === undefined) throw new Error("no confirm button");
+    await userEvent.click(confirm);
+    await userEvent.click(confirm);
+    expect(deleteRole).toHaveBeenCalledTimes(1);
+
+    fail(new Error("network"));
+    expect(
+      await screen.findByTestId(`delete-role-${free.id}-failure`),
+    ).not.toBeEmptyDOMElement();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("disables Delete on a built-in role and on a held one, with the reason (negative)", () => {
+    render(
+      <IntlProvider>
+        <DeleteRole org="acme" role={roleRow({ builtIn: true, heldBy: 0 })} />
+        <DeleteRole org="acme" role={roleRow({ id: "rol_held", heldBy: 3 })} />
+      </IntlProvider>,
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Delete: Built-in roles cannot be deleted",
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: "Delete: Reassign the 3 holders first",
+      }),
+    ).toBeDisabled();
+    expect(deleteRole).not.toHaveBeenCalled();
   });
 });

@@ -200,15 +200,31 @@ describe("the context-record wizard: describe", () => {
     const slug = screen.getByLabelText<HTMLInputElement>(t("describe.slug"), {
       exact: false,
     });
-    fireEvent.change(name, { target: { value: "release-checklist!" } });
+    fireEvent.change(name, { target: { value: "  Don't retry   502s " } });
     fireEvent.blur(name);
-    expect(name.value).toBe("Release Checklist");
-    expect(slug.value).toBe("release-checklist");
+    expect(name.value).toBe("Don't retry 502s");
+    expect(slug.value).toBe("dont-retry-502s");
     fireEvent.change(slug, { target: { value: "custom / release!" } });
     fireEvent.blur(slug);
     expect(slug.value).toBe("custom-release");
     fireEvent.change(name, { target: { value: "Deployment Plan" } });
     expect(slug.value).toBe("custom-release");
+  });
+
+  it("says why Next is disabled when the name gives no usable slug", async () => {
+    mount();
+    const field = await screen.findByTestId<HTMLTextAreaElement>("wizard-desc");
+    fireEvent.input(field, { target: { value: "Cache the first read" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    const name = screen.getByLabelText<HTMLInputElement>(t("describe.name"));
+    fireEvent.change(name, { target: { value: "你好 世界" } });
+    expect(primary().disabled).toBe(true);
+    expect(screen.getByRole("alert").textContent).toBe(
+      t("describe.slugInvalid"),
+    );
+    fireEvent.change(name, { target: { value: "Hello world" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(primary().disabled).toBe(false);
   });
 
   it("fills the description from a suggestion", async () => {
@@ -393,7 +409,7 @@ describe("the context-record wizard: pull request", () => {
     expect(proposeRecord).toHaveBeenCalledWith("acme", "core-platform", {
       record: {
         lineageId: LINEAGE,
-        label: "Ctx Core Do Not Re Read",
+        label: "Do Not Re Read",
         kind: "rule",
         force: "must",
         sharingScope: "workspace",
@@ -416,7 +432,8 @@ describe("the context-record wizard: pull request", () => {
     ).toHaveLength(6);
     expect(screen.getByText(t("opened.passed"))).toBeTruthy();
     // The page behind moves to Context PRs with this pull request selected.
-    const target = "/acme/core-platform/steering?tab=prs&proposal=prp_01K5ABC";
+    const target =
+      "/acme/core-platform/steering/proposals/prs?proposal=prp_01K5ABC";
     await waitFor(() => {
       expect(push).toHaveBeenCalledWith(target);
     });

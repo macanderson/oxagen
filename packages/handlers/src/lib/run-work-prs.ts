@@ -25,6 +25,7 @@ export interface WorkPrDeps {
       GitHubClient,
       | "listPullRequests"
       | "getPullRequest"
+      | "listClosingIssues"
       | "listCiChecks"
       | "listPullRequestFiles"
       | "getRepoInfo"
@@ -162,6 +163,16 @@ export async function readWorkPullRequests(
           number: listed.number,
         };
         const pr = await gh.getPullRequest(input);
+        // What the PR closes is GitHub's own record of it, so it can name the
+        // run's task without anything guessed from a branch or a title. A
+        // failed read is null and a warning, never an empty list.
+        let closingIssues: RunWorkPr["closingIssues"] = null;
+        try {
+          closingIssues = await gh.listClosingIssues(input);
+          if (!closingIssues.complete) warnings.add("closing_issue_limit");
+        } catch {
+          warnings.add("closing_issues_read_failed");
+        }
         let ci: RunWorkPr["ci"] = null;
         let diff: RunWorkPr["diff"] = null;
         let current = false;
@@ -244,6 +255,7 @@ export async function readWorkPullRequests(
             : checkout.headSha === pr.headSha
               ? "head_commit"
               : "branch",
+          closingIssues,
           checkoutIds: checkout.id ? [checkout.id] : [],
           observedAt: deps.now(),
           current,

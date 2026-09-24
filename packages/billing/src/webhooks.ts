@@ -16,6 +16,7 @@ import {
   settleGauPaid,
 } from "./gau-settlements";
 import { onInvoicePaymentFailed, onInvoiceRecovered } from "./dunning";
+import { closePrepaidOrder, grantPrepaidOrder } from "./prepaid-orders";
 import { sendPaymentReceipt } from "./receipts";
 import {
   onDisputeCreated,
@@ -175,6 +176,18 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
             : settleGauOpen(tx, settlementId),
         );
       }
+      // A prepaid order (an enterprise's licence, units and credits invoiced
+      // in advance) grants what it sold when its invoice is paid. The grant is
+      // fenced per order, so a redelivery or a race with the issue-time grant
+      // adds nothing twice.
+      const prepaid = event.invoice.prepaidOrder ?? null;
+      if (prepaid !== null && event.type === "invoice.paid") {
+        await grantPrepaidOrder(prepaid.orderId, {
+          trigger: "paid",
+          stripeInvoiceId: event.invoice.providerInvoiceId,
+          assistantSpendCap: prepaid.assistantSpendCap,
+        });
+      }
       // Deposit the plan's included credits on the first invoice and every
       // renewal. Idempotent per event (ledger unique key).
       if (event.type === "invoice.paid") {
@@ -218,6 +231,15 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
     case "invoice.marked_uncollectible": {
       if (!event.invoice) return;
       await syncInvoiceFromStripe(event.invoice.providerInvoiceId);
+      // A prepaid order mirrors its invoice closing unpaid. A grant already
+      // made at issue stays made; closePrepaidOrder logs it for an operator.
+      const prepaid = event.invoice.prepaidOrder ?? null;
+      if (prepaid !== null && event.type !== "invoice.finalized") {
+        await closePrepaidOrder(prepaid.orderId, {
+          status: event.type === "invoice.voided" ? "void" : "uncollectible",
+          stripeInvoiceId: event.invoice.providerInvoiceId,
+        });
+      }
       return;
     }
     case "checkout.session.completed": {

@@ -108,6 +108,35 @@ describe("proxy", () => {
   // (apps/cli/src/auth/loopback-login.ts). The browser that finished the flow
   // may hold no app cookie at all, so a gated /cli/complete ends a successful
   // production sign-in on /login (#3091).
+  it("sends a visitor with no first factor from two-factor to /login, keeping the destination", () => {
+    const res = proxy(
+      request("/two-factor?next=%2Fcli%2Fauthorize%3Fstate%3Ds"),
+    );
+    expect(res.status).toBe(307);
+    const target = new URL(res.headers.get("location") ?? "");
+    expect(target.pathname).toBe("/login");
+    expect(target.searchParams.get("next")).toBe("/cli/authorize?state=s");
+  });
+
+  it("drops a two-factor destination back into the sign-in flow (negative)", () => {
+    const res = proxy(request("/two-factor?next=%2Ftwo-factor"));
+    expect(new URL(res.headers.get("location") ?? "").search).toBe("");
+  });
+
+  it.each([
+    ["the password step's two-factor cookie", "better-auth.two_factor=signed"],
+    ["the secure two-factor cookie", "__Secure-oxagen.two_factor=signed"],
+    ["a session, as the enrollment redirect has", "oxagen.session_token=abc"],
+  ])("lets two-factor render with %s", (_label, cookie) => {
+    const res = proxy(request("/two-factor?enroll=required", cookie));
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("an empty two-factor cookie is no first factor (negative)", () => {
+    const res = proxy(request("/two-factor", "oxagen.two_factor="));
+    expect(new URL(res.headers.get("location") ?? "").pathname).toBe("/login");
+  });
+
   it("lets the CLI completion page through without a session", () => {
     const res = proxy(request("/cli/complete"));
     expect(res.status).toBe(200);

@@ -84,15 +84,12 @@ export {
   ledgerFrame,
   ledgerFrameSummary,
   tachoFrame,
-  tachoFrameSummary,
-  tachoStage,
   tachoTimestamp,
   bisectKey,
   bisectFrames,
   foldTranscript,
   stepKind,
   ledgerPhase,
-  tachoPhase,
   frameKinds,
   filterFramesByKind,
   isTranscriptKind,
@@ -115,6 +112,7 @@ export {
   type TranscriptEntryKind,
   type TranscriptFold,
 } from "./run-frames";
+export { tachoFrameSummary, tachoPhase, tachoStage } from "./tacho-kinds";
 
 // The ledger itself: admission, immutable attempts, fenced appends, seals,
 // terminal outcome, and the read side.

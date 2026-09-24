@@ -38,7 +38,12 @@ const refuse = () => Promise.reject(new Error("not a Fleet spend read"));
 const source: DataSource = {
   runtimes: { list: refuse, agents: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse, preferences: refuse },
+  shell: {
+    context: refuse,
+    preferences: refuse,
+    counts: refuse,
+    notifications: refuse,
+  },
   billing: {
     plan: refuse,
     usageCredits: refuse,
@@ -58,7 +63,7 @@ const source: DataSource = {
     work: refuse,
     outcomesSettings: refuse,
   },
-  approvals: { pending: refuse, resolved: refuse },
+  approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
   agents: {
     list: refuse,
     get: refuse,
@@ -85,10 +90,17 @@ const source: DataSource = {
     apiKeys: refuse,
     costCenters: refuse,
     modelCredential: refuse,
+    dataPlane: refuse,
+    workspaceFacts: refuse,
     sso: refuse,
   },
   mandates: { list: refuse, get: refuse },
-  audit: { events: refuse, exportEvents: refuse },
+  audit: {
+    events: refuse,
+    exportEvents: refuse,
+    retention: refuse,
+    bundle: refuse,
+  },
   skills: { inventory: refuse, configuration: refuse },
   steering: {
     records: refuse,
@@ -96,7 +108,10 @@ const source: DataSource = {
     proposals: refuse,
     contextPr: refuse,
     freshness: refuse,
+    hub: refuse,
     deliveries: refuse,
+    memories: refuse,
+    tree: refuse,
   },
   tools: {
     versions: refuse,

@@ -60,6 +60,12 @@ export const spendGet = registerCapability({
       groupBy: spendGroupKindSchema,
       /** The period over every group: the strip at the top of the page. */
       total: spendFigureSchema,
+      /**
+       * Priced runs in the period that were still open when their rollup was
+       * last built (#3980). Their cost is in every figure here as a running
+       * estimate over the calls recorded so far, and grows until they seal.
+       */
+      estimatedRuns: z.number().int().nonnegative().optional(),
       /** Largest spend first; groups with no cost after those with one. */
       rows: z.array(spendRowSchema),
     })

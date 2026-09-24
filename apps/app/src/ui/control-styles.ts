@@ -44,7 +44,9 @@ export const linkText =
   "font-medium text-link underline-offset-4 hover:text-link-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-sm";
 
 export const inputBase =
-  "block w-full min-w-0 rounded-md border border-input-border bg-input-bg px-3 py-2 text-[13px] text-input-fg placeholder:text-input-placeholder " +
+  // 16px below md as well as by phone.css, so the class list alone says an
+  // input never makes iOS zoom the page on focus.
+  "block w-full min-w-0 rounded-md border border-input-border bg-input-bg px-3 py-2 text-[13px] max-md:text-base text-input-fg placeholder:text-input-placeholder " +
   "hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring " +
   "disabled:bg-input-disabled-bg disabled:text-input-disabled-fg aria-invalid:border-input-invalid-border aria-invalid:outline-input-invalid-ring";
 

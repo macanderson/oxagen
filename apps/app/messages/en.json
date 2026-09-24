@@ -19,7 +19,6 @@
     "register": "Register an agent",
     "cliAuthorize": "Authorize the Oxagen CLI",
     "cliComplete": "The Oxagen CLI is signed in",
-    "workspaceEyebrow": "Workspace {workspace}",
     "fleet": "Fleet",
     "run": "Run",
     "agents": "Agents",
@@ -37,7 +36,7 @@
     "apiKeys": "API keys",
     "billing": "Billing",
     "audit": "Audit",
-    "modelFunding": "Model funding",
+    "modelFunding": "Model funding and routes",
     "sso": "Single sign-on",
     "organizationEyebrow": "Organization {organization}"
   },

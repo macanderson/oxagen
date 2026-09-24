@@ -352,8 +352,16 @@ describe("Sso: a read that did not list", () => {
     });
     expect(screen.getByTestId("sso-denied")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add provider" })).toBeNull();
-    const tab = screen.getByRole("link", { name: "Single sign-on" });
-    expect(tab.getAttribute("aria-current")).toBe("page");
+    // Single sign-on is not one of the design's seven tabs: the row stays,
+    // and no tab is marked current on this page.
+    const tabs = within(
+      screen.getByRole("tablist", { name: "Organization" }),
+    ).getAllByRole("tab");
+    expect(tabs).toHaveLength(7);
+    expect(tabs.some((tab) => tab.hasAttribute("aria-current"))).toBe(false);
+    expect(
+      tabs.every((tab) => tab.getAttribute("aria-selected") === "false"),
+    ).toBe(true);
     await expectNoAxe(container);
   });
 
@@ -363,7 +371,7 @@ describe("Sso: a read that did not list", () => {
       "data-reason",
       "error",
     );
-    expect(screen.getByRole("link", { name: "Single sign-on" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /^Roles/ })).toBeTruthy();
   });
 });
 
@@ -380,14 +388,21 @@ describe("Sso: SCIM provisioning", () => {
   });
 
   it("gives the base URL and offers a token when there is none", async () => {
-    const { container } = await renderSection({ ok: true, value: ssoSettings() });
+    const { container } = await renderSection({
+      ok: true,
+      value: ssoSettings(),
+    });
     const section = screen.getByTestId("sso-scim");
     expect(within(section).getByTestId("sso-scim-base-url")).toHaveTextContent(
       "https://app.oxagen.sh/api/scim/v2",
     );
     expect(within(section).getByTestId("sso-scim-none")).toBeTruthy();
-    expect(within(section).getByRole("button", { name: "Generate token" })).toBeTruthy();
-    expect(within(section).queryByRole("button", { name: "Rotate token" })).toBeNull();
+    expect(
+      within(section).getByRole("button", { name: "Generate token" }),
+    ).toBeTruthy();
+    expect(
+      within(section).queryByRole("button", { name: "Rotate token" }),
+    ).toBeNull();
     await expectNoAxe(container);
   });
 
@@ -401,9 +416,13 @@ describe("Sso: SCIM provisioning", () => {
       },
     });
     await renderSection({ ok: true, value: ssoSettings() });
-    await userEvent.click(screen.getByRole("button", { name: "Generate token" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Generate token" }),
+    );
     const dialog = await screen.findByTestId("scim-token-generate");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Generate token" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Generate token" }),
+    );
     expect(await screen.findByTestId("scim-token-value")).toHaveTextContent(
       "oxscim_the-whole-token-value",
     );
@@ -417,20 +436,31 @@ describe("Sso: SCIM provisioning", () => {
 
   it("describes a live token by its prefix and never shows it", async () => {
     await renderSection({ ok: true, value: LIVE });
-    expect(screen.getByTestId("sso-scim-token")).toHaveTextContent("oxscim_AbCdEfGh");
-    expect(screen.getByTestId("sso-scim-token")).toHaveTextContent("Not used yet.");
+    expect(screen.getByTestId("sso-scim-token")).toHaveTextContent(
+      "oxscim_AbCdEfGh",
+    );
+    expect(screen.getByTestId("sso-scim-token")).toHaveTextContent(
+      "Not used yet.",
+    );
     expect(screen.queryByRole("button", { name: "Generate token" })).toBeNull();
     expect(screen.getByRole("button", { name: "Rotate token" })).toBeTruthy();
   });
 
   it("asks before it revokes the token", async () => {
-    actions.revokeScimToken.mockResolvedValue({ ok: true, value: { revoked: true } });
+    actions.revokeScimToken.mockResolvedValue({
+      ok: true,
+      value: { revoked: true },
+    });
     await renderSection({ ok: true, value: LIVE });
     await userEvent.click(screen.getByRole("button", { name: "Revoke token" }));
     expect(actions.revokeScimToken).not.toHaveBeenCalled();
     const dialog = await screen.findByTestId("scim-token-revoke");
-    expect(dialog).toHaveTextContent("People it already created keep their access.");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Revoke token" }));
+    expect(dialog).toHaveTextContent(
+      "People it already created keep their access.",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Revoke token" }),
+    );
     await waitFor(() => {
       expect(actions.revokeScimToken).toHaveBeenCalledWith("acme");
     });
@@ -449,8 +479,12 @@ describe("Sso: SCIM provisioning", () => {
     await userEvent.click(screen.getByRole("button", { name: "Rotate token" }));
     expect(actions.rotateScimToken).not.toHaveBeenCalled();
     const dialog = await screen.findByTestId("scim-token-rotate");
-    expect(dialog).toHaveTextContent("The current token stops working at once.");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Rotate token" }));
+    expect(dialog).toHaveTextContent(
+      "The current token stops working at once.",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Rotate token" }),
+    );
     expect(await screen.findByTestId("scim-token-value")).toHaveTextContent(
       "oxscim_the-rotated-token-value",
     );
@@ -493,10 +527,16 @@ describe("Sso: SCIM provisioning", () => {
       code: "scim_token_exists",
     });
     await renderSection({ ok: true, value: ssoSettings() });
-    await userEvent.click(screen.getByRole("button", { name: "Generate token" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Generate token" }),
+    );
     const dialog = await screen.findByTestId("scim-token-generate");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Generate token" }));
-    expect(await screen.findByTestId("scim-token-generate-failure")).toHaveTextContent(
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Generate token" }),
+    );
+    expect(
+      await screen.findByTestId("scim-token-generate-failure"),
+    ).toHaveTextContent(
       "The organization already has a SCIM token. Rotate it to get a new one.",
     );
     expect(screen.queryByTestId("scim-token-value")).toBeNull();
@@ -506,12 +546,16 @@ describe("Sso: SCIM provisioning", () => {
   it("a generate that throws shows a failure rather than a token (negative)", async () => {
     actions.createScimToken.mockRejectedValue(new Error("socket hang up"));
     await renderSection({ ok: true, value: ssoSettings() });
-    await userEvent.click(screen.getByRole("button", { name: "Generate token" }));
-    const dialog = await screen.findByTestId("scim-token-generate");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Generate token" }));
-    expect(await screen.findByTestId("scim-token-generate-failure")).toHaveTextContent(
-      "action_failed",
+    await userEvent.click(
+      screen.getByRole("button", { name: "Generate token" }),
     );
+    const dialog = await screen.findByTestId("scim-token-generate");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Generate token" }),
+    );
+    expect(
+      await screen.findByTestId("scim-token-generate-failure"),
+    ).toHaveTextContent("action_failed");
     expect(screen.queryByTestId("scim-token-value")).toBeNull();
     expect(router.refresh).not.toHaveBeenCalled();
   });
@@ -519,8 +563,12 @@ describe("Sso: SCIM provisioning", () => {
   it("off the Enterprise plan, keeps only Revoke for a leftover token (negative)", async () => {
     await renderSection({ ok: true, value: { ...LIVE, entitled: false } });
     const section = screen.getByTestId("sso-scim");
-    expect(within(section).queryByRole("button", { name: "Rotate token" })).toBeNull();
-    expect(within(section).getByRole("button", { name: "Revoke token" })).toBeTruthy();
+    expect(
+      within(section).queryByRole("button", { name: "Rotate token" }),
+    ).toBeNull();
+    expect(
+      within(section).getByRole("button", { name: "Revoke token" }),
+    ).toBeTruthy();
   });
 
   it("off the Enterprise plan with no token, shows no SCIM section (negative)", async () => {
@@ -532,8 +580,12 @@ describe("Sso: SCIM provisioning", () => {
     await renderSection({ ok: true, value: LIVE }, "member");
     const section = screen.getByTestId("sso-scim");
     expect(within(section).queryByRole("button")).toBeTruthy(); // the copy button only
-    expect(within(section).queryByRole("button", { name: "Revoke token" })).toBeNull();
-    expect(section).toHaveTextContent("Only an Owner or an Admin can manage the SCIM token.");
+    expect(
+      within(section).queryByRole("button", { name: "Revoke token" }),
+    ).toBeNull();
+    expect(section).toHaveTextContent(
+      "Only an Owner or an Admin can manage the SCIM token.",
+    );
   });
 });
 

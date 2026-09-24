@@ -80,8 +80,12 @@ export const AgentPage = z.object({
   totals: z.object({
     identities: Count,
     enrolled: Count,
+    /** Agents waiting to enroll: not retired, not suspended, no credential and no host. */
+    unenrolled: Count,
     /** Agents in the workspace holding at least one active mandate. */
     holdingMandate: Count.nullable(),
+    /** The agent keys `holdingMandate` counts, at most 100: the names the tile prints. */
+    mandateHolders: z.array(z.string().min(1)),
     tamperIncidents: Count,
     /** The Tamper incidents tile: sums over the agents' records, and the newest incident. */
     tamper: z.object({

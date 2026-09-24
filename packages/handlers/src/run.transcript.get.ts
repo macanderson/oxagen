@@ -379,6 +379,19 @@ export function boundaryHalves(fold: TranscriptFold): {
   };
 }
 
+/**
+ * The reasoning effort the fold's model call ran at: the first of its frames
+ * that recorded one. Null where none did, which is every ledger frame and
+ * every wrapped frame from a harness that does not report it.
+ */
+function entryEffort(fold: TranscriptFold): string | null {
+  for (const frame of [fold.opening, fold.request, fold.response]) {
+    const effort = frame?.identity.effort;
+    if (effort !== undefined && effort !== "") return effort;
+  }
+  return null;
+}
+
 /** The chips an entry answers to: the union over the frames it folds. */
 function entryKinds(fold: TranscriptFold): TranscriptKind[] {
   const kinds = new Set<TranscriptKind>();
@@ -512,6 +525,7 @@ export function createRunTranscriptGetHandler(
                 sessionUuid: opening.chain.sessionUuid,
                 id: opening.chain.subagentId,
                 type: opening.chain.subagentType,
+                spawnCallId: opening.chain.spawnToolUseId,
               },
             }),
         at: opening.observedAt.toISOString(),
@@ -520,6 +534,8 @@ export function createRunTranscriptGetHandler(
         type: opening.type,
         label: opening.summary,
         callId: opening.identity.callId,
+        target: opening.identity.target ?? null,
+        effort: entryEffort(fold),
         usage: fold.usage ?? null,
         kinds: entryKinds(fold),
         request: pair.request,
@@ -534,6 +550,7 @@ export function createRunTranscriptGetHandler(
                   : { sessionUuid: fold.decision.sessionUuid }),
                 decision: fold.decision.decision,
                 type: fold.decision.type,
+                source: fold.decision.source,
                 at: fold.decision.at.toISOString(),
               },
         frames: fold.frames,

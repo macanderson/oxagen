@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The governance control in Organization › Workspaces › Edit workspace: the
-// mode radio, the override checkbox, and what the dialog does with each answer
+// `wsGov` mode select, the override checkbox, and what the dialog does with each answer
 // `set_governance_mode` can give.
 //
 // Four behaviours are load-bearing and each is asserted here rather than left
@@ -38,6 +38,7 @@ const workspace: Workspace = {
   id: "ws_7a000000000000000000000001",
   name: "Platform",
   slug: "platform",
+  namespace: "platform",
   role: "Admin",
   archivedAt: null,
   costCenter: null,
@@ -93,7 +94,10 @@ describe("EditWorkspace governance", () => {
       name: /Apply now, without review/,
     });
     expect(override).toBeDisabled();
-    await user.click(screen.getByRole("radio", { name: /regulated/ }));
+    await user.selectOptions(
+      screen.getByLabelText("Governance mode"),
+      "regulated",
+    );
     expect(override).toBeEnabled();
     await user.click(override);
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -124,7 +128,7 @@ describe("EditWorkspace governance", () => {
         },
       },
     });
-    await user.click(screen.getByRole("radio", { name: /solo/ }));
+    await user.selectOptions(screen.getByLabelText("Governance mode"), "solo");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     const link = await screen.findByRole("link", {
@@ -146,6 +150,62 @@ describe("EditWorkspace governance", () => {
     });
   });
 
+  it("links no pull request whose URL is not a GitHub pull request, and still names its number (negative)", async () => {
+    const user = await openDialog({
+      ok: true,
+      value: {
+        slug: "platform",
+        governance: {
+          ok: true,
+          outcome: "proposed",
+          mode: "solo",
+          repo: "acme/platform",
+          branch: "main",
+          pullRequest: {
+            number: 413,
+            htmlUrl: "javascript:alert(1)//github.com/acme/platform/pull/413",
+            reused: true,
+          },
+          overrodeReview: false,
+        },
+      },
+    });
+    await user.selectOptions(screen.getByLabelText("Governance mode"), "solo");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByText("Open pull request #413"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open pull request #413" }),
+    ).toBeNull();
+    expect(screen.queryByTestId("edit-workspace-governance-pr")).toBeNull();
+    // A pull request already open on oxagen/governance now carries this change.
+    expect(
+      screen.getByText(
+        "It updated the pull request already open on oxagen/governance.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("names the refusal's reason when it carries no code (negative)", async () => {
+    const user = await openDialog({
+      ok: true,
+      value: {
+        slug: "platform",
+        governance: { ok: false, reason: "unavailable", code: null },
+      },
+    });
+    await user.selectOptions(screen.getByLabelText("Governance mode"), "team");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByText(
+        "The name was saved. The governance mode was not changed: unavailable",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("says the review was skipped when it was", async () => {
     const user = await openDialog({
       ok: true,
@@ -162,7 +222,7 @@ describe("EditWorkspace governance", () => {
         },
       },
     });
-    await user.click(screen.getByRole("radio", { name: /solo/ }));
+    await user.selectOptions(screen.getByLabelText("Governance mode"), "solo");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(
       await screen.findByText(/steering\.governance_overridden/),
@@ -181,7 +241,7 @@ describe("EditWorkspace governance", () => {
         },
       },
     });
-    await user.click(screen.getByRole("radio", { name: /team/ }));
+    await user.selectOptions(screen.getByLabelText("Governance mode"), "team");
     await user.click(screen.getByRole("button", { name: "Save" }));
     // "The name was saved. The governance mode was not changed: …" — both
     // halves, because both happened.
@@ -205,7 +265,7 @@ describe("EditWorkspace governance", () => {
         },
       },
     });
-    await user.click(screen.getByRole("radio", { name: /team/ }));
+    await user.selectOptions(screen.getByLabelText("Governance mode"), "team");
     await user.click(screen.getByRole("button", { name: "Save" }));
     // Nothing to read, so it behaves like every other write: close and reload.
     await waitFor(() => {

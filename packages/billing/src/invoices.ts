@@ -35,6 +35,8 @@ export async function syncInvoiceFromStripe(
   const start = Date.now();
   const invoice = await billingProvider().getInvoice(stripeInvoiceId);
 
+  // tenancy: webhook write with no tenant scope. The orgId comes from the invoice
+  // metadata or its verified subscription row, and the upsert is keyed on stripe_invoice_id.
   await withSystemDb(async (tx) => {
     const orgId =
       invoice.orgId ?? (await resolveOrgIdFromSubscription(tx, invoice));
@@ -78,7 +80,14 @@ export async function syncInvoiceFromStripe(
       })
       .onConflictDoUpdate({
         target: schema.invoices.stripeInvoiceId,
+        // Every field Stripe changes after the draft. The number and the due
+        // date are assigned at finalize and paid_at at payment, so a row first
+        // mirrored from invoice.created (a draft, number null) must take them
+        // from a later event, or the list shows a sent invoice with no number.
         set: {
+          number: invoice.number,
+          dueAt: invoice.dueAt,
+          paidAt: invoice.paidAt,
           status: invoice.status,
           amountDueCents: invoice.amountDueCents,
           amountPaidCents: invoice.amountPaidCents,

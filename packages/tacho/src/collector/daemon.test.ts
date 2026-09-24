@@ -450,6 +450,71 @@ describe("tachod", () => {
     expect((await forward).status).toBe(200);
   });
 
+  it("seals the spool replay of a hook whose live write failed", async () => {
+    // The hook-id ledger drops a replay whose id the session already holds.
+    // It used to remember the id before the frames reached the WAL, so a
+    // failed write left the id behind. The client saw a 500, spooled the
+    // hook under the same id, and the daemon dropped that replay as a
+    // repeat. The hook never reached the record.
+    //
+    // The same failure also lost the session's genesis. The session was
+    // created inside the failed call, after every chain was marked, so the
+    // rollback never reached it: the retry sealed a resume at seq 1 on a
+    // chain whose seq 0 nothing held.
+    const plane = fakeControlPlane("etag-3");
+    const { handle, host } = await boot(plane);
+    const port = handle.port as number;
+    const start = fixtures().find(
+      (f) => f.stdin["hook_event_name"] === "SessionStart",
+    ) as Fixture;
+    const envelope = {
+      payload: start.stdin,
+      env: start.env,
+      hook_id: "hook_write_failed",
+    };
+    const asEnvelope = { "x-tacho-envelope": "1" };
+
+    const append = handle.wal.append.bind(handle.wal);
+    handle.wal.append = () => {
+      throw new Error("ENOSPC: no space left on device");
+    };
+    const live = await postHttp(
+      port,
+      host.local_token,
+      "/hook",
+      envelope,
+      asEnvelope,
+    );
+    expect(live.status).toBe(500);
+    handle.wal.append = append;
+
+    const replay = await postHttp(
+      port,
+      host.local_token,
+      "/hook",
+      envelope,
+      asEnvelope,
+    );
+    expect(replay.status).toBe(200);
+    await handle.tick();
+    const started = plane.ingested.filter(
+      (e) =>
+        e.kind === "agent_start" &&
+        (e.body as { session_start_source?: string }).session_start_source ===
+          "startup",
+    );
+    expect(started).toHaveLength(1);
+    const [genesis] = started as [TachoEvent];
+    expect(genesis.seq).toBe(0);
+    expect(
+      (genesis.body as { resume_of_session_id?: string }).resume_of_session_id,
+    ).toBeUndefined();
+    const chain = plane.ingested.filter(
+      (e) => e.session_uuid === genesis.session_uuid,
+    );
+    expect(verifyChain(chain, { expectGenesis: true }).violations).toEqual([]);
+  });
+
   it(
     "reports the reason when the connect budget runs out instead of being stopped by the runner",
     async () => {

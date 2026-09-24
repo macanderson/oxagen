@@ -340,6 +340,30 @@ describe("get_run_transcript", () => {
     });
   });
 
+  it("carries the effort a model call ran at, and null where none was recorded", async () => {
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        effort: "high",
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        effort: "",
+      }),
+      tachoRow(2, { kind: "tool_call" }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(out.entries.map((entry) => entry.effort)).toEqual([
+      "high",
+      null,
+      null,
+    ]);
+  });
+
   it("steps: a second response of the same kind opens a new step, it does not join the first", async () => {
     const { transcript } = harness([
       tachoRow(0, {

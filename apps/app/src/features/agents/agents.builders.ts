@@ -60,7 +60,9 @@ export function agentPage(
     totals: {
       identities: 7,
       enrolled: 2,
+      unenrolled: 5,
       holdingMandate: 1,
+      mandateHolders: ["acme.core.release-bot"],
       tamperIncidents: 3,
       tamper: {
         recorded: 4,
@@ -425,6 +427,7 @@ export function roleCatalog(): Read<RoleCatalog> {
         permissions: ["repo.write", "pr.open"],
         heldBy: 1,
         createdBy: null,
+        createdAt: "2026-09-01T00:00:00.000Z",
       },
     ],
     catalog: [],
@@ -476,7 +479,12 @@ export function agentsSource(reads: AgentReads) {
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -496,7 +504,7 @@ export function agentsSource(reads: AgentReads) {
       work: refuse,
       outcomesSettings: refuse,
     },
-    approvals: { pending: refuse, resolved: refuse },
+    approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),
@@ -524,9 +532,16 @@ export function agentsSource(reads: AgentReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      dataPlane: refuse,
+      workspaceFacts: refuse,
       sso: refuse,
     },
-    audit: { events: refuse, exportEvents: refuse },
+    audit: {
+      events: refuse,
+      exportEvents: refuse,
+      retention: refuse,
+      bundle: refuse,
+    },
     skills: { inventory: refuse, configuration: refuse },
     steering: {
       records: refuse,
@@ -534,7 +549,10 @@ export function agentsSource(reads: AgentReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      hub: refuse,
       deliveries: answer(reads.deliveries, "deliveries"),
+      memories: refuse,
+      tree: refuse,
     },
     tools: {
       versions: refuse,

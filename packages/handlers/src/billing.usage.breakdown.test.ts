@@ -151,12 +151,13 @@ describe("billingUsageBreakdownHandler (@oxagen/handlers)", () => {
   });
 
   it("estimates net cache savings from byModel using the provider rate card (#1076)", async () => {
-    // claude-sonnet-5 rate: input $3, cachedInput $0.3, cacheWrite $3.75 per 1M.
-    // reads saved  = 10 × (3.0 − 0.3)  = 27 micro-USD
-    // writes cost  = 20 × (3.75 − 3.0) = 15 micro-USD
-    // net savings  = 27 − 15 = 12 micro-USD
+    // claude-sonnet-5 list rate: input $2, cachedInput $0.2, cacheWrite $2.5
+    // per 1M (#3944 moved it off the $3/$15 Sonnet tier).
+    // reads saved  = 10 × (2.0 − 0.2) = 18 micro-USD
+    // writes cost  = 20 × (2.5 − 2.0) = 10 micro-USD
+    // net savings  = 18 − 10 = 8 micro-USD
     const out = await billingUsageBreakdownHandler(INPUT, TEST_CTX);
-    expect(out.cacheSavingsMicros).toBe(12);
+    expect(out.cacheSavingsMicros).toBe(8);
   });
 
   it("reports zero cache savings when no tokens were cached", async () => {

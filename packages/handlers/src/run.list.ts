@@ -39,6 +39,8 @@ import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   canSummarizeRun,
+  commandBlockOf,
+  steerBlockOf,
   IN_APP_AGENT_SURFACES,
   type RunItem,
   runList,
@@ -218,6 +220,7 @@ const ledgerColumns = {
     summary: runs.summary,
     summaryGeneratedAt: runs.summaryGeneratedAt,
     summaryModel: runs.summaryModel,
+    summaryError: runs.summaryError,
   },
   identity: {
     orgNamespace: schema.organizations.namespace,
@@ -498,6 +501,8 @@ const tachoColumns = {
     seqCount: sessions.seqCount,
     startedAt: sessions.startedAt,
     sealedAt: sessions.sealedAt,
+    sealSource: sessions.sealSource,
+    endedAt: sessions.endedAt,
     replayGrade: sessions.replayGrade,
     completenessGaps: sessions.completenessGaps,
     enforcementTier: sessions.enforcementTier,
@@ -514,9 +519,12 @@ const tachoColumns = {
     // showed one for ever. That is the whole point of deriving a title, and
     // it was being written to a column nothing read.
     title: sessions.title,
+    // The title the harness gave the session itself (`harness-title.ts`).
+    harnessTitle: sessions.harnessTitle,
     summary: sessions.summary,
     summaryGeneratedAt: sessions.summaryGeneratedAt,
     summaryModel: sessions.summaryModel,
+    summaryError: sessions.summaryError,
     // `to_jsonb` takes a row, addressed by the FROM-clause's own
     // correlation name for this table, which is just its bare name and
     // never schema-qualified even though every column reference above is.
@@ -550,6 +558,9 @@ const tachoColumns = {
     osVersion: hosts.osVersion,
     arch: hosts.arch,
     nodeVersion: hosts.nodeVersion,
+    // Whether a command can reach the run (`commandBlockOf`, ADR-163).
+    status: hosts.status,
+    lastSeenAt: hosts.lastSeenAt,
   },
 };
 
@@ -615,9 +626,13 @@ type GeneratedSummaryColumns = {
    * run has no such column, so it is optional here rather than shared.
    */
   title?: string | null;
+  /** The title the harness gave the session itself; wrapped sessions only. */
+  harnessTitle?: string | null;
   summary: string | null;
   summaryGeneratedAt: Date | null;
   summaryModel: string | null;
+  /** Why the last automatic account failed, as a short reason code. */
+  summaryError?: string | null;
 };
 
 type LedgerRunCore = GeneratedSummaryColumns & {
@@ -704,8 +719,16 @@ export type RunCost = {
   costBasis: NonNullable<RunItem["cost"]>["basis"];
 };
 
-/** What a `cost.run_totals` row says about a run: its spend and its witness verdict. */
-type RunRollup = { cost: RunCost | null; verdict: RunItem["verdict"] };
+/**
+ * What a `cost.run_totals` row says about a run: its spend, its witness
+ * verdict, and whether the run had sealed when the row was rebuilt (null: it
+ * had not, so the spend is a running estimate).
+ */
+type RunRollup = {
+  cost: RunCost | null;
+  verdict: RunItem["verdict"];
+  sealedAt: Date | null;
+};
 
 export type TachoSessionColumns = GeneratedSummaryColumns & {
   harness?: string;
@@ -724,6 +747,10 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   seqCount: number;
   startedAt: Date;
   sealedAt: Date | null;
+  /** `agent_stop` or `idle_timeout`; null while open or on a seal older than the column. */
+  sealSource?: string | null;
+  /** The `agent_stop` event's own timestamp, or after an idle close the last event's; null while open. */
+  endedAt?: Date | null;
   /** The model the session started on and the one it ended on; either may be unrecorded. */
   modelInitial: string | null;
   modelFinal: string | null;
@@ -756,6 +783,10 @@ export type TachoHostColumns = {
   osVersion: string | null;
   arch: string | null;
   nodeVersion: string | null;
+  /** `tacho.hosts.status`; absent where a reader did not select it. */
+  status?: string | null;
+  /** The host's last poll; absent where a reader did not select it. */
+  lastSeenAt?: Date | null;
 };
 
 export type TachoSessionRow = {
@@ -881,6 +912,15 @@ function generatedSummary(
   };
 }
 
+/** The failure reason, carried only while the run has no account to show. */
+function enrichmentError(
+  columns: GeneratedSummaryColumns,
+): Pick<RunItem, "enrichmentError"> {
+  return columns.summaryError && generatedSummary(columns) === null
+    ? { enrichmentError: columns.summaryError }
+    : {};
+}
+
 /** Integer micro-units as the wire's decimal string; refuses a float or NaN. */
 export function microsString(micros: number): string {
   if (!Number.isSafeInteger(micros))
@@ -891,8 +931,8 @@ export function microsString(micros: number): string {
 }
 
 /**
- * The run's cost as its rollup row records it. No row yet — the run is open,
- * or the rollup has not covered its seal — means no cost, never zero.
+ * The run's cost as its rollup row records it. No row yet — the rollup has
+ * not priced any of its frames — means no cost, never zero.
  */
 function rollupCost(rollup: RunRollup | undefined): RunItem["cost"] {
   const row = rollup?.cost;
@@ -902,6 +942,35 @@ function rollupCost(rollup: RunRollup | undefined): RunItem["cost"] {
     currency: row.currency,
     basis: row.costBasis,
   };
+}
+
+/**
+ * Whether the run's cost is still an estimate: the run is open, or its row
+ * was rebuilt before the seal and the seal's rollup has not landed yet.
+ */
+export function costIsEstimate(
+  runSealedAt: Date | string | null,
+  rollup: RunRollup | undefined,
+): boolean {
+  if (!rollup?.cost) return false;
+  return runSealedAt === null || rollup.sealedAt === null;
+}
+
+/**
+ * What sealed a sealed session. A seal written before `seal_source` existed
+ * was an `agent_stop`, which is the only thing that sealed a session then.
+ */
+export function recordedSealSource(
+  sealedAt: Date | null,
+  source: string | null | undefined,
+): RunItem["sealSource"] {
+  if (sealedAt === null) return null;
+  if (source === "idle_timeout") return "idle_timeout";
+  if (source === null || source === undefined || source === "agent_stop")
+    return "agent_stop";
+  throw new RangeError(
+    `tacho session seal source outside the CHECK: ${source}`,
+  );
 }
 
 /** A column an enrolment left empty reads as unrecorded, never as a value. */
@@ -968,15 +1037,24 @@ export function toLedgerRunItem(
     operatorId: identity.operatorPublicId,
     operatorKind: principalKind(identity.operatorKind),
     operatorName: blankToNull(identity.operatorUserName),
+    operatorAttribution: identity.operatorPublicId ? "initiator" : null,
     status,
     outcome,
     turns: rollup.opaqueModelCalls === 0 ? rollup.turnIndexes : null,
     steps: rollup.modelCalls + rollup.toolCalls,
     frames: rollup.frames,
     cost: rollupCost(totals),
+    costIsEstimate: costIsEstimate(
+      status === "live" ? null : (record.seal?.sealedAt ?? null),
+      totals,
+    ),
     taskRef: identity.goal,
     startedAt: (run.startedAt ?? run.createdAt).toISOString(),
     sealedAt:
+      status === "live" ? null : (record.seal?.sealedAt.toISOString() ?? null),
+    sealSource: null,
+    // The ledger records no stop instant apart from its seal.
+    endedAt:
       status === "live" ? null : (record.seal?.sealedAt.toISOString() ?? null),
     replayGrade:
       status === "live"
@@ -984,6 +1062,9 @@ export function toLedgerRunItem(
         : recordedGrade(record.seal?.replayGrade ?? null),
     verdict: totals?.verdict ?? null,
     enforcementTier: publishedTier(record.seal?.enforcementTier),
+    // A ledger run's controls fence evidence ingress; no host carries them.
+    commandBlock: null,
+    steerBlock: null,
     completenessGaps: gaps,
     canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
     // The ledger records evidence an external engine submits. It names no
@@ -996,6 +1077,7 @@ export function toLedgerRunItem(
     machine: null,
     name: run.name,
     summary: generatedSummary(run),
+    ...enrichmentError(run),
   };
 }
 
@@ -1050,6 +1132,50 @@ export function tachoRunOutcome(outcome: string): RunItem["outcome"] {
 }
 
 /**
+ * The name a wrapped session shows, first match wins:
+ *
+ * 1. The title the harness gave the session (Claude Code's `ai-title`). The
+ *    operator already sees it in their terminal, so a name Oxagen wrote does
+ *    not replace it.
+ * 2. `name`: the model-written name, or until one exists, the first sentence
+ *    of the first prompt plus the branch that `run.enrich` writes.
+ * 3. `title`: the place-and-counts title the ingest derives.
+ *
+ * A run always has something to be called.
+ */
+export function tachoRunName(session: {
+  harnessTitle?: string | null;
+  name: string | null;
+  title?: string | null;
+}): string | null {
+  return session.harnessTitle ?? session.name ?? session.title ?? null;
+}
+
+/**
+ * The run row's `commandBlock`: `dispatch_command`'s rule read over the same
+ * session and host (ADR-163). Omitted when the reader selected no host
+ * liveness, so a caller reads "not known" rather than a refusal nobody made.
+ */
+function tachoCommandBlock(
+  row: TachoSessionRow,
+  now: Date,
+): Pick<RunItem, "commandBlock"> {
+  const host = row.host?.hostname == null ? null : row.host;
+  if (host !== null && host.status === undefined) return {};
+  return {
+    commandBlock: commandBlockOf({
+      outcome: row.session.outcome,
+      sealSource: row.session.sealSource,
+      host:
+        host === null || host.status == null
+          ? null
+          : { status: host.status, lastSeenAt: host.lastSeenAt ?? null },
+      now,
+    }),
+  };
+}
+
+/**
  * The session's token counters, as ingest folded them from the counted
  * `llm_call` frames. Null for a session that recorded no model usage, so a
  * header says "not recorded" rather than "0 tokens".
@@ -1083,6 +1209,7 @@ export function reportedTokensOf(
 export function toTachoRunItem(
   row: TachoSessionRow,
   totals: RunRollup | undefined,
+  now: Date = new Date(),
 ): RunItem {
   const { session } = row;
   const status = tachoRunStatus(session.outcome);
@@ -1095,12 +1222,16 @@ export function toTachoRunItem(
     operatorId: row.operatorPublicId,
     operatorKind: principalKind(row.operatorKind),
     operatorName: blankToNull(row.operatorUserName),
+    // Ingest attributes a wrapped session to the host's enroller
+    // (`enrollingPrincipalId`), not to whoever ran it.
+    operatorAttribution: row.operatorPublicId ? "host_enroller" : null,
     status,
     outcome,
     turns: session.numTurns,
     steps: session.numModelCalls + session.numToolCalls,
     frames: session.seqCount,
     cost: rollupCost(totals),
+    costIsEstimate: costIsEstimate(session.sealedAt, totals),
     reportedCost:
       Number.isSafeInteger(session.totalCostMicros) &&
       ((session.totalCostMicros ?? 0) > 0 || session.costBasis != null)
@@ -1110,12 +1241,23 @@ export function toTachoRunItem(
             basis: "client_attested",
           }
         : null,
+    // No dispatch record names a wrapped session's task (see the contract).
     taskRef: null,
     startedAt: session.startedAt.toISOString(),
     sealedAt: session.sealedAt?.toISOString() ?? null,
+    sealSource: recordedSealSource(session.sealedAt, session.sealSource),
+    // The stop event's own timestamp (`terminalPatch`), never receipt time.
+    endedAt:
+      status === "live" ? null : (session.endedAt?.toISOString() ?? null),
     replayGrade: recordedGrade(session.replayGrade),
     verdict: totals?.verdict ?? null,
     enforcementTier: publishedTier(session.enforcementTier),
+    ...tachoCommandBlock(row, now),
+    // Whether a steer can reach it (`steerBlockOf`); omitted when the reader
+    // selected no runtime.
+    ...(session.runtime === undefined
+      ? {}
+      : { steerBlock: steerBlockOf(session.runtime) }),
     completenessGaps: gaps,
     canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
     // The model the session ended on is the one that did most of its work, so
@@ -1135,10 +1277,9 @@ export function toTachoRunItem(
           runtime: session.runtime ?? null,
         }
       : null,
-    // The model-written name when `summarize_run` has produced one, and the
-    // derived title until then. A run always has something to be called.
-    name: session.name ?? session.title ?? null,
+    name: tachoRunName(session),
     summary: generatedSummary(session),
+    ...enrichmentError(session),
   };
 }
 
@@ -1234,6 +1375,7 @@ export const postgresReadRunRollups: ReadRunRollups = async (scope, runIds) => {
         currency: schema.runTotals.currency,
         costBasis: schema.runTotals.costBasis,
         verdict: schema.runTotals.verdict,
+        sealedAt: schema.runTotals.sealedAt,
       })
       .from(schema.runTotals)
       .where(
@@ -1257,7 +1399,11 @@ export const postgresReadRunRollups: ReadRunRollups = async (scope, runIds) => {
             currency: r.currency,
             costBasis: r.costBasis as RunCost["costBasis"],
           };
-    out.set(r.runId, { cost, verdict: recordedVerdict(r.verdict) });
+    out.set(r.runId, {
+      cost,
+      verdict: recordedVerdict(r.verdict),
+      sealedAt: r.sealedAt,
+    });
   }
   return out;
 };
@@ -1391,18 +1537,29 @@ export function createRunListHandler(
       : true;
     return {
       runs: merged.items
-        .map((item) =>
-          item.kind === "ledger"
-            ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
-            : toTachoRunItem(item.row, costs.get(item.id)),
-        )
-        .map((run) => ({
-          ...run,
-          enrichmentEnabled: enabled,
-          ...(enabled
-            ? {}
-            : { name: null, summary: null, canSummarize: false }),
-        })),
+        .map((item) => {
+          const run =
+            item.kind === "ledger"
+              ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
+              : toTachoRunItem(item.row, costs.get(item.id));
+          return {
+            ...run,
+            enrichmentEnabled: enabled,
+            ...(enabled
+              ? {}
+              : {
+                  // Turning automatic accounts off hides what Oxagen wrote,
+                  // not the title the harness gave the session.
+                  name:
+                    item.kind === "tacho"
+                      ? (item.row.session.harnessTitle ?? null)
+                      : null,
+                  summary: null,
+                  canSummarize: false,
+                  enrichmentError: undefined,
+                }),
+          };
+        }),
       nextCursor: merged.nextCursor,
     };
   };

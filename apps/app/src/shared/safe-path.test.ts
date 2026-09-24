@@ -105,6 +105,9 @@ describe("routes", () => {
   it("carries a destination forward, encoded, and leaves the link bare for the root", () => {
     const fleet = routes.fleet("acme", "core-platform");
     expect(routes.signup(fleet)).toBe("/signup?next=%2Facme%2Fcore-platform");
+    expect(routes.signup(undefined, { email: "marcus@a-intel.com" })).toBe(
+      "/signup?email=marcus%40a-intel.com",
+    );
     expect(routes.login(ROOT)).toBe("/login");
     expect(routes.login()).toBe("/login");
     expect(routes.loginWithOAuthError("please_restart_the_process")).toBe(
@@ -148,7 +151,33 @@ describe("routes", () => {
         offset: "50",
         proposal: "prp_1&x",
       }),
-    ).toBe("/acme/core/steering?tab=prs&offset=50&proposal=prp_1%26x");
+    ).toBe("/acme/core/steering/proposals/prs?offset=50&proposal=prp_1%26x");
+    // Every tab and shelf is a path segment, and an id written before the
+    // rename lands where it lives now (roadmap pages/steering.md).
+    expect(routes.steering("acme", "core", { tab: "library" })).toBe(
+      "/acme/core/steering/library",
+    );
+    expect(
+      routes.steering("acme", "core", { tab: "records", kind: "rule" }),
+    ).toBe("/acme/core/steering/records?kind=rule");
+    expect(routes.steering("acme", "core", { tab: "policy" })).toBe(
+      "/acme/core/steering/gates",
+    );
+    expect(routes.steering("acme", "core", { tab: "settings" })).toBe(
+      "/acme/core/steering/gates",
+    );
+    expect(routes.steering("acme", "core", { tab: "deliveries" })).toBe(
+      "/acme/core/steering/assignments",
+    );
+    expect(
+      routes.steering("acme", "core", {
+        tab: "preview",
+        agent: "release manager",
+      }),
+    ).toBe("/acme/core/steering/compiler/release%20manager");
+    expect(routes.steering("acme", "core", { tab: "constructor" })).toBe(
+      "/acme/core/steering",
+    );
     expect(routes.repositories("acme", "core")).toBe("/acme/core/repositories");
     expect(routes.repositories("acme", "core", "changes")).toBe(
       "/acme/core/repositories/changes",
@@ -160,8 +189,39 @@ describe("routes", () => {
     expect(routes.fleet("a/b", "..")).toBe("/a%2Fb/..");
     expect(routes.people("\\evil")).toBe("/%5Cevil");
     expect(routes.apiKeys("a/b")).toBe("/a%2Fb/api-keys");
+    expect(
+      routes.apiKeys("acme", { workspace: "core", rows: "25", offset: "25" }),
+    ).toBe("/acme/api-keys?workspace=core&rows=25&offset=25");
     expect(routes.modelFunding("a/b")).toBe("/a%2Fb/model-funding");
     expect(routes.sso("a/b")).toBe("/a%2Fb/sso");
+  });
+
+  it("puts an Organization tab on /{org} as ?tab=, and leaves People bare", () => {
+    expect(routes.organization("acme", "people")).toBe("/acme");
+    expect(routes.organization("acme", "dataPlane")).toBe(
+      "/acme?tab=dataPlane",
+    );
+    expect(routes.organization("a/b", "costCenters")).toBe(
+      "/a%2Fb?tab=costCenters",
+    );
+  });
+
+  it("builds Audit's tabs, its export and a data export's download with every segment encoded", () => {
+    expect(routes.audit("acme")).toBe("/acme/audit");
+    expect(routes.audit("acme", { outcome: "deny", range: undefined })).toBe(
+      "/acme/audit?outcome=deny",
+    );
+    expect(routes.auditTab("acme", "retention")).toBe("/acme/audit/retention");
+    expect(routes.auditTab("a/b", "exports", { export: "x&y=z" })).toBe(
+      "/a%2Fb/audit/exports?export=x%26y%3Dz",
+    );
+    expect(routes.auditExport("acme", { format: "csv" })).toBe(
+      "/acme/audit/export?format=csv",
+    );
+    // An export id cannot climb out of the account's export route.
+    expect(routes.accountExport("acme", "../../billing")).toBe(
+      "/acme/account/export/..%2F..%2Fbilling",
+    );
   });
 
   it("carries Fleet's runs cursor as a query and builds a run's path", () => {
@@ -219,10 +279,10 @@ describe("routes", () => {
       "/acme/core-platform/spend/waste",
     );
     expect(routes.skills("acme", "core-platform")).toBe(
-      "/acme/core-platform/steering?tab=skills",
+      "/acme/core-platform/steering/skills",
     );
     expect(routes.skills("acme", "core-platform", { cursor: "c 2&x" })).toBe(
-      "/acme/core-platform/steering?tab=skills&cursor=c+2%26x",
+      "/acme/core-platform/steering/skills?cursor=c+2%26x",
     );
     expect(
       routes.spend("acme", "core-platform", {

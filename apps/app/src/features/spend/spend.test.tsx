@@ -127,7 +127,12 @@ const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context: vi.fn(), preferences: vi.fn() },
+  shell: {
+    context: vi.fn(),
+    preferences: vi.fn(),
+    counts: vi.fn(),
+    notifications: vi.fn(),
+  },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
@@ -147,7 +152,7 @@ const source: DataSource = {
     work: vi.fn(),
     outcomesSettings: vi.fn(),
   },
-  approvals: { pending: vi.fn(), resolved: vi.fn() },
+  approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -174,10 +179,17 @@ const source: DataSource = {
     apiKeys: vi.fn(),
     costCenters: vi.fn(),
     modelCredential: vi.fn(),
+    dataPlane: vi.fn(),
+    workspaceFacts: vi.fn(),
     sso: vi.fn(),
   },
   mandates: { list: vi.fn(), get: vi.fn() },
-  audit: { events: vi.fn(), exportEvents: vi.fn() },
+  audit: {
+    events: vi.fn(),
+    exportEvents: vi.fn(),
+    retention: vi.fn(),
+    bundle: vi.fn(),
+  },
   skills: { inventory: vi.fn(), configuration: vi.fn() },
   steering: {
     records: vi.fn(),
@@ -185,7 +197,10 @@ const source: DataSource = {
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),
+    hub: vi.fn(),
     deliveries: vi.fn(),
+    memories: vi.fn(),
+    tree: vi.fn(),
   },
   tools: {
     versions: vi.fn(),
@@ -402,6 +417,38 @@ function headers(table: HTMLElement): string[] {
     .getAllByRole("columnheader")
     .map((th) => th.textContent);
 }
+
+/** The month by model, with `estimatedRuns` runs still open. */
+function openRuns(estimatedRuns: number) {
+  const month = monthByModel();
+  if (!month.ok) throw new Error("monthByModel must answer");
+  byGroup.mockImplementation((_ctx, groupBy) =>
+    Promise.resolve(
+      groupBy === "model"
+        ? readOk({ ...month.value, estimatedRuns })
+        : report([]),
+    ),
+  );
+}
+
+describe("Spend › open runs (#3980)", () => {
+  it("says the Spend tile includes estimates while runs in the month are still open", async () => {
+    loaded();
+    openRuns(2);
+    await renderSpend();
+    expect(tile("Spend")).toHaveTextContent(
+      "includes estimates for 2 open runs",
+    );
+  });
+
+  it("says nothing of estimates once every run in the month has sealed (negative)", async () => {
+    loaded();
+    openRuns(0);
+    await renderSpend();
+    expect(tile("Spend")).not.toHaveTextContent("estimate");
+    expect(screen.queryByTestId("spend-estimate")).toBeNull();
+  });
+});
 
 describe("Spend › header, tiles and tabs", () => {
   it("names the workspace, says what the page is for, and offers Export report and Set a budget with one gold action", async () => {

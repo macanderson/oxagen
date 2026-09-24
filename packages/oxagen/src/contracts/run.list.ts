@@ -168,6 +168,67 @@ export const runMachineSchema = z
   })
   .strict();
 
+/**
+ * Why an operator command cannot reach a wrapped run (ADR-163).
+ *
+ * - `run_sealed`: the session recorded an end, so nothing is listening.
+ * - `no_host`: the session names no enrolled host to carry the command.
+ * - `host_revoked`: the host's enrollment was revoked, so its polls are
+ *   refused and it never takes the command.
+ * - `host_offline`: the host has not polled within `HOST_POLL_WINDOW_MS`.
+ *
+ * The enforcement tier is deliberately absent. An `observe`-tier run records
+ * policy verdicts without enforcing them, and its operator can still stop it:
+ * the host's command poll is the connection point, whatever the tier.
+ */
+export const COMMAND_BLOCKS = [
+  "run_sealed",
+  "no_host",
+  "host_revoked",
+  "host_offline",
+] as const;
+
+export type CommandBlock = (typeof COMMAND_BLOCKS)[number];
+
+/**
+ * Why a steer or message cannot reach a wrapped run whose host takes the
+ * other commands (ADR-163).
+ *
+ * - `no_prompt_carrier`: the run's harness reads steering text only when a
+ *   session starts, and a live session has passed that point.
+ */
+export const STEER_BLOCKS = ["no_prompt_carrier"] as const;
+
+export type SteerBlock = (typeof STEER_BLOCKS)[number];
+
+/**
+ * The runtimes whose hook adapter delivers no steering text to a live
+ * session. Stella's adapter hands a hook's `additionalContext` to the agent
+ * only at `SessionStart` and answers `{}` to every other event
+ * (`stellaAnswer` in `packages/tacho/src/claude-code/stella-adapter.ts`).
+ * Pause, resume and cancel still reach these runs through `PreToolUse`.
+ */
+const NO_PROMPT_CARRIER_RUNTIMES: ReadonlySet<string> = new Set(["stella"]);
+
+/**
+ * May a steer or message reach this wrapped run, given its harness? One rule,
+ * read by `dispatch_command` and by every row that offers Steer.
+ */
+export function steerBlockOf(runtime: string | null): SteerBlock | null {
+  return runtime !== null && NO_PROMPT_CARRIER_RUNTIMES.has(runtime)
+    ? "no_prompt_carrier"
+    : null;
+}
+
+/**
+ * How long a host may go without a poll before its runs read as unreachable.
+ * The daemon polls for commands every 2 s and backs off to at most 60 s, or
+ * 15 min on a protocol mismatch, so five minutes is several missed polls of a
+ * healthy host and short enough that a laptop that went to sleep stops
+ * offering controls.
+ */
+export const HOST_POLL_WINDOW_MS = 5 * 60_000;
+
 export const runItemSchema = z
   .object({
     id: runPublicIdSchema,
@@ -188,6 +249,15 @@ export const runItemSchema = z
      * two. Never a name derived from an email address, and never an email.
      */
     operatorName: z.string().nullable(),
+    /**
+     * How the record came to name `operatorId`. `initiator` is the principal
+     * the run itself was admitted for. `host_enroller` is the person who
+     * enrolled the machine a wrapped session ran on: a wrapped session carries
+     * no principal Oxagen can map to an org member, so the enroller is the
+     * nearest recorded fact, and a caller labels it "enrolled by" rather than
+     * as the person at the keyboard. Null when no operator was recorded.
+     */
+    operatorAttribution: z.enum(["initiator", "host_enroller"]).nullable(),
     status: runStatusSchema,
     outcome: runOutcomeSchema,
     /**
@@ -199,15 +269,49 @@ export const runItemSchema = z
     steps: z.number().int().nonnegative(),
     /** Recorded events (ledger) or hash-chained events (tacho). */
     frames: z.number().int().nonnegative(),
-    /** Null until the rollup has priced the run's frames after its seal. */
+    /**
+     * The run's priced cost, from its rollup row; null until a rollup has
+     * priced any of its frames. The row is rebuilt as the run records frames
+     * and again at its seal (#3980), so an open run carries a figure too.
+     */
     cost: runCostSchema.nullable(),
+    /**
+     * True while `cost` is a running estimate: the run is still open, or its
+     * row was last rebuilt before the seal. False once the rollup has priced
+     * the sealed run, and false when there is no cost.
+     */
+    costIsEstimate: z.boolean().optional(),
     reportedCost: runCostSchema.nullable().optional(),
-    /** The goal a ledger run was admitted for; tacho records none. */
+    /**
+     * The goal a ledger run was admitted for. Null for a wrapped session: no
+     * dispatch record names its task, and a task is never inferred from a
+     * branch name or model output. The issues a session's pull requests close
+     * are read by `get_run_work`.
+     */
     taskRef: z.string().nullable(),
     /** RFC 3339. */
     startedAt: z.string().datetime(),
-    /** RFC 3339; null while the run is live or no seal was recorded. */
+    /**
+     * RFC 3339; when the server recorded the seal. Null while the run is live
+     * or no seal was recorded. This is receipt time, which trails the stop by
+     * however long the host took to ship it; a wall clock reads `endedAt`.
+     */
     sealedAt: z.string().datetime().nullable(),
+    /**
+     * What sealed a wrapped session: `agent_stop`, its host's own end, or
+     * `idle_timeout`, the control plane closing a run that sent nothing for
+     * twelve hours, which the run's next event reopens. Null while the run is
+     * open, and for a ledger run.
+     */
+    sealSource: z.enum(["agent_stop", "idle_timeout"]).nullable().optional(),
+    /**
+     * RFC 3339; when the run stopped, by the recorder's own clock: the stop
+     * event's timestamp for a wrapped session, the seal for a ledger run.
+     * For a session Oxagen closed for silence (`sealSource: idle_timeout`)
+     * it is the last event recorded, since no stop was. Null while the run is
+     * live or no stop was recorded.
+     */
+    endedAt: z.string().datetime().nullable(),
     /**
      * The grade the seal recorded; null while the run is live or its seal
      * predates the recorder. Never computed on read.
@@ -220,10 +324,10 @@ export const runItemSchema = z
      */
     verdict: z.enum(PROOF_VERDICTS).nullable(),
     /**
-     * Where the run's actions were observed from (spec §8.4, §13.3). An
-     * `observe`-tier session only records what an agent did: it gives Oxagen
-     * no connection point, so every direct command is refused and a caller
-     * disables the controls rather than offering four that always fail.
+     * Where the run's actions were observed from (spec §8.4, §13.3). The tier
+     * says how much of a policy verdict Oxagen could enforce. It does not
+     * decide whether the operator's controls reach the run: that is
+     * `commandBlock` (ADR-163).
      *
      * A ledger run has no recorded tier of its own: its evidence is submitted
      * by an engine Oxagen did not host (ADR-043), which is `harness`, unless
@@ -243,6 +347,22 @@ export const runItemSchema = z
      * (`canSummarizeRun`), so the row and the handler cannot drift.
      */
     canSummarize: z.boolean(),
+    /**
+     * Why a pause, resume, steer or cancel cannot reach this run, or null when
+     * it can. `dispatch_command` refuses on the same rule (`commandBlockOf`),
+     * so a row never offers a control its handler refuses (ADR-163). Always
+     * null for a ledger run, whose controls fence evidence ingress instead.
+     * Optional so a row built before the field reads as "not known", which a
+     * caller treats as deliverable and lets the handler decide.
+     */
+    commandBlock: z.enum(COMMAND_BLOCKS).nullable().optional(),
+    /**
+     * Why a steer or message cannot reach this run when the other commands
+     * can, or null when it can. `dispatch_command` refuses on the same rule
+     * (`steerBlockOf`). Null for a ledger run. Optional, read like
+     * `commandBlock`: absent means not known.
+     */
+    steerBlock: z.enum(STEER_BLOCKS).nullable().optional(),
     /**
      * The model the run ended on, falling back to the one it started on; null
      * when the store recorded no model, which is every ledger run.
@@ -293,6 +413,11 @@ export const runItemSchema = z
       .optional(),
     /** False when the workspace turned automatic run names and summaries off (ADR-153). */
     enrichmentEnabled: z.boolean().optional(),
+    /**
+     * Why the last automatic account failed, as a short reason code such as
+     * `model_refused` or `credit_refused:<code>`. Absent once an account exists.
+     */
+    enrichmentError: z.string().optional(),
     /** The generated name; null until `summarize_run` wrote one. */
     name: z.string().nullable(),
     summary: runSummarySchema.nullable(),
@@ -314,6 +439,34 @@ export function canSummarizeRun(input: {
 }): boolean {
   if (input.status === "live") return false;
   return !input.completenessGaps.includes("digest_only");
+}
+
+/**
+ * May an operator command reach this wrapped run? One rule, read by
+ * `dispatch_command` and by every row that offers the controls.
+ */
+export function commandBlockOf(input: {
+  /** `tacho.sessions.outcome`; `running` is live. */
+  outcome: string;
+  /**
+   * Who ended the session. `idle_timeout` is the control plane closing a
+   * session for silence (ADR-159), not the host's word, so a host that is
+   * still polling can take the command and its next frame reopens the run.
+   * Absent where the store does not record it.
+   */
+  sealSource?: string | null;
+  /** The session's host, or null when it names none. */
+  host: { status: string; lastSeenAt: Date | null } | null;
+  now: Date;
+}): CommandBlock | null {
+  if (input.outcome !== "running" && input.sealSource !== "idle_timeout")
+    return "run_sealed";
+  if (input.host === null) return "no_host";
+  if (input.host.status === "revoked") return "host_revoked";
+  const seen = input.host.lastSeenAt?.getTime() ?? null;
+  if (seen === null || input.now.getTime() - seen > HOST_POLL_WINDOW_MS)
+    return "host_offline";
+  return null;
 }
 
 export const runList = registerCapability({

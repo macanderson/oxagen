@@ -183,6 +183,11 @@ describe("WrapStep", () => {
     expect(screen.getByTestId("wrap-package-not-backed")).toHaveTextContent(
       "no signed package is published",
     );
+    // The plain app is published, and it is what puts the CLI on the host.
+    expect(screen.getByRole("link", { name: "AppImage" })).toHaveAttribute(
+      "href",
+      "https://downloads.oxagen.sh/latest/Oxagen_amd64.AppImage",
+    );
     expect(router.push).not.toHaveBeenCalled();
   });
 

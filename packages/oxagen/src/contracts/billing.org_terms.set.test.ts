@@ -78,17 +78,62 @@ describe("set_org_billing_terms contract", () => {
     ).toBe(false);
   });
 
-  it("returns the stored row", () => {
-    expect(
-      billingOrgTermsSet.output.parse({
-        orgId: ORG,
-        approvedForInvoiceBilling: false,
-        invoiceGauMax: 250_000,
-      }),
-    ).toEqual({
+  it("returns the stored row, with the assistant spend cap", () => {
+    const row = {
       orgId: ORG,
       approvedForInvoiceBilling: false,
       invoiceGauMax: 250_000,
-    });
+      assistantSpendCapCents: null,
+    };
+    expect(billingOrgTermsSet.output.parse(row)).toEqual(row);
+    expect(
+      billingOrgTermsSet.output.safeParse({
+        ...row,
+        assistantSpendCapCents: undefined,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("sets the assistant spend cap on its own, or beside the billing mode", () => {
+    for (const assistantSpendCapCents of [0, 600_000, null]) {
+      expect(
+        billingOrgTermsSet.input.safeParse({
+          orgId: ORG,
+          assistantSpendCapCents,
+        }).success,
+      ).toBe(true);
+    }
+    expect(
+      billingOrgTermsSet.input.safeParse({
+        orgId: ORG,
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: 1,
+        assistantSpendCapCents: 500,
+      }).success,
+    ).toBe(true);
+    for (const assistantSpendCapCents of [-1, 2.5]) {
+      expect(
+        billingOrgTermsSet.input.safeParse({
+          orgId: ORG,
+          assistantSpendCapCents,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("sets the billing mode's two fields together, and refuses a call that sets nothing", () => {
+    expect(
+      billingOrgTermsSet.input.safeParse({
+        orgId: ORG,
+        approvedForInvoiceBilling: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      billingOrgTermsSet.input.safeParse({ orgId: ORG, invoiceGauMax: 10 })
+        .success,
+    ).toBe(false);
+    expect(billingOrgTermsSet.input.safeParse({ orgId: ORG }).success).toBe(
+      false,
+    );
   });
 });

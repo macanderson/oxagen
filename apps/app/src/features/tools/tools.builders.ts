@@ -108,7 +108,10 @@ export function agentPage(
     totals: {
       identities: agents.length,
       enrolled: agents.filter((agent) => agent.status === "enrolled").length,
+      unenrolled: agents.filter((agent) => agent.status === "unenrolled")
+        .length,
       holdingMandate: 0,
+      mandateHolders: [],
       tamperIncidents: 0,
       tamper: { recorded: 0, open: 0, newest: null },
     },
@@ -199,7 +202,12 @@ export function toolsSource(reads: ToolsReads) {
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -219,7 +227,7 @@ export function toolsSource(reads: ToolsReads) {
       work: refuse,
       outcomesSettings: refuse,
     },
-    approvals: { pending: refuse, resolved: refuse },
+    approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     agents: {
       list: answer(
         reads.agents ?? readOk(agentPage([agentPageRow("invoice-bot")])),
@@ -250,17 +258,27 @@ export function toolsSource(reads: ToolsReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      dataPlane: refuse,
+      workspaceFacts: refuse,
       sso: refuse,
     },
     skills: { inventory: refuse, configuration: refuse },
-    audit: { events: refuse, exportEvents: refuse },
+    audit: {
+      events: refuse,
+      exportEvents: refuse,
+      retention: refuse,
+      bundle: refuse,
+    },
     steering: {
       records: refuse,
       record: refuse,
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      hub: refuse,
       deliveries: refuse,
+      memories: refuse,
+      tree: refuse,
     },
     tools: {
       versions: (ctx, q) => {
