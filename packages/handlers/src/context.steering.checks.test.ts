@@ -91,6 +91,55 @@ describe("the six §10.3 checks", () => {
     );
   });
 
+  it("schema: accepts a label of up to 36 characters and refuses a longer or blank one", () => {
+    expect(CHECKS.schema(ctx({ fileText: file() })).ok).toBe(true);
+    expect(
+      CHECKS.schema(ctx({ fileText: file({ label: "a".repeat(36) }) })).ok,
+    ).toBe(true);
+    const long = CHECKS.schema(
+      ctx({ fileText: file({ label: "a".repeat(37) }) }),
+    );
+    expect(long.ok).toBe(false);
+    expect(long.summary).toContain("label is 1 to 36 characters");
+    const blank = file({ label: "Name" }).replace(
+      'label = "Name"',
+      'label = "  "',
+    );
+    expect(CHECKS.schema(ctx({ fileText: blank })).ok).toBe(false);
+  });
+
+  it("record_hash: passes when only the label changed after stamping", () => {
+    const renamed = file({ label: "Read the changelog once" }).replace(
+      'label = "Read the changelog once"',
+      'label = "Changelog once"',
+    );
+    expect(CHECKS.record_hash(ctx({ fileText: renamed })).ok).toBe(true);
+  });
+
+  it("constraint_effect: refuses a file whose label is not the one the proposal sets", () => {
+    const base = ctx().proposal;
+    const named = file({ label: "Read the changelog once" });
+    expect(
+      CHECKS.constraint_effect(
+        ctx({
+          fileText: named,
+          proposal: { ...base, label: "Read the changelog once" },
+        }),
+      ).ok,
+    ).toBe(true);
+    const out = CHECKS.constraint_effect(
+      ctx({ fileText: named, proposal: { ...base, label: "Changelog once" } }),
+    );
+    expect(out.ok).toBe(false);
+    expect(out.summary).toContain("label");
+    // A proposal that sets no label keeps whatever name the file carries.
+    expect(
+      CHECKS.constraint_effect(
+        ctx({ fileText: named, proposal: { ...base, label: null } }),
+      ).ok,
+    ).toBe(true);
+  });
+
   it("schema: refuses a pull request that changes any path besides the record file", () => {
     const out = CHECKS.schema(
       ctx({

@@ -28,6 +28,7 @@ import {
   type RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import {
   CHECK_TITLES,
   parseChecked,
@@ -148,8 +149,16 @@ export function createOpenContextPrHandler(
       if (row.branch !== branch) {
         row = await deps.store.updateProposal(row.id, { branch }, ["proposed"]);
       }
+      // The file carries the record's name (ADR-173): the proposal's when it
+      // renames the record, else the name the record already has, else one
+      // derived from the slug.
+      const held = row.label
+        ? null
+        : await deps.store.findRecord(scope, row.lineageId);
       const file = buildRecordFile({
         lineageId: row.lineageId,
+        label:
+          row.label ?? held?.record.label ?? contextRecordLabel(row.lineageId),
         kind: row.kind as RecordKind,
         force: row.force as RecordForce,
         sharingScope: row.sharingScope as PublishedSharingScope,
@@ -257,6 +266,7 @@ export function createOpenContextPrHandler(
           (row.constraintEffect as ConstraintEffect | null) ?? null,
         sharingScope: row.sharingScope,
         statement: row.statement,
+        label: row.label ?? null,
         rationale: row.rationale,
         evidenceLinks: row.evidenceLinks,
       },

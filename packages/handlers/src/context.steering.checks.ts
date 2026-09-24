@@ -10,6 +10,7 @@ import {
   type ConstraintEffect,
   type RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
 import {
   RECORD_SCHEMA_TAG,
   parseRecordFile,
@@ -47,6 +48,8 @@ export interface CheckContext {
     constraintEffect: ConstraintEffect | null;
     sharingScope: string;
     statement: string;
+    /** The label the proposal sets; null keeps the record's own. */
+    label?: string | null;
     rationale: string;
     evidenceLinks: string[];
   };
@@ -125,6 +128,20 @@ export function parseChecked(fileText: string):
     const lineage_id = str("lineage_id");
     if (!lineage_id)
       return { ok: false, reason: `${at}.lineage_id is missing` };
+    // Optional: a file written before ADR-173 has none. Present, it is a name
+    // a heading can hold.
+    const label = raw.label;
+    if (
+      label !== undefined &&
+      (typeof label !== "string" ||
+        label.trim().length === 0 ||
+        label.length > CONTEXT_RECORD_LABEL_MAX)
+    ) {
+      return {
+        ok: false,
+        reason: `${at}.label is 1 to ${CONTEXT_RECORD_LABEL_MAX} characters`,
+      };
+    }
     const kind = str("kind");
     if (!kind || !KINDS.has(kind)) {
       return {
@@ -187,6 +204,7 @@ export function parseChecked(fileText: string):
     }
     records.push({
       lineage_id,
+      ...(typeof label === "string" ? { label } : {}),
       record_id,
       record_hash,
       kind,
@@ -496,8 +514,9 @@ function checkConflictAgainstActive(ctx: CheckContext): CheckOutcome {
 
 /**
  * The file's classification is the proposal's: kind, force, sharing scope
- * and statement. The registry is written from the proposal row at merge, so
- * a file that disagrees with it must not pass.
+ * and statement, and the label when the proposal sets one. The registry is
+ * written from the proposal row at merge, so a file that disagrees with it
+ * must not pass.
  */
 function checkConstraintEffect(ctx: CheckContext): CheckOutcome {
   const parsed = parseChecked(ctx.fileText);
@@ -510,6 +529,9 @@ function checkConstraintEffect(ctx: CheckContext): CheckOutcome {
       ["steering.force", record.steering.force, ctx.proposal.force],
       ["sharing_scope", record.sharing_scope, ctx.proposal.sharingScope],
       ["statement", record.statement, ctx.proposal.statement],
+      ...(ctx.proposal.label
+        ? ([["label", record.label ?? null, ctx.proposal.label]] as const)
+        : []),
     ] as const
   ).filter(([, inFile, inProposal]) => inFile !== inProposal);
   if (disagreements.length > 0) {

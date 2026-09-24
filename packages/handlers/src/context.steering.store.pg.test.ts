@@ -14,6 +14,7 @@ import {
   postgresSteeringStore as store,
   type ProposalRow,
 } from "./context.steering.store";
+import { buildRecordFile, serializeRecordFile } from "./context.steering.file";
 
 const enabled = Boolean(process.env.DATABASE_URL);
 
@@ -436,6 +437,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       over: Partial<ProposalRow>,
       n: number,
       lineageId = labelLineage,
+      body = `schema = "context-record/v0.1"\n# ${n}\n`,
     ) => {
       const proposal = await proposeIn(where, { lineageId, ...over });
       const opened = await runInTenantScope(where, () =>
@@ -461,7 +463,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         store.publishMerge({
           scope: where,
           proposal: opened,
-          body: `schema = "context-record/v0.1"\n# ${n}\n`,
+          body,
           checksum: String(n).repeat(64),
           commitSha: `9a${n}f0ab`,
           path: opened.path!,
@@ -493,6 +495,23 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       title: "Do not re-read CHANGELOG.md more than once in a run.",
       label: contextRecordLabel(`${labelLineage}.blank`),
     });
+    // The merged file names the record (ADR-173), over the proposal.
+    const named = serializeRecordFile(
+      buildRecordFile({
+        lineageId: labelLineage,
+        label: "Changelog once",
+        kind: "rule",
+        force: "should",
+        sharingScope: "workspace",
+        statement: "Do not re-read CHANGELOG.md more than once in a run.",
+        origin: "user",
+        proposalPublicId: "prp_5",
+        setId: "a-intel.platform",
+      }),
+    );
+    expect(
+      await mergeWith({ label: "Read once" }, 5, labelLineage, named),
+    ).toMatchObject({ label: "Changelog once" });
   });
 
   it("keeps one open PR per lineage through the partial unique index", async () => {

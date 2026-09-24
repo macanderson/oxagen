@@ -24,6 +24,7 @@ import {
   type SteeringStore,
 } from "./context.steering.store";
 import { canonicalJson, sha256Hex } from "./registry-digest";
+import { readRecordFile } from "./context.steering.file";
 
 export const SCOPE = {
   orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
@@ -365,9 +366,10 @@ export class MemoryStore implements SteeringStore {
     const classification = {
       title: proposal.title?.trim() || proposal.statement,
       label:
+        readRecordFile(input.body)?.label ??
         proposal.label ??
         existing?.label ??
-        (proposal.title?.trim() || contextRecordLabel(proposal.lineageId)),
+        contextRecordLabel(proposal.lineageId),
       status: "active",
       kind: proposal.kind,
       force: proposal.force,

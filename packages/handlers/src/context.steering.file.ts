@@ -3,10 +3,12 @@
 // format Stella's loader reads (stella-records/src/ingest/record.rs). The
 // record's identity is derived from its content the way Stella derives it:
 // pass 1 hashes the record with `record_id` and `record_hash` absent to mint
-// `rec_<slug>_<12 hex>`; pass 2 hashes again with the id in the preimage. Only
-// fields Stella's `Record` struct carries enter the file, because Stella
-// re-serializes the typed struct before it recomputes the hash and would drop
-// anything else from its preimage.
+// `rec_<slug>_<12 hex>`; pass 2 hashes again with the id in the preimage.
+// Stella re-serializes its typed `Record` struct before it recomputes the hash,
+// so a member that struct does not carry never reaches its preimage. The one
+// such member Oxagen writes is `label`, the record's display name (ADR-173),
+// and it is kept out of the preimage here too: renaming a record is not a new
+// version of what it says, and both sides agree on the hash.
 import { parse, stringify } from "smol-toml";
 import { recordHash } from "@oxagen/run-evidence";
 import type {
@@ -20,6 +22,8 @@ const RULES_DIR = ".oxagen/rules";
 
 interface RecordFileInput {
   lineageId: string;
+  /** The record's display name, at most 36 characters. Outside the hash. */
+  label?: string | null;
   kind: RecordKind;
   force: RecordForce;
   sharingScope: PublishedSharingScope;
@@ -35,6 +39,8 @@ interface RecordFileInput {
 /** The record as it appears under `[[record]]`, in Stella's field order. */
 export interface RecordFileRecord {
   lineage_id: string;
+  /** Absent from files written before ADR-173. */
+  label?: string;
   record_id: string;
   record_hash: string;
   kind: string;
@@ -69,15 +75,18 @@ export function contextBranch(lineageId: string): string {
 /**
  * Stamp `record_id` and `record_hash` from the content, Stella's two passes,
  * over the record exactly as it will be serialized: every present member
- * enters the preimage, `record_id` and `record_hash` are minted last.
+ * except `label` enters the preimage, `record_id` and `record_hash` are minted
+ * last. The label is a name, not content (ADR-173), and Stella's struct has no
+ * field for it, so a label in the preimage would split the two hashes.
  */
 export function stampRecordObject(raw: Record<string, unknown>): {
   record_id: string;
   record_hash: string;
 } {
-  const { record_id: _id, record_hash: _hash, ...rest } = raw;
+  const { record_id: _id, record_hash: _hash, label: _label, ...rest } = raw;
   void _id;
   void _hash;
+  void _label;
   const lineage = typeof rest.lineage_id === "string" ? rest.lineage_id : "";
   const seed = recordHash(rest);
   const record_id = `rec_${lineageSlug(lineage)}_${seed.slice("sha256:".length, "sha256:".length + 12)}`;
@@ -92,6 +101,7 @@ function stampRecord(
   const { record_id, record_hash } = stampRecordObject({ ...r });
   return {
     lineage_id: r.lineage_id,
+    ...(r.label === undefined ? {} : { label: r.label }),
     record_id,
     record_hash,
     kind: r.kind,
@@ -107,6 +117,7 @@ function stampRecord(
 export function buildRecordFile(input: RecordFileInput): RecordFile {
   const record = stampRecord({
     lineage_id: input.lineageId,
+    ...(input.label ? { label: input.label } : {}),
     kind: input.kind,
     statement: input.statement,
     origin: input.origin,
@@ -137,6 +148,8 @@ export function parseRecordFile(text: string): unknown {
 export interface ParsedRecordFile {
   setId: string;
   lineageId: string;
+  /** The file's label, or null for a file written before ADR-173. */
+  label: string | null;
   recordId: string;
   recordHash: string;
   kind: RecordKind;
@@ -227,6 +240,7 @@ export function readRecordFile(text: string): ParsedRecordFile | null {
   return {
     setId: str(file, "set_id") ?? "",
     lineageId,
+    label: str(raw, "label")?.trim() || null,
     recordId: str(raw, "record_id") ?? "",
     recordHash: str(raw, "record_hash") ?? "",
     kind,

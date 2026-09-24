@@ -13,6 +13,7 @@ import {
   withTenantDb,
 } from "@oxagen/database";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { readRecordFile } from "./context.steering.file";
 import { HandlerError } from "@oxagen/oxagen";
 import type {
   CheckResult,
@@ -952,14 +953,16 @@ export const postgresSteeringStore: SteeringStore = {
 
       const classification = {
         title: proposal.title?.trim() || proposal.statement,
-        // An omitted label keeps the record's own. The title names a new
-        // record only when the proposal gave no label. A proposal stored
-        // before the title was trimmed can carry a blank one, and a blank
-        // label fails context_records_label_check after GitHub has merged.
+        // The merged file names the record (ADR-173). A file written before
+        // ADR-173 has no label, and then an omitted label keeps the record's
+        // own. The fallback is derived from the slug and fits the 36-character
+        // CHECK: a label that fails context_records_label_check fails after
+        // GitHub has merged.
         label:
+          readRecordFile(input.body)?.label ??
           proposal.label ??
           existing?.label ??
-          (proposal.title?.trim() || contextRecordLabel(proposal.lineageId)),
+          contextRecordLabel(proposal.lineageId),
         status: "active" as const,
         kind: proposal.kind,
         force: proposal.force,

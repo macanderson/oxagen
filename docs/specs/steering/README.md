@@ -35,6 +35,7 @@ set_id = "a-intel.platform"
 
 [[record]]
 lineage_id = "ctx.release.no-reread-changelog"
+label = "Read the changelog once"
 record_id = "rec_release_no_reread_changelog_9a41c0e7bd23"
 record_hash = "sha256:…"
 kind = "rule"
@@ -63,11 +64,16 @@ force = "should"
 - `origin` is `user` for a proposal a person raised and `inferred` for one an
   agent raised over an API key (the proposal has no `created_by_id`),
   whoever opens the PR.
-- Only members Stella's `Record` struct carries enter the file. Stella
-  re-serializes the typed struct before it recomputes the hash and would drop
-  anything else from its preimage.
+- `label` is the record's name, at most 36 characters, and every surface shows
+  it first (ADR-173). It need not be unique and it can change. The lineage id
+  is derived from it when the record is created, is unique in the workspace,
+  and never changes. A file written before ADR-173 has no `label`, and readers
+  derive one from the lineage.
+- Apart from `label`, only members Stella's `Record` struct carries enter the
+  file. Stella re-serializes the typed struct before it recomputes the hash,
+  so it drops any other member from its preimage.
 - `record_hash` is SHA-256 over the RFC 8785 canonical bytes of the record
-  with `record_hash` removed and every null-valued member stripped
+  with `record_hash` and `label` removed and every null-valued member stripped
   (`packages/run-evidence/src/record-hash.ts`, pinned to Stella's golden
   digest). `record_id` is `rec_<slug>_<first 12 hex of the hash with both
   identity fields absent>`, `slug` being the lineage without `ctx.`, lowercased,
@@ -130,12 +136,12 @@ a failure.
 
 | # | name | what passes | what fails |
 | --- | --- | --- | --- |
-| 1 | `schema` | the PR changes the record file and no other path (compare from the production branch to the head; a rename counts both paths); TOML; `schema = "context-record/v0.1"`; `set_id`; one or more `[[record]]` each with `lineage_id`, a `kind` from the six, `statement`, `origin` from Stella's five, `sharing_scope` from Stella's four, `status`, `record_id`, `record_hash`, `provenance.source_kind`/`source_uri`, `steering.force` from the four | any other changed path, named; anything else, named by field |
+| 1 | `schema` | the PR changes the record file and no other path (compare from the production branch to the head; a rename counts both paths); TOML; `schema = "context-record/v0.1"`; `set_id`; one or more `[[record]]` each with `lineage_id`, a `kind` from the six, `statement`, `origin` from Stella's five, `sharing_scope` from Stella's four, `status`, `record_id`, `record_hash`, `provenance.source_kind`/`source_uri`, `steering.force` from the four; `label`, when present, 1 to 36 characters | any other changed path, named; anything else, named by field |
 | 2 | `lineage_uniqueness` | exactly one record; its lineage is the proposal's and the file stem; no published record holds the lineage at another path | two records; a foreign lineage; a lineage published elsewhere |
-| 3 | `record_hash` | `record_id` and `record_hash` recompute from the file's canonical bytes | an edit after stamping |
+| 3 | `record_hash` | `record_id` and `record_hash` recompute from the file's canonical bytes, `label` excluded | an edit after stamping, except to `label` |
 | 4 | `secret_pii_scan` | no credential token (vendor prefix, JWT, high-entropy blob), sensitive-key value or PEM block; no email, SSN or Luhn-valid card number — in the statement, rationale, evidence and file | any finding, named by field |
 | 5 | `conflict_against_active` | no active constraint of the opposite effect on the same lineage, or on the same statement under another lineage | a `forbid` against an active `require` |
-| 6 | `constraint_effect` | the file's kind, `steering.force`, `sharing_scope` and statement are the proposal's; a constraint carries `require` or `forbid`; no other kind carries an effect | a file re-stamped with another statement, force or scope; `allow` is unrepresentable; a constraint without an effect; an effect on a rule |
+| 6 | `constraint_effect` | the file's kind, `steering.force`, `sharing_scope` and statement are the proposal's, and so is its `label` when the proposal sets one; a constraint carries `require` or `forbid`; no other kind carries an effect | a file re-stamped with another statement, force or scope; `allow` is unrepresentable; a constraint without an effect; an effect on a rule |
 
 Truth probes (spec §10.3) are not declared by the files this lane writes and
 are not a check here.
