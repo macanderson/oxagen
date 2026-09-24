@@ -1857,7 +1857,12 @@ describe("frameCost", () => {
 
 describe("a wrapped Claude Code session", () => {
   const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c2";
-  const gate = (seq: string, key: string, target: string | null) =>
+  const gate = (
+    seq: string,
+    key: string,
+    target: string | null,
+    over: Partial<TranscriptEntry> = {},
+  ) =>
     frame({
       seq,
       kind: "policy",
@@ -1866,6 +1871,7 @@ describe("a wrapped Claude Code session", () => {
       callKey: key,
       target,
       decision: { seq, decision: "allow", type: "policy_decision", at: T0 },
+      ...over,
     });
   const harness = (seq: string, key: string | null, verdict = "allow") =>
     frame({
@@ -1891,6 +1897,13 @@ describe("a wrapped Claude Code session", () => {
       ...over,
     });
   const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_C" };
+  // Claude Code fires PreToolUse inside a subagent too, so Oxagen gates the
+  // subagent's calls on the subagent's chain.
+  const subGate = (seq: string, key: string, tool: string, target: string) =>
+    gate(seq, key, target, {
+      label: `allow ${tool}`,
+      subagent: sub,
+    });
 
   const entries = [
     frame({
@@ -1919,8 +1932,10 @@ describe("a wrapped Claude Code session", () => {
     gate("8", "toolu_C", null),
     harness("9", "toolu_C"),
     frame({ seq: "10", type: "subagent_start", callKey: "toolu_C" }),
-    call("0", "toolu_X1", "Grep ok", body("0", null), { subagent: sub }),
-    call("1", "toolu_X2", "Read ok", body("1", null), { subagent: sub }),
+    subGate("0", "toolu_X1", "Grep", "flaky"),
+    call("1", "toolu_X1", "Grep ok", body("1", null), { subagent: sub }),
+    subGate("2", "toolu_X2", "Read", "apps/app/src/flaky.test.ts"),
+    call("3", "toolu_X2", "Read ok", body("3", null), { subagent: sub }),
     call("11", "toolu_C", "Task ok"),
     harness("12", "toolu_D", "deny"),
     harness("13", "toolu_E"),
