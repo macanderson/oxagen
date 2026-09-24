@@ -108,9 +108,6 @@
             "runSeq": {
               "type": "string"
             },
-            "eventId": {
-              "type": "string"
-            },
             "eventDigest": {
               "type": "string"
             },
@@ -121,7 +118,6 @@
           "required": [
             "attemptSeq",
             "runSeq",
-            "eventId",
             "eventDigest",
             "idempotent"
           ],

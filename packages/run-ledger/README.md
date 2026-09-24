@@ -64,6 +64,7 @@ run          trusted RunSpecV2 identity — principals, agent version,
 | `RunStoreOptions.authorizeAppend` | port | `packages/run-ledger/src/run-store.ts` | `packages/handlers/src/run.frames.ingest.ts`. It runs under the append's run lock. |
 | `evidenceStore` / `deferredEvidenceBodies` / `deferredEvidenceArchive` | adapter | `packages/run-ledger/src/evidence-store.ts` | `packages/handlers/src/run.frames.ingest.ts`, `packages/handlers/src/lib/run-read.ts`, `packages/inngest-functions/src/functions/run.enrich.ts` |
 | `lockRunForControl` / `cancelRunInTransaction` / `setRunIngressPaused` | export | `packages/run-ledger/src/run-control.ts` | `packages/handlers/src/tacho.command.dispatch.ts`, `packages/handlers/src/run.token.issue.ts` |
+| `listIdleLedgerAttempts` / `ledgerIdleCutoff` | export | `packages/run-ledger/src/idle-attempts.ts` | `packages/inngest-functions/src/functions/run.ledger-idle-close.ts` |
 
 ## Entry points
 
@@ -87,6 +88,7 @@ run          trusted RunSpecV2 identity — principals, agent version,
 | `run-errors.ts` | Typed, dependency-free errors with stable `code` discriminants plus structural guards. |
 | `surface.ts` | Which platform surface admitted a run. |
 | `run-control.ts` | The run lock shared with appends and seals, cancel inside a transaction, and pausing evidence ingress. |
+| `idle-attempts.ts` | The cross-tenant scan for open attempts with no event for twelve hours, which the control plane seals `abandoned` (ADR-172). |
 | `frame-body.ts` | Frame body preparation under the run's retention policy, the body and archive store ports, and the seal's rollup, completeness gaps, and replay grade (ADR-058). |
 | `run-frames.ts` | One frame shape for a run from either store, and the pure transcript reads over it. |
 | `content-blocks.ts` | Reassembly of a recorded model stream into the message it was, and its encoded form. |
@@ -116,16 +118,30 @@ run          trusted RunSpecV2 identity — principals, agent version,
   `ON CONFLICT` clause.
 - **A zero-event attempt seals honestly.** Null final-event digest, the
   canonical empty-stream digest, no synthesized terminal event.
+- **A silent attempt is sealed for its producer, and the seal is final.**
+  `run.ledger-idle-close` in `@oxagen/inngest-functions` seals an open attempt
+  with no event for twelve hours as `abandoned` (reason `idle_timeout`), which
+  records `unobserved_tail` and fails the run. The seal passes
+  `expectedAttemptSeq`, so a producer that appended since the scan keeps its
+  attempt (`AttemptAdvancedError`). A producer that returns after the seal is
+  refused like any append past a seal (ADR-172).
+- **A caller's mistake is typed as the caller's.** A malformed event raises an
+  error `isRunEventInputError` recognizes, and a run that cannot take an
+  attempt raises `RunNotWritableError`. Surfaces answer both as client errors.
+  `RunStoreStateError` is kept for stored state that is missing or
+  inconsistent, which is a server fault.
 - **Seal, grant and obligation are one transaction.** A seal without its grant
   would be evidence nobody may finalize; a grant without its obligation would be
   authority nobody is scheduled to use. A duplicate seal returns the *same*
   handle — above all the same `submission_id`.
-- **Tenant-scoped, with one exception.** Every method except
+- **Tenant-scoped, with two exceptions.** Every store method except
   `compactSealedAttempts` runs under `withTenantDb`, so RLS from the caller's
   ambient scope is the tenant filter. `compactSealedAttempts` runs under
   `withSystemDb` because it compacts sealed attempts across every tenant. The
-  `evidence.frame-compaction` job in `@oxagen/inngest-functions` calls it. The
-  other cross-tenant paths left with the worker pool and the lease sweeper.
+  `evidence.frame-compaction` job in `@oxagen/inngest-functions` calls it.
+  `listIdleLedgerAttempts` also reads under `withSystemDb`, and the idle close
+  then seals each attempt in its own tenant's scope. The other cross-tenant
+  paths left with the worker pool and the lease sweeper.
 
 ## Tests
 

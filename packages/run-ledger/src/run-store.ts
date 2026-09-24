@@ -116,9 +116,12 @@ import {
   type SealedAttemptHandle,
 } from "./finalization-grant";
 import {
+  AttemptAdvancedError,
   AttemptNotWritableError,
   RunEventIntegrityError,
   RunEventSequenceGapError,
+  RunEventShapeError,
+  RunNotWritableError,
   RunStoreStateError,
   type AttemptRejectionReason,
 } from "./run-errors";
@@ -326,6 +329,15 @@ export interface SealAttemptInput {
   error?: string;
   /** Recorded on `agent_runs.result` for a completed run. */
   result?: unknown;
+  /**
+   * Seal only while the attempt still ends at this `attempt_seq`, 0 for an
+   * attempt with no events. A caller that decided to seal from a read it made
+   * outside the run lock passes the head it read; if the producer appended
+   * since, the seal throws `AttemptAdvancedError` and writes nothing. The
+   * control plane's idle close seals this way (#3988). Omitted, the seal
+   * takes whatever the attempt holds.
+   */
+  expectedAttemptSeq?: number;
 }
 
 /**
@@ -822,9 +834,10 @@ export function prepareAttemptEvent(
   const hasInline = event.payload !== undefined;
   const hasEncrypted = event.encryptedPayloadRef !== undefined;
   if (hasInline === hasEncrypted) {
-    throw new RunStoreStateError(
-      `event ${event.eventType} seq ${event.attemptSeq} must carry exactly one ` +
-        `of an inline payload or an encrypted payload reference`,
+    throw new RunEventShapeError(
+      event.eventType,
+      event.attemptSeq,
+      "must carry exactly one of an inline payload or an encrypted payload reference",
     );
   }
 
@@ -859,9 +872,10 @@ export function prepareAttemptEvent(
   // an exported frame could never be verified.
   const observedInstant = new Date(event.observedAt);
   if (Number.isNaN(observedInstant.getTime())) {
-    throw new RunStoreStateError(
-      `event ${event.eventType} seq ${event.attemptSeq} has an observedAt ` +
-        `that is not an instant: ${event.observedAt}`,
+    throw new RunEventShapeError(
+      event.eventType,
+      event.attemptSeq,
+      `has an observedAt that is not an instant: ${event.observedAt}`,
     );
   }
   const observedAt = observedInstant.toISOString();
@@ -2164,17 +2178,29 @@ export function createPostgresRunStore(
             `run ${input.runId} is a preserved legacy row and cannot take attempts`,
           );
         }
+        // The three refusals below are states a caller can race into (a
+        // cancel that wins the run lock while `fork_run` prepares its
+        // attempt), so they are `RunNotWritableError`, which a surface
+        // answers as a conflict, not a store fault (#3665).
         if (run.cancel_requested)
-          throw new RunStoreStateError(`run ${input.runId} was cancelled`);
+          throw new RunNotWritableError(
+            input.runId,
+            "cancelled",
+            "was cancelled",
+          );
         if (run.ingress_paused)
-          throw new RunStoreStateError(
-            `run ${input.runId} evidence ingress is paused`,
+          throw new RunNotWritableError(
+            input.runId,
+            "paused",
+            "evidence ingress is paused",
           );
         const maxAttempts = Number(run.max_attempts);
         const attemptNumber = Number(run.attempt_count) + 1;
         if (attemptNumber > maxAttempts) {
-          throw new RunStoreStateError(
-            `run ${input.runId} has exhausted its pinned max_attempts (${maxAttempts})`,
+          throw new RunNotWritableError(
+            input.runId,
+            "attempts_exhausted",
+            `has exhausted its pinned max_attempts (${maxAttempts})`,
           );
         }
 
@@ -2337,6 +2363,16 @@ export function createPostgresRunStore(
           throw new AttemptNotWritableError(input.attemptId, "paused");
 
         const { state, rows } = await readAttemptStateInTx(tx, input.attemptId);
+        if (
+          input.expectedAttemptSeq !== undefined &&
+          state.lastAttemptSeq !== input.expectedAttemptSeq
+        ) {
+          throw new AttemptAdvancedError(
+            input.attemptId,
+            input.expectedAttemptSeq,
+            state.lastAttemptSeq,
+          );
+        }
         const appended = terminalEvent
           ? await appendPreparedBatchInTx(
               tx,

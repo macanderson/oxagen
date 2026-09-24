@@ -63,7 +63,8 @@ export const runFramesIngest = registerCapability({
           .object({
             attemptSeq: z.number().int(),
             runSeq: z.string(),
-            eventId: z.string(),
+            // No `eventId`: the row's uuid is internal and the table has no
+            // public id. A producer names an event by its sequence (#3665).
             eventDigest: z.string(),
             idempotent: z.boolean(),
           })
