@@ -250,7 +250,8 @@ describe("tenant policy manifest", () => {
     // session policy. The gateway does not read it yet; the table is in the
     // manifest because it carries org_id, not because anything enforces it.
     // 120 includes cost centers, SSO group roles, and contained launch receipts.
-    expect(POLICY_MANIFEST.length).toBe(120);
+    // 122 adds billing.gau_ledger and billing.prepaid_orders (ADR-158).
+    expect(POLICY_MANIFEST.length).toBe(122);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

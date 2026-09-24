@@ -109,7 +109,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // The refunded/disputed half of the settlement ledger (ADR-085). org_id NOT
   // NULL, no workspace_id, written only by the webhook through withSystemDb.
   { table: "billing.gau_reversals", policyClass: "org_only" },
-  // ADR-158 (20260924000000_gau_ledger_and_prepaid_orders.sql). Both carry
+  // ADR-158 (20260924000100_gau_ledger_and_prepaid_orders.sql). Both carry
   // org_id NOT NULL and no workspace_id: the per-action ledger names the
   // workspace it attributes an action to in `attributed_workspace_id`, which
   // is a recorded fact and not a tenancy key, so a statement reads the org's
