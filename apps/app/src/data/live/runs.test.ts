@@ -119,6 +119,10 @@ describe("runs.list", () => {
             cost: null,
             costIsEstimate: false,
             reportedCost: null,
+            reportedTokens: null,
+            effort: null,
+            thinking: null,
+            permissionMode: null,
             model: viewModel,
             harness: null,
             machine,
@@ -451,7 +455,11 @@ describe("runs.cost", () => {
               model: "claude-sonnet-5",
               provider: "anthropic",
               calls: 3,
-              cost: { micros: "2500000", currency: "USD", basis: "client_attested" },
+              cost: {
+                micros: "2500000",
+                currency: "USD",
+                basis: "client_attested",
+              },
             },
             { model: "gpt-5", provider: null, calls: 1, cost: null },
           ],
@@ -841,6 +849,15 @@ describe("runs.work", () => {
         diff: null,
       },
     ],
+    subagents: [
+      {
+        id: "a0182b6cd3a21d284",
+        type: "Explore",
+        firstSeq: "12",
+        lastSeq: "30",
+        stopped: true,
+      },
+    ],
     complete: true,
     warnings: [],
   };
@@ -861,6 +878,13 @@ describe("runs.work", () => {
       checkoutRefs: ["chk_1"],
     });
     expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
+    // The harness's own agent id is a reference, not an Oxagen id (INV-11).
+    const [subagent] = read.value.subagents ?? [];
+    expect(subagent).toMatchObject({
+      agentRef: "a0182b6cd3a21d284",
+      type: "Explore",
+    });
+    expect(subagent).not.toHaveProperty("id");
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runWorkGet,
       input: { runId: "tse_4f0a" },

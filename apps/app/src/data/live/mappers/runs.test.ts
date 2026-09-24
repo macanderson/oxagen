@@ -106,6 +106,10 @@ describe("toRunPage", () => {
           // The capability said nothing and the run has sealed: final.
           costIsEstimate: false,
           reportedCost: null,
+          reportedTokens: null,
+          effort: null,
+          thinking: null,
+          permissionMode: null,
           model: null,
           harness: null,
           machine: null,
