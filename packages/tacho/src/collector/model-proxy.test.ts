@@ -266,6 +266,10 @@ function controlPlane() {
     recordDaySpend: (next: AgentDaySpend) => {
       daySpend = next;
     },
+    // Envelopes after this carry no day figure at all.
+    clearDaySpend: () => {
+      daySpend = undefined;
+    },
     queue: (
       command: Pick<DeliveredCommand, "id" | "command" | "session_uuid"> &
         Partial<DeliveredCommand>,
@@ -1183,16 +1187,151 @@ describe("the loopback model proxy", () => {
     await booted.handle.tick();
     expect((await ask()).status).toBe(200);
 
-    // Today's: the other hosts have spent the day.
+    // Today's: the other hosts spent $0.995, and this host's own $0.0111
+    // takes the agent past $1. Read with the two figures swapped, the total
+    // would be $0.995 and the call would be admitted.
     booted.plane.recordDaySpend({
       day: "2026-09-24",
       this_host_usd_micros: 0,
-      other_hosts_usd_micros: 1_000_000,
+      other_hosts_usd_micros: 995_000,
     });
     await booted.handle.tick();
     const refused = await ask();
     expect(refused.headers["x-oxagen-refusal"]).toBe("daily_budget_exceeded");
     expect(fake.requests).toHaveLength(1);
+
+    // An envelope with no figure says nothing new: the last one stands.
+    booted.plane.clearDaySpend();
+    await booted.handle.tick();
+    expect((await ask()).headers["x-oxagen-refusal"]).toBe(
+      "daily_budget_exceeded",
+    );
+    expect(fake.requests).toHaveLength(1);
+  });
+
+  it("holds the day ceiling for a call no session was found for, and charges that call to the day", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const budget = { mode: "enforced" as const, daily_limit_usd: 0.01 };
+    const clock = () => Date.parse("2026-09-24T09:00:00.000Z");
+    const ask = (port: number, id?: string) =>
+      call(port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          ...(id !== undefined ? ["X-Claude-Code-Session-Id", id] : []),
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+
+    // Two live sessions, so a call without a session header is unattributed.
+    const first = await boot(fake.url, {
+      bundle: { budget },
+      daemon: { now: clock },
+    });
+    await first.session("sess-u-a");
+    await first.session("sess-u-b");
+    expect((await ask(first.port, "sess-u-a")).status).toBe(200);
+    const unattributed = await ask(first.port);
+    expect(unattributed.headers["x-oxagen-refusal"]).toBe(
+      "daily_budget_exceeded",
+    );
+    expect(fake.requests).toHaveLength(1);
+
+    // The other way round: an unattributed call spends the day, and a
+    // session that has spent nothing of its own is refused.
+    const second = await boot(fake.url, {
+      bundle: { budget },
+      daemon: { now: clock },
+    });
+    await second.session("sess-u-c");
+    await second.session("sess-u-d");
+    expect((await ask(second.port)).status).toBe(200);
+    expect(
+      (await ask(second.port, "sess-u-c")).headers["x-oxagen-refusal"],
+    ).toBe("daily_budget_exceeded");
+    expect(fake.requests).toHaveLength(2);
+  });
+
+  it("reads back only today's observed proxy calls after a restart (negative)", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const paths = scratchPaths();
+    // Room for one call and a half: one more call is admitted after the
+    // restart, then the next is refused.
+    const budget = {
+      mode: "enforced" as const,
+      daily_limit_usd: (ANTHROPIC_COST * 1.5) / 1_000_000,
+    };
+    let clock = Date.parse("2026-09-24T23:59:59.000Z");
+    const daemon = { now: () => clock };
+    const first = await boot(fake.url, { paths, bundle: { budget }, daemon });
+    await first.session("sess-restart");
+    const ask = (port: number) =>
+      call(port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-restart",
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+    // Yesterday's call, in the same session file as today's.
+    expect((await ask(first.port)).status).toBe(200);
+    clock = Date.parse("2026-09-25T00:01:00.000Z");
+    expect((await ask(first.port)).status).toBe(200);
+    // A priced llm_call the proxy did not observe (a harness's own
+    // telemetry) is not the meter and must not count toward the day.
+    const recorder = first.handle.registry.get("sess-restart")!.recorder;
+    first.handle.wal.append([
+      recorder.sealCollectorEvent("llm_call", { cost_usd_micros: 5_000_000 }),
+    ]);
+    await first.handle.stop();
+
+    clock = Date.parse("2026-09-25T00:02:00.000Z");
+    const second = await boot(fake.url, { paths, bundle: { budget }, daemon });
+    await second.session("sess-restart");
+    expect((await ask(second.port)).status).toBe(200);
+    expect((await ask(second.port)).headers["x-oxagen-refusal"]).toBe(
+      "daily_budget_exceeded",
+    );
+    expect(fake.requests).toHaveLength(3);
+  });
+
+  it("refuses nothing on the day ceiling under an observed budget, and names the session ceiling first when both are spent", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const clock = () => Date.parse("2026-09-24T09:00:00.000Z");
+    const ask = (port: number) =>
+      call(port, {
+        path: "/anthropic/v1/messages",
+        headers: ["X-Api-Key", FAKE_KEY, "X-Claude-Code-Session-Id", "sess-m"],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+
+    const observed = await boot(fake.url, {
+      bundle: { budget: { mode: "observed" as const, daily_limit_usd: 0.01 } },
+      daemon: { now: clock },
+    });
+    await observed.session("sess-m");
+    expect((await ask(observed.port)).status).toBe(200);
+    expect((await ask(observed.port)).status).toBe(200);
+
+    const both = await boot(fake.url, {
+      bundle: {
+        budget: {
+          mode: "enforced" as const,
+          session_limit_usd: 0.01,
+          daily_limit_usd: 0.01,
+        },
+      },
+      daemon: { now: clock },
+    });
+    await both.session("sess-m");
+    expect((await ask(both.port)).status).toBe(200);
+    expect((await ask(both.port)).headers["x-oxagen-refusal"]).toBe(
+      "session_budget_exceeded",
+    );
   });
 
   it("refuses a model the mandate does not permit, names it on the frame, and forwards a permitted one", async () => {

@@ -1117,6 +1117,21 @@ export const tachoBatchSchema = z
 export type TachoBatch = z.output<typeof tachoBatchSchema>;
 
 /**
+ * What the control plane has recorded of an agent's observed model spend on
+ * one UTC day (ADR-160): this host's shipped calls, and every other host
+ * enrolled under the same agent. Micro-USD, summed from `llm_call` frames by
+ * their own timestamp. Sent on the control envelope only to a host whose
+ * mandate carries `budget.daily_limit_usd`.
+ */
+export const agentDaySpendSchema = z.object({
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  this_host_usd_micros: z.number().int().nonnegative(),
+  other_hosts_usd_micros: z.number().int().nonnegative(),
+});
+
+export type AgentDaySpend = z.output<typeof agentDaySpendSchema>;
+
+/**
  * What every machine-to-machine response carries back (spec section 7.4).
  *
  * TOLERANT OF UNKNOWN KEYS, unlike everything this file sends. A host is
@@ -1136,21 +1151,6 @@ export type TachoBatch = z.output<typeof tachoBatchSchema>;
  * version of ourselves, and the compatible move is to ignore what we do not
  * yet understand.
  */
-/**
- * What the control plane has recorded of an agent's observed model spend on
- * one UTC day (ADR-160): this host's shipped calls, and every other host
- * enrolled under the same agent. Micro-USD, summed from `llm_call` frames by
- * their own timestamp. Sent on the control envelope only to a host whose
- * mandate carries `budget.daily_limit_usd`.
- */
-export const agentDaySpendSchema = z.object({
-  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  this_host_usd_micros: z.number().int().nonnegative(),
-  other_hosts_usd_micros: z.number().int().nonnegative(),
-});
-
-export type AgentDaySpend = z.output<typeof agentDaySpendSchema>;
-
 export const controlEnvelopeSchema = z
   .object({
     host_status: tachoHostStatusSchema,

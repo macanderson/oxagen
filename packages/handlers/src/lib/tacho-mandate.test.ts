@@ -212,11 +212,16 @@ describe("deriveBundleBudget", () => {
     expect(deriveBundleBudget({ perRunMicros: 0, perDayMicros: -1 })).toEqual({
       mode: "observed",
     });
+    // Zero means no ceiling, as it does for the per-run figure: an operator
+    // stops an agent by pausing or revoking it, not with a zero budget.
     expect(
       deriveBundleBudget(
         { perRunMicros: 0, perDayMicros: 0 },
         { enforcesDaily: true },
       ),
+    ).toEqual({ mode: "observed" });
+    expect(
+      deriveBundleBudget({ perDayMicros: -1 }, { enforcesDaily: true }),
     ).toEqual({ mode: "observed" });
   });
 

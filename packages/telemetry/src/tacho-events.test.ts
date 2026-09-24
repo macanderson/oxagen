@@ -405,7 +405,18 @@ describe("selectAgentDaySpend (ADR-160)", () => {
       "ts >= toDateTime64({start:String}, 3, 'UTC')",
     );
     expect(call?.query).not.toContain("received_at");
-    expect(call?.query).toContain("fidelity = 'proxy'");
+    for (const predicate of [
+      "kind = 'llm_call'",
+      "source = 'collector'",
+      "fidelity = 'proxy'",
+      "attrs[{meteringAttr:String}] = {metered:String}",
+      "cost_usd_micros IS NOT NULL",
+      "host_enrollment_id IN {hosts:Array(String)}",
+      "ts < toDateTime64({start:String}, 3, 'UTC') + INTERVAL 1 DAY",
+      "FROM tacho_events FINAL",
+      "GROUP BY host_enrollment_id",
+    ])
+      expect(call?.query).toContain(predicate);
     expect(call?.params).toMatchObject({
       hosts: ["tch_a", "tch_b", "tch_c"],
       meteringAttr: "oxagen.metering",

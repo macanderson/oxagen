@@ -666,7 +666,7 @@ describe("the agent's day spend on the control envelope (ADR-160)", () => {
     agentId: "agent-1",
   } as Parameters<typeof agentDaySpend>[1];
   function hostsTransaction(publicIds: string[]) {
-    const findMany = vi.fn(async () =>
+    const findMany = vi.fn(async (_args: unknown) =>
       publicIds.map((publicId) => ({ publicId })),
     );
     const tx = {
@@ -678,7 +678,11 @@ describe("the agent's day spend on the control envelope (ADR-160)", () => {
   beforeEach(() => selectAgentDaySpend.mockReset());
 
   it("splits the agent's UTC day into this host and every other host of the agent", async () => {
-    const { tx } = hostsTransaction(["tch_ours", "tch_laptop", "tch_ci"]);
+    const { tx, findMany } = hostsTransaction([
+      "tch_ours",
+      "tch_laptop",
+      "tch_ci",
+    ]);
     selectAgentDaySpend.mockResolvedValueOnce(
       new Map([
         ["tch_ours", 4_000],
@@ -694,6 +698,21 @@ describe("the agent's day spend on the control envelope (ADR-160)", () => {
     expect(selectAgentDaySpend).toHaveBeenCalledWith({
       day: "2026-09-24",
       hostEnrollmentIds: ["tch_ours", "tch_laptop", "tch_ci"],
+    });
+    // Only this agent's hosts: another agent's spend is not this agent's day.
+    const lookup = findMany.mock.calls[0]?.[0] as unknown as { where: SQL };
+    const where = new PgDialect().sqlToQuery(lookup.where);
+    expect(where.sql).toContain('"agent_id"');
+    expect(where.params).toEqual(["agent-1"]);
+  });
+
+  it("counts zero for this host when only other hosts spent today", async () => {
+    const { tx } = hostsTransaction(["tch_ours", "tch_laptop"]);
+    selectAgentDaySpend.mockResolvedValueOnce(new Map([["tch_laptop", 900]]));
+    expect(await agentDaySpend(tx, ours, NOON)).toEqual({
+      day: "2026-09-24",
+      this_host_usd_micros: 0,
+      other_hosts_usd_micros: 900,
     });
   });
 
