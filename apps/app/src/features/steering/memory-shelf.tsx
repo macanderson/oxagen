@@ -16,7 +16,6 @@
 // which retracts it (./actions.ts `forgetMemory`) and touches no run, or it
 // is promoted: the record wizard opens with its words in the description, and
 // the record becomes binding at merge.
-import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useState, useTransition } from "react";
 import type { MemoryItem } from "@/data/contracts/steering";
@@ -46,6 +45,7 @@ import { STEERING_GAPS } from "./gaps";
 import { useDate } from "./section";
 import { budgetTokens } from "./tokens";
 import { type SteeringAt, steeringLink } from "./view";
+import { useNavigate } from "@/ui/navigation";
 
 const CLASSES = ["OBSERVATION", "RULE", "FACT"] as const;
 
@@ -263,10 +263,11 @@ export function MemoryShelfBody({
 }) {
   const t = useTranslations("steering.bodies.memory");
   const locale = useLocale();
-  const router = useRouter();
-  const [open, setOpen] = useState<
-    { ref: string; step: "memory" | "forget" } | null
-  >(null);
+  const router = useNavigate();
+  const [open, setOpen] = useState<{
+    ref: string;
+    step: "memory" | "forget";
+  } | null>(null);
   const [forgotten, setForgotten] = useState<string | null>(null);
   const strip = memoryStrip(memories);
   const selected =

@@ -288,35 +288,50 @@ describe("steering.hub", () => {
       >
     >,
   ) {
+    const route = (call: {
+      contract: unknown;
+      input: { status?: string };
+    }): unknown => {
+      if (call.contract === repositoryList)
+        return by.repos ?? readOk({ repositories: [MAIN] });
+      if (call.contract === repositoryTreeGet)
+        return (
+          by.tree ??
+          readOk({ fullName: "acme/platform", governanceMode: "regulated" })
+        );
+      if (call.contract === contextProposalList) {
+        const key = call.input.status ?? "all";
+        const totals: Record<string, number> = {
+          all: 15,
+          merged: 4,
+          rejected: 2,
+          proposed: 3,
+        };
+        return (
+          (isProposalKey(key) ? by[key] : undefined) ??
+          readOk({ proposals: [], total: totals[key] })
+        );
+      }
+      throw new Error("not a hub read");
+    };
+    // A throw inside the executor rejects, as the kernel's refusal would.
     kernelRead.mockImplementation(
-      async (
+      (
         _ctx: unknown,
         call: { contract: unknown; input: { status?: string } },
-      ) => {
-        if (call.contract === repositoryList)
-          return by.repos ?? readOk({ repositories: [MAIN] });
-        if (call.contract === repositoryTreeGet)
-          return (
-            by.tree ??
-            readOk({ fullName: "acme/platform", governanceMode: "regulated" })
-          );
-        if (call.contract === contextProposalList) {
-          const key = call.input.status ?? "all";
-          const totals: Record<string, number> = {
-            all: 15,
-            merged: 4,
-            rejected: 2,
-            proposed: 3,
-          };
-          return (
-            by[key as "all" | "merged" | "rejected" | "proposed"] ??
-            readOk({ proposals: [], total: totals[key] })
-          );
-        }
-        throw new Error("not a hub read");
-      },
+      ) =>
+        new Promise((resolve) => {
+          resolve(route(call));
+        }),
     );
   }
+  const isProposalKey = (
+    key: string,
+  ): key is "all" | "merged" | "rejected" | "proposed" =>
+    key === "all" ||
+    key === "merged" ||
+    key === "rejected" ||
+    key === "proposed";
 
   it("reads governance.toml off the main repository and counts the proposals waiting", async () => {
     answer({});
@@ -351,9 +366,15 @@ describe("steering.hub", () => {
     const read = await steering.hub(ctx);
     expect(read.ok && read.value.governance).toEqual({ state: "unbound" });
     expect(
-      kernelRead.mock.calls.some(
-        (call) => call[1].contract === repositoryTreeGet,
-      ),
+      kernelRead.mock.calls.some((call: unknown[]) => {
+        const arg = call[1];
+        return (
+          typeof arg === "object" &&
+          arg !== null &&
+          "contract" in arg &&
+          arg.contract === repositoryTreeGet
+        );
+      }),
     ).toBe(false);
   });
 

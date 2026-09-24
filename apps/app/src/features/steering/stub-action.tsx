@@ -24,7 +24,9 @@ export function StubAction({
         type="button"
         data-testid={testId}
         aria-expanded={shown}
-        onClick={() => setShown(true)}
+        onClick={() => {
+          setShown(true);
+        }}
         className={className}
       >
         {label}

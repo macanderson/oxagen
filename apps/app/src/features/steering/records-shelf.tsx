@@ -155,14 +155,21 @@ export function sortRecords(
   );
 }
 
-function KindIcon({ kind, className }: { kind: RecordKind; className: string }) {
+function KindIcon({
+  kind,
+  className,
+}: {
+  kind: RecordKind;
+  className: string;
+}) {
   const Icon = KIND_FACE[kind].icon;
   return <Icon aria-hidden="true" className={className} strokeWidth={1.8} />;
 }
 
 const chip = `${buttonSecondary} min-h-7 gap-1.5 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
 const select = `${inputBase} w-auto min-h-8 max-md:min-h-11 max-md:text-base py-1.5 pr-8`;
-const meta = "flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground";
+const meta =
+  "flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground";
 
 function KindChips({
   at,
@@ -268,7 +275,9 @@ function RecordShelfCard({
           {record.constraintEffect === null ? null : (
             <span title={t("effectTitle")}>
               <Badge
-                tone={record.constraintEffect === "forbid" ? "denied" : "approval"}
+                tone={
+                  record.constraintEffect === "forbid" ? "denied" : "approval"
+                }
                 dot={false}
                 data-term="constraint-effect"
               >
@@ -333,7 +342,10 @@ function RecordShelfCard({
           >
             {t("effectNotRecorded")}
           </span>
-          <span className="break-all font-mono text-[11.5px]" data-term="lineage">
+          <span
+            className="break-all font-mono text-[11.5px]"
+            data-term="lineage"
+          >
             {record.lineage}
           </span>
           {record.commit === null ? null : (
@@ -375,10 +387,14 @@ export function RecordsList({
   const [page, setPage] = useState(1);
 
   const counts = useMemo(() => {
-    const byKind = Object.fromEntries(RECORD_KINDS.map((k) => [k, 0])) as Record<
-      RecordKind,
-      number
-    >;
+    const byKind: Record<RecordKind, number> = {
+      rule: 0,
+      constraint: 0,
+      procedure: 0,
+      fact: 0,
+      memory: 0,
+      preference: 0,
+    };
     for (const record of records) {
       if (record.kind !== null) byKind[record.kind] += 1;
     }
@@ -456,7 +472,10 @@ export function RecordsList({
         </label>
       </div>
       {slice.length === 0 ? (
-        <p data-state="empty-kind" className="px-4 py-3.5 text-[13px] text-muted-foreground">
+        <p
+          data-state="empty-kind"
+          className="px-4 py-3.5 text-[13px] text-muted-foreground"
+        >
           {t("emptyKind")}
         </p>
       ) : (

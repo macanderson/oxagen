@@ -181,7 +181,9 @@ export function GovernanceChip({
                   role="radio"
                   aria-checked={picked === mode}
                   data-mode={mode}
-                  onClick={() => setPicked(mode)}
+                  onClick={() => {
+                    setPicked(mode);
+                  }}
                   className="flex min-h-11 flex-col items-start gap-0.5 rounded-lg border border-border bg-card px-3.5 py-3 text-left text-[13px] hover:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-checked:border-gold aria-checked:bg-hl"
                 >
                   <span className="font-semibold text-foreground">

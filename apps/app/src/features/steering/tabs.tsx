@@ -56,19 +56,20 @@ export function SteeringTabs({
   counts: SteeringTabCounts;
 }) {
   const t = useTranslations("steering.tabs");
-  const strip = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const selected = strip.current?.querySelector<HTMLElement>(
+    const selected = stripRef.current?.querySelector<HTMLElement>(
       '[aria-selected="true"]',
     );
-    // jsdom has no layout, so it has no scrollIntoView either.
-    selected?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    selected?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [current]);
   const move = (event: KeyboardEvent<HTMLDivElement>) => {
     const tabs = [
-      ...(strip.current?.querySelectorAll<HTMLElement>('[role="tab"]') ?? []),
+      ...(stripRef.current?.querySelectorAll<HTMLElement>('[role="tab"]') ??
+        []),
     ];
-    const from = tabs.indexOf(event.target as HTMLElement);
+    const from =
+      event.target instanceof HTMLElement ? tabs.indexOf(event.target) : -1;
     if (from === -1) return;
     const to = nextTab(event.key, from);
     if (to === null) return;
@@ -77,7 +78,7 @@ export function SteeringTabs({
   };
   return (
     <div
-      ref={strip}
+      ref={stripRef}
       role="tablist"
       aria-label={t("label")}
       onKeyDown={move}

@@ -122,6 +122,9 @@ const SHELF_SEGMENTS: ReadonlySet<string> = new Set(
   LIBRARY_SHELVES.filter((shelf) => shelf !== "all"),
 );
 
+const isShelfSegment = (raw: string): raw is Exclude<LibraryShelf, "all"> =>
+  SHELF_SEGMENTS.has(raw);
+
 const isTab = (raw: string): raw is SteeringTab =>
   STEERING_TABS.some((tab) => tab === raw);
 
@@ -240,12 +243,12 @@ export function resolveSteeringRoute(
       : notFound;
   }
 
-  if (SHELF_SEGMENTS.has(first)) {
+  if (isShelfSegment(first)) {
     // `/records/<lineage>` is the record page, its own route; nothing else nests.
     if (second !== undefined) return notFound;
     return view({
       tab: "library",
-      shelf: first as Exclude<LibraryShelf, "all">,
+      shelf: first,
     });
   }
 

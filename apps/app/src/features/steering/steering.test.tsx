@@ -66,6 +66,8 @@ vi.mock("@/features/skills", () => ({
   SkillsLoading: () => null,
 }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// jsdom has no layout, so it has no scrollIntoView; the tab strip calls it.
+Element.prototype.scrollIntoView = vi.fn();
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
