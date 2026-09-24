@@ -44,8 +44,20 @@ function setup() {
     ]),
     diffs: vi.fn().mockResolvedValue([]),
     subagents: vi.fn().mockResolvedValue([
-      { id: "a0182b6cd3a21d284", type: "Explore", first_seq: 3, last_seq: 9, stopped: 1 },
-      { id: "a079426c9a96dd3cb", type: "", first_seq: 12, last_seq: 12, stopped: 0 },
+      {
+        id: "a0182b6cd3a21d284",
+        type: "Explore",
+        first_seq: 3,
+        last_seq: 9,
+        stopped: 1,
+      },
+      {
+        id: "a079426c9a96dd3cb",
+        type: "",
+        first_seq: 12,
+        last_seq: 12,
+        stopped: 0,
+      },
     ]),
     prLinks: vi.fn().mockResolvedValue([]),
     repositories: vi.fn().mockResolvedValue([]),
@@ -172,10 +184,18 @@ describe("get_run_work", () => {
       }),
     ).toMatchObject({ owner: "fork", name: "app", number: 41 });
     expect(
-      prLinkOf({ url: "http://github.com/acme/app/pull/41", number: "41", repository: "" }),
+      prLinkOf({
+        url: "http://github.com/acme/app/pull/41",
+        number: "41",
+        repository: "",
+      }),
     ).toBeNull();
     expect(
-      prLinkOf({ url: "https://github.com/acme/app", number: "", repository: "" }),
+      prLinkOf({
+        url: "https://github.com/acme/app",
+        number: "",
+        repository: "",
+      }),
     ).toBeNull();
   });
 });
