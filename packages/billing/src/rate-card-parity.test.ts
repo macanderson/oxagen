@@ -93,10 +93,11 @@ describe("rate-card parity: the prices #1412 measured", () => {
   // The exact table from the issue — what the engine's card says a 1M-in /
   // 1M-out call costs, against what billing charged for it before the rows
   // existed. Every row but the three controls was metered at the Sonnet
-  // fallback's $18.00.
+  // fallback's $18.00. The two Claude controls were then at $15/$75 and $3/$15;
+  // #3944 moved them to list price ($5/$25 and $2/$10).
   const MEASURED: ReadonlyArray<readonly [string, number]> = [
-    ["anthropic/claude-opus-4-8", 90.0],
-    ["anthropic/claude-sonnet-5", 18.0],
+    ["anthropic/claude-opus-4-8", 30.0],
+    ["anthropic/claude-sonnet-5", 12.0],
     ["openai/gpt-4o", 12.5],
     ["openai/gpt-5", 11.25],
     ["openai/gpt-5-mini", 2.25],

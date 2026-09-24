@@ -81,15 +81,63 @@ export interface RateCardEntry {
  * exactly the fresh-input rate — and the parity test pins both halves.
  */
 export const RATE_CARD: RateCardEntry[] = [
+  // Fable 5.1 and Opus 5.5 break from their family's price, so each gets a row
+  // for both the hyphenated and the dotted gateway spelling. Their cache reads
+  // (0.025x and 0.05x input) are the list prices, not typos. Legacy Opus 4 and
+  // 4.1 ($15/$75) have no row: the CLI projects them at the family rate.
+  {
+    family: "claude-fable-5-1",
+    label: "Claude Fable 5.1",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 10.0,
+      outputPer1M: 50.0,
+      cachedInputPer1M: 0.25,
+      cacheWritePer1M: 12.5,
+    },
+  },
+  {
+    family: "claude-fable-5.1",
+    label: "Claude Fable 5.1",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 10.0,
+      outputPer1M: 50.0,
+      cachedInputPer1M: 0.25,
+      cacheWritePer1M: 12.5,
+    },
+  },
+  {
+    family: "claude-opus-5-5",
+    label: "Claude Opus 5.5",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 4.0,
+      outputPer1M: 20.0,
+      cachedInputPer1M: 0.2,
+      cacheWritePer1M: 5.0,
+    },
+  },
+  {
+    family: "claude-opus-5.5",
+    label: "Claude Opus 5.5",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 4.0,
+      outputPer1M: 20.0,
+      cachedInputPer1M: 0.2,
+      cacheWritePer1M: 5.0,
+    },
+  },
   {
     family: "claude-fable",
     label: "Claude Fable",
     vendor: "anthropic",
     rate: {
-      inputPer1M: 15.0,
-      outputPer1M: 75.0,
-      cachedInputPer1M: 1.5,
-      cacheWritePer1M: 18.75,
+      inputPer1M: 10.0,
+      outputPer1M: 50.0,
+      cachedInputPer1M: 1.0,
+      cacheWritePer1M: 12.5,
     },
   },
   {
@@ -97,10 +145,21 @@ export const RATE_CARD: RateCardEntry[] = [
     label: "Claude Opus",
     vendor: "anthropic",
     rate: {
-      inputPer1M: 15.0,
-      outputPer1M: 75.0,
-      cachedInputPer1M: 1.5,
-      cacheWritePer1M: 18.75,
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-sonnet-5",
+    label: "Claude Sonnet 5",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 2.0,
+      outputPer1M: 10.0,
+      cachedInputPer1M: 0.2,
+      cacheWritePer1M: 2.5,
     },
   },
   {
