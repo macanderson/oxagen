@@ -154,11 +154,9 @@ async function renderRun(
     spine: view.spine ?? null,
     now: NOW,
   });
-  // The header's checkout and subagent strips and the work section suspend on
-  // the work read (`use(work)`). A render inside a synchronous act ends its
-  // scope while they are suspended, and React drops the queued retry with that
-  // scope, so they would stay on their fallbacks. Awaiting act lets the
-  // resolved read land before the test reads the page.
+  // The header's checkout strips suspend on the work read (`use(work)`). A
+  // render inside a synchronous act never flushes that retry, so the strips
+  // stayed on their fallback; awaiting act lets the resolved read land.
   let container!: HTMLElement;
   await act(async () => {
     ({ container } = render(<IntlProvider>{element}</IntlProvider>));
