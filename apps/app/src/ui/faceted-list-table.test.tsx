@@ -59,8 +59,8 @@ describe("faceted ListTable", () => {
     const bar = container.querySelector("[data-list-tools]");
     expect(bar).not.toBeNull();
     const controls = [
-      ...(bar?.querySelectorAll("input, select") ?? []),
-    ] as HTMLElement[];
+      ...(bar?.querySelectorAll<HTMLElement>("input, select") ?? []),
+    ];
     expect(controls).toHaveLength(3);
     for (const control of controls) {
       expect(control.className).not.toMatch(/\bw-full\b/);
