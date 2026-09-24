@@ -47,7 +47,7 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 const formOf = (node: HTMLElement) => element(node.closest("form"), "form");
 
 const at = { org: "acme", ws: "core-platform" };
-const TAB = "/acme/core-platform/tools?tab=autoapprovals";
+const TAB = "/acme/core-platform/tools/policy";
 
 /** The fixture's rules by id: `small-refunds` is on with hours, `repeat-deploys` off with a standing window. */
 function rule(id: string) {

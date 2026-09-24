@@ -480,7 +480,9 @@ export function normalizeTranscriptLine(
             {
               pr_number: String(number),
               pr_url: url,
-              ...(repository !== undefined ? { pr_repository: repository } : {}),
+              ...(repository !== undefined
+                ? { pr_repository: repository }
+                : {}),
             },
           ),
         ],
