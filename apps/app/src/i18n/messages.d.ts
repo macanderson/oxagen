@@ -16,6 +16,9 @@ type Messages = {
     invitation: string;
     invitationNotFound: string;
     newOrganization: string;
+    welcomeWrap: string;
+    welcomeRun: string;
+    installer: string;
     register: string;
     cliAuthorize: string;
     cliComplete: string;
@@ -2524,22 +2527,256 @@ type Messages = {
       agentDescriptionTooLong: string;
       agentHarnessInvalid: string;
       failed: string;
-      denied: string;
+      namespaceInvalid: string;
     };
     organization: {
       eyebrow: string;
       title: string;
       lead: string;
       name: string;
-      slug: string;
-      slugHint: string;
+      address: string;
+      addressValue: string;
+      addressHint: string;
+      namespace: string;
+      namespaceHint: string;
       workspaceTitle: string;
       workspaceName: string;
-      workspaceSlug: string;
+      governance: string;
+      governanceModes: {
+        solo: string;
+        team: string;
+        regulated: string;
+      };
+      governanceNotBacked: string;
       workspaceHint: string;
       creates: string;
+      cancel: string;
       submit: string;
       pending: string;
+      namespaceTaken: string;
+    };
+    welcome: {
+      shell: {
+        cancel: string;
+        railLabel: string;
+        steps: {
+          organization: string;
+          wrap: string;
+          run: string;
+        };
+        state: {
+          done: string;
+          current: string;
+          todo: string;
+        };
+        caption: string;
+        loading: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        bodyNoOrg: string;
+        requestAccess: string;
+        backToFleet: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+        decidedByValue: string;
+        dialogTitle: string;
+        dialogBody: string;
+        dialogNotBacked: string;
+        close: string;
+      };
+      wrap: {
+        eyebrow: string;
+        title: string;
+        lead: string;
+        leadNoKey: string;
+        tabsLabel: string;
+        tabs: {
+          cc: {
+            name: string;
+            sub: string;
+          };
+          codex: {
+            name: string;
+            sub: string;
+          };
+          sdk: {
+            name: string;
+            sub: string;
+          };
+        };
+        recommended: string;
+        ccBody: string;
+        ccTier: string;
+        codexBody: string;
+        codexTier: string;
+        sdkBody: string;
+        ladder: {
+          thisAgent: string;
+          next: string;
+          top: string;
+          orObserve: string;
+        };
+        download: string;
+        osLabel: string;
+        os: {
+          macos: string;
+          windows: string;
+          linux: string;
+        };
+        downloadFor: string;
+        downloadNotBacked: string;
+        packageNotBacked: string;
+        profile: string;
+        tokenEmbedded: string;
+        tokenExpires: string;
+        tokenMinting: string;
+        tokenAgain: string;
+        orRun: string;
+        credential: string;
+        credentialIssued: string;
+        credentialFacts: string;
+        credentialNone: string;
+        credentialBody: string;
+        langLabel: string;
+        lang: {
+          ts: string;
+          py: string;
+          go: string;
+        };
+        copy: string;
+        copied: string;
+        copyFailed: string;
+        cancel: string;
+        back: string;
+        caption: string;
+        continue: string;
+        advancing: string;
+        noAgentTitle: string;
+        noAgentBody: string;
+        noAgentAction: string;
+        credentialValue: string;
+      };
+      run: {
+        eyebrow: string;
+        title: string;
+        lead: string;
+        leadNoKey: string;
+        waitingTitle: string;
+        polling: string;
+        hostChip: string;
+        noHostChip: string;
+        log: {
+          enrolled: string;
+          heartbeat: string;
+          hooksOk: string;
+          hooksMissing: string;
+          notBacked: string;
+          waiting: string;
+        };
+        start: string;
+        startNoHost: string;
+        connected: string;
+        receivedTitle: string;
+        framesNotRecorded: string;
+        replayGrade: string;
+        chainIntact: string;
+        tierBody: string;
+        tierBodyHarness: string;
+        cancel: string;
+        back: string;
+        openInstaller: string;
+        noDone: string;
+        opening: string;
+        openOxagen: string;
+        errorTitle: string;
+        errorBody: string;
+        errorFix: string;
+        errorRequest: string;
+        checkAgain: string;
+        checkedAgain: string;
+        repo: {
+          detectedTitle: string;
+          reported: string;
+          remote: string;
+          remoteBody: string;
+          bind: string;
+          binding: string;
+          bindBody: string;
+          skip: string;
+          skipBody: string;
+          boundTitle: string;
+          bound: string;
+          branch: string;
+          appInstalled: string;
+          boundBody: string;
+          boundToast: string;
+          skippedTitle: string;
+          provisional: string;
+          skippedBody: string;
+          bindNow: string;
+          noneTitle: string;
+          noneBody: string;
+        };
+      };
+      installer: {
+        title: string;
+        screenLabel: string;
+        screens: {
+          download: string;
+          installing: string;
+          connected: string;
+        };
+        downloadTitle: string;
+        downloadBody: string;
+        facts: {
+          package: string;
+          size: string;
+          signature: string;
+          checksum: string;
+          token: string;
+        };
+        notPublished: string;
+        tokenOnWrap: string;
+        install: string;
+        cancel: string;
+        userOnly: string;
+        installingTitle: string;
+        stepOf: string;
+        progress: string;
+        steps: {
+          collector: string;
+          hook: string;
+          login: string;
+          hooks: string;
+          policy: string;
+          mcp: string;
+          enroll: string;
+          smoke: string;
+        };
+        stepState: {
+          done: string;
+          now: string;
+          pending: string;
+        };
+        connected: string;
+        connectedTitle: string;
+        connectedBody: string;
+        connectedBodyNoKey: string;
+        frameBody: string;
+        notConnectedTitle: string;
+        notConnectedBody: string;
+        rollback: string;
+        rollbackCommand: string;
+        backToOxagen: string;
+        unlocking: string;
+        rejectedTitle: string;
+        rejectedBody: string;
+        rejectedNext: string;
+        backToWrap: string;
+      };
     };
     gate: {
       title: string;
@@ -2590,89 +2827,159 @@ type Messages = {
         todo: string;
       };
       caption: string;
+      cancel: string;
+      cancelling: string;
+      back: string;
+      loading: string;
       noAgent: {
         title: string;
         body: string;
         start: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        permission: string;
+        request: string;
+        back: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+        decidedByValue: string;
+        dialogTitle: string;
+        dialogBody: string;
       };
       name: {
         title: string;
         lead: string;
         slug: string;
         slugHint: string;
-        agentName: string;
-        agentNameHint: string;
+        workspace: string;
+        workspaceValue: string;
+        noRepository: string;
+        workspaceHint: string;
         harness: string;
         harnessHint: string;
-        description: string;
-        descriptionHint: string;
+        tier: string;
+        tierHint: string;
+        tierNotSent: string;
         note: string;
-        submit: string;
+        reserved: string;
+        continue: string;
         pending: string;
-        registered: {
-          title: string;
-          body: string;
-          expires: string;
-          continue: string;
-        };
       };
       wrap: {
         title: string;
         lead: string;
-        agentKey: string;
-        harness: string;
-        notRecorded: string;
-        host: {
-          title: string;
-          body: string;
-          mint: string;
-          pending: string;
-          again: string;
+        tabsLabel: string;
+        tabs: {
+          "claude-code": {
+            name: string;
+            sub: string;
+          };
+          codex: {
+            name: string;
+            sub: string;
+          };
+          cursor: {
+            name: string;
+            sub: string;
+          };
+          sdk: {
+            name: string;
+            sub: string;
+          };
+        };
+        recommended: string;
+        body: {
+          "claude-code": string;
+          codex: string;
+          cursor: string;
+          sdk: string;
+        };
+        ladder: {
+          thisAgent: string;
+          nextRung: string;
+          topRung: string;
+          orObserve: string;
+        };
+        tierNote: string;
+        codexNote: string;
+        cursorNote: string;
+        download: {
+          eyebrow: string;
+          osLabel: string;
+          os: {
+            macos: string;
+            windows: string;
+            linux: string;
+          };
+          button: string;
+          notPublished: string;
         };
         token: {
           label: string;
-          once: string;
+          issue: string;
+          issuing: string;
           expires: string;
-          command: string;
+          orRun: string;
         };
-        back: string;
+        credential: {
+          eyebrow: string;
+          label: string;
+          none: string;
+          facts: string;
+          use: string;
+          issue: string;
+          issuing: string;
+          issueNote: string;
+          sdkNotPublished: string;
+        };
+        caption: string;
         continue: string;
         advancing: string;
-        unavailable: {
-          title: string;
-          body: string;
-        };
       };
       run: {
         title: string;
         lead: string;
         waiting: {
           title: string;
-          body: string;
-          again: string;
-          checking: string;
-        };
-        host: {
-          enrolled: string;
+          polling: string;
+          host: string;
+          noHost: string;
+          line: string;
+          start: string;
           none: string;
-          heartbeat: string;
-          noHeartbeat: string;
-          hooksOk: string;
-          hooksMissing: string;
-          hooksUnreported: string;
         };
+        log: {
+          enrolled: string;
+          enrolledNoKey: string;
+          collector: string;
+          collectorNoVersion: string;
+          hooksOk: string;
+          hooksOkNoFile: string;
+          hooksMissing: string;
+          bundle: string;
+          notRecorded: string;
+        };
+        caption: string;
+        again: string;
+        checking: string;
         received: {
+          connected: string;
           title: string;
-          body: string;
-          at: string;
+          framesUnread: string;
+          routed: string;
+          harness: string;
+          grade: string;
+          chainIntact: string;
+          chainGaps: string;
+          auto: string;
+          autoIn: string;
           open: string;
         };
-        repository: {
+        error: {
           title: string;
-          body: string;
-          bind: string;
-          binding: string;
-          skip: string;
         };
       };
       failure: {

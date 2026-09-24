@@ -1,27 +1,76 @@
 // The register form: the slug that becomes the last segment of the agent key
-// (ADR-024), the display name, the harness that decides how the agent is
-// wrapped, and an optional description. Issues carry keys under
-// `onboarding.errors.*`. The bounds are `register_agent`'s own, so a form the
-// page accepts is one the contract accepts.
-import { agentHarnessSchema } from "@oxagen/oxagen/contracts/agent.list";
+// (ADR-024) and the harness that picks the wrap path. The display name is the
+// slug in words and the description is left empty: the design asks for
+// neither, and `register_agent` requires the name, so the form derives it.
+// Issues carry keys under `onboarding.errors.*`. The bounds are
+// `register_agent`'s own, so a form the page accepts is one the contract
+// accepts.
+import type { agentHarnessSchema } from "@oxagen/oxagen/contracts/agent.list";
 import { z } from "zod";
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-export type Harness = z.infer<typeof agentHarnessSchema>;
+type ContractHarness = z.infer<typeof agentHarnessSchema>;
 
-/** The form offers only harnesses with a working enrollment path. */
+/**
+ * Every harness `register_agent` accepts, in the design's order (register-name
+ * spec: claude-code, codex-cli, stella, claude-agent-sdk, custom) with Cursor
+ * beside Codex, because the four wrapped harnesses are equals (ADR-101).
+ */
 export const HARNESSES = [
   "claude-code",
   "codex",
   "cursor",
   "stella",
-] as const satisfies readonly Harness[];
-const HOST_WRAPPED: ReadonlySet<Harness> = new Set(HARNESSES);
+  "claude-agent-sdk",
+  "custom",
+] as const satisfies readonly ContractHarness[];
 
-/** Only harnesses with an installed host adapter have a wrapping path. */
-export function wrapPathOf(harness: Harness): "host" | "unavailable" {
-  return HOST_WRAPPED.has(harness) ? "host" : "unavailable";
+/** A harness the agent registry records; the same six members as `register_agent`'s enum. */
+export type Harness = (typeof HARNESSES)[number];
+
+/** The two model tiers the name step offers (register-name spec). */
+export const MODEL_TIERS = ["complex", "light"] as const;
+
+/**
+ * The wrap step's tabs. The three the design draws, with Cursor beside Codex
+ * CLI (ADR-101). Stella and every SDK-built agent take the SDK tab, as the
+ * design's `regTabFor` sends them.
+ */
+export const WRAP_TABS = ["claude-code", "codex", "cursor", "sdk"] as const;
+export type WrapTab = (typeof WRAP_TABS)[number];
+
+/** The tab the wrap step opens on for the harness the name step recorded. */
+export function wrapTabFor(harness: Harness): WrapTab {
+  if (harness === "claude-code" || harness === "codex" || harness === "cursor")
+    return harness;
+  return "sdk";
+}
+
+/**
+ * The slug as the key will carry it, rewritten on every keystroke: lower case,
+ * letters, digits and hyphens, and `agent` while the field is empty (the
+ * design's `regSlug`). This is what the hint shows; the form still refuses a
+ * slug the contract would refuse before anything is written.
+ */
+function displaySlug(raw: string): string {
+  const slug = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug === "" ? "agent" : slug;
+}
+
+/** `org_ns.ws_ns.slug`, from the namespaces the workspace read carries. */
+export function agentKeyOf(prefix: string, slug: string): string {
+  return `${prefix}.${displaySlug(slug)}`;
+}
+
+/** The display name `register_agent` requires, as the slug in words: `perf-watch` is `Perf watch`. */
+export function nameFromSlug(slug: string): string {
+  const words = slug.trim().replace(/-+/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 const AGENT_FORM_ERROR_KEYS = [

@@ -47,6 +47,12 @@ export const organizationCreateHandler: CapabilityHandler<
       reason: "slug_taken",
       message: `slug "${input.slug}" already in use`,
     });
+  const namespaceTaken = () =>
+    new HandlerError({
+      code: "conflict",
+      reason: "namespace_taken",
+      message: `namespace "${input.namespace ?? ""}" already in use`,
+    });
   // tenancy: system bypass via withSystemDb (bootstrap — creates the org's own root
   // rows; no tenant scope exists yet because the new org does not exist yet, and
   // ctx.orgId is the caller's current org, not the one being created) (see docs/specs/tenancy-rls/spec.md)
@@ -61,6 +67,9 @@ export const organizationCreateHandler: CapabilityHandler<
   if (existing) throw slugTaken();
 
   try {
+    // tenancy: system bypass via withSystemDb (bootstrap — writes the new org's
+    // root rows and reads every namespace to keep it globally unique; no tenant
+    // scope exists for an org that does not exist yet)
     const created = await withSystemDb(async (tx) => {
       // Derive the immutable, globally-unique namespace from the slug, avoiding
       // any namespace already taken. The unique index is the authoritative guard
@@ -73,7 +82,17 @@ export const organizationCreateHandler: CapabilityHandler<
             .from(schema.organizations)
         ).map((r) => r.namespace.toLowerCase()),
       );
-      const namespace = deriveNamespace(input.slug, takenNamespaces);
+      // A namespace the operator chose is used verbatim: an agent key is
+      // printed from it, so a suffix added here would hand them a key they
+      // did not pick. A taken one is refused instead.
+      if (
+        input.namespace !== undefined &&
+        takenNamespaces.has(input.namespace)
+      ) {
+        throw namespaceTaken();
+      }
+      const namespace =
+        input.namespace ?? deriveNamespace(input.slug, takenNamespaces);
 
       const [org] = await tx
         .insert(schema.organizations)
@@ -250,6 +269,21 @@ export const organizationCreateHandler: CapabilityHandler<
         "organization.create: slug conflict",
       );
       throw slugTaken();
+    }
+    if (err instanceof HandlerError && err.reason === "namespace_taken") {
+      throw err;
+    }
+    // Only a namespace the caller chose is theirs to hear about; a derived one
+    // that lost a race is the server's collision and stays a 500.
+    if (
+      input.namespace !== undefined &&
+      isUniqueViolation(err, "organizations_namespace_idx")
+    ) {
+      logger.warn(
+        { namespace: input.namespace, orgId: ctx.orgId },
+        "organization.create: namespace conflict",
+      );
+      throw namespaceTaken();
     }
     logger.error(
       { err, orgId: ctx.orgId },
