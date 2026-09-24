@@ -81,6 +81,7 @@ import {
   toolExchange,
   type TranscriptStep,
   type TranscriptTurn,
+  visibleChildren,
   visibleFrames,
   visibleSteps,
 } from "./transcript-model";
@@ -452,6 +453,7 @@ function StepRow({
   open,
   onToggle,
   place,
+  nested,
 }: {
   step: TranscriptStep;
   digest: StepDigest;
@@ -459,6 +461,8 @@ function StepRow({
   open: boolean;
   onToggle: (id: string, open: boolean) => void;
   place: Place;
+  /** The rows of the subagent this step spawned, drawn inside it. */
+  nested?: ReactNode;
 }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
@@ -608,6 +612,14 @@ function StepRow({
           )}
         </div>
       ) : null}
+      {nested == null ? null : (
+        <div
+          data-testid="transcript-subagent-steps"
+          className="ml-[76px] border-l-2 border-border"
+        >
+          {nested}
+        </div>
+      )}
     </details>
   );
 }
@@ -711,17 +723,35 @@ function TurnBlock({
             </span>
           </div>
         </summary>
-        {visibleSteps(turn).map((step) => (
-          <StepRow
-            key={step.id}
-            step={step}
-            digest={stepDigest(step)}
-            pos={pos}
-            open={openIds.has(step.id)}
-            onToggle={onToggle}
-            place={place}
-          />
-        ))}
+        {visibleSteps(turn).map((step) => {
+          const children = visibleChildren(step);
+          return (
+            <StepRow
+              key={step.id}
+              step={step}
+              digest={stepDigest(step)}
+              pos={pos}
+              open={openIds.has(step.id)}
+              onToggle={onToggle}
+              place={place}
+              nested={
+                children.length === 0
+                  ? null
+                  : children.map((child) => (
+                      <StepRow
+                        key={child.id}
+                        step={child}
+                        digest={stepDigest(child)}
+                        pos={pos}
+                        open={openIds.has(child.id)}
+                        onToggle={onToggle}
+                        place={place}
+                      />
+                    ))
+              }
+            />
+          );
+        })}
         {turn.reply === null ? null : <Role who="agent" text={turn.reply} />}
       </details>
     </>

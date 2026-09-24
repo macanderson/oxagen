@@ -253,6 +253,7 @@ export function toRunTranscript(
             subagent: {
               chainRef: entry.subagent.sessionUuid,
               type: entry.subagent.type,
+              spawnKey: entry.subagent.spawnCallId ?? null,
             },
           }),
       at: entry.at,
@@ -261,6 +262,7 @@ export function toRunTranscript(
       type: entry.type,
       label: entry.label,
       callKey: entry.callId,
+      target: entry.target ?? null,
       usage: entry.usage ?? null,
       kinds: entry.kinds,
       request: toTranscriptBody(entry.request),

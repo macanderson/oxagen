@@ -44,6 +44,7 @@ describe("tachoStage", () => {
         "context.assembled",
         "steering.manifest",
         "tool_requested",
+        "harness_permission",
         "token_denied",
         "approval_decision",
         "file_io",
@@ -62,6 +63,7 @@ describe("tachoStage", () => {
       "context.assembled": "model",
       "steering.manifest": "model",
       tool_requested: "tool",
+      harness_permission: "tool",
       token_denied: "policy",
       approval_decision: "policy",
       file_io: "effect",
@@ -113,6 +115,59 @@ describe("tachoFrameSummary", () => {
 });
 
 describe("tachoFrame", () => {
+  const harnessBody = JSON.stringify({
+    tool_name: "Bash",
+    tool_use_id: "toolu_1",
+    policy_decision: "allow",
+    policy_source: "harness",
+  });
+
+  it("reads a stored OTel harness check as harness_permission, not a policy decision", () => {
+    const frame = tachoFrame(
+      row(4, "policy_decision", {
+        source: "otel_log",
+        body: harnessBody,
+        toolName: "Bash",
+        toolUseId: "toolu_1",
+        policyDecision: "allow",
+      }),
+    );
+    expect(frame.type).toBe("harness_permission");
+    expect(frame.stage).toBe("tool");
+    expect(frame.summary).toBe("allow Bash");
+    expect(frame.identity.callId).toBe("toolu_1");
+  });
+
+  it("keeps a collector verdict as a policy decision and carries its target", () => {
+    const frame = tachoFrame(
+      row(5, "policy_decision", {
+        source: "collector",
+        body: JSON.stringify({
+          tool_name: "Bash",
+          tool_use_id: "toolu_1",
+          policy_decision: "allow",
+          policy_source: "bundle",
+          tool_target: `git fetch origin ${"x".repeat(500)}`,
+        }),
+        toolName: "Bash",
+        toolUseId: "toolu_1",
+        policyDecision: "allow",
+      }),
+    );
+    expect(frame.type).toBe("policy_decision");
+    expect(frame.stage).toBe("policy");
+    expect(frame.identity.target?.startsWith("git fetch origin")).toBe(true);
+    expect(frame.identity.target).toHaveLength(400);
+  });
+
+  it("keeps a policy decision whose source is not OTel, even when it names the harness", () => {
+    const frame = tachoFrame(
+      row(6, "policy_decision", { source: "hook", body: harnessBody }),
+    );
+    expect(frame.type).toBe("policy_decision");
+    expect(frame.identity.target).toBeUndefined();
+  });
+
   it("reads redactions that do not parse, or are not a list, as none", () => {
     const digest = `sha256:${"a".repeat(64)}`;
     expect(

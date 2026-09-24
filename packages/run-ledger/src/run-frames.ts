@@ -46,11 +46,17 @@ export interface FrameIdentity {
   contextRows: number | null;
   /**
    * The call the frame belongs to (`tool_call_id`, `model_call_id`), so the
-   * two halves of one exchange pair on identity and not on adjacency. Null
-   * where the producer records none — a wrapped session's rows carry no call
-   * id, and those pair on adjacency within the step kind instead.
+   * two halves of one exchange pair on identity and not on adjacency. A
+   * wrapped session's tool rows carry the harness's `tool_use_id`. Null where
+   * the producer records none, and those pair on adjacency within the step
+   * kind instead.
    */
   callId: string | null;
+  /**
+   * What a tool call acts on, as the gate recorded it: the command, path or
+   * URL from the body's `tool_target`. Absent where the frame names none.
+   */
+  target?: string | null;
 }
 
 /**
@@ -483,6 +489,9 @@ export function tachoStage(kind: string): string {
       return "model";
     case "tool_requested":
     case "tool_call":
+    // The harness's own permission check belongs to the call it gated. It is
+    // not an Oxagen decision, so it never reads as a policy frame.
+    case "harness_permission":
       return "tool";
     case "policy_decision":
     case "approval_request":
@@ -539,6 +548,7 @@ export function tachoFrameSummary(row: TachoFrameRowLike): string {
     // decision still leads, because that is what a reader scanning a run for
     // trouble is scanning for, and the subject follows it.
     case "policy_decision":
+    case "harness_permission":
     case "approval_request":
     case "approval_decision": {
       if (row.policyDecision === "")
@@ -585,8 +595,36 @@ function tachoChainFacts(
   return out;
 }
 
+/** The longest `tool_target` a frame carries into the transcript. */
+const TARGET_MAX = 400;
+
+/**
+ * The kind a stored row is read as. Before `harness_permission` existed, the
+ * OTel adapter sealed Claude Code's own permission check as `policy_decision`
+ * with `policy_source: "harness"`. Those rows stay in the store, so the reader
+ * gives them the kind they would carry today.
+ */
+function tachoKind(row: TachoFrameRowLike, payload: unknown): string {
+  if (
+    row.kind === "policy_decision" &&
+    (row.source ?? "").startsWith("otel") &&
+    field(payload, "policy_source") === "harness"
+  )
+    return "harness_permission";
+  return row.kind;
+}
+
 /** A `tacho_events` row as a run frame. */
-export function tachoFrame(row: TachoFrameRowLike): RunFrame {
+export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
+  let payload: unknown = null;
+  try {
+    payload = stored.body ? JSON.parse(stored.body) : null;
+  } catch {
+    /* Legacy malformed metadata carries no usage. */
+  }
+  const kind = tachoKind(stored, payload);
+  const row = kind === stored.kind ? stored : { ...stored, kind };
+  const target = field(payload, "tool_target");
   const digest = blank(row.contentDigest);
   const ref = blank(row.bytesRef);
   const body: FrameBodyColumns =
@@ -606,12 +644,6 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
           fidelity: ref === null ? "digest_only" : "full",
         };
   const model = blank(row.model);
-  let payload: unknown = null;
-  try {
-    payload = row.body ? JSON.parse(row.body) : null;
-  } catch {
-    /* Legacy malformed metadata carries no usage. */
-  }
   const usageObserved =
     row.kind === "llm_call" &&
     row.source === "collector" &&
@@ -686,6 +718,9 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
       // correctly. Empty for kinds that carry no call id; those still fall
       // back to adjacency within their step kind.
       callId: blank(row.toolUseId),
+      ...(target === null || target === ""
+        ? {}
+        : { target: target.slice(0, TARGET_MAX) }),
     },
     timing: {
       ttftMs: row.ttftMs ?? null,
@@ -1069,9 +1104,8 @@ function closesStep(current: TranscriptFold, frame: RunFrame): boolean {
  * response-only entry for it; completion B then did the same. Two calls
  * became four entries with every response detached from the request it
  * answered — the one thing a transcript exists to get right (finding 5,
- * macanderson/oxagen#3370). A wrapped session records no call id at all, so a
- * response with none falls back to `closesStep`'s adjacency check against
- * `current`, exactly as before.
+ * macanderson/oxagen#3370). A response that carries no call id falls back to
+ * `closesStep`'s adjacency check against `current`, exactly as before.
  *
  * A policy frame that arrives once the current step already has its response
  * is held rather than absorbed into it: `PreToolUse` writes `policy_decision`
@@ -1086,7 +1120,10 @@ function closesStep(current: TranscriptFold, frame: RunFrame): boolean {
  * in the order recorded, so two decisions ahead of one call are both kept and
  * the later one wins, the same as `absorb`'s own overwrite; a run that ends
  * with one or more still pending falls back to the last step rather than
- * dropping them, or opens a policy entry when no step ever did.
+ * dropping them, or opens a policy entry when no step ever did. The
+ * harness's own permission check (`harness_permission`) is held the same way,
+ * because Claude Code writes it before the call it gates, but it sets no
+ * decision: only an Oxagen verdict does.
  */
 function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
   const out: TranscriptFold[] = [];
@@ -1149,7 +1186,10 @@ function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
       }
       continue;
     }
-    if (POLICY_TYPES.has(frame.type) && holdPolicyForNext(current)) {
+    if (
+      (POLICY_TYPES.has(frame.type) || frame.type === "harness_permission") &&
+      holdPolicyForNext(current)
+    ) {
       pendingPolicy.push(frame);
       continue;
     }
@@ -1168,7 +1208,10 @@ function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
       const held = pendingPolicy.slice();
       pendingPolicy.length = 0;
       for (const pending of held) {
-        current = openEntry(pending, "policy");
+        current = openEntry(
+          pending,
+          POLICY_TYPES.has(pending.type) ? "policy" : "frame",
+        );
       }
     }
   }

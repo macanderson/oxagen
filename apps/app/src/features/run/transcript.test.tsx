@@ -256,6 +256,7 @@ describe("a subagent's frames", () => {
     expect(mapped.entries[0]?.subagent).toEqual({
       chainRef: CHAIN,
       type: "Explore",
+      spawnKey: null,
     });
     expect(mapped.entries[0]?.response?.chainRef).toBe(CHAIN);
     renderSection({ read: readOk(mapped), zoom: "everything" });

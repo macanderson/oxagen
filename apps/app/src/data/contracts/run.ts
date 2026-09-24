@@ -283,7 +283,15 @@ export const TranscriptEntry = z.object({
    * subagent's `seq` needs beside it to name one frame (`entryKey`).
    */
   subagent: z
-    .object({ chainRef: z.string(), type: z.string().nullable() })
+    .object({
+      chainRef: z.string(),
+      type: z.string().nullable(),
+      /**
+       * The parent's Task or Agent call that spawned the subagent, as a
+       * `callKey`, so the Turns view nests the subagent under that call.
+       */
+      spawnKey: z.string().nullable().optional(),
+    })
     .optional(),
   at: z.iso.datetime({ offset: true }),
   /** Milliseconds from the run's recorded start; never negative. */
@@ -301,6 +309,8 @@ export const TranscriptEntry = z.object({
    * a `PublicId` (src/test/arch/public-ids.test.ts).
    */
   callKey: z.string().nullable(),
+  /** What the tool call acts on (a command, path or URL); null when unrecorded. */
+  target: z.string().nullable().optional(),
   usage: TranscriptUsage.nullable().optional(),
   /** The chips this entry answers to. */
   kinds: z.array(TranscriptKind),

@@ -315,6 +315,12 @@ export const transcriptEntrySchema = z
         id: z.string().nullable(),
         /** The subagent's type (`Explore`, `general-purpose`); null when none was recorded. */
         type: z.string().nullable(),
+        /**
+         * The parent's tool call that spawned the subagent (the Task or Agent
+         * call's `tool_use_id`), so a client nests the subagent under it.
+         * Null when none was recorded.
+         */
+        spawnCallId: z.string().nullable().optional(),
       })
       .strict()
       .optional(),
@@ -339,6 +345,12 @@ export const transcriptEntrySchema = z
      * result under the request that made it.
      */
     callId: z.string().nullable(),
+    /**
+     * What the opening frame's tool call acts on, as the gate recorded it: the
+     * command, path or URL, capped at 400 characters. Null when the frame
+     * names none.
+     */
+    target: z.string().nullable().optional(),
     usage: transcriptUsageSchema.nullable().optional(),
     /** The chips this entry answers to, from the frames it folds. */
     kinds: z.array(transcriptKindSchema),
