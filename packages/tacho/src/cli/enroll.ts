@@ -29,6 +29,7 @@ import { acquireInstallLock } from "../host/install-lock";
 import { modelBaseUrlFile } from "../host/model-base-url";
 import { mcpConfigShapeProblem } from "../host/mcp-config-writer";
 import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
+import { Wal } from "../host/wal";
 import {
   HOST_FILE_SCHEMA,
   type HostFile,
@@ -66,6 +67,7 @@ import {
   restoreCredentials,
 } from "./credential";
 import { restoreGithubRepositories } from "./github";
+import { shippingHealth, type ShippingHealth } from "./status";
 import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
 
 export interface EnrollOptions extends CredentialOptions {
@@ -132,6 +134,59 @@ export interface EnrollResult {
   host?: HostFile;
   managedSettings?: unknown;
   warnings: string[];
+  /**
+   * Whether the new daemon reached Oxagen and shipped what was waiting.
+   * Absent when no service was installed. `tacho enroll` exits 1 when
+   * `healthy` is false, even with every hook written.
+   */
+  shipping?: ShippingHealth;
+}
+
+/** How long enroll waits for the daemon's first contact with Oxagen. */
+const FIRST_CONTACT_ATTEMPTS = 60;
+const FIRST_CONTACT_POLL_MS = 500;
+
+/**
+ * Wait for the daemon to prove it can talk to Oxagen: a bundle fetch or an
+ * ingest that succeeded, and, when events are already waiting, a batch that
+ * shipped. A daemon that answers locally but never reaches the control plane
+ * records every session and ships none of them, which is the failure an
+ * installer that stops at "healthy" cannot see.
+ */
+async function awaitFirstContact(deps: CliDeps): Promise<ShippingHealth> {
+  let daemon: Record<string, unknown> | null = null;
+  for (let attempt = 0; attempt < FIRST_CONTACT_ATTEMPTS; attempt += 1) {
+    daemon =
+      ((await deps.daemonGet("/status")) as
+        | Record<string, unknown>
+        | undefined) ?? null;
+    if (daemon !== null) {
+      const walStats = new Wal(deps.paths.wal).stats();
+      const verdict = shippingHealth(daemon, walStats, deps.now());
+      const lastError = daemon["last_error"];
+      // The error clears on the next success, so one standing here means the
+      // last call to Oxagen failed, even with nothing left to ship.
+      if (typeof lastError === "string" && lastError !== "")
+        return verdict.healthy
+          ? {
+              healthy: false,
+              detail: `the last call to Oxagen failed: ${lastError}`,
+            }
+          : verdict;
+      const shipped = typeof daemon["last_ingest_at"] === "string";
+      const reached = shipped || typeof daemon["last_control_at"] === "string";
+      if (reached && (walStats.unshipped === 0 || shipped)) return verdict;
+    }
+    await deps.sleep(FIRST_CONTACT_POLL_MS);
+  }
+  const waited = (FIRST_CONTACT_ATTEMPTS * FIRST_CONTACT_POLL_MS) / 1000;
+  return {
+    healthy: false,
+    detail:
+      daemon === null
+        ? `tachod stopped answering before it reached Oxagen; check ${deps.paths.log}`
+        : `tachod has not reached Oxagen after ${waited}s, so nothing it records will ship; check ${deps.paths.log}`,
+  };
 }
 
 const TESTED_CLAUDE_RANGE = { min: "2.1.0", max: "2.99.99" };
@@ -1086,6 +1141,7 @@ export async function enrollLocked(
       );
     else deps.out(`      stella ${stella.version ?? "?"} at ${stella.path}`);
   }
+  let shipping: ShippingHealth | undefined;
   if (options.service !== false) {
     let healthy = false;
     let gateway: { listening?: boolean; port?: number } | undefined;
@@ -1217,6 +1273,14 @@ export async function enrollLocked(
       warnings.push(
         `tachod did not answer on 127.0.0.1:${host.port}; check ${deps.paths.log}`,
       );
+    shipping = healthy
+      ? await awaitFirstContact(deps)
+      : {
+          healthy: false,
+          detail: `tachod did not answer on 127.0.0.1:${host.port}, so nothing is recorded or shipped; check ${deps.paths.log}`,
+        };
+    if (shipping.healthy)
+      deps.out(`      tachod reached Oxagen (${shipping.detail})`);
   }
   if (!existsSync(deps.paths.deviceKey))
     warnings.push("device key missing after enrollment");
@@ -1225,6 +1289,10 @@ export async function enrollLocked(
   if (unhooked.length > 0) {
     deps.err(
       `This machine is enrolled as ${host.agent_key}, but ${listLabels(unhooked)} ${unhooked.length === 1 ? "is" : "are"} not hooked (see the warnings above). Fix that and run \`tacho enroll\` again; nothing already written is repeated.`,
+    );
+  } else if (shipping?.healthy === false) {
+    deps.err(
+      `This machine is enrolled as ${host.agent_key} and its hooks are written, but it is not reporting: ${shipping.detail}. Run \`tacho status\` once that is fixed.`,
     );
   } else {
     deps.out(
@@ -1237,5 +1305,6 @@ export async function enrollLocked(
     host,
     ...(managedSettings !== undefined ? { managedSettings } : {}),
     warnings,
+    ...(shipping !== undefined ? { shipping } : {}),
   };
 }

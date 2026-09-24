@@ -12,6 +12,7 @@ import type { PriceBook, UnpricedModels } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import en from "../../../messages/en.json";
 import spend from "../../../messages/spend.json";
 import ui from "../../../messages/ui.json";
 
@@ -50,6 +51,10 @@ const ctx = unsafeMint(WsCtx, {
 const TODAY = new Date("2026-09-15T12:00:00.000Z");
 const AT = "2026-09-15T12:00:00.000Z";
 
+const byGroup = vi.fn<DataSource["spend"]["byGroup"]>();
+const findings = vi.fn<DataSource["spend"]["findings"]>();
+const waste = vi.fn<DataSource["spend"]["waste"]>();
+const budgets = vi.fn<DataSource["spend"]["budgets"]>();
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const source: DataSource = {
@@ -88,13 +93,13 @@ const source: DataSource = {
     incidents: vi.fn(),
   },
   spend: {
-    byGroup: vi.fn(),
+    byGroup,
     fleet: vi.fn(),
     drill: vi.fn(),
-    waste: vi.fn(),
-    budgets: vi.fn(),
+    waste,
+    budgets,
     gatewayPolicy: vi.fn(),
-    findings: vi.fn(),
+    findings,
     findingEvidence: vi.fn(),
     priceBook,
     unpricedModels,
@@ -171,13 +176,13 @@ async function renderPricing() {
   const element = await Spend({
     ctx,
     source,
-    searchParams: { tab: "pricing" },
+    view: { tab: "pricing", drill: null, finding: null },
     today: TODAY,
   });
   return render(
     <NextIntlClientProvider
       locale="en"
-      messages={{ ...spend, ...ui }}
+      messages={{ ...en, ...spend, ...ui }}
       timeZone="UTC"
     >
       {element}
@@ -200,6 +205,30 @@ function panelOf(id: string): HTMLElement {
 }
 
 beforeEach(() => {
+  // The page reads the month before any tab, for its summary tiles. Pricing
+  // renders over a workspace with nothing rolled up yet, so the month here is
+  // empty and the reads beside it are down: none of them is this tab's.
+  byGroup.mockReset();
+  byGroup.mockResolvedValue(
+    readOk({
+      period: { from: "2026-09-01", to: "2026-09-15" },
+      total: {
+        cost: null,
+        calls: 0,
+        runs: 0,
+        proven: null,
+        accepted: null,
+        productiveRatio: null,
+      },
+      rows: [],
+    }),
+  );
+  findings.mockReset();
+  findings.mockResolvedValue(readError("findings_down", 503));
+  waste.mockReset();
+  waste.mockResolvedValue(readError("waste_down", 503));
+  budgets.mockReset();
+  budgets.mockResolvedValue(readError("budgets_down", 503));
   priceBook.mockReset();
   unpricedModels.mockReset();
   setPriceEntryAction.mockReset();

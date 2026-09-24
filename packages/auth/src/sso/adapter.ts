@@ -9,6 +9,14 @@
  * the column never holds a plaintext secret, and the plugin never sees a
  * token where it expects a secret.
  *
+ * Only `findOne` opens anything. `findMany` returns every provider with its
+ * secrets removed (#3740). The plugin lists all providers on a domain miss at
+ * /sign-in/sso and keeps one of them, so opening them all decrypted every
+ * organisation's secrets to serve one sign-in, and one row that could not be
+ * opened failed the lookup for everyone. The select-provider plugin
+ * (./select-provider-plugin.ts) resolves the provider before that listing
+ * runs, so the plugin reaches the row it uses through `findOne`.
+ *
  * Writes to `ssoProvider` through the adapter are refused. Oxagen's org.sso.*
  * capabilities own provider CRUD (they are where IAM, sealing and the audit
  * event happen), and the plugin's own register/update/delete/domain endpoints
@@ -18,6 +26,7 @@
 import type { BetterAuthOptions } from "better-auth";
 import {
   openSsoConfig,
+  stripSsoSecrets,
   type ResolvedSsoKms,
   type SsoProtocol,
 } from "@oxagen/database/sso-secrets";
@@ -61,20 +70,37 @@ export class SsoProviderWriteRefused extends Error {
   }
 }
 
+const CONFIG_FIELDS: readonly (readonly [string, SsoProtocol])[] = [
+  ["oidcConfig", "oidc"],
+  ["samlConfig", "saml"],
+];
+
 /** Open the sealed secrets in one provider row. */
 export async function openSsoProviderRow(
   row: Row,
   kms: ResolvedSsoKms | null,
 ): Promise<Row> {
   const out = { ...row };
-  const configs: [string, SsoProtocol][] = [
-    ["oidcConfig", "oidc"],
-    ["samlConfig", "saml"],
-  ];
-  for (const [field, protocol] of configs) {
+  for (const [field, protocol] of CONFIG_FIELDS) {
     const value = out[field];
     if (typeof value === "string" && value !== "") {
       out[field] = await openSsoConfig(protocol, value, kms);
+    }
+  }
+  return out;
+}
+
+/**
+ * One provider row with every secret removed and nothing opened. A config
+ * that is not a JSON object becomes null, so a malformed row cannot fail a
+ * listing.
+ */
+export function stripSsoProviderRow(row: Row): Row {
+  const out = { ...row };
+  for (const [field, protocol] of CONFIG_FIELDS) {
+    const value = out[field];
+    if (typeof value === "string" && value !== "") {
+      out[field] = stripSsoSecrets(protocol, value);
     }
   }
   return out;
@@ -94,16 +120,15 @@ function wrapInstance<A extends WrappableAdapter>(
       }
       return openSsoProviderRow(row as Row, resolveKms());
     },
+    // Never opens: see the header. A caller that needs a provider's secrets
+    // reads that one provider with findOne.
     findMany: async (data) => {
       const rows = await adapter.findMany(data);
       if (!isProvider(data.model)) return rows;
-      const kms = resolveKms();
-      return Promise.all(
-        rows.map((row) =>
-          row !== null && typeof row === "object"
-            ? openSsoProviderRow(row as Row, kms)
-            : row,
-        ),
+      return rows.map((row) =>
+        row !== null && typeof row === "object"
+          ? stripSsoProviderRow(row as Row)
+          : row,
       );
     },
     create: async (data) => {
@@ -128,8 +153,9 @@ function wrapInstance<A extends WrappableAdapter>(
 
 /**
  * Wrap a Better Auth adapter factory (`drizzleAdapter(db, …)` or
- * `memoryAdapter(…)`) so SSO provider rows come back with their secrets open.
- * `resolveKms` is called per read, so a key configured after boot is used.
+ * `memoryAdapter(…)`) so a provider row read with `findOne` comes back with
+ * its secrets open, and a listing comes back with none. `resolveKms` is called
+ * per `findOne`, so a key configured after boot is used.
  */
 export function withSsoSecrets<A>(
   factory: (options: BetterAuthOptions) => A,

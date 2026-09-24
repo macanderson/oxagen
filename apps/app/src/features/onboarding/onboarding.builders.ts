@@ -4,6 +4,7 @@
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { FirstFrame, OnboardingGate } from "@/data/contracts/onboarding";
+import type { RunChain, RunDetail } from "@/data/contracts/run";
 import type { RunPage } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
@@ -91,6 +92,8 @@ type Reads = {
   agent?: Read<AgentDetail>;
   /** The newest runs page, which the gate reads for the first-run banner. */
   runs?: Read<RunPage>;
+  run?: Read<RunDetail>;
+  chain?: Read<RunChain>;
 };
 
 type Calls = {
@@ -98,6 +101,8 @@ type Calls = {
   firstFrame: Parameters<DataSource["onboarding"]["firstFrame"]>[];
   agent: Parameters<DataSource["agents"]["get"]>[];
   runs: Parameters<DataSource["runs"]["list"]>[];
+  run: Parameters<DataSource["runs"]["get"]>[];
+  chain: Parameters<DataSource["runs"]["chain"]>[];
 };
 
 /** A DataSource that answers the reads a test hands it and refuses every other port. */
@@ -105,7 +110,14 @@ export function onboardingSource(reads: Reads): {
   source: DataSource;
   calls: Calls;
 } {
-  const calls: Calls = { state: [], firstFrame: [], agent: [], runs: [] };
+  const calls: Calls = {
+    state: [],
+    firstFrame: [],
+    agent: [],
+    runs: [],
+    run: [],
+    chain: [],
+  };
   const refuse = (port: string) => () => {
     throw new Error(`${port} is not part of this test`);
   };
@@ -160,11 +172,17 @@ export function onboardingSource(reads: Reads): {
         calls.runs.push(args);
         return Promise.resolve(answer(reads.runs, "runs.list"));
       },
-      get: refuse("runs.get"),
+      get: (...args: Parameters<DataSource["runs"]["get"]>) => {
+        calls.run.push(args);
+        return Promise.resolve(answer(reads.run, "runs.get"));
+      },
       frameBody: refuse("runs.frameBody"),
       cost: refuse("runs.cost"),
       transcript: refuse("runs.transcript"),
-      chain: refuse("runs.transcript"),
+      chain: (...args: Parameters<DataSource["runs"]["chain"]>) => {
+        calls.chain.push(args);
+        return Promise.resolve(answer(reads.chain, "runs.chain"));
+      },
       outputs: refuse("runs.transcript"),
       work: refuse("runs.transcript"),
       outcomesSettings: refuse("runs.transcript"),

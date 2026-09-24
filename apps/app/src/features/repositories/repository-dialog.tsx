@@ -1,114 +1,175 @@
 "use client";
-// The repository dialog (mockup `DLG_EXT.repo`): one bound repository's
-// production branch and its head, GitHub's default branch beside it as a
-// suggestion, what it holds under `.oxagen/`, whether GitHub can deliver its
-// events, and the facts no store records yet, each said as such.
+// The repository dialog (mockup `DLG_EXT.repo`): one repository's production
+// branch and its head, its visibility, what it holds under `.oxagen/`, its
+// events, and the facts no store records yet, each said as such; then what
+// records published there steer, or that there is nowhere to publish one.
 //
-// The production branch is the one branch whose commits update the code
-// graph, the one `.oxagen/` is read from, and the one a Context PR merges
-// into (§11.4). It never moves on its own: when GitHub's default branch moves,
-// this dialog shows both and a person decides, through `set_production_branch`.
+// The footer carries the role's one move. A linked repository offers Unlink
+// (red; opens the confirm), one that is not linked offers Link to this
+// workspace (gold), and the main repo offers neither, because moving main is
+// an owner action and this dialog never offers it. A governed repository
+// offers See its changes, an ungoverned one Add Oxagen.
+//
+// The production branch never moves on its own (§11.4): when GitHub's
+// default branch moves, the dialog shows both and a person decides, through
+// `set_production_branch`. A main repository whose GitHub connection was
+// retired carries the repair, which binds the same repository again.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
-import type { RepositoryTree } from "@/data/contracts/repository";
 import { parseGitHubUrl } from "@/shared/github-url";
 import {
   buttonPrimary,
   buttonSecondary,
   eyebrow,
   inputBase,
-  mono,
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { GitHubLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { setProductionBranch } from "./actions";
-import { type BoundRepositoryRow, TreeState } from "./bound-repositories";
+import { linkWorkspaceRepository, setProductionBranch } from "./actions";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
-import { Dot, type Load, prose, sectionTitle } from "./parts";
-
-/** The first twelve characters of a commit, the way the page cites one. */
-export function shortSha(sha: string): string {
-  return sha.slice(0, 12);
-}
+import { REPOSITORY_GAPS } from "./gaps";
+import { RepositorySetup } from "./main-repository";
+import { buttonDanger, code, kv, note, prose } from "./parts";
+import { TreeBadge } from "./repositories-tab";
+import { type RepositoryRow, treeState } from "./view";
 
 export function RepositoryDialog({
   org,
   ws,
-  repository,
-  tree,
+  workspace,
+  mainFullName,
+  row,
   onClose,
   onChanged,
+  onUnlink,
   onAddOxagen,
   onSeeChanges,
 }: {
   org: string;
   ws: string;
+  /** The workspace's name, which the notes name. */
+  workspace: string;
+  /** The main repository's `owner/name`; null when none is bound. */
+  mainFullName: string | null;
   /** The row the dialog is about; null keeps it closed. */
-  repository: BoundRepositoryRow | null;
-  tree: Load<RepositoryTree> | undefined;
+  row: RepositoryRow | null;
   onClose: () => void;
   /**
-   * The production branch moved. The change wrote a new binding version, so
-   * the repository now answers to `bindingId`. The page follows that id and
-   * re-reads, which keeps this dialog open on the same repository.
+   * A write settled: a link, a production-branch change or a repair. A
+   * production-branch change writes a new binding version, so the page
+   * follows the repository by name and re-reads.
    */
-  onChanged: (bindingId: string) => void;
-  /** Open the init wizard on this repository. */
-  onAddOxagen: (bindingId: string) => void;
-  /** Go to the Changes tab. */
+  onChanged: () => void;
+  onUnlink: (row: RepositoryRow) => void;
+  onAddOxagen: (fullName: string) => void;
   onSeeChanges: () => void;
 }) {
   const t = useTranslations("repositories.dialog");
-  const open = repository !== null;
-  const governed = tree?.kind === "ready" && tree.value.oxagen.present;
-  return (
-    <SheetDialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-      title={repository?.fullName ?? t("title")}
-      subtitle={
-        repository === null
-          ? undefined
-          : repository.role === "main"
-            ? t("roleMain")
-            : t("roleLinked")
-      }
-      testId="repository-dialog"
-      footer={
-        repository === null ? null : governed ? (
+  const failureText = useRepositoriesFailure();
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [linked, setLinked] = useState<string | null>(null);
+  const open = row !== null;
+  const governed = row !== null && treeState(row.tree) === "governed";
+
+  async function link() {
+    if (row === null || pending) return;
+    setPending(true);
+    setFailure(null);
+    try {
+      const result = await linkWorkspaceRepository(org, ws, {
+        owner: row.owner,
+        name: row.name,
+      });
+      if (result.ok) {
+        setLinked(t("linked", { repository: row.fullName, workspace }));
+        onChanged();
+      } else setFailure(failureText(result));
+    } catch {
+      setFailure(failureText(UNANSWERED));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const footer =
+    row === null ? null : (
+      <>
+        {row.role === "linked" ? (
+          <button
+            type="button"
+            data-testid="repository-dialog-unlink"
+            aria-haspopup="dialog"
+            className={`${buttonDanger} max-md:w-full`}
+            onClick={() => {
+              onUnlink(row);
+            }}
+          >
+            {t("unlink")}
+          </button>
+        ) : row.role === "available" && linked === null ? (
+          <button
+            type="button"
+            data-testid="repository-dialog-link"
+            disabled={pending}
+            className={`${buttonPrimary} max-md:w-full`}
+            onClick={() => {
+              void link();
+            }}
+          >
+            {pending ? t("linking") : t("link")}
+          </button>
+        ) : null}
+        {governed ? (
           <button
             type="button"
             data-testid="repository-dialog-changes"
-            data-touch-target=""
-            className={buttonSecondary}
+            className={`${buttonSecondary} max-md:w-full`}
             onClick={onSeeChanges}
           >
             {t("seeChanges")}
           </button>
-        ) : tree?.kind === "ready" && tree.value.head !== null ? (
+        ) : treeState(row.tree) === "absent" ||
+          treeState(row.tree) === "unknown" ? (
           <button
             type="button"
             data-testid="repository-dialog-add-oxagen"
-            data-touch-target=""
-            className={buttonPrimary}
+            className={`${row.role === "available" ? buttonSecondary : buttonPrimary} max-md:w-full`}
             onClick={() => {
-              onAddOxagen(repository.bindingId);
+              onAddOxagen(row.fullName);
             }}
           >
             {t("addOxagen")}
           </button>
-        ) : null
-      }
+        ) : null}
+      </>
+    );
+
+  return (
+    <SheetDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          setFailure(null);
+          setLinked(null);
+          onClose();
+        }
+      }}
+      title={row?.fullName ?? ""}
+      subtitle={row === null ? undefined : t(`subtitle.${row.role}`)}
+      testId="repository-dialog"
+      footer={footer}
     >
-      {repository === null ? null : (
-        <DialogBody
+      {row === null ? null : (
+        <Body
           org={org}
           ws={ws}
-          repository={repository}
-          tree={tree}
+          workspace={workspace}
+          mainFullName={mainFullName}
+          row={row}
+          failure={failure}
+          linked={linked}
           onChanged={onChanged}
         />
       )}
@@ -116,86 +177,142 @@ export function RepositoryDialog({
   );
 }
 
-function DialogBody({
+function Body({
   org,
   ws,
-  repository,
-  tree,
+  workspace,
+  mainFullName,
+  row,
+  failure,
+  linked,
   onChanged,
 }: {
   org: string;
   ws: string;
-  repository: BoundRepositoryRow;
-  tree: Load<RepositoryTree> | undefined;
-  onChanged: (bindingId: string) => void;
+  workspace: string;
+  mainFullName: string | null;
+  row: RepositoryRow;
+  failure: string | null;
+  linked: string | null;
+  onChanged: () => void;
 }) {
   const t = useTranslations("repositories.dialog");
+  const repos = useTranslations("repositories.repos");
   const failureText = useRepositoriesFailure();
-  const ready = tree?.kind === "ready" ? tree.value : null;
-  const initPr = ready === null ? null : ready.initPullRequest;
+  const state = treeState(row.tree);
+  const ready = row.tree?.kind === "ready" ? row.tree.value : null;
+  const initPr = ready?.initPullRequest ?? null;
   const initHref = initPr === null ? null : parseGitHubUrl(initPr.htmlUrl);
+  const notRecorded = (
+    <span
+      data-state="not-recorded"
+      data-gap={REPOSITORY_GAPS.lifecycle}
+      className="text-dim"
+    >
+      {t("notRecorded")}
+    </span>
+  );
   return (
-    <div className="flex flex-col gap-5">
-      {tree?.kind === "failed" ? (
-        <FormAlert testId="repository-dialog-failure">
-          {failureText(tree.failure)}
-        </FormAlert>
-      ) : null}
-      {tree === undefined || tree.kind === "loading" ? (
+    <div className="flex flex-col gap-3.5">
+      {failure === null ? null : (
+        <FormAlert testId="repository-dialog-failure">{failure}</FormAlert>
+      )}
+      {linked === null ? null : (
         <p
           role="status"
-          data-testid="repository-dialog-loading"
-          className={prose}
+          data-testid="repository-dialog-linked"
+          className="text-[13px]"
         >
-          {t("loading")}
+          {linked}
         </p>
+      )}
+      {row.tree?.kind === "failed" ? (
+        <FormAlert testId="repository-dialog-tree-failure">
+          {failureText(row.tree.failure)}
+        </FormAlert>
       ) : null}
-
-      <dl className="grid grid-cols-1 gap-x-4 gap-y-3 text-sm sm:grid-cols-[max-content_1fr]">
-        <dt className={eyebrow}>{t("facts.productionBranch")}</dt>
+      <dl className={kv}>
+        <dt>{t("facts.productionBranch")}</dt>
         <dd data-testid="repository-dialog-branch">
-          <span className={mono}>{repository.defaultRef}</span>
-          {ready === null ? null : ready.head === null ? (
-            <span className="ml-2">
-              <Dot tone="bad">{t("facts.branchMissing")}</Dot>
-            </span>
-          ) : (
-            <span className="ml-2 text-muted-foreground">
-              {t("facts.head", { sha: shortSha(ready.head) })}
-            </span>
-          )}
+          {ready === null
+            ? code(row.productionBranch)
+            : ready.head === null
+              ? t.rich("facts.branchMissing", {
+                  branch: row.productionBranch,
+                  code,
+                })
+              : t.rich("facts.at", {
+                  branch: row.productionBranch,
+                  sha: ready.head.slice(0, 7),
+                  code,
+                })}
         </dd>
-        {ready === null ? null : (
-          <>
-            <dt className={eyebrow}>{t("facts.githubDefault")}</dt>
-            <dd data-testid="repository-dialog-github-default">
-              <span className={mono}>{ready.githubDefaultBranch}</span>
-              <span className="ml-2 text-muted-foreground">
-                {t("facts.suggestion")}
-              </span>
-            </dd>
-          </>
-        )}
-        <dt className={eyebrow}>{t("facts.oxagen")}</dt>
+        <dt>{t("facts.visibility")}</dt>
         <dd>
-          <TreeState tree={tree} testId="repository-dialog-tree" />
+          {row.visibility === null
+            ? notRecorded
+            : repos(`visibility.${row.visibility}`)}
+        </dd>
+        <dt>{t("facts.oxagen")}</dt>
+        <dd>
+          <TreeBadge state={state} testId="repository-dialog-tree" />
           {ready !== null && ready.head !== null && ready.oxagen.present ? (
-            <span className="ml-2 text-muted-foreground">
-              {t("facts.atCommit", { sha: shortSha(ready.head) })}
+            <span className="ms-1.5 text-dim">
+              {t.rich("facts.filesAt", {
+                count: ready.oxagen.files.length,
+                sha: ready.head.slice(0, 7),
+                code,
+              })}
             </span>
           ) : null}
         </dd>
-        <dt className={eyebrow}>{t("facts.events")}</dt>
-        <dd>{t(`events.${repository.events}`)}</dd>
-        <dt className={eyebrow}>{t("facts.codeGraph")}</dt>
-        <dd className="text-muted-foreground">{t("notRecorded")}</dd>
-        <dt className={eyebrow}>{t("facts.drift")}</dt>
-        <dd className="text-muted-foreground">{t("notRecorded")}</dd>
-        <dt className={eyebrow}>{t("facts.workingCopies")}</dt>
-        <dd className="text-muted-foreground">{t("notRecorded")}</dd>
-        <dt className={eyebrow}>{t("facts.issues")}</dt>
-        <dd className="text-muted-foreground">{t("issuesNotRecorded")}</dd>
+        <dt>{t("facts.issues")}</dt>
+        <dd>{notRecorded}</dd>
+        <dt>{t("facts.events")}</dt>
+        <dd>
+          {row.events === null ? repos("none") : repos(`events.${row.events}`)}
+        </dd>
+        <dt>{t("facts.codeGraph")}</dt>
+        <dd>
+          {row.role === "available" ? (
+            <span className="text-dim">{t("notIndexed")}</span>
+          ) : (
+            notRecorded
+          )}
+        </dd>
+        <dt>{t("facts.dataLayer")}</dt>
+        <dd>{notRecorded}</dd>
+        <dt>{t("facts.workingCopies")}</dt>
+        <dd>{notRecorded}</dd>
       </dl>
+
+      {state === "governed" ? (
+        <section aria-labelledby="repository-dialog-records">
+          <h3
+            id="repository-dialog-records"
+            className="mb-1.5 text-[12.5px] font-semibold text-muted-foreground"
+          >
+            {t("recordsHere")}
+          </h3>
+          <p className={note}>
+            {row.role === "main"
+              ? t.rich("recordsMain", { workspace, code })
+              : t.rich("recordsLinked", { code })}
+          </p>
+        </section>
+      ) : state === "absent" || state === "unknown" ? (
+        <p
+          data-testid="repository-dialog-ungoverned"
+          className={`${note} border-info`}
+        >
+          <b className="text-foreground">{t.rich("noTreeLead", { code })}</b>{" "}
+          {row.role === "available"
+            ? t("noTreeAvailable", { workspace })
+            : t("noTreeLinked", {
+                main: mainFullName ?? row.fullName,
+              })}
+        </p>
+      ) : null}
 
       {initHref === null || initPr === null ? null : (
         <p data-testid="repository-dialog-init-pr" className={prose}>
@@ -206,25 +323,26 @@ function DialogBody({
         </p>
       )}
 
-      {ready !== null && !ready.oxagen.present && ready.head !== null ? (
-        <p data-testid="repository-dialog-ungoverned" className={prose}>
-          {repository.role === "linked"
-            ? t("ungovernedLinked")
-            : t("ungovernedMain")}
-        </p>
+      {row.role === "main" && !row.connectionLive ? (
+        <section aria-label={t("retiredLead")}>
+          <RepositorySetup org={org} ws={ws} onChanged={onChanged} />
+        </section>
       ) : null}
 
-      <ProductionBranchForm
-        org={org}
-        ws={ws}
-        repository={repository}
-        suggestion={
-          ready !== null && ready.githubDefaultBranch !== repository.defaultRef
-            ? ready.githubDefaultBranch
-            : null
-        }
-        onChanged={onChanged}
-      />
+      {row.bindingId === null ? null : (
+        <ProductionBranchForm
+          org={org}
+          ws={ws}
+          bindingId={row.bindingId}
+          current={row.productionBranch}
+          suggestion={
+            ready !== null && ready.githubDefaultBranch !== row.productionBranch
+              ? ready.githubDefaultBranch
+              : null
+          }
+          onChanged={onChanged}
+        />
+      )}
     </div>
   );
 }
@@ -238,16 +356,18 @@ function DialogBody({
 function ProductionBranchForm({
   org,
   ws,
-  repository,
+  bindingId,
+  current,
   suggestion,
   onChanged,
 }: {
   org: string;
   ws: string;
-  repository: BoundRepositoryRow;
+  bindingId: string;
+  current: string;
   /** GitHub's default branch when it differs from the production branch. */
   suggestion: string | null;
-  onChanged: (bindingId: string) => void;
+  onChanged: () => void;
 }) {
   const t = useTranslations("repositories.dialog.branch");
   const failureText = useRepositoriesFailure();
@@ -268,12 +388,7 @@ function ProductionBranchForm({
     setFailure(null);
     setDone(null);
     try {
-      const result = await setProductionBranch(
-        org,
-        ws,
-        repository.bindingId,
-        name,
-      );
+      const result = await setProductionBranch(org, ws, bindingId, name);
       if (result.ok) {
         setBranch("");
         setDone(
@@ -284,7 +399,7 @@ function ProductionBranchForm({
               })
             : t("unchanged", { branch: result.value.productionBranch }),
         );
-        if (result.value.changed) onChanged(result.value.bindingId);
+        if (result.value.changed) onChanged();
       } else setFailure(failureText(result));
     } catch {
       setFailure(failureText(UNANSWERED));
@@ -299,8 +414,14 @@ function ProductionBranchForm({
   }
 
   return (
-    <section aria-labelledby={`${fieldId}-heading`}>
-      <h3 id={`${fieldId}-heading`} className={sectionTitle}>
+    <section
+      aria-labelledby={`${fieldId}-heading`}
+      className="border-t border-border pt-3.5"
+    >
+      <h3
+        id={`${fieldId}-heading`}
+        className="text-[12.5px] font-semibold text-muted-foreground"
+      >
         {t("heading")}
       </h3>
       <p className={`mt-1 ${prose}`}>{t("about")}</p>
@@ -309,9 +430,7 @@ function ProductionBranchForm({
           data-testid="repository-dialog-branch-moved"
           className="mt-3 flex flex-col gap-2 rounded-md border border-border p-3"
         >
-          <p className={prose}>
-            {t("moved", { github: suggestion, current: repository.defaultRef })}
-          </p>
+          <p className={prose}>{t("moved", { github: suggestion, current })}</p>
           <div>
             <button
               type="button"
@@ -341,8 +460,8 @@ function ProductionBranchForm({
           id={fieldId}
           type="text"
           data-testid="repository-dialog-branch-input"
-          className={`mt-1 font-mono ${inputBase}`}
-          placeholder={repository.defaultRef}
+          className={`mt-1 font-mono text-base sm:text-[13px] ${inputBase}`}
+          placeholder={current}
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}

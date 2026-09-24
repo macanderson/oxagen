@@ -139,6 +139,7 @@ export function ssoSettings(overrides: Partial<SsoSettings> = {}): SsoSettings {
     providers: [ssoProvider()],
     policy: { ssoRequired: false },
     entitled: true,
+    scim: { baseUrl: "https://app.oxagen.sh/api/scim/v2", token: null },
     ...overrides,
   };
 }

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -7,10 +8,13 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "@/test/intl";
+import { TOAST_MS } from "@/ui/toast";
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -30,6 +34,12 @@ const live = {
   liveSignInSso: vi.fn(),
   rememberPendingNext: vi.fn(),
   takePendingNext: vi.fn(),
+  rememberPendingEmail: vi.fn(),
+  takePendingEmail: vi.fn(),
+  rememberNotice: vi.fn(),
+  takeNotice: vi.fn(),
+  rememberSignedIn: vi.fn(),
+  takeSignedIn: vi.fn(),
 };
 vi.mock("./auth-client", () => live);
 
@@ -45,9 +55,26 @@ const { ForgotPasswordForm, ResetPasswordForm } = await import(
 const { VerifyPanel } = await import("./verify-panel");
 const { InviteDecision } = await import("./invite-decision");
 const { OAuthButtons } = await import("./ui/oauth-buttons");
+const { InviteHint } = await import("./ui/invite-hint");
+const { SignedInToast } = await import("./ui/signed-in-toast");
+const { SsoSignIn } = await import("./ui/sso-sign-in");
+const { AuthAlert, AuthTags } = await import("./ui/auth-card");
 
 function renderWithIntl(ui: React.ReactNode) {
   return render(<IntlProvider>{ui}</IntlProvider>);
+}
+
+/**
+ * StrictMode at the root. React runs every mount effect twice only under a
+ * root StrictMode; one nested inside IntlProvider double-renders but runs each
+ * effect once, so a "taken once" assertion under it proves nothing.
+ */
+function renderStrict(ui: React.ReactNode) {
+  return render(
+    <StrictMode>
+      <IntlProvider>{ui}</IntlProvider>
+    </StrictMode>,
+  );
 }
 
 beforeEach(() => {
@@ -61,7 +88,25 @@ beforeEach(() => {
   }
   // Storage holds no remembered destination unless a test puts one there.
   live.takePendingNext.mockReturnValue(null);
+  live.takePendingEmail.mockReturnValue(null);
+  live.takeNotice.mockReturnValue(null);
+  live.takeSignedIn.mockReturnValue(false);
 });
+
+/** A promise that never settles: the form stays in its loading state. */
+const hang = () => new Promise<never>(() => {});
+
+/** The accessible names of the buttons, links and inputs in document order. */
+function controlOrder(root: HTMLElement): string[] {
+  return [
+    ...root.querySelectorAll<HTMLElement>(
+      "button, a, input:not([type=hidden])",
+    ),
+  ].map((el) => {
+    if (el instanceof HTMLInputElement) return `input#${el.id || el.name}`;
+    return el.textContent.trim();
+  });
+}
 afterEach(async () => {
   // INV-26: every test ends in a state of its section; axe checks it, portals included.
   try {
@@ -72,6 +117,55 @@ afterEach(async () => {
 });
 
 describe("LoginForm", () => {
+  it("lays the card out as the design does: providers, or, email, password, remember, log in, then SSO under the card", () => {
+    renderWithIntl(
+      <LoginForm
+        next={routes.root()}
+        header={<h1>Log in to Oxagen</h1>}
+        footer={<p>footer</p>}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Log in to Oxagen" }),
+    ).toBeInTheDocument();
+    expect(controlOrder(document.body)).toEqual([
+      "Continue with Google",
+      "Continue with GitHub",
+      "input#login-email",
+      "Forgot password?",
+      "input#login-password",
+      "Show",
+      "input#rememberMe",
+      "Log in",
+      "Sign in with SSO",
+    ]);
+    // Single sign-on is not part of the design's card.
+    expect(screen.getByTestId("login-card")).not.toHaveTextContent(
+      "Sign in with SSO",
+    );
+    expect(screen.getByText("or")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByLabelText("Work email")).toHaveAttribute(
+      "autocomplete",
+      "username",
+    );
+    expect(screen.getByLabelText("Password")).toHaveAttribute(
+      "autocomplete",
+      "current-password",
+    );
+    expect(
+      screen.getByRole("link", { name: "Forgot password?" }),
+    ).toHaveAttribute("href", "/forgot-password");
+    expect(
+      screen.getByLabelText("Keep me logged in on this device for 30 days"),
+    ).toBeChecked();
+    // One gold action on the screen.
+    const gold = [...document.querySelectorAll("button, a")].filter((el) =>
+      el.className.includes("bg-button-primary-bg"),
+    );
+    expect(gold.map((el) => el.textContent)).toEqual(["Log in"]);
+    expect(screen.getByText("footer")).toBeInTheDocument();
+  });
+
   it("shows a message under each empty field and calls nothing", async () => {
     renderWithIntl(<LoginForm next={routes.root()} />);
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -86,7 +180,16 @@ describe("LoginForm", () => {
     expect(live.liveSignIn).not.toHaveBeenCalled();
   });
 
-  it("announces wrong credentials", async () => {
+  it("toggles the password between hidden and shown", async () => {
+    renderWithIntl(<LoginForm next={routes.root()} />);
+    const input = screen.getByLabelText("Password");
+    await userEvent.click(screen.getByRole("button", { name: "Show" }));
+    expect(input).toHaveAttribute("type", "text");
+    await userEvent.click(screen.getByRole("button", { name: "Hide" }));
+    expect(input).toHaveAttribute("type", "password");
+  });
+
+  it("wrong credentials: the alert above the providers in the design's words, the email marked", async () => {
     live.liveSignIn.mockResolvedValue({
       ok: false,
       outcome: "wrongCredentials",
@@ -98,8 +201,21 @@ describe("LoginForm", () => {
     );
     await userEvent.type(screen.getByLabelText("Password"), "nope");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Email or password is wrong",
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Email or password is wrong. Check both and try again, or reset your password.",
+    );
+    expect(alert.querySelector("b")).toHaveTextContent(
+      "Email or password is wrong.",
+    );
+    expect(
+      alert.compareDocumentPosition(
+        screen.getByRole("button", { name: "Continue with Google" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByLabelText("Work email")).toHaveAttribute(
+      "aria-invalid",
+      "true",
     );
     expect(live.liveSignIn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -111,7 +227,47 @@ describe("LoginForm", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("a second factor continues at /two-factor carrying next, and remembers it", async () => {
+  it("loading: the button spins, reads Logging in… and is aria-disabled, and the form stays", async () => {
+    live.liveSignIn.mockReturnValue(hang());
+    renderWithIntl(<LoginForm next={routes.root()} />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.type(screen.getByLabelText("Password"), "x");
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }));
+    const busy = await screen.findByRole("button", { name: "Logging in…" });
+    expect(busy).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByLabelText("Work email")).toHaveValue("a@b.co");
+  });
+
+  it("suspended: one full card replaces the header, the form and the footer", async () => {
+    live.liveSignIn.mockResolvedValue({ ok: false, outcome: "suspended" });
+    renderWithIntl(
+      <LoginForm
+        next={routes.root()}
+        header={<h1>Log in to Oxagen</h1>}
+        footer={<p>footer</p>}
+      />,
+    );
+    await userEvent.type(
+      screen.getByLabelText("Work email"),
+      "marcus@a-intel.example",
+    );
+    await userEvent.type(screen.getByLabelText("Password"), "x");
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }));
+    const state = await screen.findByTestId("login-suspended");
+    expect(
+      screen.getByRole("heading", { name: "This account is suspended" }),
+    ).toBeInTheDocument();
+    expect(state).toHaveTextContent(
+      "marcus@a-intel.example is suspended. Runs already recorded are kept; no new run tokens are minted.",
+    );
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByText("footer")).toBeNull();
+    expect(screen.queryByRole("form")).toBeNull();
+    // No gold action on the suspended card.
+    expect(document.querySelector(".bg-button-primary-bg")).toBeNull();
+  });
+
+  it("a second factor continues at /two-factor carrying next, and remembers it and the address", async () => {
     live.liveSignIn.mockResolvedValue({ ok: true, twoFactor: true });
     renderWithIntl(<LoginForm next={routes.people("acme")} />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
@@ -121,6 +277,9 @@ describe("LoginForm", () => {
       expect(router.replace).toHaveBeenCalledWith("/two-factor?next=%2Facme");
     });
     expect(live.rememberPendingNext).toHaveBeenCalledWith("/acme");
+    expect(live.rememberPendingEmail).toHaveBeenCalledWith("a@b.co");
+    // The toast waits for the second factor.
+    expect(live.rememberSignedIn).not.toHaveBeenCalled();
   });
 
   it("an unverified email goes to verify", async () => {
@@ -148,7 +307,7 @@ describe("LoginForm", () => {
     );
   });
 
-  it("a plain success goes to next", async () => {
+  it("a plain success goes to next and leaves the signed-in toast for it", async () => {
     live.liveSignIn.mockResolvedValue({ ok: true, twoFactor: false });
     renderWithIntl(<LoginForm next={routes.people("acme")} />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
@@ -157,6 +316,68 @@ describe("LoginForm", () => {
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith("/acme");
     });
+    expect(live.rememberSignedIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a signed-in mark a failed sign-in left behind, once (negative)", () => {
+    renderStrict(
+      <LoginForm next={routes.root()} initialOutcome="oauthFailed" />,
+    );
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+    expect(live.rememberSignedIn).not.toHaveBeenCalled();
+  });
+
+  it("after a reset it says the password is set, once", async () => {
+    live.takeNotice.mockReturnValue("passwordSet");
+    renderWithIntl(<LoginForm next={routes.root()} />);
+    expect(await screen.findByTestId("login-notice")).toHaveTextContent(
+      "Password set. Every other device was logged out.",
+    );
+    expect(live.takeNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it("a second press while signing in sends nothing more (negative)", async () => {
+    live.liveSignIn.mockReturnValue(hang());
+    renderWithIntl(<LoginForm next={routes.root()} />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.type(screen.getByLabelText("Password"), "x");
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Logging in…" }),
+    );
+    expect(live.liveSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("suspended from the page's ?error= is the full card, naming no address", () => {
+    renderWithIntl(
+      <LoginForm
+        next={routes.root()}
+        initialOutcome="suspended"
+        header={<h1>Log in to Oxagen</h1>}
+      />,
+    );
+    expect(screen.getByTestId("login-suspended")).toHaveTextContent(
+      "This account is suspended. Runs already recorded are kept; no new run tokens are minted.",
+    );
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByRole("form")).toBeNull();
+  });
+});
+
+describe("InviteHint", () => {
+  it("Accept it says where the invitation opens", async () => {
+    renderWithIntl(
+      <p>
+        <InviteHint />
+      </p>,
+    );
+    const button = screen.getByRole("button", { name: "Accept it" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(button);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Open the link in your invitation email to accept it.",
+    );
   });
 });
 
@@ -184,6 +405,8 @@ describe("LoginForm SSO entry", () => {
       callbackURL: "/acme",
     });
     expect(live.liveSignIn).not.toHaveBeenCalled();
+    // Marked before the browser leaves for the identity provider.
+    expect(live.rememberSignedIn).toHaveBeenCalledTimes(1);
   });
 
   it("validates the email before calling anything", async () => {
@@ -251,10 +474,59 @@ describe("LoginForm SSO entry", () => {
     );
     expect(screen.queryByTestId("login-outcome")).not.toBeInTheDocument();
   });
+
+  it("a second press while redirecting sends nothing more (negative)", async () => {
+    live.liveSignInSso.mockReturnValue(hang());
+    renderWithIntl(<SsoSignIn callbackURL={routes.root()} startOpen />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@acme.example");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Redirecting…" }),
+    );
+    expect(live.liveSignInSso).toHaveBeenCalledTimes(1);
+    expect(live.rememberSignedIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("a start that throws reads as unavailable in the SSO form, drops the mark, and can be retried", async () => {
+    live.liveSignInSso.mockRejectedValue(new Error("network"));
+    renderWithIntl(<SsoSignIn callbackURL={routes.root()} startOpen />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@acme.example");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    );
+    expect(await within(ssoForm()).findByRole("alert")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    ).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("a start that succeeds stays pending while the browser leaves, and keeps the mark", async () => {
+    live.liveSignInSso.mockResolvedValue({ ok: true });
+    renderWithIntl(<SsoSignIn callbackURL={routes.root()} startOpen />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@acme.example");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    );
+    await waitFor(() => {
+      expect(live.liveSignInSso).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      screen.getByRole("button", { name: "Redirecting…" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(within(ssoForm()).queryByRole("alert")).toBeNull();
+    expect(live.takeSignedIn).not.toHaveBeenCalled();
+  });
 });
 
 describe("SignupForm", () => {
-  async function fill(password = "mission-control") {
+  const STRONG = "mission-control-9";
+
+  async function fill(password = STRONG) {
     await userEvent.type(screen.getByLabelText("Name"), "Marcus Bell");
     await userEvent.type(
       screen.getByLabelText("Work email"),
@@ -266,10 +538,71 @@ describe("SignupForm", () => {
     );
   }
 
-  it("validates the password length", async () => {
+  it("lays the card out as the design does, with the terms under the button", () => {
     renderWithIntl(<SignupForm />);
-    await fill("short");
-    expect(screen.getByText("Use at least 8 characters.")).toBeInTheDocument();
+    expect(controlOrder(document.body)).toEqual([
+      "Continue with Google",
+      "Continue with GitHub",
+      "input#signup-name",
+      "input#signup-email",
+      "input#signup-password",
+      "Show",
+      "Create account",
+    ]);
+    expect(screen.getByLabelText("Name")).toHaveAttribute(
+      "autocomplete",
+      "name",
+    );
+    expect(screen.getByLabelText("Work email")).toHaveAttribute(
+      "autocomplete",
+      "email",
+    );
+    expect(screen.getByLabelText("Password")).toHaveAttribute(
+      "autocomplete",
+      "new-password",
+    );
+    expect(document.body).toHaveTextContent(
+      "By creating an account you agree to the Oxagen terms and privacy notice. Oxagen never stores your model provider keys in plain text, and never returns them once saved.",
+    );
+  });
+
+  it("the meter and the three requirements tick as the password meets them", async () => {
+    renderWithIntl(<SignupForm />);
+    const list = screen.getByRole("list", { name: "Password requirements" });
+    expect(screen.getByLabelText("Password")).toHaveAccessibleDescription(
+      /at least 12 characters/,
+    );
+    expect(screen.getByTestId("password-meter")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    const lit = () =>
+      screen.getByTestId("password-meter").querySelectorAll("[data-on]").length;
+    expect(lit()).toBe(0);
+    expect(within(list).getAllByText("not met")).toHaveLength(3);
+    await userEvent.type(screen.getByLabelText("Password"), "abcd");
+    expect(lit()).toBe(1);
+    await userEvent.type(screen.getByLabelText("Password"), "-");
+    expect(within(list).getByText("one symbol").closest("li")).toHaveAttribute(
+      "data-met",
+      "true",
+    );
+    expect(
+      within(list).getByText("one digit").closest("li"),
+    ).not.toHaveAttribute("data-met");
+    await userEvent.type(screen.getByLabelText("Password"), "efgh-ijk9");
+    expect(lit()).toBe(3);
+    expect(within(list).getAllByText("met")).toHaveLength(3);
+  });
+
+  it.each([
+    ["short-1", "Use at least 12 characters."],
+    ["missioncontrol9", "Add a symbol."],
+    ["mission-control", "Add a digit."],
+  ])("refuses %s before calling anything", async (password, message) => {
+    renderWithIntl(<SignupForm />);
+    await fill(password);
+    expect(screen.getByText(message)).toBeInTheDocument();
     expect(live.liveSignUp).not.toHaveBeenCalled();
   });
 
@@ -279,8 +612,38 @@ describe("SignupForm", () => {
     expect(input).toHaveAttribute("type", "password");
     await userEvent.click(screen.getByRole("button", { name: "Show" }));
     expect(input).toHaveAttribute("type", "text");
-    expect(screen.getByRole("button", { name: "Hide" })).toHaveAttribute(
-      "aria-pressed",
+    // The word alone names the state, as the design draws it.
+    expect(screen.getByRole("button", { name: "Hide" })).toHaveTextContent(
+      /^Hide$/,
+    );
+  });
+
+  it("loading: Creating account… is aria-disabled and the form stays", async () => {
+    live.liveSignUp.mockReturnValue(hang());
+    renderWithIntl(<SignupForm />);
+    await fill();
+    expect(
+      await screen.findByRole("button", { name: "Creating account…" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByLabelText("Name")).toHaveValue("Marcus Bell");
+  });
+
+  it("a registered address: the alert in the design's words above the providers, the email marked", async () => {
+    live.liveSignUp.mockResolvedValue({
+      ok: false,
+      outcome: "alreadyRegistered",
+    });
+    renderWithIntl(<SignupForm />);
+    await fill();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "That email is already registered. Log in instead, or reset your password.",
+    );
+    expect(alert.querySelector("b")).toHaveTextContent(
+      "That email is already registered.",
+    );
+    expect(screen.getByLabelText("Work email")).toHaveAttribute(
+      "aria-invalid",
       "true",
     );
   });
@@ -313,53 +676,202 @@ describe("SignupForm", () => {
       "Too many attempts",
     );
   });
+
+  it("social sign-up continues to the page's next", async () => {
+    live.liveSignInSocial.mockResolvedValue({ ok: true });
+    renderWithIntl(<SignupForm />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    );
+    await waitFor(() => {
+      expect(live.liveSignInSocial).toHaveBeenCalledWith({
+        provider: "google",
+        callbackURL: "/new-organization",
+      });
+    });
+  });
+
+  it("a second press while creating sends nothing more (negative)", async () => {
+    live.liveSignUp.mockReturnValue(hang());
+    renderWithIntl(<SignupForm />);
+    await fill();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Creating account…" }),
+    );
+    expect(live.liveSignUp).toHaveBeenCalledTimes(1);
+  });
+
+  it("a thrown client error reads as unavailable and goes nowhere", async () => {
+    live.liveSignUp.mockRejectedValue(new Error("network"));
+    renderWithIntl(<SignupForm />);
+    await fill();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });
 
 describe("TwoFactorForm", () => {
+  const renderForm = (next = routes.root()) =>
+    renderWithIntl(
+      <TwoFactorForm
+        next={next}
+        eyebrow="Step 2 of 2"
+        title="Two-factor authentication"
+      />,
+    );
+  const box = (n: number) =>
+    screen.getByRole("textbox", { name: `digit ${String(n)}` });
+
+  async function typeCode(code: string) {
+    await userEvent.click(box(1));
+    await userEvent.keyboard(code);
+  }
+
+  it("renders the header, six numeric one-digit boxes, the recovery switch and the expiry", async () => {
+    live.takePendingEmail.mockReturnValue("marcus@a-intel.example");
+    renderForm();
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Two-factor authentication",
+      }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent(
+        "Enter the six-digit code from your authenticator app for marcus@a-intel.example.",
+      );
+    });
+    expect(
+      screen.getByRole("group", { name: "Authentication code" }),
+    ).toBeInTheDocument();
+    for (const n of [1, 2, 3, 4, 5, 6]) {
+      expect(box(n)).toHaveAttribute("inputmode", "numeric");
+      expect(box(n)).toHaveAttribute("id", `two-factor-code-${String(n)}`);
+    }
+    expect(box(2)).toHaveAttribute("maxlength", "1");
+    expect(
+      screen.getByRole("button", { name: "Use a recovery code instead" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByTestId("two-factor-expiry")).toHaveTextContent(
+      /^expires 0:\d{2}$/,
+    );
+  });
+
+  it("takes the remembered address once, even when React runs effects twice", async () => {
+    live.takePendingEmail.mockReturnValueOnce("marcus@a-intel.example");
+    render(
+      <StrictMode>
+        <IntlProvider>
+          <TwoFactorForm
+            next={routes.root()}
+            eyebrow="Step 2 of 2"
+            title="Two-factor authentication"
+          />
+        </IntlProvider>
+      </StrictMode>,
+    );
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent("marcus@a-intel.example");
+    });
+    expect(live.takePendingEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("without a remembered address the lead names none", () => {
+    renderForm();
+    expect(document.body).toHaveTextContent(
+      "Enter the six-digit code from your authenticator app.",
+    );
+  });
+
+  it("typing moves forward, Backspace on an empty box moves back", async () => {
+    renderForm();
+    await typeCode("12");
+    expect(box(1)).toHaveValue("1");
+    expect(box(2)).toHaveValue("2");
+    expect(box(3)).toHaveFocus();
+    await userEvent.keyboard("{Backspace}");
+    expect(box(2)).toHaveFocus();
+    expect(box(2)).toHaveValue("");
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(box(1)).toHaveFocus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(box(2)).toHaveFocus();
+  });
+
+  it("a pasted code fills every box", async () => {
+    live.liveVerifyTwoFactor.mockResolvedValue({ ok: true });
+    renderForm();
+    await userEvent.click(box(1));
+    await userEvent.paste("602 914");
+    expect(
+      [1, 2, 3, 4, 5, 6].map((n) => {
+        const input = box(n);
+        return input instanceof HTMLInputElement ? input.value : null;
+      }),
+    ).toEqual(["6", "0", "2", "9", "1", "4"]);
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+    await waitFor(() => {
+      expect(live.liveVerifyTwoFactor).toHaveBeenCalledWith({
+        method: "totp",
+        code: "602914",
+      });
+    });
+  });
+
   it("validates six digits", async () => {
-    renderWithIntl(<TwoFactorForm next={routes.root()} />);
-    await userEvent.type(screen.getByLabelText("Authentication code"), "123");
+    renderForm();
+    await typeCode("123");
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
     expect(
       screen.getByText("Enter the six digits from your authenticator app."),
     ).toBeInTheDocument();
+    expect(box(1)).toHaveAttribute("aria-invalid", "true");
+    expect(live.liveVerifyTwoFactor).not.toHaveBeenCalled();
   });
 
-  it("a wrong code is announced; a good one goes to next", async () => {
+  it("loading: Verifying… is aria-disabled and the boxes keep the code", async () => {
+    live.liveVerifyTwoFactor.mockReturnValue(hang());
+    renderForm();
+    await typeCode("602914");
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+    expect(
+      await screen.findByRole("button", { name: "Verifying…" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(box(6)).toHaveValue("4");
+  });
+
+  it("a wrong code is announced and empties the boxes; a good one goes to next", async () => {
     live.liveVerifyTwoFactor.mockResolvedValueOnce({
       ok: false,
       outcome: "codeWrong",
     });
-    renderWithIntl(<TwoFactorForm next={routes.people("acme")} />);
-    await userEvent.type(
-      screen.getByLabelText("Authentication code"),
-      "000000",
-    );
+    renderForm(routes.people("acme"));
+    await typeCode("000000");
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "That code is wrong",
-    );
+    const alert = await screen.findByRole("alert");
+    expect(alert.querySelector("b")).toHaveTextContent("That code is wrong.");
+    for (const n of [1, 2, 3, 4, 5, 6]) expect(box(n)).toHaveValue("");
+    expect(box(1)).toHaveFocus();
+
+    expect(live.rememberSignedIn).not.toHaveBeenCalled();
 
     live.liveVerifyTwoFactor.mockResolvedValueOnce({ ok: true });
-    await userEvent.clear(screen.getByLabelText("Authentication code"));
-    await userEvent.type(
-      screen.getByLabelText("Authentication code"),
-      "602914",
-    );
+    await typeCode("602914");
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith("/acme");
     });
+    // The destination shows "Signed in as …" once.
+    expect(live.rememberSignedIn).toHaveBeenCalledTimes(1);
   });
 
   it("resumes at the destination remembered before Better Auth's redirect", async () => {
     live.takePendingNext.mockReturnValue("/acme/core-platform");
     live.liveVerifyTwoFactor.mockResolvedValue({ ok: true });
-    renderWithIntl(<TwoFactorForm next={routes.root()} />);
-    await userEvent.type(
-      screen.getByLabelText("Authentication code"),
-      "602914",
-    );
+    renderForm();
+    await typeCode("602914");
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith("/acme/core-platform");
@@ -369,11 +881,8 @@ describe("TwoFactorForm", () => {
   it("ignores a remembered destination that is not same-origin", async () => {
     live.takePendingNext.mockReturnValue("//evil.example");
     live.liveVerifyTwoFactor.mockResolvedValue({ ok: true });
-    renderWithIntl(<TwoFactorForm next={routes.root()} />);
-    await userEvent.type(
-      screen.getByLabelText("Authentication code"),
-      "602914",
-    );
+    renderForm();
+    await typeCode("602914");
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith("/");
@@ -385,10 +894,11 @@ describe("TwoFactorForm", () => {
       ok: false,
       outcome: "codeWrong",
     });
-    renderWithIntl(<TwoFactorForm next={routes.root()} />);
+    renderForm();
     await userEvent.click(
       screen.getByRole("button", { name: "Use a recovery code instead" }),
     );
+    expect(screen.queryByTestId("two-factor-expiry")).toBeNull();
     await userEvent.type(screen.getByLabelText("Recovery code"), "AbCd3-fGh1j");
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => {
@@ -402,17 +912,105 @@ describe("TwoFactorForm", () => {
         name: "Use your authenticator app instead",
       }),
     );
-    expect(screen.getByLabelText("Authentication code")).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Authentication code" }),
+    ).toBeInTheDocument();
+  });
+
+  it("an empty recovery code is refused under its field and sends nothing", async () => {
+    renderForm();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Use a recovery code instead" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+    expect(screen.getByLabelText("Recovery code")).toHaveAccessibleDescription(
+      "Enter a recovery code exactly as it was issued.",
+    );
+    expect(live.liveVerifyTwoFactor).not.toHaveBeenCalled();
+  });
+
+  it("a second press while verifying sends nothing more (negative)", async () => {
+    live.liveVerifyTwoFactor.mockReturnValue(hang());
+    renderForm();
+    await typeCode("602914");
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Verifying…" }),
+    );
+    expect(live.liveVerifyTwoFactor).toHaveBeenCalledTimes(1);
+  });
+
+  it("a thrown client error reads as unavailable and signs nobody in", async () => {
+    live.liveVerifyTwoFactor.mockRejectedValue(new Error("network"));
+    renderForm();
+    await typeCode("602914");
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(live.rememberSignedIn).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("the server render carries no expiry clock, so the hydrating render matches it", () => {
+    const html = renderToString(
+      <IntlProvider>
+        <TwoFactorForm
+          next={routes.root()}
+          eyebrow="Step 2 of 2"
+          title="Two-factor authentication"
+        />
+      </IntlProvider>,
+    );
+    expect(html).toContain("Two-factor authentication");
+    expect(html).not.toContain("two-factor-expiry");
+  });
+
+  it("a letter typed into a box fills nothing and keeps the focus (negative)", async () => {
+    renderForm();
+    await userEvent.click(box(1));
+    await userEvent.keyboard("a");
+    expect(box(1)).toHaveValue("");
+    expect(box(1)).toHaveFocus();
+  });
+
+  it("deleting the digit in a filled box empties that box and stays on it", async () => {
+    renderForm();
+    await typeCode("12");
+    await userEvent.click(box(2));
+    await userEvent.keyboard("{Backspace}");
+    expect(box(2)).toHaveValue("");
+    expect(box(1)).toHaveValue("1");
+    expect(box(2)).toHaveFocus();
+  });
+
+  it("a digit typed after the one already in a box replaces it and moves on", async () => {
+    renderForm();
+    await typeCode("1");
+    await userEvent.click(box(1));
+    await userEvent.keyboard("{End}5");
+    expect(box(1)).toHaveValue("5");
+    expect(box(2)).toHaveValue("");
+    expect(box(2)).toHaveFocus();
   });
 });
 
 describe("ForgotPasswordForm", () => {
-  it("validates, then shows the neutral confirmation, and can send again", async () => {
+  const frame = {
+    header: <h1>Reset your password</h1>,
+    footer: <p>Back to log in</p>,
+  };
+
+  it("validates, then replaces the page with the success-toned sent card and keeps the footer", async () => {
     actions.requestPasswordReset.mockResolvedValue({
       ok: true,
       to: "/forgot-password",
     });
-    renderWithIntl(<ForgotPasswordForm />);
+    renderWithIntl(<ForgotPasswordForm {...frame} />);
+    expect(screen.getByLabelText("Work email")).toHaveAttribute(
+      "autocomplete",
+      "username",
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Send reset link" }),
     );
@@ -425,17 +1023,34 @@ describe("ForgotPasswordForm", () => {
       screen.getByRole("button", { name: "Send reset link" }),
     );
     expect(await screen.findByTestId("forgot-sent")).toHaveTextContent(
-      "If an account exists for anyone@acme.example",
+      "Reset link sentIf an account exists for anyone@acme.example a reset link is on its way. The link is good for 60 minutes and can be used once.",
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Send another link" }),
-    );
-    expect(screen.getByLabelText("Work email")).toBeInTheDocument();
+    // The design's `ob-state ok`: the Inbox glyph on the success tone.
+    const glyph = screen
+      .getByTestId("forgot-sent")
+      .querySelector("svg")?.parentElement;
+    expect(glyph?.className).toContain("text-success");
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.getByText("Back to log in")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("reports an action failure as unavailable", async () => {
+  it("loading: Sending… is aria-disabled and the address stays", async () => {
+    actions.requestPasswordReset.mockReturnValue(hang());
+    renderWithIntl(<ForgotPasswordForm {...frame} />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send reset link" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Sending…" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByLabelText("Work email")).toHaveValue("a@b.co");
+  });
+
+  it("an action that fails says the email was not sent", async () => {
     actions.requestPasswordReset.mockRejectedValue(new Error("down"));
-    renderWithIntl(<ForgotPasswordForm />);
+    renderWithIntl(<ForgotPasswordForm {...frame} />);
     await userEvent.type(
       screen.getByLabelText("Work email"),
       "anyone@acme.example",
@@ -443,38 +1058,123 @@ describe("ForgotPasswordForm", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Send reset link" }),
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent("unavailable");
+    const alert = await screen.findByRole("alert");
+    expect(alert.querySelector("b")).toHaveTextContent(
+      "We could not send that email.",
+    );
+    expect(alert).toHaveTextContent("Try again in a minute.");
+  });
+
+  it("a second press while sending sends nothing more (negative)", async () => {
+    actions.requestPasswordReset.mockReturnValue(hang());
+    renderWithIntl(<ForgotPasswordForm {...frame} />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send reset link" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Sending…" }),
+    );
+    expect(actions.requestPasswordReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refusal shows the server's field error, and one naming no field reads as an invalid address", async () => {
+    actions.requestPasswordReset.mockResolvedValueOnce({
+      ok: false,
+      fields: { email: "emailRequired" },
+    });
+    renderWithIntl(<ForgotPasswordForm {...frame} />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send reset link" }),
+    );
+    expect(
+      await screen.findByText("Enter your work email."),
+    ).toBeInTheDocument();
+    actions.requestPasswordReset.mockResolvedValueOnce({ ok: false });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send reset link" }),
+    );
+    expect(screen.getByLabelText("Work email")).toHaveAccessibleDescription(
+      "Enter an email address like name@company.com.",
+    );
+    expect(screen.queryByTestId("forgot-sent")).toBeNull();
   });
 });
 
 describe("ResetPasswordForm", () => {
+  const STRONG = "Rq7!mesa-lattice";
+
   async function submit(a: string, b: string) {
     await userEvent.type(screen.getByLabelText("New password"), a);
     await userEvent.type(screen.getByLabelText("Confirm new password"), b);
     await userEvent.click(screen.getByRole("button", { name: "Set password" }));
   }
 
-  it("a missing token is the expired state", () => {
-    renderWithIntl(<ResetPasswordForm token="" />);
-    expect(screen.getByTestId("reset-expired")).toHaveTextContent(
-      "This reset link has expired",
+  it("a missing token is the expired card, in place of the header", () => {
+    renderWithIntl(
+      <ResetPasswordForm token="" header={<h1>Set a new password</h1>} />,
     );
+    expect(screen.getByTestId("reset-expired")).toHaveTextContent(
+      "This reset link has expiredReset links last 60 minutes and can be used once. Request a new one and it will arrive in under a minute.",
+    );
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    const request = screen.getByRole("link", { name: "Request a new link" });
+    expect(request).toHaveAttribute("href", "/forgot-password");
+    expect(request.className).not.toContain("bg-button-primary-bg");
   });
 
-  it("validates matching passwords", async () => {
-    renderWithIntl(<ResetPasswordForm token="rst_1" />);
-    await submit("Rq7!mesa-lattice", "Rq7!mesa-latice");
+  it("carries the meter and requirements, and no footer link", () => {
+    renderWithIntl(
+      <ResetPasswordForm token="rst_1" header={<h1>Set a new password</h1>} />,
+    );
     expect(
-      screen.getByText(/The two passwords do not match/),
+      screen.getByRole("list", { name: "Password requirements" }),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("New password")).toHaveAttribute(
+      "autocomplete",
+      "new-password",
+    );
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("a mismatch is the alert above the form, with the confirmation marked", async () => {
+    renderWithIntl(<ResetPasswordForm token="rst_1" />);
+    await submit(STRONG, "Rq7!mesa-latice");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(
+      "The two passwords do not match. Retype the confirmation.",
+    );
+    expect(screen.getByLabelText("Confirm new password")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(screen.getAllByText(/do not match/)).toHaveLength(1);
     expect(actions.resetPassword).not.toHaveBeenCalled();
   });
 
-  it("shows done on success and expired on a spent link", async () => {
+  it("loading: Saving… is aria-disabled", async () => {
+    actions.resetPassword.mockReturnValue(hang());
+    renderWithIntl(<ResetPasswordForm token="rst_1" />);
+    await submit(STRONG, STRONG);
+    expect(
+      await screen.findByRole("button", { name: "Saving…" }),
+    ).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("success returns to Log in with the notice; a spent link is the expired card", async () => {
     actions.resetPassword.mockResolvedValueOnce({ ok: true, to: "/login" });
     const { unmount } = renderWithIntl(<ResetPasswordForm token="rst_1" />);
-    await submit("Rq7!mesa-lattice", "Rq7!mesa-lattice");
-    expect(await screen.findByTestId("reset-done")).toBeInTheDocument();
+    await submit(STRONG, STRONG);
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith("/login");
+    });
+    expect(live.rememberNotice).toHaveBeenCalledWith("passwordSet");
+    expect(actions.resetPassword).toHaveBeenCalledWith({
+      token: "rst_1",
+      newPassword: STRONG,
+      confirmPassword: STRONG,
+    });
     unmount();
 
     actions.resetPassword.mockResolvedValueOnce({
@@ -482,7 +1182,7 @@ describe("ResetPasswordForm", () => {
       outcome: "linkExpired",
     });
     renderWithIntl(<ResetPasswordForm token="rst_2" />);
-    await submit("Rq7!mesa-lattice", "Rq7!mesa-lattice");
+    await submit(STRONG, STRONG);
     expect(await screen.findByTestId("reset-expired")).toBeInTheDocument();
   });
 
@@ -492,7 +1192,7 @@ describe("ResetPasswordForm", () => {
       fields: { newPassword: "passwordTooLong" },
     });
     renderWithIntl(<ResetPasswordForm token="rst_1" />);
-    await submit("Rq7!mesa-lattice", "Rq7!mesa-lattice");
+    await submit(STRONG, STRONG);
     expect(
       await screen.findByText("Use at most 128 characters."),
     ).toBeInTheDocument();
@@ -505,15 +1205,72 @@ describe("ResetPasswordForm", () => {
       "Too many attempts",
     );
   });
+
+  it("a second press while saving sends nothing more (negative)", async () => {
+    actions.resetPassword.mockReturnValue(hang());
+    renderWithIntl(<ResetPasswordForm token="rst_1" />);
+    await submit(STRONG, STRONG);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Saving…" }),
+    );
+    expect(actions.resetPassword).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refusal that names neither a field nor an outcome reads as the generic failure", async () => {
+    actions.resetPassword.mockResolvedValue({ ok: false });
+    renderWithIntl(<ResetPasswordForm token="rst_1" />);
+    await submit(STRONG, STRONG);
+    expect(await screen.findByTestId("reset-outcome")).toHaveTextContent(
+      "That did not work. Try again, and contact support if it keeps happening.",
+    );
+  });
+
+  it("a thrown action reads as unavailable and keeps the form", async () => {
+    actions.resetPassword.mockRejectedValue(new Error("down"));
+    renderWithIntl(<ResetPasswordForm token="rst_1" />);
+    await submit(STRONG, STRONG);
+    expect(await screen.findByTestId("reset-outcome")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });
 
 describe("VerifyPanel", () => {
-  it("announces a spent link, validates the address and confirms a resend neutrally", async () => {
+  it("with the address: Did not arrive? and a resend that sends it", async () => {
+    actions.resendVerification.mockResolvedValue({ ok: true, to: "/verify" });
+    renderWithIntl(
+      <VerifyPanel
+        email="m@acme.example"
+        expired={false}
+        next="/new-organization"
+      />,
+    );
+    expect(screen.queryByLabelText("Work email")).toBeNull();
+    expect(screen.queryByTestId("verify-expired")).toBeNull();
+    expect(document.body).toHaveTextContent("Did not arrive?");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    expect(await screen.findByTestId("verify-resent")).toHaveTextContent(
+      "If an account for that address is waiting to be verified, a new link is on its way.",
+    );
+    expect(actions.resendVerification).toHaveBeenCalledWith({
+      email: "m@acme.example",
+      next: "/new-organization",
+    });
+  });
+
+  it("without one: announces a spent link, validates the address and confirms a resend neutrally", async () => {
     actions.resendVerification.mockResolvedValue({ ok: true, to: "/verify" });
     renderWithIntl(
       <VerifyPanel email={null} expired next="/new-organization" />,
     );
-    expect(screen.getByTestId("verify-expired")).toBeInTheDocument();
+    const alert = screen.getByTestId("verify-expired");
+    expect(alert).toHaveTextContent(
+      "That link has expired. Links last 60 minutes. Send a new one below.",
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Send a new link" }),
     );
@@ -532,49 +1289,115 @@ describe("VerifyPanel", () => {
     });
   });
 
-  it("prefills the address it was given", () => {
+  it("a refused address shows under the resend", async () => {
+    actions.resendVerification.mockResolvedValue({
+      ok: false,
+      fields: { email: "emailInvalid" },
+    });
     renderWithIntl(
-      <VerifyPanel
-        email="m@acme.example"
-        expired={false}
-        next="/new-organization"
-      />,
+      <VerifyPanel email="m@acme.example" expired={false} next="/x" />,
     );
-    expect(screen.getByLabelText("Work email")).toHaveValue("m@acme.example");
-    expect(screen.queryByTestId("verify-expired")).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    expect(
+      await screen.findByText("Enter an email address like name@company.com."),
+    ).toBeInTheDocument();
+  });
+
+  it("a refusal naming no field reads as an invalid address", async () => {
+    actions.resendVerification.mockResolvedValue({ ok: false });
+    renderWithIntl(<VerifyPanel email={null} expired={false} next="/x" />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText("Work email")).toHaveAccessibleDescription(
+        "Enter an email address like name@company.com.",
+      );
+    });
+    expect(screen.queryByTestId("verify-resent")).toBeNull();
+  });
+
+  it("a resend that throws reads as unavailable and can be retried (negative)", async () => {
+    actions.resendVerification.mockRejectedValueOnce(new Error("offline"));
+    renderWithIntl(
+      <VerifyPanel email="m@acme.example" expired={false} next="/x" />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    expect(await screen.findByTestId("verify-outcome")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(screen.queryByTestId("verify-resent")).toBeNull();
+    actions.resendVerification.mockResolvedValue({ ok: true, to: "/verify" });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    expect(await screen.findByTestId("verify-resent")).toBeInTheDocument();
+    expect(screen.queryByTestId("verify-outcome")).toBeNull();
+  });
+
+  it("a second press while sending sends nothing more (negative)", async () => {
+    actions.resendVerification.mockReturnValue(hang());
+    renderWithIntl(
+      <VerifyPanel email="m@acme.example" expired={false} next="/x" />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Sending…" }),
+    );
+    expect(actions.resendVerification).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("InviteDecision", () => {
-  it("accept replaces the page with the organization", async () => {
+  it("accept replaces the page with the action's landing and leaves the signed-in toast for it", async () => {
     inviteActions.acceptInvitation.mockResolvedValue({
       ok: true,
-      value: { to: "/acme" },
+      value: { to: "/acme/core-platform" },
     });
-    renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
+    renderWithIntl(<InviteDecision token="invi_1" />);
     await userEvent.click(
       screen.getByRole("button", { name: "Accept invitation" }),
     );
     await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith("/acme");
+      expect(router.replace).toHaveBeenCalledWith("/acme/core-platform");
     });
+    expect(live.rememberSignedIn).toHaveBeenCalledTimes(1);
   });
 
-  it("decline confirms without navigating", async () => {
+  it("loading: Accepting… on Accept while Decline stays", async () => {
+    inviteActions.acceptInvitation.mockReturnValue(hang());
+    renderWithIntl(<InviteDecision token="invi_1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Accept invitation" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Accepting…" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
+  });
+
+  it("decline confirms without navigating and claims nothing else", async () => {
     inviteActions.declineInvitation.mockResolvedValue({
       ok: true,
       value: { invitationPublicId: "invi_1", status: "declined" },
     });
-    renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
+    renderWithIntl(<InviteDecision token="invi_1" />);
     await userEvent.click(screen.getByRole("button", { name: "Decline" }));
     expect(await screen.findByTestId("invite-declined")).toHaveTextContent(
-      "Invitation declined. Acme Robotics has been told",
+      "Invitation declined. Nothing else changes.",
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("names the refusal: another account, a closed invitation, any other failure", async () => {
-    renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
+    renderWithIntl(<InviteDecision token="invi_1" />);
     const accept = () =>
       userEvent.click(
         screen.getByRole("button", { name: "Accept invitation" }),
@@ -613,6 +1436,20 @@ describe("InviteDecision", () => {
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
+
+  it("while one answer is pending, neither button sends another (negative)", async () => {
+    inviteActions.acceptInvitation.mockReturnValue(hang());
+    renderWithIntl(<InviteDecision token="invi_1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Accept invitation" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Accepting…" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Decline" }));
+    expect(inviteActions.acceptInvitation).toHaveBeenCalledTimes(1);
+    expect(inviteActions.declineInvitation).not.toHaveBeenCalled();
+  });
 });
 
 describe("OAuthButtons", () => {
@@ -642,5 +1479,167 @@ describe("OAuthButtons", () => {
     expect(await screen.findByTestId("oauth-outcome")).toHaveTextContent(
       "did not finish",
     );
+  });
+
+  it("draws the two providers, then the or rule, with Google's mark in its four colours", () => {
+    renderWithIntl(<OAuthButtons callbackURL={routes.root()} />);
+    expect(controlOrder(document.body)).toEqual([
+      "Continue with Google",
+      "Continue with GitHub",
+    ]);
+    expect(screen.getByText("or")).toHaveAttribute("aria-hidden", "true");
+    const google = document.querySelector('svg[data-mark="google"]');
+    expect(
+      [...(google?.querySelectorAll("path") ?? [])].map((p) =>
+        p.getAttribute("fill"),
+      ),
+    ).toEqual(["#4285F4", "#34A853", "#FBBC05", "#EA4335"]);
+  });
+
+  it("on Log in, marks the sign-in before leaving for the provider", async () => {
+    live.liveSignInSocial.mockResolvedValue({ ok: true });
+    renderWithIntl(<OAuthButtons callbackURL={routes.root()} announceSignIn />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    );
+    await waitFor(() => {
+      expect(live.liveSignInSocial).toHaveBeenCalled();
+    });
+    expect(live.rememberSignedIn).toHaveBeenCalledTimes(1);
+    expect(live.takeSignedIn).not.toHaveBeenCalled();
+  });
+
+  it("drops the mark when the provider start fails here, and never marks on Sign up (negative)", async () => {
+    live.liveSignInSocial.mockResolvedValue({
+      ok: false,
+      outcome: "oauthFailed",
+    });
+    const { unmount } = renderWithIntl(
+      <OAuthButtons callbackURL={routes.root()} announceSignIn />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with GitHub" }),
+    );
+    await screen.findByTestId("oauth-outcome");
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+    unmount();
+    live.rememberSignedIn.mockClear();
+    live.liveSignInSocial.mockResolvedValue({ ok: true });
+    renderWithIntl(<OAuthButtons callbackURL={routes.root()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with GitHub" }),
+    );
+    await waitFor(() => {
+      expect(live.liveSignInSocial).toHaveBeenCalledTimes(2);
+    });
+    expect(live.rememberSignedIn).not.toHaveBeenCalled();
+  });
+
+  it("a start that throws reads as unavailable, and drops the mark on Log in only", async () => {
+    live.liveSignInSocial.mockRejectedValue(new Error("network"));
+    const { unmount } = renderWithIntl(
+      <OAuthButtons callbackURL={routes.root()} announceSignIn />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    );
+    expect(await screen.findByTestId("oauth-outcome")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+    unmount();
+    renderWithIntl(<OAuthButtons callbackURL={routes.root()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with GitHub" }),
+    );
+    expect(await screen.findByTestId("oauth-outcome")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("while one provider is starting, pressing either sends nothing more (negative)", async () => {
+    live.liveSignInSocial.mockReturnValue(hang());
+    renderWithIntl(<OAuthButtons callbackURL={routes.root()} />);
+    const google = screen.getByRole("button", { name: "Continue with Google" });
+    await userEvent.click(google);
+    await waitFor(() => {
+      expect(google).toHaveAttribute("aria-disabled", "true");
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with GitHub" }),
+    );
+    await userEvent.click(google);
+    expect(live.liveSignInSocial).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SignedInToast", () => {
+  const sentence =
+    "Signed in as Marcus Bell. The session is recorded like any other governed action.";
+
+  it("shows the design's sentence when a sign-in just landed, in a polite live region, then leaves", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      live.takeSignedIn.mockReturnValue(true);
+      renderWithIntl(<SignedInToast name="Marcus Bell" />);
+      const stack = screen.getByTestId("signed-in-toast");
+      expect(await within(stack).findByText(sentence)).toBeInTheDocument();
+      expect(stack.querySelectorAll("[data-toast]")).toHaveLength(1);
+      expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(TOAST_MS);
+      });
+      expect(screen.getByTestId("signed-in-toast")).toBeEmptyDOMElement();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Dismissal is asserted above without StrictMode: under a root StrictMode the
+  // simulated unmount in useToasts clears the row's timer, and the guarded
+  // re-run does not re-arm it, so the row stays (a development-only defect in
+  // @/ui/toast, reported with this change).
+  it("takes the mark once and shows one row, even when React runs effects twice", async () => {
+    live.takeSignedIn.mockReturnValue(true);
+    renderStrict(<SignedInToast name="Marcus Bell" />);
+    const stack = screen.getByTestId("signed-in-toast");
+    expect(await within(stack).findByText(sentence)).toBeInTheDocument();
+    expect(stack.querySelectorAll("[data-toast]")).toHaveLength(1);
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows nothing on a page no sign-in landed on (negative)", () => {
+    renderWithIntl(<SignedInToast name="Marcus Bell" />);
+    expect(screen.getByTestId("signed-in-toast")).toBeEmptyDOMElement();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+});
+
+describe("AuthAlert and AuthTags", () => {
+  it("a message of one sentence is bold throughout with nothing after it", () => {
+    renderWithIntl(<AuthAlert message="Invitation declined" />);
+    const alert = screen.getByRole("alert");
+    expect(alert.querySelector("b")).toHaveTextContent(/^Invitation declined$/);
+    expect(alert).toHaveTextContent(/^Invitation declined$/);
+  });
+
+  it("the tags are one labelled list, an item per tag, in order", () => {
+    const tags = [
+      "included monthly allowance",
+      "no token markup",
+      "SOC 2 evidence built in",
+    ];
+    renderWithIntl(
+      <AuthTags label="What every organization gets" tags={tags} />,
+    );
+    const list = screen.getByRole("list", {
+      name: "What every organization gets",
+    });
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(tags);
   });
 });

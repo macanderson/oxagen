@@ -7,12 +7,37 @@
 // expired one is a `conflict`, another account a `denied`.
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
+import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
-import { requireInvitee } from "@/server/viewer";
+import { kernelRead, kernelWrite } from "@/server/kernel";
+import { requireInvitee, requireUser } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
 
-/** An accepted invitation continues to the organization's People page. */
+/**
+ * Where an accepted invitation lands: Fleet of the first workspace of that
+ * organization the person belongs to, as the design does. `list_workspaces`
+ * returns every workspace of the organization with `role` null where the
+ * person holds no membership, and such a workspace is a 404 (INV-15), so it
+ * is skipped. The invitation names no workspace yet (#3886), so a person who
+ * joined only the organization belongs to none of its workspaces and lands on
+ * its People page, and so does one whose list cannot be read: the acceptance
+ * already went through, and a failed read must not make it look refused.
+ */
+async function landingAfterAccept(orgSlug: string): Promise<SafePath> {
+  const user = await requireUser();
+  const read = await kernelRead(user, {
+    contract: workspaceList,
+    input: { orgSlug },
+    page: "shell",
+  });
+  const ws = read.ok
+    ? read.value.workspaces.find((w) => w.role !== null)
+    : undefined;
+  return ws === undefined
+    ? routes.people(orgSlug)
+    : routes.fleet(orgSlug, ws.slug);
+}
+
 export async function acceptInvitation(
   token: string,
 ): Promise<ActionResult<{ to: SafePath }>> {
@@ -20,9 +45,11 @@ export async function acceptInvitation(
   const result = await kernelWrite(ctx, orgMemberInviteAccept, {
     invitationPublicId: token,
   });
-  return result.ok
-    ? { ok: true, value: { to: routes.people(invitation.orgSlug) } }
-    : result;
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: { to: await landingAfterAccept(invitation.orgSlug) },
+  };
 }
 
 export async function declineInvitation(

@@ -32,8 +32,13 @@ Org Owner, Org Admin.
 
 ## Side effects
 
-- Postgres: deletes `org.org_users` row; deletes `iam.principal_role_assignments` for the user in this org; soft-deletes `iam.principals` row.
-- ClickHouse: emits `org.member_removed` audit event.
+- Postgres, in one transaction through `removeOrgMemberInTx` (`packages/database/src/member-lifecycle.ts`, shared with SCIM deprovisioning and the SSO deny sign-in):
+  - soft-deletes every `iam.principal_role_assignments` row for the user in this org, org-wide and workspace-scoped;
+  - marks the user's `iam.principals` row deleted;
+  - deletes the `org.org_users` row and the user's `workspace.workspace_users` rows in this org's workspaces;
+  - soft-deletes the CLI session keys the user created in this org, with one `api_key.revoked` row each.
+- The user's sessions are left alone: a session belongs to the person, and removal from one org does not sign them out of the others. A SCIM deprovision ends them.
+- `security.security_events`: an `org.member_removed` row.
 
 ## Surfaces
 

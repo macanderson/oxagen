@@ -13,6 +13,11 @@ import {
   listOrgSsoProviders,
   readOrgSsoRequired,
 } from "./lib/sso-store";
+import {
+  readLiveScimToken,
+  scimBaseUrl,
+  toScimTokenView,
+} from "./lib/scim/token-store";
 
 // audit-exempt: read-only listing, no mutation
 
@@ -46,16 +51,19 @@ export const orgSsoListHandler: CapabilityHandler<typeof orgSsoList> = async (
   // Admin membership check above; auth.sso_providers is a shared-plane table
   // with no RLS, and org.sso_group_roles references it, so both are read on
   // the shared plane in one transaction.
-  const { rows, roles, ssoRequired } = await withSystemDb(async (tx) => {
-    const rows = await listOrgSsoProviders(tx, ctx.orgId);
-    const roles = await listOrgSsoGroupRoles(
-      tx,
-      ctx.orgId,
-      rows.map((r) => r.providerId),
-    );
-    const ssoRequired = await readOrgSsoRequired(tx, ctx.orgId);
-    return { rows, roles, ssoRequired };
-  });
+  const { rows, roles, ssoRequired, scimToken } = await withSystemDb(
+    async (tx) => {
+      const rows = await listOrgSsoProviders(tx, ctx.orgId);
+      const roles = await listOrgSsoGroupRoles(
+        tx,
+        ctx.orgId,
+        rows.map((r) => r.providerId),
+      );
+      const ssoRequired = await readOrgSsoRequired(tx, ctx.orgId);
+      const scimToken = await readLiveScimToken(tx, ctx.orgId);
+      return { rows, roles, ssoRequired, scimToken };
+    },
+  );
 
   return {
     providers: rows.map((row) =>
@@ -63,5 +71,9 @@ export const orgSsoListHandler: CapabilityHandler<typeof orgSsoList> = async (
     ),
     policy: { ssoRequired },
     entitled,
+    scim: {
+      baseUrl: scimBaseUrl(baseUrl),
+      token: scimToken ? toScimTokenView(scimToken) : null,
+    },
   };
 };

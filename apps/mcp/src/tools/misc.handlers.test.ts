@@ -302,6 +302,7 @@ describe("organization.create handler", () => {
       website: undefined,
       industry: undefined,
       employeeSize: undefined,
+      namespace: undefined,
       workspace: { name: "Core", slug: "core" },
     };
     await handler_organizationCreate(args);

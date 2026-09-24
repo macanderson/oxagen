@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { scimViewSchema } from "./org.scim_token.shared";
 import { ssoPolicyViewSchema, ssoProviderViewSchema } from "./org.sso.shared";
 
 /**
@@ -9,6 +10,9 @@ import { ssoPolicyViewSchema, ssoProviderViewSchema } from "./org.sso.shared";
  * No secret leaves: the view says whether a client secret or an SP private
  * key is stored, never what it is. The callback URL and, for SAML, the SP
  * metadata URL are what the admin copies into the identity provider.
+ *
+ * `scim` names the SCIM endpoint and describes the live SCIM token by its
+ * prefix and dates (#3734); the token is shown only when it is minted.
  *
  * `entitled` says whether the plan includes SSO. Only the Enterprise plan
  * does; without it the setup writes are refused, and the list still reads so
@@ -44,6 +48,9 @@ export const orgSsoList = registerCapability({
       .describe(
         "Whether the organisation's plan includes SSO. Only the Enterprise plan does.",
       ),
+    scim: scimViewSchema.describe(
+      "The SCIM 2.0 endpoint and the live SCIM token's prefix and dates. The token itself is never returned.",
+    ),
   }),
 });
 
