@@ -470,6 +470,43 @@ describe("Runtimes, loaded", () => {
       "overridden by /etc/managed-settings.json",
     );
   });
+
+  it("prints the half of the OS a host reported, and Claude Code with no enrollment version as not recorded", async () => {
+    await renderList({
+      list: runtimeList([
+        enrollment({
+          id: "tch_versiononlyaaaaaaaaaaa",
+          arch: null,
+          claudeVersionAtEnroll: null,
+        }),
+        enrollment({
+          id: "tch_archonlyaaaaaaaaaaaaaa",
+          platform: "linux",
+          osVersion: null,
+        }),
+      ]),
+    });
+    const cellsOf = (id: string) =>
+      within(
+        document.querySelector(`[data-runtime="${id}"]`) as HTMLElement,
+      ).getAllByRole("cell");
+    const versionOnly = cellsOf("tch_versiononlyaaaaaaaaaaa");
+    // No architecture: the line stops at the version, with no dangling dot.
+    expect(nth(versionOnly, 0, "cell")).toHaveTextContent(/macOS 15\.6$/);
+    expect(nth(versionOnly, 0, "cell")).not.toHaveTextContent("·");
+    // Claude Code with no version recorded at enrollment names the gap,
+    // never a blank beside the name (#3919).
+    const harness = nth(versionOnly, 2, "cell");
+    expect(harness).toHaveTextContent("Claude Code version not recorded");
+    expect(harness.querySelector("[data-not-backed]")).toHaveAttribute(
+      "data-gap",
+      "#3919",
+    );
+    // No version: the architecture follows the platform's name alone.
+    expect(
+      nth(cellsOf("tch_archonlyaaaaaaaaaaaaaa"), 0, "cell"),
+    ).toHaveTextContent(/Linux · arm64$/);
+  });
 });
 
 describe("Runtimes, not loaded", () => {
@@ -743,6 +780,22 @@ describe("One runtime", () => {
       "SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, StopFive run as command hooks. The first four can refuse.",
     );
     expect(written.querySelector("[data-not-backed]")).toBeNull();
+  });
+
+  it("names the hooks written not recorded when the read-back found a gap or the host runs more than Claude Code (negative)", async () => {
+    for (const host of [
+      enrollment({ hooksOk: false }),
+      enrollment({ hooksOk: true, harnesses: ["claude-code", "codex"] }),
+    ]) {
+      await renderDetail({ list: runtimeList([host]) });
+      const written = screen.getByTestId("fact-hooks-written");
+      expect(written).not.toHaveTextContent("SessionStart");
+      expect(written.querySelector("[data-not-backed]")).toHaveAttribute(
+        "data-gap",
+        "#3818",
+      );
+      cleanup();
+    }
   });
 
   it("names managed settings when the installer wrote the hooks there", async () => {
