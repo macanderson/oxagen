@@ -9,7 +9,7 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { routes } from "@/shared/safe-path";
-import { buttonPrimary, inputBase } from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -68,7 +68,17 @@ function Select({
   );
 }
 
-export function BudgetDialog({ at }: { at: SpendAt }) {
+export function BudgetDialog({
+  at,
+  placement = "header",
+}: {
+  at: SpendAt;
+  /**
+   * The header's opener is the screen's one gold action; the Budgets panel's
+   * copy of it is a plain button, so the screen keeps exactly one.
+   */
+  placement?: "header" | "panel";
+}) {
   const t = useTranslations("spend");
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -118,7 +128,8 @@ export function BudgetDialog({ at }: { at: SpendAt }) {
     <>
       <button
         type="button"
-        className={buttonPrimary}
+        data-placement={placement}
+        className={placement === "header" ? buttonPrimary : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}

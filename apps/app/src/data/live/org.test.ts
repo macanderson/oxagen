@@ -415,6 +415,16 @@ const storedProvider = {
   updatedAt: "2026-09-21T10:00:00.000Z",
 };
 
+/** The SCIM part of list_sso_providers (#3734): the endpoint and the live token's prefix. */
+const storedScim = {
+  baseUrl: "https://app.oxagen.sh/api/scim/v2",
+  token: {
+    tokenPrefix: "oxscim_AbCdEfGh",
+    createdAt: "2026-09-23T10:00:00.000Z",
+    lastUsedAt: null,
+  },
+};
+
 describe("org.sso", () => {
   it("reads list_sso_providers for the organization and returns the SSO view model", async () => {
     kernelRead.mockResolvedValue(
@@ -422,6 +432,7 @@ describe("org.sso", () => {
         providers: [storedProvider],
         policy: { ssoRequired: true },
         entitled: true,
+        scim: storedScim,
       }),
     );
     expect(await org.sso(ctx)).toEqual(
@@ -449,6 +460,14 @@ describe("org.sso", () => {
         ],
         policy: { ssoRequired: true },
         entitled: true,
+        scim: {
+          baseUrl: "https://app.oxagen.sh/api/scim/v2",
+          token: {
+            prefix: "oxscim_AbCdEfGh",
+            createdAt: "2026-09-23T10:00:00.000Z",
+            lastUsedAt: null,
+          },
+        },
       }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
@@ -465,6 +484,7 @@ describe("org.sso", () => {
         providers: [storedProvider],
         policy: { ssoRequired: false },
         entitled: false,
+        scim: { ...storedScim, token: null },
       }),
     );
     const read = await org.sso(ctx);
@@ -499,6 +519,7 @@ describe("org.sso", () => {
         ],
         policy: { ssoRequired: false },
         entitled: true,
+        scim: storedScim,
       }),
     );
     expect(await org.sso(ctx)).toEqual(readError("record_unmappable", 502));

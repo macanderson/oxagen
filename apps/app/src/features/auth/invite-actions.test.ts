@@ -54,6 +54,8 @@ const record = {
   status: "pending",
   invitedAt: new Date("2026-09-11T09:00:00Z"),
   expiresAt: new Date("2099-01-01T00:00:00Z"),
+  inviterName: "Priya Natarajan",
+  inviterRole: "Owner",
 };
 const refusal = (code: "forbidden" | "conflict", reason: string) =>
   new kernel.HandlerError({ code, reason });
@@ -128,16 +130,46 @@ describe("acceptInvitation and declineInvitation", () => {
     });
   });
 
-  it("accept as the invitee in the invitation's organization and continue to its People page", async () => {
-    invoke.mockResolvedValue({
-      orgUserId: "ou_01",
-      orgId: record.orgId,
-      role: "Admin",
-      joinedAt: "2026-09-15T00:00:00.000Z",
+  const accepted = {
+    orgUserId: "ou_01",
+    orgId: record.orgId,
+    role: "Admin",
+    joinedAt: "2026-09-15T00:00:00.000Z",
+  };
+  /** accept_member_invite answers `accepted`; list_workspaces answers `list` (or throws it). */
+  const answer = (list: unknown) => {
+    invoke.mockImplementation((name: string) => {
+      if (name === "accept_member_invite") return Promise.resolve(accepted);
+      if (list instanceof Error) return Promise.reject(list);
+      return Promise.resolve(list);
+    });
+  };
+  const org = {
+    id: record.orgId,
+    publicId: "org_acme",
+    slug: "acme",
+    namespace: "acme",
+    name: record.orgName,
+  };
+  const ws = (slug: string, role: string | null) => ({
+    id: `0192f1c4-0000-7000-8000-0000000000${String(slug.length)}0`,
+    publicId: `ws_${slug}`,
+    slug,
+    namespace: slug,
+    name: slug,
+    role,
+    archivedAt: null,
+    costCenter: null,
+  });
+
+  it("accept as the invitee in the invitation's organization and land on Fleet of the first workspace the person belongs to", async () => {
+    answer({
+      organization: org,
+      workspaces: [ws("sandbox", null), ws("core-platform", "member")],
     });
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: true,
-      value: { to: "/acme" },
+      value: { to: "/acme/core-platform" },
     });
     expect(invoke).toHaveBeenCalledWith(
       "accept_member_invite",
@@ -148,6 +180,33 @@ describe("acceptInvitation and declineInvitation", () => {
         workspaceId: ORG_ONLY_WS,
       }),
     );
+    expect(invoke).toHaveBeenCalledWith(
+      "list_workspaces",
+      { orgSlug: "acme" },
+      expect.objectContaining({ userId: "u-priya" }),
+    );
+  });
+
+  it("land on the organization's People page when the person belongs to none of its workspaces", async () => {
+    answer({ organization: org, workspaces: [ws("core-platform", null)] });
+    expect(await acceptInvitation("invi_live")).toEqual({
+      ok: true,
+      value: { to: "/acme" },
+    });
+  });
+
+  it("still report the acceptance, landing on People, when the workspace list cannot be read (negative)", async () => {
+    answer(new Error("list_workspaces down"));
+    expect(await acceptInvitation("invi_live")).toEqual({
+      ok: true,
+      value: { to: "/acme" },
+    });
+  });
+
+  it("read no workspace list when the acceptance is refused (negative)", async () => {
+    invoke.mockRejectedValue(refusal("conflict", "invitation_expired"));
+    await acceptInvitation("invi_live");
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 
   it("decline as the invitee", async () => {

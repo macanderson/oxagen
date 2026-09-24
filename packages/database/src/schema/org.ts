@@ -585,3 +585,97 @@ export const ssoGroupRoles = orgSchema.table(
     ),
   }),
 );
+
+// ── SCIM 2.0 provisioning (#3734) ────────────────────────────────────────────
+//
+// An identity provider pushes users and groups to /api/scim/v2 with a bearer
+// token one organization's Owner or Admin minted on the Single sign-on page.
+// Only the token's SHA-256 is stored, as auth.api_keys stores a key: the server
+// compares a presented token and never reads one back, so a leaked row gives
+// nobody anything to present. `token_prefix` is the indexed lookup window. One
+// live token per organization; rotating revokes the old row and inserts a new
+// one in the same transaction. Revoked rows stay as the record of who minted
+// what and when.
+//
+// org_only RLS. Every read runs through withSystemDb, because a SCIM request
+// has no tenant scope until its token names the organization, so the policy is
+// the backstop rather than the filter.
+export const scimTokens = orgSchema.table(
+  "scim_tokens",
+  {
+    ...idMixin("sct"),
+    ...auditMixin(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    tokenPrefix: text("token_prefix").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+    revokedById: uuid("revoked_by_id"),
+  },
+  (t) => ({
+    prefixIdx: uniqueIndex("scim_tokens_token_prefix_idx").on(t.tokenPrefix),
+    liveIdx: uniqueIndex("scim_tokens_org_live_idx")
+      .on(t.orgId)
+      .where(sql`${t.revokedAt} IS NULL`),
+    hashCheck: check(
+      "scim_tokens_token_hash_check",
+      sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+// The groups an identity provider pushed. SCIM needs an id to answer with and
+// the member list to recompute roles from; nothing else about a group is kept.
+// A group decides a role only through org.sso_group_roles, matched on its
+// display name or its external id, so one mapping table serves SSO sign-in and
+// SCIM alike. Hard-deleted on DELETE /Groups/{id}; the security event is the
+// record.
+export const scimGroups = orgSchema.table(
+  "scim_groups",
+  {
+    ...idMixin("scg"),
+    ...auditMixin(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    externalId: text("external_id"),
+  },
+  (t) => ({
+    orgNameIdx: uniqueIndex("scim_groups_org_display_name_idx").on(
+      t.orgId,
+      t.displayName,
+    ),
+    orgExternalIdx: index("scim_groups_org_external_id_idx").on(
+      t.orgId,
+      t.externalId,
+    ),
+  }),
+);
+
+// One row per (group, person). `org_id` is repeated from the group so the
+// org_only policy applies without a join.
+export const scimGroupMembers = orgSchema.table(
+  "scim_group_members",
+  {
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => scimGroups.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    memberIdx: uniqueIndex("scim_group_members_group_user_idx").on(
+      t.groupId,
+      t.userId,
+    ),
+    orgUserIdx: index("scim_group_members_org_user_idx").on(t.orgId, t.userId),
+  }),
+);

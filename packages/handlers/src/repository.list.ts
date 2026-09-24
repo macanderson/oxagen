@@ -13,6 +13,7 @@ import {
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import { isLiveConnectionRow } from "./repository.github-connection";
+import { gitlabDeliveryConfigOf } from "./repository.gitlab-connection";
 
 type EventDelivery = RepositoryListOutput["repositories"][number]["events"];
 
@@ -24,6 +25,8 @@ type EventDelivery = RepositoryListOutput["repositories"][number]["events"];
  * resume.
  */
 export function eventDelivery(row: {
+  provider?: string;
+  deliveryConfig?: unknown;
   connectionLive: boolean;
   connectionStatus: string | null;
   installationRowId: string | null;
@@ -31,6 +34,14 @@ export function eventDelivery(row: {
   installationDeletedAt: Date | null;
 }): EventDelivery {
   if (!row.connectionLive) return "retired";
+  if (row.provider === "gitlab") {
+    // No App installation: the project webhook `attach_gitlab_project`
+    // registered is what delivers events.
+    if (row.connectionStatus === "paused") return "paused";
+    return gitlabDeliveryConfigOf(row.deliveryConfig)?.webhookId != null
+      ? "installed"
+      : "unknown";
+  }
   if (row.installationRowId === null) return "unknown";
   if (row.installationDeletedAt !== null) return "uninstalled";
   if (row.installationSuspendedAt !== null) return "suspended";
@@ -46,6 +57,8 @@ export const repositoryListHandler: CapabilityHandler<
       .select({
         bindingId: schema.repositoryBindings.publicId,
         role: schema.repositoryBindingHeads.role,
+        provider: schema.repositoryBindings.provider,
+        deliveryConfig: schema.sourceConnections.deliveryConfig,
         owner: schema.repositoryBindings.providerOwner,
         name: schema.repositoryBindings.providerName,
         fullName: schema.repositoryBindings.providerFullName,
@@ -100,11 +113,16 @@ export const repositoryListHandler: CapabilityHandler<
         // The table's CHECK admits only these two; anything else is a schema
         // the contract does not know, and its output parse refuses it.
         role: r.role as "main" | "linked",
+        provider:
+          r.provider === "gitlab" ? ("gitlab" as const) : ("github" as const),
         owner: r.owner,
         name: r.name,
         fullName: r.fullName,
         defaultRef: r.defaultRef,
-        htmlUrl: `https://github.com/${r.fullName}`,
+        htmlUrl:
+          r.provider === "gitlab"
+            ? `https://gitlab.com/${r.fullName}`
+            : `https://github.com/${r.fullName}`,
         boundAt: r.boundAt.toISOString(),
         connectionLive,
         events: eventDelivery({ ...r, connectionLive }),

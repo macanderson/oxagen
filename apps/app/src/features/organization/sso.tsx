@@ -10,7 +10,12 @@
 //
 // SSO is part of the Enterprise plan. On any other plan the page says so,
 // links to Billing, and offers only what an organisation that left the plan
-// needs to clean up: deleting a provider and turning Require SSO off.
+// needs to clean up: deleting a provider, turning Require SSO off, and
+// revoking the SCIM token.
+//
+// The SCIM section (#3734) gives the base URL and manages the bearer token an
+// identity provider pushes users and groups with. The token itself shows
+// once, in the dialog that minted it.
 import { useTranslations } from "next-intl";
 import type { SsoProvider, SsoSettings } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
@@ -18,6 +23,7 @@ import type { Read } from "@/data/read";
 import type { OrgCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
+import { useFormatter } from "@/ui/formatter";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { SafeLink } from "@/ui/navigation";
@@ -29,6 +35,7 @@ import {
   RequireSso,
   VerifyDomain,
 } from "./sso-controls";
+import { ScimTokenControls } from "./scim-controls";
 import { SsoProviderDialog } from "./sso-provider-form";
 import { OrganizationTabs } from "./tabs";
 
@@ -86,6 +93,9 @@ function SsoSection({
           ))}
           {read.value.entitled || read.value.policy.ssoRequired ? (
             <Policy org={org} canEdit={canEdit} value={read.value} />
+          ) : null}
+          {read.value.entitled || read.value.scim.token !== null ? (
+            <Scim org={org} canEdit={canEdit} value={read.value} />
           ) : null}
         </>
       ) : read.reason === "denied" ? (
@@ -302,6 +312,63 @@ function Policy({
         canEdit={canEdit}
         lapsed={!value.entitled}
       />
+    </section>
+  );
+}
+
+function Scim({
+  org,
+  canEdit,
+  value,
+}: {
+  org: string;
+  canEdit: boolean;
+  value: SsoSettings;
+}) {
+  const t = useTranslations("organization.sso.scim");
+  const format = useFormatter();
+  const when = (iso: string) =>
+    format.dateTime(new Date(iso), { dateStyle: "medium", timeStyle: "short" });
+  const token = value.scim.token;
+  return (
+    <section
+      aria-labelledby="sso-scim"
+      className={`${panel} flex flex-col gap-3 p-5`}
+      data-testid="sso-scim"
+    >
+      <h2 id="sso-scim" className={sectionTitle}>
+        {t("title")}
+      </h2>
+      <p className={lead}>{t("lead")}</p>
+      <CopyValue
+        label={t("baseUrl")}
+        value={value.scim.baseUrl}
+        testId="sso-scim-base-url"
+      />
+      {token === null ? (
+        <p className={lead} data-testid="sso-scim-none">
+          {t("none")}
+        </p>
+      ) : (
+        <p className={lead} data-testid="sso-scim-token">
+          {t("live", {
+            prefix: token.prefix,
+            createdAt: when(token.createdAt),
+          })}{" "}
+          {token.lastUsedAt === null
+            ? t("neverUsed")
+            : t("lastUsed", { lastUsedAt: when(token.lastUsedAt) })}
+        </p>
+      )}
+      {canEdit ? (
+        <ScimTokenControls
+          org={org}
+          hasToken={token !== null}
+          entitled={value.entitled}
+        />
+      ) : (
+        <p className={lead}>{t("readOnly")}</p>
+      )}
     </section>
   );
 }

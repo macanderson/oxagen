@@ -1,0 +1,55 @@
+---
+title: Connect GitLab
+description: Keep a workspace's steering in a gitlab.com project. Context records publish as merge requests, checked and merged the way they are on GitHub.
+---
+
+## Overview
+
+A workspace keeps its steering in its main repository, under `.oxagen/`. That repository can be a gitlab.com project instead of a GitHub repository. Each context record then publishes as a merge request on the project. Oxagen reports the six checks as commit statuses, and a reviewer's merge squashes the commit the checks ran on.
+
+Oxagen connects to the project with a **project access token**. You create the token on the project, so it reaches that one project and nothing else.
+
+Only gitlab.com is supported. Self-managed GitLab needs its own host setting first.
+
+## Before you start
+
+- You need Owner or Admin on the Oxagen organization.
+- You need to create project access tokens on the GitLab project, which takes the Maintainer role there.
+- The project needs at least one commit, so it has a default branch.
+
+## Create the token
+
+1. On gitlab.com, open the project and go to **Settings → Access tokens**.
+2. Add a token with the `api` scope and the **Developer** role.
+3. Choose the **Maintainer** role instead if you want Oxagen to register a webhook for merge request events.
+4. Copy the token. GitLab shows it once.
+
+Oxagen refuses a personal access token, a group access token, and another project's token, because each reaches more than this project. It also refuses a token with `sudo` or `admin_mode`.
+
+## Connect and bind the project
+
+1. In Oxagen, open **Repositories**.
+2. Under **Or connect a GitLab project**, enter the project path, such as `acme/platform/rules`.
+3. Paste the token and select **Connect and bind**.
+
+Oxagen checks the token with GitLab, stores it encrypted, and binds the project as the workspace's main repository. It never shows the token again.
+
+The API equivalent is two calls: `POST /v1/{orgSlug}/{workspaceSlug}/repository/gitlab/attach` with `{ "projectPath", "token" }`, then `POST /v1/{orgSlug}/{workspaceSlug}/repository/main` with `{ "provider": "gitlab", "projectPath" }`. To create a new workspace with a GitLab project, pass `mainRepo: { "provider": "gitlab", "projectPath", "token" }` to `create_workspace` from the app or the API.
+
+## What works on GitLab
+
+| Action | On GitLab |
+| --- | --- |
+| Propose, open, check, merge and dismiss a Context PR | A merge request, with the checks as commit statuses |
+| Publish, revise and retire records, and set the governance mode | Through the same merge request flow |
+| Propose an agent, a skill or a configuration clone | Through the same merge request flow |
+| `oxagen steering` freshness in a checkout | Matches the project's gitlab.com remote, nested groups included |
+| Repository tree, production branch, init pull request, agent definition commit, skill configuration | Not yet. Oxagen refuses these with `repository_host_unsupported` |
+
+A project that moves to another group keeps working, because Oxagen addresses it by its numeric id. Records stay stamped with the path you approved when you bound it.
+
+## When the token stops working
+
+Revoking or expiring the token stops steering on the project. Oxagen refuses with `gitlab_credential_rejected` and names the project. It never names the token. To repair it, create a new token and paste it into the form on **Repositories**. The binding stays on the same project.
+
+To disconnect, delete the GitLab connection with `delete_connection` through the API or MCP, then revoke the token on GitLab.

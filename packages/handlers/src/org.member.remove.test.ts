@@ -29,6 +29,25 @@ vi.mock("@oxagen/database/security", () => ({
   makeSecurityEventInserter: vi.fn().mockReturnValue(vi.fn()),
 }));
 
+// ── The shared removal transaction ───────────────────────────────────────────
+// Its statements are proven in packages/database/src/member-lifecycle.test.ts.
+// Here the handler's job is to run it inside the guarded transaction with the
+// options a manual removal means.
+const mockRemove = vi.fn();
+vi.mock("@oxagen/database/member-lifecycle", () => ({
+  removeOrgMemberInTx: mockRemove,
+}));
+const REMOVAL = {
+  userId: "target-user",
+  wasMember: true,
+  sessionIds: [],
+  apiKeyIds: ["key-1"],
+  hostIds: [],
+  enrollmentTokensExpired: 0,
+  roleAssignmentsRevoked: 3,
+  workspaceMembershipsRemoved: 1,
+};
+
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
 
 // ── @oxagen/database mock ────────────────────────────────────────────────────
@@ -74,7 +93,6 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 const { orgMemberRemoveHandler } = await import("./org.member.remove");
-const { schema } = await import("@oxagen/database");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -140,6 +158,7 @@ function writeResult(rows: unknown[] = []) {
 describe("orgMemberRemoveHandler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRemove.mockResolvedValue(REMOVAL);
   });
 
   it("no authenticated principal → forbidden", async () => {
@@ -308,119 +327,22 @@ describe("orgMemberRemoveHandler", () => {
     expect(event.outcome).toBe("success");
     expect(event.capability).toBe("remove_org_member");
 
-    // The target's CLI session keys are soft-deleted with the membership.
-    expect(mockTx.update).toHaveBeenCalledWith(schema.apiKeys);
-    expect(updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({
-        deletedAt: expect.any(Date),
-        deletedById: "actor-user-id",
-      }),
-    );
-  });
-
-  it("revokes role assignments at every scope and drops workspace memberships", async () => {
-    // The removal the org-only workspace sentinel used to narrow. Step (b)
-    // deliberately carries no workspace predicate — its intent is to revoke the
-    // principal's roles at EVERY scope — and RLS put the predicate back, so the
-    // UPDATE reached only the workspace_id IS NULL rows and said nothing. Step
-    // (c)'s status: "deleted" does not compensate: fetch-authz resolves a
-    // principal with no status filter and iam-provision reuses the same row, so
-    // a re-invited member returns holding their old workspace roles.
-    let callCount = 0;
-    mockTx.select = vi.fn().mockImplementation(() => {
-      callCount++;
-      const build = (result: unknown[]) => ({
-        from: selectChain(result).select().from,
-      });
-      if (callCount === 1) return build([{ id: "actor-principal-id" }]);
-      if (callCount === 2) return build([{ roleName: "Owner" }]);
-      if (callCount === 3) return build([{ id: "target-ou", role: "member" }]);
-      if (callCount === 4) return build([{ id: "owner-role-id" }]);
-      if (callCount === 5) return build([{ n: 2 }]);
-      if (callCount === 6) return build([{ id: "target-principal-id" }]);
-      if (callCount === 7) return build([]);
-      if (callCount === 8) return build([{ id: "target-principal-id" }]);
-      // (e) the org's workspaces, the fence for workspace_users
-      if (callCount === 9) return build([{ id: "ws-1" }, { id: "ws-2" }]);
-      return build([]);
+    // The shared removal ran in the guarded transaction, with what a manual
+    // removal means: roles, principal, memberships and CLI session keys, and
+    // no session of the person's other organizations.
+    expect(mockRemove).toHaveBeenCalledOnce();
+    expect(mockRemove).toHaveBeenCalledWith(mockTx, {
+      orgId: "org-abc",
+      userId: "target-user",
+      actorId: "actor-user-id",
+      trigger: "manual",
+      endSessions: false,
+      keys: "cli_sessions",
+      refuseOwner: false,
+      principalStatus: "deleted",
+      summaryEvent: null,
+      requestId: "req-123",
     });
-
-    const revokedAssignments = [
-      { id: "pra-org", workspaceId: null },
-      { id: "pra-ws-1", workspaceId: "ws-1" },
-      { id: "pra-ws-2", workspaceId: "ws-2" },
-    ];
-    const praReturning = vi.fn().mockResolvedValue(revokedAssignments);
-    const keyReturning = vi.fn().mockResolvedValue([{ id: "key-1" }]);
-    const updateSet = vi.fn();
-    mockTx.update = vi.fn().mockImplementation((table: unknown) => ({
-      set: updateSet.mockReturnValue({
-        where: vi.fn().mockReturnValue(
-          Object.assign(Promise.resolve([]), {
-            returning: table === schema.apiKeys ? keyReturning : praReturning,
-          }),
-        ),
-      }),
-    }));
-
-    const wsuReturning = vi.fn().mockResolvedValue([{ id: "wsu-1" }]);
-    const deletedTables: unknown[] = [];
-    mockTx.delete = vi.fn().mockImplementation((table: unknown) => {
-      deletedTables.push(table);
-      return {
-        where: vi
-          .fn()
-          .mockReturnValue(
-            Object.assign(Promise.resolve([]), { returning: wsuReturning }),
-          ),
-      };
-    });
-
-    const result = await orgMemberRemoveHandler(
-      { targetUserId: "target-user" },
-      makeCtx(),
-    );
-
-    expect(result.removed).toBe(true);
-    // The workspace-scoped assignments are in the revoked set, not only the
-    // org-wide one.
-    expect(praReturning).toHaveBeenCalled();
-    // org_users AND workspace_users, in that order.
-    expect(deletedTables).toEqual([schema.orgUsers, schema.workspaceUsers]);
-    expect(wsuReturning).toHaveBeenCalled();
-    // The CLI session keys are revoked for real rather than matching nothing.
-    expect(keyReturning).toHaveBeenCalled();
-  });
-
-  it("skips the workspace sweep when the org has no workspaces", async () => {
-    let callCount = 0;
-    mockTx.select = vi.fn().mockImplementation(() => {
-      callCount++;
-      const build = (result: unknown[]) => ({
-        from: selectChain(result).select().from,
-      });
-      if (callCount === 1) return build([{ id: "actor-principal-id" }]);
-      if (callCount === 2) return build([{ roleName: "Owner" }]);
-      if (callCount === 3) return build([{ id: "target-ou", role: "member" }]);
-      if (callCount === 4) return build([{ id: "owner-role-id" }]);
-      if (callCount === 5) return build([{ n: 2 }]);
-      if (callCount === 6) return build([{ id: "target-principal-id" }]);
-      if (callCount === 7) return build([]);
-      if (callCount === 8) return build([{ id: "target-principal-id" }]);
-      return build([]); // no workspaces
-    });
-    mockTx.update = vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({ where: () => writeResult() }),
-    });
-    const deletedTables: unknown[] = [];
-    mockTx.delete = vi.fn().mockImplementation((table: unknown) => {
-      deletedTables.push(table);
-      return { where: () => writeResult() };
-    });
-
-    await orgMemberRemoveHandler({ targetUserId: "target-user" }, makeCtx());
-
-    expect(deletedTables).toEqual([schema.orgUsers]);
   });
 
   it("a member named by public id is resolved to their user id, after the actor gate", async () => {
@@ -458,7 +380,10 @@ describe("orgMemberRemoveHandler", () => {
       removed: true,
       targetUserId: "usr_7k2m9q4x8r1t5v3w6y0z2a",
     });
-    expect(mockTx.delete).toHaveBeenCalledOnce();
+    expect(mockRemove).toHaveBeenCalledWith(
+      mockTx,
+      expect.objectContaining({ userId: "target-user-uuid" }),
+    );
   });
 
   it("a public id that names nobody in this org → not_found, nothing deleted", async () => {
@@ -485,5 +410,6 @@ describe("orgMemberRemoveHandler", () => {
     );
     expect(mockTx.delete).not.toHaveBeenCalled();
     expect(mockTx.update).not.toHaveBeenCalled();
+    expect(mockRemove).not.toHaveBeenCalled();
   });
 });

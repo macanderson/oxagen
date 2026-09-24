@@ -24,6 +24,7 @@ describe("get_main_repository contract", () => {
     const out = {
       repository: {
         bindingId: "rpb_0123456789abcdef",
+        provider: "github",
         owner: "acme",
         name: "widgets",
         fullName: "acme/widgets",

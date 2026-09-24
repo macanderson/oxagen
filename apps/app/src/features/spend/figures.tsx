@@ -3,11 +3,16 @@
 // recorded"; nothing prints a zero it was not given (ARCHITECTURE.md INV-09,
 // INV-10). Money goes through <Money>, counts and ratios through
 // src/ui/money-format.ts.
-import { statNote, statStrip, statTerm, statTile, statValue } from "@/ui/control-styles";
+import {
+  statNote,
+  statStrip,
+  statTerm,
+  statTile,
+  statValue,
+} from "@/ui/control-styles";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Cost, Money as MoneyValue } from "@/data/contracts/money";
-import type { DayRange, SpendFigure } from "@/data/contracts/spend";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import type { MoneyPrecision } from "@/ui/money-format";
@@ -32,18 +37,28 @@ export function NotRecordedValue() {
   );
 }
 
-export function CostFigure({ cost }: { cost: Cost | null }) {
+/**
+ * The basis a cost carries, in the record's own words (`gateway_observed`,
+ * `client_attested`), never a stronger one: `mixed` reads as both.
+ */
+export function BasisLabel({ basis }: { basis: Cost["basis"] }) {
   const t = useTranslations("spend");
+  return (
+    <span
+      data-basis={basis ?? "not_recorded"}
+      className="font-mono text-[11px] font-normal text-muted-foreground"
+    >
+      {basis === null ? t("basisNotRecorded") : t(`basis.${basis}`)}
+    </span>
+  );
+}
+
+export function CostFigure({ cost }: { cost: Cost | null }) {
   if (cost === null) return <NotRecordedValue />;
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-2">
       <Money value={cost} />
-      <span
-        data-basis={cost.basis ?? "not_recorded"}
-        className="font-mono text-xs font-normal text-muted-foreground"
-      >
-        {cost.basis === null ? t("basisNotRecorded") : t(`basis.${cost.basis}`)}
-      </span>
+      <BasisLabel basis={cost.basis} />
     </span>
   );
 }
@@ -121,40 +136,5 @@ export function TileStrip({
   children: ReactNode;
   embedded?: boolean;
 }) {
-  return (
-    <dl
-      className={
-        embedded ? "contents" : statStrip
-      }
-    >
-      {children}
-    </dl>
-  );
-}
-
-/** Recorded spend and workload, without outcome or operator scores. */
-export function SpendStrip({
-  total,
-  period,
-}: {
-  total: SpendFigure;
-  period: DayRange;
-}) {
-  const t = useTranslations("spend");
-  return (
-    <TileStrip>
-      <Tile term={t("strip.spend")} note={t("period", period)}>
-        <CostFigure cost={total.cost} />
-      </Tile>
-      <Tile term={t("strip.runs")} note={t("strip.runsNote")}>
-        <CountFigure count={total.runs} />
-      </Tile>
-      <Tile term={t("strip.calls")} note={t("strip.callsNote")}>
-        <CountFigure count={total.calls} />
-      </Tile>
-      <Tile term={t("strip.coverage")} note={t("strip.coverageNote")}>
-        {total.cost === null ? t("strip.missing") : t("strip.available")}
-      </Tile>
-    </TileStrip>
-  );
+  return <dl className={embedded ? "contents" : statStrip}>{children}</dl>;
 }

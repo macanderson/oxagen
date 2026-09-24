@@ -1,7 +1,7 @@
 // The transcript's grouping and digests, and the feed the Transcript tab
 // draws from them, without a render.
 import { describe, expect, it } from "vitest";
-import type { TranscriptEntry } from "@/data/contracts/run";
+import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
 import {
   mockupTranscript,
   transcriptBody,
@@ -14,9 +14,13 @@ import {
   decisionSubject,
   entryKey,
   type FeedRow,
+  frameCost,
+  type Frames,
+  isNonEmpty,
   isOperatorPrompt,
   stepDigest,
   stepTool,
+  type TranscriptStep,
 } from "./transcript-model";
 
 const { entries } = mockupTranscript();
@@ -1291,5 +1295,665 @@ describe("isOperatorPrompt", () => {
         transcriptEntry({ type: "model.request", kinds: ["prompt"] }),
       ),
     ).toBe(false);
+  });
+});
+
+// ── Edges of the grouping and the readers ────────────────────────────────────
+//
+// Every frame below is built from `edgeFrame()`, which starts from nothing: no
+// halves, no decision, no cost and no call key. Each test names the fields its
+// case depends on, so what a test exercises is readable at the call site
+// rather than inherited from the builder's model-call defaults.
+
+const T0 = "2026-09-15T08:00:00.000Z";
+
+function edgeFrame(over: Partial<TranscriptEntry> = {}): TranscriptEntry {
+  return transcriptEntry({
+    kind: "frame",
+    type: "oxagen:note",
+    label: "oxagen:note",
+    at: T0,
+    callKey: null,
+    request: null,
+    response: null,
+    decision: null,
+    turn: 1,
+    frames: 1,
+    cost: null,
+    cumulativeCost: null,
+    kinds: [],
+    ...over,
+  });
+}
+
+/** A body carrying `text`; `null` stands for a digest-only seal. */
+function body(seq: string, text: string | null): TranscriptBody {
+  return transcriptBody(
+    text === null
+      ? { seq, fidelity: "digest_only", bytesRef: null, text: null }
+      : { seq, text },
+  );
+}
+
+/** The steps of a transcript recorded in one turn. */
+function stepsIn(entries: readonly TranscriptEntry[]): TranscriptStep[] {
+  const built = buildTranscript(entries);
+  const [turn] = built;
+  if (turn === undefined || built.length !== 1)
+    throw new Error(`expected one turn, got ${String(built.length)}`);
+  return turn.steps;
+}
+
+/** The step at `n`; a missing one fails the test that asked, by name. */
+function nth(steps: readonly TranscriptStep[], n: number): TranscriptStep {
+  const found = steps[n];
+  if (found === undefined) throw new Error(`no step ${String(n)}`);
+  return found;
+}
+
+/** Each step as its id and the seqs of the frames it owns. */
+function shape(steps: readonly TranscriptStep[]): [string, string[]][] {
+  return steps.map((s) => [s.id, s.frames.map((f) => f.seq)]);
+}
+
+/** A hand-built step over `frames`, for the readers that take one. */
+function stepOver(
+  kind: TranscriptStep["kind"],
+  frames: Frames,
+): TranscriptStep {
+  const [first] = frames;
+  const last = frames[frames.length - 1] ?? first;
+  return {
+    id: `s${first.seq}`,
+    kind,
+    from: 0,
+    to: frames.length - 1,
+    first,
+    last,
+    frames: [...frames],
+  };
+}
+
+describe("buildTranscript: turns", () => {
+  it("keeps a turn number reused after a gap as its own group, in recorded order", () => {
+    const built = buildTranscript([
+      edgeFrame({ seq: "1", turn: 1 }),
+      edgeFrame({ seq: "2", turn: 2 }),
+      edgeFrame({ seq: "3", turn: 1 }),
+    ]);
+    expect(built.map((t) => [t.id, t.turn])).toEqual([
+      ["t1", 1],
+      ["t2", 2],
+      ["t3", 1],
+    ]);
+    // Positions stay the transcript's own, not the group's.
+    expect(built[2]?.steps.map((s) => [s.from, s.to])).toEqual([[2, 2]]);
+  });
+});
+
+describe("pairing a model call's halves", () => {
+  it("pairs a keyed request with its response by key, across another frame of the same call", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "model_call",
+        type: "model.request",
+        label: "anthropic/claude-opus-5",
+        callKey: "m1",
+      }),
+      edgeFrame({ seq: "2", type: "oxagen:stream_tick", callKey: "m1" }),
+      edgeFrame({
+        seq: "3",
+        kind: "model_call",
+        type: "model.response",
+        label: "anthropic/claude-opus-5",
+        callKey: "m1",
+      }),
+    ]);
+    expect(shape(steps)).toEqual([
+      ["s1", ["1", "3"]],
+      ["s2", ["2"]],
+    ]);
+    expect(nth(steps, 0)).toMatchObject({ kind: "model", from: 0, to: 2 });
+  });
+
+  it("pairs a keyed engine call with its receipt, not with a wrapped response of the same key", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "model_call",
+        type: "model.engine_call_started",
+        label: "m",
+        callKey: "m1",
+      }),
+      edgeFrame({
+        seq: "2",
+        kind: "model_call",
+        type: "model.response",
+        label: "m",
+        callKey: "m1",
+      }),
+      edgeFrame({
+        seq: "3",
+        kind: "model_call",
+        type: "model.engine_call_completed",
+        label: "m",
+        callKey: "m1",
+      }),
+    ]);
+    expect(shape(steps)).toEqual([
+      ["s1", ["1", "3"]],
+      ["s2", ["2"]],
+    ]);
+  });
+
+  it("leaves a keyed request whose response never came as a one-frame step (negative)", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "model_call",
+        type: "model.request",
+        label: "m",
+        callKey: "m1",
+      }),
+      edgeFrame({
+        seq: "2",
+        kind: "model_call",
+        type: "model.response",
+        label: "m",
+        callKey: "m2",
+      }),
+    ]);
+    expect(shape(steps)).toEqual([
+      ["s1", ["1"]],
+      ["s2", ["2"]],
+    ]);
+    expect(stepDigest(nth(steps, 0)).durationMs).toBeNull();
+  });
+
+  it("does not pair an unkeyed request with a response that is not next to it (negative)", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "model_call",
+        type: "model.request",
+        label: "m",
+      }),
+      edgeFrame({ seq: "2", type: "oxagen:stream_tick" }),
+      edgeFrame({
+        seq: "3",
+        kind: "model_call",
+        type: "model.response",
+        label: "m",
+      }),
+    ]);
+    expect(steps.map((s) => [s.id, s.kind])).toEqual([
+      ["s1", "model"],
+      ["s2", "event"],
+      ["s3", "model"],
+    ]);
+  });
+});
+
+describe("pairing a tool call's halves", () => {
+  it("leaves a keyed request whose call never came as a one-frame tool step", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_requested",
+        label: "Read",
+        callKey: "t1",
+      }),
+    ]);
+    expect(shape(steps)).toEqual([["s1", ["1"]]]);
+    // With no call frame the request names the tool, and nothing recorded a status.
+    expect(stepDigest(nth(steps, 0))).toMatchObject({
+      node: "tool",
+      name: "Read",
+      arg: null,
+      outcome: null,
+      status: null,
+      durationMs: null,
+    });
+  });
+
+  it("ends an unkeyed request at the first frame that is neither a gate nor its call (negative)", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_requested",
+        label: "Bash",
+      }),
+      edgeFrame({
+        seq: "2",
+        kind: "policy",
+        type: "policy_decision",
+        label: "allow Bash",
+      }),
+      edgeFrame({ seq: "3", kind: "model_call", type: "llm_call", label: "m" }),
+      edgeFrame({
+        seq: "4",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Bash ok",
+      }),
+    ]);
+    expect(shape(steps)).toEqual([
+      ["s1", ["1", "2"]],
+      ["s3", ["3"]],
+      ["s4", ["4"]],
+    ]);
+  });
+
+  it("does not fold a keyed effect frame into a call that recorded no key (negative)", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Bash ok",
+      }),
+      edgeFrame({
+        seq: "2",
+        type: "command",
+        label: "command",
+        callKey: "toolu_x",
+      }),
+    ]);
+    expect(shape(steps)).toEqual([
+      ["s1", ["1"]],
+      ["s2", ["2"]],
+    ]);
+  });
+});
+
+describe("decisionSubject", () => {
+  it("names the call a gate decided on, and nothing when the gate named none", () => {
+    expect(
+      decisionSubject(
+        edgeFrame({
+          kind: "policy",
+          type: "policy_decision",
+          label: "deny Bash",
+        }),
+      ),
+    ).toBe("Bash");
+    expect(
+      decisionSubject(
+        edgeFrame({
+          kind: "policy",
+          type: "policy_decision",
+          label: "policy deny",
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      decisionSubject(
+        edgeFrame({
+          kind: "policy",
+          type: "approval_request",
+          label: "approval_request",
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("names a tool frame by its own tool, for each spelling of a call", () => {
+    expect(
+      decisionSubject(
+        edgeFrame({ kind: "tool_call", type: "tool_call", label: "Bash ok" }),
+      ),
+    ).toBe("Bash");
+    expect(
+      decisionSubject(
+        edgeFrame({ kind: "tool_call", type: "tool_requested", label: "Read" }),
+      ),
+    ).toBe("Read");
+    expect(
+      decisionSubject(
+        edgeFrame({
+          kind: "tool_call",
+          type: "tool.engine_call_completed",
+          label: "list_pull_requests completed",
+        }),
+      ),
+    ).toBe("list_pull_requests");
+  });
+
+  it("claims no subject for a tool frame whose label is only its type, or a frame that is no call (negative)", () => {
+    expect(
+      decisionSubject(
+        edgeFrame({ kind: "tool_call", type: "tool_call", label: "tool_call" }),
+      ),
+    ).toBeNull();
+    expect(
+      decisionSubject(
+        edgeFrame({
+          kind: "model_call",
+          type: "llm_call",
+          label: "anthropic/claude-opus-5",
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      decisionSubject(edgeFrame({ type: "turn_start", label: "turn_start" })),
+    ).toBeNull();
+  });
+});
+
+describe("stepDigest edges", () => {
+  it("names a model step by its whole label when the label carries no provider", () => {
+    const d = stepDigest(
+      stepOver("model", [
+        edgeFrame({
+          kind: "model_call",
+          type: "llm_call",
+          label: "claude-opus-5",
+        }),
+      ]),
+    );
+    expect(d).toMatchObject({
+      node: "model",
+      name: "claude-opus-5",
+      arg: null,
+      durationMs: null,
+    });
+  });
+
+  it("marks a tool step whose call failed or timed out as a denial, with the status it recorded", () => {
+    for (const status of ["error", "failed", "timeout"]) {
+      const d = stepDigest(
+        stepOver("tool", [
+          edgeFrame({
+            kind: "tool_call",
+            type: "tool_call",
+            label: `Bash ${status}`,
+          }),
+        ]),
+      );
+      expect(d).toMatchObject({
+        node: "deny",
+        name: "Bash",
+        status,
+        outcome: null,
+      });
+    }
+    // A status outside the failure words is not a denial (negative).
+    expect(
+      stepDigest(
+        stepOver("tool", [
+          edgeFrame({ kind: "tool_call", type: "tool_call", label: "Bash ok" }),
+        ]),
+      ).node,
+    ).toBe("tool");
+  });
+
+  it("reads a tool step's gate from the folded decision before its label, and times it end to end", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_requested",
+        label: "Bash",
+        at: T0,
+      }),
+      edgeFrame({
+        seq: "2",
+        kind: "policy",
+        type: "policy_decision",
+        label: "policy_decision",
+        decision: {
+          seq: "2",
+          decision: "reject",
+          type: "policy_decision",
+          at: T0,
+        },
+      }),
+      edgeFrame({
+        seq: "3",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Bash",
+        at: "2026-09-15T08:00:01.500Z",
+      }),
+    ]);
+    expect(stepDigest(nth(steps, 0))).toMatchObject({
+      node: "deny",
+      name: "Bash",
+      arg: null,
+      outcome: "reject",
+      status: null,
+      durationMs: 1500,
+    });
+  });
+
+  it("keeps the request's label as the argument when it says more than the tool's name", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_requested",
+        label: "Read src/app.ts",
+      }),
+      edgeFrame({
+        seq: "2",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Read ok",
+      }),
+    ]);
+    expect(stepDigest(nth(steps, 0))).toMatchObject({
+      name: "Read",
+      arg: "Read src/app.ts",
+      status: "ok",
+    });
+  });
+
+  const gateStep = (over: Partial<TranscriptEntry>) =>
+    stepDigest(
+      stepOver("event", [
+        edgeFrame({ kind: "policy", type: "policy_decision", ...over }),
+      ]),
+    );
+
+  it("names a gate that recorded no decision by its type, never by a word it did not record", () => {
+    // The label is the frame's own type: no decision in it.
+    expect(gateStep({ label: "policy_decision" })).toMatchObject({
+      node: "policy",
+      name: "policy_decision",
+      arg: null,
+    });
+    // `policy` with no second word decided nothing either.
+    expect(gateStep({ label: "policy" })).toMatchObject({
+      node: "policy",
+      name: "policy_decision",
+      arg: null,
+    });
+    // One word that is neither: not read as a decision without a call after it.
+    expect(
+      gateStep({ type: "approval_decision", label: "deny" }),
+    ).toMatchObject({
+      node: "policy",
+      name: "approval_decision",
+      arg: null,
+    });
+  });
+
+  it("names a gate by the folded decision when its label carries none", () => {
+    const decided = (decision: string) =>
+      gateStep({
+        type: "approval_request",
+        label: "approval_request",
+        decision: { seq: "1", decision, type: "approval_request", at: T0 },
+      });
+    expect(decided("allow")).toMatchObject({
+      node: "policy",
+      name: "allow",
+      outcome: null,
+    });
+    expect(decided("denied")).toMatchObject({
+      node: "deny",
+      name: "denied",
+      outcome: null,
+    });
+  });
+
+  it("draws admission and oxagen frames as control, and keeps a label that says more than the type", () => {
+    const event = (type: string, label: string) =>
+      stepDigest(stepOver("event", [edgeFrame({ type, label })]));
+    expect(event("admission.checked", "admission.checked")).toMatchObject({
+      node: "control",
+      arg: null,
+    });
+    expect(event("oxagen:hook_health", "hook PreToolUse")).toMatchObject({
+      node: "control",
+      name: "oxagen:hook_health",
+      arg: "hook PreToolUse",
+      outcome: null,
+    });
+    expect(event("context.assembled", "3 files")).toMatchObject({
+      node: "tool",
+      arg: "3 files",
+    });
+  });
+});
+
+describe("stepTool", () => {
+  it("is null for a step that is not a tool call (negative)", () => {
+    expect(
+      stepTool(
+        stepOver("model", [
+          edgeFrame({ kind: "model_call", type: "llm_call" }),
+        ]),
+      ),
+    ).toBeNull();
+  });
+
+  it("reads the call's receipt before the request, which holds the input alone", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_requested",
+        label: "Bash",
+        request: body("1", '{"command":"ls"}'),
+      }),
+      edgeFrame({
+        seq: "2",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Bash ok",
+        response: body("2", '{"input":{"command":"ls -la"},"output":"a.ts"}'),
+      }),
+    ]);
+    expect(stepTool(nth(steps, 0))).toMatchObject({
+      name: "Bash",
+      group: "shell",
+      headline: "ls -la",
+    });
+  });
+
+  it("falls back to the request's input when the call never completed", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_requested",
+        label: "Bash",
+        request: body("1", '{"command":"pwd"}'),
+      }),
+    ]);
+    expect(stepTool(nth(steps, 0))).toMatchObject({
+      name: "Bash",
+      headline: "pwd",
+    });
+  });
+
+  it("takes the tool's name from the body when the label is only the frame's type", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "tool_call",
+        response: body(
+          "1",
+          '{"tool_use":{"name":"Read","input":{"file_path":"src/app.ts"}}}',
+        ),
+      }),
+    ]);
+    expect(stepTool(nth(steps, 0))).toMatchObject({
+      name: "Read",
+      group: "read",
+      headline: "src/app.ts",
+    });
+  });
+
+  it("still names the tool from its label when every copy was digest-only", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Grep ok",
+        response: body("1", null),
+      }),
+    ]);
+    expect(stepTool(nth(steps, 0))).toMatchObject({
+      name: "Grep",
+      headline: null,
+      output: null,
+      diffs: [],
+    });
+  });
+
+  it("is null when neither the label nor a body names the tool (negative)", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "tool_call",
+        response: body("1", null),
+      }),
+    ]);
+    expect(stepTool(nth(steps, 0))).toBeNull();
+  });
+});
+
+describe("frameCost", () => {
+  const usd = (micros: string): TranscriptEntry["cost"] => ({
+    micros,
+    currency: "USD",
+    basis: "gateway_observed",
+  });
+
+  it("is null when no frame carried a cost, rather than a zero (negative)", () => {
+    expect(frameCost([])).toBeNull();
+    expect(frameCost([edgeFrame(), edgeFrame()])).toBeNull();
+  });
+
+  it("sums the frames that carried one and skips the ones that did not", () => {
+    expect(
+      frameCost([
+        edgeFrame({ cost: usd("380000") }),
+        edgeFrame(),
+        edgeFrame({ cost: usd("120000") }),
+      ]),
+    ).toEqual({
+      micros: "500000",
+      currency: "USD",
+    });
+  });
+
+  it("refuses a total across currencies (negative)", () => {
+    expect(
+      frameCost([
+        edgeFrame({ cost: usd("1") }),
+        edgeFrame({ cost: { micros: "1", currency: "EUR", basis: null } }),
+      ]),
+    ).toBeNull();
   });
 });

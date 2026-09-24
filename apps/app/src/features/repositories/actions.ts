@@ -22,6 +22,7 @@
 // the two callers refuse differently (the banner stays where it is, the page
 // re-reads its panel), so the duplication is the seam, not an accident.
 import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
+import { repositoryGitlabAttach } from "@oxagen/oxagen/contracts/repository.gitlab.attach";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
 import { repositoryInstallationList } from "@oxagen/oxagen/contracts/repository.installation.list";
 import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
@@ -33,6 +34,10 @@ import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get"
 import { repositoryProductionBranchSet } from "@oxagen/oxagen/contracts/repository.production_branch.set";
 import { repositoryInitPrOpen } from "@oxagen/oxagen/contracts/repository.init_pr.open";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
+import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
+import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
+import type { ContextPr } from "@/data/contracts/steering";
 import type {
   AttachedInstallation,
   GitHubInstallations,
@@ -106,13 +111,18 @@ export async function listInstallationRepositories(
 export async function bindWorkspaceRepository(
   org: string,
   ws: string,
-  repository: { owner: string; name: string },
+  repository:
+    | { owner: string; name: string }
+    | { provider: "gitlab"; projectPath: string },
 ): Promise<ActionResult<BoundRepository>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, repositoryMainBind, {
-    owner: repository.owner,
-    name: repository.name,
-  });
+  const result = await kernelWrite(
+    ctx,
+    repositoryMainBind,
+    "projectPath" in repository
+      ? { provider: "gitlab", projectPath: repository.projectPath }
+      : { owner: repository.owner, name: repository.name },
+  );
   return result.ok
     ? {
         ok: true,
@@ -123,6 +133,52 @@ export async function bindWorkspaceRepository(
         },
       }
     : result;
+}
+
+/** What connecting a GitLab project settled. */
+export type ConnectedGitLabProject = BoundRepository & {
+  /** Whether GitLab delivers merge request events: the hook's registration. */
+  webhook: "registered" | "refused" | "unchanged";
+};
+
+/**
+ * Connect a gitlab.com project with a project access token, then bind it as
+ * the main repository (#3762). Two writes, in this order, because a token is
+ * not an App installation: `attach_gitlab_project` verifies and stores the
+ * token, and `bind_main_repository` binds the project through the connection
+ * it wrote. A refusal from either is returned as it came. When the bind
+ * refuses, the connection stays, and submitting the form again rotates the
+ * same token in place and retries the bind.
+ *
+ * The token passes from the form to this server action and on to the kernel,
+ * and nothing returns it.
+ */
+export async function connectGitLabProject(
+  org: string,
+  ws: string,
+  input: { projectPath: string; token: string },
+): Promise<ActionResult<ConnectedGitLabProject>> {
+  const ctx = await requireViewer(org, ws);
+  const connected = await kernelWrite(ctx, repositoryGitlabAttach, {
+    projectPath: input.projectPath,
+    token: input.token,
+  });
+  if (!connected.ok) return connected;
+  const bound = await kernelWrite(ctx, repositoryMainBind, {
+    provider: "gitlab",
+    projectPath: connected.value.fullName,
+  });
+  return bound.ok
+    ? {
+        ok: true,
+        value: {
+          fullName: bound.value.fullName,
+          defaultRef: bound.value.defaultRef,
+          boundAt: bound.value.boundAt,
+          webhook: connected.value.webhook.status,
+        },
+      }
+    : bound;
 }
 
 /**
@@ -363,7 +419,9 @@ export async function readRepositoryChanges(
     if (proposal.pr === null || proposal.status === "proposed") continue;
     changes.push({
       proposalId: proposal.id,
+      lineage: proposal.lineageId,
       statement: proposal.statement,
+      why: proposal.rationale,
       kind: "context_record",
       pullRequest: proposal.pr,
       openedBy: proposal.source,
@@ -381,4 +439,105 @@ export async function readRepositoryChanges(
       ).length,
     },
   };
+}
+
+/**
+ * One change's Context PR, for the detail the Changes tab shows when a row is
+ * selected: its branch and base, each check with its own result, what merge
+ * will do, and the merge once it happened. `get_context_pr` is read here
+ * rather than through the Steering port because this page reads on demand.
+ */
+export async function readRepositoryChange(
+  org: string,
+  ws: string,
+  proposalId: string,
+): Promise<ActionResult<ContextPr>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: contextPrGet,
+    input: { proposalId },
+    page: "repositories",
+  });
+  if (!read.ok) return readToActionResult(read);
+  const out = read.value;
+  return {
+    ok: true,
+    value: {
+      proposalId: out.proposalId,
+      lineage: out.lineageId,
+      status: out.status,
+      governanceMode: out.governanceMode,
+      pr:
+        out.pr === null
+          ? null
+          : {
+              number: out.pr.number,
+              url: out.pr.url,
+              repository: out.pr.repository,
+              baseRef: out.pr.baseRef,
+              branch: out.pr.branch,
+              headSha: out.pr.headSha,
+            },
+      body: out.body,
+      checks: out.checks.map((check) => ({
+        name: check.name,
+        status: check.status,
+        summary: check.summary,
+      })),
+      onMerge: {
+        path: out.onMerge.publishes.path,
+        bundleVersion: {
+          current: out.onMerge.bundleVersion.current,
+          afterMerge: out.onMerge.bundleVersion.afterMerge,
+        },
+      },
+      merged:
+        out.merged === null
+          ? null
+          : {
+              commit: out.merged.commit,
+              at: out.merged.at,
+              promotionEventId: out.merged.promotionEventId,
+              recordId: out.merged.recordId,
+            },
+    },
+  };
+}
+
+/**
+ * Merge a change once every check passed. `merge_context_pr` re-reads the
+ * governance mode at merge time and gates the signed-in reviewer it names, so
+ * a person the mode does not admit is refused there whatever the page drew.
+ */
+export async function mergeRepositoryChange(
+  org: string,
+  ws: string,
+  proposalId: string,
+): Promise<ActionResult<{ commit: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, contextPrMerge, { proposalId });
+  return result.ok
+    ? { ok: true, value: { commit: result.value.mergedCommit } }
+    : result;
+}
+
+/**
+ * Close a change without merging: `dismiss_proposal` closes the pull request,
+ * deletes its branch and publishes nothing. The comment the dialog previews is
+ * recorded as the dismissal's reason.
+ */
+export async function closeRepositoryChange(
+  org: string,
+  ws: string,
+  proposalId: string,
+  comment: string,
+): Promise<ActionResult<{ status: "rejected" }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, contextProposalDismiss, {
+    proposalId,
+    reason: comment.trim(),
+  });
+  return result.ok
+    ? { ok: true, value: { status: result.value.status } }
+    : result;
 }

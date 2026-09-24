@@ -1,29 +1,32 @@
 // Which Spend view a request asks for (#2962, #2963): a tab, and with it
 // either one key's drill on the operator, agent and tool tabs or one finding's
-// evidence on the Findings tab, all from the query string. A tab is a query
-// rather than a route (ARCHITECTURE.md §1.2: neither lane adds a route), and a
-// value the page does not know opens the first tab with nothing selected
-// rather than an error page.
+// evidence on the Findings tab. The tab and the drill are path segments
+// (`/spend/<tab>/<drill>`, the mockup's route); the evidence is a dialog over
+// the Findings tab, so the finding is a query value. A segment the page does
+// not know is a 404 rather than a page that guesses.
 import { type DayRange, SpendDrillKind } from "@/data/contracts/spend";
 import { firstParam } from "@/shared/safe-path";
 import { isFindingId } from "./forms";
 
 /**
- * The tabs in the mockup's order: the page leads with Findings, and Pricing
- * closes it — the book every figure above was priced against, and the models
- * it cannot price, which is why some of those figures read "not recorded".
+ * The tabs in the mockup's order, Findings to Budgets. The three after them
+ * are this build's own and are not in the design: By task and By cost center
+ * (ADR-142), and Pricing, the book every figure above was priced against with
+ * the models it cannot price, which is why some of those figures read "not
+ * recorded".
  */
 export const SPEND_TABS = [
   "findings",
   "tokens",
+  "coaching",
   "operator",
   "agent",
   "model",
   "tool",
-  "task",
-  "cost_center",
   "waste",
   "budgets",
+  "task",
+  "cost_center",
   "pricing",
 ] as const;
 export type SpendTab = (typeof SPEND_TABS)[number];
@@ -58,30 +61,37 @@ function isTab(value: string | undefined): value is SpendTab {
   return SPEND_TABS.some((tab) => tab === value);
 }
 
+/**
+ * The view the path segments after `/spend` name, or null for a path that
+ * names none (the route answers 404). `finding` is the query value that opens
+ * one finding's evidence over the Findings tab.
+ */
 export function parseSpendView(
-  params: Readonly<Record<string, string | string[] | undefined>>,
-): SpendView {
-  const raw = firstParam(params.tab);
-  const tab = isTab(raw) ? raw : "findings";
-  const drill = firstParam(params.drill);
-  // A drill opens only on a tab the request named: a tab that fell back to the
-  // first one does not carry the drill with it.
-  const kind = SpendDrillKind.safeParse(raw);
-  if (
-    kind.success &&
-    drill !== undefined &&
-    drill.length > 0 &&
-    drill.length <= KEY_MAX &&
-    (kind.data !== "operator" || PRINCIPAL.test(drill))
-  ) {
+  segments: readonly string[] | undefined,
+  finding?: string | string[],
+): SpendView | null {
+  const [raw, drill, ...rest] = segments ?? [];
+  if (rest.length > 0) return null;
+  const tab = raw === undefined ? "findings" : raw;
+  if (!isTab(tab)) return null;
+  if (drill !== undefined) {
+    const kind = SpendDrillKind.safeParse(tab);
+    if (
+      !kind.success ||
+      drill.length === 0 ||
+      drill.length > KEY_MAX ||
+      (kind.data === "operator" && !PRINCIPAL.test(drill))
+    ) {
+      return null;
+    }
     return { tab: kind.data, drill, finding: null };
   }
   if (tab === "findings") {
-    const finding = firstParam(params.finding);
+    const id = firstParam(finding);
     return {
       tab,
       drill: null,
-      finding: finding !== undefined && isFindingId(finding) ? finding : null,
+      finding: id !== undefined && isFindingId(id) ? id : null,
     };
   }
   return { tab, drill: null, finding: null };

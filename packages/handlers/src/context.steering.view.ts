@@ -12,10 +12,20 @@ import {
   type PublishedSharingScope,
   type RecordForce,
   type RecordKind,
+  type RepositoryProvider,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { recordFilePath } from "./context.steering.file";
 import { REVIEW_BY_MODE } from "./context.steering.policy";
 import type { ProposalRow, PublishedRecordRow } from "./context.steering.store";
+
+/**
+ * The host a proposal's PR lives on. The store's
+ * `context_proposals_pr_provider_check` means a row with a PR number always
+ * names one; the fallback covers only a row read before that column existed.
+ */
+function prProvider(row: ProposalRow): RepositoryProvider {
+  return row.provider === "gitlab" ? "gitlab" : "github";
+}
 
 export function proposalView(row: ProposalRow): ProposalView {
   return {
@@ -40,6 +50,7 @@ export function proposalView(row: ProposalRow): ProposalView {
         ? {
             number: row.prNumber,
             url: row.prUrl,
+            provider: prProvider(row),
             repository: row.repository,
             branch: row.branch,
           }
@@ -103,6 +114,7 @@ export function contextPrView(
         ? {
             number: row.prNumber,
             url: row.prUrl,
+            provider: prProvider(row),
             repository: row.repository,
             baseRef: row.baseRef,
             branch: row.branch,

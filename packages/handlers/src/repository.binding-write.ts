@@ -13,18 +13,40 @@
 // reused when nothing it records has moved, superseded by version + 1 when
 // something has, and only when there is none is a version 1 written.
 import { schema, type Tx } from "@oxagen/database";
-import type { GitHubRepoInfo } from "@oxagen/github";
+
 import { and, desc, eq } from "drizzle-orm";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
 
 export type RepositoryHeadRole = "main" | "linked";
 
+/** The hosts a binding can name (`repository_bindings_provider_check`). */
+export type RepositoryProvider = "github" | "gitlab";
+
+/**
+ * The repository facts a binding records, whichever host reported them. A
+ * GitHub `GitHubRepoInfo` satisfies it; on GitLab `owner` is the full
+ * namespace path and `id` the numeric project id.
+ */
+export interface BindableRepository {
+  id: string;
+  owner: string;
+  name: string;
+  fullName: string;
+  defaultBranch: string;
+}
+
 export interface NewRepositoryHead {
   scope: { orgId: string; workspaceId: string };
   /** The `source_connections` row the head and binding hang off. */
   connectionId: string;
-  repo: GitHubRepoInfo;
+  repo: BindableRepository;
   role: RepositoryHeadRole;
+  /**
+   * The host. Defaults to GitHub, the only host `create_workspace` and
+   * `link_repository` bind today. `provider_repository_id` is unique only
+   * within one host, so the retained-version lookup filters on it too.
+   */
+  provider?: RepositoryProvider;
   userId: string;
   now: Date;
 }
@@ -44,6 +66,7 @@ export async function writeRepositoryHead(
   args: NewRepositoryHead,
 ): Promise<WrittenRepositoryHead> {
   const { scope, connectionId, repo, role, userId, now } = args;
+  const provider = args.provider ?? GITHUB_PROVIDER;
 
   const [latest] = await tx
     .select({
@@ -61,6 +84,7 @@ export async function writeRepositoryHead(
         eq(schema.repositoryBindings.orgId, scope.orgId),
         eq(schema.repositoryBindings.workspaceId, scope.workspaceId),
         eq(schema.repositoryBindings.connectionId, connectionId),
+        eq(schema.repositoryBindings.provider, provider),
         eq(schema.repositoryBindings.providerRepositoryId, repo.id),
       ),
     )
@@ -83,7 +107,7 @@ export async function writeRepositoryHead(
         orgId: scope.orgId,
         workspaceId: scope.workspaceId,
         connectionId,
-        provider: GITHUB_PROVIDER,
+        provider,
         providerRepositoryId: repo.id,
         providerOwner: repo.owner,
         providerName: repo.name,
@@ -108,7 +132,7 @@ export async function writeRepositoryHead(
     orgId: scope.orgId,
     workspaceId: scope.workspaceId,
     connectionId,
-    provider: GITHUB_PROVIDER,
+    provider,
     providerRepositoryId: repo.id,
     currentBindingId: binding.id,
     // Written out rather than left to the column default: which role a head
