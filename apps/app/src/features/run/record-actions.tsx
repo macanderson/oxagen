@@ -317,8 +317,11 @@ function RecordDialog<O>({
   write,
   receipt,
   follow,
+  prefix = "run",
 }: {
   action: "summarize" | "resummarize" | "export";
+  /** The test id's prefix; set where a second copy of the action sits on the page. */
+  prefix?: string;
   /** The button's words; `summarize` and `resummarize` differ only here. */
   label: string;
   runId: string;
@@ -365,7 +368,7 @@ function RecordDialog<O>({
     <>
       <button
         type="button"
-        data-testid={`run-${action}`}
+        data-testid={`${prefix}-${action}`}
         className={buttonSecondary}
         onClick={() => {
           setOpen(true);
@@ -495,6 +498,8 @@ export function ExportAction({
   runId,
   sealed,
   orgRole,
+  label,
+  prefix = "run",
 }: {
   org: string;
   ws: string;
@@ -502,14 +507,20 @@ export function ExportAction({
   /** A live run is refused by the handler: the bundle signs a finished record. */
   sealed: boolean;
   orgRole: OrgRole;
+  /** The button's words where they differ from the header's Export. */
+  label?: string;
+  /** The test id's prefix; set where a second copy of the action sits on the page. */
+  prefix?: string;
 }) {
   const t = useTranslations("run.record");
   const canExport = orgRole === "owner" || orgRole === "admin";
+  const words = label ?? t("export.open");
   if (sealed && canExport) {
     return (
       <RecordDialog
         action="export"
-        label={t("export.open")}
+        label={words}
+        prefix={prefix}
         runId={runId}
         write={() => exportRun(org, ws, runId)}
         receipt={(value) => value.exportId}
@@ -524,11 +535,11 @@ export function ExportAction({
     <button
       type="button"
       disabled
-      data-testid="run-export"
+      data-testid={`${prefix}-export`}
       title={reason}
       className={buttonSecondary}
     >
-      {t("export.open")}
+      {words}
     </button>
   );
 }

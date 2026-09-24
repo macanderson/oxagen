@@ -134,6 +134,56 @@ function Instrument({
   );
 }
 
+/**
+ * One field of an instrument the record does not hold: a muted line that says
+ * what is missing and names the gap, never a zero or a blank (spec: 🟡 rows
+ * render NotBacked for the fields that do not exist).
+ */
+function Gap({ gap, children }: { gap: string; children: ReactNode }) {
+  return (
+    <span data-gap={gap} data-testid="instrument-gap">
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Cost per turn as a small column chart, one column per turn the per-turn
+ * ledger priced, tallest at the dearest. Null when no turn carries a cost.
+ */
+function PerTurnChart({ turns }: { turns: Read<RunTranscript> }) {
+  const t = useTranslations("run.cost.instruments");
+  if (!turns.ok) return null;
+  const priced = turns.value.entries.flatMap((entry) =>
+    entry.cost === null
+      ? []
+      : [{ id: entry.seq, micros: BigInt(entry.cost.micros) }],
+  );
+  if (priced.length === 0) return null;
+  const top = priced.reduce(
+    (max, turn) => (turn.micros > max ? turn.micros : max),
+    0n,
+  );
+  return (
+    <span
+      role="img"
+      aria-label={t("perTurnChart", { count: priced.length })}
+      data-testid="instrument-per-turn"
+      className="flex h-6 items-end gap-[2px] pt-1"
+    >
+      {priced.map((turn) => (
+        <span
+          key={turn.id}
+          className="w-1.5 rounded-sm bg-foreground/50"
+          style={{
+            height: `${String(top === 0n ? 0 : Math.max(8, Number((turn.micros * 100n) / top)))}%`,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
 /** The dearest turn the per-turn ledger recorded; null when no turn carried a cost. */
 function dearestTurn(turns: Read<RunTranscript>) {
   if (!turns.ok) return null;
@@ -199,6 +249,8 @@ function Instruments({
             </>
           )}
         </span>
+        <Gap gap="G3">{t("medianNotRecorded")}</Gap>
+        <PerTurnChart turns={turns} />
         <span>
           {t("cacheHit")}{" "}
           {rollup.cacheHitRate === null ? (
@@ -207,19 +259,24 @@ function Instruments({
             formatRatio(rollup.cacheHitRate, locale)
           )}
         </span>
+        <Gap gap="G3">{t("savedNotRecorded")}</Gap>
       </Instrument>
       <Instrument
         label={t("wallClock")}
         basis={run.sealedAt === null ? t("soFar") : t("startToSeal")}
         value={formatDuration(Math.max(0, wall), locale)}
       >
-        <span>{t("splitNotRecorded")}</span>
+        <Gap gap="G6">{t("splitNotRecorded")}</Gap>
+        <Gap gap="G6">{t("batchedNotRecorded")}</Gap>
       </Instrument>
       <Instrument
         label={t("tokens")}
         basis={t("inAndOut")}
-        value={t("inOut", { in: count(input), out: count(output) })}
+        value={count(input + output)}
       >
+        <span data-testid="instrument-tokens-split">
+          {t("inOut", { in: count(input), out: count(output) })}
+        </span>
         <span>
           {t("tokenSplit", {
             cacheRead: count(rollup.tokens.cacheRead),
@@ -234,6 +291,7 @@ function Instruments({
                 tokens: count(Math.round((input + output) / rollup.modelCalls)),
               })}
         </span>
+        <Gap gap="G3">{t("priceNotRecorded")}</Gap>
       </Instrument>
       <Instrument
         label={t("shape")}
@@ -252,11 +310,12 @@ function Instruments({
             })
           )}
         </span>
-        <span>{t("batchesNotRecorded")}</span>
+        <Gap gap="G6">{t("batchesNotRecorded")}</Gap>
       </Instrument>
       <Instrument label={t("toolCalls")} value={count(rollup.toolCalls)}>
         <span>{t("families", { count: families.size })}</span>
-        <span>{t("failedNotRecorded")}</span>
+        <Gap gap="G6">{t("failedNotRecorded")}</Gap>
+        <Gap gap="G6">{t("parallelNotRecorded")}</Gap>
       </Instrument>
       <Instrument
         label={t("productive")}
@@ -269,6 +328,8 @@ function Instruments({
         }
       >
         <span>{t("productiveNote")}</span>
+        <Gap gap="G3">{t("advancedNotRecorded")}</Gap>
+        <Gap gap="G3">{t("trendNotRecorded")}</Gap>
       </Instrument>
     </div>
   );
@@ -350,6 +411,7 @@ function ToolCalls({ rollup }: { rollup: RunCostRollup }) {
  */
 function TokenClasses({ rollup }: { rollup: RunCostRollup }) {
   const t = useTranslations("run.cost.classes");
+  const tc = useTranslations("run.cost");
   const locale = useLocale();
   const total = TOKEN_CLASSES.reduce(
     (sum, [key]) => sum + rollup.tokens[key],
@@ -402,7 +464,15 @@ function TokenClasses({ rollup }: { rollup: RunCostRollup }) {
             {rollup.cost === null ? (
               <NoValue />
             ) : (
-              <Money value={rollup.cost} precision="exact" />
+              <span className="inline-flex flex-col items-end">
+                <Money value={rollup.cost} precision="exact" />
+                <span
+                  data-testid="cost-class-basis"
+                  className={`${mono} text-[10.5px] font-normal text-muted-foreground`}
+                >
+                  {rollup.cost.basis ?? tc("basisNotRecorded")}
+                </span>
+              </span>
             )}
           </td>
           <td className={numericCell}>{total === 0 ? null : "100%"}</td>

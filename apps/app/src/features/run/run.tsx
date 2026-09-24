@@ -6,6 +6,7 @@ import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { ApprovalQueue } from "@/data/contracts/approvals";
 import type { RunCost, RunTranscript } from "@/data/contracts/run";
+import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, type Read, readError } from "@/data/read";
@@ -22,6 +23,8 @@ import { type AgentFigures, RunHeader } from "./header";
 import { interjectionOf, RunInterjection } from "./interjection";
 import { issueCount, IssuesSection } from "./issues";
 import { OutputsSpine } from "./outputs";
+import { ExportAction } from "./record-actions";
+import { ReplayActions } from "./replay-actions";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import {
   ContextSection,
@@ -33,7 +36,7 @@ import { StatRow, SummaryPanel } from "./stats";
 import { RunEmpty, RunReadFailure } from "./states";
 import { KINDS_NONE, kindsParam, TranscriptSection } from "./transcript";
 import { ChangesPanel, SpendByArea } from "./work";
-import { readRunWork, WithWork } from "./work-ci";
+import { checkoutOf, readRunWork, WithWork, workOf } from "./work-ci";
 
 /** The seven tabs, in the spec's order (pages/run.md). */
 const TABS = [
@@ -137,9 +140,65 @@ function isPlayer(everything: Read<RunTranscript>): boolean {
   return policy !== null && policy.length === 0;
 }
 
+/**
+ * `github.com/a-intel/edge-proxy@e7c41a9`: the repository the first recorded
+ * checkout named and the commit it was at. Null when the collector recorded
+ * no checkout, no repository or no commit, so the meta line says the remote
+ * was not captured rather than guessing one.
+ */
+function remoteOf(work: RunWork | null): string | null {
+  const checkout = checkoutOf(work);
+  const repository = checkout?.repository ?? null;
+  if (checkout === null || repository === null || checkout.headSha === null)
+    return null;
+  return `${repository.host}/${repository.owner}/${repository.name}@${checkout.headSha.slice(0, 7)}`;
+}
+
 /** A call parked on this run: the dot the Governed actions and Policy tabs carry. */
 function isParked(pending: Read<ApprovalQueue>): boolean {
   return pending.ok && pending.value.items.length > 0;
+}
+
+/**
+ * The Chain and seal tab's three actions (spec): Fork replay from frame N,
+ * Bisect against another run, and Export the bundle. The same dialogs the
+ * header opens, under the tab's longer names.
+ */
+function ChainActions({
+  run,
+  lastSeq,
+  orgRole,
+  org,
+  ws,
+}: {
+  run: RunRow;
+  lastSeq: string | null;
+  orgRole: WsCtx["orgRole"];
+} & Place) {
+  const t = useTranslations("run.chain.actions");
+  return (
+    <ReplayActions
+      org={org}
+      ws={ws}
+      run={run}
+      prefix="chain"
+      labels={{
+        fork: lastSeq === null ? t("forkNoSeq") : t("fork", { seq: lastSeq }),
+        bisect: t("bisect"),
+      }}
+      after={
+        <ExportAction
+          org={org}
+          ws={ws}
+          runId={run.id}
+          sealed={run.status !== "live"}
+          orgRole={orgRole}
+          prefix="chain"
+          label={t("export")}
+        />
+      }
+    />
+  );
 }
 
 /** The side column: what the run changed, what it produced, and where it spent. */
@@ -364,14 +423,18 @@ export async function Run({
   if (interject !== null) {
     // The agent's pane opens on the operator's first message, which is the
     // transcript's first prompt entry.
-    const prompts = await source.runs.transcript(ctx, run.id, "everything", {
-      kinds: ["prompt"],
-    });
+    const [prompts, work] = await Promise.all([
+      source.runs.transcript(ctx, run.id, "everything", {
+        kinds: ["prompt"],
+      }),
+      readRunWork(ctx, source, run.id),
+    ]);
     return (
       <RunInterjection
         detail={detail}
         interject={interject}
         prompt={firstPrompt(prompts)}
+        remote={remoteOf(workOf(work))}
         ws={place.ws}
       />
     );
@@ -533,7 +596,19 @@ export async function Run({
       break;
     }
     case "chain":
-      section = <ChainSection read={await source.runs.chain(ctx, run.id)} />;
+      section = (
+        <ChainSection
+          read={await source.runs.chain(ctx, run.id)}
+          actions={(lastSeq) => (
+            <ChainActions
+              run={run}
+              lastSeq={lastSeq}
+              orgRole={ctx.orgRole}
+              {...place}
+            />
+          )}
+        />
+      );
       break;
   }
   return (

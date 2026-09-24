@@ -222,22 +222,30 @@
         "wallClock": "Wall clock",
         "soFar": "so far",
         "startToSeal": "start to seal",
-        "splitNotRecorded": "model, tool, waiting and harness time not recorded",
+        "splitNotRecorded": "model, tool, waiting and harness time not recorded (#3891)",
         "tokens": "Tokens",
         "inAndOut": "in and out",
-        "inOut": "{in} in, {out} out",
+        "inOut": "{in} in · {out} out",
         "tokenSplit": "cache read {cacheRead} · fresh input {fresh} · output {output}",
         "perCall": "{tokens} per model call",
         "noModelCall": "no model call recorded",
         "shape": "Shape of the run",
         "shapeValue": "{turns} turns · {steps} steps · {frames} frames",
         "stepsPerTurn": "{value} steps per turn",
-        "batchesNotRecorded": "tools per batch not recorded",
+        "batchesNotRecorded": "tools per batch not recorded (#3891)",
         "toolCalls": "Tool calls",
         "families": "{count, plural, one {# family} other {# families}}",
-        "failedNotRecorded": "failed calls not recorded",
+        "failedNotRecorded": "failed calls not recorded (#3891)",
         "productive": "Productive ratio",
-        "productiveNote": "the share of steps the rollup counted as advancing the run"
+        "productiveNote": "the share of steps the rollup counted as advancing the run",
+        "perTurnChart": "Cost of each of {count} priced turns",
+        "medianNotRecorded": "delta against the agent’s median run not recorded (#3984)",
+        "savedNotRecorded": "cache saving not recorded (#3892)",
+        "batchedNotRecorded": "batches together against one at a time not recorded (#3891)",
+        "priceNotRecorded": "effective input price not recorded (#3892)",
+        "parallelNotRecorded": "batches in parallel not recorded (#3891)",
+        "advancedNotRecorded": "steps advanced against did not not recorded (#3984)",
+        "trendNotRecorded": "delta against the last 30 days not recorded (#3984)"
       },
       "tools": {
         "title": "Tool calls",
@@ -503,6 +511,12 @@
         "view": "read every retained body",
         "fork": "replay to a frame and run on from it",
         "retry": "replay the whole run against its recording"
+      },
+      "actions": {
+        "fork": "Fork replay from frame {seq}",
+        "forkNoSeq": "Fork replay",
+        "bisect": "Bisect against another run",
+        "export": "Export the bundle"
       }
     },
     "waterfall": {
@@ -740,7 +754,7 @@
         "none": "The first request's window is not on the record, so the tokens written and sent are not shown. It needs the USED_CONTEXT edges Oxagen does not write yet (G10)."
       },
       "manifest": {
-        "title": "Steering manifest",
+        "title": "Manifest frame",
         "none": "This run sealed no steering.manifest frame. A wrapped session seals one at its start when its bundle carries a manifest.",
         "unreadable": "Frame {seq} does not carry a manifest this page can read.",
         "tally": "{rendered} rendered · {cut} cut · {tokens} tok",
@@ -760,7 +774,9 @@
           "unrecorded": "no reason recorded"
         },
         "supersededBy": "replaced by {by}",
-        "footer": "bundle v{version} · frame {seq} · budget {budget} tok"
+        "footer": "bundle v{version} · frame {seq} · budget {budget} tok",
+        "preview": "Open in Preview",
+        "previewGap": "Steering has no Preview that runs the assembler for one agent and one prompt yet (#3879)."
       },
       "window": {
         "title": "Prompt window",
@@ -777,6 +793,10 @@
       "stats": {
         "title": "Retrieval stats",
         "none": "Candidates scored, admitted, held back and below the floor are not recorded (G10)."
+      },
+      "walk": {
+        "title": "Walk the window",
+        "none": "Walking the window block by block needs the model request’s window on the record, which needs the USED_CONTEXT edges Oxagen does not write yet (G10, #3894)."
       }
     },
     "work": {
@@ -798,9 +818,9 @@
       "inFiles": "in {count, plural, one {# file} other {# files}}",
       "basisNotRecorded": "basis not recorded",
       "areasNotRecorded": "The rollup does not split this run's cost by area yet. The initial prompt, follow-ups, context retrievals, tool definitions, tool calls, system prompt and model output need token columns cost.run_totals does not carry (G3).",
-      "dearestTools": "Dearest tools",
+      "dearestTools": "Most called tools",
       "noTools": "This run called no tool.",
-      "toolCostNotRecorded": "cost not recorded",
+      "toolCostNotRecorded": "cost not recorded (#3892)",
       "allTools": "All {count} tools on Cost",
       "splitNote": "Tools are ranked by calls. The rollup counts each tool's calls and not its money, so no tool carries a cost here.",
       "state": {
@@ -907,14 +927,22 @@
       "timeoutTitle": "If nobody answers",
       "timeoutNotRecorded": "No timeout is recorded on this interjection.",
       "pending": "pending",
-      "waitsOn": "waits on the answer",
       "notHappened": "{count, select, 1 {The greyed frame has} 2 {The two greyed frames have} other {The three greyed frames have}} not happened. A run that is waiting is a run that has written down that it is waiting.",
       "skillLoaded": "Skill loaded",
       "workspaceCreated": "Workspace created",
       "operatorNotRecorded": "the operator",
       "cut": "This read stopped before the end of the recording, so later frames are not listed.",
       "linkTo": "to {ws}",
-      "promptNotRecorded": "The operator's first message is not on the record."
+      "promptNotRecorded": "The operator's first message is not on the record.",
+      "remoteNotCaptured": "remote not captured",
+      "createAs": "a workspace whose name is not proposed yet",
+      "cardNotRecorded": "What this path inherits is not worked out yet (#3941).",
+      "midRunNotRecorded": "What a new workspace ships with is not recorded, so this page cannot say what the second path changes in the middle of this run (#3941).",
+      "notYet": {
+        "skills.resolved": "waits on the answer",
+        "context.assembled": "waits on the answer",
+        "model.request": "the first model call of the run has not happened"
+      }
     },
     "player": {
       "timeline": "Timeline",

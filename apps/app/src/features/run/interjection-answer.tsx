@@ -22,19 +22,30 @@ export function InterjectionAnswer({
 }) {
   const t = useTranslations("run.interjection");
   const [picked, setPicked] = useState<Path | null>(null);
+  // Each card's line says what the path would do. That is worked out from the
+  // config that would apply, which nothing works out yet (#3941), so the line
+  // says so rather than printing the mockup's inheritance list.
   const card = (path: Path, title: string) => (
     <button
       type="button"
       aria-pressed={picked === path}
       data-testid={`interjection-pick-${path}`}
       onClick={() => setPicked(path)}
-      className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border bg-app-panel-bg px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:border-foreground aria-pressed:border-gold aria-pressed:bg-gold/10"
+      className="flex min-h-11 w-full items-start gap-3 rounded-lg border border-border bg-app-panel-bg px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:border-foreground aria-pressed:border-gold aria-pressed:bg-gold/10"
     >
       <span
         aria-hidden="true"
-        className={`size-4 shrink-0 rounded border ${picked === path ? "border-gold bg-gold" : "border-border"}`}
+        className={`mt-0.5 size-4 shrink-0 rounded border ${picked === path ? "border-gold bg-gold" : "border-border"}`}
       />
-      {title}
+      <span className="flex flex-col gap-0.5">
+        {title}
+        <span
+          data-gap="interjection-consequences"
+          className="text-xs font-normal text-muted-foreground"
+        >
+          {t("cardNotRecorded")}
+        </span>
+      </span>
     </button>
   );
   return (

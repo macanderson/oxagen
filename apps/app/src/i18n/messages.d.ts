@@ -3864,6 +3864,14 @@ type Messages = {
         failedNotRecorded: string;
         productive: string;
         productiveNote: string;
+        perTurnChart: string;
+        medianNotRecorded: string;
+        savedNotRecorded: string;
+        batchedNotRecorded: string;
+        priceNotRecorded: string;
+        parallelNotRecorded: string;
+        advancedNotRecorded: string;
+        trendNotRecorded: string;
       };
       tools: {
         title: string;
@@ -4130,6 +4138,12 @@ type Messages = {
         fork: string;
         retry: string;
       };
+      actions: {
+        fork: string;
+        forkNoSeq: string;
+        bisect: string;
+        export: string;
+      };
     };
     waterfall: {
       title: string;
@@ -4387,6 +4401,8 @@ type Messages = {
         };
         supersededBy: string;
         footer: string;
+        preview: string;
+        previewGap: string;
       };
       window: {
         title: string;
@@ -4401,6 +4417,10 @@ type Messages = {
         cited: string;
       };
       stats: {
+        title: string;
+        none: string;
+      };
+      walk: {
         title: string;
         none: string;
       };
@@ -4533,7 +4553,6 @@ type Messages = {
       timeoutTitle: string;
       timeoutNotRecorded: string;
       pending: string;
-      waitsOn: string;
       notHappened: string;
       skillLoaded: string;
       workspaceCreated: string;
@@ -4541,6 +4560,15 @@ type Messages = {
       cut: string;
       linkTo: string;
       promptNotRecorded: string;
+      remoteNotCaptured: string;
+      createAs: string;
+      cardNotRecorded: string;
+      midRunNotRecorded: string;
+      notYet: {
+        "skills.resolved": string;
+        "context.assembled": string;
+        "model.request": string;
+      };
     };
     player: {
       timeline: string;
