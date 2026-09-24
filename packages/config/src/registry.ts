@@ -2275,6 +2275,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "35930652260",
   },
+  DEPLOY_SERVICE: {
+    group: "Operator scripts",
+    description:
+      "The service a deploy job ships (web, app, api, mcp, docs or stella-serve). check-deploy-tip.mjs reads it to find what is live for that service and to record what shipped (ADR-164). pipeline.yml sets it on the deploy jobs' order and record steps.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "app",
+  },
   SCR_OWNER: {
     group: "Operator scripts",
     description:

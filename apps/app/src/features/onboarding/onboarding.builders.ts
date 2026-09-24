@@ -232,7 +232,10 @@ export function onboardingSource(reads: Reads): {
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
       freshness: refuse("steering.freshness"),
+      hub: refuse("steering.hub"),
       deliveries: refuse("steering.deliveries"),
+      memories: refuse("steering.memories"),
+      tree: refuse("steering.tree"),
     },
     tools: {
       versions: refuse("tools.versions"),
