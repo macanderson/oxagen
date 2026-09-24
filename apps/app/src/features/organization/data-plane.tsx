@@ -144,7 +144,7 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
               plane.host === null ? (
                 nr
               ) : (
-                <span key="host" className={mono}>
+                <span key="postgresHost" className={mono}>
                   {plane.host}
                 </span>
               ),
@@ -154,7 +154,7 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
               plane.database === null ? (
                 nr
               ) : (
-                <span key="database" className={mono}>
+                <span key="postgresDatabase" className={mono}>
                   {plane.database}
                   {plane.schemaVersion === null
                     ? null
@@ -275,7 +275,7 @@ function Isolation({
             [t("rows"), t("rowsValue")],
             [
               t("workspaceScoping"),
-              <Fragment key="scoping">
+              <Fragment key="workspaceScoping">
                 {t("workspaceScopingValue")}{" "}
                 <span className={`${mono} text-dim`}>({slugs})</span>
               </Fragment>,

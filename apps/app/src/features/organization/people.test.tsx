@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MemberList } from "@/data/contracts/org";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import { nth } from "@/test/nth";
 import { IntlProvider } from "@/test/intl";
 import { roleCatalog, roleRow } from "./organization.builders";
 
@@ -96,18 +97,11 @@ const catalog = roleCatalog({
   ],
 });
 
-/** The table row a test keys on, or a failure naming it. */
+/** The list row a member or invitation id keys. */
 function rowOf(id: string): HTMLElement {
   const row = document.querySelector<HTMLElement>(`[data-row="${id}"]`);
-  if (row === null) throw new Error(`no row ${id}`);
+  if (row === null) throw new Error(`no row for ${id}`);
   return row;
-}
-
-/** One cell of a row, or a failure naming its position. */
-function cellAt(cells: readonly HTMLElement[], index: number): HTMLElement {
-  const found = cells[index];
-  if (found === undefined) throw new Error(`no cell ${String(index)}`);
-  return found;
 }
 
 function headers(table: HTMLElement): string[] {
@@ -172,8 +166,9 @@ describe("People", () => {
 
   it("prints a member's name and email, the recorded role, active status, and not recorded where the roster has nothing", async () => {
     await renderPeople();
-    const row = rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a");
-    const cells = within(row).getAllByRole("cell");
+    const cells = within(rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a")).getAllByRole(
+      "cell",
+    );
     expect(cells[0]).toHaveTextContent("Marcus Bell");
     expect(cells[0]).toHaveTextContent("marcus.bell@acme.example");
     expect(cells[1]).toHaveTextContent("Owner");
@@ -182,7 +177,7 @@ describe("People", () => {
     }
     expect(cells[5]).toHaveTextContent("active");
     expect(
-      within(cellAt(cells, 6))
+      within(nth(cells, 6, "an actions cell"))
         .getAllByRole("button")
         .map((b) => b.textContent),
     ).toEqual(["Open", "Change role", "Remove"]);

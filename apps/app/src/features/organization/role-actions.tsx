@@ -45,20 +45,17 @@ type EditorMode = "create" | "duplicate" | "edit" | "view";
 const label = "text-[12px] font-semibold text-muted-foreground";
 const hint = "text-xs text-muted-foreground";
 
-/** What the editor holds while it is open. */
-type EditorState = {
-  name: string;
-  description: string;
-  scope: Role["scope"];
-  permissions: Set<string>;
-};
-
 /** The editor's opening state for one door. */
 function initial(
   mode: EditorMode,
   role: Role | undefined,
   suffix: string,
-): EditorState {
+): {
+  name: string;
+  description: string;
+  scope: Role["scope"];
+  permissions: Set<string>;
+} {
   if (mode === "create" || role === undefined) {
     return {
       name: "",
