@@ -247,9 +247,59 @@ describe("header", () => {
       cost: ok(runCost({ rollup: null })),
     });
     const stats = within(screen.getByTestId("run-stats"));
-    // Tokens, prompts, cost, wasted, wall clock and cache hit: nothing backs any.
-    expect(stats.getAllByText("not recorded")).toHaveLength(6);
+    // Tokens, prompts, cost, wasted and cache hit: nothing backs any. The
+    // wall clock is backed by the run's recorded start, and keeps counting.
+    expect(stats.getAllByText("not recorded")).toHaveLength(5);
+    expect(screen.getByTestId("run-wall-ticking")).toBeTruthy();
     expect(screen.queryByText("$0.00")).toBeNull();
+  });
+
+  it("ticks a live run's wall clock once a second from its start", async () => {
+    vi.useFakeTimers({
+      now: NOW,
+      toFake: ["setInterval", "clearInterval", "Date"],
+    });
+    try {
+      await renderRun(
+        {
+          detail: ok(
+            runDetail({
+              run: runRow({
+                status: "live",
+                sealedAt: null,
+                endedAt: null,
+                startedAt: new Date(NOW - 3 * 86_400_000).toISOString(),
+              }),
+            }),
+          ),
+          transcript: ok(runTranscript()),
+        },
+        { tab: "cost" },
+      );
+      const wall = within(screen.getByTestId("run-stat-wall"));
+      // Three days read as hours, short enough for the tile.
+      expect(wall.getByText("72:00:00")).toBeTruthy();
+      expect(
+        within(screen.getByTestId("inst-wall-value")).getByText("72:00:00"),
+      ).toBeTruthy();
+      act(() => {
+        vi.advanceTimersByTime(2_000);
+      });
+      expect(wall.getByText("72:00:02")).toBeTruthy();
+      expect(
+        within(screen.getByTestId("inst-wall-value")).getByText("72:00:02"),
+      ).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops a sealed run's wall clock at its end (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-wall-ticking")).toBeNull();
   });
 
   it("leaves out the generated name when automatic names are disabled", async () => {

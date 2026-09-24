@@ -249,7 +249,13 @@ export async function Run({
             )
             .catch(() => null),
     ]);
-  const metrics = runMetrics({ run, cost, transcript: everything, book });
+  const metrics = runMetrics({
+    run,
+    cost,
+    transcript: everything,
+    book,
+    now: at,
+  });
   const props: RunTabProps = {
     ctx,
     source,

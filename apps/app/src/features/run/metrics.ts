@@ -127,6 +127,13 @@ type WallClock = {
    * reads it as not recorded.
    */
   closedIdle: boolean;
+  /**
+   * A live run's clock, which keeps counting after the render: the instant it
+   * counts from (the run's start) and the instant `ms` was measured at, both
+   * epoch milliseconds. Null for a run that has ended, and for a live run read
+   * with no render instant, whose clock stops at its last frame.
+   */
+  ticking: { from: number; at: number } | null;
   parts: WallParts | null;
   lead: WallLead | null;
 };
@@ -517,22 +524,37 @@ function wallClock(
   entries: readonly TranscriptEntry[] | null,
   turns: readonly TranscriptTurn[] | null,
   waits: readonly Wait[],
+  now: number | null,
 ): WallClock {
   // The clock ends when the status says the run did: at the recorder's end
   // time, else the seal, which is the server's receipt time and can trail the
-  // run by the upload. A live run runs to its last recorded frame.
+  // run by the upload. A live run is still running, so its clock runs to the
+  // instant the page was rendered and keeps counting in the browser; read
+  // with no such instant, it stops at the last recorded frame.
   const endedAt = run.status === "live" ? null : (run.endedAt ?? run.sealedAt);
   const sealed = endedAt !== null;
   if (run.status !== "live" && run.sealSource === "idle_timeout")
-    return { ms: null, sealed, closedIdle: true, parts: null, lead: null };
+    return {
+      ms: null,
+      sealed,
+      closedIdle: true,
+      ticking: null,
+      parts: null,
+      lead: null,
+    };
   const last = entries?.at(-1);
+  const from = Date.parse(run.startedAt);
+  const ticking =
+    run.status === "live" && now !== null ? { from, at: now } : null;
   const ms = sealed
-    ? Math.max(0, Date.parse(endedAt) - Date.parse(run.startedAt))
-    : last === undefined
-      ? null
-      : last.elapsedMs;
+    ? Math.max(0, Date.parse(endedAt) - from)
+    : ticking !== null
+      ? Math.max(last?.elapsedMs ?? 0, ticking.at - from)
+      : last === undefined
+        ? null
+        : last.elapsedMs;
   if (ms === null || entries === null || turns === null || ms === 0)
-    return { ms, sealed, closedIdle: false, parts: null, lead: null };
+    return { ms, sealed, closedIdle: false, ticking, parts: null, lead: null };
   let model = 0;
   let tool = 0;
   for (const turn of turns) {
@@ -556,6 +578,7 @@ function wallClock(
     ms,
     sealed,
     closedIdle: false,
+    ticking,
     parts,
     lead: parts[lead] > 0 ? lead : null,
   };
@@ -566,6 +589,7 @@ export function runMetrics({
   cost,
   transcript,
   book,
+  now = null,
 }: {
   run: RunRow;
   cost: Read<RunCost>;
@@ -573,6 +597,12 @@ export function runMetrics({
   transcript: Read<RunTranscript>;
   /** The organization's price book; null when it was not read or was refused. */
   book: PriceBook | null;
+  /**
+   * The instant the page was rendered, in epoch milliseconds. A live run's
+   * wall clock runs to it and keeps counting; without it, the clock stops at
+   * the run's last recorded frame.
+   */
+  now?: number | null;
 }): RunMetrics {
   const rollup = cost.ok ? cost.value.rollup : null;
   const entries = transcript.ok ? transcript.value.entries : null;
@@ -614,7 +644,7 @@ export function runMetrics({
       promptCount === null
         ? null
         : { count: promptCount, corrective: Math.max(0, promptCount - 1) },
-    wall: wallClock(run, entries, turns, waits),
+    wall: wallClock(run, entries, turns, waits, now),
     turns: turns === null ? null : turnFigures(turns),
     modelCalls:
       rollup?.modelCalls ??

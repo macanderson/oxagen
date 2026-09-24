@@ -15,6 +15,7 @@ import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Avatar } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
+import { Clock } from "@/ui/clock";
 import {
   buttonSecondary,
   eyebrowQuiet,
@@ -360,7 +361,23 @@ export function StatRow({
               : t(`mostly.${wall.lead}`)
         }
       >
-        {wall.ms === null ? <NoValue /> : formatDuration(wall.ms, locale)}
+        {wall.ticking !== null ? (
+          // A live run's clock keeps counting, once a second, from its start.
+          <span data-testid="run-wall-ticking" className="whitespace-nowrap">
+            <Clock
+              at={wall.ticking.from}
+              now={wall.ticking.at}
+              direction="since"
+              className="tabular-nums"
+            />
+          </span>
+        ) : wall.ms === null ? (
+          <NoValue />
+        ) : (
+          <span className="whitespace-nowrap">
+            {formatDuration(wall.ms, locale)}
+          </span>
+        )}
       </Stat>
       <Stat
         testId="run-stat-cache"

@@ -776,6 +776,43 @@ describe("runMetrics over a partial record", () => {
     expect(m.toolCalls?.[0]?.ms).toBe(4000);
   });
 
+  it("runs a live run's clock to the render instant and says where it counts from", () => {
+    const run = runRow({ status: "live", sealedAt: null, endedAt: null });
+    const now = Date.parse(run.startedAt) + 3 * 86_400_000;
+    const m = runMetrics({
+      run,
+      cost: readOk(runCost()),
+      transcript: readOk(mockupTranscript()),
+      book: null,
+      now,
+    });
+    expect(m.wall.ms).toBe(3 * 86_400_000);
+    expect(m.wall.ticking).toEqual({
+      from: Date.parse(run.startedAt),
+      at: now,
+    });
+    expect(m.wall.sealed).toBe(false);
+  });
+
+  it("stops a live run's clock at its last frame when read with no render instant, and never ticks a sealed run (negative)", () => {
+    const live = runMetrics({
+      run: runRow({ status: "live", sealedAt: null, endedAt: null }),
+      cost: readOk(runCost()),
+      transcript: readOk(mockupTranscript()),
+      book: null,
+    });
+    expect(live.wall.ticking).toBeNull();
+    expect(live.wall.ms).toBe(mockupTranscript().entries.at(-1)?.elapsedMs);
+    const sealed = runMetrics({
+      run: runRow(),
+      cost: readOk(runCost()),
+      transcript: readOk(mockupTranscript()),
+      book: null,
+      now: Date.now(),
+    });
+    expect(sealed.wall.ticking).toBeNull();
+  });
+
   it("has no wall clock for a run Oxagen closed for silence, whatever its row's end says", () => {
     const m = runMetrics({
       run: runRow({ sealSource: "idle_timeout" }),
@@ -787,6 +824,7 @@ describe("runMetrics over a partial record", () => {
       ms: null,
       sealed: true,
       closedIdle: true,
+      ticking: null,
       parts: null,
       lead: null,
     });
@@ -832,6 +870,7 @@ describe("runMetrics over a partial record", () => {
       ms: 3_300_000,
       sealed: true,
       closedIdle: false,
+      ticking: null,
       parts: null,
       lead: null,
     });
@@ -855,6 +894,7 @@ describe("runMetrics over a partial record", () => {
       ms: 0,
       sealed: true,
       closedIdle: false,
+      ticking: null,
       parts: null,
       lead: null,
     });
@@ -881,6 +921,7 @@ describe("runMetrics over a partial record", () => {
       ms: null,
       sealed: false,
       closedIdle: false,
+      ticking: null,
       parts: null,
       lead: null,
     });

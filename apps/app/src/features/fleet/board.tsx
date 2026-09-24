@@ -63,7 +63,7 @@ import { StatusBadge } from "@/ui/status-badge";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { ToastStack, useToasts } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
-import { Clock } from "./clock";
+import { Clock } from "@/ui/clock";
 import {
   applyList,
   chipRows,
