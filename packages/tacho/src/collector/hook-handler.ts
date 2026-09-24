@@ -488,6 +488,15 @@ export async function handleHookEvent(
     agent,
     hookId,
   );
+  // Remembered after the route, not before it: a route that throws (a
+  // policy read, a git lookup, a parse) sends the client a failure, the
+  // client spools the same id, and that replay is the only copy the daemon
+  // will ever see. Remembering an id the ledger already holds is a no-op, so
+  // the dedupe branch passes through here harmlessly. A WAL write that fails
+  // after this point is undone by the daemon with `forgetHookId`.
+  if (hookId !== undefined && outcome.record !== undefined) {
+    rememberHookId(outcome.record, hookId);
+  }
   // Drained after the route, whichever branch returned: every event the
   // route sealed is in `events` by now, so every body is pending on the
   // recorder, and taking them here is what keeps the two lists paired.
@@ -611,12 +620,11 @@ async function routeHook(
   // `UserPromptSubmit`) a phantom prompt nobody sent twice. Nothing new is
   // sealed for the replay; the answer is empty, which is safe here because a
   // replay is fed back into the daemon for its record only, not read by a
-  // harness waiting on stdout.
-  if (hookId !== undefined) {
-    if (sawHookId(record, hookId)) {
-      return { events: [], response: {}, record };
-    }
-    rememberHookId(record, hookId);
+  // harness waiting on stdout. The id is remembered only once the route
+  // succeeds (in `handleHookEvent`), so a live request that threw leaves no
+  // sighting behind and its spool replay is sealed.
+  if (hookId !== undefined && sawHookId(record, hookId)) {
+    return { events: [], response: {}, record };
   }
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
