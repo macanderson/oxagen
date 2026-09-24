@@ -37,14 +37,16 @@
           "enum": [
             "prompt",
             "responses",
+            "thinking",
             "tools",
             "policy",
-            "recall",
             "usage",
+            "recall",
+            "seal",
             "errors"
           ]
         },
-        "maxItems": 7,
+        "maxItems": 9,
         "default": []
       },
       "after": {
@@ -83,10 +85,12 @@
           "enum": [
             "prompt",
             "responses",
+            "thinking",
             "tools",
             "policy",
-            "recall",
             "usage",
+            "recall",
+            "seal",
             "errors"
           ]
         }
@@ -120,6 +124,16 @@
                   ]
                 },
                 "type": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "spawnCallId": {
                   "anyOf": [
                     {
                       "type": "string"
@@ -164,6 +178,27 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "target": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "effort": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
                 },
                 {
                   "type": "null"
@@ -252,10 +287,12 @@
                 "enum": [
                   "prompt",
                   "responses",
+                  "thinking",
                   "tools",
                   "policy",
-                  "recall",
                   "usage",
+                  "recall",
+                  "seal",
                   "errors"
                 ]
               }

@@ -59,6 +59,7 @@ export function toRunRow(
     taskRef: run.taskRef,
     name: run.name,
     enrichmentEnabled: run.enrichmentEnabled ?? true,
+    ...(run.enrichmentError ? { enrichmentError: run.enrichmentError } : {}),
     summary:
       run.summary === null
         ? null

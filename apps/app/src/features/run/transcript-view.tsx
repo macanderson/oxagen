@@ -11,8 +11,13 @@
 // the step holding it is marked.
 //
 // Zoom is which disclosures start open (Turns: none, Steps: the turns,
-// Everything: the turns and their steps), not a different read, so a change
-// of level keeps the position and rewrites only the query value.
+// Everything: the turns and their steps), read once from `?zoom=`. The page
+// draws no zoom tabs, because the mockup of record has none: the chips,
+// search and "expand thinking" are how a reader narrows the transcript.
+//
+// Search narrows what is drawn, never what is read. A step shows when any of
+// its frames matches, a turn when any of its steps does, and the step
+// numbers stay the run's, so a found step keeps the number it had before.
 //
 // A live run follows its own head over the SSE route
 // (`GET /v1/:org/:ws/runs/:run_id/stream`, reached same-origin through the
@@ -32,9 +37,7 @@
 import { TokenUsage } from "./token-usage";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  createContext,
   type ReactNode,
-  use,
   useCallback,
   useEffect,
   useMemo,
@@ -45,7 +48,6 @@ import type { Money as MoneyValue } from "@/data/contracts/money";
 import {
   type RunTranscript,
   TRANSCRIPT_ENTRY_DEFAULT,
-  TRANSCRIPT_ZOOMS,
   type TranscriptBody,
   type TranscriptDecision,
   type TranscriptEntry,
@@ -64,10 +66,10 @@ import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
 import type { ToolDetail } from "./tool-detail";
 import { StepIcon } from "./tool-icon";
-import { kindsParam } from "./transcript";
 import {
   buildTranscript,
   entryKey,
+  entryText,
   decisionSubject,
   type Frames,
   frameAt,
@@ -79,10 +81,12 @@ import {
   type StepNode,
   stepDigest,
   stepModel,
+  stepThinking,
   stepTool,
   toolExchange,
   type TranscriptStep,
   type TranscriptTurn,
+  visibleChildren,
   visibleFrames,
   visibleSteps,
 } from "./transcript-model";
@@ -172,10 +176,7 @@ function Decision({
 }: {
   decision: TranscriptDecision;
   subject: string | null;
-  org: string;
-  ws: string;
-  runId: string;
-}) {
+} & Place) {
   const t = useTranslations("run.transcript");
   // The ⚖ chip opens Oxagen's own frame for the decision on Governed actions
   // (spec pages/run.md, Transcript). The spec's chip names the rule id; the
@@ -258,7 +259,7 @@ function FrameHalf({
           className="m-0 text-xs text-muted-foreground"
         >
           {t("truncated")}
-          {/* A subagent's frame is on its own chain, which the Frames tab
+          {/* A subagent's frame is on its own chain, which the Governed actions tab
               does not read: a link by seq would open the run's own frame of
               that number, a different frame. */}
           {body.chainRef === undefined ? (
@@ -473,36 +474,6 @@ function ToolPanes({ detail }: { detail: ToolDetail }) {
   );
 }
 
-/**
- * Whether the reasoning the recorder kept is drawn under each model step
- * (spec: "expand thinking"). Off by default: a reasoning block is the model's
- * working, and the step's own line already says what it did.
- */
-const ThinkingOpenContext = createContext(false);
-
-/**
- * The reasoning blocks the recorder kept for a step, in frame order, each
- * keyed by its frame and its place in that frame, which a recorded frame
- * never changes.
- */
-function thoughtsOf(step: TranscriptStep): { id: string; text: string }[] {
-  return step.frames.flatMap((frame) =>
-    [frame.request, frame.response].flatMap((half, side) => {
-      const blocks = half?.blocks ?? [];
-      return blocks.flatMap((block, at) =>
-        block.kind === "thinking" && block.text.trim() !== ""
-          ? [
-              {
-                id: `${frame.seq}:${String(side)}:${String(at)}`,
-                text: block.text,
-              },
-            ]
-          : [],
-      );
-    }),
-  );
-}
-
 function StepRow({
   step,
   digest,
@@ -510,24 +481,35 @@ function StepRow({
   open,
   onToggle,
   place,
+  number,
+  nested,
+  thinkingOpen,
 }: {
   step: TranscriptStep;
   digest: StepDigest;
+  /** The step's place in the run, counted over the rows drawn, so a frame
+   * with no row (a harness allow, a digest-only call) leaves no gap. A
+   * subagent's step reads `4.2`, the second step under step 4. */
+  number: string;
   pos: number;
   open: boolean;
   onToggle: (id: string, open: boolean) => void;
   place: Place;
+  /** The rows of the subagent this step spawned, drawn inside it. */
+  nested?: ReactNode;
+  /** "Expand thinking" is on: a step with a kept thought opens on it. */
+  thinkingOpen: boolean;
 }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const { first } = step;
+  const thinking = useMemo(() => stepThinking(step), [step]);
+  const opened = open || (thinkingOpen && thinking?.text != null);
   const isNow = pos >= step.from && pos <= step.to;
   const isFuture = step.from > pos;
   // Held across renders because it parses the recorded body, where the digest
   // beside it is cheap enough to recompute.
   const detail = useMemo(() => stepTool(step) ?? stepModel(step), [step]);
-  const thinking = use(ThinkingOpenContext);
-  const thoughts = useMemo(() => thoughtsOf(step), [step]);
   // The tool's own name beats the label's first word wherever the body was
   // kept. A skill load is the one exception: it is the step that changes what
   // the agent CAN do rather than recording what it did, so the line says so
@@ -547,148 +529,190 @@ function StepRow({
   // behind a disclosure that would reveal nothing new.
   const panes = detail === null || detail.panes.length === 0 ? null : detail;
   return (
-    <>
-      <details
-        data-testid="transcript-step"
-        data-node={digest.node}
-        data-now={isNow ? "true" : undefined}
-        open={open}
-        onToggle={(e) => {
-          onToggle(step.id, e.currentTarget.open);
-        }}
-        className={`group border-b border-border last:border-b-0 ${isFuture ? "opacity-35" : ""}`}
+    <details
+      data-testid="transcript-step"
+      data-node={digest.node}
+      data-now={isNow ? "true" : undefined}
+      open={opened}
+      onToggle={(e) => {
+        onToggle(step.id, e.currentTarget.open);
+      }}
+      className={`group border-b border-border last:border-b-0 ${isFuture ? "opacity-35" : ""}`}
+    >
+      <summary
+        className={`cursor-pointer list-none py-1.5 pr-3 select-none hover:bg-muted [&::-webkit-details-marker]:hidden ${isNow ? "bg-muted shadow-[inset_3px_0_0_var(--color-brand)]" : ""}`}
       >
-        <summary
-          className={`cursor-pointer list-none py-1.5 pr-3 select-none hover:bg-muted [&::-webkit-details-marker]:hidden ${isNow ? "bg-muted shadow-[inset_3px_0_0_var(--color-brand)]" : ""}`}
-        >
-          <div className="grid grid-cols-[46px_30px_1fr] items-baseline">
-            <time
-              dateTime={first.at}
-              className="pr-2 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
+        <div className="grid grid-cols-[46px_30px_1fr] items-baseline">
+          <time
+            dateTime={first.at}
+            className="pr-2 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
+          >
+            {formatClock(first.elapsedMs / 1000, locale)}
+          </time>
+          <span className="relative text-center before:absolute before:-top-3 before:-bottom-3 before:left-1/2 before:w-px before:bg-border">
+            <span
+              aria-hidden="true"
+              className={`relative z-10 inline-block size-[7px] rounded-full border-2 bg-card ${DOT[digest.node]}`}
+            />
+          </span>
+          <span className="flex min-w-0 flex-wrap items-baseline gap-2">
+            <Chevron />
+            <span
+              data-testid="step-number"
+              className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-foreground"
             >
-              {formatClock(first.elapsedMs / 1000, locale)}
-            </time>
-            <span className="relative text-center before:absolute before:-top-3 before:-bottom-3 before:left-1/2 before:w-px before:bg-border">
-              <span
-                aria-hidden="true"
-                className={`relative z-10 inline-block size-[7px] rounded-full border-2 bg-card ${DOT[digest.node]}`}
-              />
+              {number}
             </span>
-            <span className="flex min-w-0 flex-wrap items-baseline gap-2">
-              <Chevron />
-              <span
-                className={`flex shrink-0 items-baseline gap-1.5 font-mono text-xs font-semibold ${NAME[digest.node]}`}
-              >
-                {/* The mark takes its colour from this span, so the palette on
+            <span
+              className={`flex shrink-0 items-baseline gap-1.5 font-mono text-xs font-semibold ${NAME[digest.node]}`}
+            >
+              {/* The mark takes its colour from this span, so the palette on
                   the rail stays the four the node already spends and a new
                   tool family can never add a fifth. */}
-                <StepIcon node={digest.node} group={detail?.group ?? null} />
-                {name}
-              </span>
-              {arg === null ? null : (
-                <span className="max-w-[46ch] overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground">
-                  {arg}
-                </span>
-              )}
-              {detail?.detail == null ? null : (
-                <span className="shrink-0 font-mono text-[11px] text-muted-foreground/80">
-                  {detail.detail}
-                </span>
-              )}
-              <span className="ml-auto flex flex-wrap gap-1.5">
-                {step.kind === "model" && detail !== null ? (
-                  <Chip>
-                    <span data-testid="step-model">{digest.name}</span>
-                  </Chip>
-                ) : null}
-                {digest.outcome === null ? null : (
-                  <Chip tone={digest.node === "deny" ? "warn" : undefined}>
-                    {digest.outcome}
-                  </Chip>
-                )}
-                {digest.status === null ? null : (
-                  <Chip tone={digest.node === "deny" ? "warn" : undefined}>
-                    {digest.status}
-                  </Chip>
-                )}
-                {digest.durationMs === null ? null : (
-                  <Chip>
-                    {t("ms", { ms: formatCount(digest.durationMs, locale) })}
-                  </Chip>
-                )}
-                {digest.repeats !== null ? (
-                  <Chip>
-                    <span data-testid="step-repeats">
-                      {t("repeats", {
-                        count: formatCount(digest.repeats, locale),
-                      })}
-                    </span>
-                  </Chip>
-                ) : step.frames.length > 1 ? (
-                  <Chip>{t("frameCount", { count: step.frames.length })}</Chip>
-                ) : null}
-                {digest.cost === null ? null : (
-                  <Chip tone="cost">
-                    <Money value={digest.cost} precision="exact" />
-                  </Chip>
-                )}
-              </span>
+              <StepIcon node={digest.node} group={detail?.group ?? null} />
+              {name}
             </span>
-          </div>
-        </summary>
-        {open ? (
-          <div className="pr-3 pb-2.5 pl-3 md:pl-[76px]">
-            {panes === null ? null : <ToolPanes detail={panes} />}
-            {/* The record under the reading of it. Where the panes above already
+            {arg === null ? null : (
+              <span className="max-w-[46ch] overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground">
+                {arg}
+              </span>
+            )}
+            {detail?.detail == null ? null : (
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground/80">
+                {detail.detail}
+              </span>
+            )}
+            <span className="ml-auto flex flex-wrap gap-1.5">
+              {step.kind === "model" && detail !== null ? (
+                <Chip>
+                  <span data-testid="step-model">{digest.name}</span>
+                </Chip>
+              ) : null}
+              {thinking?.effort == null ? null : (
+                <Chip>
+                  <span data-testid="step-effort">
+                    {t("effort", { effort: thinking.effort })}
+                  </span>
+                </Chip>
+              )}
+              {thinking?.tokens == null ? null : (
+                <Chip>
+                  <span data-testid="step-thinking-tokens">
+                    {t("thinkingTokens", {
+                      count: formatCount(thinking.tokens, locale),
+                    })}
+                  </span>
+                </Chip>
+              )}
+              {digest.outcome === null ? null : (
+                <Chip tone={digest.node === "deny" ? "warn" : undefined}>
+                  {digest.outcome}
+                </Chip>
+              )}
+              {digest.status === null ? null : (
+                <Chip tone={digest.node === "deny" ? "warn" : undefined}>
+                  {digest.status}
+                </Chip>
+              )}
+              {digest.durationMs === null ? null : (
+                <Chip>
+                  {t("ms", { ms: formatCount(digest.durationMs, locale) })}
+                </Chip>
+              )}
+              {digest.repeats !== null ? (
+                <Chip>
+                  <span data-testid="step-repeats">
+                    {t("repeats", {
+                      count: formatCount(digest.repeats, locale),
+                    })}
+                  </span>
+                </Chip>
+              ) : step.frames.length > 1 ? (
+                <Chip>{t("frameCount", { count: step.frames.length })}</Chip>
+              ) : null}
+              {digest.cost === null ? null : (
+                <Chip tone="cost">
+                  <Money value={digest.cost} precision="exact" />
+                </Chip>
+              )}
+            </span>
+          </span>
+        </div>
+      </summary>
+      {opened ? (
+        <div className="pr-3 pb-2.5 pl-3 md:pl-[76px]">
+          {thinking === null ? null : thinking.text !== null ? (
+            <details
+              // Keyed on the toggle so "expand thinking" opens or closes
+              // every thought, whatever a reader did to one of them since.
+              key={thinkingOpen ? "open" : "shut"}
+              data-testid="step-thinking"
+              open={thinkingOpen}
+              className="group/think mb-2 overflow-hidden rounded-md border border-border bg-background"
+            >
+              <summary className="cursor-pointer list-none px-3 py-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+                <span
+                  aria-hidden="true"
+                  className="mr-1.5 inline-block text-[8px] transition-transform group-open/think:rotate-90"
+                >
+                  ▶
+                </span>
+                {t("pane.thinking")}
+              </summary>
+              <p className="m-0 max-w-[70ch] whitespace-pre-wrap border-t border-border px-3 py-2 text-[12.5px] leading-relaxed text-muted-foreground italic">
+                {thinking.text}
+              </p>
+            </details>
+          ) : thinking.tokens === null ? null : (
+            <p
+              data-testid="step-thinking-unkept"
+              className="m-0 mb-2 max-w-prose text-[11.5px] text-muted-foreground"
+            >
+              {t("thinkingUnkept", {
+                count: formatCount(thinking.tokens, locale),
+              })}
+            </p>
+          )}
+          {panes === null ? null : <ToolPanes detail={panes} />}
+          {/* The record under the reading of it. Where the panes above already
               say what the step did, the envelopes they were read from fold
               away behind one more click — still one step away, never a page
               away — and where there are no panes the frames ARE the reading,
               so they stay open. A digest-only duplicate of a frame whose body
               is already shown elsewhere in the step is left out here too. */}
-            {panes === null ? (
-              <div className="overflow-hidden rounded-md border border-border bg-background">
-                {visibleFrames(step).map((frame) => (
-                  <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
-                ))}
-              </div>
-            ) : (
-              <details className="group/raw overflow-hidden rounded-md border border-border bg-background">
-                <summary className="cursor-pointer list-none px-3 py-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground group-open/raw:border-b group-open/raw:border-border [&::-webkit-details-marker]:hidden">
-                  <span
-                    aria-hidden="true"
-                    className="mr-1.5 inline-block text-[8px] transition-transform group-open/raw:rotate-90"
-                  >
-                    ▶
-                  </span>
-                  {t("frameCount", { count: step.frames.length })}
-                </summary>
-                {visibleFrames(step).map((frame) => (
-                  <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
-                ))}
-              </details>
-            )}
-          </div>
-        ) : null}
-      </details>
-      {thinking && thoughts.length > 0 ? (
-        <div
-          data-testid="step-thinking"
-          className={`border-b border-border py-2 pr-3 pl-3 md:pl-[76px] ${isFuture ? "opacity-35" : ""}`}
-        >
-          <p className="m-0 pb-1 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
-            {t("thinking")}
-          </p>
-          {thoughts.map((thought) => (
-            <p
-              key={thought.id}
-              className="m-0 max-w-[70ch] whitespace-pre-wrap border-l-2 border-border pl-3 text-[12.5px] italic leading-relaxed text-muted-foreground"
-            >
-              {thought.text}
-            </p>
-          ))}
+          {panes === null ? (
+            <div className="overflow-hidden rounded-md border border-border bg-background">
+              {visibleFrames(step).map((frame) => (
+                <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
+              ))}
+            </div>
+          ) : (
+            <details className="group/raw overflow-hidden rounded-md border border-border bg-background">
+              <summary className="cursor-pointer list-none px-3 py-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground group-open/raw:border-b group-open/raw:border-border [&::-webkit-details-marker]:hidden">
+                <span
+                  aria-hidden="true"
+                  className="mr-1.5 inline-block text-[8px] transition-transform group-open/raw:rotate-90"
+                >
+                  ▶
+                </span>
+                {t("frameCount", { count: step.frames.length })}
+              </summary>
+              {visibleFrames(step).map((frame) => (
+                <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
+              ))}
+            </details>
+          )}
         </div>
       ) : null}
-    </>
+      {nested == null ? null : (
+        <div
+          data-testid="transcript-subagent-steps"
+          className="ml-[76px] border-l-2 border-border"
+        >
+          {nested}
+        </div>
+      )}
+    </details>
   );
 }
 
@@ -717,24 +741,40 @@ function Role({ who, text }: { who: "you" | "agent"; text: string }) {
 
 function TurnBlock({
   turn,
+  firstStep,
   pos,
   running,
   openIds,
   onToggle,
   place,
+  matched,
+  thinkingOpen,
 }: {
   turn: TranscriptTurn;
+  /** The run-wide number of this turn's first drawn step. */
+  firstStep: number;
   pos: number;
   running: boolean;
   openIds: Set<string>;
   onToggle: (id: string, open: boolean) => void;
   place: Place;
+  /** The keys of the entries a search found; null when nothing is searched. */
+  matched: ReadonlySet<string> | null;
+  thinkingOpen: boolean;
 }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const { first, last } = turn;
   const cost = frameCost(turn.frames);
   const seconds = (Date.parse(last.at) - Date.parse(first.at)) / 1000;
+  const steps = visibleSteps(turn);
+  // A search draws the turn only where something in it matched, and opens
+  // it, so a found step is on screen rather than behind a closed turn.
+  if (matched !== null && !turn.frames.some((f) => matched.has(entryKey(f)))) {
+    return null;
+  }
+  const found = (step: TranscriptStep) =>
+    matched === null || stepMatches(step, matched);
   return (
     <>
       {/* What was asked sits ABOVE the turn it opened, outside the
@@ -746,7 +786,7 @@ function TurnBlock({
       {turn.prompt === null ? null : <Role who="you" text={turn.prompt} />}
       <details
         data-testid="transcript-turn"
-        open={openIds.has(turn.id)}
+        open={matched !== null || openIds.has(turn.id)}
         onToggle={(e) => {
           onToggle(turn.id, e.currentTarget.open);
         }}
@@ -778,10 +818,15 @@ function TurnBlock({
               </span>
             )}
             <span className="ml-auto flex flex-wrap gap-1.5">
-              <Chip>
-                {t("stepCount", { count: visibleSteps(turn).length })}
-              </Chip>
-              <Chip>{t("seqSpan", { from: first.seq, to: last.seq })}</Chip>
+              <Chip>{t("stepCount", { count: steps.length })}</Chip>
+              {steps.length === 0 ? null : (
+                <Chip>
+                  {t("stepSpan", {
+                    from: firstStep,
+                    to: firstStep + steps.length - 1,
+                  })}
+                </Chip>
+              )}
               <Chip>{formatClock(seconds, locale)}</Chip>
               {cost === null ? null : (
                 <Chip tone="cost">
@@ -791,20 +836,59 @@ function TurnBlock({
             </span>
           </div>
         </summary>
-        {visibleSteps(turn).map((step) => (
-          <StepRow
-            key={step.id}
-            step={step}
-            digest={stepDigest(step)}
-            pos={pos}
-            open={openIds.has(step.id)}
-            onToggle={onToggle}
-            place={place}
-          />
-        ))}
+        {steps.map((step, index) => {
+          // Numbered before the search filters, so a found step keeps the
+          // number it has in the whole run.
+          const number = firstStep + index;
+          if (!found(step)) return null;
+          const children = visibleChildren(step).flatMap((child, at) =>
+            found(child) ? [{ child, at }] : [],
+          );
+          return (
+            <StepRow
+              key={step.id}
+              step={step}
+              number={String(number)}
+              digest={stepDigest(step)}
+              pos={pos}
+              open={openIds.has(step.id)}
+              onToggle={onToggle}
+              place={place}
+              thinkingOpen={thinkingOpen}
+              nested={
+                children.length === 0
+                  ? null
+                  : children.map(({ child, at }) => (
+                      <StepRow
+                        key={child.id}
+                        step={child}
+                        number={`${String(number)}.${String(at + 1)}`}
+                        digest={stepDigest(child)}
+                        pos={pos}
+                        open={openIds.has(child.id)}
+                        onToggle={onToggle}
+                        place={place}
+                        thinkingOpen={thinkingOpen}
+                      />
+                    ))
+              }
+            />
+          );
+        })}
         {turn.reply === null ? null : <Role who="agent" text={turn.reply} />}
       </details>
     </>
+  );
+}
+
+/** Whether a step, or a subagent step under it, holds an entry the search found. */
+function stepMatches(
+  step: TranscriptStep,
+  matched: ReadonlySet<string>,
+): boolean {
+  return (
+    step.frames.some((frame) => matched.has(entryKey(frame))) ||
+    (step.children ?? []).some((child) => stepMatches(child, matched))
   );
 }
 
@@ -824,11 +908,9 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
       className="whitespace-nowrap font-mono text-[11.5px] tabular-nums text-muted-foreground"
     >
       <b className="font-medium text-foreground">
-        {t("index", { n: pos + 1, total: head + 1 })}
-      </b>
-      {" · "}
-      {t("position", { seq: here.seq })}{" "}
-      {t("of", { seq: frameAt(entries, head).seq })}
+        {t("position", { n: pos + 1 })}
+      </b>{" "}
+      {t("of", { n: head + 1 })}
       {" · "}
       {formatClock(here.elapsedMs / 1000, locale)} /{" "}
       {formatClock(frameAt(entries, head).elapsedMs / 1000, locale)}
@@ -844,28 +926,12 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
   );
 }
 
-/** True when a turn's prompt, reply, or any frame's label, type or body holds the needle. */
-function turnMatches(turn: TranscriptTurn, needle: string): boolean {
-  const hay = [
-    turn.prompt,
-    turn.reply,
-    ...turn.frames.flatMap((frame) => [
-      frame.label,
-      frame.type,
-      frame.request?.text ?? null,
-      frame.response?.text ?? null,
-    ]),
-  ];
-  return hay.some(
-    (text) => text !== null && text.toLowerCase().includes(needle),
-  );
-}
-
 export function TranscriptView({
   transcript,
   entries: first,
   kinds,
-  zoom: initialZoom,
+  chips,
+  zoom,
   status,
   org,
   ws,
@@ -875,8 +941,10 @@ export function TranscriptView({
   transcript: Pick<RunTranscript, "complete" | "cursor">;
   /** The first page of the transcript's frames, at least one. */
   entries: Frames;
-  /** The chips the URL pressed; a later page is read through the same filter. */
+  /** The kinds the chips show; a later page is read through the same filter. */
   kinds: readonly TranscriptKind[];
+  /** The filter chips, drawn in the toolbar after the search. */
+  chips?: ReactNode;
   /** The level the URL asked for: which disclosures start open. */
   zoom: TranscriptZoom;
   status: RunStatus;
@@ -908,11 +976,21 @@ export function TranscriptView({
   const [pageFailure, setPageFailure] = useState<PageFailure | null>(null);
   const head = entries.length - 1;
   const turns = useMemo(() => buildTranscript(entries), [entries]);
+  // Each turn's first step number, counted over the rows drawn, so the
+  // numbers run 1, 2, 3 across the run whatever frames have no row.
+  const firstSteps = useMemo(() => {
+    const starts: number[] = [];
+    let next = 1;
+    for (const turn of turns) {
+      starts.push(next);
+      next += visibleSteps(turn).length;
+    }
+    return starts;
+  }, [turns]);
   const live = status === "live";
 
-  const [zoom, setZoom] = useState<TranscriptZoom>(initialZoom);
   const [openIds, setOpenIds] = useState(() => {
-    const open = openAtZoom(turns, initialZoom);
+    const open = openAtZoom(turns, zoom);
     for (const id of idsAt(turns, head)) open.add(id);
     return open;
   });
@@ -920,10 +998,20 @@ export function TranscriptView({
   const [pinned, setPinned] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
-  // The search narrows the turns drawn, never the frames the transport walks,
-  // so the playhead and a live follow keep their place while a person looks.
   const [query, setQuery] = useState("");
-  const [thinking, setThinking] = useState(false);
+  const [thinkingOpen, setThinkingOpen] = useState(false);
+  const needle = query.trim().toLowerCase();
+  const matched = useMemo(
+    () =>
+      needle === ""
+        ? null
+        : new Set(
+            entries
+              .filter((entry) => entryText(entry).includes(needle))
+              .map(entryKey),
+          ),
+    [entries, needle],
+  );
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const following = pinned === null;
@@ -1109,26 +1197,7 @@ export function TranscriptView({
     });
   }, []);
 
-  const chooseZoom = (level: TranscriptZoom) => {
-    setZoom(level);
-    const open = openAtZoom(turns, level);
-    if (level !== "turns") for (const id of idsAt(turns, pos)) open.add(id);
-    setOpenIds(open);
-    window.history.replaceState(
-      null,
-      "",
-      routes.run(org, ws, runId, {
-        tab: "transcript",
-        zoom: level,
-        kinds: kindsParam(kinds),
-      }),
-    );
-  };
-
   const lastTurnId = turns[turns.length - 1]?.id;
-  const needle = query.trim().toLowerCase();
-  const drawn =
-    needle === "" ? turns : turns.filter((turn) => turnMatches(turn, needle));
 
   return (
     <section
@@ -1139,26 +1208,27 @@ export function TranscriptView({
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
         <input
           type="search"
-          value={query}
-          aria-label={t("search")}
-          placeholder={t("searchPlaceholder")}
           data-testid="transcript-search"
+          value={query}
+          placeholder={t("searchPlaceholder")}
+          aria-label={t("searchLabel")}
           onChange={(e) => {
             setQuery(e.currentTarget.value);
           }}
-          className="h-11 w-full max-w-sm rounded-md border border-border bg-background px-3 font-mono text-base sm:h-9 sm:text-[13px]"
+          className="h-8 min-w-0 flex-[1_1_220px] rounded-md border border-border bg-background px-2.5 text-[12.5px] text-foreground placeholder:text-muted-foreground"
         />
-        <button
-          type="button"
-          data-testid="transcript-thinking"
-          aria-pressed={thinking}
-          onClick={() => {
-            setThinking((open) => !open);
-          }}
-          className={`${segButton} rounded-md border`}
-        >
-          {thinking ? t("collapseThinking") : t("expandThinking")}
-        </button>
+        {matched === null ? null : (
+          <span
+            data-testid="transcript-search-count"
+            className="font-mono text-[11px] tabular-nums text-muted-foreground"
+          >
+            {t("searchCount", {
+              shown: formatCount(matched.size, locale),
+              total: formatCount(entries.length, locale),
+            })}
+          </span>
+        )}
+        {chips}
       </div>
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted px-3 py-2.5">
         {stream === "denied" ? null : status !== "live" ? (
@@ -1188,15 +1258,22 @@ export function TranscriptView({
           type="button"
           className={tpButton}
           disabled={pos <= 0}
-          aria-label={t("first")}
+          aria-label={t("rewind")}
           data-testid="transport-first"
           onClick={() => {
             moveTo(0);
           }}
         >
-          <span aria-hidden="true" className="text-[11px]">
-            ⏮
-          </span>
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
+            <path d="M11.4 3.2 4.6 8l6.8 4.8Z" fill="currentColor" />
+            <rect
+              x="3.2"
+              y="3.2"
+              width="1.6"
+              height="9.6"
+              fill="currentColor"
+            />
+          </svg>
         </button>
         <button
           type="button"
@@ -1209,13 +1286,6 @@ export function TranscriptView({
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
             <path d="M11.4 3.2 4.6 8l6.8 4.8Z" fill="currentColor" />
-            <rect
-              x="3.2"
-              y="3.2"
-              width="1.6"
-              height="9.6"
-              fill="currentColor"
-            />
           </svg>
         </button>
         <button
@@ -1265,6 +1335,20 @@ export function TranscriptView({
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
             <path d="M4.6 3.2 11.4 8l-6.8 4.8Z" fill="currentColor" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={tpButton}
+          disabled={pos >= head}
+          aria-label={t("toEnd")}
+          data-testid="transport-last"
+          onClick={() => {
+            moveTo(head);
+          }}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
+            <path d="M4.6 3.2 11.4 8l-6.8 4.8Z" fill="currentColor" />
             <rect
               x="11.2"
               y="3.2"
@@ -1274,20 +1358,6 @@ export function TranscriptView({
             />
           </svg>
         </button>
-        <button
-          type="button"
-          className={tpButton}
-          disabled={pos >= head}
-          aria-label={t("last")}
-          data-testid="transport-last"
-          onClick={() => {
-            moveTo(head);
-          }}
-        >
-          <span aria-hidden="true" className="text-[11px]">
-            ⏭
-          </span>
-        </button>
         <span className="flex min-w-[130px] flex-[1_1_190px] items-center">
           <input
             type="range"
@@ -1295,7 +1365,7 @@ export function TranscriptView({
             max={head}
             value={pos}
             aria-label={t("scrub")}
-            aria-valuetext={t("position", { seq: frameAt(entries, pos).seq })}
+            aria-valuetext={t("position", { n: pos + 1 })}
             onChange={(e) => {
               moveTo(Number(e.currentTarget.value));
             }}
@@ -1322,25 +1392,17 @@ export function TranscriptView({
             </button>
           ))}
         </span>
-        <span
-          role="group"
-          aria-label={t("zoomLabel")}
-          className="flex shrink-0 overflow-hidden rounded-md border border-border"
+        <button
+          type="button"
+          data-testid="expand-thinking"
+          aria-pressed={thinkingOpen}
+          onClick={() => {
+            setThinkingOpen((was) => !was);
+          }}
+          className={`${segButton} shrink-0 rounded-md border`}
         >
-          {TRANSCRIPT_ZOOMS.map((level) => (
-            <button
-              key={level}
-              type="button"
-              aria-pressed={zoom === level}
-              onClick={() => {
-                chooseZoom(level);
-              }}
-              className={segButton}
-            >
-              {t(`zoom.${level}`)}
-            </button>
-          ))}
-        </span>
+          {thinkingOpen ? t("collapseThinking") : t("expandThinking")}
+        </button>
         <p className="m-0 basis-full text-[11px] leading-snug text-muted-foreground">
           {t("transportNote")}
         </p>
@@ -1349,27 +1411,28 @@ export function TranscriptView({
         ref={bodyRef}
         className="max-h-[min(66vh,760px)] overflow-y-auto motion-safe:scroll-smooth"
       >
-        {drawn.length === 0 ? (
+        {turns.map((turn, index) => (
+          <TurnBlock
+            key={turn.id}
+            turn={turn}
+            firstStep={firstSteps[index] ?? 1}
+            pos={pos}
+            running={activelyLive && turn.id === lastTurnId}
+            openIds={shown}
+            onToggle={toggle}
+            place={place}
+            matched={matched}
+            thinkingOpen={thinkingOpen}
+          />
+        ))}
+        {matched !== null && matched.size === 0 ? (
           <p
-            data-testid="transcript-no-match"
-            className="px-4 py-6 text-sm text-muted-foreground"
+            data-testid="transcript-search-empty"
+            className="m-0 px-3 py-4 text-sm text-muted-foreground"
           >
-            {t("noMatch")}
+            {t("searchEmpty")}
           </p>
         ) : null}
-        <ThinkingOpenContext value={thinking}>
-          {drawn.map((turn) => (
-            <TurnBlock
-              key={turn.id}
-              turn={turn}
-              pos={pos}
-              running={activelyLive && turn.id === lastTurnId}
-              openIds={shown}
-              onToggle={toggle}
-              place={place}
-            />
-          ))}
-        </ThinkingOpenContext>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t border-border bg-muted px-3 py-2.5 text-xs text-muted-foreground">
         <span

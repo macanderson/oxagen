@@ -533,6 +533,9 @@ export const agentRuns = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // Why the last automatic account failed, as a short reason code; null
+    // once an account is written or the run is no longer due.
+    summaryError: text("summary_error"),
 
     // ── RunSpecV2 typed identity (docs/specs/run-evidence-ingress) ───────────
     //

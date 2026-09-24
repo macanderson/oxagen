@@ -45,12 +45,6 @@
     },
     "transcript": {
       "title": "Transcript",
-      "zoomLabel": "Zoom level",
-      "zoom": {
-        "turns": "Turns",
-        "steps": "Steps",
-        "everything": "Everything"
-      },
       "digestOnly": "The recorder kept a digest and no body, so there is nothing to read here.",
       "noBody": "No body was retained for this entry, or the bytes are not text.",
       "truncated": "Cut at the length one entry carries.",
@@ -68,7 +62,7 @@
       "frameCount": "{count, plural, one {# frame} other {# frames}}",
       "repeats": "×{count}",
       "reply": "Reply",
-      "seqSpan": "seq {from} to {to}",
+      "stepSpan": "steps {from} to {to}",
       "ms": "{ms} ms",
       "live": "live",
       "goLive": "go live",
@@ -76,13 +70,15 @@
         "sealed": "sealed",
         "halted": "halted"
       },
+      "rewind": "Rewind to the first frame",
       "back": "Step back",
       "play": "Play",
       "pause": "Pause playback",
       "forward": "Step forward",
+      "toEnd": "Go to the last frame",
       "scrub": "Scrub to frame",
-      "position": "seq {seq}",
-      "of": "/ {seq}",
+      "position": "frame {n}",
+      "of": "/ {n}",
       "speedLabel": "Playback speed",
       "speed": "{speed}×",
       "transportNote": "The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
@@ -104,10 +100,23 @@
         "usage": "usage",
         "recall": "recall",
         "seal": "seal",
-        "errors": "✗ errors"
+        "errors": "errors"
       },
-      "chipsClear": "all",
-      "emptyFiltered": "No entry in this run answers to the {count} chips you pressed. Clear the filter to read the whole run.",
+      "chipsAll": "all",
+      "chipsNone": "none",
+      "chipCount": "{count}",
+      "chipCountFloor": "{count}+",
+      "errorsTitle": "Show only failed calls",
+      "emptyFiltered": "Nothing in this run matches these filters. Choose all to read the whole run.",
+      "searchLabel": "Search the transcript",
+      "searchPlaceholder": "Search the transcript…",
+      "searchCount": "{shown} of {total} entries",
+      "searchEmpty": "Nothing matches this search.",
+      "expandThinking": "expand thinking",
+      "collapseThinking": "collapse thinking",
+      "effort": "effort {effort}",
+      "thinkingTokens": "{count} thinking tokens",
+      "thinkingUnkept": "The model spent {count} tokens thinking. The harness did not record what it thought.",
       "more": "Read more",
       "readingMore": "Reading",
       "loadedMore": "{count} entries read so far. More lie past this page.",
@@ -135,13 +144,10 @@
         "brief": "Brief",
         "plan": "Plan",
         "input": "Input",
-        "reply": "Reply"
+        "reply": "Reply",
+        "thinking": "Thinking"
       },
       "note": "The transcript is what the agent showed its operator. The gateway’s own frames sit behind the ⚖ chips.",
-      "chipGap": {
-        "thinking": "Counted from the reasoning the recorder kept. The transcript read has no thinking filter yet.",
-        "seal": "No transcript kind carries the seal yet. Chain and seal shows it."
-      },
       "head": {
         "turns": "{count, plural, one {# turn} other {# turns}}",
         "steps": "{count, plural, one {# step} other {# steps}}",
@@ -154,18 +160,7 @@
         },
         "burn": "burn",
         "of": "of"
-      },
-      "search": "Search the transcript",
-      "searchPlaceholder": "search the transcript",
-      "noMatch": "No entry on this page matches that search.",
-      "first": "First frame",
-      "last": "Last frame",
-      "index": "{n} / {total}",
-      "thinking": "thinking",
-      "expandThinking": "expand thinking",
-      "collapseThinking": "collapse thinking",
-      "chipsNone": "none",
-      "noneShown": "Every kind is off, so no entry is shown. Press a chip, or all, to show entries."
+      }
     },
     "frames": {
       "title": "Frames",
