@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { AFTER_SIGNUP, VerifyPanel } from "@/features/auth";
-import { firstParam, readNext } from "@/shared/safe-path";
+import { AFTER_SIGNUP, VerifyPanel, queryEmail } from "@/features/auth";
+import { firstParam, readNext, routes } from "@/shared/safe-path";
 import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText, mono } from "@/ui/control-styles";
+import { SafeLink } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -21,17 +21,13 @@ export default function VerifyPage(props: PageProps<"/verify">) {
   );
 }
 
-const EMAIL_SHAPE = /^[^\s@]{1,64}@[^\s@]{1,190}$/;
-
 async function Verify({
   searchParams,
 }: {
   searchParams: PageProps<"/verify">["searchParams"];
 }) {
   const params = await searchParams;
-  const raw = firstParam(params.email)?.trim() ?? "";
-  // Shown back to the person who typed it, never looked up: a malformed value is simply not echoed.
-  const email = EMAIL_SHAPE.test(raw) ? raw : null;
+  const email = queryEmail(params.email);
   const expired = firstParam(params.error) !== undefined;
   const next = readNext(params, AFTER_SIGNUP);
   const [t, pages] = await Promise.all([
@@ -55,9 +51,15 @@ async function Verify({
       <VerifyPanel email={email} expired={expired} next={next} />
       <AuthFooter>
         {t("verify.wrongAddress")}{" "}
-        <Link href="/signup" className={linkText}>
+        {/* Back to sign-up with the address in its field, editable (verify-email.md). */}
+        <SafeLink
+          to={routes.signup(next === AFTER_SIGNUP ? undefined : next, {
+            email: email ?? undefined,
+          })}
+          className={linkText}
+        >
           {t("verify.changeIt")}
-        </Link>
+        </SafeLink>
       </AuthFooter>
     </AuthColumn>
   );
