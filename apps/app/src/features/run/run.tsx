@@ -20,6 +20,7 @@ import { ChainSection } from "./chain";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunHeader } from "./header";
+import { interjectionOf, RunInterjection } from "./interjection";
 import { IssuesSection } from "./issues";
 import { OutputsSpine } from "./outputs";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
@@ -309,6 +310,13 @@ export async function Run({
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug, runId: run.id };
   // A run token was minted and nothing has been recorded under it yet.
   if (run.frames === 0) return <RunEmpty org={place.org} ws={place.ws} />;
+  // A run whose loop Oxagen stopped on an interjection is drawn as the three
+  // panes of pages/run-interjection.md rather than the ordinary run page.
+  const interject = interjectionOf(detail);
+  if (interject !== null)
+    return (
+      <RunInterjection detail={detail} interject={interject} ws={place.ws} />
+    );
   // The header, the stat row, the side column and the tab counts all read
   // from these, whichever tab is open, so they are read together rather than
   // one after another. The whole-run transcript serves the Prompts figure,
