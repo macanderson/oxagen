@@ -64,16 +64,35 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(eyebrow).toContain("uppercase");
   });
 
-  it("`.panel-h` and `th` are flat on the panel: no band behind a header", () => {
+  it("`.panel-h` sits on the panel-head band; the footer and `th` stay flat on the panel", () => {
+    expect(panelHeader).toContain("bg-panel-head");
     for (const recipe of [panelHeader, panelFooter, headCell]) {
       expect(recipe).not.toMatch(/\bbg-(data-surface|muted|hl|accent)\b/);
     }
+    for (const recipe of [panelFooter, headCell]) {
+      expect(recipe).not.toContain("bg-panel-head");
+    }
+    // ADR-170: light grey on paper, and on ink a step between the panel and
+    // the row wash, so the band never matches a hovered row.
+    expect(lightRoot()).toMatch(/--panel-head:\s*var\(--ox-paper-hl\)/);
     const css = read("src/app/globals.css");
+    expect(
+      css.match(
+        /--panel-head:\s*color-mix\(in oklab, var\(--ox-panel\) 45%, var\(--ox-hl\)\)/g,
+      ),
+    ).toHaveLength(2);
     const th = css.match(/\[data-shell-page\] table thead th \{[^}]*\}/)?.[0];
     expect(th).toBeDefined();
     expect(th).toMatch(/background:\s*var\(--panel\)/);
     expect(th).toMatch(/text-transform:\s*uppercase/);
     expect(css).not.toMatch(/\[data-shell-page\] table \{[^}]*background/);
+  });
+
+  it("the dark theme's page body is the ink, and the panel grey stays on panels", () => {
+    const css = read("src/app/globals.css");
+    // The `.dark` block and the no-JS `prefers-color-scheme` copy of it.
+    expect(css.match(/--app-panel-bg:\s*var\(--ink\)/g)).toHaveLength(2);
+    expect(css).toMatch(/--ink:\s*var\(--background\)/);
   });
 
   it("`.panel` and `.stat` sit on the panel fill with the hairline and 12px corners", () => {
