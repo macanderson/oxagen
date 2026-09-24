@@ -70,6 +70,13 @@ function xmlEscape(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
+/**
+ * How long launchd waits after SIGTERM before it SIGKILLs the daemon. The
+ * daemon bounds its own shutdown (`STOP_GRACE_MS` in `collector/run.ts`), so
+ * this is the backstop, and it sits well inside the `bootout` wait below.
+ */
+const LAUNCHD_EXIT_TIMEOUT_SEC = 10;
+
 export function renderLaunchdPlist(spec: ServiceSpec): string {
   const args = spec.command
     .map((arg) => `      <string>${xmlEscape(arg)}</string>`)
@@ -100,6 +107,8 @@ ${env}
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>ExitTimeOut</key>
+    <integer>${LAUNCHD_EXIT_TIMEOUT_SEC}</integer>
     <key>ProcessType</key>
     <string>Background</string>
     <key>StandardOutPath</key>
@@ -121,18 +130,15 @@ function systemdQuote(value: string, command = false): string {
 }
 
 /**
- * How long systemd waits for `stop()` to finish before it SIGKILLs the
- * daemon. `stop()` awaits the git reconciliation lane, whose own worst case
- * (`startGitReads`'s comment in `daemon.ts` has the arithmetic: up to four
- * sessions at ~210 s each) is 840 s; this is not that ceiling, it is a bound
- * generous enough to let an ordinary shutdown — including one lane's
- * reconciliation — finish cleanly, while still ending an unbounded hang
- * rather than leaving systemd's own default (90 s on most distributions) to
- * kill a daemon that was still finalizing its own chain. `stop()` persists
- * `state.json` before it starts the wait this bounds, so a kill here loses at
- * most the wait itself, never the cursor.
+ * How long systemd waits for the daemon to exit before it SIGKILLs it. The
+ * daemon bounds its own shutdown to `STOP_GRACE_MS` (`collector/run.ts`),
+ * because `stop()` awaits the git reconciliation lane, which can run for
+ * minutes. This is the backstop for a daemon that hangs anyway. `stop()`
+ * persists `state.json` before that wait, so a kill loses at most the final
+ * seal, never the cursor. `systemctl restart` blocks for this long in the
+ * worst case, so a re-enroll never waits minutes on it.
  */
-const STOP_TIMEOUT_SEC = 230;
+const STOP_TIMEOUT_SEC = 10;
 
 export function renderSystemdUnit(spec: ServiceSpec): string {
   const env = Object.entries(spec.env)
@@ -180,8 +186,21 @@ function blockingSleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-/** launchd needs a moment to let go of a label it has just booted out. */
-const BOOTSTRAP_ATTEMPTS = 5;
+/**
+ * How long `install` and `uninstall` wait for launchd to drop a label after
+ * `bootout`: 30 polls 500 ms apart, about 15 s. `bootout` only marks the
+ * label for removal. launchd removes it when the old daemon exits, and the
+ * daemon's SIGTERM path can take several seconds (`STOP_GRACE_MS` in
+ * `collector/run.ts` bounds it). launchd kills it at `LAUNCHD_EXIT_TIMEOUT_SEC`,
+ * well inside this window.
+ *
+ * Counted in polls rather than read from a clock so a test that injects a
+ * no-op `sleep` does not spin for 15 real seconds.
+ */
+const BOOTOUT_WAIT_POLLS = 30;
+const BOOTOUT_POLL_MS = 500;
+/** Retries for a `bootstrap` that launchd refuses once the label is gone. */
+const BOOTSTRAP_ATTEMPTS = 3;
 const BOOTSTRAP_RETRY_MS = 400;
 
 function launchdManager(options: ServiceManagerOptions): ServiceManager {
@@ -189,19 +208,47 @@ function launchdManager(options: ServiceManagerOptions): ServiceManager {
   const dir = join(options.home, "Library", "LaunchAgents");
   const unitPath = join(dir, `${SERVICE_LABEL}.plist`);
   const domain = `gui/${options.uid ?? process.getuid?.() ?? 501}`;
+  const target = `${domain}/${SERVICE_LABEL}`;
+  /** `print` answers 0 for a loaded label and non-zero for any other. */
+  const loaded = () =>
+    options.exec("launchctl", ["print", target]).status === 0;
+  /** Poll until launchd has dropped the label; false if it never did. */
+  const waitUntilGone = (): boolean => {
+    for (let poll = 0; poll < BOOTOUT_WAIT_POLLS; poll += 1) {
+      if (!loaded()) return true;
+      sleep(BOOTOUT_POLL_MS);
+    }
+    return !loaded();
+  };
+  const stillLoaded = (then: string) =>
+    new Error(
+      `${SERVICE_LABEL} is still loaded ${Math.round((BOOTOUT_WAIT_POLLS * BOOTOUT_POLL_MS) / 1000)} s after launchctl bootout. Run \`launchctl bootout ${target}\`, then ${then} again`,
+    );
   return {
     kind: "launchd",
     unitPath,
     install: (spec) => {
+      const plist = renderLaunchdPlist(spec);
+      // An unchanged plist on a loaded service needs a restart, not a reload.
+      // `kickstart -k` kills the running instance and starts it again under
+      // the same label, so there is no window in which the label is gone.
+      // A plist that is unchanged but not loaded is the state a failed
+      // re-enroll leaves behind, and it takes the bootstrap path below.
+      const unchanged =
+        existsSync(unitPath) && readFileSync(unitPath, "utf8") === plist;
+      if (unchanged && loaded()) {
+        const kicked = options.exec("launchctl", ["kickstart", "-k", target]);
+        if (kicked.status === 0 && loaded()) return;
+      }
       ensureDir(dir, 0o755);
-      writeSensitiveFileAtomic(unitPath, renderLaunchdPlist(spec), 0o644);
-      options.exec("launchctl", ["bootout", `${domain}/${SERVICE_LABEL}`]);
-      // `bootout` returns before the old instance has gone, and a
-      // `bootstrap` that lands in that window fails with "Bootstrap failed:
-      // 5: Input/output error". Every re-enroll and reassign does exactly
-      // this pair, so it is retried instead of reported as "service install
-      // failed; run `tacho daemon` yourself" on a machine where nothing is
-      // wrong.
+      writeSensitiveFileAtomic(unitPath, plist, 0o644);
+      options.exec("launchctl", ["bootout", target]);
+      // `bootout` returns before the old instance has gone. A `bootstrap`
+      // that lands in that window is either refused ("Bootstrap failed: 5:
+      // Input/output error") or accepted and then removed when the old
+      // process finally exits, which leaves the plist on disk and no service
+      // in launchd. Wait for the label to go first.
+      if (!waitUntilGone()) throw stillLoaded("enroll");
       let result = options.exec("launchctl", ["bootstrap", domain, unitPath]);
       for (
         let attempt = 1;
@@ -216,31 +263,20 @@ function launchdManager(options: ServiceManagerOptions): ServiceManager {
           `launchctl bootstrap failed (${result.status ?? "signal"}): ${result.stderr.trim() || result.stdout.trim()}`,
         );
       }
+      if (!loaded()) {
+        throw new Error(
+          `launchctl bootstrap reported success, but launchd has no ${SERVICE_LABEL} service. The plist is at ${unitPath}; run \`launchctl bootstrap ${domain} ${unitPath}\` to load it`,
+        );
+      }
     },
     uninstall: () => {
-      options.exec("launchctl", ["bootout", `${domain}/${SERVICE_LABEL}`]);
+      options.exec("launchctl", ["bootout", target]);
       // `bootout` answers non-zero both for "was not loaded" and for "could
       // not unload", so its status says nothing. `print` does: while it
       // answers 0 the daemon is still running, and deleting the plist then
       // leaves a collector nothing on disk accounts for until the next
       // logout. The plist stays so the retry has something to boot out.
-      let loaded =
-        options.exec("launchctl", ["print", `${domain}/${SERVICE_LABEL}`])
-          .status === 0;
-      for (
-        let attempt = 1;
-        loaded && attempt < BOOTSTRAP_ATTEMPTS;
-        attempt += 1
-      ) {
-        sleep(BOOTSTRAP_RETRY_MS);
-        loaded =
-          options.exec("launchctl", ["print", `${domain}/${SERVICE_LABEL}`])
-            .status === 0;
-      }
-      if (loaded)
-        throw new Error(
-          `${SERVICE_LABEL} is still loaded after launchctl bootout. Run \`launchctl bootout ${domain}/${SERVICE_LABEL}\`, then unenroll again`,
-        );
+      if (!waitUntilGone()) throw stillLoaded("unenroll");
       if (existsSync(unitPath)) unlinkSync(unitPath);
     },
     status: () => {
