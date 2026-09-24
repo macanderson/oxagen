@@ -15,7 +15,7 @@ import type { MandateDetail } from "@/data/contracts/mandates";
 import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 import { AuthorityBar } from "./authority-bar";
 import { LedgerTable } from "./ledger-table";
-import { NotBacked, StateWrap } from "./state";
+import { StateWrap } from "./state";
 import { measuresOf, openCalls } from "./view";
 
 export function MandateLedger({ detail }: { detail: MandateDetail }) {
@@ -80,11 +80,6 @@ export function MandateLedger({ detail }: { detail: MandateDetail }) {
             primary={measuresOf(mandate).primary?.measure ?? null}
             periodKeys={periodKeys}
           />
-          <div className="border-t border-border px-4 py-2.5">
-            <NotBacked gap="G8" block>
-              {t("footnote")}
-            </NotBacked>
-          </div>
         </>
       )}
     </section>
