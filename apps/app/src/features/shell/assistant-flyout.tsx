@@ -769,7 +769,7 @@ export function AssistantFlyout() {
       onKeyDown={(e) => {
         if (e.key === "Escape") setAssistantOpen(false);
       }}
-      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-panel-bg pb-[env(safe-area-inset-bottom)] text-app-panel-fg shadow-2xl duration-300 ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:translate-x-0 motion-reduce:duration-100 md:left-(--sidebar-width) md:w-[min(var(--assistant-width),calc(100vw-var(--sidebar-width)-56px))] ${
+      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-raised-bg pb-[env(safe-area-inset-bottom)] text-app-raised-fg shadow-2xl duration-300 ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:translate-x-0 motion-reduce:duration-100 md:left-(--sidebar-width) md:w-[min(var(--assistant-width),calc(100vw-var(--sidebar-width)-56px))] ${
         assistantOpen
           ? // Visible at once, so the close button can take focus on open…
             "visible translate-x-0 opacity-100 transition-[translate,opacity]"

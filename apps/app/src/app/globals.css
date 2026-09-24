@@ -331,6 +331,10 @@
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
+  }
+}
+
+/*
  * The stella spinner (`StellaSpinner` in `ui/stella-mark.tsx`), on the kit's
  * timing from `oxagen-brand/spinners/stella-spinner.svg`: the asterisk turns
  * 60 degrees and a light sweep crosses it, both every 3.2s. The kit's global
