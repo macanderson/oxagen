@@ -86,12 +86,12 @@ describe("get_run_cost", () => {
           model: "claude-sonnet-5",
           provider: "anthropic",
           calls: 3,
-          cost: { micros: "900", currency: "USD", basis: "client_attested" },
+          cost: { micros: "900", currency: "USD", basis: "client_attested" as const },
         },
       ],
       toolCalls: 4,
       asOf: "2026-09-23T10:00:00.000Z",
-    } as const;
+    };
     const readProvisional = vi.fn(async () => provisional);
     const handler = createRunCostHandler({
       readRunTotalsByIds: async () => new Map(),
