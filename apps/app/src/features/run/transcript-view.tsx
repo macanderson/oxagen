@@ -8,6 +8,14 @@
 // behind the chips: a ⚖ chip opens the decision's frame on the Governed
 // actions tab, and a frame chip opens a reply's or a call's.
 //
+// Every row reads as one line until it is opened (#4116): a call as its
+// tool and its arguments, the model's words and thoughts as their first
+// sentence, a recall as its heading. Opening a row shows the whole of it: the
+// arguments as they were sent, every line of the output, every line of each
+// diff, the frame behind it and the notes. A search opens every row it draws,
+// because a match can sit in text a closed row hides. The run's answer opens
+// by default, since it is what a reader of a stopped run came for.
+//
 // The kind chips, the search and the errors toggle filter the rows in the
 // browser, over the whole-run transcript the page already read, so a count on
 // a chip is the count of rows it shows.
@@ -24,7 +32,9 @@
 // entries the contract derives from them, so a frame landing is the signal to
 // read the tail rather than something to render. A run longer than one read
 // is paged rather than truncated: entries are appended, never replaced, and a
-// cursor this capability did not write is refused and said so.
+// cursor this capability did not write is refused and said so. When the page
+// reads the run again (the seal refreshes it), that read's order replaces the
+// list, so a subagent frame the tail could not reach sits under its call.
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -62,6 +72,7 @@ import {
   type Frames,
   type FrameRef,
   mergeEntries,
+  rebaseEntries,
 } from "./transcript-model";
 import { useRunStream } from "./use-run-stream";
 
@@ -102,42 +113,12 @@ export function paceMs(gapMs: number, speed: number): number {
   );
 }
 
-/** How many output lines a tool row shows before its fold (`budget=6`). */
-const OUTPUT_BUDGET = 6;
-/** How many diff lines a closed row shows (`cap=12`). */
-const DIFF_CAP = 12;
-/** How many recalled items a closed recall row lists (`CTXF.slice(0,3)`). */
-const RECALL_CAP = 3;
-
 /**
- * `TX_SALIENT` and `txSalient`: the line an output window opens at. The first
- * line that reads as a failure, when one does; otherwise the first line with
- * anything on it.
+ * The widest a passage runs before it wraps: `.tx-prose { max-width:72ch }`.
+ * A passage longer than this cannot sit on one line, so its row offers to open
+ * even when it is one sentence.
  */
-const SALIENT = [
-  "error",
-  "warning",
-  "failed",
-  "failure",
-  "panic",
-  "assert",
-  "fatal",
-  "exception",
-];
-function salientLine(lines: readonly string[]): number {
-  let first = -1;
-  for (const [index, line] of lines.entries()) {
-    const trimmed = line.trimStart();
-    if (first === -1 && trimmed !== "") first = index;
-    const lower = trimmed.toLowerCase();
-    for (const mark of SALIENT) {
-      if (lower.startsWith(mark)) return index;
-      const at = lower.indexOf(`${mark}:`);
-      if (at >= 0 && at <= 12) return index;
-    }
-  }
-  return Math.max(0, first);
-}
+const ONE_LINE_CHARS = 72;
 
 /** `txFold`: a passage as its first sentence and the rest. */
 function foldText(text: string): { head: string; rest: string } {
@@ -148,6 +129,15 @@ function foldText(text: string): { head: string; rest: string } {
     head: match[0],
     rest: text.slice(match[0].length).replace(/^\s+/, ""),
   };
+}
+
+/** Whether a passage holds more than its closed row's one line shows. */
+function holdsMore(text: string): boolean {
+  return (
+    foldText(text).rest.length > 0 ||
+    text.includes("\n") ||
+    text.length > ONE_LINE_CHARS
+  );
 }
 
 // ── The design's rules, as class recipes (ADR-132) ──────────────────────────
@@ -305,10 +295,12 @@ const txRoleGut = "pr-3.5 text-right max-md:p-0 max-md:text-left";
 /**
  * `.tx-roletag { font-size:10px; font-weight:700; letter-spacing:.14em;
  * padding:1px 7px; border-radius:4px; color:var(--ink) }`, on `--tx-you`
- * (the muted ink) for YOU and `--tx-agent` (the ink) for the agent.
+ * (the muted ink) for the operator and `--tx-agent` (the ink) for the agent.
+ * The catalogue holds the words in sentence case; the capitals are the
+ * style's.
  */
 const txRoleTag =
-  "rounded px-[7px] py-px text-[10px] font-bold tracking-[0.14em] text-background";
+  "rounded px-[7px] py-px text-[10px] font-bold uppercase tracking-[0.14em] text-background";
 /** `.tx-prose { max-width:72ch; white-space:pre-wrap; color:var(--body) }` */
 const txProse =
   "max-w-[72ch] whitespace-pre-wrap [overflow-wrap:anywhere] text-(color:--body)";
@@ -320,6 +312,10 @@ const txSub =
 /** `.tx-think { color:var(--dim); font-style:italic; max-width:72ch }` */
 const txThink =
   "max-w-[72ch] whitespace-pre-wrap [overflow-wrap:anywhere] italic text-dim";
+/** A closed row's one line: cut at the row's width with an ellipsis. */
+const txLine = "min-w-0 truncate";
+/** A closed row's line with its fold control before it. */
+const txLineRow = "flex min-w-0 items-baseline gap-1.5";
 /** `.tx-fold { border:0; background:none; font-size:10.5px; color:var(--dim) }` */
 const txFold =
   "border-0 bg-transparent p-0 font-mono text-[10.5px] text-dim hover:text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring";
@@ -537,50 +533,8 @@ function SubagentChip({ row }: { row: FeedRow }) {
   );
 }
 
-/** The fold under a closed output: how many lines it holds back. */
-function MoreLines({
-  hidden,
-  open,
-  onToggle,
-}: {
-  hidden: number;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const t = useTranslations("run.transcript");
-  if (hidden <= 0 && !open) return null;
-  return (
-    <button
-      type="button"
-      className={`${txFold} ml-5`}
-      aria-expanded={open}
-      onClick={onToggle}
-    >
-      {open ? (
-        <>
-          <span aria-hidden="true">⏶ </span>
-          {t("collapse")}
-        </>
-      ) : (
-        <>
-          <span aria-hidden="true">⋯ </span>
-          {t("moreLines", { count: hidden })}
-        </>
-      )}
-    </button>
-  );
-}
-
-/** `txDiffBlock`: the path, the stat, and the changed lines, twelve until the row opens. */
-function DiffBlock({
-  change,
-  open,
-  q,
-}: {
-  change: ToolDiff;
-  open: boolean;
-  q: string;
-}) {
+/** `txDiffBlock`: the path, the stat, and every changed line. An open row draws it. */
+function DiffBlock({ change, q }: { change: ToolDiff; q: string }) {
   const t = useTranslations("run.transcript");
   type Line = DiffLine | { op: "gap"; key: string };
   const all: Line[] = change.diff.hunks.flatMap((hunk, index) => [
@@ -589,8 +543,6 @@ function DiffBlock({
       : [{ op: "gap" as const, key: `gap-${String(index)}` }]),
     ...hunk.lines,
   ]);
-  const shown = open ? all : all.slice(0, DIFF_CAP);
-  const hidden = all.length - shown.length;
   return (
     <div data-testid="tx-diff" className="mt-1 mb-1.5 ml-5 min-w-0">
       <div className={txDiffPath}>
@@ -604,7 +556,7 @@ function DiffBlock({
         </span>
       </div>
       <div className={txDiff}>
-        {shown.map((line) =>
+        {all.map((line) =>
           line.op === "gap" ? (
             <div key={line.key} className={txDiffLine}>
               <span className={txDiffNum} />
@@ -625,16 +577,6 @@ function DiffBlock({
             </div>
           ),
         )}
-        {hidden > 0 ? (
-          <div className={txDiffLine}>
-            <span className={txDiffNum} />
-            <span className={txDiffNum} />
-            <span className="px-2.5 text-center text-dim">
-              <span aria-hidden="true">⋯ </span>
-              {t("moreLines", { count: hidden })}
-            </span>
-          </div>
-        ) : null}
       </div>
     </div>
   );
@@ -650,13 +592,67 @@ type RowProps = {
   place: Place;
 };
 
+/**
+ * A passage of words as its row draws it: closed, its first sentence on one
+ * line cut at the row's width, with the control that opens it before it;
+ * open, the whole passage as it was recorded.
+ *
+ * The element tree is the same open and closed, so a reader's place in it
+ * (and a test's hold on it) survives the toggle.
+ */
+function Passage({
+  rowKey,
+  text,
+  q,
+  open,
+  onToggle,
+  className,
+}: {
+  rowKey: string;
+  text: string;
+  q: string;
+  open: boolean;
+  onToggle: (key: string) => void;
+  /** The passage's own ink, open and closed. */
+  className: string;
+}) {
+  const t = useTranslations("run.transcript");
+  const { head, rest } = foldText(text);
+  const foldable = holdsMore(text);
+  const whole = open || !foldable;
+  return (
+    <div className={whole ? txProse : `${txLineRow} ${txProse}`}>
+      {foldable ? (
+        <button
+          type="button"
+          className={`${txFold} flex-none pr-1.5`}
+          aria-expanded={open}
+          aria-label={open ? t("showLess") : t("showRest")}
+          onClick={() => {
+            onToggle(rowKey);
+          }}
+        >
+          {open ? "⏶" : "⏵"}
+        </button>
+      ) : null}
+      <span className={whole ? className : `${txLine} ${className}`}>
+        <Hi text={whole ? text : head} q={q} />
+        {!whole && rest.length > 0 ? (
+          <span className="text-dim"> …</span>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
 function PromptRow({
   row,
   q,
+  open,
+  onToggle,
   run,
-}: {
+}: Omit<RowProps, "row" | "place"> & {
   row: Extract<FeedRow, { kind: "prompt" }>;
-  q: string;
   run: TranscriptRun;
 }) {
   const t = useTranslations("run.transcript");
@@ -665,25 +661,32 @@ function PromptRow({
       <div className={txRoleGut}>
         <span className={`${txRoleTag} bg-muted-foreground`}>{t("you")}</span>
       </div>
-      <div>
-        <div className={`${txProse} text-foreground`}>
-          <Hi text={row.text} q={q} />
-        </div>
-        <div className={txSub}>
-          {run.operatorName === null ? null : (
-            <span>{t("operator", { name: run.operatorName })}</span>
-          )}
-          {row.first && run.taskRef !== null ? (
-            <span>{t("task", { ref: run.taskRef })}</span>
-          ) : null}
-          <span>
-            {row.first
-              ? t("firstPrompt")
-              : row.turn === null
-                ? t("laterPrompt")
-                : t("turn", { n: row.turn })}
-          </span>
-        </div>
+      <div className="min-w-0">
+        <Passage
+          rowKey={row.key}
+          text={row.text}
+          q={q}
+          open={open}
+          onToggle={onToggle}
+          className="text-foreground"
+        />
+        {open ? (
+          <div className={txSub}>
+            {run.operatorName === null ? null : (
+              <span>{t("operator", { name: run.operatorName })}</span>
+            )}
+            {row.first && run.taskRef !== null ? (
+              <span>{t("task", { ref: run.taskRef })}</span>
+            ) : null}
+            <span>
+              {row.first
+                ? t("firstPrompt")
+                : row.turn === null
+                  ? t("laterPrompt")
+                  : t("turn", { n: row.turn })}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -700,9 +703,6 @@ function TextRow({
   answer: boolean;
 }) {
   const t = useTranslations("run.transcript");
-  const { head, rest } = foldText(row.text);
-  const foldable = !answer && rest.length > 0;
-  const folded = foldable && !open;
   return (
     <div data-testid="transcript-agent" className={txRole}>
       <div className={txRoleGut}>
@@ -710,29 +710,20 @@ function TextRow({
           {answer ? t("answer") : t("agent")}
         </span>
       </div>
-      <div className="min-w-0">
-        <div className={`${txProse} ${answer ? txAnswer : ""}`}>
-          {foldable ? (
-            <button
-              type="button"
-              className={`${txFold} pr-1.5`}
-              aria-expanded={!folded}
-              aria-label={folded ? t("showRest") : t("showLess")}
-              onClick={() => {
-                onToggle(row.key);
-              }}
-            >
-              {folded ? "⏵" : "⏶"}
-            </button>
-          ) : null}
-          <Hi text={folded ? head : row.text} q={q} />
-          {folded ? <span className="text-dim"> …</span> : null}
-        </div>
-        {row.subagent === undefined ? null : (
+      <div className={`min-w-0 ${answer ? txAnswer : ""}`}>
+        <Passage
+          rowKey={row.key}
+          text={row.text}
+          q={q}
+          open={open}
+          onToggle={onToggle}
+          className=""
+        />
+        {open && row.subagent !== undefined ? (
           <div className={txSub}>
             <SubagentChip row={row} />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -749,20 +740,26 @@ function ThinkingRow({
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   if (row.text === null) {
+    const said = t("thinkingUnkept", {
+      count: formatCount(row.tokens ?? 0, locale),
+    });
     return (
-      <div data-testid="step-thinking-unkept" className={txThink}>
-        {t("thinkingUnkept", { count: formatCount(row.tokens ?? 0, locale) })}
+      <div
+        data-testid="step-thinking-unkept"
+        title={said}
+        className={`${txLine} italic text-dim`}
+      >
+        {said}
       </div>
     );
   }
   const lines = row.text.split("\n").length;
   const { head, rest } = foldText(row.text);
-  const folded = !open && rest.length > 0;
   return (
-    <div>
+    <div className={open ? "min-w-0" : txLineRow}>
       <button
         type="button"
-        className={txFold}
+        className={`${txFold} flex-none`}
         aria-expanded={open}
         onClick={() => {
           onToggle(row.key);
@@ -771,9 +768,12 @@ function ThinkingRow({
         <span aria-hidden="true">{open ? "⏶ " : "⏵ "}</span>
         {t("thinkingLines", { count: lines })}
       </button>
-      <div data-testid="tx-think" className={txThink}>
-        <Hi text={folded ? head : row.text} q={q} />
-        {folded ? " …" : null}
+      <div
+        data-testid="tx-think"
+        className={open ? txThink : `${txLine} italic text-dim`}
+      >
+        <Hi text={open ? row.text : head} q={q} />
+        {!open && rest.length > 0 ? " …" : null}
       </div>
     </div>
   );
@@ -792,16 +792,13 @@ function ToolRow({
   const locale = useLocale();
   const failed = row.failed;
   const kind = CALL_CLASS[call.group];
-  const diff = call.diffs[0] ?? null;
   const lines = call.output?.split("\n") ?? [];
-  const anchor = Math.min(
-    salientLine(lines),
-    Math.max(0, lines.length - OUTPUT_BUDGET),
-  );
-  const shown = open ? lines : lines.slice(anchor, anchor + OUTPUT_BUDGET);
   const added = call.diffs.reduce((sum, each) => sum + each.diff.added, 0);
   const removed = call.diffs.reduce((sum, each) => sum + each.diff.removed, 0);
-  const foldable = call.raw !== null || call.truncated;
+  // The argument slot reads the call's own line, or, where no reading found
+  // one, the call as it was made, on one line. Never blank over arguments the
+  // record kept.
+  const arg = call.arg ?? flatten(call.raw);
   return (
     <div>
       <div className={txCall}>
@@ -817,9 +814,9 @@ function ToolRow({
         >
           <Hi text={call.name} q={q} />
         </span>
-        {call.arg === null ? null : (
-          <span data-testid="tx-tool-arg" className={txArg} title={call.arg}>
-            <Hi text={call.arg} q={q} />
+        {arg === null ? null : (
+          <span data-testid="tx-tool-arg" className={txArg} title={arg}>
+            <Hi text={arg} q={q} />
           </span>
         )}
         <span className={txChips}>
@@ -835,7 +832,7 @@ function ToolRow({
               {formatDuration(call.durationMs, locale)}
             </span>
           )}
-          {diff === null && lines.length > 1 ? (
+          {call.diffs.length === 0 && lines.length > 1 ? (
             <span className={failed ? CHIP.err : CHIP.plain}>
               {t("lines", { count: formatCount(lines.length, locale) })}
             </span>
@@ -857,26 +854,39 @@ function ToolRow({
               place={place}
             />
           ))}
-          {foldable ? (
-            <button
-              type="button"
-              className={txFold}
-              aria-expanded={open}
-              aria-label={open ? t("hideCall") : t("showCall")}
-              onClick={() => {
-                onToggle(row.key);
-              }}
-            >
-              {open ? "⏶" : "⋯"}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={txFold}
+            aria-expanded={open}
+            aria-label={open ? t("hideCall") : t("showCall")}
+            onClick={() => {
+              onToggle(row.key);
+            }}
+          >
+            {open ? "⏶" : "⋯"}
+          </button>
         </span>
       </div>
-      {open && foldable ? (
+      {open ? (
         <div data-testid="tx-call-fold">
           {call.raw === null ? null : (
             <pre className={txArgs}>
               <Hi text={call.raw} q={q} />
+            </pre>
+          )}
+          {call.diffs.map((change, index) => (
+            <DiffBlock
+              key={`${change.path}-${String(index)}`}
+              change={change}
+              q={q}
+            />
+          ))}
+          {lines.length === 0 ? null : (
+            <pre
+              data-testid="tx-out"
+              className={`${txOut} ${failed ? "text-error" : "text-muted-foreground"}`}
+            >
+              <Hi text={lines.join("\n")} q={q} />
             </pre>
           )}
           <div className={`${txSub} ml-5`}>
@@ -885,38 +895,24 @@ function ToolRow({
             </FrameChip>
             {call.truncated ? <span>{t("truncated")}</span> : null}
           </div>
+          {call.parked === null ? null : (
+            <div className={`${txSub} ml-5`}>{t("parkedNote")}</div>
+          )}
         </div>
       ) : null}
-      {call.diffs.map((change, index) => (
-        <DiffBlock
-          key={`${change.path}-${String(index)}`}
-          change={change}
-          open={open}
-          q={q}
-        />
-      ))}
-      {diff === null && lines.length > 0 ? (
-        <>
-          <pre
-            data-testid="tx-out"
-            className={`${txOut} ${failed ? "text-error" : "text-muted-foreground"}`}
-          >
-            <Hi text={shown.join("\n")} q={q} />
-          </pre>
-          <MoreLines
-            hidden={lines.length - shown.length}
-            open={open && lines.length > OUTPUT_BUDGET}
-            onToggle={() => {
-              onToggle(row.key);
-            }}
-          />
-        </>
-      ) : null}
-      {call.parked === null ? null : (
-        <div className={`${txSub} ml-5`}>{t("parkedNote")}</div>
-      )}
     </div>
   );
+}
+
+/** `text` on one line: every line trimmed and joined by a space; null when empty. */
+function flatten(text: string | null): string | null {
+  if (text === null) return null;
+  const line = text
+    .split("\n")
+    .map((each) => each.trim())
+    .filter((each) => each !== "")
+    .join(" ");
+  return line === "" ? null : line;
 }
 
 /** A cost chip, with the basis that says who observed it as its title. */
@@ -995,6 +991,11 @@ function UsageRow({
   );
 }
 
+/**
+ * What was put in front of the model, as its heading on one line with the
+ * frame and the Context tab beside it. Opening the row lists every item the
+ * frame recorded.
+ */
 function RecallRow({
   row,
   q,
@@ -1005,13 +1006,6 @@ function RecallRow({
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const { recall } = row;
-  const shown = open ? recall.items : recall.items.slice(0, RECALL_CAP);
-  const held = recall.items.slice(shown.length);
-  // The tokens held back are summed only when every held item recorded its
-  // count; a partial sum would read as the whole.
-  const heldTokens = held.every((item) => item.tokens !== null)
-    ? held.reduce((sum, item) => sum + (item.tokens ?? 0), 0)
-    : null;
   const heading = [
     t("recall"),
     recall.count === null
@@ -1030,30 +1024,45 @@ function RecallRow({
     .join(" · ");
   // `color:var(--st-proven); font-weight:600; font-size:12.5px` on the fold.
   const headingClass =
-    "border-0 bg-transparent p-0 font-mono text-[12.5px] font-semibold text-proven";
+    "min-w-0 truncate border-0 bg-transparent p-0 text-left font-mono text-[12.5px] font-semibold text-proven";
   return (
     <div data-testid="tx-recall">
-      {recall.items.length > RECALL_CAP ? (
-        <button
-          type="button"
-          className={headingClass}
-          aria-expanded={open}
-          onClick={() => {
-            onToggle(row.key);
-          }}
-        >
-          <span aria-hidden="true">◉ </span>
-          {heading}
-        </button>
-      ) : (
-        <span className={headingClass}>
-          <span aria-hidden="true">◉ </span>
-          {heading}
+      <div className={txCall}>
+        {recall.items.length > 0 ? (
+          <button
+            type="button"
+            className={`${headingClass} hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring`}
+            aria-expanded={open}
+            onClick={() => {
+              onToggle(row.key);
+            }}
+          >
+            <span aria-hidden="true">◉ </span>
+            {heading}
+          </button>
+        ) : (
+          <span className={headingClass}>
+            <span aria-hidden="true">◉ </span>
+            {heading}
+          </span>
+        )}
+        <span className={txChips}>
+          <FrameChip frame={row.frame} place={place}>
+            {t("frame", { type: row.frame.type, seq: row.frame.seq })}
+          </FrameChip>
+          <SafeLink
+            to={routes.run(place.org, place.ws, place.runId, {
+              tab: "context",
+            })}
+            className={CHIP.link}
+          >
+            {t("openContext")}
+          </SafeLink>
         </span>
-      )}
-      {shown.length === 0 ? null : (
+      </div>
+      {open && recall.items.length > 0 ? (
         <div className={txRecall}>
-          {shown.map((item, index) => (
+          {recall.items.map((item, index) => (
             <RecallItem
               // A manifest names each item once; the index keeps two
               // unnamed items apart.
@@ -1063,36 +1072,7 @@ function RecallRow({
             />
           ))}
         </div>
-      )}
-      {held.length === 0 ? null : (
-        <button
-          type="button"
-          className={`${txFold} ml-5`}
-          aria-expanded={false}
-          onClick={() => {
-            onToggle(row.key);
-          }}
-        >
-          <span aria-hidden="true">⋯ </span>
-          {heldTokens === null
-            ? t("recallMore", { count: formatCount(held.length, locale) })
-            : t("recallMoreTokens", {
-                count: formatCount(held.length, locale),
-                tokens: formatCount(heldTokens, locale),
-              })}
-        </button>
-      )}
-      <div className={`${txSub} ml-5`}>
-        <FrameChip frame={row.frame} place={place}>
-          {t("frame", { type: row.frame.type, seq: row.frame.seq })}
-        </FrameChip>
-        <SafeLink
-          to={routes.run(place.org, place.ws, place.runId, { tab: "context" })}
-          className={CHIP.link}
-        >
-          {t("openContext")}
-        </SafeLink>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -1476,6 +1456,31 @@ export function TranscriptView({
   const [reading, setReading] = useState(false);
   const [pageFailure, setPageFailure] = useState<PageFailure | null>(null);
 
+  // The page read the run again: the seal refreshes it, and so do the run
+  // controls. That read is the record as it stands, in the order the server
+  // placed it, so it replaces what this view had paged in. A subagent frame
+  // the tail read could not reach, because it landed before the cursor,
+  // arrives this way once the run seals (#4083). Entries this view read past
+  // the page's own bound stay, and so does the cursor that reached them.
+  const [readFrom, setReadFrom] = useState(first);
+  if (readFrom !== first) {
+    setReadFrom(first);
+    const rebased = rebaseEntries(first, entries);
+    setEntries(rebased);
+    if (rebased.length === first.length) {
+      setCursor(transcript.cursor);
+      setComplete(transcript.complete);
+    }
+  }
+  // The refs follow the state a rebase set. A page read sets both itself,
+  // before the render, so an append in flight never merges onto a stale list.
+  useEffect(() => {
+    heldRef.current = entries;
+  }, [entries]);
+  useEffect(() => {
+    cursorRef.current = cursor;
+  }, [cursor]);
+
   const rows = useMemo(() => buildFeed(entries), [entries]);
 
   const [on, setOn] = useState(() => initialGroups(kinds));
@@ -1755,7 +1760,13 @@ export function TranscriptView({
         <FeedRowView
           row={row}
           q={q}
-          open={open.has(row.key) || (row.kind === "thinking" && thinking)}
+          open={
+            // A search opens every row it draws: the match can sit in text a
+            // closed row hides. The answer opens until it is closed.
+            q !== "" ||
+            (row.kind === "thinking" && thinking) ||
+            (index === answer ? !open.has(row.key) : open.has(row.key))
+          }
           onToggle={toggle}
           place={place}
           run={run}
@@ -2003,7 +2014,9 @@ function FeedRowView({
 }) {
   switch (row.kind) {
     case "prompt":
-      return <PromptRow row={row} q={q} run={run} />;
+      return (
+        <PromptRow row={row} q={q} open={open} onToggle={onToggle} run={run} />
+      );
     case "text":
       return (
         <TextRow

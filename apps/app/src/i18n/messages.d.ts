@@ -5927,8 +5927,6 @@ type Messages = {
       thinkingLines: string;
       showCall: string;
       hideCall: string;
-      moreLines: string;
-      collapse: string;
       lines: string;
       running: string;
       noResult: string;
@@ -5947,8 +5945,6 @@ type Messages = {
       recallItems: string;
       recallTokens: string;
       recallCut: string;
-      recallMore: string;
-      recallMoreTokens: string;
       openContext: string;
       stopped: string;
       sealedAt: string;
