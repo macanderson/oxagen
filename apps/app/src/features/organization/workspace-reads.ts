@@ -18,11 +18,8 @@
 import { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import { repositoryInstallationList } from "@oxagen/oxagen/contracts/repository.installation.list";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
-import {
-  type ActionResult,
-  kernelRead,
-  readToActionResult,
-} from "@/server/kernel";
+import type { ActionResult } from "@/server/kernel";
+import { kernelRead, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 /** One repository a workspace binds, as the Workspaces row and Edit workspace print it. */

@@ -42,7 +42,9 @@ vi.mock("./actions", () => ({
   createWorkspace: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession }));
-vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+vi.mock("@/server/tenancy-lookups", () => ({
+  systemLookups: { mfaPolicy: () => Promise.resolve(null) },
+}));
 
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -119,9 +121,9 @@ describe("the frame", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Acme Robotics" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Model funding and routes" }),
-    ).toHaveAttribute("aria-current", "page");
+    const tab = screen.getByRole("tab", { name: "Model funding and routes" });
+    expect(tab).toHaveAttribute("aria-current", "page");
+    expect(tab).toHaveAttribute("aria-selected", "true");
     expect(
       screen.getAllByRole("button", { name: "Create a workspace" }),
     ).toHaveLength(1);
@@ -159,29 +161,66 @@ describe("Funding source", () => {
     await expectNoAxe(view.container);
   });
 
-  it("says the source is not recorded without a customer key, and names the issue (#4005)", async () => {
-    await renderTab(readOk(NONE));
+  it("chooses no source without a customer key, and states no key as the one that pays (trust, #4005)", async () => {
+    const { view } = await renderTab(readOk(NONE));
     const panel = funding();
     expect(
       panel.querySelector('[data-source="not-recorded"]'),
     ).toHaveTextContent("source not recorded");
-    expect(within(panel).getByTestId("funding-preview")).toHaveTextContent(
-      "No capability reads which one yet (#4005).",
+    const source = within(panel).getByLabelText("Source");
+    expect(source).toHaveValue("");
+    expect(
+      within(source)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual([
+      "Choose a source",
+      "platform_minted — one key minted for this organization on Oxagen’s OpenRouter account",
+      "platform — Oxagen’s shared account",
+      "customer_key — your own OpenRouter or vendor key",
+    ]);
+    expect(panel).toHaveTextContent(
+      "No capability reads which one yet (#4005)",
     );
-    expect(panel).toHaveTextContent("Oxagen’s shared account");
+    // No state is drawn, so nothing says which of Oxagen's keys pays.
+    expect(panel.querySelector("[data-funding-state]")).toBeNull();
+    expect(panel).not.toHaveTextContent(
+      "Oxagen pays the provider and bills the tokens as assistant usage",
+    );
+    await expectNoAxe(view.container);
   });
 
-  it("previews the minted key with its facts not recorded and Mint a key, Rotate and Revoke as stubs", async () => {
+  it("marks the shared account a preview when the person picks it", async () => {
+    await renderTab(readOk(NONE));
+    const panel = funding();
+    await userEvent.selectOptions(
+      within(panel).getByLabelText("Source"),
+      "platform",
+    );
+    expect(within(panel).getByTestId("funding-preview")).toHaveTextContent(
+      "Preview of platform. No capability reads which source pays for this organization yet (#4005).",
+    );
+  });
+
+  it("previews the minted key's two states apart: a held key with Rotate, Revoke and Reconciliation, and no key with Mint a key", async () => {
     const { view } = await renderTab(readOk(NONE));
     const panel = funding();
     await userEvent.selectOptions(
       within(panel).getByLabelText("Source"),
       "platform_minted",
     );
-    const state = panel.querySelector<HTMLElement>(
+    const minted = panel.querySelector<HTMLElement>(
       '[data-funding-state="platform_minted"]',
     );
-    if (state === null) throw new Error("no minted state");
+    const state = minted?.querySelector<HTMLElement>('[data-key-state="held"]');
+    const none = minted?.querySelector<HTMLElement>('[data-key-state="none"]');
+    if (!state || !none) throw new Error("no minted states");
+    expect(
+      within(state).getByRole("heading", { name: "Minted key" }),
+    ).toBeInTheDocument();
+    expect(
+      within(none).getByRole("heading", { name: "No key" }),
+    ).toBeInTheDocument();
     for (const fact of [
       "Secret",
       "Provisioned id",
@@ -193,17 +232,34 @@ describe("Funding source", () => {
     ]) {
       expect(state).toHaveTextContent(fact);
     }
-    expect(state.querySelectorAll("[data-not-recorded]")).toHaveLength(7);
+    // Seven facts, then the three Reconciliation rows.
+    expect(state.querySelectorAll("[data-not-recorded]")).toHaveLength(10);
+    const reconciliation = state.querySelector<HTMLElement>(
+      "[data-reconciliation]",
+    );
+    if (reconciliation === null) throw new Error("no reconciliation");
+    for (const row of ["OpenRouter reports", "Our credit ledger", "Difference"])
+      expect(reconciliation).toHaveTextContent(row);
+    // Difference is never computed from two unread figures.
+    expect(reconciliation.querySelectorAll("[data-not-recorded]")).toHaveLength(
+      3,
+    );
+    expect(reconciliation).toHaveAttribute("data-issue", "4005");
     for (const stub of ["Rotate", "Revoke"]) {
       expect(within(state).getByRole("button", { name: stub })).toHaveAttribute(
         "data-stub",
       );
     }
+    // Mint a key is the no-key state's, never beside Rotate and Revoke.
+    expect(
+      within(state).queryByRole("button", { name: "Mint a key" }),
+    ).toBeNull();
+    expect(none).toHaveTextContent(
+      "With no key the in-app agent cannot run, and nothing has been charged.",
+    );
     await expectNoAxe(view.container);
     await userEvent.click(
-      within(state).getByRole("button", {
-        name: "Mint a key for Acme Robotics",
-      }),
+      within(none).getByRole("button", { name: "Mint a key" }),
     );
     const dialog = screen.getByTestId("funding-mint-key");
     expect(dialog).toHaveTextContent("Mint a model key for Acme Robotics");

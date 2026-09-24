@@ -24,7 +24,6 @@
       "title": "People",
       "person": "Person",
       "role": "Role",
-      "joined": "Joined",
       "actions": "Actions",
       "empty": "This organization has no members.",
       "tableLabel": "People",
@@ -81,12 +80,8 @@
       "denied": "Changing a role and removing a member are Owner and Admin actions.",
       "fields": {
         "name": "Name",
-        "description": "Description",
-        "scope": "Scope",
         "mainRepo": "Main repository",
         "mainRepoHint": "owner/name on GitHub. This is where the workspace keeps .oxagen/, and it cannot change here later. The Oxagen GitHub App has to be installed on that owner and reachable from a GitHub account this organization has connected. Oxagen finds the installation from the owner.",
-        "permissions": "Permissions",
-        "roleNameHint": "Lowercase letters and digits, separated by a dot, a hyphen, or an underscore. It cannot change later.",
         "productionBranch": "Production branch",
         "productionBranchHint": "The only branch whose commits update the code graph. A re-approval on the Repositories page moves it.",
         "productionBranchCreateHint": "The only branch whose commits update the code graph. If GitHub’s default changes later you are prompted; the binding never moves on its own.",
@@ -100,25 +95,6 @@
         "mainRepoChoose": "Choose a repository",
         "branchDefault": "{branch} — GitHub’s default, suggested",
         "branchPick": "Choose the repository first"
-      },
-      "createRole": {
-        "open": "Create role",
-        "title": "Create a role",
-        "confirm": "Create",
-        "pending": "Creating"
-      },
-      "editRole": {
-        "open": "Edit",
-        "title": "Edit {name}",
-        "confirm": "Save",
-        "pending": "Saving"
-      },
-      "deleteRole": {
-        "open": "Delete",
-        "title": "Delete {name}",
-        "body": "The role and its grants go. The audit record keeps what it allowed.",
-        "confirm": "Delete",
-        "pending": "Deleting"
       },
       "createWorkspace": {
         "open": "Create a workspace",
@@ -142,7 +118,6 @@
         "heading": "Governance mode",
         "about": "Written to .oxagen/rules/governance.toml on the main repository through a Context PR. It takes effect on merge. The mode decides who merges a Context PR in this workspace.",
         "unchanged": "Leave unchanged",
-        "unchangedHint": "Nothing is read from GitHub and nothing is written. The workspace's Repositories page shows the mode in force.",
         "solo": "solo · The author may merge their own.",
         "team": "team · A code-owner review is required.",
         "regulated": "regulated · A named approver from a role must approve, and the promotion ledger is hash-chained.",
@@ -262,15 +237,11 @@
       "bodyTwoFactor": "An invitation is the only way into the organization. It expires in seven days, and accepting it requires a verified email and two-factor."
     },
     "apiKeys": {
-      "lead": "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
       "tableLabel": "API keys",
       "columns": {
         "name": "Name",
-        "prefix": "Prefix",
-        "created": "Created",
         "lastUsed": "Last used",
         "expires": "Expires",
-        "status": "Status",
         "actions": "Actions",
         "principal": "Principal",
         "grants": "Grants",
@@ -325,11 +296,6 @@
           "unavailable": "The change could not be made: {code}. Nothing was changed.",
           "workspaceArchived": "That workspace was archived while this page was open. Its keys are listed so they can be revoked; no new key is issued into it."
         }
-      },
-      "status": {
-        "live": "live",
-        "expired": "expired",
-        "revoked": "revoked"
       },
       "workspace": {
         "label": "Workspace",
@@ -412,12 +378,6 @@
       },
       "noPermissions": "No permissions",
       "empty": "This organization has no roles.",
-      "catalog": {
-        "title": "Permission catalogue",
-        "open": "View permission catalogue",
-        "lead": "A permission is a named bundle of capabilities. A role allows a permission when it allows every capability in it.",
-        "covers": "{count} capabilities"
-      },
       "badge": "postgres · iam",
       "heldBy": {
         "people": "{count, plural, one {# person} other {# people}}",
@@ -488,11 +448,6 @@
         "governance": "Governance",
         "actions": "Actions"
       },
-      "status": {
-        "live": "live",
-        "archived": "archived"
-      },
-      "noRole": "No membership",
       "empty": "This organization has no workspaces.",
       "governanceNotRecorded": "mode not recorded (#3907)",
       "retentionNotRecorded": "retention not recorded (#3933)",
@@ -897,8 +852,7 @@
     },
     "page": {
       "eyebrow": "Organization",
-      "description": "People, roles, workspaces, model routes, the data plane, and API keys.",
-      "title": "Organization"
+      "description": "People, roles, workspaces, model routes, the data plane, and API keys."
     },
     "list": {
       "all": "All · {filter}"

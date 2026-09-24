@@ -305,26 +305,6 @@ export async function resolveViewer(org: string): Promise<RouteViewer> {
     : result;
 }
 
-/**
- * The workspace viewer inside an organization the page already resolved, or
- * null when this person may not enter it. It is the resolution
- * requireViewer(org, ws) makes, answered as a value rather than a not-found
- * interrupt, so a page that lists every workspace of the organization (the
- * Organization › Workspaces tab) can read inside the ones its viewer is a
- * member of and say "not recorded" for the rest.
- */
-export async function enterWorkspace(
-  org: OrgCtx,
-  wsSlug: string,
-): Promise<WsCtx | null> {
-  const result = await resolveSession(org.orgSlug, wsSlug);
-  if (result.kind !== "ok" || result.ws === null) return null;
-  if (result.org.orgId !== org.orgId || result.org.userId !== org.userId)
-    return null;
-  const ctx = mintResolved(result);
-  return WsCtx.is(ctx) ? ctx : null;
-}
-
 /** The organization's two-factor policy, as the MFA gate reads it. */
 export type OrgTwoFactorPolicy = {
   /** security.org_security_policy.mfa_required; false when the org has no policy row. */

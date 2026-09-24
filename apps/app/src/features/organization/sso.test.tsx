@@ -350,10 +350,13 @@ describe("Sso: a read that did not list", () => {
     // Single sign-on is not one of the design's seven tabs: the row stays,
     // and no tab is marked current on this page.
     const tabs = within(
-      screen.getByRole("navigation", { name: "Organization" }),
-    ).getAllByRole("link");
+      screen.getByRole("tablist", { name: "Organization" }),
+    ).getAllByRole("tab");
     expect(tabs).toHaveLength(7);
     expect(tabs.some((tab) => tab.hasAttribute("aria-current"))).toBe(false);
+    expect(
+      tabs.every((tab) => tab.getAttribute("aria-selected") === "false"),
+    ).toBe(true);
     await expectNoAxe(container);
   });
 
@@ -363,7 +366,7 @@ describe("Sso: a read that did not list", () => {
       "data-reason",
       "error",
     );
-    expect(screen.getByRole("link", { name: /^Roles/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /^Roles/ })).toBeTruthy();
   });
 });
 

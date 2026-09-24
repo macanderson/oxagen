@@ -2698,7 +2698,6 @@ type Messages = {
       title: string;
       person: string;
       role: string;
-      joined: string;
       actions: string;
       empty: string;
       tableLabel: string;
@@ -2755,12 +2754,8 @@ type Messages = {
       denied: string;
       fields: {
         name: string;
-        description: string;
-        scope: string;
         mainRepo: string;
         mainRepoHint: string;
-        permissions: string;
-        roleNameHint: string;
         productionBranch: string;
         productionBranchHint: string;
         productionBranchCreateHint: string;
@@ -2774,25 +2769,6 @@ type Messages = {
         mainRepoChoose: string;
         branchDefault: string;
         branchPick: string;
-      };
-      createRole: {
-        open: string;
-        title: string;
-        confirm: string;
-        pending: string;
-      };
-      editRole: {
-        open: string;
-        title: string;
-        confirm: string;
-        pending: string;
-      };
-      deleteRole: {
-        open: string;
-        title: string;
-        body: string;
-        confirm: string;
-        pending: string;
       };
       createWorkspace: {
         open: string;
@@ -2816,7 +2792,6 @@ type Messages = {
         heading: string;
         about: string;
         unchanged: string;
-        unchangedHint: string;
         solo: string;
         team: string;
         regulated: string;
@@ -2936,15 +2911,11 @@ type Messages = {
       bodyTwoFactor: string;
     };
     apiKeys: {
-      lead: string;
       tableLabel: string;
       columns: {
         name: string;
-        prefix: string;
-        created: string;
         lastUsed: string;
         expires: string;
-        status: string;
         actions: string;
         principal: string;
         grants: string;
@@ -2999,11 +2970,6 @@ type Messages = {
           unavailable: string;
           workspaceArchived: string;
         };
-      };
-      status: {
-        live: string;
-        expired: string;
-        revoked: string;
       };
       workspace: {
         label: string;
@@ -3086,12 +3052,6 @@ type Messages = {
       };
       noPermissions: string;
       empty: string;
-      catalog: {
-        title: string;
-        open: string;
-        lead: string;
-        covers: string;
-      };
       badge: string;
       heldBy: {
         people: string;
@@ -3162,11 +3122,6 @@ type Messages = {
         governance: string;
         actions: string;
       };
-      status: {
-        live: string;
-        archived: string;
-      };
-      noRole: string;
       empty: string;
       governanceNotRecorded: string;
       retentionNotRecorded: string;
@@ -3572,7 +3527,6 @@ type Messages = {
     page: {
       eyebrow: string;
       description: string;
-      title: string;
     };
     list: {
       all: string;

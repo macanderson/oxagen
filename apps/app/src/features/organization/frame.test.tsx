@@ -18,7 +18,10 @@ import {
   workspaceRow,
 } from "./organization.builders";
 
-const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
+const { getSession, mfaPolicy } = vi.hoisted(() => ({
+  getSession: vi.fn(),
+  mfaPolicy: vi.fn(),
+}));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
     Promise.resolve(translator(namespace)),
@@ -32,7 +35,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock("@/server/session", () => ({ getSession }));
-vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: { mfaPolicy } }));
 vi.mock("./actions", () => ({
   sendInvitation: vi.fn(),
   createWorkspace: vi.fn(),
@@ -44,6 +47,8 @@ const { readError, readOk } = await import("@/data/read");
 const { OrganizationFrame } = await import("./frame");
 
 beforeEach(() => {
+  mfaPolicy.mockReset();
+  mfaPolicy.mockResolvedValue(null);
   getSession.mockResolvedValue({
     user: { name: "Marcus Bell", email: "marcus@acme.example" },
   });
@@ -154,8 +159,8 @@ describe("loaded", () => {
       expect(invite.className).not.toContain("bg-button-primary-bg");
 
       const tabs = within(
-        screen.getByRole("navigation", { name: "Organization" }),
-      ).getAllByRole("link");
+        screen.getByRole("tablist", { name: "Organization" }),
+      ).getAllByRole("tab");
       expect(tabs.map((tab) => tab.textContent)).toEqual([
         "People1",
         "Roles2",
@@ -166,6 +171,8 @@ describe("loaded", () => {
         "API keys",
       ]);
       expect(tabs[0]).toHaveAttribute("aria-current", "page");
+      expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+      expect(tabs[1]).toHaveAttribute("aria-selected", "false");
       expect(tabs[2]).toHaveAttribute("href", "/acme?tab=invitations");
       expect(tabs[5]).toHaveAttribute("href", "/acme?tab=dataPlane");
       expect(screen.getByTestId("tab-body")).toBeInTheDocument();
@@ -178,11 +185,37 @@ describe("loaded", () => {
         members: roster,
         roles: loaded.roles.ok ? loaded.roles.value : null,
         workspaces: loaded.workspaces.ok ? loaded.workspaces.value : null,
+        // No policy row requires nothing, as the MFA gate reads it.
+        twoFactor: { required: false },
+        // The live workspaces the viewer belongs to; the archived one is not.
+        enterable: [workspaceRow().slug],
       });
       expect(calls.members).toHaveLength(1);
       expect(calls.roles).toHaveLength(1);
     },
   );
+});
+
+describe("the two-factor policy", () => {
+  it("reads the organization's policy from the record the MFA gate enforces, and hands it to the tab", async () => {
+    mfaPolicy.mockResolvedValue({
+      mfaRequired: true,
+      mfaGraceHours: 72,
+      updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+    });
+    const { body } = await renderFrame("owner", loaded);
+    expect(mfaPolicy).toHaveBeenCalledWith(
+      "7a000000-0000-4000-8000-0000000000a1",
+    );
+    expect(body).toHaveBeenCalledWith(
+      expect.objectContaining({ twoFactor: { required: true } }),
+    );
+  });
+
+  it("reads no policy for a viewer the frame refuses (negative)", async () => {
+    await renderFrame("member", { workspaces: loaded.workspaces });
+    expect(mfaPolicy).not.toHaveBeenCalled();
+  });
 });
 
 describe("access denied", () => {

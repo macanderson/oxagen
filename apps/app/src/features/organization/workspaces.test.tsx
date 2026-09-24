@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Organization › Workspaces (pages/organization.md): the design's columns in
-// order, the recorded name, slug and namespace, "not recorded" where
-// `list_workspaces` has no value, the Governance chip that states the mode is
+// order, the recorded name, slug and namespace, the main repository,
+// production branch, linked repositories and agent count read inside each
+// workspace the viewer may enter, "not recorded" where nothing was read, the Governance chip that states the mode is
 // not recorded with the namespace beneath it, Open only onto a workspace the
 // viewer can enter, Edit and Archive only on a live workspace, the panel's
 // Create a workspace, and the note. Checked with axe.
@@ -26,8 +27,31 @@ vi.mock("./actions", () => ({
   createWorkspace: vi.fn(),
   editWorkspace: vi.fn(),
 }));
+vi.mock("./workspace-reads", () => ({
+  readRepositoryChoices: vi.fn(),
+  readWorkspaceFacts: vi.fn(),
+}));
 
 const { WorkspacesTab } = await import("./workspaces");
+type Facts = NonNullable<Parameters<typeof WorkspacesTab>[0]["facts"]>;
+
+/** What the tab read inside core-platform: its main, two linked, 64 agents. */
+const CORE_FACTS: Facts = new Map([
+  [
+    "core-platform",
+    {
+      ok: true,
+      value: {
+        repositories: [
+          { role: "main", fullName: "acme/platform", defaultRef: "main" },
+          { role: "linked", fullName: "acme/billing", defaultRef: "main" },
+          { role: "linked", fullName: "acme/infra", defaultRef: "trunk" },
+        ],
+        agents: 64,
+      },
+    },
+  ],
+]);
 
 afterEach(cleanup);
 
@@ -51,10 +75,18 @@ const list: WorkspaceList = {
   ],
 };
 
-async function renderTab(value: WorkspaceList = list) {
+async function renderTab(
+  value: WorkspaceList = list,
+  facts: Facts = CORE_FACTS,
+) {
   const view = render(
     <IntlProvider>
-      <WorkspacesTab org="acme" workspaces={value} />
+      <WorkspacesTab
+        org="acme"
+        workspaces={value}
+        facts={facts}
+        enterable={["core-platform"]}
+      />
     </IntlProvider>,
   );
   await expectNoAxe(view.container);
@@ -95,16 +127,18 @@ describe("Workspaces", () => {
     );
   });
 
-  it("prints what list_workspaces records and says not recorded for the rest", async () => {
+  it("prints the repositories and agents read inside the workspace, and says not recorded for the owner", async () => {
     await renderTab();
     const cells = within(row("wrk_0a1b2c3d4e5f6g7h8j9k0m")).getAllByRole(
       "cell",
     );
     expect(cells[0]).toHaveTextContent("Core platform");
     expect(cells[0]).toHaveTextContent("core-platform");
-    for (const index of [1, 2, 3, 4, 5]) {
-      expect(cells[index]).toHaveTextContent("not recorded");
-    }
+    expect(cells[1]).toHaveTextContent("acme/platform");
+    expect(cells[2]).toHaveTextContent("main");
+    expect(cells[3]).toHaveTextContent("acme/billing, acme/infra");
+    expect(cells[4]).toHaveTextContent("64");
+    expect(cells[5]).toHaveTextContent("not recorded");
     // The governance cell names the issues that would back it.
     expect(cells[6]).toHaveTextContent("mode not recorded (#3907)");
     expect(cells[6]).toHaveTextContent("retention not recorded (#3933)");
@@ -112,6 +146,80 @@ describe("Workspaces", () => {
     expect(
       cells[6]?.querySelector('[data-governance="not-recorded"]'),
     ).toHaveAttribute("data-issue", "3907");
+  });
+
+  it("says not recorded for a workspace the viewer cannot enter, and for an archived one (negative)", async () => {
+    await renderTab();
+    for (const id of [
+      "wrk_1b2c3d4e5f6g7h8j9k0m1n",
+      "wrk_2c3d4e5f6g7h8j9k0m1n2p",
+    ]) {
+      const cells = within(row(id)).getAllByRole("cell");
+      for (const index of [1, 2, 3, 4, 5]) {
+        expect(cells[index]).toHaveTextContent("not recorded");
+      }
+    }
+  });
+
+  it("says a read that failed could not be read, never not recorded or zero (negative)", async () => {
+    await renderTab(
+      list,
+      new Map([
+        [
+          "core-platform",
+          {
+            ok: false,
+            reason: "unavailable",
+            code: "installation_unreachable",
+          },
+        ],
+      ]),
+    );
+    const cells = within(row("wrk_0a1b2c3d4e5f6g7h8j9k0m")).getAllByRole(
+      "cell",
+    );
+    for (const index of [1, 2, 3, 4]) {
+      expect(cells[index]).toHaveTextContent("could not be read");
+      expect(
+        cells[index]?.querySelector("[data-facts-unread]"),
+      ).toHaveAttribute("data-facts-unread", "unavailable");
+    }
+    expect(cells[4]).not.toHaveTextContent("0");
+  });
+
+  it("says none for a workspace with no linked repository", async () => {
+    await renderTab(
+      list,
+      new Map([
+        [
+          "core-platform",
+          {
+            ok: true,
+            value: {
+              repositories: [
+                { role: "main", fullName: "acme/platform", defaultRef: "main" },
+              ],
+              agents: 0,
+            },
+          },
+        ],
+      ]),
+    );
+    const cells = within(row("wrk_0a1b2c3d4e5f6g7h8j9k0m")).getAllByRole(
+      "cell",
+    );
+    expect(cells[3]).toHaveTextContent("none");
+    expect(cells[4]).toHaveTextContent("0");
+  });
+
+  it("filters by the production branch the rows carry", async () => {
+    await renderTab();
+    const branch = screen.getByLabelText("Production branch");
+    expect(
+      within(branch)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Production branch", "main"]);
   });
 
   it("opens a workspace the viewer belongs to, and offers Edit and Archive on a live one", async () => {

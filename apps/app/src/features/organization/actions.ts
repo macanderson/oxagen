@@ -41,6 +41,7 @@ import { GrantableOrgRole } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { slugFromName } from "./workspace-slug";
 
 export type RoleDraft = {
   name: string;
@@ -125,26 +126,6 @@ export type NewWorkspaceDraft = {
   mainRepo: string;
   slug?: string;
 };
-
-/** The longest slug `create_workspace` takes (workspace-slug.ts). */
-const SLUG_MAX = 40;
-
-/**
- * A workspace slug made from its name, in the one spelling the contract takes:
- * lowercase letters and digits in groups joined by single hyphens, at most 40
- * characters. Anything else in the name becomes a hyphen between groups. A
- * name that yields a reserved or too-short slug is refused by the contract,
- * and the refusal is named on the Name field.
- */
-export function slugFromName(name: string): string {
-  return name
-    .normalize("NFKD")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, SLUG_MAX)
-    .replace(/-+$/, "");
-}
 
 /**
  * `owner/name`, as a person types it or pastes it from GitHub: surrounding

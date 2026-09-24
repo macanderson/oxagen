@@ -25,13 +25,19 @@ const nav = vi.hoisted(() => {
     notFound: interrupt("NEXT_NOT_FOUND"),
   };
 });
-const { requestHeaders, getSessionMock, resolveMock, invitationByToken } =
-  vi.hoisted(() => ({
-    requestHeaders: new Headers(),
-    getSessionMock: vi.fn(),
-    resolveMock: vi.fn<() => Promise<ViewerResolution>>(),
-    invitationByToken: vi.fn<() => Promise<InvitationRecord | null>>(),
-  }));
+const {
+  requestHeaders,
+  getSessionMock,
+  resolveMock,
+  invitationByToken,
+  mfaPolicy,
+} = vi.hoisted(() => ({
+  requestHeaders: new Headers(),
+  getSessionMock: vi.fn(),
+  resolveMock: vi.fn<() => Promise<ViewerResolution>>(),
+  invitationByToken: vi.fn<() => Promise<InvitationRecord | null>>(),
+  mfaPolicy: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => nav);
 // requireViewer defers its clock read behind connection(), which needs a request scope.
@@ -44,7 +50,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("./session", () => ({ getSession: getSessionMock }));
 vi.mock("./tenancy-lookups", () => ({
-  systemLookups: { name: "live", invitationByToken },
+  systemLookups: { name: "live", invitationByToken, mfaPolicy },
 }));
 vi.mock("./viewer-resolution", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./viewer-resolution")>()),
@@ -57,6 +63,7 @@ import { systemLookups } from "./tenancy-lookups";
 import {
   InviteeCtx,
   OrgCtx,
+  orgTwoFactorPolicy,
   type OrgFields,
   PretenantCtx,
   readInvitation,
@@ -290,6 +297,33 @@ describe("requireViewer", () => {
       "NEXT_PERMANENT_REDIRECT",
     );
     expect(nav.permanentRedirect).toHaveBeenLastCalledWith("/acme");
+  });
+});
+
+describe("orgTwoFactorPolicy", () => {
+  it("reads the organization's policy row, the one the MFA gate enforces", async () => {
+    mfaPolicy.mockResolvedValue({
+      mfaRequired: true,
+      mfaGraceHours: 72,
+      updatedAt: new Date("2026-09-01T00:00:00Z"),
+    });
+    expect(await orgTwoFactorPolicy(unsafeMint(OrgCtx, orgFields))).toEqual({
+      required: true,
+    });
+    expect(mfaPolicy).toHaveBeenCalledWith(orgFields.orgId);
+  });
+
+  it("requires nothing when the organization has no policy row", async () => {
+    mfaPolicy.mockResolvedValue(null);
+    expect(await orgTwoFactorPolicy(unsafeMint(OrgCtx, orgFields))).toEqual({
+      required: false,
+    });
+  });
+
+  it("refuses a forged context (negative)", async () => {
+    await expect(
+      orgTwoFactorPolicy({ ...orgFields } as unknown as OrgCtx),
+    ).rejects.toThrow(TypeError);
   });
 });
 
