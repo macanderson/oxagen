@@ -6,7 +6,10 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
+import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { kernelRead, captureError } = vi.hoisted(() => ({
@@ -692,5 +695,194 @@ describe("runs.chain", () => {
       status: 502,
     });
     expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A refusal from the kernel seam is the section's answer, passed through
+// untouched: the page renders the denial or the named error, never a mapped
+// empty value in its place.
+describe("a refused read passes through every run read (negative)", () => {
+  const refusals = [
+    { ok: false, reason: "denied", permission: "workspace.read" },
+    readError("frame_store_unreachable", 503),
+  ];
+  const reads: [string, () => Promise<unknown>][] = [
+    ["outcomesSettings", () => runs.outcomesSettings(ctx)],
+    ["work", () => runs.work(ctx, "tse_4f0a")],
+    ["get", () => runs.get(ctx, "tse_4f0a", { framesAfter: null })],
+    ["cost", () => runs.cost(ctx, "tse_4f0a")],
+    ["transcript", () => runs.transcript(ctx, "tse_4f0a", "turns")],
+    ["outputs", () => runs.outputs(ctx, "tse_4f0a")],
+    ["chain", () => runs.chain(ctx, "tse_4f0a")],
+  ];
+  for (const [name, call] of reads)
+    it(`runs.${name}`, async () => {
+      for (const refusal of refusals) {
+        kernelRead.mockResolvedValueOnce(refusal);
+        expect(await call()).toEqual(refusal);
+      }
+      expect(captureError).not.toHaveBeenCalled();
+    });
+});
+
+describe("runs.outcomesSettings", () => {
+  const policy = {
+    customerEnabled: true,
+    platformDisabled: true,
+    platformDisabledReason: "outcome scoring is paused platform-wide",
+    effectiveEnabled: false,
+  };
+
+  it("reads get_run_outcomes_settings and carries the policy as recorded", async () => {
+    kernelRead.mockResolvedValue(readOk(policy));
+    expect(await runs.outcomesSettings(ctx)).toEqual(readOk(policy));
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runOutcomesSettingsGet,
+      input: {},
+      page: "run",
+    });
+  });
+
+  it("answers record_unmappable and reports once for a policy the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(readOk({ ...policy, effectiveEnabled: "no" }));
+    expect(await runs.outcomesSettings(ctx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+    expect(captureError.mock.calls[0]?.[0]).toMatchObject({
+      context: "runs.outcomesSettings record_unmappable",
+    });
+  });
+});
+
+describe("runs.work", () => {
+  const repository = {
+    host: "github.com",
+    owner: "acme",
+    name: "core",
+    url: "https://github.com/acme/core",
+    connected: true,
+  };
+  const work = {
+    runId: "tse_4f0a",
+    machine: { name: "tycho" },
+    checkouts: [
+      {
+        id: "chk_1",
+        path: "/work/core",
+        branch: "release/3.2",
+        headSha: "abc123",
+        remoteDigest: null,
+        repository,
+        firstSeq: "1",
+        lastSeq: "9",
+      },
+    ],
+    diffs: [
+      {
+        checkoutId: "chk_1",
+        seq: "7",
+        baseSha: "abc000",
+        headSha: "abc123",
+        digest: "sha256:d1",
+        bodyAvailable: false,
+        completeness: "not_retained",
+        limitations: [],
+        observedAt: "2026-09-15T08:57:00.000Z",
+      },
+    ],
+    pullRequests: [
+      {
+        repository,
+        number: 482,
+        url: "https://github.com/acme/core/pull/482",
+        title: "Cut the 3.2 release",
+        state: "open",
+        headSha: "abc123",
+        headRef: "release/3.2",
+        association: "recorded",
+        checkoutIds: ["chk_1"],
+        observedAt: "2026-09-15T08:58:00.000Z",
+        current: true,
+        ci: null,
+        diff: null,
+      },
+    ],
+    complete: true,
+    warnings: [],
+  };
+
+  it("reads get_run_work and renames the wire's checkout ids to the view's refs", async () => {
+    kernelRead.mockResolvedValue(readOk(work));
+    const read = await runs.work(ctx, "tse_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.checkouts[0]).toMatchObject({
+      ref: "chk_1",
+      path: "/work/core",
+    });
+    expect(read.value.checkouts[0]).not.toHaveProperty("id");
+    expect(read.value.diffs[0]).toMatchObject({ checkoutRef: "chk_1" });
+    expect(read.value.diffs[0]).not.toHaveProperty("checkoutId");
+    expect(read.value.pullRequests[0]).toMatchObject({
+      number: 482,
+      checkoutRefs: ["chk_1"],
+    });
+    expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runWorkGet,
+      input: { runId: "tse_4f0a" },
+      page: "run",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("answers record_unmappable and reports once for a record the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(readOk({ ...work, runId: "not a run id" }));
+    expect(await runs.work(ctx, "tse_4f0a")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runs.outputs", () => {
+  const node = {
+    seq: "7",
+    kind: "file",
+    name: "packages/core/package.json",
+    nameIsLocator: false,
+    where: "/work/core",
+    state: "written",
+    note: null,
+    stat: { added: 1, removed: 1 },
+    observedAt: "2026-09-15T08:57:00.000Z",
+    digestBefore: "sha256:b",
+    digestAfter: "sha256:a",
+  };
+  const outputs = {
+    source: "wrapped",
+    nodes: [node],
+    tally: { artifacts: 1, reads: 0, gates: 0 },
+    complete: false,
+  };
+
+  it("reads get_run_outputs and maps the spine, keeping a capped read marked incomplete", async () => {
+    kernelRead.mockResolvedValue(readOk(outputs));
+    expect(await runs.outputs(ctx, "tse_4f0a")).toEqual(readOk(outputs));
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runOutputsGet,
+      input: { runId: "tse_4f0a" },
+      page: "run",
+    });
+  });
+
+  it("answers record_unmappable and reports once for a node the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ ...outputs, nodes: [{ ...node, name: "" }] }),
+    );
+    expect(await runs.outputs(ctx, "tse_4f0a")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
   });
 });
