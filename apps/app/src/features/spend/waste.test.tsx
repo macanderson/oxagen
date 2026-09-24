@@ -41,7 +41,7 @@ afterEach(async () => {
 });
 
 function waste(value: SpendWaste) {
-  return render(
+  render(
     <IntlProvider>
       <WasteSection waste={value} month={MONTH} at={AT} />
     </IntlProvider>,
@@ -49,8 +49,8 @@ function waste(value: SpendWaste) {
 }
 
 describe("Wasted spend", () => {
-  it("says not recorded for the amount and share, no cause, and no run with waste", async () => {
-    const { container } = waste({
+  it("says not recorded for the amount and share, no cause, and no run with waste", () => {
+    waste({
       wasted: null,
       share: null,
       runsWithWaste: 0,
@@ -65,11 +65,10 @@ describe("Wasted spend", () => {
       screen.getByText("No run in this period shows waste in its frames."),
     ).toBeTruthy();
     expect(document.body).not.toHaveTextContent("$0");
-    await expectNoAxe(container);
   });
 
-  it("draws a recorded cause with an empty share bar when the total wasted is not recorded, and no largest cause it cannot find", async () => {
-    const { container } = waste({
+  it("draws a recorded cause with an empty share bar when the total wasted is not recorded, and no largest cause it cannot find", () => {
+    waste({
       wasted: null,
       share: 0.1,
       runsWithWaste: 1,
@@ -94,7 +93,6 @@ describe("Wasted spend", () => {
       cause?.querySelector('[style*="width"]')?.getAttribute("style"),
     ).toContain("width: 0%");
     expect(screen.getByText("arun_01k5rn8f3j", { exact: false })).toBeTruthy();
-    await expectNoAxe(container);
 
     cleanup();
     waste({

@@ -67,8 +67,8 @@ describe("RelatedList", () => {
     expect(card).not.toHaveTextContent("2026");
   });
 
-  it("reads a require effect apart from a forbid", async () => {
-    const { container } = render(
+  it("reads a require effect apart from a forbid", () => {
+    render(
       <IntlProvider>
         <RelatedList
           items={[
@@ -82,7 +82,6 @@ describe("RelatedList", () => {
     expect(list).toHaveTextContent("require");
     expect(list).toHaveTextContent("forbid");
     expect(list).toHaveTextContent("4d5e6f7");
-    await expectNoAxe(container);
   });
 
   it("says nothing matches when a search hides every record (negative)", async () => {

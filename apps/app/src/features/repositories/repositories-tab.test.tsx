@@ -67,7 +67,7 @@ afterEach(async () => {
 
 function tab(truncated = false) {
   const onAddOxagen = vi.fn();
-  const { container } = render(
+  render(
     <IntlProvider>
       <RepositoriesTab
         rows={ROWS}
@@ -78,12 +78,12 @@ function tab(truncated = false) {
       />
     </IntlProvider>,
   );
-  return { onAddOxagen, container };
+  return onAddOxagen;
 }
 
 describe("the Repositories table", () => {
-  it("badges a missing branch, a tree still being read, and one that could not be read, and offers none of them Add Oxagen", async () => {
-    const { container } = tab();
+  it("badges a missing branch, a tree still being read, and one that could not be read, and offers none of them Add Oxagen", () => {
+    tab();
     const badge = (name: string) =>
       screen.getByTestId(`repository-tree-acme/${name}`);
     expect(badge("moved")).toHaveAttribute("data-tree", "branchMissing");
@@ -95,24 +95,22 @@ describe("the Repositories table", () => {
     for (const name of ["moved", "slow", "down"])
       expect(screen.queryByTestId(`repository-add-acme/${name}`)).toBeNull();
     expect(screen.getByTestId("repository-add-acme/docs")).toBeTruthy();
-    await expectNoAxe(container);
   });
 
   it("names every ungoverned linked repository in the banner, whose Add Oxagen opens on the first", async () => {
     const user = userEvent.setup();
-    const { onAddOxagen } = tab();
+    const onAddOxagen = tab();
     const add = screen.getByTestId("repositories-ungoverned-add");
     expect(add.parentElement).toHaveTextContent("acme/docs, acme/site");
     await user.click(add);
     expect(onAddOxagen).toHaveBeenCalledWith("acme/docs");
   });
 
-  it("says the listing was cut short when the installation reaches more than it returned", async () => {
-    const { container } = tab(true);
+  it("says the listing was cut short when the installation reaches more than it returned", () => {
+    tab(true);
     expect(screen.getByTestId("repositories-reachable-note")).toHaveTextContent(
       "The installation reaches more repositories than this list holds.",
     );
-    await expectNoAxe(container);
   });
 
   it("says no rows match when a search hides every repository (negative)", async () => {

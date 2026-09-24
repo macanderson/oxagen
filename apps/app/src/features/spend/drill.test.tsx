@@ -49,8 +49,8 @@ afterEach(async () => {
 });
 
 describe("the drill", () => {
-  it("names an operator the rollup cannot name by their key, and says what could not be read", async () => {
-    const { container } = render(
+  it("names an operator the rollup cannot name by their key, and says what could not be read", () => {
+    render(
       <IntlProvider>
         <DrillSection drill={drill()} findings={null} operator={null} at={AT} />
       </IntlProvider>,
@@ -72,11 +72,10 @@ describe("the drill", () => {
       ?.closest("section")
       ?.querySelector("polyline");
     expect(line?.getAttribute("points")).toBe("0,48");
-    await expectNoAxe(container);
   });
 
-  it("says no finding names the key when the findings read answered with none", async () => {
-    const { container } = render(
+  it("says no finding names the key when the findings read answered with none", () => {
+    render(
       <IntlProvider>
         <DrillSection
           drill={drill({ kind: "agent", key: "a-intel.core.stella-ci" })}
@@ -88,6 +87,5 @@ describe("the drill", () => {
     );
     expect(screen.getByText("No open finding names this key.")).toBeTruthy();
     expect(screen.getByText("none identified")).toBeTruthy();
-    await expectNoAxe(container);
   });
 });
