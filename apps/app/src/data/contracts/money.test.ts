@@ -4,6 +4,7 @@
 // shifting.
 import { describe, expect, it } from "vitest";
 import {
+  compareIntegers,
   compareMicros,
   Cost,
   isCurrencyCode,
@@ -77,6 +78,19 @@ describe("ratioOfMicros", () => {
     expect(() => ratioOfMicros(usd("1.5"), usd("3000000"))).toThrow(
       "micros must be an integer string",
     );
+  });
+});
+
+describe("compareIntegers", () => {
+  it("orders bare integer strings exactly, past the range a float holds", () => {
+    expect(compareIntegers("5", "12")).toBe(-1);
+    expect(compareIntegers("12", "5")).toBe(1);
+    expect(compareIntegers("7", "7")).toBe(0);
+    expect(compareIntegers("9007199254740993", "9007199254740992")).toBe(1);
+  });
+
+  it("refuses a string that is not an integer (negative)", () => {
+    expect(() => compareIntegers("1.5", "2")).toThrow();
   });
 });
 

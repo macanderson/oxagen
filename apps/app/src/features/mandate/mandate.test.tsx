@@ -8,7 +8,6 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AgentDetail } from "@/data/contracts/agents";
 import type { OrgRole } from "@/data/contracts/common";
 import type { MemberList } from "@/data/contracts/org";
 import { readError, readOk } from "@/data/read";
@@ -21,6 +20,7 @@ import {
   mandateDraw,
   mandateRow,
 } from "@/test/mandate-views";
+import { agentDetail } from "../agents/agents.builders";
 import { mandateSource } from "./mandate.builders";
 
 vi.mock("next/link", () => ({
@@ -73,7 +73,7 @@ const members: MemberList = {
   invitations: [],
 };
 
-const agent = {
+const agent = agentDetail({
   identity: {
     id: "agt_invoicebot",
     slug: "invoice-bot",
@@ -83,7 +83,6 @@ const agent = {
     harness: "claude-code",
     principalId: null,
     operatorId: null,
-    status: "active",
     registeredAt: "2026-09-01T00:00:00.000Z",
     firstFrameAt: null,
     costCenter: null,
@@ -92,7 +91,7 @@ const agent = {
   roles: [],
   hosts: [],
   definition: null,
-} as unknown as AgentDetail;
+});
 
 type DetailRead = Parameters<typeof mandateSource>[0];
 type Names = Parameters<typeof mandateSource>[1];

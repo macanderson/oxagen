@@ -135,8 +135,17 @@ export function ratioOfMicros(part: Money, whole: Money): number | null {
  */
 export function compareMicros(a: Money, b: Money): number {
   if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
-  const x = toBigInt(a.micros);
-  const y = toBigInt(b.micros);
+  return compareIntegers(a.micros, b.micros);
+}
+
+/**
+ * Orders two bare integer strings (micros, or a count's whole units) exactly,
+ * through BigInt: negative when `a` is smaller, positive when larger, zero
+ * when equal. The pair to `compareMicros` for figures that carry no currency.
+ */
+export function compareIntegers(a: string, b: string): number {
+  const x = toBigInt(a);
+  const y = toBigInt(b);
   return x === y ? 0 : x < y ? -1 : 1;
 }
 

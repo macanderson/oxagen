@@ -17,6 +17,7 @@ import type {
   MandateRow,
   MeasureValue,
 } from "@/data/contracts/mandates";
+import { compareIntegers } from "@/data/contracts/money";
 import {
   endOfZonedDay,
   startOfNextZonedDay,
@@ -195,11 +196,9 @@ export function nextSort(
   return was.dir === 1 ? { column, dir: -1 } : null;
 }
 
-/** A draw's amount as an integer in its smallest unit: micros for money, the count itself otherwise. */
-function amountOf(row: MandateDraw): bigint {
-  return BigInt(
-    row.value.kind === "money" ? row.value.money.micros : row.value.count,
-  );
+/** A draw's amount as an integer string in its smallest unit: micros for money, the count itself otherwise. */
+function amountOf(row: MandateDraw): string {
+  return row.value.kind === "money" ? row.value.money.micros : row.value.count;
 }
 
 const STATE_ORDER: Record<MandateMovement, number> = {
@@ -224,9 +223,7 @@ function compareOn(
       return Date.parse(a.at) - Date.parse(b.at);
     case "amount": {
       if (a.measure !== b.measure) return a.measure.localeCompare(b.measure);
-      const x = amountOf(a);
-      const y = amountOf(b);
-      return x === y ? 0 : x < y ? -1 : 1;
+      return compareIntegers(amountOf(a), amountOf(b));
     }
     case "state":
       return STATE_ORDER[a.state] - STATE_ORDER[b.state];

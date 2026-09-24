@@ -218,9 +218,13 @@ describe("changeMandateLimits", () => {
       ...untouched,
       validTo: "2027-03-31",
     });
-    const input = written() as { validTo: string; limitChanges?: unknown };
-    expect(input.limitChanges).toBeUndefined();
-    expect(Date.parse(input.validTo)).toBe(
+    const input = written();
+    const field = (key: string): unknown =>
+      typeof input === "object" && input !== null
+        ? Reflect.get(input, key)
+        : undefined;
+    expect(field("limitChanges")).toBeUndefined();
+    expect(Date.parse(String(field("validTo")))).toBe(
       Date.parse("2027-03-31T23:59:59.999Z"),
     );
   });
