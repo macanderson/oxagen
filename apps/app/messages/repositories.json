@@ -328,7 +328,7 @@
         "context_record": "context record"
       },
       "kindPaths": {
-        "context_record": ".oxagen/rules/<lineage>.toml"
+        "context_record": ".oxagen/rules/'<lineage>'.toml"
       },
       "states": {
         "pr_open": "open",
