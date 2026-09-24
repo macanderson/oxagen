@@ -73,6 +73,7 @@ import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get"
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
+import { runIssueProvidersGet } from "@oxagen/oxagen/contracts/run.issue.providers.get";
 import { REQUIRED_GITHUB_APP_ENV } from "./repository.main.get";
 import { GITHUB_TOKEN_DECRYPT_ENV } from "./repository.github-user-installations";
 
@@ -177,6 +178,17 @@ const FLOW: readonly FlowEntry[] = [
     handlerFile: "workspace.create.ts",
     reads: GITHUB_TOKEN_DECRYPT_ENV,
     via: "resolveWorkspaceGithubUserToken, via githubUserInstallationsDeps",
+  },
+  // `get_run_issue_providers` returns the GitHub connect, install and manage
+  // URLs beside the Linear connections, minted by the same `envGithubUrls` as
+  // `get_main_repository`. The run-outcomes settings read it over the api
+  // (`apps/api/src/routes/v1/run.outcomes.settings.ts`) and in the app
+  // (`apps/app/src/features/run-outcomes/provider-actions.ts`).
+  {
+    capability: runIssueProvidersGet,
+    handlerFile: "run.issue.providers.get.ts",
+    reads: REQUIRED_GITHUB_APP_ENV,
+    via: "envGithubUrls",
   },
 ];
 
