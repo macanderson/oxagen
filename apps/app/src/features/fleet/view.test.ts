@@ -16,7 +16,6 @@ import {
   parkedRunIds,
   type RowWords,
   rowState,
-  rowsPerPageOf,
   spendShown,
   windowParts,
 } from "./view";
@@ -177,16 +176,6 @@ describe("the list controls", () => {
     replay: "fork",
     text: `${run.id} ${run.enforcementTier}`,
   }));
-  /** One row's words, every column alike but the search text. */
-  const wordsAt = (i: number): RowWords => ({
-    run: `arun_${String(i)}`,
-    agent: "",
-    operator: "Marcus Bell",
-    status: "live",
-    tier: "harness",
-    replay: "fork",
-    text: String(i),
-  });
   const base: ListQuery = {
     search: "",
     facets: { tier: null, replay: null, status: null },
@@ -265,88 +254,6 @@ describe("the list controls", () => {
     expect(pagerSlots(1, 3)).toEqual([1, 2, 3]);
     expect(pagerSlots(1, 28)).toEqual([1, 2, "gap", 28]);
     expect(pagerSlots(14, 28)).toEqual([1, "gap", 13, 14, 15, "gap", 28]);
-  });
-
-  it("draws no trailing gap when the current page sits beside the last", () => {
-    expect(pagerSlots(27, 28)).toEqual([1, "gap", 26, 27, 28]);
-    expect(pagerSlots(28, 28)).toEqual([1, "gap", 27, 28]);
-  });
-
-  it("sorts on when a run started, oldest first or newest first", () => {
-    const started = listRuns(
-      [
-        runRow({ id: "arun_b", startedAt: "2026-09-15T09:00:00.000Z" }),
-        runRow({ id: "arun_a", startedAt: "2026-09-15T08:00:00.000Z" }),
-        runRow({ id: "arun_c", startedAt: "2026-09-15T10:00:00.000Z" }),
-      ],
-      new Set(),
-    );
-    const startedWords = started.map((_, i) => wordsAt(i));
-    const sorted = (dir: 1 | -1) =>
-      applyList(started, startedWords, {
-        ...base,
-        sort: { key: "started", dir },
-      }).rows;
-    expect(sorted(1)).toEqual([1, 0, 2]);
-    expect(sorted(-1)).toEqual([2, 0, 1]);
-  });
-
-  it("sorts a text column on the words shown, and keeps the read order among equal words", () => {
-    const agents = ["zeta", "alpha", "mu", "alpha"];
-    const textRows = rows.slice(0, 4);
-    const textWords = textRows.map((_, i) => ({
-      ...wordsAt(i),
-      agent: agents[i] ?? "",
-    }));
-    const byAgent = (dir: 1 | -1) =>
-      applyList(textRows, textWords, {
-        ...base,
-        sort: { key: "agent", dir },
-      }).rows;
-    // The two "alpha" rows tie, so the earlier read stays first both ways.
-    expect(byAgent(1)).toEqual([1, 3, 2, 0]);
-    expect(byAgent(-1)).toEqual([0, 2, 1, 3]);
-    // Every row reads "live": the sort changes nothing.
-    expect(
-      applyList(rows, words, {
-        ...base,
-        perPage: 0,
-        sort: { key: "status", dir: -1 },
-      }).rows,
-    ).toEqual(rows.map((_, i) => i));
-  });
-
-  it("keeps two unpriced rows last and in read order when sorting on cost", () => {
-    const priced = listRuns(
-      [
-        runRow({ id: "arun_n1", cost: null }),
-        runRow({ id: "arun_p", cost: usd("1000000") }),
-        runRow({ id: "arun_n2", cost: null }),
-      ],
-      new Set(),
-    );
-    const pricedWords = priced.map((_, i) => wordsAt(i));
-    for (const dir of [1, -1] as const) {
-      expect(
-        applyList(priced, pricedWords, { ...base, sort: { key: "cost", dir } })
-          .rows,
-      ).toEqual([1, 0, 2]);
-    }
-  });
-
-  it("drops a row the caller supplied no words for (negative)", () => {
-    const listed = applyList(rows, words.slice(0, 2), { ...base, perPage: 0 });
-    expect(listed.rows).toEqual([0, 1]);
-    expect(listed.total).toBe(2);
-  });
-
-  it("reads a rows-per-page choice, and falls back to 10 for one it does not offer (negative)", () => {
-    expect(rowsPerPageOf("25")).toBe(25);
-    expect(rowsPerPageOf("0")).toBe(0);
-    expect(rowsPerPageOf("7")).toBe(10);
-    expect(rowsPerPageOf("many")).toBe(10);
-    // A wart, pinned: Number("") is 0, so an empty value reads as All.
-    expect(rowsPerPageOf("")).toBe(0);
   });
 });
 

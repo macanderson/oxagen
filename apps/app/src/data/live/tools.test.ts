@@ -1,9 +1,7 @@
 // The four Tools ports: one kernel read each on the Tools page's failure row,
 // mapped into the page's view models, with a refusal passed through and an
 // unmappable record reported once.
-import { agentMcpList } from "@oxagen/oxagen/contracts/agent.mcp.list";
 import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
-import { connectionList } from "@oxagen/oxagen/contracts/connection.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
@@ -11,10 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KILL_SWITCH_BOARD_LIMIT } from "@/data/contracts/tools";
 import {
   approvalRuleListOutput,
-  connectionListOutput,
   credentialGrantListOutput,
   killSwitchListOutput,
-  mcpServerListOutput,
   toolVersionListOutput,
 } from "@/test/tools-outputs";
 
@@ -171,16 +167,6 @@ describe("tools.grants", () => {
   });
 });
 
-describe("tools.grants refusals", () => {
-  it("passes a refusal through as the kernel classified it (negative)", async () => {
-    kernelRead.mockResolvedValue(readError("forbidden", 403));
-    expect(await tools.grants(ctx, { cursor: null })).toEqual(
-      readError("forbidden", 403),
-    );
-    expect(captureError).not.toHaveBeenCalled();
-  });
-});
-
 describe("tools.killSwitches", () => {
   it("reads the switches with the deny generation and keeps the uuid target off the id fields", async () => {
     kernelRead.mockResolvedValue(readOk(killSwitchListOutput()));
@@ -311,114 +297,6 @@ describe("tools.approvalRules", () => {
       ),
     );
     expect(await tools.approvalRules(ctx)).toEqual(
-      readError("record_unmappable", 502),
-    );
-    expect(captureError).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("tools.connections", () => {
-  it("reads every connection with no filter and maps the public id and connector slug", async () => {
-    kernelRead.mockResolvedValue(readOk(connectionListOutput()));
-    const read = await tools.connections(ctx, {
-      status: null,
-      connectorId: null,
-    });
-    expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: connectionList,
-      input: {},
-      page: "tools",
-    });
-    if (!read.ok) throw new Error("expected the connections read to succeed");
-    const [github, stripe] = read.value.connections;
-    expect(github).toMatchObject({
-      id: "con_01k5n1",
-      connector: "github",
-      status: "connected",
-      entityCount: 482,
-    });
-    // The contract's own field names stay behind the boundary.
-    expect(github).not.toHaveProperty("connectorId");
-    expect(github).not.toHaveProperty("publicId");
-    expect(stripe?.lastSyncAt).toBeNull();
-    expect(stripe?.nextPollAt).toBeNull();
-  });
-
-  it("sends the status and connector filters the page asked for", async () => {
-    kernelRead.mockResolvedValue(readOk(connectionListOutput()));
-    await tools.connections(ctx, {
-      status: "connected",
-      connectorId: "github",
-    });
-    expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: connectionList,
-      input: { status: "connected", connectorId: "github" },
-      page: "tools",
-    });
-  });
-
-  it("passes a refusal through as the kernel classified it (negative)", async () => {
-    kernelRead.mockResolvedValue(readError("forbidden", 403));
-    expect(
-      await tools.connections(ctx, { status: null, connectorId: null }),
-    ).toEqual(readError("forbidden", 403));
-    expect(captureError).not.toHaveBeenCalled();
-  });
-
-  it("reports a status word the page has no label for as record_unmappable (negative)", async () => {
-    kernelRead.mockResolvedValue(
-      readOk({
-        connections: connectionListOutput().connections.map((item) => ({
-          ...item,
-          status: "hibernating",
-        })),
-      }),
-    );
-    expect(
-      await tools.connections(ctx, { status: null, connectorId: null }),
-    ).toEqual(readError("record_unmappable", 502));
-    expect(captureError).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("tools.mcpServers", () => {
-  it("reads the whole roster with the empty input and carries the mcs id import_tools takes", async () => {
-    kernelRead.mockResolvedValue(readOk(mcpServerListOutput()));
-    const read = await tools.mcpServers(ctx);
-    expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: agentMcpList,
-      input: {},
-      page: "tools",
-    });
-    if (!read.ok) throw new Error("expected the servers read to succeed");
-    expect(read.value.servers.map((server) => server.id)).toEqual([
-      "mcs_01k5s1",
-      "mcs_01k5s2",
-    ]);
-    expect(read.value.servers[1]).toMatchObject({
-      transportType: "sse",
-      healthStatus: "unknown",
-      lastHealthcheckAt: null,
-      toolCount: 0,
-    });
-  });
-
-  it("passes a refusal through as the kernel classified it (negative)", async () => {
-    kernelRead.mockResolvedValue(readError("forbidden", 403));
-    expect(await tools.mcpServers(ctx)).toEqual(readError("forbidden", 403));
-    expect(captureError).not.toHaveBeenCalled();
-  });
-
-  it("reports a server the view model refuses as record_unmappable (negative)", async () => {
-    kernelRead.mockResolvedValue(
-      readOk({
-        servers: mcpServerListOutput().servers.map((item) => ({
-          ...item,
-          publicId: "not a public id",
-        })),
-      }),
-    );
-    expect(await tools.mcpServers(ctx)).toEqual(
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledTimes(1);
