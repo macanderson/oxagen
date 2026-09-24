@@ -33,6 +33,7 @@ import type {
   WorkspaceRepository,
 } from "@/data/contracts/repository";
 import { parseGitHubUrl } from "@/shared/github-url";
+import { parseGitLabUrl } from "@/shared/gitlab-url";
 import { routes, sanitizeNext } from "@/shared/safe-path";
 import {
   buttonSecondary,
@@ -42,10 +43,11 @@ import {
   panel,
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
-import { GitHubLink, useNavigate } from "@/ui/navigation";
+import { GitHubLink, GitLabLink, useNavigate } from "@/ui/navigation";
 import {
   attachGithubInstallation,
   bindWorkspaceRepository,
+  connectGitLabProject,
   listGithubInstallations,
   listInstallationRepositories,
   readWorkspaceRepository,
@@ -335,6 +337,7 @@ function MainRepositoryPanel({
               than inside it, so the repository it still binds stays legible.
             */}
             {settings.value.repository.connectionLive ||
+            settings.value.repository.provider === "gitlab" ||
             settings.value.github.connected ? null : (
               <div className="mt-4">
                 <ConnectPanel
@@ -392,6 +395,16 @@ function MainRepositoryPanel({
             onAttached={bound}
           />
         )}
+        {/*
+          The other host (#3762). Offered whenever nothing is bound, beside the
+          GitHub doors rather than behind them: a workspace that keeps its code
+          on gitlab.com never needs the GitHub App.
+        */}
+        {settings.kind === "ready" && settings.value.repository === null ? (
+          <div className="mt-4">
+            <GitLabPanel org={org} ws={ws} onBound={bound} />
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -720,7 +733,9 @@ function BoundRepositoryPanel({
   onRepaired: () => void;
 }) {
   const t = useTranslations("repositories.mainRepository");
-  const href = parseGitHubUrl(repository.htmlUrl);
+  const onGitLab = repository.provider === "gitlab";
+  const href = onGitLab ? null : parseGitHubUrl(repository.htmlUrl);
+  const gitlabHref = onGitLab ? parseGitLabUrl(repository.htmlUrl) : null;
   return (
     <div data-testid="workspace-repository-bound" className={`${panel} p-4`}>
       <p className={eyebrow}>{t("bound.heading")}</p>
@@ -741,6 +756,15 @@ function BoundRepositoryPanel({
         >
           {t("bound.open")}
         </GitHubLink>
+      )}
+      {gitlabHref === null ? null : (
+        <GitLabLink
+          to={gitlabHref}
+          data-testid="workspace-repository-open"
+          className={`mt-2 inline-block ${linkText}`}
+        >
+          {t("gitlab.open")}
+        </GitLabLink>
       )}
       {repository.connectionLive ? (
         <>
@@ -764,8 +788,22 @@ function BoundRepositoryPanel({
             repository={repository}
             onRepaired={onRepaired}
           />
-          <ManageLink manageUrl={manageUrl} />
+          {onGitLab ? null : <ManageLink manageUrl={manageUrl} />}
         </>
+      ) : onGitLab ? (
+        // The token was revoked or the connection deleted. The repair is a
+        // new token for the same project; which project is main never moves.
+        <div className="mt-3" data-testid="workspace-repository-retired">
+          <FormAlert>{t("bound.retired")}</FormAlert>
+          <div className="mt-3">
+            <GitLabPanel
+              org={org}
+              ws={ws}
+              projectPath={repository.fullName}
+              onBound={onRepaired}
+            />
+          </div>
+        </div>
       ) : (
         <RetiredConnection
           org={org}
@@ -913,10 +951,13 @@ function ReapproveDefaultRef({
       // The SAME owner and name the binding already carries. A re-approval of
       // this repository's current default branch, never a choice of another
       // repository — the bind refuses that with `main_repo_bound` regardless.
-      const result = await bindWorkspaceRepository(org, ws, {
-        owner: repository.owner,
-        name: repository.name,
-      });
+      const result = await bindWorkspaceRepository(
+        org,
+        ws,
+        repository.provider === "gitlab"
+          ? { provider: "gitlab", projectPath: repository.fullName }
+          : { owner: repository.owner, name: repository.name },
+      );
       if (result.ok) {
         onRepaired();
         navigate.refresh();
@@ -946,6 +987,142 @@ function ReapproveDefaultRef({
           label={t("bound.reapprove")}
           pendingLabel={t("bound.reapproving")}
         />
+      </form>
+    </div>
+  );
+}
+
+/**
+ * Connect a gitlab.com project with a project access token and bind it as the
+ * main repository (#3762). The same form repairs a GitLab binding whose token
+ * was revoked: the path is fixed to the bound project and a new token rotates
+ * the stored one.
+ *
+ * The token field is a password field with autocomplete off, and the value is
+ * cleared once the write settles either way, so the token does not sit in the
+ * page after it has been sent.
+ */
+function GitLabPanel({
+  org,
+  ws,
+  projectPath: fixedPath,
+  onBound,
+}: {
+  org: string;
+  ws: string;
+  /** The bound project, for a repair; the path is then not editable. */
+  projectPath?: string;
+  onBound: () => void;
+}) {
+  const t = useTranslations("repositories.mainRepository");
+  const failureText = useRepositoriesFailure();
+  const navigate = useNavigate();
+  const pathId = useId();
+  const tokenId = useId();
+  const [path, setPath] = useState(fixedPath ?? "");
+  const [token, setToken] = useState("");
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function connect(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setFailure(null);
+    setNotice(null);
+    try {
+      const result = await connectGitLabProject(org, ws, {
+        projectPath: path.trim(),
+        token: token.trim(),
+      });
+      if (result.ok) {
+        if (result.value.webhook === "refused")
+          setNotice(t("gitlab.webhookRefused"));
+        onBound();
+        navigate.refresh();
+      } else setFailure(failureText(result));
+    } catch {
+      setFailure(failureText(UNANSWERED));
+    } finally {
+      setToken("");
+      setPending(false);
+    }
+  }
+
+  return (
+    <div data-testid="workspace-gitlab-connect" className={`${panel} p-4`}>
+      <h4 className={sectionTitle}>
+        {fixedPath === undefined
+          ? t("gitlab.heading")
+          : t("gitlab.reconnectHeading")}
+      </h4>
+      <p className={`mt-1.5 ${prose}`}>
+        {fixedPath === undefined
+          ? t("gitlab.body")
+          : t("gitlab.reconnectBody", { project: fixedPath })}
+      </p>
+      <form noValidate className="mt-3" onSubmit={(e) => void connect(e)}>
+        {failure === null ? null : (
+          <div className="mb-3">
+            <FormAlert testId="workspace-gitlab-failure">{failure}</FormAlert>
+          </div>
+        )}
+        {notice === null ? null : (
+          <p
+            role="status"
+            data-testid="workspace-gitlab-notice"
+            className={`mb-3 ${prose}`}
+          >
+            {notice}
+          </p>
+        )}
+        <label htmlFor={pathId} className="text-sm font-medium text-foreground">
+          {t("gitlab.pathLabel")}
+        </label>
+        <input
+          id={pathId}
+          data-testid="workspace-gitlab-path"
+          className={`mt-1 ${inputBase}`}
+          value={path}
+          readOnly={fixedPath !== undefined}
+          placeholder={t("gitlab.pathHint")}
+          autoComplete="off"
+          spellCheck={false}
+          required
+          onChange={(e) => {
+            setPath(e.target.value);
+          }}
+        />
+        <label
+          htmlFor={tokenId}
+          className="mt-3 block text-sm font-medium text-foreground"
+        >
+          {t("gitlab.tokenLabel")}
+        </label>
+        <input
+          id={tokenId}
+          data-testid="workspace-gitlab-token"
+          className={`mt-1 ${inputBase}`}
+          type="password"
+          value={token}
+          autoComplete="off"
+          spellCheck={false}
+          required
+          onChange={(e) => {
+            setToken(e.target.value);
+          }}
+        />
+        <p className={`mt-1.5 text-xs ${prose}`}>{t("gitlab.selfManaged")}</p>
+        <div className="mt-3">
+          <SubmitButton
+            pending={pending}
+            fullWidth={false}
+            secondary
+            label={t("gitlab.submit")}
+            pendingLabel={t("gitlab.submitting")}
+          />
+        </div>
       </form>
     </div>
   );

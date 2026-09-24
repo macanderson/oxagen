@@ -139,6 +139,7 @@ describe("get_steering_freshness handler", () => {
       headCommits: ["abc1234", "def5678"],
       publishedAt: "2026-09-01T10:00:00.000Z",
       repository: "acme/platform",
+      provider: "github",
       defaultBranch: "main",
       policy: { autoSync: false, blockStaleRuns: true },
     });
@@ -166,6 +167,25 @@ describe("get_steering_freshness handler", () => {
     expect(out.policy.blockStaleRuns).toBe(true);
   });
 
+  it("names a GitLab main project and its host, so the CLI matches its gitlab.com remote (#3762)", async () => {
+    stubReads(null);
+    const handler = createGetSteeringFreshnessHandler({
+      store: store as never,
+      readConnection: vi.fn(async () => ({
+        provider: "gitlab" as const,
+        source: "binding" as const,
+        owner: "acme/platform",
+        repo: "rules",
+        approvedFullName: "acme/platform/rules",
+        approvedDefaultRef: "main",
+      })) as never,
+    });
+    const out = await handler({}, CTX);
+    expect(out.repository).toBe("acme/platform/rules");
+    expect(out.provider).toBe("gitlab");
+    expect(out.defaultBranch).toBe("main");
+  });
+
   it("reports nulls, not guesses, when no repository is bound", async () => {
     stubReads(null);
     const handler = createGetSteeringFreshnessHandler({
@@ -179,6 +199,7 @@ describe("get_steering_freshness handler", () => {
     });
     const out = await handler({}, CTX);
     expect(out.repository).toBeNull();
+    expect(out.provider).toBeNull();
     expect(out.defaultBranch).toBeNull();
     expect(out.headCommit).toBeNull();
     expect(out.headCommits).toEqual([]);

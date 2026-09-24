@@ -2,7 +2,8 @@
 // spec §10.3 step 1-2): a branch `context/<lineage>` from the production
 // branch of the workspace's repository, the single record file under
 // `.oxagen/rules/`, the PR with its body, then the six §10.3 checks one at a
-// time, each mirrored as a GitHub check run. Calling it again on a proposal
+// time, each mirrored as a GitHub check run or a GitLab commit status. On a
+// GitLab main project the PR is a merge request (#3762). Calling it again on a proposal
 // whose PR is open re-runs the checks on the same PR: one concern, one pull
 // request. The handler gates on the caller's org or workspace role, which
 // only a signed-in user holds; an API key carries no user, so the MCP and CLI
@@ -17,6 +18,7 @@ import {
   publishedSharingScopeSchema,
   recordForceSchema,
   recordKindSchema,
+  repositoryProviderSchema,
 } from "./context.steering.shared";
 
 const instant = z.string().datetime({ offset: true });
@@ -33,6 +35,11 @@ export const contextPrSchema = z
       .object({
         number: z.number().int().positive(),
         url: z.string(),
+        /**
+         * The host the PR lives on. On GitLab it is a merge request and
+         * `number` is its IID, which is scoped to the project.
+         */
+        provider: repositoryProviderSchema,
         repository: z.string(),
         baseRef: z.string(),
         branch: z.string(),
@@ -89,7 +96,7 @@ export const contextPrOpen = registerCapability({
   name: "open_context_pr",
   domain: "context",
   description:
-    "Open the Context PR for a proposal: branch context/<lineage> from the production branch, the single record file under .oxagen/rules/, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs. Re-runs the checks when the PR is already open.",
+    "Open the Context PR for a proposal: branch context/<lineage> from the production branch, the single record file under .oxagen/rules/, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs or GitLab commit statuses. On GitLab the PR is a merge request. Re-runs the checks when the PR is already open.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs", "app"],

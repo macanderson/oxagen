@@ -25,6 +25,17 @@ The row records the branch before GitHub is touched. A call that failed after Gi
 
 On a row whose PR is already open (`pr_open`, `checks_running`, `checks_passed`, `checks_failed`) the checks run again on the same PR, against its current head: the PR is refused `base_moved` when it no longer targets the production branch, `headSha` is re-read from GitHub, the file is read at that commit and the check runs are posted to it. Every status write applies only from the statuses it names, so a proposal dismissed or merged while the checks run is left as it is and the call is refused `proposal_rejected` or `proposal_merged`. Each check write and the outcome write also require the row's head to be the one the checks read, so a re-run that recorded a newer head wins and this call is refused `head_moved`. Once every check passes the row carries the `record_id` and `record_hash` stamped in that file, and `merge_context_pr` merges that commit and no other. One concern, one pull request: a second proposal on a lineage with an open PR is refused.
 
+## On GitLab
+
+When the workspace's main repository is a gitlab.com project (#3762), the same steps run through the GitLab implementation of the steering port (`context.steering.gitlab.ts`), picked from the binding's provider by `context.steering.host.ts`:
+
+- the PR is a merge request, and `pr.number` is its IID, which is scoped to the project;
+- each check is a commit status named `Oxagen · <check>` on the head commit, with the title and summary as its description (255 characters at most);
+- every call authenticates with the project access token `attach_gitlab_project` stored, and addresses the project by its numeric id, so a project moved to another group keeps working;
+- the proposal records `provider = 'gitlab'`. A PR number is read back only through the host that issued it: if the workspace's main repository moved to the other host after the PR opened, re-running the checks is refused `repository_host_changed`.
+
+A token GitLab no longer accepts is `conflict: gitlab_credential_rejected`, naming the project and nothing about the token. Any other GitLab refusal travels on `conflict: gitlab_refused`.
+
 ## The checks
 
 | name | passes when |
@@ -42,7 +53,7 @@ On a row whose PR is already open (`pr_open`, `checks_running`, `checks_passed`,
 
 ## Output
 
-The Context PR (`contextPrSchema`, shared with `get_context_pr`): `status`, `governanceMode` (null until this call reads governance.toml), `pr` (number, url, repository, baseRef, branch, headSha, path), `record` (recordId, recordHash, kind, force, constraintEffect, sharingScope, statement), `body`, `checks[]` (name, status, summary, detailsUrl, startedAt, completedAt), `onMerge` (what it publishes, the steering version before and after, who may merge under the mode — `review` null until the mode is read), `merged` (null until merged).
+The Context PR (`contextPrSchema`, shared with `get_context_pr`): `status`, `governanceMode` (null until this call reads governance.toml), `pr` (number, url, provider, repository, baseRef, branch, headSha, path), `record` (recordId, recordHash, kind, force, constraintEffect, sharingScope, statement), `body`, `checks[]` (name, status, summary, detailsUrl, startedAt, completedAt), `onMerge` (what it publishes, the steering version before and after, who may merge under the mode — `review` null until the mode is read), `merged` (null until merged).
 
 ## Side effects
 
@@ -54,4 +65,4 @@ A branch, a commit and a pull request on the workspace's repository; up to six G
 | --- | --- | --- |
 | `forbidden` | `org_role_required` / `no_principal` | |
 | `not_found` | `proposal_not_found` / `workspace_repository_missing` | No connected GitHub repository (MC spec §10.1). |
-| `conflict` | `proposal_merged` / `proposal_rejected` / `lineage_pr_open` / `governance_unreadable` / `base_moved` / `head_moved` / `head_unknown` / `record_file_missing` / `github_refused` | GitHub's message travels on `github_refused`; `head_unknown` when GitHub reports no head commit for the PR; `base_moved` when the PR no longer targets the production branch; `head_moved` when a re-run recorded a newer head while these checks ran. |
+| `conflict` | `proposal_merged` / `proposal_rejected` / `lineage_pr_open` / `governance_unreadable` / `base_moved` / `head_moved` / `head_unknown` / `record_file_missing` / `github_refused` / `gitlab_refused` / `gitlab_credential_rejected` / `repository_host_changed` | GitHub's message travels on `github_refused`; `head_unknown` when GitHub reports no head commit for the PR; `base_moved` when the PR no longer targets the production branch; `head_moved` when a re-run recorded a newer head while these checks ran. |

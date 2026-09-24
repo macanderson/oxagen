@@ -7,9 +7,30 @@ describe("parsePullRequestUrl", () => {
     expect(parsePullRequestUrl(raw)).toBe(raw);
   });
 
+  it("accepts a gitlab.com merge request page, nested groups included (#3762)", () => {
+    for (const raw of [
+      "https://gitlab.com/acme/core/-/merge_requests/7",
+      "https://gitlab.com/acme/platform/rules/-/merge_requests/12",
+    ])
+      expect(parsePullRequestUrl(raw)).toBe(raw);
+  });
+
   it.each([
     ["plain http", "http://github.com/acme/core/pull/519"],
-    ["another host", "https://gitlab.com/acme/core/pull/519"],
+    ["a GitHub path on gitlab.com", "https://gitlab.com/acme/core/pull/519"],
+    [
+      "a GitLab merge request path on github.com",
+      "https://github.com/acme/core/-/merge_requests/1",
+    ],
+    [
+      "a self-managed GitLab host",
+      "https://gitlab.example.com/acme/core/-/merge_requests/1",
+    ],
+    ["merge request zero", "https://gitlab.com/acme/core/-/merge_requests/0"],
+    [
+      "a sub-page of the merge request",
+      "https://gitlab.com/acme/core/-/merge_requests/1/diffs",
+    ],
     [
       "a host that only starts with it",
       "https://github.com.evil/acme/core/pull/1",

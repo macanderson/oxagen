@@ -6,6 +6,7 @@ describe("skill repository resolution", () => {
   const scope = { orgId: "org", workspaceId: "workspace" };
   const bound = {
     bindingId: "binding",
+    provider: "github",
     connectionId: "approved-connection",
     repositoryId: "123",
     owner: "owner",
@@ -58,5 +59,21 @@ describe("skill repository resolution", () => {
     await expect(resolve(scope)).rejects.toMatchObject({
       reason: "skill_repository_identity_changed",
     });
+  });
+  it("refuses a GitLab main project by name, before minting any token (#3762)", async () => {
+    const token = vi.fn();
+    const resolve = createSkillRepositoryResolver({
+      binding: vi.fn().mockResolvedValue({
+        ...bound,
+        provider: "gitlab",
+        fullName: "acme/platform/rules",
+      }),
+      token,
+      client: vi.fn(),
+    });
+    await expect(resolve(scope)).rejects.toMatchObject({
+      reason: "repository_host_unsupported",
+    });
+    expect(token).not.toHaveBeenCalled();
   });
 });

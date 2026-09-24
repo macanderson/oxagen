@@ -22,6 +22,7 @@
 // the two callers refuse differently (the banner stays where it is, the page
 // re-reads its panel), so the duplication is the seam, not an accident.
 import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
+import { repositoryGitlabAttach } from "@oxagen/oxagen/contracts/repository.gitlab.attach";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
 import { repositoryInstallationList } from "@oxagen/oxagen/contracts/repository.installation.list";
 import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
@@ -106,13 +107,18 @@ export async function listInstallationRepositories(
 export async function bindWorkspaceRepository(
   org: string,
   ws: string,
-  repository: { owner: string; name: string },
+  repository:
+    | { owner: string; name: string }
+    | { provider: "gitlab"; projectPath: string },
 ): Promise<ActionResult<BoundRepository>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, repositoryMainBind, {
-    owner: repository.owner,
-    name: repository.name,
-  });
+  const result = await kernelWrite(
+    ctx,
+    repositoryMainBind,
+    "projectPath" in repository
+      ? { provider: "gitlab", projectPath: repository.projectPath }
+      : { owner: repository.owner, name: repository.name },
+  );
   return result.ok
     ? {
         ok: true,
@@ -123,6 +129,52 @@ export async function bindWorkspaceRepository(
         },
       }
     : result;
+}
+
+/** What connecting a GitLab project settled. */
+export type ConnectedGitLabProject = BoundRepository & {
+  /** Whether GitLab delivers merge request events: the hook's registration. */
+  webhook: "registered" | "refused" | "unchanged";
+};
+
+/**
+ * Connect a gitlab.com project with a project access token, then bind it as
+ * the main repository (#3762). Two writes, in this order, because a token is
+ * not an App installation: `attach_gitlab_project` verifies and stores the
+ * token, and `bind_main_repository` binds the project through the connection
+ * it wrote. A refusal from either is returned as it came. When the bind
+ * refuses, the connection stays, and submitting the form again rotates the
+ * same token in place and retries the bind.
+ *
+ * The token passes from the form to this server action and on to the kernel,
+ * and nothing returns it.
+ */
+export async function connectGitLabProject(
+  org: string,
+  ws: string,
+  input: { projectPath: string; token: string },
+): Promise<ActionResult<ConnectedGitLabProject>> {
+  const ctx = await requireViewer(org, ws);
+  const connected = await kernelWrite(ctx, repositoryGitlabAttach, {
+    projectPath: input.projectPath,
+    token: input.token,
+  });
+  if (!connected.ok) return connected;
+  const bound = await kernelWrite(ctx, repositoryMainBind, {
+    provider: "gitlab",
+    projectPath: connected.value.fullName,
+  });
+  return bound.ok
+    ? {
+        ok: true,
+        value: {
+          fullName: bound.value.fullName,
+          defaultRef: bound.value.defaultRef,
+          boundAt: bound.value.boundAt,
+          webhook: connected.value.webhook.status,
+        },
+      }
+    : bound;
 }
 
 /**
