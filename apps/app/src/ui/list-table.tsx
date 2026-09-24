@@ -139,8 +139,12 @@ function compare(a: string, b: string, numeric: boolean): number {
   });
 }
 
-/** The page numbers the pager shows, with an ellipsis on either side past seven pages. */
-function pageList(
+/**
+ * The page numbers the pager shows, one-based, with an ellipsis on either side
+ * past seven pages: the design's `ltPager`. Exported so a list with its own
+ * pager (Agents) windows its buttons by the same rule.
+ */
+export function pageList(
   page: number,
   pages: number,
 ): (number | "gap-before" | "gap-after")[] {

@@ -45,6 +45,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
+import { pageList } from "@/ui/list-table";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { RetireAgent } from "./agent-actions";
 import { AgentStatusBadge, NotRecordedValue } from "./parts";
@@ -542,29 +543,20 @@ function searchText(row: AgentRow, harness: string): string {
     .toLowerCase();
 }
 
-/** Past this many pages the pager windows its buttons (`ltPager`). */
-const PAGER_FULL = 7;
-
 /**
  * The page buttons the design's `ltPager` draws, zero-based: every page up to
  * seven; past that the first, the current page and its neighbours, and the
  * last, with null for each gap the ellipsis stands in. A pager of 20 pages at
- * page 10 is 1 … 9 10 11 … 20, so it fits a phone's width.
+ * page 10 is 1 … 9 10 11 … 20, so it fits a phone's width. The window is the
+ * shared list table's (`pageList`), so the two pagers cannot drift apart.
  */
 export function pagerItems(
   pages: number,
   current: number,
 ): readonly (number | null)[] {
-  if (pages <= PAGER_FULL) return Array.from({ length: pages }, (_, i) => i);
-  const last = pages - 1;
-  const lo = Math.max(1, current - 1);
-  const hi = Math.min(last - 1, current + 1);
-  const items: (number | null)[] = [0];
-  if (lo > 1) items.push(null);
-  for (let page = lo; page <= hi; page += 1) items.push(page);
-  if (hi < last - 1) items.push(null);
-  items.push(last);
-  return items;
+  return pageList(current + 1, pages).map((item) =>
+    typeof item === "number" ? item - 1 : null,
+  );
 }
 
 export function AgentsTable({
