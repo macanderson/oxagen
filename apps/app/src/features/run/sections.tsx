@@ -43,7 +43,7 @@ type ClosingIssue = { key: string; label: string; url: string; pr: number };
  * is true when GitHub's list for any of those pull requests is missing or cut
  * short, so an unread list never reads as closing nothing.
  */
-export function closingIssuesOf(work: RunWorkView): {
+function closingIssuesOf(work: RunWorkView): {
   issues: ClosingIssue[];
   unread: boolean;
 } {

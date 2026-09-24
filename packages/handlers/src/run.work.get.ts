@@ -107,14 +107,15 @@ export function createRunWorkGetHandler(
         ],
       };
     }
-    const [contexts, diffs, subagents, links, repositories] =
-      await Promise.all([
+    const [contexts, diffs, subagents, links, repositories] = await Promise.all(
+      [
         deps.contexts(run.sessionUuid),
         deps.diffs(run.sessionUuid),
         deps.subagents(run.sessionUuid),
         deps.prLinks(run.sessionUuid),
         deps.repositories(scope),
-      ]);
+      ],
+    );
     const checkouts = contexts
       .slice(0, WORK_CONTEXT_CAP)
       .map((row) => checkoutOf(row, repositories));
