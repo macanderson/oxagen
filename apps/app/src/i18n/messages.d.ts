@@ -5982,6 +5982,11 @@ type Messages = {
         previous: string;
         next: string;
         last: string;
+        play: string;
+        pause: string;
+        replay: string;
+        speed: string;
+        speedLabel: string;
         scrub: string;
         scrubValue: string;
         position: string;

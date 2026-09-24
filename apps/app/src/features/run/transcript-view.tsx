@@ -1977,13 +1977,7 @@ function FeedRowView({
   switch (row.kind) {
     case "prompt":
       return (
-        <PromptRow
-          row={row}
-          q={q}
-          open={open}
-          onToggle={onToggle}
-          run={run}
-        />
+        <PromptRow row={row} q={q} open={open} onToggle={onToggle} run={run} />
       );
     case "text":
       return (
