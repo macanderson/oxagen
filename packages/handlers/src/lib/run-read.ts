@@ -46,9 +46,7 @@ import {
   type TachoSessionRow,
   toLedgerRunItem,
   toTachoRunItem,
-  withTachoPause,
 } from "../run.list";
-import { postgresReadRunHalts, type ReadRunHalts } from "./run-halts";
 import { requireScope } from "@oxagen/tenancy";
 import { readWitnessFor } from "./proof";
 
@@ -104,11 +102,6 @@ export type RunReadDeps = {
    */
   tachoChildSessions?: (rootSessionUuid: string) => Promise<string[]>;
   readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
-  /**
-   * The latest pause or resume a wrapped run's host applied (#4112). Absent,
-   * the run carries no `ingressPaused`.
-   */
-  readRunHalts?: ReadRunHalts;
 };
 
 export const runNotFound = () =>
@@ -160,19 +153,16 @@ async function resolveSource(
   publicId: string,
 ): Promise<ResolvedSource> {
   if (publicId.startsWith("tse_")) {
-    const [row, costs, halts] = await Promise.all([
+    const [row, costs] = await Promise.all([
       deps.queries.tachoSession(scope, publicId),
       deps.readRunRollups(scope, [publicId]),
-      deps.readRunHalts === undefined
-        ? Promise.resolve(null)
-        : deps.readRunHalts(scope, [publicId]),
     ]);
     if (!row) throw runNotFound();
     return {
       source: "tacho",
       sessionUuid: row.session.sessionUuid,
       row,
-      item: withTachoPause(toTachoRunItem(row, costs.get(publicId)), halts),
+      item: toTachoRunItem(row, costs.get(publicId)),
     };
   }
   const summary = await deps.store.getRunByPublicId(publicId);
@@ -410,6 +400,5 @@ export function defaultRunReadDeps(): RunReadDeps {
     tachoChildSessions: (root) =>
       postgresTachoChildSessions(requireScope(), root),
     readEnrichmentEnabled: readRunEnrichmentEnabled,
-    readRunHalts: postgresReadRunHalts,
   };
 }

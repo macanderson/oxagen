@@ -672,14 +672,18 @@ describe("header", () => {
     expect(operator).toHaveTextContent(/^not recorded$/);
   });
 
-  it("draws the pause banner only while ingress is paused", async () => {
+  it("draws the pause banner only while the run is paused", async () => {
     await renderRun({
       detail: ok(
         runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
       ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
+    // A wrapped run's host refuses tool calls. It holds no ingress fence.
+    expect(screen.getByTestId("run-paused")).toHaveTextContent(
+      "Paused. The host refuses this agent's tool calls until you resume it.",
+    );
+    expect(screen.getByTestId("run-paused")).not.toHaveTextContent("Ingress");
     cleanup();
     await renderRun({
       detail: ok(runDetail()),
@@ -1153,6 +1157,14 @@ describe("controls", () => {
     expect(screen.getByTestId("run-steer").className).not.toContain(
       "text-error-ink",
     );
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-resume")).toHaveTextContent("▶ Resume run");
   });
 
   it("ends a live run's actions on Export, drawn disabled until the run seals", async () => {

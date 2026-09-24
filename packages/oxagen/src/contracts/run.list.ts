@@ -279,11 +279,9 @@ export const runItemSchema = z
     /** A ledger append fence, independent of the external process status. */
     ingressRevoked: z.boolean().optional(),
     /**
-     * Whether a live run is paused. A ledger run: its evidence ingress is
-     * paused, and new batches are refused. A wrapped run: the latest pause or
-     * resume its host applied is a pause, so the host refuses the agent's
-     * tool calls. False once the run seals. Absent where the reader did not
-     * read it.
+     * The run is paused until someone resumes it. A ledger run reads this from
+     * its ingress fence. A live wrapped run reads it from the last pause or
+     * resume its host applied (#4112). A sealed wrapped run is never paused.
      */
     ingressPaused: z.boolean().optional(),
     /** `org_ns.ws_ns.slug` (ADR-024); null when the ledger row names no agent. */
@@ -349,7 +347,7 @@ export const runItemSchema = z
     sealedAt: z.string().datetime().nullable(),
     /**
      * What sealed a wrapped session: `agent_stop`, its host's own end,
-     * which the host's next `agent_start` on the chain reopens (ADR-170);
+     * which the host's next `agent_start` on the chain reopens (ADR-172);
      * `idle_timeout`, the control plane closing a run that sent nothing for
      * twelve hours, which the run's next event reopens; or `operator`, a
      * person sealing it through `seal_run` (ADR-169), which is final. Null

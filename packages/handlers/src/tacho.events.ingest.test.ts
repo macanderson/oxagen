@@ -5031,7 +5031,7 @@ describe("running cost and the idle close", () => {
     terminalReason: null,
   };
 
-  it("reopens a run the daemon's sweep sealed as crashed when the harness resumes the session (ADR-170)", async () => {
+  it("reopens a run the daemon's sweep sealed as crashed when the harness resumes the session (ADR-172)", async () => {
     const db = fakeDb();
     wire(db);
     // The harness process went away between messages, so the sweep sealed
@@ -5067,7 +5067,7 @@ describe("running cost and the idle close", () => {
     expect(sentNames()).toEqual(["cost/run.progressed"]);
   });
 
-  it("reopens a run its host sealed on a clean exit when the harness resumes it, and seals it again at the next stop (ADR-170)", async () => {
+  it("reopens a run its host sealed on a clean exit when the harness resumes it, and seals it again at the next stop (ADR-172)", async () => {
     const db = fakeDb();
     wire(db);
     const events = session();
@@ -5158,7 +5158,7 @@ describe("running cost and the idle close", () => {
     expect(db.sessions.get(SESSION)).toMatchObject(OPEN_AGAIN);
   });
 
-  it("reopens a run when the daemon reopens a session its sweep closed for quiet (ADR-170)", async () => {
+  it("reopens a run when the daemon reopens a session its sweep closed for quiet (ADR-172)", async () => {
     const db = fakeDb();
     wire(db);
     const open = session().slice(0, -1);
@@ -5249,17 +5249,14 @@ describe("running cost and the idle close", () => {
     });
   });
 
-  it("keeps an operator's seal final when the harness resumes the session (ADR-169, ADR-170)", async () => {
+  it("keeps an operator's seal final when the harness resumes the session (ADR-169, ADR-172)", async () => {
     const db = fakeDb();
     wire(db);
     const events = session();
     await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
     const { sealedAt, finalHash } = sealByOperator(db);
 
-    await tachoEventsIngestHandler(
-      batch(resumed(events.slice(0, 3))),
-      CONTEXT,
-    );
+    await tachoEventsIngestHandler(batch(resumed(events.slice(0, 3))), CONTEXT);
     expect(db.sessions.get(SESSION)).toMatchObject({
       sealedAt,
       sealSource: "operator",

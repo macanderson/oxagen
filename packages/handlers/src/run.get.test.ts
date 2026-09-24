@@ -52,8 +52,6 @@ type Over = {
   configFails?: boolean;
   /** Runs after each fake sleep, with the count so far; a test lands events here. */
   onSleep?: (count: number, log: AttemptEventReadRecord[]) => void;
-  /** The applied pause or resume read (#4112); not wired by default. */
-  readRunHalts?: RunGetDeps["readRunHalts"];
 };
 
 function harness(over: Over = {}) {
@@ -108,9 +106,6 @@ function harness(over: Over = {}) {
       over.onSleep?.(sleeps.length, log);
       return Promise.resolve();
     },
-    ...(over.readRunHalts === undefined
-      ? {}
-      : { readRunHalts: over.readRunHalts }),
   };
   return { get: createRunGetHandler(deps), log, sleeps, stores };
 }
@@ -489,35 +484,33 @@ describe("get_run", () => {
   });
 
   // #4112: a wrapped run's pause is applied by its host, so get_run reads it
-  // from the last pause or resume the host acknowledged `applied`.
+  // from the last pause or resume the host acknowledged `applied`, which the
+  // session query selects as `paused`.
   it("answers a live wrapped run paused while the last applied halt is a pause, and not once a resume lands", async () => {
-    const live = [
+    const live = (paused: boolean) =>
       tachoSession({
         publicId: TACHO_ID,
-        session: { outcome: "running", sealedAt: null },
-      }),
-    ];
-    const reads: (readonly string[])[] = [];
-    let applied: "pause" | "resume" = "pause";
-    const { get } = harness({
-      tacho: live,
-      readRunHalts: async (_scope, ids) => {
-        reads.push(ids);
-        return new Map([[TACHO_ID, applied]]);
-      },
+        session: { outcome: "running", sealedAt: null, paused },
+      });
+    const pausedRun = await harness({ tacho: [live(true)] }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
+    expect(runGet.output.parse(pausedRun)).toEqual(pausedRun);
+    expect(pausedRun.run).toMatchObject({
+      status: "live",
+      ingressPaused: true,
     });
-    const paused = await get(input({ runId: TACHO_ID }), ctx());
-    expect(runGet.output.parse(paused)).toEqual(paused);
-    expect(paused.run).toMatchObject({ status: "live", ingressPaused: true });
-    applied = "resume";
-    const resumed = await get(input({ runId: TACHO_ID }), ctx());
+    const resumed = await harness({ tacho: [live(false)] }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
     expect(resumed.run.ingressPaused).toBe(false);
-    expect(reads).toEqual([[TACHO_ID], [TACHO_ID]]);
   });
 
   it("answers a sealed wrapped run not paused, whatever its host last applied (negative)", async () => {
     const { get } = harness({
-      readRunHalts: async () => new Map([[TACHO_ID, "pause" as const]]),
+      tacho: [tachoSession({ publicId: TACHO_ID, session: { paused: true } })],
     });
     const out = await get(input({ runId: TACHO_ID }), ctx());
     expect(out.run.status).toBe("sealed");

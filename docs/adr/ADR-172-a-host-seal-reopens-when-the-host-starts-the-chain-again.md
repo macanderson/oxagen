@@ -1,4 +1,4 @@
-# ADR-170: A host's seal reopens when the host starts the chain again
+# ADR-172: A host's seal reopens when the host starts the chain again
 
 - **Status:** Accepted
 - **Date:** 2026-09-24

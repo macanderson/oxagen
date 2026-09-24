@@ -1,5 +1,5 @@
 // idle-attempts.ts — the scan behind the control plane's close of a ledger
-// attempt whose producer stopped reporting (#3988, ADR-172).
+// attempt whose producer stopped reporting (#3988, ADR-173).
 //
 // A ledger attempt seals through `sealAttempt`, which its producer calls: the
 // in-app assistant when its turn settles, a preflight refusal, or

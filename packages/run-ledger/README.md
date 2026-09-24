@@ -88,7 +88,7 @@ run          trusted RunSpecV2 identity — principals, agent version,
 | `run-errors.ts` | Typed, dependency-free errors with stable `code` discriminants plus structural guards. |
 | `surface.ts` | Which platform surface admitted a run. |
 | `run-control.ts` | The run lock shared with appends and seals, cancel inside a transaction, and pausing evidence ingress. |
-| `idle-attempts.ts` | The cross-tenant scan for open attempts with no event for twelve hours, which the control plane seals `abandoned` (ADR-172). |
+| `idle-attempts.ts` | The cross-tenant scan for open attempts with no event for twelve hours, which the control plane seals `abandoned` (ADR-173). |
 | `frame-body.ts` | Frame body preparation under the run's retention policy, the body and archive store ports, and the seal's rollup, completeness gaps, and replay grade (ADR-058). |
 | `run-frames.ts` | One frame shape for a run from either store, and the pure transcript reads over it. |
 | `content-blocks.ts` | Reassembly of a recorded model stream into the message it was, and its encoded form. |
@@ -124,7 +124,7 @@ run          trusted RunSpecV2 identity — principals, agent version,
   records `unobserved_tail` and fails the run. The seal passes
   `expectedAttemptSeq`, so a producer that appended since the scan keeps its
   attempt (`AttemptAdvancedError`). A producer that returns after the seal is
-  refused like any append past a seal (ADR-172).
+  refused like any append past a seal (ADR-173).
 - **A caller's mistake is typed as the caller's.** A malformed event raises an
   error `isRunEventInputError` recognizes, and a run that cannot take an
   attempt raises `RunNotWritableError`. Surfaces answer both as client errors.

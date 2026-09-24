@@ -118,23 +118,26 @@ describe("design record: the recipes carry the mockup's rules", () => {
  * other fill is a wash or a state hue. A `bg-primary` under src/ is the drift
  * this file names, whichever way it drifted.
  */
-const INK_PRIMARY = /\b(bg|text|border|ring|shadow-\[inset[^\]]*)-primary\b|var\(--primary\)/;
+const INK_PRIMARY =
+  /\b(bg|text|border|ring|shadow-\[inset[^\]]*)-primary\b|var\(--primary\)/;
 
 /** A tile drawn by hand instead of from `statTile`. */
 const HAND_TILE = /rounded-xl border border-border bg-(data-surface|muted)\b/;
 
 const SELF = "src/test/arch/design-record.test.ts";
-const RECIPES = new Set([
-  "src/ui/control-styles.ts",
-  "src/app/globals.css",
-]);
+const RECIPES = new Set(["src/ui/control-styles.ts", "src/app/globals.css"]);
 
-function hits(files: readonly string[], pattern: RegExp, name: string): string[] {
+function hits(
+  files: readonly string[],
+  pattern: RegExp,
+  name: string,
+): string[] {
   const out: string[] = [];
   for (const file of files) {
     const lines = read(file).split("\n");
     lines.forEach((line, index) => {
-      if (pattern.test(line)) out.push(`${RULE} ${file}:${String(index + 1)} ${name}`);
+      if (pattern.test(line))
+        out.push(`${RULE} ${file}:${String(index + 1)} ${name}`);
     });
   }
   return out;
@@ -153,7 +156,6 @@ function scanned(): string[] {
 }
 
 describe("design record: no page draws around the recipes", () => {
-
   it(
     "no file under src/ paints with the kit's ink primary",
     () => {
@@ -174,20 +176,41 @@ describe("design record: no page draws around the recipes", () => {
     "every app page names its scope in an eyebrow over the h1 (`.phead .eyebrow`)",
     () => {
       const pages = listFiles("src/app/[org]").filter(
-        (file) => file.endsWith("/page.tsx") && read(file).includes("<PageHeader"),
+        (file) =>
+          file.endsWith("/page.tsx") && read(file).includes("<PageHeader"),
       );
       expect(pages.length).toBeGreaterThan(0);
-      const bare = pages.filter((file) => !/<PageHeader[\s\S]*?eyebrow=/.test(read(file)));
+      const bare = pages.filter(
+        (file) => !/<PageHeader[\s\S]*?eyebrow=/.test(read(file)),
+      );
       expect(bare).toEqual([]);
     },
     WHOLE_TREE_TIMEOUT_MS,
   );
 
   it("the scan reads the probe the way it reads a page", () => {
-    expect(hits(["src/test/arch/probes/design-record/ink.tsx"], INK_PRIMARY, "ink-primary")).toEqual([
+    expect(
+      hits(
+        ["src/test/arch/probes/design-record/ink.tsx"],
+        INK_PRIMARY,
+        "ink-primary",
+      ),
+    ).toEqual([
       `${RULE} src/test/arch/probes/design-record/ink.tsx:3 ink-primary`,
     ]);
-    expect(hits(["src/test/arch/probes/design-record/clean.tsx"], INK_PRIMARY, "ink-primary")).toEqual([]);
-    expect(hits(["src/test/arch/probes/design-record/clean.tsx"], HAND_TILE, "hand-tile")).toEqual([]);
+    expect(
+      hits(
+        ["src/test/arch/probes/design-record/clean.tsx"],
+        INK_PRIMARY,
+        "ink-primary",
+      ),
+    ).toEqual([]);
+    expect(
+      hits(
+        ["src/test/arch/probes/design-record/clean.tsx"],
+        HAND_TILE,
+        "hand-tile",
+      ),
+    ).toEqual([]);
   });
 });

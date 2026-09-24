@@ -712,9 +712,9 @@ function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
 }
 
 /**
- * The banner under the header while a live run is paused. It says what the
- * pause holds, which differs by source: a ledger run's evidence ingress, or a
- * wrapped run's tool calls, which its host refuses (#4112).
+ * The banner under the header while the run is paused. A ledger run's ingress
+ * fence holds every step. A wrapped run's host refuses its tool calls, and the
+ * model may still write text, so each source gets its own sentence.
  */
 function PauseBanner({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
@@ -727,7 +727,7 @@ function PauseBanner({ run }: { run: RunRow }) {
       className="mb-3.5 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
     >
       <b className="text-info">{t("pausedTitle")}</b>{" "}
-      {t(run.source === "ledger" ? "paused" : "pausedSession")}
+      {run.source === "tacho" ? t("pausedSession") : t("paused")}
     </p>
   );
 }

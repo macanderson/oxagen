@@ -70,12 +70,6 @@ import {
 } from "@oxagen/run-ledger";
 import { modelFactsOf } from "./lib/model-facts";
 import {
-  postgresReadRunHalts,
-  type ReadRunHalts,
-  type RunHalt,
-  tachoPaused,
-} from "./lib/run-halts";
-import {
   matchesPullRequestFilter,
   postgresRunGitDiffs,
   type ReadRunGitDiffs,
@@ -155,6 +149,7 @@ const events = schema.agentRunEvents;
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
 const hosts = schema.tachoHosts;
+const commands = schema.tachoControlCommands;
 
 /** Millisecond precision, so a cursor built from a JS Date compares exactly. */
 const ms = (column: SQL | typeof sessions.startedAt) =>
@@ -576,6 +571,25 @@ const tachoColumns = {
     outputTokens: sessions.outputTokens,
     cacheReadTokens: sessions.cacheReadTokens,
     cacheCreationTokens: sessions.cacheCreationTokens,
+    // Whether the host holds the session paused: the last pause or resume it
+    // acknowledged `applied`. Dispatch writes one `run` row per session,
+    // addressed by public id, so `tacho_control_commands_target_idx` answers
+    // it. A pause still queued, or one the host refused, does not count: the
+    // pause dialog promises that the run's status says when it has applied.
+    // The subquery names the outer table the way `machineSnapshot` does, so
+    // it depends on the same unaliased `.from(sessions)`.
+    paused: sql<boolean>`coalesce((
+      select ${commands.command} = 'pause'
+      from ${commands}
+      where ${commands.orgId} = ${sessions.orgId}
+        and ${commands.workspaceId} = ${sessions.workspaceId}
+        and ${commands.targetKind} = 'run'
+        and ${commands.targetId} = ${sessions.publicId}
+        and ${commands.command} in ('pause', 'resume')
+        and ${commands.outcome} = 'applied'
+      order by ${commands.appliedAt} desc nulls last, ${commands.issuedAt} desc
+      limit 1
+    ), false)`,
     // What the page lists beside the run: how many `pr_open` calls ingest
     // counted, and the harness's own line totals from the session's end.
     pullRequests: sessions.pullRequests,
@@ -835,6 +849,11 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   enforcementTier: string;
   /** The sealed commitment for the whole session; null while open. */
   finalHash: string | null;
+  /**
+   * The last pause or resume the host applied was a pause. Absent where a
+   * reader did not select it.
+   */
+  paused?: boolean;
 };
 
 /**
@@ -1319,6 +1338,11 @@ export function toTachoRunItem(
     verdict: totals?.verdict ?? null,
     enforcementTier: publishedTier(session.enforcementTier),
     ...tachoCommandBlock(row, now),
+    // Only a live session can be paused. A sealed one has ended, whatever
+    // pause it ended under.
+    ...(session.paused === undefined
+      ? {}
+      : { ingressPaused: status === "live" && session.paused }),
     // Whether a steer can reach it (`steerBlockOf`); omitted when the reader
     // selected no runtime.
     ...(session.runtime === undefined
@@ -1551,12 +1575,6 @@ export type RunListDeps = {
   readPullRequests?: ReadRunPullRequests;
   /** Git's uncommitted change per wrapped session; absent reads none. */
   readGitDiffs?: ReadRunGitDiffs;
-  /**
-   * The latest pause or resume each live wrapped run's host applied (#4112).
-   * Absent, a wrapped row carries no `ingressPaused`, so it says "not read"
-   * rather than "running".
-   */
-  readRunHalts?: ReadRunHalts;
 };
 
 type FleetItem =
@@ -1713,14 +1731,7 @@ export function createRunListHandler(
         : [],
     );
     const noGit = new Map<string, LineCounts>();
-    // Only a live wrapped run can be paused, so only those are read.
-    const liveTacho = items.flatMap((item) =>
-      item.kind === "tacho" &&
-      tachoRunStatus(item.row.session.outcome) === "live"
-        ? [item.id]
-        : [],
-    );
-    const [enabled, enrich, costs, gitDiffs, halts] = await Promise.all([
+    const [enabled, enrich, costs, gitDiffs] = await Promise.all([
       enabledRead,
       ledgerEnrichment(
         deps,
@@ -1742,22 +1753,16 @@ export function createRunListHandler(
             );
             return noGit;
           }),
-      deps.readRunHalts === undefined
-        ? Promise.resolve(null)
-        : deps.readRunHalts(scope, liveTacho),
     ]);
     return {
       runs: items.map((item) => {
         const run =
           item.kind === "ledger"
             ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
-            : withTachoPause(
-                {
-                  ...toTachoRunItem(item.row, costs.get(item.id)),
-                  ...tachoWorkFields(item.row.session, links, gitDiffs),
-                },
-                halts,
-              );
+            : {
+                ...toTachoRunItem(item.row, costs.get(item.id)),
+                ...tachoWorkFields(item.row.session, links, gitDiffs),
+              };
         return {
           ...run,
           enrichmentEnabled: enabled,
@@ -1782,19 +1787,6 @@ export function createRunListHandler(
   };
 }
 
-/**
- * A wrapped run's row with `ingressPaused` read from the commands its host
- * applied (`lib/run-halts.ts`). With no halts read (`null`), the row is
- * returned as it was, carrying no `ingressPaused`.
- */
-export function withTachoPause(
-  run: RunItem,
-  halts: ReadonlyMap<string, RunHalt> | null,
-): RunItem {
-  if (halts === null) return run;
-  return { ...run, ingressPaused: tachoPaused(run.status, halts.get(run.id)) };
-}
-
 /** The pull requests, the `pr_open` count and the lines a wrapped session's row carries. */
 function tachoWorkFields(
   session: TachoSessionColumns,
@@ -1817,5 +1809,4 @@ export const runListHandler = createRunListHandler({
   readEnrichmentEnabled: readRunEnrichmentEnabled,
   readPullRequests: readRunPullRequests,
   readGitDiffs: postgresRunGitDiffs,
-  readRunHalts: postgresReadRunHalts,
 });

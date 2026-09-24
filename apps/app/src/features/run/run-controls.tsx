@@ -14,14 +14,6 @@
 // a person can tell "Oxagen accepted this" from "the agent has stopped". The
 // page then reloads, because the run's own status is what says whether it did.
 //
-// A live run offers Pause or Resume, never both (#4112): Pause while it runs,
-// Resume while it is paused, then Steer and Cancel. The disabled sets follow
-// the same rule. `ingressPaused` says which: a ledger run reads it from its
-// own ingress fence, a wrapped run from the last pause or resume its host
-// applied. After a pause or resume is queued and its dialog closed, the page
-// re-reads the run every few seconds, for at most a minute, until the status
-// says the command took effect, so a person does not have to reload to see it.
-//
 // A sealed or halted run has nothing to reach, so it draws no controls. A
 // ledger run can pause, resume, or cancel evidence ingress. Steering stays
 // disabled until the producer carries it. A wrapped run takes commands through
@@ -39,16 +31,18 @@
 // a workspace Owner or Member) sees them disabled with that reason, not a
 // button that ends in `org_role_required`.
 //
+// Pause and Resume share one slot, enabled or disabled: a running run offers
+// Pause and a paused one offers Resume, never both (#4112). `ingressPaused`
+// says which. A ledger run reads it from its ingress fence, a wrapped run from
+// the last pause or resume its host applied. After a pause or resume is queued
+// and its dialog closed, the page re-reads the run every few seconds, for at
+// most a minute, until the status says the command took effect, so a person
+// does not have to reload to see it.
+//
 // Re-reading the run refreshes the route the person is on, so the tab, zoom
 // and frames page they were using stay put.
 import { useTranslations } from "next-intl";
-import {
-  type SyntheticEvent,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { type SyntheticEvent, useEffect, useId, useRef, useState } from "react";
 import {
   type CommandBlock,
   DeliveryMode,
@@ -77,8 +71,9 @@ import { haltRun, type QueuedCommand, steerRun } from "./actions";
 type Command = "pause" | "resume" | "steer" | "cancel";
 
 /**
- * The controls a live run offers, in order. Pause and Resume share one slot:
- * only one of them can apply to a run at a time.
+ * The commands a live run offers, in header order. Pause and Resume share the
+ * first slot, because only one of them can change the run: Pause while it
+ * runs, Resume while it is paused.
  */
 function commandsFor(paused: boolean): readonly Command[] {
   return [paused ? "resume" : "pause", "steer", "cancel"];
@@ -466,28 +461,28 @@ export function RunControls({
     return (
       <div className="flex flex-col items-start gap-2 lg:items-end">
         <div className="flex flex-wrap gap-2">
-          <CommandDialog
-            key={halt}
-            command={halt}
-            runId={runId}
-            ledgerControl
-            write={(text) => haltRun(org, ws, runId, halt, text)}
-            onQueuedClose={followHalt}
-          />
-          <button
-            type="button"
-            disabled
-            data-testid="run-steer"
-            className={buttonSecondary}
-          >
-            {t("steer.open")}
-          </button>
-          <CommandDialog
-            command="cancel"
-            runId={runId}
-            ledgerControl
-            write={(text) => haltRun(org, ws, runId, "cancel", text)}
-          />
+          {commandsFor(ingressPaused).map((command) =>
+            command === "steer" ? (
+              <button
+                key={command}
+                type="button"
+                disabled
+                data-testid="run-steer"
+                className={buttonSecondary}
+              >
+                {t("steer.open")}
+              </button>
+            ) : (
+              <CommandDialog
+                key={command}
+                command={command}
+                runId={runId}
+                ledgerControl
+                write={(text) => haltRun(org, ws, runId, command, text)}
+                {...(command === "cancel" ? {} : { onQueuedClose: followHalt })}
+              />
+            ),
+          )}
         </div>
         <p
           data-testid="ledger-control-limit"

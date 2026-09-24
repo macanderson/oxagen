@@ -300,8 +300,9 @@ export const RunRow = z.object({
   steerBlock: SteerBlock.nullable().optional(),
   ingressRevoked: z.boolean().optional(),
   /**
-   * Whether the live run is paused. A ledger run's evidence ingress is paused;
-   * a wrapped run's host applied a pause and refuses the agent's tool calls.
+   * The run is paused until someone resumes it. A ledger run reads this from
+   * its ingress fence. A live wrapped run reads it from the last pause or
+   * resume its host applied (#4112). A sealed wrapped run is never paused.
    */
   ingressPaused: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */

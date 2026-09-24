@@ -1149,107 +1149,68 @@ describe("a run row says whether a command can reach it", () => {
   });
 });
 
-// #4112: a wrapped run has no pause column. Its host applies the pause and
-// acknowledges it `applied`, so the row reads the latest applied pause or
-// resume, and the page offers Resume on a paused run and Pause on a running
-// one.
-describe("a wrapped run reads paused from what its host applied", () => {
+describe("a wrapped run row says whether its host holds it paused (#4112)", () => {
   const live = { outcome: "running", sealedAt: null };
 
-  function listWithHalts(
-    halts: ReadonlyMap<string, "pause" | "resume">,
-    tacho: Parameters<typeof memoryStores>[1],
-    ledger: Parameters<typeof memoryStores>[0] = [],
-  ) {
-    const stores = memoryStores(ledger, tacho);
-    const reads: (readonly string[])[] = [];
-    const list = createRunListHandler({
-      ...stores,
-      readRunHalts: async (scope, ids) => {
-        expect(scope).toEqual(SCOPE);
-        reads.push(ids);
-        return new Map([...halts].filter(([id]) => ids.includes(id)));
-      },
-    });
-    return { list, reads };
-  }
-
-  it("answers paused for a live run whose last applied halt is a pause, and not once a resume lands", async () => {
-    const { list, reads } = listWithHalts(
-      new Map([
-        ["tse_paused", "pause"],
-        ["tse_resumed", "resume"],
-      ]),
-      [
-        tachoSession({ publicId: "tse_paused", session: live }),
-        tachoSession({ publicId: "tse_resumed", session: live }),
-        tachoSession({ publicId: "tse_running", session: live }),
-      ],
-    );
-    const out = await list({ limit: 50 }, ctx());
-    expect(runList.output.parse(out)).toEqual(out);
-    const byId = new Map(out.runs.map((r) => [r.id, r]));
-    expect(byId.get("tse_paused")?.ingressPaused).toBe(true);
-    expect(byId.get("tse_resumed")?.ingressPaused).toBe(false);
-    // No halt applied at all: the run is running.
-    expect(byId.get("tse_running")?.ingressPaused).toBe(false);
-    // One read for the whole page.
-    expect(reads).toHaveLength(1);
-    expect([...(reads[0] ?? [])].sort()).toEqual([
-      "tse_paused",
-      "tse_resumed",
-      "tse_running",
-    ]);
+  it("reads the last applied pause or resume in the page's own statement", () => {
+    const db = drizzle.mock({ schema });
+    const page = tachoPageQuery(db, SCOPE, {
+      cursor: null,
+      limit: 50,
+      withoutWitnessRuns: false,
+    }).toSQL();
+    const one = tachoSessionQuery(db, SCOPE, "tse_a").toSQL();
+    for (const query of [page, one]) {
+      expect(query.sql).toContain('from "tacho"."control_commands"');
+      // Correlated on the outer session, through the target index's columns.
+      expect(query.sql).toContain(
+        '"tacho"."control_commands"."target_id" = "tacho"."sessions"."public_id"',
+      );
+      expect(query.sql).toContain("in ('pause', 'resume')");
+      expect(query.sql).toContain(
+        `"tacho"."control_commands"."outcome" = 'applied'`,
+      );
+    }
   });
 
-  it("reads only live wrapped runs, and answers a sealed one not paused (negative)", async () => {
-    const { list, reads } = listWithHalts(
-      new Map([
-        ["tse_sealed", "pause"],
-        ["tse_live", "pause"],
-      ]),
-      [
-        tachoSession({ publicId: "tse_sealed" }),
-        tachoSession({ publicId: "tse_live", session: live }),
-      ],
-    );
-    const byId = new Map(
-      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
-    );
-    expect(reads).toEqual([["tse_live"]]);
-    expect(byId.get("tse_sealed")?.ingressPaused).toBe(false);
-    expect(byId.get("tse_live")?.ingressPaused).toBe(true);
-  });
-
-  it("leaves a ledger run's own pause column alone, and does not read halts for it", async () => {
-    const base = ledgerRun({ publicId: "arun_paused", runId: RUN_A });
-    const { list, reads } = listWithHalts(
-      new Map([["arun_paused", "resume"]]),
-      [tachoSession({ publicId: "tse_live", session: live })],
-      [
-        {
-          ...base,
-          run: { ...base.run, status: "running", ingressPaused: true },
-        },
-      ],
-    );
-    const byId = new Map(
-      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
-    );
-    expect(byId.get("arun_paused")).toMatchObject({
-      source: "ledger",
-      ingressPaused: true,
-    });
-    expect(reads).toEqual([["tse_live"]]);
-  });
-
-  it("carries no ingressPaused on a wrapped row when nothing read the halts", async () => {
+  it("answers paused for a live run whose host applied a pause, and not once it applied a resume", async () => {
     const { list } = handlerOver(
       [],
-      [tachoSession({ publicId: "tse_live", session: live })],
+      [
+        tachoSession({
+          publicId: "tse_paused",
+          session: { ...live, paused: true },
+        }),
+        tachoSession({
+          publicId: "tse_resumed",
+          session: { ...live, paused: false },
+        }),
+      ],
+    );
+    const byId = new Map(
+      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+    );
+    expect(byId.get("tse_paused")?.ingressPaused).toBe(true);
+    expect(byId.get("tse_resumed")?.ingressPaused).toBe(false);
+  });
+
+  it("reads a sealed run as not paused, whatever pause it ended under (negative)", async () => {
+    const { list } = handlerOver(
+      [],
+      [tachoSession({ publicId: "tse_sealed", session: { paused: true } })],
     );
     const run = (await list({ limit: 50 }, ctx())).runs[0];
-    expect(run?.ingressPaused).toBeUndefined();
+    expect(run?.status).toBe("sealed");
+    expect(run?.ingressPaused).toBe(false);
+  });
+
+  it("omits the flag where the reader selected no commands", async () => {
+    const { list } = handlerOver(
+      [],
+      [tachoSession({ publicId: "tse_unread", session: live })],
+    );
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run).not.toHaveProperty("ingressPaused");
   });
 });
 
@@ -1260,8 +1221,11 @@ describe("a run row names who ran it, on what, with which model", () => {
   it("reads the host and the operator's name in the page's own statement, not per row", () => {
     const query = tachoPageQuery(db, SCOPE, page).toSQL();
     // One statement for the whole page. A lookup per row would be a hundred
-    // round trips at the contract's maximum limit.
-    expect(query.sql.match(/\bselect\b/gi)).toHaveLength(1);
+    // round trips at the contract's maximum limit. The second `select` is
+    // the correlated read of the last applied pause or resume, which runs
+    // inside this same statement.
+    expect(query.sql.match(/\bselect\b/gi)).toHaveLength(2);
+    expect(query.sql).toMatch(/coalesce\(\(\s*select\b/i);
     expect(query.sql).toContain('left join "tacho"."hosts"');
     expect(query.sql).toContain("machine_snapshot");
     // `to_jsonb` takes the FROM-clause's own correlation name, which is
