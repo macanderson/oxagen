@@ -19,6 +19,13 @@ import {
   type AgentRunIAMResolution,
   type EffectiveMcpScope,
 } from "@oxagen/oxagen/iam";
+import {
+  assertGauAvailable,
+  attributableWorkspaceId,
+  governedActionEntry,
+  ledgerKey,
+  recordGovernedActions,
+} from "@oxagen/billing";
 import { withTenantDb } from "@oxagen/database";
 import { readActiveEmergencyDenies } from "@oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -350,6 +357,108 @@ function iamRefusalCode(
   return "authz_denied";
 }
 
+/**
+ * The part of a tool's per-call options these closures read. The engine
+ * (`executeToolRequest`, engine/tools.ts) and the AI SDK both pass the
+ * model's tool-call id here. Named apart from the SDK's own options type,
+ * which carries more than this file uses.
+ */
+interface ExecuteCallOptions {
+  toolCallId?: string;
+}
+
+/** The model's tool-call id for this call, or null when the caller sent none. */
+function modelToolCallId(
+  options: ExecuteCallOptions | undefined,
+): string | null {
+  const id = options?.toolCallId;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+/**
+ * Record one governed action unit for an external MCP tool call that
+ * completed (ADR-165, source `external_tool`).
+ *
+ * The call is keyed by the model's tool-call id within the run (or the turn,
+ * when there is no run), because a provider's id is unique within a
+ * conversation and promised nothing beyond it. A retried call therefore
+ * bills once. With no tool-call id, or nothing to scope one to, the key is
+ * this invocation's own random id: nothing is deduplicated, which is the safe
+ * direction, since a shared key would silently drop a second, distinct call.
+ *
+ * Never throws. The call already happened and its result is on its way to
+ * the model, so a failure here costs a charge, not the call. That is the
+ * kernel's rule for its own recorder, and like the kernel this logs loudly,
+ * because a silent miss is a revenue leak.
+ *
+ * Runs in the tenant scope it opens: the recorder writes through
+ * `withTenantDb`, and this closure executes mid-stream, outside the scope the
+ * route opened around `materializeTools`.
+ */
+async function recordExternalToolCall(
+  ctx: CapabilityContext,
+  call: {
+    invocationId: string;
+    toolCallId: string | null;
+    toolName: string;
+    mcpServer: string | null;
+    runId: string | null;
+    principalId: string | null;
+    principalKind: string | null;
+  },
+): Promise<void> {
+  const scope = call.runId ?? ctx.executionStepId ?? ctx.messageId ?? null;
+  const idempotencyKey =
+    call.toolCallId !== null && scope !== null
+      ? ledgerKey("external_tool", scope, call.toolCallId)
+      : ledgerKey("external_tool", scope ?? "-", `inv:${call.invocationId}`);
+  const entry = governedActionEntry({
+    idempotencyKey,
+    source: "external_tool",
+    units: 1,
+    occurredAt: new Date(),
+    toolName: call.toolName,
+    mcpServer: call.mcpServer,
+    surface: "agent",
+    workspaceId: attributableWorkspaceId(ctx.workspaceId),
+    agentId:
+      ctx.agentRun?.agentId ?? ctx.deployedAgentInvocation?.agentId ?? null,
+    principalId: call.principalId,
+    principalKind: call.principalKind,
+    operatorUserId:
+      ctx.agentRun?.humanPrincipal?.id ??
+      ctx.deployedAgentInvocation?.initiatingPrincipal.id ??
+      ctx.userId ??
+      null,
+    runId: call.runId,
+    toolCallId: call.toolCallId,
+    requestId: ctx.requestId ?? null,
+  });
+  try {
+    await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () =>
+        recordGovernedActions({
+          orgId: ctx.orgId,
+          entries: [entry],
+          label: call.toolName,
+        }),
+    );
+  } catch (err) {
+    logger.error(
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        capability: call.toolName,
+        idempotencyKey,
+        alert: "external_tool_billing_failed",
+      },
+      "external tool call completed and its governed action was not recorded",
+    );
+  }
+}
+
 // HITL window the consent card is answerable in (same as the approval card).
 const CONSENT_PROMPT_TTL_MS = 5 * 60 * 1000;
 
@@ -542,7 +651,7 @@ export async function materializeTools(
       tool({
         description: cap.description,
         inputSchema: cap.input as ZodTypeAny,
-        execute: async (input: unknown) => {
+        execute: async (input: unknown, options?: ExecuteCallOptions) => {
           const invocationId = crypto.randomUUID();
           const startedAt = Date.now();
           const inputBytes = byteSize(input);
@@ -668,15 +777,24 @@ export async function materializeTools(
               }
               await refuseIfKilled();
             }
-            const result = await invoke(cap.name, input, ctx, {
-              surface: "agent",
-              // Read fresh at call time, same reasoning as the manual-approval
-              // runId above: the in-app assistant opens its run only after
-              // materializing tools, so ctx.agentRun is unset when these
-              // closures are built (finding 9, #3370). Without this, an
-              // auto-approved call's receipt (#3153) attaches to no run.
-              runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
-            });
+            // The model's tool-call id rides on the context so the kernel keys
+            // this call's ledger row by it (ADR-165): a retried tool call bills
+            // once. Without an id the context goes through unchanged.
+            const toolCallId = modelToolCallId(options);
+            const result = await invoke(
+              cap.name,
+              input,
+              toolCallId === null ? ctx : { ...ctx, toolCallId },
+              {
+                surface: "agent",
+                // Read fresh at call time, same reasoning as the manual-approval
+                // runId above: the in-app assistant opens its run only after
+                // materializing tools, so ctx.agentRun is unset when these
+                // closures are built (finding 9, #3370). Without this, an
+                // auto-approved call's receipt (#3153) attaches to no run.
+                runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
+              },
+            );
             // every tool invocation lands one row in ClickHouse
             // `tool_invocations` with surface + provider. Failure-isolated.
             try {
@@ -747,6 +865,10 @@ export async function materializeTools(
   //   2. METERED via insertToolInvocation — whether the call was allowed,
   //      blocked by IAM, or failed. The full invocation trail is preserved
   //      ([[instrument-everything]]).
+  //   3. BILLED as one governed action unit when it completes (ADR-165):
+  //      admitted by `assertGauAvailable` after IAM, recorded on the ledger
+  //      by `recordExternalToolCall` after the server answers. A refused or
+  //      failed call bills nothing.
   // Failures per-server are isolated — a degraded server never blocks the
   // model from receiving other tools.
   // The PluginType spine yields the per-tool work (governance query, connect,
@@ -889,7 +1011,7 @@ export async function materializeTools(
         tool({
           description: raw.description,
           inputSchema: toExternalToolInputSchema(raw.inputSchema),
-          execute: async (input: unknown) => {
+          execute: async (input: unknown, options?: ExecuteCallOptions) => {
             const invocationId = crypto.randomUUID();
             const startedAt = Date.now();
 
@@ -1007,6 +1129,53 @@ export async function materializeTools(
                 );
               }
               // ── End IAM gate ────────────────────────────────────────────────
+
+              // ── Governed action admission (ADR-055, ADR-165) ────────────────
+              // An external call Oxagen authorises bills one governed action
+              // unit, so it is admitted by the same gate the kernel runs after
+              // IAM for a capability (`assertGauAvailable`, installed there by
+              // bootstrapBillingRuntime). A prepaid organisation with no units
+              // left and no top-up is refused, as is one dunning suspended.
+              //
+              // Thrown, the way the kernel throws it for a capability tool, so
+              // the model reads the refusal as the tool's error and the turn
+              // carries on. Checked before the decision rules and the consent
+              // gates, so nobody is asked to approve a call that would then be
+              // refused for want of units. Read-only: the gate charges nothing.
+              try {
+                await runInTenantScope(
+                  { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                  () => assertGauAvailable(ctx.orgId),
+                );
+              } catch (error) {
+                try {
+                  await insertToolInvocation(
+                    buildInvocationPayload(
+                      {
+                        invocationId,
+                        ctx,
+                        capabilityName: capturedKey,
+                        externalServerId,
+                        inputBytes: byteSize(input),
+                      },
+                      {
+                        status: "failed",
+                        outputBytes: 0,
+                        latencyMs: Date.now() - startedAt,
+                        errorClass:
+                          error instanceof Error
+                            ? error.name
+                            : "GovernedActionRefused",
+                      },
+                    ),
+                  );
+                } catch {
+                  /* telemetry must never fail the call */
+                }
+                throw error;
+              }
+              // ── End governed action admission ───────────────────────────────
+
               const admitExternalDecision = externalDecisionCheck({
                 approvalMode: opts.approvalMode,
                 name: capturedKey,
@@ -1478,6 +1647,27 @@ export async function materializeTools(
                 } catch {
                   /* telemetry must never fail the call */
                 }
+                // One governed action unit, for a call that completed. A call
+                // refused by any gate above returned or threw before this
+                // line, and a call the server failed threw out of
+                // `capturedExecute` (an MCP `isError` result throws there
+                // too), so neither bills.
+                await recordExternalToolCall(ctx, {
+                  invocationId,
+                  toolCallId: modelToolCallId(options),
+                  toolName: capturedKey,
+                  mcpServer: capturedServerName,
+                  // The kernel's order for its own ledger rows, so one run's
+                  // capability calls and external calls group together.
+                  runId:
+                    opts.runIdRef?.current ??
+                    ctx.agentRun?.runId ??
+                    ctx.runId ??
+                    ctx.executionStepId ??
+                    null,
+                  principalId: freshIam.principal?.id ?? null,
+                  principalKind: freshIam.principal?.kind ?? null,
+                });
                 return result;
               } catch (err) {
                 _otelToolSpan.setAttributes({ "tool.status": "failed" });

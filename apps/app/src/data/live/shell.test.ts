@@ -1,7 +1,9 @@
 // The shell port: two kernel reads for the layout's organization context,
 // mapped into the shell's view model, with either read's refusal passed
 // through and an unmappable record reported once.
+import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
+import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
 import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.read";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +36,7 @@ vi.mock("@oxagen/telemetry", () => ({ captureError }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
-const { OrgCtx } = await import("@/server/viewer");
+const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
 const { shell } = await import("./shell");
@@ -210,5 +212,107 @@ describe("shell.preferences", () => {
     await shell.preferences(ctx);
     await shell.preferences(other);
     expect(captureError).toHaveBeenCalledTimes(2);
+  });
+});
+
+const wsCtx = unsafeMint(WsCtx, {
+  userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "member",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "core",
+  wsName: "Core platform",
+  wsRole: "member",
+});
+
+describe("shell.counts", () => {
+  it("reads get_nav_counts under the shell's page key and keeps a null count null", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ approvals: 3, proposals: null, incidents: null }),
+    );
+    expect(await shell.counts(wsCtx)).toEqual(
+      readOk({ approvals: 3, proposals: null, incidents: null }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
+      contract: shellNavCountsGet,
+      input: {},
+      page: "shell",
+    });
+  });
+
+  it("passes a refusal through (negative)", async () => {
+    const down = readError("control_plane_unavailable", 503);
+    kernelRead.mockResolvedValue(down);
+    expect(await shell.counts(wsCtx)).toEqual(down);
+  });
+});
+
+describe("shell.notifications", () => {
+  const row = {
+    id: "8d000000-0000-4000-8000-000000000001",
+    publicId: "ntf_01K5",
+    kind: "approval" as const,
+    event: "approval.requested" as const,
+    title: "Approval waiting",
+    body: "release-manager wants to cut the 4.11.0 release.",
+    deepLink: null,
+    unread: true,
+    archived: false,
+    createdAt: "2026-09-23T09:14:00.000Z",
+  };
+
+  it("maps the feed to the public id, drops archived rows and keeps the whole feed's unread count", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        notifications: [row, { ...row, publicId: "ntf_02K5", archived: true }],
+        unreadCount: 7,
+      }),
+    );
+    expect(await shell.notifications(wsCtx)).toEqual(
+      readOk({
+        items: [
+          {
+            id: "ntf_01K5",
+            title: "Approval waiting",
+            body: "release-manager wants to cut the 4.11.0 release.",
+            event: "approval.requested",
+            kind: "approval",
+            unread: true,
+            createdAt: "2026-09-23T09:14:00.000Z",
+          },
+        ],
+        unread: 7,
+      }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
+      contract: notificationsList,
+      input: { unreadOnly: false, limit: 50 },
+      page: "shell",
+    });
+  });
+
+  it("answers record_unmappable and reports once for a row the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        notifications: [{ ...row, publicId: "not a public id" }],
+        unreadCount: 1,
+      }),
+    );
+    expect(await shell.notifications(wsCtx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+
+  it("passes a refusal through (negative)", async () => {
+    const denied = {
+      ok: false as const,
+      reason: "denied" as const,
+      permission: "workspace.read",
+    };
+    kernelRead.mockResolvedValue(denied);
+    expect(await shell.notifications(wsCtx)).toEqual(denied);
   });
 });

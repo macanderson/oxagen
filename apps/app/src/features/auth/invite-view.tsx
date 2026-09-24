@@ -119,6 +119,12 @@ export async function InvitationBody({
       : decision.kind === "closed"
         ? decision.signedInAs
         : null;
+  // An accepted invitation tells the visitor to log in instead; when nobody is
+  // signed in, the footer carries that Log in, since the card's actions are off.
+  const logInInstead =
+    decision.kind === "closed" &&
+    decision.status === "accepted" &&
+    decision.signedInAs === null;
 
   return (
     <>
@@ -179,12 +185,12 @@ export async function InvitationBody({
           ) : decision.kind === "closed" ? (
             // The design keeps the rest of the card when the invitation is
             // closed; the two actions stay in place and cannot be pressed.
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 max-md:flex-col max-md:items-stretch">
               <button
                 type="button"
                 disabled
                 data-touch-target=""
-                className={`${buttonPrimary} max-md:flex-1 disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`${buttonPrimary} max-md:w-full disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {t("accept")}
               </button>
@@ -192,7 +198,7 @@ export async function InvitationBody({
                 type="button"
                 disabled
                 data-touch-target=""
-                className={`${buttonSecondary} max-md:flex-1 disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`${buttonSecondary} max-md:w-full disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {t("decline")}
               </button>
@@ -206,11 +212,19 @@ export async function InvitationBody({
                   mono: monoTag,
                 })}
               </p>
-              <div className="flex flex-wrap gap-2">
-                <SafeLink to={routes.login(here)} className={buttonPrimary}>
+              <div className="flex flex-wrap items-center gap-2 max-md:flex-col max-md:items-stretch">
+                <SafeLink
+                  to={routes.login(here)}
+                  data-touch-target=""
+                  className={`${buttonPrimary} max-md:w-full`}
+                >
                   {t("logIn")}
                 </SafeLink>
-                <SafeLink to={routes.signup(here)} className={buttonSecondary}>
+                <SafeLink
+                  to={routes.signup(here)}
+                  data-touch-target=""
+                  className={`${buttonSecondary} max-md:w-full`}
+                >
                   {t("signUp")}
                 </SafeLink>
               </div>
@@ -226,6 +240,12 @@ export async function InvitationBody({
           </span>{" "}
           <SafeLink to={routes.login(here)} className={linkText}>
             {t("notYou")}
+          </SafeLink>
+        </AuthFooter>
+      ) : logInInstead ? (
+        <AuthFooter>
+          <SafeLink to={routes.login()} className={linkText}>
+            {t("logInInstead")}
           </SafeLink>
         </AuthFooter>
       ) : null}

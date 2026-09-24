@@ -36,7 +36,12 @@ const resolveViewer = vi.fn();
 const source: DataSource = {
   runtimes: { list: refuse, agents: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse, preferences },
+  shell: {
+    context: refuse,
+    preferences,
+    counts: refuse,
+    notifications: refuse,
+  },
   runs: {
     list: refuse,
     get: refuse,
@@ -48,7 +53,7 @@ const source: DataSource = {
     work: refuse,
     outcomesSettings: refuse,
   },
-  approvals: { pending: refuse, resolved: refuse },
+  approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
   agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
   billing: {
     plan: refuse,
@@ -77,9 +82,11 @@ const source: DataSource = {
     apiKeys: refuse,
     costCenters: refuse,
     modelCredential: refuse,
+    dataPlane: refuse,
+    workspaceFacts: refuse,
     sso: refuse,
   },
-  audit: { events: refuse, exportEvents },
+  audit: { events: refuse, exportEvents, retention: refuse, bundle: refuse },
   onboarding: { state: refuse, firstFrame: refuse },
   skills: { inventory: refuse, configuration: refuse },
   mandates: { list: refuse, get: refuse },
@@ -89,7 +96,10 @@ const source: DataSource = {
     proposals: refuse,
     contextPr: refuse,
     freshness: refuse,
+    hub: refuse,
     deliveries: refuse,
+    memories: refuse,
+    tree: refuse,
   },
   tools: {
     versions: refuse,
@@ -153,7 +163,10 @@ describe("handleAuditExport", () => {
     });
   });
 
-  it("exports the whole record without reading a zone when no day is filtered", async () => {
+  it("exports the page's Range window, ending now, without reading a zone when no day is filtered", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(
+      Date.parse("2026-09-16T12:00:00.000Z"),
+    );
     await handleAuditExport(request("?outcome=deny"), context, deps);
     expect(exportEvents).toHaveBeenCalledWith(ctx, {
       format: "csv",
@@ -161,10 +174,16 @@ describe("handleAuditExport", () => {
       outcome: "deny",
       actor: null,
       capability: null,
-      since: null,
+      since: "2026-08-17T12:00:00.000Z",
       until: null,
     });
+    await handleAuditExport(request("?range=48h"), context, deps);
+    expect(exportEvents).toHaveBeenLastCalledWith(
+      ctx,
+      expect.objectContaining({ since: "2026-09-14T12:00:00.000Z" }),
+    );
     expect(preferences).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it("exports CSV when the request names no format the contract knows (negative)", async () => {

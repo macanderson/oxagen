@@ -164,6 +164,8 @@ export function onboardingSource(reads: Reads): {
     shell: {
       context: refuse("shell.context"),
       preferences: refuse("shell.preferences"),
+      counts: refuse("shell.counts"),
+      notifications: refuse("shell.notifications"),
     },
     runs: {
       list: (...args: Parameters<DataSource["runs"]["list"]>) => {
@@ -188,6 +190,7 @@ export function onboardingSource(reads: Reads): {
     approvals: {
       pending: refuse("approvals.pending"),
       resolved: refuse("approvals.resolved"),
+      resolvedSince: refuse("approvals.resolvedSince"),
     },
     billing: {
       plan: refuse("billing.plan"),
@@ -212,6 +215,8 @@ export function onboardingSource(reads: Reads): {
     audit: {
       events: refuse("audit.events"),
       exportEvents: refuse("audit.exportEvents"),
+      retention: refuse("audit.retention"),
+      bundle: refuse("audit.bundle"),
     },
     org: {
       members: refuse("org.members"),
@@ -220,6 +225,8 @@ export function onboardingSource(reads: Reads): {
       apiKeys: refuse("org.apiKeys"),
       costCenters: refuse("org.costCenters"),
       modelCredential: refuse("org.modelCredential"),
+      dataPlane: refuse("org.dataPlane"),
+      workspaceFacts: refuse("org.workspaceFacts"),
       sso: refuse("org.sso"),
     },
     skills: {
@@ -232,7 +239,10 @@ export function onboardingSource(reads: Reads): {
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
       freshness: refuse("steering.freshness"),
+      hub: refuse("steering.hub"),
       deliveries: refuse("steering.deliveries"),
+      memories: refuse("steering.memories"),
+      tree: refuse("steering.tree"),
     },
     tools: {
       versions: refuse("tools.versions"),

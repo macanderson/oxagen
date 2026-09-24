@@ -26,6 +26,7 @@ export function toRunRow(
     operatorId: run.operatorId,
     operatorKind: run.operatorKind,
     operatorName: run.operatorName,
+    operatorAttribution: run.operatorAttribution,
     status: run.status,
     reportedCost: run.reportedCost ?? null,
     outcome: run.outcome,
@@ -58,6 +59,7 @@ export function toRunRow(
     taskRef: run.taskRef,
     name: run.name,
     enrichmentEnabled: run.enrichmentEnabled ?? true,
+    ...(run.enrichmentError ? { enrichmentError: run.enrichmentError } : {}),
     summary:
       run.summary === null
         ? null
@@ -69,12 +71,15 @@ export function toRunRow(
     replayGrade: run.replayGrade,
     verdict: run.verdict,
     enforcementTier: run.enforcementTier,
+    commandBlock: run.commandBlock ?? null,
+    steerBlock: run.steerBlock ?? null,
     ingressRevoked: run.ingressRevoked ?? false,
     ingressPaused: run.ingressPaused ?? false,
     completenessGaps: run.completenessGaps,
     canSummarize: run.canSummarize,
     startedAt: run.startedAt,
     sealedAt: run.sealedAt,
+    endedAt: run.endedAt,
   };
 }
 

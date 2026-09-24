@@ -112,6 +112,20 @@
               }
             ]
           },
+          "operatorAttribution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "initiator",
+                  "host_enroller"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -239,6 +253,16 @@
               }
             ]
           },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "replayGrade": {
             "anyOf": [
               {
@@ -301,6 +325,35 @@
           },
           "canSummarize": {
             "type": "boolean"
+          },
+          "commandBlock": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "run_sealed",
+                  "no_host",
+                  "host_revoked",
+                  "host_offline"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steerBlock": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_prompt_carrier"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "model": {
             "anyOf": [
@@ -557,6 +610,9 @@
           "enrichmentEnabled": {
             "type": "boolean"
           },
+          "enrichmentError": {
+            "type": "string"
+          },
           "name": {
             "anyOf": [
               {
@@ -602,6 +658,7 @@
           "operatorId",
           "operatorKind",
           "operatorName",
+          "operatorAttribution",
           "status",
           "outcome",
           "turns",
@@ -611,6 +668,7 @@
           "taskRef",
           "startedAt",
           "sealedAt",
+          "endedAt",
           "replayGrade",
           "verdict",
           "enforcementTier",

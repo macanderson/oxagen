@@ -13,7 +13,8 @@ import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 /**
  * Reachable without a session: the sign-in flows, invitations, the auth API and
  * the two callbacks. Two-factor is public because after the password step the
- * person holds only Better Auth's short-lived two-factor cookie. The CLI and
+ * person holds only Better Auth's short-lived two-factor cookie; the proxy
+ * still sends a visitor with neither that cookie nor a session to /login. The CLI and
  * GitHub callbacks are public so an invalid CLI request renders its error
  * without a detour, and each sends a signed-out visitor to /login itself with
  * the exact request as `next`. /cli/complete is public because the browser the
@@ -48,6 +49,35 @@ export function hasSessionCookie(req: NextRequest): boolean {
 }
 
 /**
+ * Better Auth's short-lived cookie between the password and the second factor:
+ * `<prefix>.two_factor`, with a `__Secure-` prefix over HTTPS. Its value is
+ * signed and checked by the two-factor endpoints; here only its presence counts.
+ */
+export function hasTwoFactorCookie(req: NextRequest): boolean {
+  return req.cookies
+    .getAll()
+    .some((c) => c.name.endsWith("two_factor") && c.value !== "");
+}
+
+const TWO_FACTOR_PATH = /^\/two-factor(\/|$)/;
+
+/**
+ * Two-factor is read only after a first factor (two-factor.md, Permissions):
+ * the password step's two-factor cookie, or a session, which the enrollment
+ * redirect (`routes.mfaEnroll`) carries. Without either the visitor goes to
+ * /login, keeping the destination the page was given.
+ */
+function twoFactorWithoutFirstFactor(req: NextRequest): NextResponse | null {
+  if (!TWO_FACTOR_PATH.test(req.nextUrl.pathname)) return null;
+  if (hasTwoFactorCookie(req) || hasSessionCookie(req)) return null;
+  const next = sanitizeNext(
+    req.nextUrl.searchParams.get("next"),
+    routes.root(),
+  );
+  return responseRedirect(req, routes.login(next));
+}
+
+/**
  * Each row compiled once: `from` as an anchored pattern with `org` and `ws`
  * named groups, `to` as its replacement string.
  */
@@ -71,6 +101,8 @@ function legacyTarget(pathname: string): SafePath | null {
 
 export function proxy(req: NextRequest): NextResponse {
   const { pathname, search } = req.nextUrl;
+  const signedOut = twoFactorWithoutFirstFactor(req);
+  if (signedOut !== null) return signedOut;
   if (isPublicPath(pathname)) return NextResponse.next();
   const moved = legacyTarget(pathname);
   if (moved !== null) return responseRedirect(req, moved, 308);

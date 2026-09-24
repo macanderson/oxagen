@@ -85,6 +85,28 @@ const runPrDiffFileSchema = z
     patch: z.string().nullable(),
   })
   .strict();
+/**
+ * The issues a pull request closes on merge, as GitHub records them (closing
+ * keywords and sidebar links). Null when they could not be read, so an unread
+ * list never reads as "closes nothing".
+ */
+const runPrClosingIssuesSchema = z
+  .object({
+    issues: z.array(
+      z
+        .object({
+          owner: z.string(),
+          repo: z.string(),
+          number: z.number().int(),
+          title: z.string(),
+          url: z.url(),
+          state: z.enum(["open", "closed"]),
+        })
+        .strict(),
+    ),
+    complete: z.boolean(),
+  })
+  .strict();
 const runWorkPrSchema = z
   .object({
     repository: runRepositorySchema,
@@ -95,6 +117,7 @@ const runWorkPrSchema = z
     headSha: z.string().nullable(),
     headRef: z.string(),
     association: z.enum(["recorded", "head_commit", "branch"]),
+    closingIssues: runPrClosingIssuesSchema.nullable(),
     checkoutRefs: z.array(z.string()),
     observedAt: z.string(),
     current: z.boolean(),
@@ -118,10 +141,14 @@ const runWorkPrSchema = z
   })
   .strict();
 
-/** One subagent the session started, as its hook frames recorded it. */
+/**
+ * One subagent the session started, as its hook frames recorded it.
+ * `agentRef` is the harness's own agent id (`hook.agent_id`). Oxagen neither
+ * mints nor validates it, so it is a `…Ref`, not a `PublicId` (INV-11).
+ */
 export const RunSubagent = z
   .object({
-    id: z.string(),
+    agentRef: z.string(),
     type: z.string().nullable(),
     firstSeq: z.string(),
     lastSeq: z.string(),

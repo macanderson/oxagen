@@ -459,6 +459,65 @@ describe("kernelWrite", () => {
       { ok: false, reason: "exhausted", code: "budget_exceeded" },
       0,
     ],
+    // The in-app agent's credit gate. These read "unavailable" before, so a
+    // person out of usage credits was told to try again, not to top up.
+    [
+      "insufficient_credits",
+      new Coded("insufficient_credits"),
+      { ok: false, reason: "exhausted", code: "insufficient_credits" },
+      0,
+    ],
+    [
+      "assistant_spend_cap",
+      new Coded("assistant_spend_cap"),
+      { ok: false, reason: "exhausted", code: "assistant_spend_cap" },
+      0,
+    ],
+    [
+      "insufficient_credits",
+      new Coded("insufficient_credits"),
+      { ok: false, reason: "exhausted", code: "insufficient_credits" },
+      0,
+    ],
+    [
+      "assistant_spend_cap",
+      new Coded("assistant_spend_cap"),
+      { ok: false, reason: "exhausted", code: "assistant_spend_cap" },
+      0,
+    ],
+    // #3227: the engine's own codes reach the caller, so the flyout can say
+    // the engine is down rather than the generic kernel_failure. Each is a
+    // service outage, reported once like any other.
+    [
+      "engine_unavailable",
+      new Coded("engine_unavailable"),
+      { ok: false, reason: "unavailable", code: "engine_unavailable" },
+      1,
+    ],
+    [
+      "assistant_run_not_recorded",
+      new Coded("assistant_run_not_recorded"),
+      { ok: false, reason: "unavailable", code: "assistant_run_not_recorded" },
+      1,
+    ],
+    [
+      "model_call_failed",
+      new Coded("model_call_failed"),
+      { ok: false, reason: "unavailable", code: "model_call_failed" },
+      1,
+    ],
+    [
+      "assistant_model_key_limit",
+      new Coded("assistant_model_key_limit"),
+      { ok: false, reason: "exhausted", code: "assistant_model_key_limit" },
+      0,
+    ],
+    [
+      "engine_aborted",
+      new Coded("engine_aborted"),
+      { ok: false, reason: "conflict", code: "engine_aborted" },
+      0,
+    ],
     [
       "HandlerError forbidden",
       handlerError("forbidden"),

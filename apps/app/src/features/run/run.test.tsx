@@ -154,7 +154,14 @@ async function renderRun(
     spine: view.spine ?? null,
     now: NOW,
   });
-  const { container } = render(<IntlProvider>{element}</IntlProvider>);
+  // The header's checkout strips suspend on the work read (`use(work)`). A
+  // render inside a synchronous act never flushes that retry, so the strips
+  // stayed on their fallback; awaiting act lets the resolved read land.
+  let container!: HTMLElement;
+  await act(async () => {
+    ({ container } = render(<IntlProvider>{element}</IntlProvider>));
+    await Promise.resolve();
+  });
   return { container, calls };
 }
 
@@ -174,7 +181,9 @@ describe("header", () => {
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("Cut the 3.2 release branch");
     expect(h1.className).not.toContain("font-mono");
-    expect(screen.getByRole("button", { name: "Copy tse_7k2m9q" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeTruthy();
     // The title is the h1's alone, never repeated in the when line.
     expect(screen.getByTestId("run-when")).not.toHaveTextContent(
       "Cut the 3.2 release branch",
@@ -225,7 +234,9 @@ describe("header", () => {
 
   it("reads sealed from the run's status in the when line, the same status the record actions gate on", async () => {
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "halted", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "halted", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const when = screen.getByTestId("run-when");
@@ -233,7 +244,9 @@ describe("header", () => {
     expect(when).not.toHaveTextContent("still running");
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "live", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-when")).toHaveTextContent("still running");
@@ -299,7 +312,9 @@ describe("header", () => {
     );
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ operatorAttribution: "initiator" }) })),
+      detail: ok(
+        runDetail({ run: runRow({ operatorAttribution: "initiator" }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator");
@@ -339,14 +354,18 @@ describe("header", () => {
   it("titles a run that carries no name and no task reference by its id in mono (negative)", async () => {
     await renderRun({
       detail: ok(
-        runDetail({ run: runRow({ name: null, taskRef: null, summary: null }) }),
+        runDetail({
+          run: runRow({ name: null, taskRef: null, summary: null }),
+        }),
       ),
       transcript: ok(runTranscript()),
     });
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("tse_7k2m9q");
     expect(h1.className).toContain("font-mono");
-    expect(screen.queryByRole("button", { name: "Copy tse_7k2m9q" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeNull();
   });
 
   it("titles a run whose read failed by the id the URL named", async () => {
@@ -479,14 +498,14 @@ describe("header", () => {
         pullRequests: [],
         subagents: [
           {
-            id: "a0182b6cd3a21d284",
+            agentRef: "a0182b6cd3a21d284",
             type: "Explore",
             firstSeq: "12",
             lastSeq: "30",
             stopped: true,
           },
           {
-            id: "b77c01e9f2d4a8c10",
+            agentRef: "b77c01e9f2d4a8c10",
             type: null,
             firstSeq: "31",
             lastSeq: "31",
@@ -568,6 +587,7 @@ describe("header", () => {
             headSha: null,
             headRef: "release/3.2",
             association: "recorded",
+            closingIssues: null,
             checkoutRefs: [],
             observedAt: "2026-09-23T10:00:00.000Z",
             current: true,
@@ -824,6 +844,21 @@ describe("controls", () => {
     }
   });
 
+  it("disables only Steer on a live run whose harness carries no mid-session prompt", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ status: "live", steerBlock: "no_prompt_carrier" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    for (const command of ["pause", "resume", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
+    }
+  });
+
   it("allows ledger ingress control and explains the remaining control limit", async () => {
     await renderRun({
       detail: ok(
@@ -968,10 +1003,12 @@ describe("tabs", () => {
       "everything",
       { kinds: [] },
     ]);
-    expect(screen.getByRole("button", { name: "Steps" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    // Steps opens every turn.
+    expect(
+      screen
+        .getAllByTestId("transcript-turn")
+        .every((turn) => turn.hasAttribute("open")),
+    ).toBe(true);
   });
 
   it("opens the transcript at the level the URL asked for, from the same read", async () => {
@@ -985,9 +1022,9 @@ describe("tabs", () => {
       "everything",
       { kinds: [] },
     ]);
-    expect(screen.getByRole("button", { name: "Turns" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    // Turns opens none but the one holding the newest frame.
+    expect(screen.getAllByTestId("transcript-turn")[0]).not.toHaveAttribute(
+      "open",
     );
   });
 
@@ -1064,8 +1101,8 @@ describe("transcript", () => {
       expect.stringContaining("turn 2"),
     ]);
     expect(turns[1]).toHaveTextContent("done");
-    expect(turns[1]).toHaveTextContent("4 steps");
-    expect(turns[1]).toHaveTextContent("seq 2 to 8");
+    expect(turns[1]).toHaveTextContent("2 steps");
+    expect(turns[1]).toHaveTextContent("steps 1 to 2");
     // What was asked sits above the turn it opened, outside the disclosure,
     // so a collapsed turn still shows it.
     const asked = screen.getByTestId("transcript-you");
@@ -1080,9 +1117,23 @@ describe("transcript", () => {
       .getAllByTestId("transcript-step")
       .map((step) => step.getAttribute("data-node"));
     // A step with nothing to read (a context assembly with no body, a model
-    // call the recorder kept only a digest of) draws no row; the Frames tab
-    // still has it. What is left is what the run did.
-    expect(nodes).toEqual(["control", "model", "tool", "control", "deny"]);
+    // call the recorder kept only a digest of) draws no row, and neither does
+    // the turn_start or turn_end whose text is already the prompt above the
+    // turn and the reply inside it. The Frames tab still has every one. What
+    // is left is what the run did.
+    expect(nodes).toEqual(["model", "tool", "deny"]);
+    expect(turns[1]).not.toHaveTextContent(
+      "Cut the 2026.9.2 release candidate.",
+    );
+    expect(
+      screen.getAllByText(/Both failures predate the release scope/),
+    ).toHaveLength(1);
+    // The steps are numbered over the rows drawn: the run start, the
+    // digest-only model call and the turn text above have no row, and
+    // leave no gap in the count.
+    expect(
+      screen.getAllByTestId("step-number").map((n) => n.textContent),
+    ).toEqual(["1", "2", "3"]);
     await expectNoAxe(container);
   });
 
@@ -1092,8 +1143,9 @@ describe("transcript", () => {
       { tab: "transcript" },
     );
     const readout = screen.getByTestId("transport-readout");
-    expect(readout).toHaveTextContent("seq 12");
-    expect(readout).toHaveTextContent("/ 12");
+    // The position counts frames from 1, not the recorded seq, so it runs
+    // without gaps whatever seq numbers the chain carries.
+    expect(readout).toHaveTextContent("frame 13 / 13");
     expect(readout).toHaveTextContent("0:24 / 0:24");
     expect(readout).toHaveTextContent("$0.90");
     const now = screen
@@ -1117,14 +1169,48 @@ describe("transcript", () => {
       target: { value: "4" },
     });
     const readout = screen.getByTestId("transport-readout");
-    expect(readout).toHaveTextContent("seq 4");
+    expect(readout).toHaveTextContent("frame 5 /");
     expect(readout).toHaveTextContent("$0.38");
     const steps = screen.getAllByTestId("transcript-step");
     const now = steps.find((step) => step.hasAttribute("data-now"));
     expect(now).toHaveTextContent("claude-fable-5-1");
     expect(steps[steps.length - 1]?.className).toContain("opacity-35");
     fireEvent.click(screen.getByRole("button", { name: "Step back" }));
-    expect(readout).toHaveTextContent("seq 3");
+    expect(readout).toHaveTextContent("frame 4 /");
+  });
+
+  it("rewinds to the first frame, jumps to the last, and offers the mockup's four speeds", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript" },
+    );
+    const readout = screen.getByTestId("transport-readout");
+    const rewind = screen.getByRole("button", {
+      name: "Rewind to the first frame",
+    });
+    const end = screen.getByRole("button", { name: "Go to the last frame" });
+    expect(end).toBeDisabled();
+    fireEvent.click(rewind);
+    expect(readout).toHaveTextContent("frame 1 / 13");
+    expect(rewind).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Step back" })).toBeDisabled();
+    fireEvent.click(end);
+    expect(readout).toHaveTextContent("frame 13 / 13");
+    const speeds = within(
+      screen.getByRole("group", { name: "Playback speed" }),
+    ).getAllByRole("button");
+    expect(speeds.map((button) => button.textContent)).toEqual([
+      "1×",
+      "2×",
+      "3×",
+      "6×",
+    ]);
+    expect(speeds[0]).toHaveAttribute("aria-pressed", "true");
+    const six = speeds[3];
+    if (six === undefined) throw new Error("no 6× speed button");
+    fireEvent.click(six);
+    expect(speeds[3]).toHaveAttribute("aria-pressed", "true");
+    expect(speeds[0]).toHaveAttribute("aria-pressed", "false");
   });
 
   it("opens every step's frames at Everything, and says a digest_only frame has nothing to read", async () => {
@@ -1132,9 +1218,10 @@ describe("transcript", () => {
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript", zoom: "everything" },
     );
-    // Nine frames across the steps that have something to read; the frames
-    // of the steps with nothing to read are the Frames tab's.
-    expect(screen.getAllByTestId("transcript-frame")).toHaveLength(9);
+    // Seven frames across the steps that have something to read; the frames
+    // of the steps with nothing to read, and of the turn_start and turn_end
+    // the prompt and reply already show, are the Frames tab's.
+    expect(screen.getAllByTestId("transcript-frame")).toHaveLength(7);
     expect(screen.getByText('{"open":34}')).toBeTruthy();
     // The digest-only model call has no row, so nothing says it has no body.
     expect(screen.queryByText(/kept a digest and no body/)).toBeNull();
@@ -1146,26 +1233,21 @@ describe("transcript", () => {
     );
   });
 
-  it("closes everything at Turns and keeps the position", async () => {
-    const replaceState = vi.spyOn(window.history, "replaceState");
+  it("draws no zoom tabs, and keeps the URL's zoom on the Transcript tab's link", async () => {
     await renderRun(
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript", zoom: "everything" },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Turns" }));
-    expect(screen.queryAllByTestId("transcript-frame")).toHaveLength(0);
-    expect(
-      screen
-        .getAllByTestId("transcript-turn")
-        .every((turn) => !turn.hasAttribute("open")),
-    ).toBe(true);
-    expect(screen.getByTestId("transport-readout")).toHaveTextContent("seq 12");
-    expect(replaceState).toHaveBeenCalledWith(
-      null,
-      "",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+    for (const name of ["Turns", "Steps", "Everything"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    const tabs = within(
+      screen.getByRole("navigation", { name: "Run sections" }),
     );
-    replaceState.mockRestore();
+    expect(tabs.getByRole("link", { name: /Transcript/ })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=everything",
+    );
   });
 
   it("says which half a frame carried, and the decision a rule made about the call", async () => {
@@ -1239,11 +1321,11 @@ describe("transcript", () => {
         target: { value: "2" },
       });
       expect(screen.getByTestId("transport-readout")).not.toHaveTextContent(
-        "seq 12",
+        "frame 13 /",
       );
       fireEvent.click(screen.getByRole("button", { name: "go live" }));
       expect(screen.getByTestId("transport-readout")).toHaveTextContent(
-        "seq 12",
+        "frame 13 /",
       );
     } finally {
       vi.useRealTimers();
@@ -1259,21 +1341,21 @@ describe("transcript", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Play" }));
       const readout = screen.getByTestId("transport-readout");
-      expect(readout).toHaveTextContent("seq 0");
+      expect(readout).toHaveTextContent("frame 1 /");
       act(() => {
         vi.advanceTimersByTime(2000);
       });
-      expect(readout).toHaveTextContent("seq 1");
-      fireEvent.click(screen.getByRole("button", { name: "×2" }));
+      expect(readout).toHaveTextContent("frame 2 /");
+      fireEvent.click(screen.getByRole("button", { name: "2×" }));
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(readout).toHaveTextContent("seq 2");
+      expect(readout).toHaveTextContent("frame 3 /");
       fireEvent.click(screen.getByRole("button", { name: "Pause playback" }));
       act(() => {
         vi.advanceTimersByTime(10_000);
       });
-      expect(readout).toHaveTextContent("seq 2");
+      expect(readout).toHaveTextContent("frame 3 /");
     } finally {
       vi.useRealTimers();
     }
@@ -1661,10 +1743,9 @@ describe("chips", () => {
   it("drops a word the contract does not publish rather than refusing the page (negative)", async () => {
     const { calls } = await renderRun(
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
-      { tab: "transcript", kinds: "thinking,proof,tools" },
+      { tab: "transcript", kinds: "proof,tools" },
     );
     expect(calls.transcript[1]?.[3]).toEqual({ kinds: ["tools"] });
-    expect(screen.queryByTestId("chip-thinking")).toBeNull();
     expect(screen.queryByTestId("chip-proof")).toBeNull();
   });
 
@@ -1676,14 +1757,37 @@ describe("chips", () => {
       },
       { tab: "transcript", zoom: "turns", kinds: "tools" },
     );
-    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+    // Turning a chip on adds its kinds; tools brings its gate decisions.
+    expect(screen.getByTestId("chip-prompt")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=tools%2Cerrors",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=prompt%2Ctools%2Cpolicy",
     );
-    // Pressing a chip that is on takes it off again.
+    // Turning off the one chip that is on turns every chip off.
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=none",
+    );
+    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=errors",
+    );
+  });
+
+  it("reads nothing more when every chip is off, and says how to get the run back", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript", kinds: "none" },
+    );
+    expect(calls.transcript).toEqual([
+      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
+    ]);
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Choose all",
+    );
+    expect(screen.queryByTestId("transcript")).toBeNull();
+    expect(screen.getByTestId("chip-all")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=steps",
     );
   });
 
@@ -1696,7 +1800,7 @@ describe("chips", () => {
       { tab: "transcript", kinds: "policy" },
     );
     expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
-      "Clear the filter",
+      "Choose all",
     );
     expect(screen.queryByTestId("run-transport")).toBeNull();
   });
@@ -2186,7 +2290,9 @@ describe("the work", () => {
       "Provisional until the rollup. Priced from the cost each call reported.",
     );
     expect(
-      screen.queryByText("No cost rollup yet. It is built after the run seals."),
+      screen.queryByText(
+        "No cost rollup yet. It is built after the run seals.",
+      ),
     ).toBeNull();
   });
 
@@ -2220,7 +2326,13 @@ describe("issues", () => {
       },
       { tab: "issues" },
     );
-    expect(screen.getByText("This run names no issue.")).toBeTruthy();
+    // The default work read lists no pull requests, so the run's own pull
+    // requests were read and close nothing (#4024).
+    expect(
+      screen.getByText(
+        "This run names no issue, and no pull request it opened closes one.",
+      ),
+    ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("0");
   });
 });
@@ -2384,21 +2496,23 @@ describe("loading", () => {
     await expectNoAxe(container);
   });
 
-  it("keeps the page's own main container and header, rather than exporting the skeleton alone", () => {
+  it("keeps the page's frame and header, and leaves main#main to the streamed page", () => {
     render(
       <IntlProvider>
         <RunLoading />
       </IntlProvider>,
     );
-    // Next swaps page.tsx's whole return value for this default export while
-    // the route suspends, so the skip-to-content target and the page frame
-    // have to come from here too, or a stranger's tab-order loses its anchor
-    // and the layout jumps once the real page takes the same container.
-    const main = document.getElementById("main");
-    expect(main).not.toBeNull();
-    expect(main?.tagName).toBe("MAIN");
-    expect(main).toContainElement(screen.getByRole("heading", { name: "Run" }));
-    expect(main).toContainElement(screen.getByRole("status"));
+    // The frame comes from here, so the layout does not jump once the real
+    // page lands. main#main does not: while the page streams in, this
+    // fallback and the page are in the document together, and only the page
+    // may own the landmark (arch/loading-landmarks.test.ts).
+    const frame = screen.getByTestId("run-loading-frame");
+    expect(frame).toContainElement(
+      screen.getByRole("heading", { name: "Run" }),
+    );
+    expect(frame).toContainElement(screen.getByRole("status"));
+    expect(document.getElementById("main")).toBeNull();
+    expect(screen.queryByRole("main")).toBeNull();
   });
 });
 

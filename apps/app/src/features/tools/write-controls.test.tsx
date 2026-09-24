@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The three Tools writes as a person makes them: the import dialog, which
-// picks its server from the registered roster, the tool dialog's
+// The three Tools writes as a person makes them: the import dialog's three
+// steps (Connect, Review tools/list, Classify and import), the tool dialog's
 // reclassification form, and the switch dialog — which states the
 // blast radius before the confirming button, never after. A completed write
 // reloads the view it leads to; a refusal is named where the person acted and
@@ -20,21 +20,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { router, importTools, setToolClassification, flipKillSwitch } =
-  vi.hoisted(() => ({
-    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-    importTools: vi.fn(),
-    setToolClassification: vi.fn(),
-    flipKillSwitch: vi.fn(),
-  }));
+const {
+  router,
+  importTools,
+  registerServer,
+  setToolClassification,
+  flipKillSwitch,
+} = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  importTools: vi.fn(),
+  registerServer: vi.fn(),
+  setToolClassification: vi.fn(),
+  flipKillSwitch: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
   importTools,
+  registerServer,
   setToolClassification,
   flipKillSwitch,
 }));
 
-const { ImportControls } = await import("./import-controls");
+const { ImportProvider } = await import("./import-provider");
 const { ToolDialog } = await import("./tool-dialog");
 const { splitTags, versionLabel } = await import("./view");
 const { FlipControls } = await import("./switch-controls");
@@ -50,7 +57,7 @@ const formOf = (node: HTMLElement) => element(node.closest("form"), "form");
 
 const at = { org: "acme", ws: "core-platform" };
 const TOOLS = "/acme/core-platform/tools";
-const SWITCHES = "/acme/core-platform/tools?tab=switches";
+const SWITCHES = "/acme/core-platform/tools/switches";
 const GENERATION = { org: 12, workspace: 4 };
 /** The operator level's picker (#3147): one member, so its option is unambiguous. */
 const MEMBERS = [
@@ -87,6 +94,7 @@ beforeEach(() => {
     router.replace,
     router.refresh,
     importTools,
+    registerServer,
     setToolClassification,
     flipKillSwitch,
   ]) {
@@ -120,97 +128,187 @@ describe("versionLabel", () => {
   });
 });
 
-describe("ImportControls", () => {
-  it("imports the server the person named and reloads the registry", async () => {
+describe("ImportProvider", () => {
+  const ROSTER = [
+    { id: "mcs_01k5s1", name: "Stripe" },
+    { id: "mcs_01k5s2", name: "GitHub" },
+  ];
+
+  function open(servers: readonly { id: string; name: string }[] | null) {
+    withIntl(<ImportProvider at={at} servers={servers} />);
+    fireEvent.click(screen.getByTestId("tools-import-open"));
+    return screen.getByTestId("tools-import-dialog");
+  }
+
+  it("walks the three steps in order, naming the one the person is on", () => {
+    const dialog = open(ROSTER);
+    const steps = within(dialog).getByRole("list", { name: "Import steps" });
+    expect(
+      within(steps)
+        .getAllByRole("listitem")
+        .map((step) => step.textContent),
+    ).toEqual(["1 Connect", "2 Review tools/list", "3 Classify and import"]);
+    expect(within(steps).getByText("1 Connect")).toHaveAttribute(
+      "aria-current",
+      "step",
+    );
+  });
+
+  it("imports the tools typed for a provider picked off the roster, by its id, and reloads the registry", async () => {
     importTools.mockResolvedValue({
       ok: true,
       value: { importDigest: "d1", published: 2, unchanged: 1 },
     });
-    withIntl(<ImportControls at={at} servers={null} />);
-    fireEvent.click(screen.getByTestId("tools-import-open"));
-    fill("Server", "mcs_01k5s1");
+    open(ROSTER);
+    // The picker shows the provider's name; what goes to the kernel is the id
+    // `import_tools` names a provider by, never the name a person reads.
+    fill("Provider", "mcs_01k5s2");
+    fireEvent.submit(formOf(screen.getByLabelText("Provider")));
     fill("Tools", "get_page create_page");
-    fireEvent.submit(formOf(screen.getByText("Import")));
+    fireEvent.click(screen.getByTestId("tools-import-classify"));
+    expect(
+      screen.getByText("What import does not do.", { exact: false }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByTestId("tools-import-confirm"));
     await waitFor(() => {
       expect(importTools).toHaveBeenCalledWith("acme", "core-platform", {
-        serverId: "mcs_01k5s1",
+        serverId: "mcs_01k5s2",
         tools: ["get_page", "create_page"],
       });
     });
-    expect(router.replace).toHaveBeenCalledWith(TOOLS);
+    // The page behind re-reads in place: moving to another tab would unmount
+    // a dialog opened from a tab's own panel before its receipt is read.
+    expect(router.refresh).toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
     expect(await screen.findByTestId("tools-import-done")).toHaveTextContent(
       "2 new versions · 1 already registered.",
     );
   });
 
-  it("names a refusal where the person acted and navigates nowhere", async () => {
-    importTools.mockResolvedValue({
-      ok: false,
-      reason: "denied",
-      code: "org_role_required",
-    });
-    withIntl(<ImportControls at={at} servers={null} />);
-    fireEvent.click(screen.getByTestId("tools-import-open"));
-    fill("Server", "mcs_01k5s1");
-    fireEvent.submit(formOf(screen.getByText("Import")));
-    expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
-      "This needs an organization Owner or Admin.",
-    );
-    expect(router.replace).not.toHaveBeenCalled();
-  });
-
-  it("picks a registered server by name and submits its id", async () => {
+  it("imports every pin when no name is typed, and says so before it runs", async () => {
     importTools.mockResolvedValue({
       ok: true,
       value: { importDigest: "d1", published: 1, unchanged: 0 },
     });
-    withIntl(
-      <ImportControls
-        at={at}
-        servers={[
-          { id: "mcs_01k5s1", name: "Stripe" },
-          { id: "mcs_01k5s2", name: "GitHub" },
-        ]}
-      />,
-    );
-    fireEvent.click(screen.getByTestId("tools-import-open"));
-    // The picker shows the server's name; what goes to the kernel is the id
-    // `import_tools` names a server by, never the name a person reads.
-    fill("Server", "mcs_01k5s2");
-    fireEvent.submit(formOf(screen.getByText("Import")));
+    open(ROSTER);
+    fill("Provider", "mcs_01k5s1");
+    fireEvent.submit(formOf(screen.getByLabelText("Provider")));
+    fireEvent.click(screen.getByTestId("tools-import-classify"));
+    expect(screen.getByText("Every tool the provider pins.")).toBeVisible();
+    fireEvent.click(screen.getByTestId("tools-import-confirm"));
     await waitFor(() => {
       expect(importTools).toHaveBeenCalledWith("acme", "core-platform", {
-        serverId: "mcs_01k5s2",
+        serverId: "mcs_01k5s1",
         tools: [],
       });
     });
   });
 
-  it("says so when no server is registered to import from", () => {
-    withIntl(<ImportControls at={at} servers={[]} />);
-    fireEvent.click(screen.getByTestId("tools-import-open"));
-    expect(
-      screen.getByText(
-        "No server is registered yet, so there is nothing to import from.",
-      ),
-    ).toBeVisible();
+  it("connects a new provider, offers every tool it listed, and imports only the ones left checked", async () => {
+    registerServer.mockResolvedValue({
+      ok: true,
+      value: {
+        serverId: "mcs_01k5s9",
+        healthStatus: "healthy",
+        discoveredTools: ["get_page", "create_page"],
+      },
+    });
+    importTools.mockResolvedValue({
+      ok: true,
+      value: { importDigest: "d2", published: 1, unchanged: 0 },
+    });
+    open([]);
+    fill("Name", "Notion");
+    fill("Endpoint URL", "https://mcp.notion.example/v1");
+    fireEvent.submit(formOf(screen.getByLabelText("Name")));
+    await waitFor(() => {
+      expect(registerServer).toHaveBeenCalledWith("acme", "core-platform", {
+        name: "Notion",
+        transportType: "streamable-http",
+        endpointUrl: "https://mcp.notion.example/v1",
+        authStrategy: "none",
+        authConfig: {},
+      });
+    });
+    // The provider exists now whether or not anything is imported.
+    expect(router.refresh).toHaveBeenCalled();
+    expect(await screen.findByText("Review tools/list")).toBeVisible();
+    expect(screen.getByTestId("tools-import-selected")).toHaveTextContent(
+      "2 of 2 selected",
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "create_page" }));
+    expect(screen.getByTestId("tools-import-selected")).toHaveTextContent(
+      "1 of 2 selected",
+    );
+    fireEvent.click(screen.getByTestId("tools-import-classify"));
+    fireEvent.click(screen.getByTestId("tools-import-confirm"));
+    await waitFor(() => {
+      expect(importTools).toHaveBeenCalledWith("acme", "core-platform", {
+        serverId: "mcs_01k5s9",
+        tools: ["get_page"],
+      });
+    });
   });
 
-  it("falls back to a typed id when the server roster could not be read", () => {
-    withIntl(<ImportControls at={at} servers={null} />);
-    fireEvent.click(screen.getByTestId("tools-import-open"));
-    expect(screen.getByLabelText("Server")).toHaveAttribute(
-      "placeholder",
-      "mcs_\u2026",
+  it("offers no Classify while every listed tool is unchecked (negative)", async () => {
+    registerServer.mockResolvedValue({
+      ok: true,
+      value: {
+        serverId: "mcs_01k5s9",
+        healthStatus: "healthy",
+        discoveredTools: ["get_page"],
+      },
+    });
+    open(null);
+    fill("Name", "Notion");
+    fill("Endpoint URL", "https://mcp.notion.example/v1");
+    fireEvent.submit(formOf(screen.getByLabelText("Name")));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "get_page" }));
+    expect(screen.getByTestId("tools-import-classify")).toBeDisabled();
+  });
+
+  it("names a refused connect where the person acted and moves to no later step", async () => {
+    registerServer.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    open([]);
+    fill("Name", "Notion");
+    fill("Endpoint URL", "https://mcp.notion.example/v1");
+    fireEvent.submit(formOf(screen.getByLabelText("Name")));
+    expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
+      "This needs an organization Owner or Admin.",
     );
+    expect(screen.queryByText("Review tools/list")).toBeNull();
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it("names a refused import and navigates nowhere", async () => {
+    importTools.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    open(ROSTER);
+    fill("Provider", "mcs_01k5s1");
+    fireEvent.submit(formOf(screen.getByLabelText("Provider")));
+    fireEvent.click(screen.getByTestId("tools-import-classify"));
+    fireEvent.click(screen.getByTestId("tools-import-confirm"));
+    expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
+      "This needs an organization Owner or Admin.",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(router.refresh).not.toHaveBeenCalled();
   });
 
   it("names a write that threw before it answered", async () => {
     importTools.mockRejectedValue(new Error("network"));
-    withIntl(<ImportControls at={at} servers={null} />);
-    fireEvent.click(screen.getByTestId("tools-import-open"));
-    fill("Server", "mcs_01k5s1");
-    fireEvent.submit(formOf(screen.getByText("Import")));
+    open(ROSTER);
+    fill("Provider", "mcs_01k5s1");
+    fireEvent.submit(formOf(screen.getByLabelText("Provider")));
+    fireEvent.click(screen.getByTestId("tools-import-classify"));
+    fireEvent.click(screen.getByTestId("tools-import-confirm"));
     expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
       "action_failed",
     );
@@ -227,7 +325,7 @@ describe("ToolDialog", () => {
     fireEvent.click(screen.getByText("Create payment"));
     const dialog = within(await screen.findByTestId("tool-dialog"));
     expect(dialog.getByText("mcp.stripe.create_payment")).toBeInTheDocument();
-    expect(dialog.getByText("MCP server")).toBeInTheDocument();
+    expect(dialog.getByText("Imported from a provider")).toBeInTheDocument();
     // The `tlv_…` a tool-version kill switch names: the switch dialog asks for
     // it, so the registry has to be somewhere a person can read it off.
     expect(dialog.getByText("tlv_01k5a1")).toBeInTheDocument();
@@ -317,6 +415,63 @@ describe("ToolDialog", () => {
         }),
       );
     });
+  });
+
+  it("classifies a version that had none from the form's defaults, with no measure to carry", async () => {
+    setToolClassification.mockResolvedValue({
+      ok: true,
+      value: { classifiedAt: "2026-09-16T09:00:00.000Z" },
+    });
+    withIntl(
+      <ToolDialog at={at} version={plain()} canClassify>
+        <span>Get file contents</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Get file contents"));
+    await screen.findByTestId("tool-dialog");
+    // An unclassified version opens on the narrowest axes, never blank ones.
+    expect(screen.getByLabelText("Side effect")).toHaveValue("read");
+    expect(screen.getByLabelText("Egress")).toHaveValue("local");
+    expect(screen.getByLabelText("Consequence tags")).toHaveValue("");
+    fill("Reason", "First classification.");
+    fireEvent.submit(formOf(screen.getByText("Reclassify this version")));
+    await waitFor(() => {
+      expect(setToolClassification).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        {
+          toolVersionId: "tlv_01k5a2",
+          riskGrade: "low",
+          sideEffect: "read",
+          egress: "local",
+          consequenceTags: [],
+          dataClasses: [],
+          measures: [],
+          reason: "First classification.",
+        },
+      );
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("tool-dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("names a reclassification that threw before it answered, and keeps the dialog open", async () => {
+    setToolClassification.mockRejectedValue(new Error("network"));
+    withIntl(
+      <ToolDialog at={at} version={financial()} canClassify>
+        <span>Create payment</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Create payment"));
+    await screen.findByTestId("tool-dialog");
+    fill("Reason", "x");
+    fireEvent.submit(formOf(screen.getByText("Reclassify this version")));
+    expect(
+      await screen.findByTestId("tool-classify-failure"),
+    ).toHaveTextContent("action_failed");
+    expect(screen.getByTestId("tool-dialog")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("names a refusal on the form", async () => {
@@ -512,6 +667,63 @@ describe("FlipControls", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
+  it("forgets that nothing changed once the dialog is closed, so the next flip starts clean", async () => {
+    flipKillSwitch.mockResolvedValue({
+      ok: true,
+      value: {
+        switchId: "emd_01k5c1",
+        on: true,
+        changed: false,
+        denyGeneration: { org: 12, workspace: 4 },
+        grantsRevoked: 0,
+      },
+    });
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fill("Target", "moves_money");
+    fill(/^Reason/, "Suspected compromise.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    await screen.findByTestId("tools-flip-unchanged");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("tools-flip-dialog")).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    await screen.findByTestId("tools-flip-dialog");
+    expect(
+      screen.queryByTestId("tools-flip-unchanged"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("names a flip that threw before it answered, and navigates nowhere", async () => {
+    flipKillSwitch.mockRejectedValue(new Error("network"));
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fill("Target", "moves_money");
+    fill(/^Reason/, "Suspected compromise.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    expect(await screen.findByTestId("tools-flip-failure")).toHaveTextContent(
+      "action_failed",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
   it("promises the bump outright on a card, whose switch it knows the state of", async () => {
     withIntl(
       <FlipControls
@@ -652,7 +864,7 @@ describe("useActionFailure", () => {
     ],
     [
       { ok: false, reason: "not_found", code: "server_not_found" },
-      "No registered tool server has that id in this workspace.",
+      "No registered provider has that id in this workspace.",
     ],
     [
       { ok: false, reason: "conflict", code: "kill_switch_on" },
@@ -688,5 +900,121 @@ describe("useActionFailure", () => {
     const hook = renderHook(() => useActionFailure(), { wrapper: intl });
     expect(hook.result.current(failure)).toContain(expected);
     hook.unmount();
+  });
+});
+
+describe("FlipControls with a fixed target", () => {
+  it("flips the fixed class target with no level select, naming the level when no label is given", async () => {
+    flipKillSwitch.mockReturnValue(new Promise(() => undefined));
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        fixed={{ kind: "class", ref: "moves_money" }}
+        members={MEMBERS}
+      />,
+    );
+    const toggle = screen.getByTestId("tools-flip-class-moves_money");
+    expect(toggle).toHaveAccessibleName("Deny Class");
+    fireEvent.click(toggle);
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    expect(within(dialog).queryByLabelText("Level")).toBeNull();
+    expect(dialog).toHaveTextContent("Class · Class");
+    fill(/^Reason/, "Freeze payments.");
+    const form = formOf(within(dialog).getByText("Deny now"));
+    fireEvent.submit(form);
+    // A second submit while the first is pending sends nothing.
+    fireEvent.submit(form);
+    expect(flipKillSwitch).toHaveBeenCalledTimes(1);
+    expect(flipKillSwitch).toHaveBeenCalledWith("acme", "core-platform", {
+      kind: "class",
+      target: "moves_money",
+      on: true,
+      reason: "Freeze payments.",
+    });
+  });
+
+  it("marks a self-targeted fixed switch as self and sends no target", async () => {
+    flipKillSwitch.mockReturnValue(new Promise(() => undefined));
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        fixed={{ kind: "org", ref: null }}
+        label="Organization"
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-org-self"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fill(/^Reason/, "Stop everything.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    expect(flipKillSwitch).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      expect.objectContaining({ kind: "org", target: null }),
+    );
+  });
+});
+
+describe("FlipControls operator picker", () => {
+  it("names a member with no name by email, and says when there is nobody to choose (negative)", async () => {
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={[{ id: "usr_anon", name: null, email: "anon@acme.example" }]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "operator" },
+    });
+    expect(
+      screen.getByRole("option", { name: "anon@acme.example" }),
+    ).toBeInTheDocument();
+    cleanup();
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={[]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "operator" },
+    });
+    expect(
+      screen.getByText("No org members to choose from."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("ToolDialog while a classification is pending", () => {
+  it("says a disabled version is not enabled, and sends one classification however often the form is submitted", async () => {
+    setToolClassification.mockReturnValue(new Promise(() => undefined));
+    withIntl(
+      <ToolDialog
+        at={at}
+        version={{ ...financial(), enabled: false }}
+        canClassify
+      >
+        <span>Create payment</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Create payment"));
+    const dialog = await screen.findByTestId("tool-dialog");
+    expect(dialog).toHaveTextContent("EnabledNo");
+    const form = element(dialog.querySelector("form"), "classify form");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(setToolClassification).toHaveBeenCalledTimes(1);
   });
 });

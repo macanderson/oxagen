@@ -21,14 +21,22 @@ import {
   useTransition,
 } from "react";
 import type { ApprovalQueue } from "@/data/contracts/approvals";
-import { acceptsCommands, type RunRow } from "@/data/contracts/runs";
+import {
+  type CommandBlock,
+  commandBlockOf,
+  type RunRow,
+} from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { openApprovals } from "@/features/shell/client";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Avatar } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
-import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
+import {
+  COMMAND_BLOCK_COPY,
+  UNANSWERED,
+  useActionFailure,
+} from "@/ui/command-failure";
 import {
   buttonPrimary,
   buttonSecondary,
@@ -787,13 +795,20 @@ function RunRowView({
 
 // ── Pause ────────────────────────────────────────────────────────────────
 
-/** Why a live run cannot take a pause from Oxagen, or null when it can. */
-function pauseRefusal(
-  run: RunRow,
-  canCommand: boolean,
-): "observeReason" | "ledgerReason" | "roleReason" | null {
-  if (!acceptsCommands(run.enforcementTier)) return "observeReason";
+type PauseRefusal =
+  | `blocked.${(typeof COMMAND_BLOCK_COPY)[CommandBlock]}`
+  | "ledgerReason"
+  | "roleReason";
+
+/**
+ * Why a live run cannot take a pause from Oxagen, or null when it can. The
+ * enforcement tier plays no part (ADR-163): the row's `commandBlock` says
+ * whether the run's host can collect a command.
+ */
+function pauseRefusal(run: RunRow, canCommand: boolean): PauseRefusal | null {
   if (run.source === "ledger") return "ledgerReason";
+  const block = commandBlockOf(run);
+  if (block !== null) return `blocked.${COMMAND_BLOCK_COPY[block]}`;
   if (!canCommand) return "roleReason";
   return null;
 }

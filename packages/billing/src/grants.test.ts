@@ -62,9 +62,19 @@ vi.mock("./client", () => ({
 
 interface TxMock {
   insert: ReturnType<typeof vi.fn>;
+  select: ReturnType<typeof vi.fn>;
   _ledgerRows: Array<{ id: string }>;
   _lotInsertCalled: boolean;
   _balanceUpsertCalled: boolean;
+}
+
+/** A `select` whose settings read finds no row: the org owes nothing. */
+function owesNothing() {
+  return vi.fn(() => ({
+    from: vi.fn(() => ({
+      where: vi.fn(() => ({ for: vi.fn(async () => []) })),
+    })),
+  }));
 }
 
 /**
@@ -78,6 +88,9 @@ function makeTx(ledgerConflict = false): TxMock {
   let insertCallIdx = 0;
 
   const mock: TxMock = {
+    // The debt settlement's read of org_billing_settings: no row, so the
+    // org owes nothing and the grant writes what it always wrote.
+    select: owesNothing(),
     _ledgerRows: ledgerRows,
     _lotInsertCalled: false,
     _balanceUpsertCalled: false,
@@ -123,6 +136,7 @@ function makeDb(
     // withSystemDb mock passes dbState.instance as tx; expose insert so the
     // functions under test can call tx.insert(...) when withSystemDb is used.
     insert: txMock.insert,
+    select: txMock.select,
     transaction: vi.fn((fn: (tx: TxMock) => Promise<unknown>) => fn(txMock)),
     query: {
       creditLedger: {
@@ -273,6 +287,7 @@ describe("grantSignupCredits", () => {
   it("writes the ledger row, a non-expiring free_grant lot of 500 and the balance on the caller's transaction", async () => {
     const values: unknown[] = [];
     const tx = {
+      select: owesNothing(),
       insert: vi.fn(() => ({
         values: vi.fn((v: unknown) => {
           values.push(v);
@@ -306,6 +321,66 @@ describe("grantSignupCredits", () => {
       expiresAt: null,
     });
     expect(values[2]).toMatchObject({ orgId: "org-new", balanceCents: 500n });
+  });
+
+  // The credits that arrive pay what an earlier turn left owing, before
+  // anything else can spend them, and the mirror gets what is left.
+  it("pays what the org owes out of the grant before mirroring the balance", async () => {
+    const values: Array<Record<string, unknown>> = [];
+    const updates: Array<Record<string, unknown>> = [];
+    const settingsRow = {
+      carryByReason: { consume_assistant_tokens: 120_000_000 },
+    };
+    const tx = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            // The settings row, locked.
+            for: vi.fn(async () => [settingsRow]),
+            // The lots, locked: the grant just inserted.
+            orderBy: vi.fn(() => ({
+              for: vi.fn(async () => [
+                { id: "lot-signup", remainingCents: 500n, expiresAt: null },
+              ]),
+            })),
+          })),
+        })),
+      })),
+      update: vi.fn(() => ({
+        set: vi.fn((fields: Record<string, unknown>) => {
+          updates.push(fields);
+          return { where: vi.fn().mockResolvedValue(undefined) };
+        }),
+      })),
+      insert: vi.fn(() => ({
+        values: vi.fn((v: Record<string, unknown>) => {
+          values.push(v);
+          return {
+            onConflictDoNothing: () => ({
+              returning: vi.fn().mockResolvedValue([{ id: "ledger-row-1" }]),
+            }),
+            onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+            then: (resolve: (v: undefined) => void) => resolve(undefined),
+          };
+        }),
+      })),
+    };
+
+    await grantSignupCredits(tx as never, "org-owes");
+
+    // grant row, lot, the 120-credit debt paid under its own reason, mirror.
+    expect(values[2]).toMatchObject({
+      orgId: "org-owes",
+      deltaCents: -120n,
+      reason: "consume_assistant_tokens",
+      referenceType: "credit_debt",
+    });
+    expect(values[3]).toMatchObject({ orgId: "org-owes", balanceCents: 380n });
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        meterCarryMicroCreditsByReason: { consume_assistant_tokens: 0 },
+      }),
+    );
   });
 
   it("writes nothing more and answers false when the org already holds the grant (negative)", async () => {

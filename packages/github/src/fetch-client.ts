@@ -3,6 +3,7 @@ import type {
   GitHubCheckRun,
   GitHubCiChecks,
   GitHubClient,
+  GitHubClosingIssues,
   GitHubClientOptions,
   GitHubInstallationRepo,
   GitHubInstallationRepositories,
@@ -280,6 +281,37 @@ interface GHBranchListItem {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_BASE_URL = "https://api.github.com";
+
+const CLOSING_ISSUES_QUERY = `query ($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      closingIssuesReferences(first: 25) {
+        totalCount
+        nodes { number title url state repository { name owner { login } } }
+      }
+    }
+  }
+}`;
+
+interface GHClosingIssuesResponse {
+  data?: {
+    repository?: {
+      pullRequest?: {
+        closingIssuesReferences?: {
+          totalCount: number;
+          nodes: {
+            number: number;
+            title: string;
+            url: string;
+            state: string;
+            repository: { name: string; owner: { login: string } };
+          }[];
+        } | null;
+      } | null;
+    } | null;
+  } | null;
+  errors?: { message?: string }[];
+}
 /** Page size for the installation-repositories walk — GitHub's maximum. */
 const INSTALLATION_REPOS_PER_PAGE = 100;
 /**
@@ -383,7 +415,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     path: string,
     body?: unknown,
   ): Promise<T> {
-    const url = `${baseUrl}${path}`;
+    // A path is REST, under `baseUrl`; an absolute URL (GraphQL) is used as is.
+    const url = path.startsWith("/") ? `${baseUrl}${path}` : path;
     for (let attempt = 0; ; attempt++) {
       opts.signal?.throwIfAborted();
       const timeout = AbortSignal.timeout(opts.timeoutMs ?? 30_000);
@@ -895,6 +928,46 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     };
   }
 
+  /**
+   * GraphQL lives beside REST: `https://api.github.com/graphql`, and on
+   * GitHub Enterprise Server `/api/graphql` beside `/api/v3`.
+   */
+  const graphqlUrl = baseUrl.endsWith("/api/v3")
+    ? `${baseUrl.slice(0, -"/v3".length)}/graphql`
+    : `${baseUrl}/graphql`;
+
+  async function listClosingIssues(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<GitHubClosingIssues> {
+    const data = await request<GHClosingIssuesResponse>("POST", graphqlUrl, {
+      query: CLOSING_ISSUES_QUERY,
+      variables: { owner: args.owner, repo: args.repo, number: args.number },
+    });
+    // GraphQL answers 200 with `errors` for a query it refused; a missing
+    // pull request is one of those. Reported as an error, never as "closes
+    // nothing", which would read as a fact.
+    const refs = data.data?.repository?.pullRequest?.closingIssuesReferences;
+    if (!refs) {
+      throw new GitHubApiError(
+        200,
+        data.errors?.[0]?.message ?? "closingIssuesReferences was not returned",
+      );
+    }
+    return {
+      issues: refs.nodes.map((node) => ({
+        owner: node.repository.owner.login,
+        repo: node.repository.name,
+        number: node.number,
+        title: node.title,
+        url: node.url,
+        state: node.state === "OPEN" ? "open" : "closed",
+      })),
+      complete: refs.totalCount <= refs.nodes.length,
+    };
+  }
+
   async function listPullRequestComments(args: {
     owner: string;
     repo: string;
@@ -1206,6 +1279,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     getTree,
     getBranch,
     getPullRequest,
+    listClosingIssues,
     listPullRequestComments,
     listCiChecks,
     listPullRequestFiles,

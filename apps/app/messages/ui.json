@@ -4,7 +4,8 @@
       "home": "Oxagen home"
     },
     "dialog": {
-      "close": "Close"
+      "close": "Close",
+      "dismiss": "Close {title}"
     },
     "record": {
       "kinds": {
@@ -120,8 +121,47 @@
       "hint": "Enter to apply. Escape to cancel. This updates the name in the source.",
       "invalid": "Use a valid lowercase name with hyphens, and check that the source can be read."
     },
+    "pageState": {
+      "loading": "Loading this page",
+      "error": {
+        "title": "This page could not be loaded",
+        "titleNamed": "{page} could not be loaded",
+        "body": "The control plane answered <code>{answer}</code>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+        "retry": "Try again",
+        "incident": "Open an incident",
+        "trace": "trace {id}",
+        "incidentNotBacked": "Oxagen cannot open an incident from this page yet."
+      },
+      "denied": {
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "request": "Request access",
+        "back": "Back to Fleet",
+        "requestNotBacked": "Oxagen cannot send a request for a role yet.",
+        "signedIn": "Signed in as",
+        "needed": "Needed",
+        "decidedBy": "Decided by",
+        "decidedByValue": "<code>{policy}</code> · deny wins over every allow",
+        "policyNotRecorded": "The refusal does not record which policy decided it."
+      }
+    },
+    "list": {
+      "search": "Search this list",
+      "filterBy": "Filter by {column}",
+      "all": "All · {column}",
+      "rows": "Rows",
+      "allRows": "All",
+      "noMatch": "No rows match.",
+      "pager": "Pages",
+      "range": "{from}–{to} of {total}",
+      "rangeEmpty": "0 of 0",
+      "previous": "Previous page",
+      "next": "Next page",
+      "page": "Page {page}"
+    },
     "listTable": {
       "search": "Search this list",
+      "facetAll": "All · {column}",
+      "facetLabel": "Filter by {column}",
       "rows": "Rows",
       "all": "All",
       "noMatch": "No rows match.",
@@ -130,6 +170,25 @@
       "previous": "Previous page",
       "next": "Next page",
       "pages": "{label} pages"
+    },
+    "desktopDownloads": {
+      "title": "Install the Oxagen app",
+      "lead": "Install it first, on the machine the agent runs on. The app puts the <code>oxagen</code> and <code>tacho</code> commands on PATH, and enrollment runs through them.",
+      "platforms": {
+        "macos": "macOS",
+        "windows": "Windows",
+        "linux": "Linux"
+      },
+      "installers": {
+        "macAppleSilicon": "Apple silicon (.dmg)",
+        "macIntel": "Intel (.dmg)",
+        "windowsExe": "Installer (.exe)",
+        "windowsMsi": "Installer (.msi)",
+        "linuxDeb": ".deb (Debian, Ubuntu)",
+        "linuxRpm": ".rpm (Fedora, RHEL)",
+        "linuxAppImage": "AppImage"
+      },
+      "all": "Every version, with SHA-256 checksums"
     }
   }
 }

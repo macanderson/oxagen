@@ -351,7 +351,10 @@ function Scim({
         </p>
       ) : (
         <p className={lead} data-testid="sso-scim-token">
-          {t("live", { prefix: token.prefix, createdAt: when(token.createdAt) })}{" "}
+          {t("live", {
+            prefix: token.prefix,
+            createdAt: when(token.createdAt),
+          })}{" "}
           {token.lastUsedAt === null
             ? t("neverUsed")
             : t("lastUsed", { lastUsedAt: when(token.lastUsedAt) })}

@@ -185,6 +185,18 @@ describe("OpenTelemetry normalization", () => {
       tool_decision: "reject",
       tool_decision_source: "user_reject",
     });
+    // Claude Code's own permission check is the harness's decision, not
+    // Oxagen's, so it never lands as a `policy_decision`.
+    expect(
+      normalizeOtlp(
+        log("tool_decision", {
+          tool_name: "Bash",
+          tool_use_id: "t",
+          decision: "accept",
+          source: "config",
+        }),
+      ).drafts[0]?.kind,
+    ).toBe("harness_permission");
     expect(
       normalizeOtlp(
         log("tool_result", {
@@ -360,7 +372,7 @@ describe("OpenTelemetry normalization", () => {
       "llm_call",
       "tool_call",
       "tool_call",
-      "policy_decision",
+      "harness_permission",
       "oxagen:message",
       "oxagen:hook_health",
       "oxagen:notification",

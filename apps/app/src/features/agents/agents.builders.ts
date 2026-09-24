@@ -9,7 +9,14 @@ import type {
   Toolbelt,
 } from "@/data/contracts/agents";
 import type { MandateList } from "@/data/contracts/mandates";
-import type { SpendBudgets } from "@/data/contracts/spend";
+import type { RoleCatalog } from "@/data/contracts/org";
+import type { RunPage, RunRow } from "@/data/contracts/runs";
+import type {
+  SpendBudgets,
+  SpendFindings,
+  SpendReport,
+} from "@/data/contracts/spend";
+import type { SteeringDeliveries } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
 
@@ -53,7 +60,9 @@ export function agentPage(
     totals: {
       identities: 7,
       enrolled: 2,
+      unenrolled: 5,
       holdingMandate: 1,
+      mandateHolders: ["acme.core.release-bot"],
       tamperIncidents: 3,
       tamper: {
         recorded: 4,
@@ -265,6 +274,167 @@ export function spendBudgets(
   ];
 }
 
+/** A run of the release bot on the newest page of runs (list_runs). */
+export function runRow(overrides: Partial<RunRow> = {}): RunRow {
+  return {
+    id: "arun_7k2m9q",
+    source: "ledger",
+    agentKey: "acme.core.release-bot",
+    operatorId: "usr_marcusbell",
+    operatorKind: "human",
+    operatorName: "Marcus Bell",
+    status: "sealed",
+    outcome: "completed",
+    turns: 34,
+    steps: 271,
+    frames: 1204,
+    cost: { micros: "4131265", currency: "USD", basis: "gateway_observed" },
+    model: null,
+    machine: null,
+    taskRef: null,
+    name: "Cut the 3.2 release branch",
+    summary: null,
+    replayGrade: "fork",
+    verdict: null,
+    enforcementTier: "harness",
+    completenessGaps: [],
+    canSummarize: false,
+    startedAt: "2026-09-15T08:00:00.000Z",
+    sealedAt: "2026-09-15T08:40:00.000Z",
+    ...overrides,
+  };
+}
+
+export function runPage(runs: RunRow[]): Read<RunPage> {
+  return readOk({ runs, nextCursor: null });
+}
+
+type SpendRow = SpendReport["rows"][number];
+
+/** The release bot's row of get_spend at the agent level. */
+export function spendRow(overrides: Partial<SpendRow> = {}): SpendRow {
+  return {
+    key: "acme.core.release-bot",
+    provider: null,
+    operator: null,
+    cost: { micros: "12500000", currency: "USD", basis: "gateway_observed" },
+    calls: 100,
+    runs: 4,
+    proven: null,
+    accepted: null,
+    productiveRatio: 0.5,
+    tokens: {
+      input_uncached: 1000,
+      cache_read: 3000,
+      cache_write_5m: 500,
+      cache_write_1h: 500,
+      output: 800,
+      reasoning: 200,
+    },
+    ...overrides,
+  };
+}
+
+export function spendReport(rows: SpendRow[]): Read<SpendReport> {
+  const figure = rows[0] ?? spendRow();
+  return readOk({
+    period: { from: "2026-08-18", to: "2026-09-16" },
+    total: {
+      cost: figure.cost,
+      calls: figure.calls,
+      runs: figure.runs,
+      proven: null,
+      accepted: null,
+      productiveRatio: null,
+    },
+    rows,
+  });
+}
+
+type Delivery = SteeringDeliveries["runs"][number];
+
+/** get_steering_deliveries with the manifests handed in. */
+export function steeringDeliveries(
+  runs: Partial<Delivery>[] = [{}],
+): Read<SteeringDeliveries> {
+  return readOk({
+    runs: runs.map((run) => ({
+      sessionUuid: "0f9e8d7c-6b5a-4938-8271-605f4e3d2c1b",
+      ts: "2026-09-15T08:00:00.000Z",
+      harness: "claude-code",
+      agentKey: "acme.core.release-bot",
+      recordsIncluded: 6,
+      recordsCut: 3,
+      recordsCutForBudget: 2,
+      budgetTokens: 4000,
+      spentTokens: 2600,
+      ...run,
+    })),
+    undelivered: [],
+    scanned: runs.length,
+    truncated: false,
+  });
+}
+
+type Finding = SpendFindings["findings"][number];
+
+export function spendFindings(
+  findings: Partial<Finding>[],
+): Read<SpendFindings> {
+  return readOk({
+    window: null,
+    saving: null,
+    spend: null,
+    share: null,
+    annualised: null,
+    counts: {
+      findings: findings.length,
+      high: findings.length,
+      medium: 0,
+      operators: 0,
+    },
+    findings: findings.map((finding) => ({
+      id: "fnd_01",
+      kind: "duplicate_tool_calls",
+      level: "agent",
+      subject: "acme.core.release-bot",
+      saving: { micros: "2000000", currency: "USD", basis: "gateway_observed" },
+      confidence: "high",
+      window: {
+        from: "2026-09-01T00:00:00.000Z",
+        to: "2026-09-15T00:00:00.000Z",
+      },
+      why: "The same read ran twice on eleven turns.",
+      fix: "Cache the first result.",
+      runs: 3,
+      calls: 22,
+      ...finding,
+    })),
+  });
+}
+
+/** The organization's role catalogue with the release bot's CI writer role in it. */
+export function roleCatalog(): Read<RoleCatalog> {
+  return readOk({
+    roles: [
+      {
+        id: "rol_ci",
+        name: "CI writer",
+        description: null,
+        scope: "workspace",
+        kind: "agent",
+        builtIn: false,
+        permissions: ["repo.write", "pr.open"],
+        heldBy: 1,
+        createdBy: null,
+        createdAt: "2026-09-01T00:00:00.000Z",
+      },
+    ],
+    catalog: [],
+    enforcement: { tier: "enterprise", enforced: true },
+  });
+}
+
 type AgentReads = {
   list?: Read<AgentPage>;
   get?: Read<AgentDetail>;
@@ -273,6 +443,13 @@ type AgentReads = {
   mandates?: Read<MandateList>;
   /** The Budgets tab's read; it is `spend.budgets`, not an agents port method. */
   budgets?: Read<SpendBudgets>;
+  /** The newest page of runs, which the header's tier and replay badges read. */
+  runs?: Read<RunPage>;
+  /** get_spend at the agent level over the trailing 30 days. */
+  spend?: Read<SpendReport>;
+  deliveries?: Read<SteeringDeliveries>;
+  findings?: Read<SpendFindings>;
+  roles?: Read<RoleCatalog>;
 };
 
 /** A DataSource answering the agents reads it was handed; `calls` records each read's arguments. */
@@ -284,6 +461,11 @@ export function agentsSource(reads: AgentReads) {
     incidents: [],
     mandates: [],
     budgets: [],
+    runs: [],
+    spend: [],
+    deliveries: [],
+    findings: [],
+    roles: [],
   };
   const refuse = () => Promise.reject(new Error("not an Agents read"));
   const answer =
@@ -297,7 +479,12 @@ export function agentsSource(reads: AgentReads) {
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -307,7 +494,7 @@ export function agentsSource(reads: AgentReads) {
       invoices: refuse,
     },
     runs: {
-      list: refuse,
+      list: answer(reads.runs, "runs"),
       get: refuse,
       frameBody: refuse,
       cost: refuse,
@@ -317,7 +504,7 @@ export function agentsSource(reads: AgentReads) {
       work: refuse,
       outcomesSettings: refuse,
     },
-    approvals: { pending: refuse, resolved: refuse },
+    approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),
@@ -326,13 +513,13 @@ export function agentsSource(reads: AgentReads) {
     },
     mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
     spend: {
-      byGroup: refuse,
+      byGroup: answer(reads.spend, "spend"),
       fleet: refuse,
       drill: refuse,
       waste: refuse,
       gatewayPolicy: refuse,
       budgets: answer(reads.budgets, "budgets"),
-      findings: refuse,
+      findings: answer(reads.findings, "findings"),
       findingEvidence: refuse,
       priceBook: refuse,
       unpricedModels: refuse,
@@ -340,14 +527,21 @@ export function agentsSource(reads: AgentReads) {
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
       members: refuse,
-      roles: refuse,
+      roles: answer(reads.roles, "roles"),
       workspaces: refuse,
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      dataPlane: refuse,
+      workspaceFacts: refuse,
       sso: refuse,
     },
-    audit: { events: refuse, exportEvents: refuse },
+    audit: {
+      events: refuse,
+      exportEvents: refuse,
+      retention: refuse,
+      bundle: refuse,
+    },
     skills: { inventory: refuse, configuration: refuse },
     steering: {
       records: refuse,
@@ -355,7 +549,10 @@ export function agentsSource(reads: AgentReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
-      deliveries: refuse,
+      hub: refuse,
+      deliveries: answer(reads.deliveries, "deliveries"),
+      memories: refuse,
+      tree: refuse,
     },
     tools: {
       versions: refuse,

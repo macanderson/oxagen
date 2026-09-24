@@ -12,7 +12,7 @@ export const schema = {
     "turns: one entry per turn; steps: one per model call and tool call, request and result folded together; everything: one per frame",
   ),
   kinds: runTranscriptGet.input.shape.kinds.describe(
-    "The chips to narrow to (prompt, responses, tools, policy, recall, usage, errors); empty keeps every frame",
+    "The chips to narrow to (prompt, responses, thinking, tools, policy, usage, recall, seal, errors); empty keeps every frame",
   ),
   after: runTranscriptGet.input.shape.after.describe(
     "An entry cursor from an earlier read; omit to read from the start",

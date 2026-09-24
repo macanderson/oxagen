@@ -72,6 +72,7 @@ const run = {
   // the mapping carries it through rather than merely tolerating the field.
   operatorKind: "human",
   operatorName: "Ada Lovelace",
+  operatorAttribution: "host_enroller",
   status: "live",
   outcome: "running",
   turns: null,
@@ -90,6 +91,7 @@ const run = {
   canSummarize: false,
   startedAt: "2026-09-15T08:55:00.000Z",
   sealedAt: null,
+  endedAt: null,
 };
 
 beforeEach(() => {
@@ -111,6 +113,7 @@ describe("runs.list", () => {
             operatorId: null,
             operatorKind: "human",
             operatorName: "Ada Lovelace",
+            operatorAttribution: "host_enroller",
             status: "live",
             outcome: "running",
             turns: null,
@@ -118,6 +121,10 @@ describe("runs.list", () => {
             frames: 9,
             cost: null,
             reportedCost: null,
+            reportedTokens: null,
+            effort: null,
+            thinking: null,
+            permissionMode: null,
             model: viewModel,
             harness: null,
             machine,
@@ -127,6 +134,8 @@ describe("runs.list", () => {
             replayGrade: null,
             verdict: null,
             enforcementTier: "observe",
+            commandBlock: null,
+            steerBlock: null,
             enrichmentEnabled: true,
             ingressPaused: false,
             ingressRevoked: false,
@@ -134,6 +143,7 @@ describe("runs.list", () => {
             canSummarize: false,
             startedAt: "2026-09-15T08:55:00.000Z",
             sealedAt: null,
+            endedAt: null,
           },
         ],
         nextCursor: "c2",
@@ -449,7 +459,11 @@ describe("runs.cost", () => {
               model: "claude-sonnet-5",
               provider: "anthropic",
               calls: 3,
-              cost: { micros: "2500000", currency: "USD", basis: "client_attested" },
+              cost: {
+                micros: "2500000",
+                currency: "USD",
+                basis: "client_attested",
+              },
             },
             { model: "gpt-5", provider: null, calls: 1, cost: null },
           ],
@@ -832,11 +846,24 @@ describe("runs.work", () => {
         headSha: "abc123",
         headRef: "release/3.2",
         association: "recorded",
+        closingIssues: null,
         checkoutIds: ["chk_1"],
         observedAt: "2026-09-15T08:58:00.000Z",
         current: true,
         ci: null,
         diff: null,
+      },
+    ],
+    // `get_run_work` always sends this array, empty for a ledger run
+    // (`run.work.get.ts`, `subagents`). The adapter maps it unguarded, so a
+    // fixture that omits it tests a shape the wire never sends.
+    subagents: [
+      {
+        id: "a0182b6cd3a21d284",
+        type: "Explore",
+        firstSeq: "12",
+        lastSeq: "30",
+        stopped: true,
       },
     ],
     complete: true,
@@ -859,6 +886,13 @@ describe("runs.work", () => {
       checkoutRefs: ["chk_1"],
     });
     expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
+    // The harness mints a subagent's id, so the view carries it as `agentRef`
+    // rather than an `id` a reader would take for a public id (INV-11).
+    expect(read.value.subagents?.[0]).toMatchObject({
+      agentRef: "a0182b6cd3a21d284",
+      type: "Explore",
+    });
+    expect(read.value.subagents?.[0]).not.toHaveProperty("id");
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runWorkGet,
       input: { runId: "tse_4f0a" },

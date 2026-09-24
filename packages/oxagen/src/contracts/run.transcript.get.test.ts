@@ -68,10 +68,12 @@ describe("get_run_transcript contract", () => {
     expect(parsed.success && parsed.data.kinds).toEqual([]);
     expect(parsed.success && parsed.data.limit).toBe(200);
     expect(input({ kinds: ["tools", "errors"] }).success).toBe(true);
-    // The mockup draws a `thinking` chip; no producer records one, so the
-    // contract does not publish it rather than offering a filter that can only
-    // ever answer "none".
-    expect(input({ kinds: ["thinking"] }).success).toBe(false);
+    // `thinking` and `seal` are published now that producers record them: a
+    // model call that spent reasoning tokens, and the run's seal frame.
+    expect(input({ kinds: ["thinking", "seal"] }).success).toBe(true);
+    // A chip no producer records is refused rather than offered as a filter
+    // that can only ever answer "none".
+    expect(input({ kinds: ["frames"] }).success).toBe(false);
     expect(input({ limit: 0 }).success).toBe(false);
     expect(input({ limit: 501 }).success).toBe(false);
   });

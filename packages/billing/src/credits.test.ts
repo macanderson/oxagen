@@ -27,6 +27,17 @@ interface MockState {
   ledgerInserts: Array<Record<string, unknown>>;
   balanceUpserts: number;
   transactionCalled: boolean;
+  /**
+   * The org_billing_settings row the grant's debt settlement locks, or none.
+   * `carryByReason` whole credits are what the org owes.
+   */
+  settings: { carryByReason: Record<string, number> } | null;
+  /** The lots the settlement locks and draws from (id + remaining). */
+  spendableLots: Array<{ id: string; remainingCents: bigint }>;
+  /** Every UPDATE's SET payload, in order. */
+  updates: Array<Record<string, unknown>>;
+  /** The delta each credit_balances upsert added on conflict. */
+  mirrorValues: Array<Record<string, unknown>>;
 }
 
 const state: MockState = {
@@ -36,6 +47,10 @@ const state: MockState = {
   ledgerInserts: [],
   balanceUpserts: 0,
   transactionCalled: false,
+  settings: null,
+  spendableLots: [],
+  updates: [],
+  mirrorValues: [],
 };
 
 // Factory that builds a tx-like object for the transaction callback.
@@ -54,21 +69,20 @@ function makeTx() {
           }),
         };
       }
-      if (insertCallCount === 2) {
-        // Second insert: credit_ledger → no returning
-        return {
-          values: vi
-            .fn()
-            .mockImplementation(async (v: Record<string, unknown>) => {
-              state.ledgerInserts.push(v);
-            }),
-        };
-      }
-      // Third insert: credit_balances → .onConflictDoUpdate()
-      state.balanceUpserts++;
       return {
-        values: vi.fn().mockReturnValue({
-          onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+        values: vi.fn().mockImplementation((v: Record<string, unknown>) => {
+          // credit_balances → .onConflictDoUpdate(); its row carries
+          // `balanceCents`, a ledger row carries `deltaCents`.
+          if ("balanceCents" in v) {
+            state.balanceUpserts++;
+            state.mirrorValues.push(v);
+            return {
+              onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+            };
+          }
+          // credit_ledger → no returning
+          state.ledgerInserts.push(v);
+          return Promise.resolve();
         }),
       };
     }),
@@ -78,6 +92,12 @@ function makeTx() {
     select: vi.fn((fields: { remaining: SQL }) => ({
       from: vi.fn(() => ({
         where: vi.fn((where: SQL) => {
+          // The debt settlement's settings read selects `carryByReason`.
+          if ("carryByReason" in fields) {
+            return {
+              for: vi.fn(async () => (state.settings ? [state.settings] : [])),
+            };
+          }
           state.balanceQueries.push({ fields, where });
           return {
             // For effectiveBalance / createCreditLot inner SELECT (resolved directly)
@@ -85,16 +105,21 @@ function makeTx() {
               resolve(state.lots),
             // For consumeCredits SELECT (chained with .orderBy().for())
             orderBy: vi.fn(() => ({
-              for: vi.fn(async () => state.lots),
+              for: vi.fn(async () =>
+                state.spendableLots.length > 0
+                  ? state.spendableLots.map((l) => ({ ...l }))
+                  : state.lots,
+              ),
             })),
           };
         }),
       })),
     })),
     update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn().mockResolvedValue(undefined),
-      })),
+      set: vi.fn((fields: Record<string, unknown>) => {
+        state.updates.push(fields);
+        return { where: vi.fn().mockResolvedValue(undefined) };
+      }),
     })),
   };
 }
@@ -167,6 +192,10 @@ function resetState() {
   state.ledgerInserts = [];
   state.balanceUpserts = 0;
   state.transactionCalled = false;
+  state.settings = null;
+  state.spendableLots = [];
+  state.updates = [];
+  state.mirrorValues = [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,6 +281,65 @@ describe("createCreditLot", () => {
     expect(state.ledgerInserts[0]!.reason).toBe("grant_plan_renewal");
     expect(state.ledgerInserts[0]!.referenceType).toBe("stripe_invoice");
     expect(state.ledgerInserts[0]!.referenceId).toBe("inv-uuid-1");
+  });
+
+  // A turn that outran the balance left 15 credits owed. The credits that
+  // arrive next pay it before anything else can spend them, under the
+  // reason that ran it up, and the mirror is written with what is left.
+  it("pays what the org owes out of the grant, and mirrors the remainder", async () => {
+    state.settings = {
+      carryByReason: { consume_assistant_tokens: 15_250_000 },
+    };
+    state.spendableLots = [{ id: "lot-id-1", remainingCents: 500n }];
+    state.lots = [{ remaining: "485" }];
+
+    const result = await createCreditLot({
+      orgId: "org-abc",
+      amountCents: 500n,
+      source: "purchase",
+      expiresAt: null,
+      reason: "grant_credit_pack",
+    });
+
+    expect(result.effectiveBalanceCents).toBe(485n);
+    expect(state.ledgerInserts).toEqual([
+      expect.objectContaining({
+        deltaCents: 500n,
+        reason: "grant_credit_pack",
+      }),
+      expect.objectContaining({
+        deltaCents: -15n,
+        reason: "consume_assistant_tokens",
+        referenceType: "credit_debt",
+      }),
+    ]);
+    // The fraction stays banked; only the whole credits were owed.
+    expect(state.updates).toContainEqual(
+      expect.objectContaining({
+        meterCarryMicroCreditsByReason: { consume_assistant_tokens: 250_000 },
+      }),
+    );
+    expect(state.mirrorValues).toEqual([
+      expect.objectContaining({ balanceCents: 485n }),
+    ]);
+  });
+
+  it("settles nothing and mirrors the whole grant when nothing is owed", async () => {
+    state.settings = { carryByReason: { consume_assistant_tokens: 250_000 } };
+    state.lots = [{ remaining: "500" }];
+
+    await createCreditLot({
+      orgId: "org-abc",
+      amountCents: 500n,
+      source: "purchase",
+      expiresAt: null,
+      reason: "grant_credit_pack",
+    });
+
+    expect(state.ledgerInserts).toHaveLength(1);
+    expect(state.mirrorValues).toEqual([
+      expect.objectContaining({ balanceCents: 500n }),
+    ]);
   });
 
   it.each([

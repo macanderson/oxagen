@@ -17,10 +17,12 @@ import type {
   ResolvedApprovalItem,
 } from "./contracts/approvals";
 import type {
+  AuditBundle,
   AuditExport,
   AuditExportQuery,
   AuditPage,
   AuditPageQuery,
+  AuditRetention,
 } from "./contracts/audit";
 import type {
   ContractRate,
@@ -35,10 +37,12 @@ import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
   ApiKey,
   CostCenterList,
+  DataPlane,
   MemberList,
   ModelCredential,
   RoleCatalog,
   SsoSettings,
+  WorkspaceFacts,
   WorkspaceList,
 } from "./contracts/org";
 import type {
@@ -56,6 +60,8 @@ import type { RunPage } from "./contracts/runs";
 import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
 import type {
   OrgChoice,
+  NavCounts,
+  NotificationFeed,
   ShellContext,
   ViewerPreferences,
   WorkspaceChoice,
@@ -80,10 +86,13 @@ import type {
   ContextPr,
   ProposalPage,
   RecordDetail,
+  MemoryPage,
+  OxagenTree,
   RecordKind,
   RecordPage,
   SteeringFreshness,
   SteeringDeliveries,
+  SteeringHub,
 } from "./contracts/steering";
 import type {
   ApprovalRuleSet,
@@ -121,6 +130,18 @@ export interface DataSource {
      * features/shell/viewer-clock.tsx and features/audit/filters.ts.
      */
     preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
+    /**
+     * get_nav_counts, what waits on a person in one workspace: the sidebar's
+     * Fleet, Steering and Audit counts; callers:
+     * features/shell/workspace-activity.tsx and features/shell/source.ts.
+     */
+    counts(ctx: WsCtx): Promise<Read<NavCounts>>;
+    /**
+     * list_notifications, the viewer's newest rows and the unread count the
+     * bell's dot reads; callers: features/shell/workspace-activity.tsx and
+     * features/shell/source.ts.
+     */
+    notifications(ctx: WsCtx): Promise<Read<NotificationFeed>>;
   };
   /**
    * The Billing page's six noBillingGate reads, each Owner, Admin or Billing
@@ -214,6 +235,15 @@ export interface DataSource {
       ctx: WsCtx,
       q: { runId: string },
     ): Promise<Read<ResolvedApprovalItem[]>>;
+    /**
+     * list_resolved_approvals since an instant, one page: the approvals
+     * drawer's "N resolved today" (mockup `apdBody()`), with `more` set when
+     * the page did not reach the end; caller: features/shell/source.ts.
+     */
+    resolvedSince(
+      ctx: WsCtx,
+      q: { since: string },
+    ): Promise<Read<{ items: ResolvedApprovalItem[]; more: boolean }>>;
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
@@ -242,7 +272,7 @@ export interface DataSource {
    * features/tools/mandates-ledger.tsx (the ledger the accountable office
    * reads) and features/agents/mandates.tsx (the mandates one agent holds).
    * features/run/run.tsx and the shell's approvals drawer
-   * (features/shell/activity-actions.ts) read it for the bar on their approval
+   * (features/shell/source.ts) read it for the bar on their approval
    * cards; Fleet draws no approval card and reads none.
    */
   mandates: {
@@ -337,6 +367,13 @@ export interface DataSource {
     roles(ctx: OrgCtx): Promise<Read<RoleCatalog>>;
     /** list_workspaces, archived rows included */
     workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
+    /**
+     * list_repositories and list_agents inside one workspace: its bound
+     * repositories and its agent count, for the Workspaces row. A `WsCtx`,
+     * because both reads are workspace-scoped; the tab makes one per workspace
+     * the viewer may enter.
+     */
+    workspaceFacts(ctx: WsCtx): Promise<Read<WorkspaceFacts>>;
     /** list_cost_centers, the organization's live chargeback labels (ADR-142) */
     costCenters(ctx: OrgCtx): Promise<Read<CostCenterList>>;
     /**
@@ -353,6 +390,8 @@ export interface DataSource {
      * Org-scoped: the key pays for every workspace's assistant turns.
      */
     modelCredential(ctx: OrgCtx): Promise<Read<ModelCredential>>;
+    /** get_data_plane {kind:"postgres"}, redacted; the Data plane tab. */
+    dataPlane(ctx: OrgCtx): Promise<Read<DataPlane>>;
     /**
      * list_sso_providers — the organisation's identity providers, their
      * domain proofs and group mappings, and whether SSO is required. No
@@ -373,6 +412,18 @@ export interface DataSource {
     events(ctx: OrgCtx, q: AuditPageQuery): Promise<Read<AuditPage>>;
     /** export_audit_events: the signed file over the same window */
     exportEvents(ctx: OrgCtx, q: AuditExportQuery): Promise<Read<AuditExport>>;
+    /**
+     * get_evidence_retention (org Owner, Admin or Billing): the body retention
+     * the header's mono line and the Retention tab print; caller
+     * features/audit/audit.tsx.
+     */
+    retention(ctx: OrgCtx): Promise<Read<AuditRetention>>;
+    /**
+     * get_export_status for the organization export Build bundle queued, read
+     * back by the id the Exports tab's URL carries; caller
+     * features/audit/audit.tsx.
+     */
+    bundle(ctx: OrgCtx, exportId: string): Promise<Read<AuditBundle>>;
   };
   /**
    * list_skills, one page by name over its default window (noBillingGate;
@@ -395,7 +446,12 @@ export interface DataSource {
     /** list_records, status active: one page of the records in force, of one kind or all */
     records(
       ctx: WsCtx,
-      q: { kind: RecordKind | null; offset: number },
+      q: {
+        kind: RecordKind | null;
+        offset: number;
+        /** Rows to a page, 1 to `STEERING_READ_MAX`; `STEERING_PAGE` when omitted. */
+        limit?: number;
+      },
     ): Promise<Read<RecordPage>>;
     /**
      * get_record on a lineage: the published record's page (#3395). Reads the
@@ -418,6 +474,25 @@ export interface DataSource {
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
     /** get_steering_freshness: what is published, where, and the two gates */
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
+    /**
+     * The hub header's reads: list_repositories and get_repository_tree for
+     * the governance mode on the main repository, and three list_proposals
+     * counts for the proposals waiting. Each half fails on its own inside the
+     * value, so a GitHub outage never takes the library down with it.
+     */
+    hub(ctx: WsCtx): Promise<Read<SteeringHub>>;
+    /**
+     * list_memories: the workspace's active `:AgentMemory` nodes, newest
+     * first, up to `limit` (1 to `STEERING_READ_MAX`); the Memory shelf and
+     * its chip count.
+     */
+    memories(ctx: WsCtx, q: { limit: number }): Promise<Read<MemoryPage>>;
+    /**
+     * list_repositories and get_repository_tree: every path under `.oxagen/`
+     * on the main repository's production branch, for the Records shelf's On
+     * disk panel; `unbound` when no main repository is bound.
+     */
+    tree(ctx: WsCtx): Promise<Read<OxagenTree>>;
   };
   /**
    * The Tools page's six reads on the workspace (#2958), each role-checked in

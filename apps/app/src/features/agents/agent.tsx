@@ -1,133 +1,47 @@
-import { HarnessLabel } from "@/ui/harness-icon";
+// One agent (spec pages/agent.md; ARCHITECTURE.md §1.2 Agents row): the
+// header, the eight tabs, and the one tab the URL names. Composition happens
+// here: the registries on Tools and Steering own the reusable objects, and
+// this page shows what this agent's references resolved to.
+//
+// The identity is read first and every other read is keyed by it
+// (`agent-reads.ts`). An identity that cannot be read replaces the page body
+// with the not-loaded state (`page-states.tsx`); an unknown agent is a 404.
+// Every other read that fails leaves its own panel saying so and the rest of
+// the page standing.
+//
+// The design's empty state, "This agent has never run", stands in for the
+// Overview body of an enrolled agent with no frame yet. The header and the
+// tabs stay, because the writes an operator needs before a first run (the
+// Runtime tab's enroll path, the Definition tab, Suspend) must stay reachable;
+// the other tabs carry their own empty states.
 import { notFound } from "next/navigation";
-import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
+import { isEffective } from "@/data/contracts/mandates";
+import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
-import { CloneButton } from "@/ui/clone-button";
-import { AgentCard } from "@/ui/agent-card";
-import { panel } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
-import { ReadFailure } from "@/ui/read-failure";
-import { AgentActions } from "./agent-actions";
-import { BudgetSection } from "./budget-panel";
+import { ActivitySection } from "./activity";
+import {
+  type AgentReads,
+  type AgentTab,
+  readAgentTab,
+  runsOf,
+  spendRowOf,
+  tabOf,
+  tamperOf,
+} from "./agent-reads";
+import { AgentTabs } from "./agent-tabs";
 import { DefinitionSection } from "./definition";
-import { EnrollmentSection } from "./enrollment";
-import { IdentitySection, Roles } from "./identity";
-import { IncidentsSection } from "./incidents";
-import { AgentKillSwitch } from "./kill-switch";
-import { MandatesSection } from "./mandates";
-import { AgentStatusBadge, Facts, Panel } from "./parts";
+import { AgentHeader, operatorNameOf } from "./header";
+import { IdentitySection } from "./identity";
+import { Overview } from "./overview";
+import { AgentNeverRan, AgentPageFailure } from "./page-states";
+import { PermissionsSection } from "./permissions";
+import { RuntimeSection } from "./runtime";
+import { SteeringSection } from "./steering-tab";
 import { ToolbeltSection } from "./toolbelt";
-
-const TABS = [
-  "overview",
-  "identity",
-  "steering",
-  "toolbelt",
-  "runtime",
-  "permissions",
-  "activity",
-  "definition",
-] as const;
-const ALIASES: Record<string, string> = {
-  enrollment: "runtime",
-  budgets: "permissions",
-  mandates: "permissions",
-  incidents: "activity",
-  runs: "activity",
-};
-type Tab = (typeof TABS)[number];
-
-type Place = { org: string; ws: string; agent: string };
-
-function Header({
-  identity,
-  org,
-  ws,
-  orgRole,
-}: {
-  identity: AgentDetail["identity"];
-  org: string;
-  ws: string;
-  orgRole: WsCtx["orgRole"];
-}) {
-  const t = useTranslations("agents");
-  return (
-    <section
-      aria-label={t("detail.header")}
-      className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
-    >
-      <div className="flex min-w-0 flex-col gap-2">
-        <AgentCard
-          layout="detail"
-          agentKey={identity.agentKey}
-          notRecorded={t("notRecorded")}
-          sub={identity.name}
-        />
-        <p className="flex flex-wrap items-center gap-3 text-xs">
-          <AgentStatusBadge status={identity.status} />
-          <HarnessLabel harness={identity.harness}>
-            {t(`harness.${identity.harness}`)}
-          </HarnessLabel>
-        </p>
-        {identity.description === null ? null : (
-          <p className="max-w-prose text-sm text-muted-foreground">
-            {identity.description}
-          </p>
-        )}
-      </div>
-      <div className="flex flex-wrap items-start gap-2">
-        <CloneButton kind="agent" sourceRef={identity.id} />
-        {identity.status === "retired" ? null : (
-          <>
-            <AgentKillSwitch
-              org={org}
-              ws={ws}
-              agentId={identity.id}
-              agentKey={identity.agentKey}
-              name={identity.name}
-              orgRole={orgRole}
-            />
-            <AgentActions
-              org={org}
-              ws={ws}
-              agentId={identity.id}
-              name={identity.name}
-              slug={identity.slug}
-              suspended={identity.status === "suspended"}
-              here={routes.agent(org, ws, identity.slug)}
-              list={routes.agents(org, ws)}
-            />
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function Tabs({ selected, org, ws, agent }: { selected: Tab } & Place) {
-  const t = useTranslations("agents.detail.tabs");
-  return (
-    <nav aria-label={t("label")} className="border-b border-border">
-      <ul className="flex flex-wrap gap-1">
-        {TABS.map((tab) => (
-          <li key={tab}>
-            <SafeLink
-              to={routes.agent(org, ws, agent, { tab })}
-              aria-current={tab === selected ? "page" : undefined}
-              className="inline-flex min-h-11 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
-            >
-              {t(tab)}
-            </SafeLink>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
-}
 
 /**
  * The agent's record and the instant it was read. The credential and host
@@ -137,6 +51,20 @@ function Tabs({ selected, org, ws, agent }: { selected: Tab } & Place) {
 async function readAgent(ctx: WsCtx, source: DataSource, agent: string) {
   const read = await source.agents.get(ctx, agent);
   return { read, now: Date.now() };
+}
+
+/** The live counts on the tab strip; a count the page could not read is null and draws nothing. */
+function countsOf(reads: AgentReads) {
+  const list = reads.mandates.ok ? reads.mandates.value : null;
+  const mandates =
+    list === null
+      ? null
+      : list.mandates.filter((m) => isEffective(m, new Date(list.asOf))).length;
+  return {
+    toolbelt: reads.toolbelt.ok ? reads.toolbelt.value.tools.length : null,
+    permissions: mandates,
+    activity: tamperOf(reads.incidents)?.length ?? null,
+  };
 }
 
 export async function Agent({
@@ -155,51 +83,122 @@ export async function Agent({
   /** `?cursor=`, a later page of the incidents. */
   cursor: string | null;
 }) {
-  const canonical =
-    tab === null
-      ? "overview"
-      : Object.hasOwn(ALIASES, tab)
-        ? ALIASES[tab]
-        : tab;
-  const selected = TABS.find((name) => name === canonical) ?? "overview";
+  const selected = tabOf(tab);
   const { read, now } = await readAgent(ctx, source, agent);
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
     return (
-      <div className={`${panel} p-4`}>
-        <ReadFailure read={read} section={agent} />
-      </div>
+      <AgentPageFailure
+        read={read}
+        subject="agent"
+        viewer={ctx}
+        retry={routes.agent(ctx.orgSlug, ctx.wsSlug, agent, {
+          tab: selected,
+        })}
+        readAt={new Date(now).toISOString()}
+      />
     );
   }
   const detail = read.value;
   const { identity } = detail;
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug, agent: identity.slug };
-  let body: ReactNode;
+  const reads = await readAgentTab(ctx, source, detail, selected, cursor, now);
+  const runs = runsOf(reads.runs, identity.agentKey);
+  const lastRun = runs.ok ? (runs.value[0] ?? null) : null;
+  const operatorName = operatorNameOf(identity, lastRun);
+  const body = tabBody({
+    selected,
+    ctx,
+    detail,
+    reads,
+    runs,
+    lastRun,
+    operatorName,
+    place,
+    now,
+    cursor,
+  });
+  return (
+    <div className="flex flex-col gap-5" data-testid="agent-page">
+      <AgentHeader
+        identity={identity}
+        lastRun={lastRun}
+        orgRole={ctx.orgRole}
+        org={place.org}
+        ws={place.ws}
+      />
+      <AgentTabs
+        selected={selected}
+        counts={countsOf(reads)}
+        org={place.org}
+        ws={place.ws}
+        agent={place.agent}
+      />
+      {body}
+    </div>
+  );
+}
+
+function tabBody({
+  selected,
+  ctx,
+  detail,
+  reads,
+  runs,
+  lastRun,
+  operatorName,
+  place,
+  now,
+  cursor,
+}: {
+  selected: AgentTab;
+  ctx: WsCtx;
+  detail: AgentDetail;
+  reads: AgentReads;
+  runs: ReturnType<typeof runsOf>;
+  lastRun: RunRow | null;
+  operatorName: string | null;
+  place: { org: string; ws: string; agent: string };
+  now: number;
+  cursor: string | null;
+}): ReactNode {
+  const { identity } = detail;
+  const spendRow = spendRowOf(reads.spend, identity.agentKey);
   switch (selected) {
+    case "overview":
+      if (
+        identity.firstFrameAt === null &&
+        (identity.status === "enrolled" || detail.hosts.length > 0)
+      ) {
+        return <AgentNeverRan fleet={routes.fleet(place.org, place.ws)} />;
+      }
+      return (
+        <Overview
+          detail={detail}
+          toolbelt={reads.toolbelt}
+          mandates={reads.mandates}
+          incidents={reads.incidents}
+          deliveries={reads.deliveries}
+          spend={reads.spend}
+          spendRow={spendRow}
+          lastRun={lastRun}
+          operatorName={operatorName}
+          place={place}
+        />
+      );
     case "identity":
-      body = (
+      return (
         <IdentitySection
           detail={detail}
-          showRoles={false}
           now={now}
-          // assign_agent_role and revoke_agent_role are org Owner or Admin
-          // writes (INV-29, checked in their handlers), and a retired
-          // principal holds no authority to change, so the panel offers the
-          // controls to nobody else.
-          manage={
-            (ctx.orgRole === "owner" || ctx.orgRole === "admin") &&
-            identity.status !== "retired"
-              ? {
-                  org: place.org,
-                  ws: place.ws,
-                  agentId: identity.id,
-                  agentSlug: identity.slug,
-                }
-              : null
-          }
+          lastRun={lastRun}
+          operatorName={operatorName}
+          incidents={reads.incidents}
+          wsName={ctx.wsName}
+          wsSlug={ctx.wsSlug}
+          place={place}
           // set_cost_center admits an org Owner, Admin or Billing member
-          // (ADR-142), a wider set than the role writes, so the gate is its
-          // own. A retired agent's label is left as the record holds it.
+          // (ADR-142). A retired agent's label is left as the record holds it.
           charge={
             (ctx.orgRole === "owner" ||
               ctx.orgRole === "admin" ||
@@ -216,89 +215,62 @@ export async function Agent({
           }
         />
       );
-      break;
-    case "toolbelt":
-      body = (
-        <ToolbeltSection
-          read={await source.agents.toolbelt(ctx, identity.id)}
-        />
-      );
-      break;
-    case "runtime":
-      body = (
-        <EnrollmentSection
-          hosts={detail.hosts}
-          now={now}
+    case "steering":
+      return reads.deliveries === null ? null : (
+        <SteeringSection
+          deliveries={reads.deliveries}
+          agentKey={identity.agentKey}
+          lastRun={lastRun}
           org={place.org}
           ws={place.ws}
-          agentId={identity.id}
-          agentName={identity.name}
-          retired={identity.status === "retired"}
+        />
+      );
+    case "toolbelt":
+      return <ToolbeltSection read={reads.toolbelt} />;
+    case "runtime":
+      return (
+        <RuntimeSection
+          detail={detail}
+          lastRun={lastRun}
+          org={place.org}
+          ws={place.ws}
           here={routes.agent(place.org, place.ws, place.agent, {
-            tab: "enrollment",
+            tab: "runtime",
           })}
         />
       );
-      break;
-    case "activity":
-      body = (
-        <IncidentsSection
-          read={await source.agents.incidents(ctx, identity.id, { cursor })}
-          cursor={cursor}
-          {...place}
+    case "permissions":
+      return (
+        <PermissionsSection
+          detail={detail}
+          toolbelt={reads.toolbelt}
+          mandates={reads.mandates}
+          roles={reads.roles}
+          budgets={reads.budgets}
+          runs={runs.ok ? runs.value : []}
+          operatorName={operatorName}
+          orgRole={ctx.orgRole}
+          place={place}
         />
       );
-      break;
-    case "permissions": {
-      // Neither read needs the other, so they run together.
-      const [budgets, mandates] = await Promise.all([
-        source.spend.budgets(ctx),
-        source.mandates.list(ctx, { agentId: identity.id }),
-      ]);
-      body = (
-        <div className="flex flex-col gap-4">
-          <Roles
-            roles={detail.roles}
-            manage={
-              (ctx.orgRole === "owner" || ctx.orgRole === "admin") &&
-              identity.status !== "retired"
-                ? {
-                    org: place.org,
-                    ws: place.ws,
-                    agentId: identity.id,
-                    agentSlug: identity.slug,
-                  }
-                : null
-            }
-          />
-          <BudgetSection
-            read={budgets}
-            spend={routes.spend(place.org, place.ws, { tab: "budgets" })}
-          />
-          <MandatesSection
-            read={mandates}
-            orgRole={ctx.orgRole}
-            agentStatus={identity.status}
-            org={place.org}
-            ws={place.ws}
-            agentId={identity.id}
-            agentSlug={identity.slug}
-          />
-        </div>
+    case "activity":
+      return (
+        <ActivitySection
+          runs={runs}
+          row={spendRow}
+          spend={reads.spend}
+          findings={reads.findings}
+          incidents={reads.incidents}
+          cursor={cursor}
+          agentKey={identity.agentKey}
+          place={place}
+        />
       );
-      break;
-    }
-    case "overview":
-      body = <Overview detail={detail} {...place} />;
-      break;
-    case "steering":
-      body = <SteeringLink {...place} />;
-      break;
     case "definition":
-      body = (
+      return (
         <DefinitionSection
           detail={detail}
-          mandates={await source.mandates.list(ctx, { agentId: identity.id })}
+          mandates={reads.mandates}
           org={place.org}
           ws={place.ws}
           editor={routes.agentSource(place.org, place.ws, place.agent)}
@@ -307,81 +279,5 @@ export async function Agent({
           })}
         />
       );
-      break;
   }
-  return (
-    <div className="flex flex-col gap-6">
-      <Header
-        identity={identity}
-        org={place.org}
-        ws={place.ws}
-        orgRole={ctx.orgRole}
-      />
-      <Tabs selected={selected} {...place} />
-      {body}
-    </div>
-  );
-}
-
-function Overview({ detail, org, ws, agent }: { detail: AgentDetail } & Place) {
-  const t = useTranslations("agents.detail.overview");
-  const sections = [
-    "identity",
-    "steering",
-    "toolbelt",
-    "runtime",
-    "permissions",
-    "activity",
-    "definition",
-  ] as const;
-  const labels = useTranslations("agents.detail.tabs");
-  return (
-    <Panel id="agent-overview" title={t("title")} lead={t("lead")}>
-      <Facts
-        rows={[
-          {
-            term: t("principal"),
-            value: detail.identity.principalId ?? t("unavailable"),
-          },
-          {
-            term: t("operator"),
-            value: detail.identity.operatorId ?? t("unavailable"),
-          },
-          { term: t("hosts"), value: detail.hosts.length },
-          { term: t("roles"), value: detail.roles.length },
-          {
-            term: t("definition"),
-            value: detail.definition?.path ?? t("unavailable"),
-          },
-        ]}
-      />
-      <nav
-        aria-label={t("composition")}
-        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-      >
-        {sections.map((tab) => (
-          <SafeLink
-            key={tab}
-            to={routes.agent(org, ws, agent, { tab })}
-            className={`${panel} min-h-11 p-4 text-sm underline underline-offset-4`}
-          >
-            {labels(tab)}
-          </SafeLink>
-        ))}
-      </nav>
-    </Panel>
-  );
-}
-function SteeringLink({ org, ws }: Place) {
-  const t = useTranslations("agents.detail.steering");
-  return (
-    <Panel id="agent-steering" title={t("title")} lead={t("lead")}>
-      <SafeLink
-        to={routes.steering(org, ws)}
-        className="text-sm underline underline-offset-4"
-      >
-        {t("open")}
-      </SafeLink>
-    </Panel>
-  );
 }

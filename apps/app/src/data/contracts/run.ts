@@ -173,7 +173,7 @@ export const RunCost = z.object({
 });
 export type RunCost = z.infer<typeof RunCost>;
 
-export const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
+const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
 export const TranscriptZoom = z.enum(TRANSCRIPT_ZOOMS);
 export type TranscriptZoom = z.infer<typeof TranscriptZoom>;
 
@@ -190,10 +190,12 @@ type TranscriptEntryKind = z.infer<typeof TranscriptEntryKind>;
 export const TRANSCRIPT_KINDS = [
   "prompt",
   "responses",
+  "thinking",
   "tools",
   "policy",
-  "recall",
   "usage",
+  "recall",
+  "seal",
   "errors",
 ] as const;
 export const TranscriptKind = z.enum(TRANSCRIPT_KINDS);
@@ -277,6 +279,12 @@ export const TranscriptDecision = z.object({
   chainRef: z.string().optional(),
   decision: z.string(),
   type: z.string(),
+  /**
+   * Who decided: `bundle` or `kernel` for Oxagen policy, `human` for an
+   * operator, `harness` or `managed_settings` for the agent's own harness.
+   * Null or absent when the frame names none.
+   */
+  source: z.string().nullable().optional(),
   at: z.iso.datetime({ offset: true }),
 });
 export type TranscriptDecision = z.infer<typeof TranscriptDecision>;
@@ -301,7 +309,15 @@ export const TranscriptEntry = z.object({
    * subagent's `seq` needs beside it to name one frame (`entryKey`).
    */
   subagent: z
-    .object({ chainRef: z.string(), type: z.string().nullable() })
+    .object({
+      chainRef: z.string(),
+      type: z.string().nullable(),
+      /**
+       * The parent's Task or Agent call that spawned the subagent, as a
+       * `callKey`, so the Turns view nests the subagent under that call.
+       */
+      spawnKey: z.string().nullable().optional(),
+    })
     .optional(),
   at: z.iso.datetime({ offset: true }),
   /** Milliseconds from the run's recorded start; never negative. */
@@ -319,6 +335,10 @@ export const TranscriptEntry = z.object({
    * a `PublicId` (src/test/arch/public-ids.test.ts).
    */
   callKey: z.string().nullable(),
+  /** What the tool call acts on (a command, path or URL); null when unrecorded. */
+  target: z.string().nullable().optional(),
+  /** The reasoning effort the model call ran at; null when unrecorded. */
+  effort: z.string().nullable().optional(),
   usage: TranscriptUsage.nullable().optional(),
   /** The chips this entry answers to. */
   kinds: z.array(TranscriptKind),

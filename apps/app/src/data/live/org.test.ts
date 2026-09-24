@@ -1,12 +1,17 @@
 // The organization port: one kernel read each of list_members at org scope for
 // the Organization page, list_iam_roles for the roles and the permission
 // catalogue, list_workspaces for the Workspaces section and list_api_keys for
-// the API keys page, each mapped into its view model, with a refusal passed
-// through and an unmappable answer reported once. The keys are read
-// through a WsCtx: a key names a workspace (ADR-073).
+// the API keys page, and list_repositories with list_agents for one
+// workspace's row, each mapped into its view model, with a refusal passed
+// through and an unmappable answer reported once. The keys and a workspace's
+// facts are read through a WsCtx: a key names a workspace (ADR-073), and both
+// facts reads are workspace-scoped.
+import { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
+import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -165,6 +170,7 @@ describe("org.roles", () => {
             permissions: ["run.read"],
             heldBy: 0,
             createdBy: null,
+            createdAt: "2026-09-15T00:00:00.000Z",
           },
         ],
         catalog: [
@@ -287,6 +293,7 @@ describe("org.workspaces", () => {
           {
             id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
             slug: "core-platform",
+            namespace: "core",
             name: "Core platform",
             role: "Owner",
             archivedAt: null,
@@ -334,6 +341,133 @@ const storedKey = {
   revokedAt: null,
   rotatable: true,
 };
+
+/** One `list_repositories` row, as the contract's output carries it. */
+function binding(
+  role: "main" | "linked",
+  fullName: string,
+  defaultRef: string,
+) {
+  const [owner = "acme", name = "repo"] = fullName.split("/");
+  return {
+    bindingId: "rpb_0a1b2c",
+    role,
+    owner,
+    name,
+    fullName,
+    defaultRef,
+    htmlUrl: `https://github.com/${fullName}`,
+    boundAt: "2026-09-01T00:00:00.000Z",
+    connectionLive: true,
+    events: "installed" as const,
+  };
+}
+
+/** `list_agents`' answer: one row of the page and the totals over the workspace. */
+function agents(identities: number) {
+  return {
+    items: [],
+    nextCursor: null,
+    totals: {
+      identities,
+      enrolled: 0,
+      holdingMandate: null,
+      tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
+    },
+  };
+}
+
+describe("org.workspaceFacts", () => {
+  it("reads the repositories and the agent total inside the workspace and returns the row's facts", async () => {
+    kernelRead.mockImplementation((_ctx, { contract }) =>
+      Promise.resolve(
+        contract === repositoryList
+          ? readOk({
+              repositories: [
+                binding("main", "acme/platform", "main"),
+                binding("linked", "acme/billing", "trunk"),
+              ],
+            })
+          : readOk(agents(64)),
+      ),
+    );
+    expect(await org.workspaceFacts(wsCtx)).toEqual(
+      readOk({
+        repositories: [
+          { role: "main", fullName: "acme/platform", defaultRef: "main" },
+          { role: "linked", fullName: "acme/billing", defaultRef: "trunk" },
+        ],
+        agents: 64,
+        archiveBlockers: { count: 0, more: false },
+      }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
+      contract: repositoryList,
+      input: {},
+      page: "organization",
+    });
+    // The largest page: the Archive dialog counts the rows it would refuse over.
+    expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
+      contract: agentList,
+      input: { limit: 100 },
+      page: "organization",
+    });
+  });
+
+  it("counts the agents archive_workspace refuses over, leaving out the built-in and retired ones", async () => {
+    kernelRead.mockImplementation((_ctx, { contract }) =>
+      Promise.resolve(
+        contract === repositoryList
+          ? readOk({ repositories: [] })
+          : readOk({
+              ...agents(4),
+              items: [
+                { slug: "qa-chat", status: "unenrolled" },
+                { slug: "old-bot", status: "retired" },
+                { slug: "invoice-bot", status: "enrolled" },
+                { slug: "review-bot", status: "suspended" },
+              ],
+              nextCursor: "cmV2aWV3LWJvdA",
+            }),
+      ),
+    );
+    const read = await org.workspaceFacts(wsCtx);
+    expect(read.ok && read.value).toMatchObject({
+      agents: 4,
+      // Two live agents on this page, and the page did not reach the end.
+      archiveBlockers: { count: 2, more: true },
+    });
+  });
+
+  it("refuses the whole when either read refuses, never a row half fact and half gap (negative)", async () => {
+    const denied = {
+      ok: false,
+      reason: "denied",
+      permission: "organization.read",
+    } as const;
+    kernelRead.mockImplementation((_ctx, { contract }) =>
+      Promise.resolve(
+        contract === agentList ? denied : readOk({ repositories: [] }),
+      ),
+    );
+    expect(await org.workspaceFacts(wsCtx)).toEqual(denied);
+  });
+
+  it("answers record_unmappable for a negative agent total, reported once (negative)", async () => {
+    kernelRead.mockImplementation((_ctx, { contract }) =>
+      Promise.resolve(
+        contract === repositoryList
+          ? readOk({ repositories: [] })
+          : readOk(agents(-1)),
+      ),
+    );
+    expect(await org.workspaceFacts(wsCtx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("org.apiKeys", () => {
   it("reads list_api_keys in the workspace scope and returns the API keys view model", async () => {
@@ -424,6 +558,61 @@ const storedScim = {
     lastUsedAt: null,
   },
 };
+
+describe("org.dataPlane", () => {
+  const shared = {
+    kind: "postgres",
+    mode: "shared",
+    status: "active",
+    host: null,
+    database: null,
+    schemaVersion: null,
+    lastVerifiedAt: null,
+    rotatedAt: null,
+  };
+
+  it("reads get_data_plane for the Postgres binding and returns the redacted view", async () => {
+    kernelRead.mockResolvedValue(readOk(shared));
+    expect(await org.dataPlane(ctx)).toEqual(
+      readOk({
+        mode: "shared",
+        status: "active",
+        host: null,
+        database: null,
+        schemaVersion: null,
+        lastVerifiedAt: null,
+        rotatedAt: null,
+      }),
+    );
+    // The Postgres binding: the one every tenant table sits on.
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: orgDataPlaneGet,
+      input: { kind: "postgres" },
+      page: "organization",
+    });
+  });
+
+  it("passes a refusal through unchanged and reports nothing (negative)", async () => {
+    const denied = {
+      ok: false,
+      reason: "denied",
+      permission: "org.owner or org.admin",
+    } as const;
+    kernelRead.mockResolvedValue(denied);
+    expect(await org.dataPlane(ctx)).toEqual(denied);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("answers record_unmappable and reports once for a binding the view model refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ ...shared, lastVerifiedAt: "last Tuesday" }),
+    );
+    expect(await org.dataPlane(ctx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("org.sso", () => {
   it("reads list_sso_providers for the organization and returns the SSO view model", async () => {

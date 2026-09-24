@@ -52,13 +52,13 @@ function WriteDialog<O>({
 }: {
   copy: Copy;
   testId: string;
-  /** Draws the trigger as `.btn.danger`, for a write that ends something. */
-  danger?: boolean;
   write: () => Promise<ActionResult<O>>;
   /** Runs after the write answered ok; returning true closes the dialog. */
   onDone: (value: O) => boolean;
   /** What the dialog shows once the write answered ok and stayed open. */
   done?: (value: O) => ReactNode;
+  /** A write that ends something draws its opener in the danger ink (`.btn.danger`). */
+  danger?: boolean;
 }) {
   const failureText = useActionFailure();
   const [open, setOpen] = useState(false);
@@ -168,7 +168,7 @@ export function RetireAgent({
   holds?: Holds;
   /** The agents list, reloaded once the agent is retired. */
   after: SafePath;
-  /** The list's row action is `.btn.danger`; the agent page's header keeps the plain button. */
+  /** The agent's header draws it in the danger ink; the list's row does not. */
   danger?: boolean;
 }) {
   const t = useTranslations("agents.actions.retire");
@@ -231,9 +231,23 @@ export function RetireAgent({
       : roles === null
         ? t("endsValueNoRoles", holds)
         : t("endsValue", { ...holds, roles });
-  const facts: readonly [string, string][] = [
+  // In flight is the design's third row. No read counts an agent's live runs
+  // and `retire_agent` cancels none, so the row says so and names the gap
+  // (#3975) rather than printing a count or a promise.
+  const facts: readonly [string, ReactNode][] = [
     [t("kept"), t("keptValue")],
     [t("ends"), ends],
+    [
+      t("inFlight"),
+      <span
+        key="in-flight"
+        data-not-backed=""
+        data-gap="#3975"
+        className="text-muted-foreground"
+      >
+        {t("inFlightUnrecorded")}
+      </span>,
+    ],
   ];
   return (
     <>
@@ -380,6 +394,7 @@ export function AgentActions({
         key={suspendKey}
         copy={suspendCopy}
         testId={`${suspendKey}-agent`}
+        danger={!suspended}
         write={() => setAgentSuspended(org, ws, agentId, !suspended)}
         onDone={() => {
           navigate.replace(here);
@@ -393,6 +408,7 @@ export function AgentActions({
         name={name}
         slug={slug}
         after={list}
+        danger
       />
     </>
   );

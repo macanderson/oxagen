@@ -522,6 +522,9 @@ async function runPreparedTurn(
         ...scope,
         surface: request.surface === "chat" ? "app" : "api",
         messageId,
+        // The person who asked (resolved in prepareAssistantTurn), so each
+        // platform-paid debit of this turn is attributed to them.
+        userId,
       },
       model: p.turnModel,
       ...(p.tier ? { tier: p.tier } : {}),

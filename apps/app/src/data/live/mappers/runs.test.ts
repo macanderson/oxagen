@@ -18,6 +18,7 @@ const ledgerRun: Run = {
   operatorId: "prn_marcusbell",
   operatorKind: "human",
   operatorName: "Marcus Bell",
+  operatorAttribution: "initiator",
   status: "sealed",
   outcome: "completed",
   turns: 12,
@@ -29,6 +30,7 @@ const ledgerRun: Run = {
   taskRef: "ENG-4121",
   startedAt: "2026-09-15T08:00:00.000Z",
   sealedAt: "2026-09-15T08:40:00.000Z",
+  endedAt: "2026-09-15T08:40:00.000Z",
   replayGrade: "fork",
   verdict: null,
   enforcementTier: "gateway",
@@ -49,6 +51,7 @@ const unpricedSession: Run = {
   operatorId: null,
   operatorKind: null,
   operatorName: null,
+  operatorAttribution: null,
   status: "live",
   outcome: "running",
   turns: null,
@@ -70,6 +73,7 @@ const unpricedSession: Run = {
   taskRef: null,
   startedAt: "2026-09-15T08:55:00.000Z",
   sealedAt: null,
+  endedAt: null,
   replayGrade: null,
   verdict: null,
   // A live observe-tier session: it records what the agent did and gives
@@ -93,6 +97,7 @@ describe("toRunPage", () => {
           operatorId: "prn_marcusbell",
           operatorKind: "human",
           operatorName: "Marcus Bell",
+          operatorAttribution: "initiator",
           status: "sealed",
           outcome: "completed",
           turns: 12,
@@ -104,6 +109,10 @@ describe("toRunPage", () => {
             basis: "gateway_observed",
           },
           reportedCost: null,
+          reportedTokens: null,
+          effort: null,
+          thinking: null,
+          permissionMode: null,
           model: null,
           harness: null,
           machine: null,
@@ -117,6 +126,9 @@ describe("toRunPage", () => {
           replayGrade: "fork",
           verdict: null,
           enforcementTier: "gateway",
+          // A row the control plane sent no answer for reads as reachable.
+          commandBlock: null,
+          steerBlock: null,
           enrichmentEnabled: true,
           ingressRevoked: false,
           ingressPaused: false,
@@ -124,6 +136,7 @@ describe("toRunPage", () => {
           canSummarize: true,
           startedAt: "2026-09-15T08:00:00.000Z",
           sealedAt: "2026-09-15T08:40:00.000Z",
+          endedAt: "2026-09-15T08:40:00.000Z",
         },
       ],
       nextCursor: "c2",
@@ -138,6 +151,7 @@ describe("toRunPage", () => {
       operatorId: null,
       operatorKind: null,
       operatorName: null,
+      operatorAttribution: null,
       // The session recorded both, so neither is dropped on the way to the view.
       model: {
         slug: "claude-haiku-4-5-20251001",
@@ -152,6 +166,7 @@ describe("toRunPage", () => {
       summary: null,
       replayGrade: null,
       sealedAt: null,
+      endedAt: null,
       // An observe-tier live session: the row says where it was observed from,
       // what the seal has not recorded, and that summarizing would be refused,
       // so a page can disable the controls rather than offer four that fail.
@@ -179,6 +194,23 @@ describe("toRunPage", () => {
       status: "live",
       ingressRevoked: true,
       ingressPaused: true,
+    });
+  });
+
+  it("carries why a command or a steer cannot reach the run (ADR-163)", () => {
+    const page = toRunPage({
+      runs: [
+        {
+          ...unpricedSession,
+          commandBlock: "host_offline",
+          steerBlock: "no_prompt_carrier",
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(RunPage.parse(page).runs[0]).toMatchObject({
+      commandBlock: "host_offline",
+      steerBlock: "no_prompt_carrier",
     });
   });
 

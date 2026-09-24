@@ -80,28 +80,19 @@ export async function createCreditLot(
       createdById: args.createdById ?? null,
     });
 
-    // 3. Mirror into credit_balances (cached derived value).
+    // 3. Collect any debt a mid-turn shortfall left, out of the credits that
+    // just arrived. Before the mirror, so the settings-then-lots lock order
+    // matches consumeCredits.
+    const settled = await settleOwedCredits(tx, args.orgId);
+
+    // 4. Mirror into credit_balances (cached derived value).
     // The mirror tracks grants and spends only — nothing decrements it when a
     // lot passes its expires_at, so it drifts ABOVE the real spendable balance
     // once any expiring lot lapses. Treat it as a display cache; every
     // gating decision must read {@link effectiveBalance}, which sums live lots.
-    await tx
-      .insert(schema.creditBalances)
-      .values({
-        orgId: args.orgId,
-        balanceCents: args.amountCents,
-        lastEventAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: schema.creditBalances.orgId,
-        set: {
-          balanceCents: sql`${schema.creditBalances.balanceCents} + ${args.amountCents}`,
-          lastEventAt: new Date(),
-          updatedAt: new Date(),
-        },
-      });
+    await upsertBalanceMirror(tx, args.orgId, args.amountCents - settled);
 
-    // 4. Compute the new effective balance (lazy expiry — expired lots excluded).
+    // 5. Compute the new effective balance (lazy expiry — expired lots excluded).
     const now = new Date();
     const balanceRows = await tx
       .select({
@@ -122,6 +113,34 @@ export async function createCreditLot(
 
     return { lotId, effectiveBalanceCents };
   });
+}
+
+/**
+ * Add `deltaCents` to the credit_balances mirror, creating the row if the org
+ * has none. A grant that also settled a debt can hand in a negative delta, so
+ * the mirror is floored at zero like every other write to it.
+ */
+export async function upsertBalanceMirror(
+  tx: Tx,
+  orgId: string,
+  deltaCents: bigint,
+  at: Date = new Date(),
+): Promise<void> {
+  await tx
+    .insert(schema.creditBalances)
+    .values({
+      orgId,
+      balanceCents: deltaCents > 0n ? deltaCents : 0n,
+      lastEventAt: at,
+    })
+    .onConflictDoUpdate({
+      target: schema.creditBalances.orgId,
+      set: {
+        balanceCents: sql`GREATEST(${schema.creditBalances.balanceCents} + ${deltaCents}, 0)`,
+        lastEventAt: at,
+        updatedAt: at,
+      },
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +249,13 @@ interface ConsumeCreditsBase {
   reason: string;
   referenceType?: string;
   referenceId?: string;
+  /**
+   * The person the spend is attributed to, written to
+   * `credit_ledger.created_by_id` (a uuid column). Only a caller that knows
+   * who acted passes it: the in-app agent's turn names the person who asked.
+   * Left off, the row names nobody, which is true of a background spend.
+   */
+  createdById?: string;
 }
 
 /**
@@ -247,8 +273,26 @@ interface ConsumeCreditsBase {
  */
 export type ConsumeCreditsArgs = ConsumeCreditsBase &
   (
-    | { requestedCents: bigint; requestedMicroCents?: never }
-    | { requestedMicroCents: bigint; requestedCents?: never }
+    | {
+        requestedCents: bigint;
+        requestedMicroCents?: never;
+        carryShortfall?: never;
+      }
+    | {
+        requestedMicroCents: bigint;
+        requestedCents?: never;
+        /**
+         * Keep what the balance could not cover as a debt, rather than drop
+         * it. The whole credits left unpaid are banked in this reason's carry
+         * bucket beside the sub-credit fraction, so the next charge under the
+         * same reason and the next grant ({@link settleOwedCredits}) collect
+         * them, and the turn credit gate reads them as owed
+         * ({@link owedCredits}). The metering chokepoint sets it for
+         * `consume_assistant_tokens` alone: that is the line whose shortfall
+         * was a platform-key cost nobody paid.
+         */
+        carryShortfall?: boolean;
+      }
   );
 
 export interface ConsumeCreditsResult {
@@ -269,6 +313,105 @@ export interface ConsumeCreditsResult {
    * looked at. Meaningful only when the request was positive.
    */
   carryMicroCents: bigint;
+  /**
+   * Whole credits this reason owed from earlier calls when this one began: the
+   * debt a `carryShortfall` caller left in the bucket. Part of the request this
+   * call made, so `requested - priorOwedCents` is what this call alone came to.
+   */
+  priorOwedCents: bigint;
+  /**
+   * Whole credits this reason still owes after this call: `shortfallCents` for
+   * a `carryShortfall` caller, zero for every other caller, whose shortfall is
+   * dropped.
+   */
+  owedCents: bigint;
+}
+
+/** One non-expired lot with credit left, as the debit paths lock it. */
+interface SpendableLot {
+  id: string;
+  remainingCents: bigint | string;
+}
+
+const asBigint = (value: bigint | string): bigint =>
+  typeof value === "bigint" ? value : BigInt(value);
+
+/**
+ * Lock the org's spendable lots, soonest-expiring first (expires_at NULLS
+ * LAST, so non-expiring lots are spent last). Both debit paths take the
+ * settings row before this, which is the lock order that keeps a grant and a
+ * charge from deadlocking.
+ */
+async function lockSpendableLots(
+  tx: Tx,
+  orgId: string,
+  now: Date,
+): Promise<SpendableLot[]> {
+  return tx
+    .select({
+      id: schema.creditLots.id,
+      remainingCents: schema.creditLots.remainingCents,
+      expiresAt: schema.creditLots.expiresAt,
+    })
+    .from(schema.creditLots)
+    .where(
+      and(
+        eq(schema.creditLots.orgId, orgId),
+        or(
+          isNull(schema.creditLots.expiresAt),
+          gt(schema.creditLots.expiresAt, now),
+        ),
+        gt(schema.creditLots.remainingCents, 0n),
+      ),
+    )
+    .orderBy(asc(schema.creditLots.expiresAt))
+    .for("update");
+}
+
+/**
+ * Take `amount` out of `lots` in order, never driving one below zero. The
+ * caller has already clamped `amount` to what the lots hold. Mutates the
+ * in-memory `remainingCents` so a second draw in the same transaction sees
+ * what the first left.
+ */
+async function drainLots(
+  tx: Tx,
+  lots: SpendableLot[],
+  amount: bigint,
+): Promise<void> {
+  let remaining = amount;
+  for (const lot of lots) {
+    if (remaining <= 0n) break;
+    const lotRemaining = asBigint(lot.remainingCents);
+    if (lotRemaining <= 0n) continue;
+    const debit = remaining <= lotRemaining ? remaining : lotRemaining;
+    remaining -= debit;
+    lot.remainingCents = lotRemaining - debit;
+    await tx
+      .update(schema.creditLots)
+      .set({
+        remainingCents: sql`${schema.creditLots.remainingCents} - ${debit}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.creditLots.id, lot.id));
+  }
+}
+
+/**
+ * A carry bucket as the JSON column stores it. The fraction alone is always
+ * under 1e6; a bucket that also holds a debt is larger, and must stay an exact
+ * JSON number. 2^53 micro-credits is about 9 billion credits of debt, which
+ * the turn credit gate makes unreachable, so passing it is a defect to stop
+ * on rather than a value to round.
+ */
+function bucketValue(microCredits: bigint): number {
+  const value = Number(microCredits);
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(
+      `meter carry bucket out of range: ${microCredits.toString()} micro-credits`,
+    );
+  }
+  return value;
 }
 
 /**
@@ -285,6 +428,11 @@ export interface ConsumeCreditsResult {
  * differently (assistant tokens at exactly cost, everything else at the solved
  * markup), so a pooled carry would bill one line's margin against another and
  * count it against that line's cap.
+ *
+ * What the lots cannot cover is never debited. A `carryShortfall` caller
+ * banks it in the same bucket as a debt, which the next charge under the
+ * reason and the next grant collect ({@link settleOwedCredits}); every other
+ * caller's shortfall is dropped.
  *
  * A zero or fully-clamped debit writes NO ledger row (the ledger CHECK forbids
  * a zero delta). credit_balances is decremented in the same transaction to keep
@@ -311,6 +459,8 @@ export async function consumeCredits(
       shortfallCents: 0n,
       balanceCents: 0n,
       carryMicroCents: 0n,
+      priorOwedCents: 0n,
+      owedCents: 0n,
     };
   }
 
@@ -336,8 +486,14 @@ export async function consumeCredits(
     // the assistant's call and wrote a whole credit as
     // `consume_assistant_tokens`, putting embedding margin on a line that bills
     // at exactly cost and counting it against the assistant spend cap.
+    //
+    // A bucket can also hold whole credits: the debt a `carryShortfall` caller
+    // left when the balance ran out. They are part of `requested` here, so this
+    // call collects them first, before its own cost.
     let requested = args.requestedCents ?? 0n;
     let carryMicroCents = 0n;
+    let priorOwedCents = 0n;
+    let writeBack: ((owedCents: bigint) => Promise<void>) | null = null;
     if (micro !== undefined) {
       const locked = await tx
         .insert(schema.orgBillingSettings)
@@ -353,70 +509,57 @@ export async function consumeCredits(
 
       const carryByReason = locked[0]?.carryByReason ?? {};
       const banked = BigInt(carryByReason[args.reason] ?? 0);
+      priorOwedCents = banked / MICRO_CREDITS_PER_CREDIT;
       const total = banked + micro;
       requested = total / MICRO_CREDITS_PER_CREDIT;
       carryMicroCents = total % MICRO_CREDITS_PER_CREDIT;
+      const fraction = carryMicroCents;
 
-      await tx
-        .update(schema.orgBillingSettings)
-        .set({
-          meterCarryMicroCreditsByReason: {
-            ...carryByReason,
-            // Always < 1e6 by construction, so exact as a JSON number.
-            [args.reason]: Number(carryMicroCents),
-          },
-          updatedAt: now,
-        })
-        .where(eq(schema.orgBillingSettings.orgId, args.orgId));
+      writeBack = (owedCents: bigint) =>
+        tx
+          .update(schema.orgBillingSettings)
+          .set({
+            meterCarryMicroCreditsByReason: {
+              ...carryByReason,
+              [args.reason]: bucketValue(
+                owedCents * MICRO_CREDITS_PER_CREDIT + fraction,
+              ),
+            },
+            updatedAt: now,
+          })
+          .where(eq(schema.orgBillingSettings.orgId, args.orgId))
+          .then(() => undefined);
 
       // Still under a whole credit even with everything banked before it —
       // nothing to debit yet, and nothing lost: it stays in the carry.
       if (requested <= 0n) {
+        await writeBack(0n);
         return {
           chargedCents: 0n,
           shortfallCents: 0n,
           balanceCents: 0n,
           carryMicroCents,
+          priorOwedCents,
+          owedCents: 0n,
         };
       }
     }
 
-    // Lock and read all non-expired lots for this org, soonest-expiring first.
-    // expires_at NULLS LAST → non-expiring (free) lots are consumed last.
-    const lots = await tx
-      .select({
-        id: schema.creditLots.id,
-        remainingCents: schema.creditLots.remainingCents,
-        expiresAt: schema.creditLots.expiresAt,
-      })
-      .from(schema.creditLots)
-      .where(
-        and(
-          eq(schema.creditLots.orgId, args.orgId),
-          or(
-            isNull(schema.creditLots.expiresAt),
-            gt(schema.creditLots.expiresAt, now),
-          ),
-          gt(schema.creditLots.remainingCents, 0n),
-        ),
-      )
-      .orderBy(asc(schema.creditLots.expiresAt))
-      .for("update");
+    const lots = await lockSpendableLots(tx, args.orgId, now);
 
     // Compute how much we can charge across all lots.
     const totalAvailable = lots.reduce(
-      (acc, l) =>
-        acc +
-        (typeof l.remainingCents === "bigint"
-          ? l.remainingCents
-          : BigInt(l.remainingCents)),
+      (acc, l) => acc + asBigint(l.remainingCents),
       0n,
     );
     const charge = requested <= totalAvailable ? requested : totalAvailable;
-    // A shortfall is not re-banked into the carry: credit_balances forbids an
-    // overdraft, so an org that outran its credits mid-turn owes nothing later.
-    // The pre-turn guard is what stops it happening.
+    // credit_balances forbids an overdraft, so what the lots cannot cover is
+    // never debited here. A `carryShortfall` caller keeps it as a debt in its
+    // bucket; every other caller's shortfall is dropped, as before.
     const shortfall = requested - charge;
+    const owedCents =
+      micro !== undefined && args.carryShortfall === true ? shortfall : 0n;
+    if (writeBack) await writeBack(owedCents);
 
     if (charge <= 0n) {
       return {
@@ -424,36 +567,39 @@ export async function consumeCredits(
         shortfallCents: shortfall,
         balanceCents: totalAvailable,
         carryMicroCents,
+        priorOwedCents,
+        owedCents,
       };
     }
 
-    // Drain lots in order, decrementing remaining_cents.
-    let remaining = charge;
-    for (const lot of lots) {
-      if (remaining <= 0n) break;
-      const lotRemaining =
-        typeof lot.remainingCents === "bigint"
-          ? lot.remainingCents
-          : BigInt(lot.remainingCents);
-      const debit = remaining <= lotRemaining ? remaining : lotRemaining;
-      remaining -= debit;
-      await tx
-        .update(schema.creditLots)
-        .set({
-          remainingCents: sql`${schema.creditLots.remainingCents} - ${debit}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.creditLots.id, lot.id));
-    }
+    await drainLots(tx, lots, charge);
 
-    // Write the ledger entry.
-    await tx.insert(schema.creditLedger).values({
-      orgId: args.orgId,
-      deltaCents: -charge,
-      reason: args.reason,
-      referenceType: args.referenceType ?? null,
-      referenceId: args.referenceId ?? null,
-    });
+    // Write the ledger entries. The debt an earlier call left is collected
+    // first and gets its own row, attributed to nobody: the bucket does not
+    // record who ran it up, and naming this call's person would put another
+    // person's spend on their statement.
+    const debtPaid = charge < priorOwedCents ? charge : priorOwedCents;
+    if (debtPaid > 0n) {
+      await tx.insert(schema.creditLedger).values({
+        orgId: args.orgId,
+        deltaCents: -debtPaid,
+        reason: args.reason,
+        referenceType: "credit_debt",
+        referenceId: null,
+        createdById: null,
+      });
+    }
+    const ownCharge = charge - debtPaid;
+    if (ownCharge > 0n) {
+      await tx.insert(schema.creditLedger).values({
+        orgId: args.orgId,
+        deltaCents: -ownCharge,
+        reason: args.reason,
+        referenceType: args.referenceType ?? null,
+        referenceId: args.referenceId ?? null,
+        createdById: args.createdById ?? null,
+      });
+    }
 
     // Keep the credit_balances mirror in sync. This is an UPDATE, so it is a
     // silent no-op for an org that has no mirror row yet; the lots above are
@@ -473,7 +619,114 @@ export async function consumeCredits(
       shortfallCents: shortfall,
       balanceCents: newBalance,
       carryMicroCents,
+      priorOwedCents,
+      owedCents,
     };
   };
   return inTransaction(transaction, run);
+}
+
+// ---------------------------------------------------------------------------
+// Owed credits — the debt a carryShortfall charge left, and its settlement
+// ---------------------------------------------------------------------------
+
+/** Whole credits owed across every reason's carry bucket. */
+function owedInBuckets(carryByReason: Record<string, number>): bigint {
+  let owed = 0n;
+  for (const micro of Object.values(carryByReason)) {
+    owed += BigInt(micro) / MICRO_CREDITS_PER_CREDIT;
+  }
+  return owed;
+}
+
+/**
+ * Whole credits the org owes and has not paid: the debt a `carryShortfall`
+ * charge banked when the balance ran out mid-turn. The sub-credit fractions
+ * beside it are not counted; they are not owed as a credit until they add up
+ * to one.
+ *
+ * The turn credit gate reads balance minus this, so an org that outran its
+ * credits is not admitted again until a grant has covered what it owes.
+ * Reads through withTenantDb (the caller is inside a tenant scope), or
+ * withSystemDb with `opts.system` for a cross-tenant sweep.
+ */
+export async function owedCredits(
+  orgId: string,
+  opts?: { system?: boolean },
+): Promise<bigint> {
+  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const rows = await runner((tx) =>
+    tx
+      .select({
+        carryByReason: schema.orgBillingSettings.meterCarryMicroCreditsByReason,
+      })
+      .from(schema.orgBillingSettings)
+      .where(eq(schema.orgBillingSettings.orgId, orgId))
+      .limit(1),
+  );
+  return owedInBuckets(rows[0]?.carryByReason ?? {});
+}
+
+/**
+ * Collect what the org owes out of the lots it holds, on the grant's own
+ * transaction, and return the credits collected so the caller can take them
+ * off the credit_balances mirror it is about to write.
+ *
+ * Call it after the grant's lot is inserted and before the mirror is touched.
+ * It locks the settings row and then the lots, the same order consumeCredits
+ * takes them, so a grant and a concurrent charge queue rather than deadlock.
+ * Each reason's debt is written to the ledger under that reason, so a
+ * settled assistant debt is a `consume_assistant_tokens` debit like any
+ * other, and the assistant spend cap counts it. The collection is clamped to
+ * the lots, so a grant smaller than the debt pays part of it and the rest
+ * stays owed. Nothing here can overdraw a lot.
+ *
+ * An org with no settings row, or no whole credit in any bucket, reads one row
+ * and writes nothing.
+ */
+export async function settleOwedCredits(
+  tx: Tx,
+  orgId: string,
+): Promise<bigint> {
+  const rows = await tx
+    .select({
+      carryByReason: schema.orgBillingSettings.meterCarryMicroCreditsByReason,
+    })
+    .from(schema.orgBillingSettings)
+    .where(eq(schema.orgBillingSettings.orgId, orgId))
+    .for("update");
+  const carryByReason = rows[0]?.carryByReason ?? {};
+  if (owedInBuckets(carryByReason) <= 0n) return 0n;
+
+  const now = new Date();
+  const lots = await lockSpendableLots(tx, orgId, now);
+  let available = lots.reduce((acc, l) => acc + asBigint(l.remainingCents), 0n);
+  const next: Record<string, number> = { ...carryByReason };
+  let collected = 0n;
+  // Sorted so two settlements of the same map write their rows in one order.
+  for (const reason of Object.keys(carryByReason).sort()) {
+    if (available <= 0n) break;
+    const banked = BigInt(carryByReason[reason] ?? 0);
+    const owed = banked / MICRO_CREDITS_PER_CREDIT;
+    if (owed <= 0n) continue;
+    const pay = owed <= available ? owed : available;
+    await drainLots(tx, lots, pay);
+    await tx.insert(schema.creditLedger).values({
+      orgId,
+      deltaCents: -pay,
+      reason,
+      referenceType: "credit_debt",
+      referenceId: null,
+      createdById: null,
+    });
+    next[reason] = bucketValue(banked - pay * MICRO_CREDITS_PER_CREDIT);
+    available -= pay;
+    collected += pay;
+  }
+  if (collected <= 0n) return 0n;
+  await tx
+    .update(schema.orgBillingSettings)
+    .set({ meterCarryMicroCreditsByReason: next, updatedAt: now })
+    .where(eq(schema.orgBillingSettings.orgId, orgId));
+  return collected;
 }

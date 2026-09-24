@@ -4,11 +4,7 @@
 // and the link builder carries exactly the filters that are set.
 import { EMITTED_SECURITY_EVENT_TYPES } from "@oxagen/compliance";
 import { describe, expect, it, vi } from "vitest";
-import {
-  AUDIT_PAGE_SIZE,
-  type AuditFilters,
-  type AuditQuery,
-} from "@/data/contracts/audit";
+import type { AuditFilters, AuditQuery } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
 import {
   AUDIT_EVENT_TYPES,
@@ -32,8 +28,10 @@ const NONE: AuditQuery = {
   outcome: null,
   actor: null,
   capability: null,
+  range: "30d",
   from: null,
   to: null,
+  rows: 10,
   offset: 0,
 };
 
@@ -57,6 +55,8 @@ describe("parseAuditQuery", () => {
         capability: "query_audit_log",
         from: "2026-09-01",
         to: "2026-09-15",
+        range: "7d",
+        rows: "25",
         offset: "100",
       }),
     ).toEqual({
@@ -64,9 +64,19 @@ describe("parseAuditQuery", () => {
       outcome: "deny",
       actor: "usr_7k2m9q4x8r1t5v3w",
       capability: "query_audit_log",
+      range: "7d",
       from: "2026-09-01",
       to: "2026-09-15",
+      rows: 25,
       offset: 100,
+    });
+  });
+
+  it("opens on thirty days and ten rows, and drops a Range or Rows the selects do not offer (negative)", () => {
+    expect(parseAuditQuery({ range: "1y", rows: "1000" })).toEqual(NONE);
+    expect(parseAuditQuery({ range: "48h", rows: "50" })).toMatchObject({
+      range: "48h",
+      rows: 50,
     });
   });
 
@@ -120,10 +130,9 @@ describe("parseAuditQuery", () => {
   it("clamps an offset that is negative, fractional or not a number, and lands it on a page boundary (negative)", () => {
     for (const offset of ["-50", "not-a-number", "", "0"])
       expect(parseAuditQuery({ offset }).offset).toBe(0);
-    expect(parseAuditQuery({ offset: "70" }).offset).toBe(AUDIT_PAGE_SIZE);
-    expect(parseAuditQuery({ offset: "100.7" }).offset).toBe(
-      2 * AUDIT_PAGE_SIZE,
-    );
+    expect(parseAuditQuery({ offset: "17" }).offset).toBe(10);
+    expect(parseAuditQuery({ offset: "70", rows: "50" }).offset).toBe(50);
+    expect(parseAuditQuery({ offset: "100.7", rows: "25" }).offset).toBe(100);
   });
 
   it("bounds an offset past the end of the record (negative)", () => {
@@ -141,10 +150,12 @@ describe("parseAuditQuery", () => {
 });
 
 describe("hasAuditFilters", () => {
-  it("is false for the newest page and true for any filter, the offset aside", () => {
+  it("is false for the newest page and true for a filter that narrows past the window", () => {
     expect(hasAuditFilters(NONE)).toBe(false);
-    expect(hasAuditFilters({ ...NONE, offset: 100 })).toBe(false);
+    expect(hasAuditFilters({ ...NONE, offset: 100, rows: 50 })).toBe(false);
+    expect(hasAuditFilters({ ...NONE, range: "48h" })).toBe(false);
     expect(hasAuditFilters({ ...NONE, outcome: "deny" })).toBe(true);
+    expect(hasAuditFilters({ ...NONE, actor: "usr_7k2m" })).toBe(true);
   });
 });
 
@@ -157,11 +168,19 @@ describe("auditQueryParams", () => {
       outcome: "deny",
       actor: undefined,
       capability: "get_run",
+      range: undefined,
       from: undefined,
       to: undefined,
+      rows: undefined,
       offset: undefined,
       format: undefined,
     });
+  });
+
+  it("carries a Range and Rows other than the defaults", () => {
+    expect(auditQueryParams({ ...NONE, range: "48h", rows: 25 })).toMatchObject(
+      { range: "48h", rows: "25" },
+    );
   });
 
   it("takes the offset and the format a link asks for", () => {
@@ -187,9 +206,12 @@ describe("auditWindow", () => {
     outcome: null,
     actor: null,
     capability: null,
+    range: "30d",
     from: null,
     to: null,
   };
+  /** The instant the page read at; a Range window ends here. */
+  const NOW = Date.parse("2026-09-16T12:00:00.000Z");
 
   const ctx = unsafeMint(OrgCtx, {
     userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -205,6 +227,8 @@ describe("auditWindow", () => {
     shell: {
       context: () => Promise.reject(new Error("not a window read")),
       preferences,
+      counts: () => Promise.reject(new Error("not a window read")),
+      notifications: () => Promise.reject(new Error("not a window read")),
     },
   });
 
@@ -216,11 +240,16 @@ describe("auditWindow", () => {
   it("resolves the days in the viewer's zone, the last day inclusive", async () => {
     const preferences = zoned("Asia/Tokyo");
     expect(
-      await auditWindow(ctx, sourceWith(preferences), {
-        ...NO_DAYS,
-        from: "2026-09-18",
-        to: "2026-09-18",
-      }),
+      await auditWindow(
+        ctx,
+        sourceWith(preferences),
+        {
+          ...NO_DAYS,
+          from: "2026-09-18",
+          to: "2026-09-18",
+        },
+        NOW,
+      ),
     ).toMatchObject({
       // JST is UTC+9, so a Tokyo day starts at 15:00 UTC the day before.
       since: "2026-09-17T15:00:00.000Z",
@@ -230,12 +259,17 @@ describe("auditWindow", () => {
 
   it("carries the filters the days are not, and one bound on its own", async () => {
     expect(
-      await auditWindow(ctx, sourceWith(zoned("UTC")), {
-        ...NO_DAYS,
-        outcome: "deny",
-        capability: "query_audit_log",
-        from: "2026-09-18",
-      }),
+      await auditWindow(
+        ctx,
+        sourceWith(zoned("UTC")),
+        {
+          ...NO_DAYS,
+          outcome: "deny",
+          capability: "query_audit_log",
+          from: "2026-09-18",
+        },
+        NOW,
+      ),
     ).toEqual({
       eventType: null,
       outcome: "deny",
@@ -246,14 +280,27 @@ describe("auditWindow", () => {
     });
   });
 
-  it("reads no zone when neither day is set", async () => {
+  it("reads the Range back from now, open at the top, and no zone, when neither day is set", async () => {
     const preferences = zoned("Asia/Tokyo");
     expect(
-      await auditWindow(ctx, sourceWith(preferences), NO_DAYS),
-    ).toMatchObject({
-      since: null,
-      until: null,
-    });
+      await auditWindow(ctx, sourceWith(preferences), NO_DAYS, NOW),
+    ).toMatchObject({ since: "2026-08-17T12:00:00.000Z", until: null });
+    expect(
+      await auditWindow(
+        ctx,
+        sourceWith(preferences),
+        { ...NO_DAYS, range: "48h" },
+        NOW,
+      ),
+    ).toMatchObject({ since: "2026-09-14T12:00:00.000Z", until: null });
+    expect(
+      await auditWindow(
+        ctx,
+        sourceWith(preferences),
+        { ...NO_DAYS, range: "7d" },
+        NOW,
+      ),
+    ).toMatchObject({ since: "2026-09-09T12:00:00.000Z" });
     expect(preferences).not.toHaveBeenCalled();
   });
 
@@ -262,20 +309,30 @@ describe("auditWindow", () => {
       Promise.resolve(readError("control_plane_unavailable", 503)),
     );
     expect(
-      await auditWindow(ctx, sourceWith(preferences), {
-        ...NO_DAYS,
-        from: "2026-09-18",
-      }),
+      await auditWindow(
+        ctx,
+        sourceWith(preferences),
+        {
+          ...NO_DAYS,
+          from: "2026-09-18",
+        },
+        NOW,
+      ),
       // Pacific is the default the pages print in: PDT, UTC-7 in September.
     ).toMatchObject({ since: "2026-09-18T07:00:00.000Z" });
   });
 
   it("falls back to the default zone for one this runtime cannot format in (negative)", async () => {
     expect(
-      await auditWindow(ctx, sourceWith(zoned("Mars/Olympus_Mons")), {
-        ...NO_DAYS,
-        from: "2026-09-18",
-      }),
+      await auditWindow(
+        ctx,
+        sourceWith(zoned("Mars/Olympus_Mons")),
+        {
+          ...NO_DAYS,
+          from: "2026-09-18",
+        },
+        NOW,
+      ),
     ).toMatchObject({ since: "2026-09-18T07:00:00.000Z" });
   });
 });

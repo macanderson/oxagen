@@ -3,7 +3,13 @@
 // and the workspace, shows a rotated secret once, reloads the page a suspend
 // leaves, leaves a receipt after a deregister and reloads the list once it is
 // closed, and names every refusal without navigating.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
@@ -257,6 +263,52 @@ describe("AgentActions", () => {
   });
 });
 
+describe("AgentActions while a write is open", () => {
+  it("forgets a refused rotate when its dialog is closed and opened again", async () => {
+    rotateAgentCredential.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    renderActions();
+    const dialog = await confirm(
+      "Rotate credential",
+      "rotate-credential",
+      "Rotate",
+    );
+    expect(
+      await screen.findByTestId("rotate-credential-failure"),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /^(Close|Cancel)$/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Rotate credential" }),
+    );
+    expect(screen.queryByTestId("rotate-credential-failure")).toBeNull();
+  });
+
+  it("sends one suspend however often the form is submitted while it is pending (negative)", async () => {
+    setAgentSuspended.mockReturnValue(new Promise(() => undefined));
+    renderActions();
+    await userEvent.click(screen.getByRole("button", { name: "Suspend" }));
+    const form = screen.getByTestId("suspend-agent").querySelector("form");
+    if (form === null) throw new Error("suspend form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(setAgentSuspended).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends no deregister when the form is submitted before the person says they understand (negative)", async () => {
+    renderActions();
+    await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
+    const form = screen.getByTestId("retire-agent").querySelector("form");
+    if (form === null) throw new Error("deregister form not drawn");
+    fireEvent.submit(form);
+    expect(retireAgent).not.toHaveBeenCalled();
+  });
+});
+
 describe("RetireAgent", () => {
   it("names the roles without a count when they cannot be read (negative)", async () => {
     readAgentRoleNames.mockResolvedValue({
@@ -359,7 +411,17 @@ describe("RetireAgent", () => {
     ).toEqual([
       "every run, frame and receipt. The record is never deleted.",
       "2 roles, 0 mandates, the host enrollment",
+      "live runs not counted yet, and deregistering does not cancel them",
     ]);
+    // In flight has no count and retirement cancels no run (#3975), so the
+    // row names the gap rather than a number or a promise.
+    const inFlight = dialog.querySelector('[data-gap="#3975"]');
+    expect(inFlight).toHaveAttribute("data-not-backed");
+    expect(
+      within(dialog)
+        .getAllByRole("term")
+        .map((dt) => dt.textContent),
+    ).toEqual(["Kept", "Ends", "In flight"]);
     // Deregister sits in the footer beside Cancel.
     const footer = dialog.querySelector("[data-sheet-footer]");
     if (!(footer instanceof HTMLElement)) throw new Error("no footer");
@@ -368,8 +430,8 @@ describe("RetireAgent", () => {
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual(["Cancel", "Deregister"]);
-    const pr = dialog.querySelector("[data-not-backed]");
-    expect(pr).toHaveAttribute("data-gap", "#3855");
+    const pr = dialog.querySelector('[data-not-backed][data-gap="#3855"]');
+    expect(pr).not.toBeNull();
     expect(pr).toHaveTextContent(".oxagen/agents/other.toml");
   });
 

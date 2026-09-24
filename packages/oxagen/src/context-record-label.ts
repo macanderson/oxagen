@@ -1,6 +1,14 @@
-/** A display label derived from a record slug; identity remains unchanged. */
+/** A lineage id: lowercase letters, digits, dots and hyphens, starting and ending on a letter or digit. */
+export const CONTEXT_RECORD_LINEAGE = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/;
+
+/**
+ * A display label derived from a record slug; identity remains unchanged.
+ * The `ctx.<set>.` namespace every minted lineage carries is dropped, so
+ * `ctx.core.do-not-re-read` reads "Do Not Re Read".
+ */
 export function contextRecordLabel(slug: string): string {
   const words = slug
+    .replace(/^ctx\.[^.]+\./i, "")
     .normalize("NFKC")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();

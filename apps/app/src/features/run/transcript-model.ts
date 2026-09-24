@@ -22,9 +22,9 @@ import { type ToolDetail, toolDetail } from "./tool-detail";
  * its result in `response`; a positional `response ?? request` would silently
  * render a tool's input where its result belongs, and nothing about the page
  * would look wrong. A caller that needs both halves reads them by name, which
- * is what the frame renderer does. Module-private: its one caller is
- * `textOf` below, in this file; a turn's prompt and reply are the only
- * place the app still reads a body positionally instead of by name.
+ * is what the frame renderer does. Module-private: its callers are `textOf`
+ * and `echoesTurn` below, in this file; a turn's prompt and reply are the
+ * only place the app still reads a body positionally instead of by name.
  */
 function soleBody(entry: TranscriptEntry): TranscriptBody | null {
   if (entry.request !== null && entry.response !== null) return null;
@@ -71,6 +71,12 @@ export type TranscriptStep = {
   first: TranscriptEntry;
   last: TranscriptEntry;
   frames: TranscriptEntry[];
+  /**
+   * The steps of the subagents this step spawned, in the order recorded. Set
+   * on the Task or Agent call that started them (`nestSubagents`); absent on
+   * every other step.
+   */
+  children?: TranscriptStep[];
 };
 
 export type TranscriptTurn = {
@@ -139,6 +145,24 @@ const CONTROL: ReadonlySet<string> = new Set([
  * opened, and still on the Frames tab.
  */
 const EFFECT: ReadonlySet<string> = new Set(["command", "file_io", "network"]);
+/**
+ * The harness's own permission check on a tool call (Claude Code's
+ * `tool_decision`). It runs on every call whether or not anyone was asked, so
+ * it is evidence about the call and never Oxagen's verdict: an allow folds into
+ * the call's step and draws nothing of its own, and only a refusal shows.
+ */
+const HARNESS: ReadonlySet<string> = new Set(["harness_permission"]);
+
+/** Whether a harness check refused the call (`deny Bash`). */
+function harnessDenied(frame: TranscriptEntry): boolean {
+  if (!HARNESS.has(frame.type)) return false;
+  return DENIED.test(frame.label.split(" ")[0] ?? "");
+}
+
+/** The chain an entry was recorded on: a subagent's, or "" for the run's own. */
+function chainOf(entry: TranscriptEntry): string {
+  return entry.subagent?.chainRef ?? "";
+}
 
 /**
  * Which indices the step opening at `i` owns, and what kind it is.
@@ -284,7 +308,12 @@ function stepPair(
     const indices = [i];
     for (let j = i + 1; j < frames.length; j += 1) {
       const next = frames[j];
-      if (next === undefined || next.type !== frame.type || !isBare(next))
+      if (
+        next === undefined ||
+        next.type !== frame.type ||
+        next.callKey !== frame.callKey ||
+        !isBare(next)
+      )
         break;
       indices.push(j);
     }
@@ -338,6 +367,48 @@ function readable(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+/**
+ * Every frame of one tool call, gathered on its call key, or null when the
+ * frame at `i` does not open one.
+ *
+ * A wrapped Claude Code session writes up to six frames for one call, all
+ * carrying the call's `tool_use_id`: Oxagen's gate decision, the PreToolUse
+ * request, the harness's own permission check, the PostToolUse receipt with
+ * the body, and digest-only copies from the OTel log and the transcript
+ * tailer. They are not adjacent. Oxagen's decision lands before the request,
+ * and a parallel call's frames fall between them. Paired by adjacency they
+ * drew as a column of "allow Bash" rows with the call nowhere in sight.
+ * Gathered on the key, the call is one step whose first frame is the earliest
+ * one recorded, and `visibleFrames` keeps the copies worth reading.
+ *
+ * A key counts as a call only when some frame with it on the same chain is a
+ * tool frame. A gate on a call whose tool frames were never recorded stays its
+ * own step, so the decision still reads.
+ */
+function callFold(
+  frames: readonly TranscriptEntry[],
+  byKey: ByCallKey,
+  claimed: ReadonlySet<number>,
+  i: number,
+  first: TranscriptEntry,
+): { indices: number[]; kind: TranscriptStep["kind"] } | null {
+  const key = first.callKey;
+  if (key === null || first.kind === "model_call") return null;
+  const chain = chainOf(first);
+  const indices = (byKey.get(key) ?? []).filter((j) => {
+    const frame = frames[j];
+    return (
+      frame !== undefined &&
+      j >= i &&
+      !claimed.has(j) &&
+      frame.kind !== "model_call" &&
+      chainOf(frame) === chain
+    );
+  });
+  if (!indices.some((j) => frames[j]?.kind === "tool_call")) return null;
+  return { indices: absorbEffects(frames, indices, key), kind: "tool" };
+}
+
 function stepsOf(
   frames: readonly TranscriptEntry[],
   offset: number,
@@ -349,21 +420,9 @@ function stepsOf(
     if (claimed.has(i)) continue;
     const first = frames[i];
     if (first === undefined) continue;
-    const { indices, kind } = stepPair(frames, byKey, i, first);
-    // A wrapped session seals one tool call up to three times: once from the
-    // PostToolUse hook, which carries the body, and once each from the OTel
-    // log and the transcript tailer, which carry a digest and nothing else.
-    // The three share the tool's call id. Read as three steps they drew the
-    // page the way it looked: one call, then two "digest only" rows for it.
-    // Folded on the call id, the call is one step, and `visibleFrames` keeps
-    // the copy that has something to read.
-    if (kind === "tool" && first.callKey !== null) {
-      const last = indices[indices.length - 1] ?? i;
-      for (const j of byKey.get(first.callKey) ?? []) {
-        if (j <= last || claimed.has(j)) continue;
-        if (frames[j]?.kind === "tool_call") indices.push(j);
-      }
-    }
+    const { indices, kind } =
+      callFold(frames, byKey, claimed, i, first) ??
+      stepPair(frames, byKey, i, first);
     for (const index of indices) {
       if (index !== i) claimed.add(index);
     }
@@ -426,7 +485,7 @@ export function buildTranscript(
       first,
       last: entry,
       frames,
-      steps: stepsOf(frames, start),
+      steps: nestSubagents(stepsOf(frames, start)),
       prompt: textOf(frames, "turn_start", false),
       // A harness that reports the agent's message apart from the turn's end
       // (Cursor) can close the turn before the message lands; the message
@@ -438,6 +497,49 @@ export function buildTranscript(
     start = index + 1;
   });
   return turns;
+}
+
+/**
+ * The steps with each subagent's steps moved under the call that spawned it.
+ *
+ * A subagent records on a chain of its own, and the reader splices that chain
+ * in where it began, so its steps sit between the Task call's first and last
+ * frames. Drawn flat they read as the parent's own work. Each subagent step
+ * goes under the step whose call key is the subagent's `spawnKey`, or, for a
+ * recording that kept none, under the nearest earlier step that holds a
+ * `subagent_start`. A subagent step with neither stays where it was.
+ */
+function nestSubagents(steps: TranscriptStep[]): TranscriptStep[] {
+  const out: TranscriptStep[] = [];
+  const owner = new Map<string, TranscriptStep>();
+  let spawner: TranscriptStep | null = null;
+  const own = (step: TranscriptStep, parent: TranscriptStep): void => {
+    for (const frame of step.frames)
+      if (frame.callKey !== null && !owner.has(frame.callKey))
+        owner.set(frame.callKey, parent);
+  };
+  for (const step of steps) {
+    const sub = step.first.subagent;
+    const parent =
+      sub === undefined
+        ? undefined
+        : ((sub.spawnKey == null ? undefined : owner.get(sub.spawnKey)) ??
+          spawner ??
+          undefined);
+    if (parent === undefined) {
+      out.push(step);
+      own(step, step);
+      if (sub === undefined && step.frames.some(isSpawn)) spawner = step;
+      continue;
+    }
+    parent.children = [...(parent.children ?? []), step];
+    own(step, parent);
+  }
+  return out;
+}
+
+function isSpawn(frame: TranscriptEntry): boolean {
+  return frame.type === "subagent_start";
 }
 
 function toolName(label: string): string {
@@ -537,19 +639,25 @@ export function stepDigest(step: TranscriptStep): StepDigest {
     };
   }
   if (step.kind === "tool") {
-    // The call's own frame carries the outcome; the request only names the tool.
+    // The call's own frame carries the outcome; the request only names the
+    // tool. A step gathered on its call key can open on the gate's decision,
+    // whose label (`allow Bash`) names the decision first, so the name and
+    // the argument come from the call's frames and never from the gate's.
+    const call =
+      step.frames.find((frame) => frame.kind === "tool_call") ?? first;
     const named =
-      step.frames.find((frame) => TOOL_CLOSE.has(frame.type)) ?? first;
+      step.frames.find((frame) => TOOL_CLOSE.has(frame.type)) ?? call;
     const gate = step.frames.map(policyOutcome).find((o) => o !== null) ?? null;
     const status = toolStatus(named.label);
     const denied =
       (gate !== null && DENIED.test(gate)) ||
-      (status !== null && FAILED.test(status));
+      (status !== null && FAILED.test(status)) ||
+      step.frames.some(harnessDenied);
     const name = toolName(named.label);
     return {
       node: denied ? "deny" : "tool",
       name,
-      arg: first.label === name ? null : first.label,
+      arg: stepTarget(step) ?? (call.label === name ? null : call.label),
       outcome: gate,
       status,
       durationMs,
@@ -612,7 +720,10 @@ export function stepDigest(step: TranscriptStep): StepDigest {
 export function stepTool(step: TranscriptStep): ToolDetail | null {
   if (step.kind !== "tool") return null;
   const close = step.frames.find((frame) => TOOL_CLOSE.has(frame.type));
-  const named = close ?? step.first;
+  const named =
+    close ??
+    step.frames.find((frame) => frame.kind === "tool_call") ??
+    step.first;
   const name = toolName(named.label);
   // A label of `Bash ok` names the tool; a label that is just the frame's
   // type names nothing, and the body's own `name` is then the only source.
@@ -622,7 +733,37 @@ export function stepTool(step: TranscriptStep): ToolDetail | null {
     ordered
       .flatMap((frame) => [frame.response, frame.request])
       .find((half) => (half?.text ?? null) !== null)?.text ?? null;
-  return toolDetail(known, body);
+  const detail = toolDetail(known, body);
+  const target = stepTarget(step);
+  if (detail === null || body !== null || target === null) return detail;
+  // No body was kept, but the gate recorded what the call acted on. That is
+  // the command or path the reader came for, so it is drawn as the input.
+  const cut = target.indexOf("\n");
+  return {
+    ...detail,
+    headline: detail.headline ?? (cut === -1 ? target : target.slice(0, cut)),
+    multiline: detail.headline === null ? cut !== -1 : detail.multiline,
+    panes: [
+      detail.group === "shell"
+        ? {
+            kind: "code",
+            label: "command",
+            text: target,
+            language: "shell",
+            startLine: 1,
+            preview: cut === -1 ? null : 1,
+          }
+        : { kind: "note", label: "input", text: target },
+    ],
+  };
+}
+
+/** What the step's call acted on, as its gate recorded it; null when none did. */
+function stepTarget(step: TranscriptStep): string | null {
+  for (const frame of step.frames) {
+    if (frame.target != null && frame.target !== "") return frame.target;
+  }
+  return null;
 }
 
 /**
@@ -675,21 +816,121 @@ export function stepModel(step: TranscriptStep): ToolDetail | null {
   };
 }
 
+/** What a model step recorded of its thinking; see `stepThinking`. */
+export type StepThinking = {
+  /** The thinking blocks the reply kept, joined; null when none was kept. */
+  text: string | null;
+  /** Reasoning tokens the calls reported; null when none reported any. */
+  tokens: number | null;
+  /** The effort the call ran at, as the harness recorded it; null when unrecorded. */
+  effort: string | null;
+};
+
+/**
+ * What a model step recorded of its thinking: the thinking blocks of its
+ * reply, the reasoning tokens its usage reported, and the effort it ran at.
+ * Only the reply's blocks count, because a request carries the history the
+ * model was sent, and a thought in it belongs to an earlier step. Null for a
+ * tool step, and for a model step that recorded none of the three.
+ */
+export function stepThinking(step: TranscriptStep): StepThinking | null {
+  if (step.kind !== "model") return null;
+  const text = step.frames
+    .flatMap((frame) => frame.response?.blocks ?? [])
+    .flatMap((block) => (block.kind === "thinking" ? [block.text] : []))
+    .join("\n\n")
+    .trim();
+  const reported = step.frames.flatMap((frame) =>
+    frame.usage?.reasoning == null ? [] : [frame.usage.reasoning],
+  );
+  const tokens =
+    reported.length === 0 ? 0 : reported.reduce((sum, n) => sum + n, 0);
+  const effort =
+    step.frames.find((frame) => frame.effort != null && frame.effort !== "")
+      ?.effort ?? null;
+  if (text === "" && tokens === 0 && effort === null) return null;
+  return {
+    text: text === "" ? null : text,
+    tokens: tokens === 0 ? null : tokens,
+    effort,
+  };
+}
+
+/**
+ * The words an entry is found by: what it said, what it acted on, and what
+ * it is called. Lower-cased once so a search compares lower-cased text.
+ */
+export function entryText(entry: TranscriptEntry): string {
+  return [
+    entry.label,
+    entry.type,
+    entry.target ?? "",
+    entry.request?.text ?? "",
+    entry.response?.text ?? "",
+    entry.subagent?.type ?? "",
+  ]
+    .join("\n")
+    .toLowerCase();
+}
+
 /**
  * The steps of a turn worth a row. A step with nothing to read on any frame
  * and no decision is bookkeeping (a hook registering, a queue tick) or a
- * digest-only duplicate of a call another source sealed with its body; the
- * Frames tab still has every one of them.
+ * digest-only duplicate of a call another source sealed with its body. A step
+ * whose text the turn already draws as its prompt or its reply is left out
+ * too. The Frames tab still has every one of them.
  */
 export function visibleSteps(turn: TranscriptTurn): TranscriptStep[] {
-  return turn.steps.filter((step) =>
-    step.frames.some(
-      (frame) =>
-        hasContent(frame) ||
-        frame.decision !== null ||
-        TOOL_GATE.has(frame.type),
-    ),
+  return turn.steps.filter(
+    (step) => !echoesTurn(turn, step) && isVisible(step),
   );
+}
+
+/** The subagent steps nested under `step` worth a row, by the same test. */
+export function visibleChildren(step: TranscriptStep): TranscriptStep[] {
+  return (step.children ?? []).filter(isVisible);
+}
+
+/**
+ * Whether a step is worth a row. A harness allow with nothing else is not:
+ * Claude Code checks every call, and a row per check buried the calls. A
+ * harness refusal is, because the call it stopped never ran. A tool step with
+ * a recorded target is, because the target is what the call did.
+ */
+function isVisible(step: TranscriptStep): boolean {
+  if (step.kind === "tool" && stepTarget(step) !== null) return true;
+  return step.frames.some(
+    (frame) =>
+      hasContent(frame) ||
+      frame.decision !== null ||
+      // A seal or a thought is its own row: the chips can ask for either
+      // alone, and a chip that is on must never draw an empty transcript.
+      frame.kinds.includes("seal") ||
+      frame.kinds.includes("thinking") ||
+      TOOL_GATE.has(frame.type) ||
+      harnessDenied(frame),
+  );
+}
+
+/** The frame types that can carry a turn's prompt or its reply. */
+const TURN_TEXT: ReadonlySet<string> = new Set([
+  "turn_start",
+  "turn_end",
+  "oxagen:message",
+]);
+
+/**
+ * Whether every frame of the step repeats the turn's prompt or its reply. The
+ * view draws both beside the turn, so a row for the `turn_start` that holds
+ * the prompt, or for the transcript's copy of it, drew the same text twice.
+ */
+function echoesTurn(turn: TranscriptTurn, step: TranscriptStep): boolean {
+  return step.frames.every((frame) => {
+    if (frame.subagent !== undefined || !TURN_TEXT.has(frame.type))
+      return false;
+    const text = soleBody(frame)?.text ?? null;
+    return text !== null && (text === turn.prompt || text === turn.reply);
+  });
 }
 
 /** Whether either half of the entry carries text to read. */
@@ -708,15 +949,21 @@ function hasContent(entry: TranscriptEntry): boolean {
  */
 export function visibleFrames(step: TranscriptStep): TranscriptEntry[] {
   if (step.kind !== "tool") return step.frames;
+  // The harness's allow says only that Claude Code let the call run, which the
+  // call's own frames already show. Its refusal stays.
+  const checked = step.frames.filter(
+    (frame) => !HARNESS.has(frame.type) || harnessDenied(frame),
+  );
+  const frames = checked.length > 0 ? checked : step.frames;
   const full = new Set(
-    step.frames.flatMap((frame) =>
+    frames.flatMap((frame) =>
       frame.kind === "tool_call" && frame.callKey !== null && hasContent(frame)
         ? [frame.callKey]
         : [],
     ),
   );
-  if (full.size === 0) return step.frames;
-  return step.frames.filter(
+  if (full.size === 0) return frames;
+  return frames.filter(
     (frame) =>
       !(
         frame.kind === "tool_call" &&
@@ -758,18 +1005,34 @@ export function openAtZoom(
 ): Set<string> {
   const open = new Set<string>();
   if (zoom === "turns") return open;
+  const addSteps = (steps: readonly TranscriptStep[]): void => {
+    for (const step of steps) {
+      open.add(step.id);
+      addSteps(step.children ?? []);
+    }
+  };
   for (const turn of turns) {
     open.add(turn.id);
-    if (zoom === "everything") for (const step of turn.steps) open.add(step.id);
+    if (zoom === "everything") addSteps(turn.steps);
   }
   return open;
 }
 
 /** The turn and step holding position `pos`, so a reveal opens both. */
 export function idsAt(turns: readonly TranscriptTurn[], pos: number): string[] {
+  // A Task step spans the subagent work nested under it, so the child holding
+  // `pos` is looked for before the parent is taken as the answer.
+  const holding = (steps: readonly TranscriptStep[]): string[] => {
+    for (const step of steps) {
+      const inner = holding(step.children ?? []);
+      if (inner.length > 0) return [step.id, ...inner];
+      if (pos >= step.from && pos <= step.to) return [step.id];
+    }
+    return [];
+  };
   for (const turn of turns) {
-    const step = turn.steps.find((s) => pos >= s.from && pos <= s.to);
-    if (step !== undefined) return [turn.id, step.id];
+    const ids = holding(turn.steps);
+    if (ids.length > 0) return [turn.id, ...ids];
   }
   return [];
 }

@@ -16,11 +16,13 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary, mono } from "@/ui/control-styles";
+import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
+import { buttonDanger } from "./parts";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import {
   type EnrollmentToken,
@@ -186,6 +188,7 @@ export function EnrollHost({
       >
         <form onSubmit={(e) => void mint(e)} className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <DesktopDownloads />
           {failure === null ? null : (
             <FormAlert testId="enroll-host-failure">{failure}</FormAlert>
           )}
@@ -261,7 +264,7 @@ export function RevokeHost({
         type="button"
         data-testid="revoke-host"
         aria-label={t("label", { hostname })}
-        className={`${buttonSecondary} h-8 px-2 text-xs`}
+        className={buttonDanger}
         onClick={() => {
           setOpen(true);
         }}

@@ -13,6 +13,7 @@
 // the dialog moves to Steering · Context PRs with the new pull request
 // selected, so closing the wizard lands there (creation-spec §5).
 import {
+  CONTEXT_RECORD_LINEAGE,
   contextRecordLabel,
   contextRecordSlug,
 } from "@oxagen/oxagen/context-record-label";
@@ -153,6 +154,15 @@ function useFailureText(): (failure: Failure) => string {
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
 /**
+ * A typed name as the person wrote it, trimmed and with runs of whitespace
+ * collapsed. contextRecordLabel is for a label built from a slug: run on a
+ * typed name it drops punctuation and recases every word.
+ */
+function tidyName(name: string): string {
+  return name.trim().replace(/\s+/g, " ");
+}
+
+/**
  * What the draft adds up to: the record propose_record will be sent.
  * `statement` is the editor's text as typed; `sent` is that text on one line
  * (normalizeStatement), which is what the choice carries, what the preview
@@ -168,9 +178,7 @@ function recordOf(api: Api, ctx: CreateContext) {
     d.name === null ? lineageOf(ctx.ws, d.desc) : contextRecordSlug(d.name);
   const lineageId = d.slug === null ? suggestedSlug : contextRecordSlug(d.slug);
   const label =
-    d.name === null
-      ? contextRecordLabel(lineageId)
-      : contextRecordLabel(d.name);
+    d.name === null ? contextRecordLabel(lineageId) : tidyName(d.name);
   const force = forceOf(kind, d.force);
   const choice: RecordChoice = {
     lineageId,
@@ -192,13 +200,16 @@ function recordOf(api: Api, ctx: CreateContext) {
     fits:
       sent !== "" &&
       sent.length <= STATEMENT_MAX &&
-      /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(lineageId) &&
+      CONTEXT_RECORD_LINEAGE.test(lineageId) &&
       (d.name === null || d.name.trim() !== ""),
   };
 }
 
 function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
   const t = useTranslations("createRecord.describe");
+  const slugValid = CONTEXT_RECORD_LINEAGE.test(
+    recordOf(api, ctx).choice.lineageId,
+  );
   return (
     <div className="flex flex-col gap-3 text-sm">
       <label className="flex flex-col gap-1">
@@ -215,7 +226,7 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
           }}
           onBlur={() => {
             if (api.draft.name?.trim())
-              api.update({ name: contextRecordLabel(api.draft.name) });
+              api.update({ name: tidyName(api.draft.name) });
           }}
         />
       </label>
@@ -238,7 +249,13 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
               api.update({ slug: contextRecordSlug(api.draft.slug) });
           }}
         />
-        <span className="text-xs text-muted-foreground">{t("slugHint")}</span>
+        {slugValid ? (
+          <span className="text-xs text-muted-foreground">{t("slugHint")}</span>
+        ) : (
+          <span role="alert" className="text-xs text-destructive">
+            {t("slugInvalid")}
+          </span>
+        )}
       </label>
       <DescriptionField
         api={api}
@@ -705,7 +722,13 @@ function useRecordStep(props: StepProps<RecordDraft>): StepView {
       title: t("describe.title"),
       subtitle: t("describe.subtitle"),
       body: <DescribeStep {...props} />,
-      primary: { label: t("describe.next"), enabled: d.desc.trim() !== "" },
+      primary: {
+        label: t("describe.next"),
+        enabled:
+          d.desc.trim() !== "" &&
+          CONTEXT_RECORD_LINEAGE.test(record.choice.lineageId) &&
+          (d.name === null || d.name.trim() !== ""),
+      },
     };
   if (step === 2)
     return {

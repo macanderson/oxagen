@@ -356,6 +356,10 @@
             "type": "integer",
             "minimum": 0
           },
+          "unenrolled": {
+            "type": "integer",
+            "minimum": 0
+          },
           "holdingMandate": {
             "anyOf": [
               {
@@ -366,6 +370,14 @@
                 "type": "null"
               }
             ]
+          },
+          "mandateHolders": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxItems": 100
           },
           "tamperIncidents": {
             "type": "integer",
@@ -423,7 +435,9 @@
         "required": [
           "identities",
           "enrolled",
+          "unenrolled",
           "holdingMandate",
+          "mandateHolders",
           "tamperIncidents",
           "tamper"
         ],

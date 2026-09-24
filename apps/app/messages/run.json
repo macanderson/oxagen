@@ -47,12 +47,6 @@
     },
     "transcript": {
       "title": "Transcript",
-      "zoomLabel": "Zoom level",
-      "zoom": {
-        "turns": "Turns",
-        "steps": "Steps",
-        "everything": "Everything"
-      },
       "digestOnly": "The recorder kept a digest and no body, so there is nothing to read here.",
       "noBody": "No body was retained for this entry, or the bytes are not text.",
       "truncated": "Cut at the length one entry carries.",
@@ -70,7 +64,7 @@
       "frameCount": "{count, plural, one {# frame} other {# frames}}",
       "repeats": "×{count}",
       "reply": "Reply",
-      "seqSpan": "seq {from} to {to}",
+      "stepSpan": "steps {from} to {to}",
       "ms": "{ms} ms",
       "live": "live",
       "goLive": "go live",
@@ -78,15 +72,17 @@
         "sealed": "sealed",
         "halted": "halted"
       },
+      "rewind": "Rewind to the first frame",
       "back": "Step back",
       "play": "Play",
       "pause": "Pause playback",
       "forward": "Step forward",
+      "toEnd": "Go to the last frame",
       "scrub": "Scrub to frame",
-      "position": "seq {seq}",
-      "of": "/ {seq}",
+      "position": "frame {n}",
+      "of": "/ {n}",
       "speedLabel": "Playback speed",
-      "speed": "×{speed}",
+      "speed": "{speed}×",
       "transportNote": "The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
       "frameHead": "seq {seq} · +{time} · {fidelity}",
       "subagent": "subagent",
@@ -101,14 +97,28 @@
       "chip": {
         "prompt": "Prompt",
         "responses": "Responses",
+        "thinking": "Thinking",
         "tools": "Tools",
-        "policy": "Policy",
         "recall": "Recall",
         "usage": "Usage",
+        "seal": "Seal",
         "errors": "Errors"
       },
-      "chipsClear": "Clear the filter",
-      "emptyFiltered": "No entry in this run answers to the {count} chips you pressed. Clear the filter to read the whole run.",
+      "chipsAll": "all",
+      "chipsNone": "none",
+      "chipCount": "{count}",
+      "chipCountFloor": "{count}+",
+      "errorsTitle": "Show only failed calls",
+      "emptyFiltered": "Nothing in this run matches these filters. Choose all to read the whole run.",
+      "searchLabel": "Search the transcript",
+      "searchPlaceholder": "Search the transcript…",
+      "searchCount": "{shown} of {total} entries",
+      "searchEmpty": "Nothing matches this search.",
+      "expandThinking": "expand thinking",
+      "collapseThinking": "collapse thinking",
+      "effort": "effort {effort}",
+      "thinkingTokens": "{count} thinking tokens",
+      "thinkingUnkept": "The model spent {count} tokens thinking. The harness did not record what it thought.",
       "more": "Read more",
       "readingMore": "Reading",
       "loadedMore": "{count} entries read so far. More lie past this page.",
@@ -135,7 +145,8 @@
         "brief": "Brief",
         "plan": "Plan",
         "input": "Input",
-        "reply": "Reply"
+        "reply": "Reply",
+        "thinking": "Thinking"
       }
     },
     "frames": {
@@ -255,7 +266,10 @@
         "runNotFound": "This run is not in this workspace.",
         "noConnectionPoint": "A ledger run has no connection point to carry a command.",
         "runSealed": "This run has ended, so nothing can receive the command.",
-        "observeTier": "An observe-tier run has no connection point, so the command was refused.",
+        "noHost": "This run names no enrolled host, so nothing can receive the command. Nothing was queued.",
+        "hostRevoked": "This run's host was revoked and no longer collects commands. Nothing was queued.",
+        "hostOffline": "This run's host has not checked for commands in the last five minutes, so nothing would read this one. Nothing was queued.",
+        "noPromptCarrier": "This agent reads steering text only when a session starts, so this run would never see it. Pause, resume and cancel still reach it. Nothing was queued.",
         "runNotSealed": "This run is still live. Both of these need a complete record, so they run after the seal.",
         "digestOnly": "This recording kept digests and no bodies, so there is nothing for a model to read.",
         "steerText": "Steering text is required, and it has a length limit.",
@@ -273,7 +287,15 @@
         "commandReason": "Keep the reason to {max} characters or fewer. Nothing was queued.",
         "rowCommand": "A run's row sends a pause, a resume or a cancel. Nothing was queued."
       },
-      "observeReason": "This run was observed from the side. Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel.",
+      "blocked": {
+        "runSealed": "This run has ended, so there is nothing to pause, steer or cancel.",
+        "noHost": "This run names no enrolled host. Commands reach a run through its host, so there is nothing to pause, steer or cancel.",
+        "hostRevoked": "This run's host was revoked. A revoked host no longer collects commands, so there is nothing to pause, steer or cancel.",
+        "hostOffline": "This run's host has not checked for commands in the last five minutes. It may have stopped or lost its connection, so a command would go unread. The controls come back when the host checks in."
+      },
+      "steerBlocked": {
+        "noPromptCarrier": "This agent reads steering text only when a session starts, so a steer cannot reach this run. Pause, resume and cancel still can."
+      },
       "delivery": {
         "legend": "When the agent sees it",
         "nextStep": {
@@ -282,7 +304,7 @@
         },
         "interrupt": {
           "label": "Interrupt the step in flight",
-          "help": "The step running now is cut short so your text lands sooner. A connection point that cannot interrupt carries it at the next model call and records that it did."
+          "help": "The step running now is cut short so your text lands sooner. A connection point that cannot interrupt carries it at the next model call, or at the end of the turn when it cannot reach a model call, and records which."
         },
         "turnBoundary": {
           "label": "At the end of the turn",
@@ -603,8 +625,13 @@
       "reference": "Reference",
       "relation": "Relation",
       "task": "Task the run was started on",
-      "empty": "This run names no issue.",
-      "note": "The record keeps one task reference per run. Links to other issues are not captured."
+      "closedBy": "Pull request #{number} closes it",
+      "pullRequests": "Pull requests",
+      "empty": "This run names no issue, and no pull request it opened closes one.",
+      "emptyUnread": "This run names no issue. GitHub did not return the issues its pull requests close.",
+      "loading": "Reading the run's pull requests.",
+      "closingUnread": "GitHub did not return every issue the run's pull requests close, so this list may be short.",
+      "note": "The task reference comes from the run's dispatch. The other issues come from GitHub's record of what each pull request the run opened closes."
     },
     "policy": {
       "title": "Policy decisions",
@@ -612,7 +639,18 @@
       "call": "Call",
       "outcome": "Outcome",
       "type": "Decision type",
+      "decidedBy": "Decided by",
+      "by": {
+        "oxagen": "Oxagen policy",
+        "operator": "Operator",
+        "harness": "Agent harness",
+        "managedSettings": "Managed settings",
+        "unrecorded": "Not recorded"
+      },
       "empty": "No policy decision was recorded on this run.",
+      "onlyChecks": "Neither Oxagen policy nor an operator made a decision on this run. The agent harness's own checks are listed below.",
+      "checks": "{count, plural, one {# harness check} other {# harness checks}}",
+      "checksTitle": "Harness checks",
       "cut": "The transcript read stopped short, so later decisions are missing here.",
       "at": "Into the run"
     },

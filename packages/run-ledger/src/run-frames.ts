@@ -24,6 +24,12 @@ import {
 import type { AttemptEventReadRecord } from "./run-store";
 import type { FrameBodyColumns } from "./frame-body";
 import {
+  tachoFramePhase,
+  tachoFrameSummary,
+  tachoKind,
+  tachoStage,
+} from "./tacho-kinds";
+import {
   isTranscriptKind,
   countsLlmCallUsage,
   countsLlmCallSplit,
@@ -42,15 +48,34 @@ export interface FrameIdentity {
   toolStatus: string | null;
   model: string | null;
   policy: string | null;
+  /**
+   * Who made the decision the frame records, in the envelope's
+   * `policy_source` words: `bundle` and `kernel` are Oxagen policy, `human`
+   * is an operator, `harness` and `managed_settings` are the agent's own
+   * harness checking itself. Absent or null where the frame names none.
+   */
+  policySource?: string | null;
   verdict: string | null;
   contextRows: number | null;
   /**
    * The call the frame belongs to (`tool_call_id`, `model_call_id`), so the
-   * two halves of one exchange pair on identity and not on adjacency. Null
-   * where the producer records none — a wrapped session's rows carry no call
-   * id, and those pair on adjacency within the step kind instead.
+   * two halves of one exchange pair on identity and not on adjacency. A
+   * wrapped session's tool rows carry the harness's `tool_use_id`. Null where
+   * the producer records none, and those pair on adjacency within the step
+   * kind instead.
    */
   callId: string | null;
+  /**
+   * What a tool call acts on, as the gate recorded it: the command, path or
+   * URL from the body's `tool_target`. Absent where the frame names none.
+   */
+  target?: string | null;
+  /**
+   * The reasoning effort the harness ran a model call at (`low`, `medium`,
+   * `high`), as a wrapped session's frame recorded it. Absent where it
+   * recorded none; the ledger records none.
+   */
+  effort?: string;
 }
 
 /**
@@ -418,6 +443,8 @@ export interface TachoFrameRowLike {
   ttftMs?: number | null;
   /** The provider call's wall time; null when untimed. */
   apiDurationMs?: number | null;
+  /** The reasoning effort the call ran at; empty when unrecorded. */
+  effort?: string;
   /** The chain the row was recorded on; set by a read across a run's chains. */
   sessionUuid?: string;
   rootSessionUuid?: string;
@@ -425,81 +452,6 @@ export interface TachoFrameRowLike {
   subagentId?: string;
   subagentType?: string;
   spawnToolUseId?: string;
-}
-
-/** Which half of its exchange a wrapped kind records. */
-const TACHO_PHASES: Readonly<Record<string, FramePhase>> = {
-  "model.request": "request",
-  tool_requested: "request",
-  "model.response": "response",
-  tool_call: "response",
-};
-
-export function tachoPhase(kind: string): FramePhase {
-  return TACHO_PHASES[kind] ?? "single";
-}
-
-/**
- * The half a wrapped frame records, read from its body where the kind alone
- * does not say.
- *
- * An `oxagen:message` that names `last_assistant_message_digest` is the
- * agent's own message, reported by a harness that sends it apart from the
- * turn's end (Cursor's `afterAgentResponse`). It is what came back, so it is a
- * response, and the transcript read gives it a half the page can show. Every
- * other `oxagen:message` (a prompt line from a transcript, a streamed delta)
- * stays a single frame: the turn already shows the prompt, and a delta is a
- * fragment of a message rather than the message.
- */
-function tachoFramePhase(kind: string, payload: unknown): FramePhase {
-  if (
-    kind === "oxagen:message" &&
-    typeof payload === "object" &&
-    payload !== null &&
-    typeof (payload as Record<string, unknown>)[
-      "last_assistant_message_digest"
-    ] === "string"
-  )
-    return "response";
-  return tachoPhase(kind);
-}
-
-/** The stage a wrapped kind belongs to (tacho spec §6.1 kinds). */
-export function tachoStage(kind: string): string {
-  switch (kind) {
-    case "agent_start":
-    case "agent_stop":
-    case "subagent_start":
-    case "subagent_stop":
-      return "session";
-    case "turn_start":
-    case "turn_end":
-      return "turn";
-    case "llm_call":
-    case "model.request":
-    case "model.response":
-    case "context.assembled":
-    case "steering.manifest":
-      return "model";
-    case "tool_requested":
-    case "tool_call":
-      return "tool";
-    case "policy_decision":
-    case "approval_request":
-    case "approval_decision":
-    case "token_issued":
-    case "token_use":
-    case "token_denied":
-      return "policy";
-    case "file_io":
-    case "network":
-    case "command":
-      return "effect";
-    case "proof.observed":
-      return "proof";
-    default:
-      return kind.startsWith("oxagen:") ? "control" : "chain";
-  }
 }
 
 const blank = (v: string): string | null => (v === "" ? null : v);
@@ -518,38 +470,6 @@ function tachoRedactions(text: string): Redaction[] {
 export function tachoTimestamp(ts: string): Date {
   const iso = /^\d{4}-\d{2}-\d{2} /.test(ts) ? `${ts.replace(" ", "T")}Z` : ts;
   return new Date(iso);
-}
-
-export function tachoFrameSummary(row: TachoFrameRowLike): string {
-  switch (row.kind) {
-    case "tool_requested":
-    case "tool_call":
-      return row.toolName
-        ? `${row.toolName}${row.toolStatus ? ` ${row.toolStatus}` : ""}`
-        : row.kind;
-    case "llm_call":
-      return row.model
-        ? row.provider
-          ? `${row.provider}/${row.model}`
-          : row.model
-        : row.kind;
-    // A gate frame is about a call, and until now the summary dropped which
-    // one: `policy allow` told a reader that something had been allowed and
-    // gave them no way to learn what without opening the envelope. The
-    // decision still leads, because that is what a reader scanning a run for
-    // trouble is scanning for, and the subject follows it.
-    case "policy_decision":
-    case "approval_request":
-    case "approval_decision": {
-      if (row.policyDecision === "")
-        return row.toolName === "" ? row.kind : `${row.kind} ${row.toolName}`;
-      return row.toolName === ""
-        ? `policy ${row.policyDecision}`
-        : `${row.policyDecision} ${row.toolName}`;
-    }
-    default:
-      return row.kind;
-  }
 }
 
 /**
@@ -585,8 +505,22 @@ function tachoChainFacts(
   return out;
 }
 
+/** The longest effort label a frame carries; the column is a short enum. */
+const EFFORT_MAX = 32;
+/** The longest `tool_target` a frame carries into the transcript. */
+const TARGET_MAX = 400;
+
 /** A `tacho_events` row as a run frame. */
-export function tachoFrame(row: TachoFrameRowLike): RunFrame {
+export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
+  let payload: unknown = null;
+  try {
+    payload = stored.body ? JSON.parse(stored.body) : null;
+  } catch {
+    /* Legacy malformed metadata carries no usage. */
+  }
+  const kind = tachoKind(stored, field(payload, "policy_source"));
+  const row = kind === stored.kind ? stored : { ...stored, kind };
+  const target = field(payload, "tool_target");
   const digest = blank(row.contentDigest);
   const ref = blank(row.bytesRef);
   const body: FrameBodyColumns =
@@ -606,12 +540,6 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
           fidelity: ref === null ? "digest_only" : "full",
         };
   const model = blank(row.model);
-  let payload: unknown = null;
-  try {
-    payload = row.body ? JSON.parse(row.body) : null;
-  } catch {
-    /* Legacy malformed metadata carries no usage. */
-  }
   const usageObserved =
     row.kind === "llm_call" &&
     row.source === "collector" &&
@@ -678,7 +606,14 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
           : row.provider
             ? `${row.provider}/${model}`
             : model,
-      policy: blank(row.policyDecision),
+      // An operator command records the command as its decision: the host's
+      // allow or deny is how it applied a pause, not what the person chose.
+      policy:
+        row.kind === COMMAND_APPLIED
+          ? (blank(row.attrs?.["command.name"] ?? "") ??
+            blank(row.policyDecision))
+          : blank(row.policyDecision),
+      policySource: field(payload, "policy_source"),
       verdict: null,
       contextRows: null,
       // The producer's tool_use_id: foldSteps keys pending requests on it so
@@ -686,6 +621,12 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
       // correctly. Empty for kinds that carry no call id; those still fall
       // back to adjacency within their step kind.
       callId: blank(row.toolUseId),
+      ...(target === null || target === ""
+        ? {}
+        : { target: target.slice(0, TARGET_MAX) }),
+      ...(row.effort === undefined || row.effort === ""
+        ? {}
+        : { effort: row.effort.slice(0, EFFORT_MAX) }),
     },
     timing: {
       ttftMs: row.ttftMs ?? null,
@@ -767,9 +708,16 @@ export type TranscriptEntryKind =
 // list. Re-exported here so a caller over frames has one import site.
 export { isTranscriptKind, TRANSCRIPT_KINDS, type TranscriptKind };
 
-/** Frames that record a decision a rule or a person made about a call. */
+/** An operator's command as the host applied it. */
+const COMMAND_APPLIED = "oxagen:command_applied";
+
+/**
+ * Frames that record a decision a rule or a person made about a call, or an
+ * operator's command to the run (`oxagen:command_applied`).
+ */
 const POLICY_TYPES: ReadonlySet<string> = new Set([
   "tool.approval_recorded",
+  COMMAND_APPLIED,
   "policy_decision",
   "approval_request",
   "approval_decision",
@@ -785,6 +733,15 @@ const RECALL_TYPES: ReadonlySet<string> = new Set([
   // What the assembler put in front of a wrapped agent at its start, and
   // what it cut (ADR-093).
   "steering.manifest",
+]);
+/**
+ * A wrapped chain's own integrity frames: the signed checkpoint over the
+ * chain so far, and the gap it records where frames were lost. A ledger
+ * attempt's counterpart is its terminal-stage event, read by stage.
+ */
+const SEAL_TYPES: ReadonlySet<string> = new Set([
+  "checkpoint",
+  "telemetry_gap",
 ]);
 /** Tool outcomes that record a call that did not do what it was asked to. */
 const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
@@ -806,10 +763,22 @@ export function frameKinds(frame: RunFrame): TranscriptKind[] {
   if (MODEL_TYPES.has(frame.type)) {
     kinds.add(frame.phase === "request" ? "prompt" : "responses");
   }
+  // A wrapped run's prompt is the `turn_start` its operator typed, not a model
+  // request: tacho records the harness's hooks and never a `model.request`.
+  // A subagent's own `turn_start` is the prompt its parent wrote, so it is not
+  // counted. Nor is the transcript's or OTel's `oxagen:message` copy of the
+  // same prompt, which would count each prompt two or three times.
+  if (opensRunTurn(frame)) kinds.add("prompt");
+  // A model call that reasoned. The count is the provider's own report, so a
+  // call whose text was not kept still answers the chip.
+  if ((frame.usage?.reasoning ?? 0) > 0) kinds.add("thinking");
   if (TOOL_TYPES.has(frame.type)) kinds.add("tools");
   if (POLICY_TYPES.has(frame.type)) kinds.add("policy");
   if (RECALL_TYPES.has(frame.type)) kinds.add("recall");
   if (frame.costMicros !== null) kinds.add("usage");
+  if (SEAL_TYPES.has(frame.type) || frame.stage === "terminal") {
+    kinds.add("seal");
+  }
   const status = frame.identity.toolStatus;
   if (status !== null && FAILED_OUTCOMES.has(status)) kinds.add("errors");
   if (frame.type === "error" || frame.type.endsWith(".error")) {
@@ -842,9 +811,15 @@ export interface TranscriptDecision {
   seq: string;
   /** The subagent chain the decision was recorded on; absent on the run's own. */
   sessionUuid?: string;
-  /** The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote. */
+  /**
+   * The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote.
+   * An operator command records the command: `pause`, `resume`, `cancel` or
+   * `steer`.
+   */
   decision: string;
   type: string;
+  /** Who decided, in `FrameIdentity.policySource`'s words; null when unrecorded. */
+  source: string | null;
   at: Date;
 }
 
@@ -931,6 +906,16 @@ function addCost(sum: number | null, cost: number | null): number | null {
   return (sum ?? 0) + cost;
 }
 
+/**
+ * The decision `frame` records about the call a folded entry holds. An
+ * operator command is about the run, not about any one call, so folding it
+ * into a step or a turn does not make it that entry's decision: it keeps its
+ * own entry at the `everything` zoom, which the Policies tab reads.
+ */
+function callDecisionOf(frame: RunFrame): TranscriptDecision | null {
+  return frame.type === COMMAND_APPLIED ? null : decisionOf(frame);
+}
+
 function decisionOf(frame: RunFrame): TranscriptDecision | null {
   if (!POLICY_TYPES.has(frame.type)) return null;
   return {
@@ -940,6 +925,7 @@ function decisionOf(frame: RunFrame): TranscriptDecision | null {
       : { sessionUuid: frame.chain.sessionUuid }),
     decision: frame.identity.policy ?? frame.type,
     type: frame.type,
+    source: frame.identity.policySource ?? null,
     at: frame.observedAt,
   };
 }
@@ -990,7 +976,7 @@ function absorb(current: TranscriptFold, frame: RunFrame): void {
       current.response = frame;
     }
   }
-  const decision = decisionOf(frame);
+  const decision = callDecisionOf(frame);
   if (decision !== null) current.decision = decision;
 }
 
@@ -1009,7 +995,7 @@ function absorbPending(current: TranscriptFold, frame: RunFrame): void {
   current.frames += 1;
   current.costMicros = addCost(current.costMicros, frame.costMicros);
   current.usage = addFrameUsage(current.usage, frame.usage);
-  const decision = decisionOf(frame);
+  const decision = callDecisionOf(frame);
   if (decision !== null) current.decision = decision;
 }
 
@@ -1069,9 +1055,8 @@ function closesStep(current: TranscriptFold, frame: RunFrame): boolean {
  * response-only entry for it; completion B then did the same. Two calls
  * became four entries with every response detached from the request it
  * answered — the one thing a transcript exists to get right (finding 5,
- * macanderson/oxagen#3370). A wrapped session records no call id at all, so a
- * response with none falls back to `closesStep`'s adjacency check against
- * `current`, exactly as before.
+ * macanderson/oxagen#3370). A response that carries no call id falls back to
+ * `closesStep`'s adjacency check against `current`, exactly as before.
  *
  * A policy frame that arrives once the current step already has its response
  * is held rather than absorbed into it: `PreToolUse` writes `policy_decision`
@@ -1086,7 +1071,10 @@ function closesStep(current: TranscriptFold, frame: RunFrame): boolean {
  * in the order recorded, so two decisions ahead of one call are both kept and
  * the later one wins, the same as `absorb`'s own overwrite; a run that ends
  * with one or more still pending falls back to the last step rather than
- * dropping them, or opens a policy entry when no step ever did.
+ * dropping them, or opens a policy entry when no step ever did. The
+ * harness's own permission check (`harness_permission`) is held the same way,
+ * because Claude Code writes it before the call it gates, but it sets no
+ * decision: only an Oxagen verdict does.
  */
 function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
   const out: TranscriptFold[] = [];
@@ -1149,7 +1137,11 @@ function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
       }
       continue;
     }
-    if (POLICY_TYPES.has(frame.type) && holdPolicyForNext(current)) {
+    if (
+      (POLICY_TYPES.has(frame.type) || frame.type === "harness_permission") &&
+      frame.type !== COMMAND_APPLIED &&
+      holdPolicyForNext(current)
+    ) {
       pendingPolicy.push(frame);
       continue;
     }
@@ -1168,7 +1160,10 @@ function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
       const held = pendingPolicy.slice();
       pendingPolicy.length = 0;
       for (const pending of held) {
-        current = openEntry(pending, "policy");
+        current = openEntry(
+          pending,
+          POLICY_TYPES.has(pending.type) ? "policy" : "frame",
+        );
       }
     }
   }

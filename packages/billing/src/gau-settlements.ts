@@ -43,6 +43,7 @@ import { logger } from "./logger";
 import { readDefaultPaymentMethod } from "./payment-methods";
 import type { GauTerms } from "./pricing";
 import type { BillingCheckoutSession, GauInvoiceKind } from "./provider";
+import { formatPeriod, type InvoicePeriod } from "./invoice-copy";
 
 export type GauSettlementRow = typeof schema.gauSettlements.$inferSelect;
 
@@ -317,21 +318,64 @@ export async function settleGauFailed(
 const GAU_INVOICE_DAYS_UNTIL_DUE = 30;
 
 const INVOICE_KINDS: Partial<
-  Record<string, { kind: GauInvoiceKind; description: string }>
+  Record<string, { kind: GauInvoiceKind; label: string }>
 > = {
   auto_topup: {
     kind: "gau_auto_topup",
-    description: "Oxagen governed action units: auto top-up",
+    label: "Governed action units, auto top-up",
   },
   interim_invoice: {
     kind: "gau_interim",
-    description: "Oxagen governed action units: interim overage",
+    label: "Governed action units, interim overage",
   },
   period_close: {
     kind: "gau_period_close",
-    description: "Oxagen governed action units: month-end overage",
+    label: "Governed action units, month-end overage",
   },
 };
+
+/**
+ * The settlement line as a finance team reads it: what it is, the bucket
+ * month it bills, and the agreement when the org has negotiated terms, e.g.
+ * "Governed action units, month-end overage: 1 Sep to 30 Sep 2026
+ * (agreement MSA-2026-014)".
+ */
+function settlementLineDescription(
+  label: string,
+  period: InvoicePeriod,
+  agreementRef: string | null,
+): string {
+  const base = `${label}: ${formatPeriod(period)}`;
+  return agreementRef ? `${base} (agreement ${agreementRef})` : base;
+}
+
+/**
+ * The bucket month a settlement bills and the agreement in force now, read on
+ * the scope's executor: the recorder's tenant transaction or a system one.
+ */
+async function settlementLineContext(
+  row: GauSettlementRow,
+  scope: GauSettlementScope,
+): Promise<{ period: InvoicePeriod; agreementRef: string | null }> {
+  return scope.run(async (tx) => {
+    const buckets = await tx
+      .select()
+      .from(schema.gauBuckets)
+      .where(eq(schema.gauBuckets.id, row.bucketId))
+      .limit(1);
+    const bucket = buckets[0];
+    if (!bucket) {
+      throw new Error(
+        `billing: settlement ${row.id} names bucket ${row.bucketId}, which does not exist`,
+      );
+    }
+    const { terms } = await readGauEntitlement(tx, row.orgId);
+    return {
+      period: { start: bucket.periodStart, end: bucket.periodEnd },
+      agreementRef: terms.source === "negotiated" ? terms.agreementRef : null,
+    };
+  });
+}
 
 /**
  * Where a settlement sequence runs: the executor its writes commit on, the
@@ -363,9 +407,10 @@ async function createSettlementInvoice(
   if (invoice === undefined) {
     throw new Error(`billing: a ${row.kind} settlement carries no invoice`);
   }
-  const [customerId, paymentMethodId] = await Promise.all([
+  const [customerId, paymentMethodId, line] = await Promise.all([
     scope.customerId(),
     scope.defaultPaymentMethodId(),
+    settlementLineContext(row, scope),
   ]);
   const { invoiceId } = await billingProvider().createGauInvoice({
     customerId,
@@ -375,7 +420,12 @@ async function createSettlementInvoice(
     quantityGau: row.quantityGau,
     ratePerGauMicros: row.ratePerGauMicros,
     currency: row.currency,
-    description: invoice.description,
+    description: settlementLineDescription(
+      invoice.label,
+      line.period,
+      line.agreementRef,
+    ),
+    period: line.period,
     collection:
       paymentMethodId === null
         ? { method: "send_invoice", daysUntilDue: GAU_INVOICE_DAYS_UNTIL_DUE }
