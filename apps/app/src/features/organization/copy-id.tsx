@@ -6,10 +6,20 @@
 // The clipboard can refuse (an insecure origin, a denied permission), and the
 // refusal is said beside the id rather than swallowed. The id stays
 // selectable either way.
+//
+// The status speaks for the latest click only. "Copied" clears after
+// COPIED_MS, so after copying the org id and then a workspace id the page
+// does not claim both are on the clipboard. Each click clears the status
+// first, so a repeat copy is announced again, and a click that settles after
+// a later one has started leaves the status alone. A refusal stays until the
+// next click, because it tells you what to do instead.
 import { Check, Copy } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mono } from "@/ui/control-styles";
+
+/** How long "Copied" stays beside an id, in milliseconds. */
+export const COPIED_MS = 3000;
 
 export function CopyId({
   value,
@@ -22,13 +32,25 @@ export function CopyId({
 }) {
   const t = useTranslations("organization.copyId");
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const latest = useRef(0);
+  const clear = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(clear.current), []);
 
   async function copy() {
+    const attempt = ++latest.current;
+    clearTimeout(clear.current);
+    setState("idle");
+    let outcome: "copied" | "failed";
     try {
       await navigator.clipboard.writeText(value);
-      setState("copied");
+      outcome = "copied";
     } catch {
-      setState("failed");
+      outcome = "failed";
+    }
+    if (attempt !== latest.current) return;
+    setState(outcome);
+    if (outcome === "copied") {
+      clear.current = setTimeout(() => setState("idle"), COPIED_MS);
     }
   }
 

@@ -10,6 +10,7 @@
 // the panel title and each workspace's under its slug, each with a button that
 // copies it exactly. Checked with axe.
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -22,6 +23,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceList } from "@/data/contracts/org";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { COPIED_MS } from "./copy-id";
 import { workspaceRow } from "./organization.builders";
 
 vi.mock("next/link", () => ({
@@ -401,5 +403,93 @@ describe("Workspaces › public ids", () => {
         "Copy failed. Select the ID instead.",
       );
     });
+  });
+
+  // The status speaks for the latest click. "Copied" left beside a copy the
+  // browser then refused sends someone to paste whatever the clipboard held
+  // before, often another workspace's id, into `.oxagen/workspace.json`. A
+  // second click copies again, because the clipboard may have changed since.
+  it("copies again on every click and reports only the latest attempt (negative)", async () => {
+    const outcomes = [true, false, true];
+    const writeText = stubClipboard(() =>
+      outcomes.shift() === false
+        ? Promise.reject(new Error("not allowed"))
+        : Promise.resolve(),
+    );
+    await renderTab();
+    const org = copyId(ORG_ID);
+    const button = within(org).getByRole("button", {
+      name: "Copy organization ID",
+    });
+    const status = within(org).getByRole("status");
+
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(status).toHaveTextContent("Copied");
+    });
+
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(status).toHaveTextContent("Copy failed. Select the ID instead.");
+    });
+    expect(status).not.toHaveTextContent("Copied");
+
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(status).toHaveTextContent("Copied");
+    });
+    expect(status).not.toHaveTextContent("Copy failed");
+
+    expect(writeText).toHaveBeenCalledTimes(3);
+    expect(writeText?.mock.calls).toEqual([[ORG_ID], [ORG_ID], [ORG_ID]]);
+    // Only the id that was copied says so.
+    expect(
+      within(copyId("wrk_0a1b2c3d4e5f6g7h8j9k0m")).getByRole("status"),
+    ).toBeEmptyDOMElement();
+  });
+
+  // Copying the org id and then a workspace id leaves only the workspace id
+  // on the clipboard. A "Copied" that never cleared would still sit beside
+  // the org id and claim otherwise.
+  it("clears Copied after COPIED_MS and keeps a refusal until the next click", async () => {
+    const outcomes = [true, false];
+    stubClipboard(() =>
+      outcomes.shift() === false
+        ? Promise.reject(new Error("not allowed"))
+        : Promise.resolve(),
+    );
+    await renderTab();
+    const org = copyId(ORG_ID);
+    const button = within(org).getByRole("button", {
+      name: "Copy organization ID",
+    });
+    const status = within(org).getByRole("status");
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(status).toHaveTextContent("Copied");
+      act(() => {
+        vi.advanceTimersByTime(COPIED_MS - 1);
+      });
+      expect(status).toHaveTextContent("Copied");
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(status).toBeEmptyDOMElement();
+
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(status).toHaveTextContent("Copy failed. Select the ID instead.");
+      act(() => {
+        vi.advanceTimersByTime(COPIED_MS * 2);
+      });
+      expect(status).toHaveTextContent("Copy failed. Select the ID instead.");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -744,6 +744,183 @@ describe("resolveContext", () => {
     expect(userApiPostOrThrow).not.toHaveBeenCalled();
   });
 
+  // Records shaped as `list_organizations` and `list_workspaces` return them,
+  // with both forms of id. Each list leads with a decoy, so a finder that took
+  // the first record, or fell back to the only one, lands on the wrong
+  // workspace and applies its gates to this checkout.
+  const ACME = {
+    id: "0d6f1b2e-7a55-4a47-9c1c-2f1f0f6b8a10",
+    publicId: "org_8fK2mQ9xLw3RtY6bN1pZ4c",
+    slug: "acme",
+  };
+  const OTHER_ORG = {
+    id: "3c9bd760-d44a-4891-a4a5-35878d4fcfaa",
+    publicId: "org_5nW1cE8tRk2Yh7Qz4Lp9Vd",
+    slug: "other",
+  };
+  const PAYMENTS = {
+    id: "778d509d-ea0b-4f1a-be73-d1d7fb5f97df",
+    publicId: "wrk_3Hs7Vd1QkP9mXe2Lt5Ga8r",
+    slug: "payments",
+  };
+  const BILLING = {
+    id: "5a2e9c41-0b7d-4f3e-8a61-c94d2b7e1f08",
+    publicId: "wrk_6Jd2Nx8Rw4Kc1Tm9Hq3Bz7",
+    slug: "billing",
+  };
+
+  /**
+   * A checkout whose link carries old slugs and the given ids, a platform
+   * that answers only acme/payments and 404s every other scope, and lists
+   * that answer `organizations` and acme's `workspaces`. Returns the checkout
+   * and the link's text as written.
+   */
+  async function renamedCheckout(
+    ids: { orgId?: string; workspaceId?: string },
+    lists: {
+      organizations: (typeof ACME)[];
+      workspaces: (typeof PAYMENTS)[];
+    },
+  ): Promise<{ tmp: string; written: string }> {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    const written = JSON.stringify({
+      orgSlug: "acme-old",
+      workspaceSlug: "payments-old",
+      ...ids,
+    });
+    await writeFile(join(tmp, ".oxagen", "workspace.json"), written, "utf8");
+    remotes({ origin: "git@github.com:acme/app.git" });
+    apiPostOrThrow.mockImplementation(async (_path, _body, scope) => {
+      const s = scope as { org: string; ws: string } | undefined;
+      if (s?.org === "acme" && s.ws === "payments")
+        return {
+          steeringVersion: 11,
+          headCommit: null,
+          repository: "acme/app",
+          defaultBranch: "main",
+          policy: { blockStaleRuns: true },
+        };
+      throw new MockApiError("not found", 404);
+    });
+    userApiPostOrThrow.mockImplementation(async (path, body) => {
+      if (path === "organizations")
+        return { organizations: lists.organizations };
+      if (path === "workspaces") {
+        // Another org's workspaces never include payments.
+        const { orgSlug } = body as { orgSlug: string };
+        return {
+          workspaces: orgSlug === "acme" ? lists.workspaces : [BILLING],
+        };
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+    return { tmp, written };
+  }
+
+  /** How many times the freshness read went out, first try and retry. */
+  function freshnessReads(): number {
+    return apiPostOrThrow.mock.calls.filter(
+      ([path]) => path === "context/steering/freshness",
+    ).length;
+  }
+
+  // `oxagen init` writes database ids, and the Organization page shows public
+  // ids, so a person who repoints one field by hand from the page leaves a
+  // link holding one form of each. Each id is matched on its own; the link's
+  // form is never decided once for both.
+  it.each([
+    [
+      "the org by public id and the workspace by database id",
+      ACME.publicId,
+      PAYMENTS.id,
+    ],
+    [
+      "the org by database id and the workspace by public id",
+      ACME.id,
+      PAYMENTS.publicId,
+    ],
+  ])(
+    "follows a renamed link that names %s",
+    async (_case, orgId, workspaceId) => {
+      const { tmp } = await renamedCheckout(
+        { orgId, workspaceId },
+        { organizations: [OTHER_ORG, ACME], workspaces: [BILLING, PAYMENTS] },
+      );
+
+      const ctx = await resolveContext(tmp);
+      expect(ctx.platform?.steeringVersion).toBe(11);
+      const rewritten = JSON.parse(
+        await readFile(join(tmp, ".oxagen", "workspace.json"), "utf8"),
+      ) as Record<string, string>;
+      // Today's slugs, and each id kept in the form it was written in.
+      expect(rewritten).toMatchObject({
+        orgSlug: "acme",
+        orgId,
+        workspaceSlug: "payments",
+        workspaceId,
+      });
+    },
+  );
+
+  // One missing id is enough to stop recovery; the other test leaves out
+  // both. A link missing either can never resolve, so reading the lists for
+  // it only spends the hook's budget.
+  it.each([
+    ["its workspace id", { orgId: ACME.publicId }],
+    ["its org id", { workspaceId: PAYMENTS.publicId }],
+  ])(
+    "does not recover a link missing %s, and lists nothing (negative)",
+    async (_case, ids) => {
+      const { tmp, written } = await renamedCheckout(ids, {
+        organizations: [ACME],
+        workspaces: [PAYMENTS],
+      });
+
+      const ctx = await resolveContext(tmp);
+      expect(ctx.platform).toBeNull();
+      expect(userApiPostOrThrow).not.toHaveBeenCalled();
+      expect(freshnessReads()).toBe(1);
+      expect(
+        await readFile(join(tmp, ".oxagen", "workspace.json"), "utf8"),
+      ).toBe(written);
+    },
+  );
+
+  // An id the lists do not hold (a deleted workspace, access withdrawn, a
+  // typo) resolves to nothing. Each list holds exactly one other record, the
+  // case where "use the only one" is most tempting: taking it would apply
+  // another workspace's gates to this checkout and write its slugs into the
+  // link.
+  it.each([
+    [
+      "org",
+      { orgId: "org_2Gm8Tx4Wq1Ln6Rb3Ys9Kc", workspaceId: PAYMENTS.publicId },
+      1,
+    ],
+    [
+      "workspace",
+      { orgId: ACME.publicId, workspaceId: "wrk_7Pv3Lk9Qd2Xs5Nh1Wz8Tf" },
+      2,
+    ],
+  ])(
+    "drops the platform read and keeps the link when its %s id names no record (negative)",
+    async (_case, ids, listCalls) => {
+      const { tmp, written } = await renamedCheckout(ids, {
+        organizations: [ACME],
+        workspaces: [PAYMENTS],
+      });
+
+      const ctx = await resolveContext(tmp);
+      expect(ctx.platform).toBeNull();
+      expect(userApiPostOrThrow).toHaveBeenCalledTimes(listCalls);
+      expect(freshnessReads()).toBe(1);
+      expect(
+        await readFile(join(tmp, ".oxagen", "workspace.json"), "utf8"),
+      ).toBe(written);
+    },
+  );
+
   // The recovery calls run inside the same deadline as the read, so a hung
   // list endpoint cannot spend the hook's budget either.
   it("bounds the slug-recovery calls by the same deadline", async () => {
