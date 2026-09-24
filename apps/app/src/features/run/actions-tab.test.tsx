@@ -255,6 +255,22 @@ describe("the open frame", () => {
     await expectNoAxe(container);
   });
 
+  it("reads no body for the frame open by default, and offers to read it when it retained bytes", async () => {
+    const { calls } = await renderTab({
+      frames: [runFrame(), runFrame({ seq: "12", cursor: "ZjoxMg" })],
+      page: "ZjoxMA",
+    });
+    expect(calls.frameBody).toHaveLength(0);
+    expect(screen.queryByTestId("frame-body")).toBeNull();
+    expect(screen.getByTestId("frame-open-body")).toHaveAttribute(
+      "href",
+      frameLink("11", "ZjoxMA"),
+    );
+    expect(screen.getByTestId("frame-open")).toHaveTextContent(
+      "Bodybytes retained",
+    );
+  });
+
   it("opens ?body=<seq>, reads that frame's body and draws it as text, with its neighbours a step away", async () => {
     const { calls, container } = await renderTab({
       body: "3",

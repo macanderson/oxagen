@@ -4121,6 +4121,7 @@ type Messages = {
       read: {
         title: string;
         heading: string;
+        open: string;
         noType: string;
         noBytes: string;
         bytes: string;

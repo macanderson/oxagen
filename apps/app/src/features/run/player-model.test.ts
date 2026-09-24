@@ -162,7 +162,11 @@ describe("timelineMarks", () => {
 
 describe("openFrameOf and stepsOf", () => {
   it("opens the first frame shown when the URL names none, or names something that is not a seq", () => {
-    expect(openFrameOf(frames, null)).toMatchObject({ seq: "0", index: 0 });
+    expect(openFrameOf(frames, null)).toMatchObject({
+      seq: "0",
+      index: 0,
+      named: false,
+    });
     expect(openFrameOf(frames, "../etc")).toMatchObject({ seq: "0", index: 0 });
     expect(openFrameOf([], null)).toBeNull();
   });
@@ -183,7 +187,12 @@ describe("openFrameOf and stepsOf", () => {
       runFrame({ seq, cursor: seq }),
     );
     const open = openFrameOf(page, "11");
-    expect(open).toMatchObject({ seq: "11", index: -1, frame: null });
+    expect(open).toMatchObject({
+      seq: "11",
+      index: -1,
+      frame: null,
+      named: true,
+    });
     if (open === null) throw new Error("no frame");
     expect(stepsOf(page, open)).toMatchObject({ prev: "10", next: "100" });
     const before = openFrameOf(page, "2");

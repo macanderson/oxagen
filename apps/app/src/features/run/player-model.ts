@@ -220,6 +220,11 @@ export type OpenFrame = {
   index: number;
   /** The frame itself when the page holds it. */
   frame: RunFrame | null;
+  /**
+   * The URL named it. Its body is read only then: the first frame shown is
+   * open by default, and a body is read when a person asks for it.
+   */
+  named: boolean;
 };
 
 export function openFrameOf(
@@ -228,12 +233,12 @@ export function openFrameOf(
 ): OpenFrame | null {
   if (body !== null && FRAME_SEQ.test(body)) {
     const index = frames.findIndex((frame) => frame.seq === body);
-    return { seq: body, index, frame: frames[index] ?? null };
+    return { seq: body, index, frame: frames[index] ?? null, named: true };
   }
   const first = frames[0];
   return first === undefined
     ? null
-    : { seq: first.seq, index: 0, frame: first };
+    : { seq: first.seq, index: 0, frame: first, named: false };
 }
 
 /** Two decimal seqs in order, without reading either as a number a double cannot hold. */

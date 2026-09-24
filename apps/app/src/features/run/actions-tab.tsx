@@ -74,9 +74,10 @@ async function readApprovals(
 }
 
 /**
- * The open frame's body, read when the frame retained bytes, or when the URL
- * named a frame this page does not hold and so whose envelope is unknown here.
- * A frame that kept its digest alone has nothing to read.
+ * The open frame's body, read on demand: when the URL names the frame, and the
+ * frame retained bytes or this page does not hold its envelope. The first
+ * frame shown opens with no read, and a frame that kept its digest alone has
+ * nothing to read.
  */
 async function readBody(
   source: DataSource,
@@ -84,7 +85,7 @@ async function readBody(
   runId: string,
   open: OpenFrame | null,
 ): Promise<Read<RunFrameBody> | null> {
-  if (open === null) return null;
+  if (open === null || !open.named) return null;
   const { frame } = open;
   const retained =
     frame === null ||

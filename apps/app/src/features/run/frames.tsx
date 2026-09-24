@@ -208,16 +208,29 @@ function FrameBody({
   frame,
   seq,
   read,
+  open,
 }: {
   frame: RunFrame | null;
   seq: string;
-  /** Null when the frame retained no bytes, so nothing was read. */
+  /** Null when nothing was read: the URL did not name the frame, or it retained no bytes. */
   read: Read<RunFrameBody> | null;
+  /** The link that names the frame, which reads its body. */
+  open: SafePath;
 }) {
   const t = useTranslations("run.frames.read");
   const locale = useLocale();
   if (read === null) {
     if (frame === null || frame.body.digest === null) return null;
+    if (frame.body.fidelity === "full")
+      return (
+        <SafeLink
+          to={open}
+          data-testid="frame-open-body"
+          className={`${linkText} self-start text-[12.5px]`}
+        >
+          {t("open")}
+        </SafeLink>
+      );
     return (
       <p
         data-testid="frame-body"
@@ -349,7 +362,12 @@ export function FramePanel({
           // The body read lists its own redactions; without it, the envelope's.
           <Redactions redactions={frame.body.redactions} />
         )}
-        <FrameBody frame={frame} seq={open.seq} read={body} />
+        <FrameBody
+          frame={frame}
+          seq={open.seq}
+          read={body}
+          open={hrefOf(open.seq)}
+        />
         {/* `.row` with `margin-top:16px; border-top:1px solid var(--border); padding-top:13px` */}
         <div className="mt-0.5 flex flex-wrap items-center gap-[9px] border-t border-border pt-[13px]">
           <StepLink

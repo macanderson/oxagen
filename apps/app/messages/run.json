@@ -182,6 +182,7 @@
       "read": {
         "title": "Frame {seq} body",
         "heading": "Body",
+        "open": "Read the body",
         "noType": "no content type",
         "noBytes": "no bytes retained",
         "bytes": "{count} bytes",
