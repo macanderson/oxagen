@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 // The server half: the chrome renders what the source read for the context the
 // layout resolved; the frame streams a skeleton and the pre-paint theme script.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement, type ReactNode, use } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -158,16 +160,28 @@ describe("ShellFrame", () => {
     expect(container.querySelector("script")?.innerHTML).toBe(THEME_SCRIPT);
   });
 
-  it("paints the workspace on the content-panel token, not the page canvas", async () => {
-    // AGENTS.md "Design Token Usage in Shell Components": the shell frame is
-    // the reskin knob for the content panel. A dark-mode pass once moved it
-    // to `bg-app-canvas`, which put the workspace on the black page canvas
-    // and took the frame out of reach of a `--app-panel-bg` change.
+  it("paints the page on the ink canvas and keeps panels on the panel token", async () => {
+    // The mockup's body is `--ink` and its `.main` has no fill of its own, so
+    // in dark mode the page is #09090B and only panels and cards are lighter
+    // (#18181B). The frame once used `bg-app-panel-bg`, which `.dark` points
+    // at `--panel`, so every page sat on the panel colour. In light mode both
+    // tokens are white, so the canvas changes nothing there. The flyout and
+    // the mobile-nav badge keep `--app-panel-bg`, which stays on `--panel`.
     const { ShellFrame } = await import("./shell-frame");
     render(await ShellFrame({ chrome: <p>chrome</p>, children: null }));
     const shell = screen.getByTestId("shell");
-    expect(shell.className).toContain("bg-app-panel-bg");
-    expect(shell.className).not.toContain("bg-app-canvas");
+    expect(shell.className).toContain("bg-app-canvas");
+    expect(shell.className).not.toContain("bg-app-panel-bg");
+
+    const css = readFileSync(
+      join(process.cwd(), "src", "app", "globals.css"),
+      "utf8",
+    );
+    expect(css).toContain("--color-app-canvas: var(--ink);");
+    expect(css).toContain("--ink: var(--background);");
+    // Both dark blocks (the `.dark` class and the system preference) keep the
+    // panel token on the panel colour.
+    expect(css.match(/--app-panel-bg: var\(--panel\);/g)).toHaveLength(2);
   });
 
   it("streams a labelled skeleton while the chrome loads", async () => {

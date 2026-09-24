@@ -3,6 +3,7 @@ import { dataSource } from "@/data/source";
 import { SignedInNotice } from "@/features/auth";
 import { ShellChrome, ShellFrame, ViewerClock } from "@/features/shell";
 import { requireViewer } from "@/server/viewer";
+import { PageLoading } from "@/ui/page-skeleton";
 
 // The organization shell: sidebar, top bar, command menu and <MobileNav>
 // around every organization and workspace page. The frame is static; the
@@ -12,14 +13,16 @@ import { requireViewer } from "@/server/viewer";
 // <Suspense> around the page (params of an unlisted slug are request data).
 // Inside that same <Suspense>, <OrganizationClock> resolves the viewer's time
 // zone and every date on the page renders in it. <SignedInNotice> shows
-// "Signed in as …" once on the first page a sign-in lands on.
+// "Signed in as …" once on the first page a sign-in lands on. While the viewer
+// resolves, that <Suspense> draws the page skeleton inside the frame, so the
+// chrome stays and a click shows the page's shape at once.
 export default function OrganizationLayout({
   children,
   params,
 }: LayoutProps<"/[org]">) {
   return (
     <ShellFrame chrome={<OrganizationChrome params={params} />}>
-      <Suspense fallback={null}>
+      <Suspense fallback={<PageLoading />}>
         <OrganizationClock params={params}>{children}</OrganizationClock>
       </Suspense>
     </ShellFrame>

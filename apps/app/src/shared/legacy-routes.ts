@@ -102,6 +102,9 @@ export const LEGACY_ROUTES: readonly LegacyRoute[] = [
   { from: "/{org}/{ws}/knowledge/sources/connect", to: "/{org}/{ws}" },
   { from: "/{org}/{ws}/settings/github", to: "/{org}/{ws}" },
   { from: "/{org}/{ws}/knowledge/memory", to: "/{org}/{ws}/steering" },
+  // IAM was this app's name for the Agents page before the rename: the page
+  // and every path beneath it land on Agents.
+  { from: "/{org}/{ws}/iam/**", to: "/{org}/{ws}/agents" },
   { from: "/{org}/{ws}/workbench/agents", to: "/{org}/{ws}/agents" },
   { from: "/{org}/{ws}/workbench/agents/{id}", to: "/{org}/{ws}/agents" },
   { from: "/{org}/{ws}/workbench/environments", to: "/{org}/{ws}/agents" },

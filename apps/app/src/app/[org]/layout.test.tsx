@@ -1,7 +1,7 @@
 // The organization layout resolves the viewer for the organization slug and
 // hands the context to the shell chrome and to the clock around its pages; a
 // stranger is a 404 and neither renders.
-import { type ReactNode, Suspense } from "react";
+import { type ReactElement, type ReactNode, Suspense } from "react";
 import { renderToReadableStream } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -49,6 +49,12 @@ vi.mock("@/features/shell", () => ({
   ),
 }));
 
+// The skeleton reads the catalog; here it only has to be the fallback.
+vi.mock("@/ui/page-skeleton", () => ({
+  PageLoading: () => <div data-testid="page-skeleton" />,
+}));
+
+import { PageLoading } from "@/ui/page-skeleton";
 import OrganizationLayout from "./layout";
 
 async function render(org: string) {
@@ -88,6 +94,16 @@ describe("OrganizationLayout", () => {
     expect(html).toMatch(
       /data-testid="clock" data-org="acme">.*data-testid="page".*data-testid="signed-in-notice"/s,
     );
+  });
+
+  it("draws the page skeleton inside the frame while the viewer resolves, so the chrome stays", () => {
+    const frame = OrganizationLayout({
+      children: null,
+      params: Promise.resolve({ org: "acme" }),
+    }) as ReactElement<{ children: ReactElement<{ fallback: ReactElement }> }>;
+    const gate = frame.props.children;
+    expect(gate.type).toBe(Suspense);
+    expect(gate.props.fallback.type).toBe(PageLoading);
   });
 
   it("is not found for an organization the viewer does not belong to, and neither the chrome nor the page renders", async () => {

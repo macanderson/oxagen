@@ -9,10 +9,12 @@
 // has already started reading the header would lose their place.
 //
 // Next replaces page.tsx's whole return value with this default export while
-// the route segment suspends, `<main id="main">` and the page header
-// included, so this reproduces both: the skip-to-content link keeps a
-// target, and the frame does not jump once the read finishes and the real
-// page takes over the same container. The run's id is not known here, so the
+// the route segment suspends, the page header included, so this draws the
+// header too and the frame does not jump once the read finishes. The
+// landmark carries `aria-busy` and no `id`: while the page streams in, React
+// holds the resolved page hidden beside this fallback, and two `main#main` in
+// one document is what the page-load check refused. `aria-busy` also puts it
+// in the page's frame (globals.css). The run's id is not known here, so the
 // h1 says "Run" until the page lands.
 import { useTranslations } from "next-intl";
 import { panel } from "@/ui/control-styles";
@@ -33,7 +35,7 @@ export function RunLoading() {
   const t = useTranslations();
   return (
     <main
-      id="main"
+      aria-busy="true"
       className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10"
     >
       <PageHeader eyebrow={t("pages.run")} title={t("pages.run")} />

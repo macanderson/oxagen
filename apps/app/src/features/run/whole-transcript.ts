@@ -17,6 +17,7 @@ import {
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
+import { mergeEntries } from "./transcript-model";
 
 /**
  * The most pages one tab reads. At the default page size that is the
@@ -38,11 +39,14 @@ export function isWhole(transcript: RunTranscript): boolean {
 /**
  * `get_run_transcript` at `zoom`, narrowed to `kinds`, read page by page until
  * the run is read or `WHOLE_TRANSCRIPT_PAGES` pages have been. The entries
- * are every page's, in order. The cursor is the last page's: null when the
- * run was read to its end, and otherwise the point the list stops at, so
- * `isWhole` says it is a prefix. A page that fails after the first keeps what
- * was read and its cursor, so the tab says the list stops short rather than
- * failing a list it mostly holds.
+ * are every page's, merged: an entry the server sends again because it grew
+ * replaces the copy already held, so each entry is listed once
+ * (`mergeEntries`). The cursor is the last page's: null when the run was read
+ * to its end, and otherwise the point the list stops at, so `isWhole` says it
+ * is a prefix. A page that fails after the first keeps what was read and its
+ * cursor, so the tab says the list stops short rather than failing a list it
+ * mostly holds. A cursor that comes back a second time stops the read: the
+ * next page would be one already read.
  */
 export async function readWholeTranscript(
   // Only the transcript read: a caller hands in its whole source, and a test
@@ -55,23 +59,28 @@ export async function readWholeTranscript(
 ): Promise<Read<RunTranscript>> {
   const first = await source.runs.transcript(ctx, runId, zoom, { kinds });
   if (!first.ok) return first;
-  const entries = [...first.value.entries];
+  let entries = [...first.value.entries];
   let last = first.value;
+  // The cursors already read from. The cursor is opaque, so the only safe
+  // reading of one seen before is that the server has nothing new past it.
+  const seen = new Set<string>();
   for (
     let pages = 1;
     pages < WHOLE_TRANSCRIPT_PAGES &&
     last.cursor !== null &&
+    !seen.has(last.cursor) &&
     // A short page is the end of what the run holds now. A live run still
     // answers a cursor there, to resume from when it records more.
     last.entries.length >= TRANSCRIPT_ENTRY_DEFAULT;
     pages += 1
   ) {
+    seen.add(last.cursor);
     const next = await source.runs.transcript(ctx, runId, zoom, {
       kinds,
       after: last.cursor,
     });
     if (!next.ok) break;
-    entries.push(...next.value.entries);
+    entries = mergeEntries(entries, next.value.entries);
     last = next.value;
   }
   return {

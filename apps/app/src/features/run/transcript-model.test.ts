@@ -16,8 +16,11 @@ import {
   frameCost,
   idsAt,
   isNonEmpty,
+  mergeEntries,
   openAtZoom,
   playDelay,
+  steadyClock,
+  stepSettled,
   stepDigest,
   stepModel,
   stepTool,
@@ -413,15 +416,23 @@ describe("the transport", () => {
     expect(entries[12]?.elapsedMs).toBe(24_000);
   });
 
-  it("paces playback on the recorded gap, held between 120 ms and 2 s and divided by the speed", () => {
-    expect(playDelay(entries, 0, 1)).toBe(2000);
-    expect(playDelay(entries, 0, 2)).toBe(1000);
+  it("paces playback on the recorded gap, held between 90 ms and 1.4 s and divided by the speed", () => {
+    // The mockup's fixture sits two seconds apart, past the ceiling.
+    expect(playDelay(entries, 0, 1)).toBe(1400);
+    expect(playDelay(entries, 0, 2)).toBe(700);
     const burst = [
       transcriptEntry({ seq: "1", at: "2026-09-15T08:00:00.000Z" }),
       transcriptEntry({ seq: "2", at: "2026-09-15T08:00:00.010Z" }),
+      transcriptEntry({ seq: "3", at: "2026-09-15T08:00:00.610Z" }),
     ];
-    expect(playDelay(burst, 0, 1)).toBe(120);
-    expect(playDelay(burst, 1, 1)).toBe(400);
+    expect(playDelay(burst, 0, 1)).toBe(90);
+    expect(playDelay(burst, 0, 6)).toBe(15);
+    expect(playDelay(burst, 1, 3)).toBe(200);
+    expect(playDelay(burst, 2, 1)).toBe(400);
+  });
+
+  it("waits the longest when a row's clock cannot be read (negative)", () => {
+    expect(playDelay([{ at: "not a time" }, { at: "2026-09-15T08:00:00Z" }], 0, 1)).toBe(1400);
   });
 
   it("opens nothing at Turns, the turns at Steps, and turns and steps at Everything", () => {
@@ -906,6 +917,152 @@ describe("visibleSteps", () => {
     if (turn === undefined) throw new Error("expected a turn");
     expect(turn.steps.map((s) => s.id)).toEqual(["s0", "s2", "s3", "s4"]);
     expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s2", "s3"]);
+  });
+});
+
+describe("mergeEntries", () => {
+  const entry = (seq: number, endSeq: number, label = "Bash") =>
+    transcriptEntry({ seq: String(seq), endSeq: String(endSeq), label });
+
+  it("appends a page whose entries are all new", () => {
+    const merged = mergeEntries([entry(1, 1), entry(2, 2)], [entry(3, 3)]);
+    expect(merged.map((e) => e.seq)).toEqual(["1", "2", "3"]);
+  });
+
+  it("replaces a resent entry where it stands and appends only the new ones", () => {
+    // The server sends a grown entry first in the next page: the tool call at
+    // seq 2 gained its result, so its endSeq moved from 2 to 5.
+    const merged = mergeEntries(
+      [entry(1, 1), entry(2, 2, "Bash"), entry(3, 3)],
+      [entry(2, 5, "Bash ok"), entry(6, 6)],
+    );
+    expect(merged.map((e) => [e.seq, e.endSeq, e.label])).toEqual([
+      ["1", "1", "Bash"],
+      ["2", "5", "Bash ok"],
+      ["3", "3", "Bash"],
+      ["6", "6", "Bash"],
+    ]);
+  });
+
+  it("holds one copy however many times a page repeats an entry", () => {
+    const again = [entry(1, 1), entry(2, 2)];
+    let held = mergeEntries([], again);
+    for (let i = 0; i < 20; i += 1) held = mergeEntries(held, again);
+    expect(held.map((e) => e.seq)).toEqual(["1", "2"]);
+  });
+
+  it("keeps the last copy when one page carries the same entry twice", () => {
+    const merged = mergeEntries([], [entry(4, 4, "Read"), entry(4, 7, "Read ok")]);
+    expect(merged.map((e) => [e.seq, e.endSeq])).toEqual([["4", "7"]]);
+  });
+
+  it("keeps a subagent's entry apart from the run's entry with the same seq", () => {
+    const own = entry(3, 3);
+    const sub = transcriptEntry({
+      seq: "3",
+      endSeq: "3",
+      subagent: { chainRef: "c1d2", type: "Explore" },
+    });
+    const merged = mergeEntries([own], [sub, { ...sub, endSeq: "4" }]);
+    expect(merged.map(entryKey)).toEqual(["3", "c1d2:3"]);
+    expect(merged[1]?.endSeq).toBe("4");
+  });
+
+  it("never keys on endSeq, so growth is not read as a new entry (negative)", () => {
+    const merged = mergeEntries([entry(9, 9)], [entry(9, 12)]);
+    expect(merged).toHaveLength(1);
+  });
+});
+
+describe("steadyClock", () => {
+  it("keeps each clock that moves forward", () => {
+    expect(steadyClock([{ elapsedMs: 0 }, { elapsedMs: 40 }, { elapsedMs: 90 }])).toEqual([0, 40, 90]);
+  });
+
+  it("shows the clock above a row whose own clock runs backwards", () => {
+    expect(
+      steadyClock([
+        { elapsedMs: 1_000 },
+        { elapsedMs: 4_000 },
+        { elapsedMs: 2_500 },
+        { elapsedMs: 3_900 },
+        { elapsedMs: 5_000 },
+      ]),
+    ).toEqual([1_000, 4_000, 4_000, 4_000, 5_000]);
+  });
+
+  it("answers nothing for no rows", () => {
+    expect(steadyClock([])).toEqual([]);
+  });
+});
+
+describe("stepSettled", () => {
+  it("is true once a tool step holds the frame that closes the call", () => {
+    expect(stepSettled(step(1, 2))).toBe(true);
+  });
+
+  it("is false for a tool step that holds only its request and decision", () => {
+    expect(stepSettled(step(2, 2))).toBe(false);
+  });
+
+  it("is true for a model step and an event step", () => {
+    expect(stepSettled(step(1, 1))).toBe(true);
+    expect(stepSettled(step(0, 0))).toBe(true);
+  });
+});
+
+describe("a turn's prompt and answer", () => {
+  it("are left out of the turn's steps, so each is drawn once", () => {
+    const turn = turns[1];
+    if (turn === undefined) throw new Error("expected turn 1");
+    expect(turn.spoken).toEqual(new Set(["2", "8"]));
+    const ids = visibleSteps(turn).map((s) => s.id);
+    expect(ids).not.toContain("s2");
+    expect(ids).not.toContain("s8");
+    expect(ids).toEqual(["s3", "s5"]);
+  });
+
+  it("leave out an agent message the turn's answer was read from", () => {
+    const [turn] = buildTranscript([
+      transcriptEntry({
+        seq: "0",
+        endSeq: "0",
+        kind: "frame",
+        type: "oxagen:message",
+        label: "oxagen:message",
+        request: null,
+        response: transcriptBody({ seq: "0", text: "Done." }),
+        turn: 1,
+      }),
+    ]);
+    if (turn === undefined) throw new Error("expected a turn");
+    expect(turn.reply).toBe("Done.");
+    expect(visibleSteps(turn)).toEqual([]);
+  });
+
+  it("keep a prompt frame that carried no text, which is not the prompt (negative)", () => {
+    const [turn] = buildTranscript([
+      transcriptEntry({
+        seq: "0",
+        endSeq: "0",
+        kind: "frame",
+        type: "turn_start",
+        label: "turn_start",
+        request: transcriptBody({ seq: "0", text: null }),
+        response: null,
+        decision: {
+          seq: "0",
+          decision: "allow",
+          type: "policy_decision",
+          at: transcriptEntry().at,
+        },
+        turn: 1,
+      }),
+    ]);
+    if (turn === undefined) throw new Error("expected a turn");
+    expect(turn.prompt).toBeNull();
+    expect(turn.spoken.size).toBe(0);
+    expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s0"]);
   });
 });
 

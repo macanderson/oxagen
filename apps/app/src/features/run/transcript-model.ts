@@ -43,6 +43,56 @@ export function entryKey(entry: TranscriptEntry): string {
     : `${entry.subagent.chainRef}:${entry.seq}`;
 }
 
+/**
+ * The entries held so far with a newly read page merged in, each entry once.
+ *
+ * The server sends an entry again when it grows: a tool call gains its
+ * result, or a Task call completes after its subagent's steps. The resent
+ * copy has the same opening frame, so it has the same `entryKey`, and a later
+ * `endSeq`. It replaces the held copy where that copy stands, so the list
+ * keeps its order. An entry with a key not yet held is appended. Appending
+ * every page as it came drew one step as many times as the server resent it.
+ *
+ * The key is `entryKey`, which reads the opening frame's chain and `seq`.
+ * `endSeq` is never part of it, because it moves as the entry grows.
+ */
+export function mergeEntries(
+  held: readonly TranscriptEntry[],
+  page: readonly TranscriptEntry[],
+): TranscriptEntry[] {
+  const out: TranscriptEntry[] = [];
+  const at = new Map<string, number>();
+  for (const entry of [...held, ...page]) {
+    const key = entryKey(entry);
+    const index = at.get(key);
+    if (index === undefined) {
+      at.set(key, out.length);
+      out.push(entry);
+    } else {
+      out[index] = entry;
+    }
+  }
+  return out;
+}
+
+/**
+ * Each entry's clock, held so it never runs backwards.
+ *
+ * The list is in `seq` order, which is the order the recorder wrote the
+ * frames. Two sources can stamp their frames from different clocks, so a
+ * later frame can carry an earlier `elapsedMs`. The list keeps `seq` order,
+ * and a clock earlier than the one above it shows the one above it instead.
+ */
+export function steadyClock(
+  entries: readonly Pick<TranscriptEntry, "elapsedMs">[],
+): number[] {
+  let latest = 0;
+  return entries.map((entry) => {
+    latest = Math.max(latest, entry.elapsedMs);
+    return latest;
+  });
+}
+
 /** A transcript with at least one frame: the only kind the view draws. */
 export type Frames = readonly [TranscriptEntry, ...TranscriptEntry[]];
 
@@ -85,6 +135,12 @@ export type TranscriptTurn = {
   prompt: string | null;
   /** The agent's last message in the turn, when the recorder kept its body. */
   reply: string | null;
+  /**
+   * The `entryKey`s of the frames the prompt and the reply were read from.
+   * The view draws those two once, as the turn's prompt and answer, so
+   * `visibleSteps` leaves their steps out.
+   */
+  spoken: ReadonlySet<string>;
 };
 
 const MODEL_REQUEST = "model.request";
@@ -388,11 +444,11 @@ function stepsOf(
 }
 
 /** The first (or last) frame of `type` in `frames` that carries text. */
-function textOf(
+function spokenIn(
   frames: readonly TranscriptEntry[],
   type: string,
   last: boolean,
-): string | null {
+): TranscriptEntry | null {
   const ordered = last ? [...frames].reverse() : frames;
   // A subagent's own prompt and reply sit inside the turn that spawned it;
   // they are the subagent's, not what the person asked or was answered.
@@ -402,7 +458,11 @@ function textOf(
       frame.type === type &&
       (soleBody(frame)?.text ?? null) !== null,
   );
-  return found === undefined ? null : (soleBody(found)?.text ?? null);
+  return found ?? null;
+}
+
+function textOf(frame: TranscriptEntry | null): string | null {
+  return frame === null ? null : (soleBody(frame)?.text ?? null);
 }
 
 /**
@@ -420,6 +480,13 @@ export function buildTranscript(
     if (next !== undefined && next.turn === entry.turn) return;
     const frames = entries.slice(start, index + 1);
     const first = frames[0] ?? entry;
+    const asked = spokenIn(frames, "turn_start", false);
+    // A harness that reports the agent's message apart from the turn's end
+    // (Cursor) can close the turn before the message lands; the message
+    // frame is then the only copy, and it is still this turn's reply.
+    const answered =
+      spokenIn(frames, "turn_end", true) ??
+      spokenIn(frames, "oxagen:message", true);
     turns.push({
       id: `t${entryKey(first)}`,
       turn: entry.turn,
@@ -427,13 +494,13 @@ export function buildTranscript(
       last: entry,
       frames,
       steps: stepsOf(frames, start),
-      prompt: textOf(frames, "turn_start", false),
-      // A harness that reports the agent's message apart from the turn's end
-      // (Cursor) can close the turn before the message lands; the message
-      // frame is then the only copy, and it is still this turn's reply.
-      reply:
-        textOf(frames, "turn_end", true) ??
-        textOf(frames, "oxagen:message", true),
+      prompt: textOf(asked),
+      reply: textOf(answered),
+      spoken: new Set(
+        [asked, answered].flatMap((frame) =>
+          frame === null ? [] : [entryKey(frame)],
+        ),
+      ),
     });
     start = index + 1;
   });
@@ -680,15 +747,21 @@ export function stepModel(step: TranscriptStep): ToolDetail | null {
  * and no decision is bookkeeping (a hook registering, a queue tick) or a
  * digest-only duplicate of a call another source sealed with its body; the
  * Frames tab still has every one of them.
+ *
+ * The frames the turn's prompt and answer were read from are left out too.
+ * The view draws each once, as the turn's prompt and answer; kept here as
+ * well, every prompt and every answer appeared twice.
  */
 export function visibleSteps(turn: TranscriptTurn): TranscriptStep[] {
-  return turn.steps.filter((step) =>
-    step.frames.some(
-      (frame) =>
-        hasContent(frame) ||
-        frame.decision !== null ||
-        TOOL_GATE.has(frame.type),
-    ),
+  return turn.steps.filter(
+    (step) =>
+      !(step.frames.length === 1 && turn.spoken.has(entryKey(step.first))) &&
+      step.frames.some(
+        (frame) =>
+          hasContent(frame) ||
+          frame.decision !== null ||
+          TOOL_GATE.has(frame.type),
+      ),
   );
 }
 
@@ -735,20 +808,33 @@ export function frameCost(frames: readonly TranscriptEntry[]): Money | null {
 }
 
 /**
- * How long playback waits before moving from `pos` to the next frame: the
- * real gap, held between 120 ms and 2 s so idle time is compressed and a
- * burst stays readable, divided by the speed.
+ * How long playback waits before it shows the row after `pos`: the recorded
+ * gap between the two rows, held between 90 ms and 1.4 s, divided by the
+ * speed. Idle time is compressed and a burst stays readable. A gap the clock
+ * cannot measure waits the longest.
  */
 export function playDelay(
-  entries: readonly TranscriptEntry[],
+  rows: readonly { at: string }[],
   pos: number,
   speed: number,
 ): number {
-  const here = entries[pos];
-  const next = entries[pos + 1];
+  const here = rows[pos];
+  const next = rows[pos + 1];
   if (here === undefined || next === undefined) return 400;
   const gap = Date.parse(next.at) - Date.parse(here.at);
-  return Math.min(2000, Math.max(120, gap)) / speed;
+  const held = Number.isFinite(gap) ? Math.max(90, Math.min(1400, gap)) : 1400;
+  return held / speed;
+}
+
+/**
+ * Whether a tool step reached its result: a frame that closes the call is in
+ * the step. A step that holds only the request is still running, or was
+ * parked for an approval, or stopped before it finished. Every other kind of
+ * step is settled.
+ */
+export function stepSettled(step: TranscriptStep): boolean {
+  if (step.kind !== "tool") return true;
+  return step.frames.some((frame) => TOOL_CLOSE.has(frame.type));
 }
 
 /** The ids open at a zoom level: turns open at Steps, turns and steps at Everything. */

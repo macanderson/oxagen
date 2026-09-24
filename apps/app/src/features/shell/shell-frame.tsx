@@ -1,6 +1,10 @@
 // The static frame of the organization shell: a two-column grid on desktop
 // (rail | top bar over the page), a single column with a bottom bar on a phone.
 // It streams immediately; the chrome's data swaps in from its <Suspense>.
+//
+// The page sits on the canvas (`--ink`), as the mockup's body does: #09090B in
+// dark mode, with panels and cards the one lighter surface (#18181B). In light
+// mode the canvas and the panel token are both white, so light is unchanged.
 import { getTranslations } from "next-intl/server";
 import { type ReactNode, Suspense } from "react";
 import { THEME_SCRIPT } from "./theme";
@@ -42,7 +46,7 @@ export async function ShellFrame({
   return (
     <div
       data-testid="shell"
-      className="min-h-dvh bg-app-panel-bg text-app-panel-fg md:grid md:grid-cols-[var(--sidebar-width)_minmax(0,1fr)] md:grid-rows-[auto_1fr]"
+      className="min-h-dvh bg-app-canvas text-app-panel-fg md:grid md:grid-cols-[var(--sidebar-width)_minmax(0,1fr)] md:grid-rows-[auto_1fr]"
     >
       {/* Before first paint: apply the stored theme so the page never flashes the wrong one. */}
       <script

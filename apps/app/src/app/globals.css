@@ -209,8 +209,11 @@
   }
 }
 
-/* The mockup's workspace frame and data density, shared by every app page. */
-[data-shell-page] main#main {
+/* The mockup's workspace frame and data density, shared by every app page.
+   A loading skeleton's landmark carries `aria-busy` and no id (React holds
+   the resolved page hidden beside it), and it sits in the same frame so
+   nothing moves when the page lands. */
+[data-shell-page] :is(main#main, main[aria-busy]) {
   max-width: 1500px;
   padding: 22px 24px 80px;
 }
@@ -240,7 +243,7 @@
 }
 
 @media (width < 48rem) {
-  [data-shell-page] main#main {
+  [data-shell-page] :is(main#main, main[aria-busy]) {
     padding: 16px 16px 88px;
   }
 }
@@ -278,6 +281,40 @@
 }
 [data-shell-page] main#main > :nth-child(n + 5) {
   animation-delay: 160ms;
+}
+
+/*
+ * The skeleton shimmer (the mockup's `.sk`): a lighter band sweeps across a
+ * bone on the highlight colour, from right to left, every 1.5 seconds. It
+ * stops under reduced motion, where the bone keeps its colour and does not
+ * move. The kit's reduced-motion switch shortens the duration but leaves an
+ * infinite animation running, so this rule removes it outright.
+ */
+@keyframes shim {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -30% 0;
+  }
+}
+
+.sk {
+  background: linear-gradient(
+    90deg,
+    var(--hl) 25%,
+    var(--panel) 50%,
+    var(--hl) 75%
+  );
+  background-size: 220% 100%;
+  animation: shim 1.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk {
+    animation: none;
+    background: var(--hl);
+  }
 }
 
 /* A disclosure's body arrives rather than appears. */

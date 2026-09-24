@@ -130,6 +130,44 @@
       "previous": "Previous page",
       "next": "Next page",
       "pages": "{label} pages"
+    },
+    "pageState": {
+      "loading": "Loading",
+      "error": {
+        "title": "{what} could not be loaded",
+        "thisPage": "This page",
+        "body": "The control plane answered <c>{code}</c>. Nothing was changed. Runs kept recording while this page was down. The collector on each host writes the frames, not Oxagen.",
+        "retry": "Try again",
+        "incident": "Open an incident",
+        "trace": "trace {trace} · region not recorded",
+        "traceUnrecorded": "trace and region not recorded"
+      },
+      "denied": {
+        "title": "You cannot see {what}",
+        "body": "Your roles on <b>{org}</b> do not include <c>{need}</c>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
+        "requestAccess": "Request access",
+        "back": "Back to Fleet",
+        "signedIn": "Signed in as",
+        "signedInValue": "{name} · <c>{role}</c>",
+        "needed": "Needed",
+        "decidedBy": "Decided by",
+        "decidedByValue": "policy not recorded · deny wins over every allow"
+      },
+      "pending": {
+        "title": "Your access request is waiting",
+        "body": "Reading {what} parked for approval. The request is {request}."
+      },
+      "incident": {
+        "title": "Open an incident",
+        "body": "Oxagen cannot file an incident from this page yet. It would record one with the code <c>{code}</c> attached.",
+        "now": "Nothing was sent. Until then, report the code and the time to whoever runs this deployment."
+      },
+      "requestAccess": {
+        "title": "Request access",
+        "body": "Oxagen cannot ask for a role from this page yet. It would send an organization owner a request for {need} with your reason, and the grant would land in the audit record with both your names.",
+        "now": "Nothing was sent. Until then, ask an organization owner to grant it. The Organization page lists who they are.",
+        "people": "Open Organization"
+      }
     }
   }
 }

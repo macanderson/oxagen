@@ -238,6 +238,9 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
     ["/acme/core/knowledge/sources/connect", "/acme/core"],
     ["/acme/core/settings/github", "/acme/core"],
     ["/acme/core/knowledge/memory", "/acme/core/steering"],
+    ["/acme/core/iam", "/acme/core/agents"],
+    ["/acme/core/iam/roles", "/acme/core/agents"],
+    ["/acme/core/iam/roles/role_1/grants", "/acme/core/agents"],
     ["/acme/core/workbench/agents", "/acme/core/agents"],
     ["/acme/core/workbench/agents/new", "/acme/core/agents"],
     ["/acme/core/workbench/agents/agt_1", "/acme/core/agents"],
@@ -276,6 +279,8 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
 
   it.each([
     "/acme/core/knowledge/memory/extra",
+    "/acme/core/iamx",
+    "/acme/iam",
     "/acme/auditx",
     "/acme/core/workbench/agents/agt_1/runs",
     "/account/profile/avatar",

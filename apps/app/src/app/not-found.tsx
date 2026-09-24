@@ -1,18 +1,15 @@
-import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { NotFoundState } from "@/ui/page-state";
 
-export default async function NotFound() {
-  const t = await getTranslations("notFound");
+// An address that matches no page, outside any organization. The shared
+// not-found state replaces the page and leads back to Oxagen's root, which
+// opens the person's first workspace.
+export default function NotFound() {
   return (
     <main
       id="main"
-      className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-10"
+      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      <p className="text-muted-foreground">{t("body")}</p>
-      <Link href="/" className="underline">
-        {t("home")}
-      </Link>
+      <NotFoundState scope="app" />
     </main>
   );
 }

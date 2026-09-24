@@ -2,6 +2,7 @@
 // resolves the viewer for both slugs through requireViewer and renders the page
 // only once that resolves. The shell's reads are not imported here, so a
 // failing shell context read cannot let a non-member through (F3).
+import { type ReactElement, Suspense } from "react";
 import { renderToReadableStream } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -23,7 +24,12 @@ const { NotFound, requireViewer, CreateHost } = vi.hoisted(() => ({
 }));
 vi.mock("@/server/viewer", () => ({ requireViewer }));
 vi.mock("@/features/create", () => ({ CreateHost }));
+// The skeleton reads the catalog; here it only has to be the fallback.
+vi.mock("@/ui/page-skeleton", () => ({
+  PageLoading: () => <div data-testid="page-skeleton" />,
+}));
 
+import { PageLoading } from "@/ui/page-skeleton";
 import WorkspaceLayout from "./layout";
 
 async function render(org: string, ws: string) {
@@ -63,6 +69,15 @@ describe("WorkspaceLayout", () => {
       ws: "core-platform",
       wsName: "Core platform",
     });
+  });
+
+  it("draws the page skeleton, not nothing, while the viewer resolves", () => {
+    const gate = WorkspaceLayout({
+      children: null,
+      params: Promise.resolve({ org: "acme", ws: "core-platform" }),
+    }) as ReactElement<{ fallback: ReactElement }>;
+    expect(gate.type).toBe(Suspense);
+    expect(gate.props.fallback.type).toBe(PageLoading);
   });
 
   it("is not found for a non-member workspace slug, and the page never renders", async () => {

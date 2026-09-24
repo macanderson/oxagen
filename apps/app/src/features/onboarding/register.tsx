@@ -179,7 +179,7 @@ export async function RegisterGate({
     <main
       id="main"
       data-testid="register-gate"
-      className="flex w-full flex-col bg-app-panel-bg px-4 pb-14"
+      className="flex w-full flex-col bg-app-canvas px-4 pb-14"
     >
       <div className={column}>
         <TopBar

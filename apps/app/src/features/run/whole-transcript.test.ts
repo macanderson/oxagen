@@ -64,14 +64,51 @@ describe("readWholeTranscript", () => {
   });
 
   it("stops at the page bound and says the list is a prefix (negative)", async () => {
-    const { source, transcript } = sourceOf(() =>
-      readOk(page(0, TRANSCRIPT_ENTRY_DEFAULT, "more")),
-    );
+    // Every page is new and names a new cursor, so only the bound stops it.
+    let n = 0;
+    const { source, transcript } = sourceOf(() => {
+      n += 1;
+      return readOk(page(n * TRANSCRIPT_ENTRY_DEFAULT, TRANSCRIPT_ENTRY_DEFAULT, `more-${String(n)}`));
+    });
     const read = await readWholeTranscript(source, ctx, "tse_1", "steps");
     // The reader's page bound: the contract's 10,000-frame cap at the default
     // page size.
     expect(transcript).toHaveBeenCalledTimes(50);
+    expect(read.ok && read.value.entries).toHaveLength(50 * TRANSCRIPT_ENTRY_DEFAULT);
     expect(read.ok && isWhole(read.value)).toBe(false);
+  });
+
+  it("stops when the server answers a cursor it answered before", async () => {
+    // A full page that names the same cursor every time would read the same
+    // page fifty times and list its entries fifty times over.
+    const { source, transcript } = sourceOf(() =>
+      readOk(page(0, TRANSCRIPT_ENTRY_DEFAULT, "same")),
+    );
+    const read = await readWholeTranscript(source, ctx, "tse_1", "steps");
+    expect(transcript).toHaveBeenCalledTimes(2);
+    expect(read.ok && read.value.entries).toHaveLength(TRANSCRIPT_ENTRY_DEFAULT);
+    expect(read.ok && isWhole(read.value)).toBe(false);
+  });
+
+  it("lists an entry the server sent again once, as its grown copy, where it stood", async () => {
+    const full = TRANSCRIPT_ENTRY_DEFAULT;
+    const grown = transcriptEntry({ seq: "5", endSeq: String(full + 1), label: "Bash ok" });
+    const { source } = sourceOf((after) =>
+      after === undefined
+        ? readOk(page(0, full, "p2"))
+        : readOk(
+            runTranscript({
+              entries: [grown, transcriptEntry({ seq: String(full), endSeq: String(full) })],
+              cursor: null,
+            }),
+          ),
+    );
+    const read = await readWholeTranscript(source, ctx, "tse_1", "everything");
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.value.entries).toHaveLength(full + 1);
+    expect(read.value.entries[5]).toEqual(grown);
+    expect(read.value.entries.filter((entry) => entry.seq === "5")).toHaveLength(1);
+    expect(read.value.entries.at(-1)?.seq).toBe(String(full));
   });
 
   it("keeps what it read when a later page fails, and says it stops short", async () => {

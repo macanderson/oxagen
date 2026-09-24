@@ -49,11 +49,17 @@
   "notFound": {
     "title": "Page not found",
     "body": "This address does not match a page you can open.",
-    "home": "Go to Oxagen"
+    "home": "Go to Oxagen",
+    "workspace": "This address does not match a page in this workspace.",
+    "organization": "This address does not match a page in this organization.",
+    "fleet": "Back to Fleet",
+    "organizationHome": "Open Organization"
   },
   "globalError": {
     "title": "Something went wrong",
     "body": "Oxagen hit an unexpected error. Reload the page to try again.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "trace": "trace {trace} · region not recorded",
+    "traceUnrecorded": "trace and region not recorded"
   }
 }
