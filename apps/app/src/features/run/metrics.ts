@@ -8,28 +8,26 @@
 // What it reads:
 //   - the run row: its cost and basis, when it started and sealed;
 //   - the cost rollup (`get_run_cost`): the token classes, the cache hit rate,
-//     the productive ratio, the per-model rows;
+//     the productive ratio, the per-model rows, and each model's recorded
+//     cost by token class and cache saving;
 //   - the whole-run transcript at `everything`: prompts, steps, tool calls,
-//     their families and batches, the per-turn ledger, the wall clock split;
-//   - the organization's price book, to price the token classes and the
-//     cache's saving, both labelled as priced from the book.
+//     their families and batches, the per-turn ledger, the wall clock split.
+//
+// It prices nothing. The rollup priced every frame from the price book at the
+// frame's instant (ADR-060) and recorded the split; this sums what it recorded,
+// so a rate change after the run cannot move a figure on the page (#4069).
 //
 // It is pure: the page reads, this derives, and the sections render.
-import {
-  type Cost,
-  type Money,
-  priceTokens,
-  subMoney,
-  sumMoney,
-} from "@/data/contracts/money";
+import { type Cost, type Money, sumMoney } from "@/data/contracts/money";
 import type {
+  CostByClass,
   RunCost,
   RunCostRollup,
   RunTranscript,
   TranscriptEntry,
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
-import type { PriceBook, PriceTokenClass } from "@/data/contracts/spend";
+import type { PriceTokenClass } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
 import { groupOf, type ToolGroup } from "./tool-detail";
 import {
@@ -61,17 +59,17 @@ const INPUT_CLASSES: ReadonlySet<TokenClass> = new Set([
   "cache_write_1h",
 ]);
 
-/** The rollup's counts, by the class names the price book uses. */
-function classCounts(
-  tokens: RunCostRollup["tokens"],
-): Record<TokenClass, number> {
+/** A rollup figure per class (a count or a cost), by the class names the price book uses. */
+function byTokenClass<T>(
+  figures: Record<keyof CostByClass, T>,
+): Record<TokenClass, T> {
   return {
-    input_uncached: tokens.inputUncached,
-    cache_read: tokens.cacheRead,
-    cache_write_5m: tokens.cacheWrite5m,
-    cache_write_1h: tokens.cacheWrite1h,
-    output: tokens.output,
-    reasoning: tokens.reasoning,
+    input_uncached: figures.inputUncached,
+    cache_read: figures.cacheRead,
+    cache_write_5m: figures.cacheWrite5m,
+    cache_write_1h: figures.cacheWrite1h,
+    output: figures.output,
+    reasoning: figures.reasoning,
   };
 }
 
@@ -85,12 +83,23 @@ export type TokenFigures = {
   byClass: Record<TokenClass, number>;
 };
 
-/** The six classes priced from the book, and what the cache saved against uncached input. */
+/**
+ * The six classes' cost and what the cache saved against uncached input, as
+ * the rollup recorded them per model, summed over the models.
+ */
 export type PricedClasses = {
-  /** Null for a class no book row prices for every model the run used. */
+  /** Null for a class a model spent tokens in without a recorded split. */
   byClass: Record<TokenClass, Money | null>;
-  /** Cache reads priced at the uncached input rate, less what they cost. */
+  /**
+   * Cache reads priced at the uncached input rate, less what they cost, as
+   * recorded. Null when a model that read the cache has no recorded saving.
+   */
   cacheSaved: Money | null;
+  /**
+   * The rollup could not price some call, so each figure here covers the
+   * calls it did price and falls short of what the run spent.
+   */
+  hasUnpriced: boolean;
 };
 
 type Prompts = {
@@ -233,88 +242,58 @@ function spanOf(step: TranscriptStep): number {
   return Math.max(0, timeOf(step.last) - timeOf(step.first));
 }
 
-function priceOf(
-  book: PriceBook | null,
-  model: string,
-  tokenClass: TokenClass,
-): Money | null {
-  if (book === null) return null;
-  const row = book.entries.find(
-    (entry) =>
-      entry.tokenClass === tokenClass &&
-      entry.unit === "token" &&
-      entry.region === null &&
-      (entry.model === model || entry.modelAliases.includes(model)),
-  );
-  return row?.ratePerMillion ?? null;
-}
-
 /**
- * The classes priced per model from the book and summed. A class is priced
- * only when every model that spent tokens in it has a row, so a partial sum
- * is never shown as the class's cost.
+ * Each model's recorded cost by class and cache saving, summed. A recorded
+ * split always counts, even for a class the model has no tokens in: the
+ * rollup files an estimated frame's unsplit cost under `output`. A class is
+ * summed only when every model that spent tokens in it has a recorded split,
+ * so a partial sum is never shown as the class's cost. A model that read
+ * nothing from the cache saved nothing, so it holds no saving back.
  */
-function priceClasses(
-  rollup: RunCostRollup,
-  book: PriceBook | null,
-): PricedClasses | null {
-  if (book === null || rollup.byModel.length === 0) return null;
-  const classPrice = (tokenClass: TokenClass): Money | null => {
+function recordedClasses(rollup: RunCostRollup): PricedClasses | null {
+  if (rollup.byModel.length === 0) return null;
+  const classCost = (tokenClass: TokenClass): Money | null => {
     const parts: Money[] = [];
-    let unpriced = false;
     for (const row of rollup.byModel) {
-      const count = classCounts(row.tokens)[tokenClass];
-      if (count === 0) continue;
-      const rate = priceOf(book, row.model, tokenClass);
-      if (rate === null) {
-        unpriced = true;
-        break;
-      }
-      parts.push(priceTokens(rate, count));
+      if (row.costByClass !== null)
+        parts.push(byTokenClass(row.costByClass)[tokenClass]);
+      else if (byTokenClass(row.tokens)[tokenClass] > 0) return null;
     }
-    return unpriced
-      ? null
-      : (sumMoney(parts) ??
-          // A class nobody spent in costs nothing, in the rollup's currency.
-          (rollup.cost === null
-            ? null
-            : { micros: "0", currency: rollup.cost.currency }));
+    return (
+      sumMoney(parts) ??
+      // A class nobody spent in costs nothing, in the rollup's currency.
+      (rollup.cost === null
+        ? null
+        : { micros: "0", currency: rollup.cost.currency })
+    );
   };
   const byClass: Record<TokenClass, Money | null> = {
-    input_uncached: classPrice("input_uncached"),
-    cache_read: classPrice("cache_read"),
-    cache_write_5m: classPrice("cache_write_5m"),
-    cache_write_1h: classPrice("cache_write_1h"),
-    output: classPrice("output"),
-    reasoning: classPrice("reasoning"),
+    input_uncached: classCost("input_uncached"),
+    cache_read: classCost("cache_read"),
+    cache_write_5m: classCost("cache_write_5m"),
+    cache_write_1h: classCost("cache_write_1h"),
+    output: classCost("output"),
+    reasoning: classCost("reasoning"),
   };
   const saved: Money[] = [];
   let savedKnown = true;
   for (const row of rollup.byModel) {
     if (row.tokens.cacheRead === 0) continue;
-    const fresh = priceOf(book, row.model, "input_uncached");
-    const cached = priceOf(book, row.model, "cache_read");
-    const diff =
-      fresh === null || cached === null
-        ? null
-        : subMoney(
-            priceTokens(fresh, row.tokens.cacheRead),
-            priceTokens(cached, row.tokens.cacheRead),
-          );
-    if (diff === null) {
+    if (row.cacheSaving === null) {
       savedKnown = false;
       break;
     }
-    saved.push(diff);
+    saved.push(row.cacheSaving);
   }
   return {
     byClass,
     cacheSaved: savedKnown ? sumMoney(saved) : null,
+    hasUnpriced: rollup.byModel.some((row) => row.hasUnpriced),
   };
 }
 
 function tokenFigures(rollup: RunCostRollup): TokenFigures {
-  const byClass = classCounts(rollup.tokens);
+  const byClass = byTokenClass(rollup.tokens);
   let input = 0;
   let output = 0;
   for (const tokenClass of TOKEN_CLASSES) {
@@ -562,14 +541,11 @@ export function runMetrics({
   run,
   cost,
   transcript,
-  book,
 }: {
   run: RunRow;
   cost: Read<RunCost>;
   /** The whole-run transcript at `everything`. */
   transcript: Read<RunTranscript>;
-  /** The organization's price book; null when it was not read or was refused. */
-  book: PriceBook | null;
 }): RunMetrics {
   const rollup = cost.ok ? cost.value.rollup : null;
   const entries = transcript.ok ? transcript.value.entries : null;
@@ -597,7 +573,7 @@ export function runMetrics({
     whole: transcript.ok && isWhole(transcript.value),
     tokens,
     reportedTokens,
-    priced: rollup === null ? null : priceClasses(rollup, book),
+    priced: rollup === null ? null : recordedClasses(rollup),
     cost: runCost,
     costIsEstimate:
       run.sealedAt === null ||

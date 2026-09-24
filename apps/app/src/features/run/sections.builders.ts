@@ -438,13 +438,12 @@ export function tabProps({
     detail: runDetail({ run }),
     place: { org: ctx.orgSlug, ws: ctx.wsSlug, runId: run.id },
     view: { kinds: [], frames: null, body },
-    metrics: runMetrics({ run, cost, transcript: everything, book: null }),
+    metrics: runMetrics({ run, cost, transcript: everything }),
     everything,
     cost,
     outputs,
     work: Promise.resolve(work),
     agent: null,
-    book: null,
     now: NOW,
   };
 }

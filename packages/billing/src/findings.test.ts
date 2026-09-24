@@ -76,6 +76,7 @@ function run(
             output: 0n,
             reasoning: 0n,
           },
+          cacheSavingMicros: 0n,
           basis: "gateway_observed",
           hasUnpriced: false,
         },

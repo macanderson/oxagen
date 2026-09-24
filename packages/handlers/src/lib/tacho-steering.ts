@@ -60,6 +60,7 @@ import {
 import { and, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   assembleSteering,
+  PREFIX_BUDGET_TOKENS,
   type SteeringCandidate,
   type SteeringForce,
   type SteeringManifest,
@@ -75,11 +76,17 @@ export const CONTEXT_SYSTEM_MAX_CHARS = 16_384;
 
 /**
  * The assembler's budget for `context.system`, in Context Graph Protocol
- * budget tokens (`ceil(utf8_bytes / 4)`). A string never has more characters
- * than bytes, so a text under this many tokens is under the host's character
- * limit.
+ * budget tokens (`ceil(utf8_bytes / 4)`). The host would take 16,384
+ * characters, but the harness it hands the text to reads less: Claude Code
+ * replaces anything past 10,000 characters with a file path and a preview,
+ * so a record the manifest called included never reached the agent. The
+ * assembler's `PREFIX_BUDGET_TOKENS` fits the smallest harness limit, and a
+ * string never has more characters than bytes, so it also fits the host's.
  */
-export const CONTEXT_SYSTEM_BUDGET_TOKENS = CONTEXT_SYSTEM_MAX_CHARS / 4;
+export const CONTEXT_SYSTEM_BUDGET_TOKENS = Math.min(
+  PREFIX_BUDGET_TOKENS,
+  CONTEXT_SYSTEM_MAX_CHARS / 4,
+);
 
 /**
  * How many workspaces the compiled-text cache holds before it drops the

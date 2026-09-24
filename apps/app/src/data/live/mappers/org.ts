@@ -92,6 +92,7 @@ export function toWorkspaceList(
   out: ContractOutput<typeof workspaceList>,
 ): z.input<typeof WorkspaceList> {
   return {
+    orgId: out.organization.publicId,
     workspaces: out.workspaces.map((workspace) => ({
       id: workspace.publicId,
       slug: workspace.slug,

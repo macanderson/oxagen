@@ -97,6 +97,7 @@ export function pricedRun(
             output: 0n,
             reasoning: 0n,
           },
+          cacheSavingMicros: 0n,
           basis,
           hasUnpriced: false,
         },

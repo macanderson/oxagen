@@ -41,7 +41,6 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
       run: runRow({ cost: usd("4130000") }),
       cost: readOk(releaseRunCost()),
       transcript: TRANSCRIPT,
-      book: null,
     }),
     ...overrides,
   };

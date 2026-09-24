@@ -139,10 +139,11 @@ export function createRunGetHandler(
     const run = await resolveRun(deps, ctx, input.runId);
     // The title and the effort settings are ClickHouse's to give. A failed
     // read leaves the heading on the run id and the settings on what the
-    // session row holds, rather than failing the page.
-    const [title, config] =
+    // session row holds, rather than failing the page. They are read while
+    // the frames are, since neither needs the other.
+    const header =
       run.source === "tacho"
-        ? await Promise.all([
+        ? Promise.all([
             deps.sessionTitle(run.sessionUuid).catch((err: unknown) => {
               logger.warn(
                 { err, runId: input.runId },
@@ -158,17 +159,20 @@ export function createRunGetHandler(
               return null;
             }),
           ])
-        : ([null, null] as const);
+        : Promise.resolve([null, null] as const);
     // One frame past the page tells a full page from the end of the recording.
     // A sealed run whose page had nothing behind it answers no cursor, because
     // nothing will ever lie past it; a live run keeps its resume point, since
     // the next frame may still arrive.
-    const batch = await poll(
-      run,
-      cursor ?? startCursorSeq(run),
-      input.frameLimit + 1,
-      input.waitMs,
-    );
+    const [[title, config], batch] = await Promise.all([
+      header,
+      poll(
+        run,
+        cursor ?? startCursorSeq(run),
+        input.frameLimit + 1,
+        input.waitMs,
+      ),
+    ]);
     const frames = batch.slice(0, input.frameLimit);
     const last = frames.at(-1);
     const ended =

@@ -481,7 +481,7 @@ export async function repoGovernance(
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const line =
-    "oxagen repo governance --mode solo|team|regulated [--workspace <ws_…>] [--apply-now] [--json]";
+    "oxagen repo governance --mode solo|team|regulated [--workspace <wrk_…>] [--apply-now] [--json]";
   const mode = opts.mode as GovernanceMode | undefined;
   if (mode === undefined || !GOVERNANCE_MODES.includes(mode)) {
     return usage(

@@ -4,8 +4,8 @@
 // side column, "The work", holds the Changes panel and the Outputs spine.
 //
 // The page makes the reads every part shares (the run, the whole-run
-// transcript, the cost rollup, the outputs, the work, the agent, the price
-// book and the approvals parked on the run), derives the figures once
+// transcript, the cost rollup, the outputs, the work, the agent and the
+// approvals parked on the run), derives the figures once
 // (`runMetrics`), and hands the open tab the whole bundle. A tab's own heavy
 // read (the chain, a frame body) happens only when that tab is open.
 import { notFound } from "next/navigation";
@@ -218,8 +218,8 @@ export async function Run({
   // checks, diffs) streams inside the boundaries that draw it and cannot hold
   // the rest of the page.
   const work = readRunWork(ctx, source, run.id);
-  const [outputs, everything, cost, pending, agent, book, roster] =
-    await Promise.all([
+  const [outputs, everything, cost, pending, agent, roster] = await Promise.all(
+    [
       // A thrown outputs read folds to the Run page's own read error, so the
       // spine says the read failed rather than the page throwing.
       source.runs
@@ -234,12 +234,6 @@ export async function Run({
       source.runs.cost(ctx, run.id),
       source.approvals.pending(ctx, { runId: run.id }),
       agentSlug === null ? null : source.agents.get(ctx, agentSlug),
-      // The book prices the token classes and the cache's saving; a viewer who
-      // may not read it sees those figures as not recorded.
-      source.spend
-        .priceBook(ctx)
-        .then((answer) => (answer.ok ? answer.value : null))
-        .catch(() => null),
       // The agent card's 30-day runs and spend are the Agents table's row. An
       // agent past the first page, or a refused read, draws the card without
       // them rather than a figure nobody read.
@@ -255,8 +249,9 @@ export async function Run({
                 : null,
             )
             .catch(() => null),
-    ]);
-  const metrics = runMetrics({ run, cost, transcript: everything, book });
+    ],
+  );
+  const metrics = runMetrics({ run, cost, transcript: everything });
   const props: RunTabProps = {
     ctx,
     source,
@@ -270,7 +265,6 @@ export async function Run({
     outputs,
     work,
     agent,
-    book,
     now,
   };
   const parked = pending.ok && pending.value.items.length > 0;

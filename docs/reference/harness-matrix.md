@@ -1,17 +1,17 @@
 # Harness and repository coverage
 
-Checked against `main` at `7245b8825` on 2026-09-22. This is a source audit, not a live harness certification. The recovered draft included a scratch enrollment transcript from a fake control plane; it is not evidence that a real harness ran its hooks. No new enrollment test was run for this audit.
+Checked against `main` at `7245b8825` on 2026-09-22. The Contained column was rechecked at `d5c7084f9` on 2026-09-24. This is a source audit, not a live harness certification. The recovered draft included a scratch enrollment transcript from a fake control plane; it is not evidence that a real harness ran its hooks. No new enrollment test was run for this audit.
 
 The [model gateway audit](../audits/2026-09-21-model-gateway-arming.md) explains the routing and bypass mechanisms. Its original Stella row predates the Anthropic base-URL writer. This page uses the current writer and separates code that installs hooks from evidence that a particular installation executes them.
 
 ## Wrapped harnesses
 
-Each source abbreviation below links to the implementation. “Metered” and “budget” cover calls that pass through the model proxy. An operator can still change a local setting or call a provider directly. No row claims OS containment.
+Each source abbreviation below links to the implementation. “Metered” and “budget” cover calls that pass through the model proxy. An operator can still change a local setting or call a provider directly. “Contained” names the harnesses the contained launcher can start ([ADR-152](../adr/ADR-152-the-contained-launcher-measures-a-docker-container-and-the-server-decides-the-tier.md)). A run reaches that tier only when started with `tacho run --contained`. A hooked run on a laptop is not contained. No production contained run is recorded yet.
 
 | Harness | Recorded | Metered | Can deny | Can ask | Enforced budget | Model list | Contained |
 |---|---|---|---|---|---|---|---|
-| Claude Code | 33 configured events: 5 command hooks and 28 HTTP events [C] | Routed Anthropic calls [M] | PreToolUse denial [H] | Native permission prompt via `ask` [H] | Routed session ceiling, and the agent's UTC-day ceiling on a host that advertises `daily_budget`, when the mandate enables them [B], [D] | Routed calls refused with `model_not_permitted` when the workspace arms its lists [L] | No contained tier [T] |
-| Codex | 12 command events [X]; hooks must be trusted [O] | Routed OpenAI calls [M] | PreToolUse denial [H], [O] | Unsupported: the current client forwards `ask`, which Codex ignores after reporting a hook error [H], [O] | Routed session ceiling and UTC-day ceiling [B], [D] | Routed calls, as for Claude Code [L] | No contained tier [T] |
+| Claude Code | 33 configured events: 5 command hooks and 28 HTTP events [C] | Routed Anthropic calls [M] | PreToolUse denial [H] | Native permission prompt via `ask` [H] | Routed session ceiling, and the agent's UTC-day ceiling on a host that advertises `daily_budget`, when the mandate enables them [B], [D] | Routed calls refused with `model_not_permitted` when the workspace arms its lists [L] | Linux with Docker only, through `tacho run --contained` [T], [R] |
+| Codex | 12 command events [X]; hooks must be trusted [O] | Routed OpenAI calls [M] | PreToolUse denial [H], [O] | Unsupported: the current client forwards `ask`, which Codex ignores after reporting a hook error [H], [O] | Routed session ceiling and UTC-day ceiling [B], [D] | Routed calls, as for Claude Code [L] | Linux with Docker only, as for Claude Code [T], [R] |
 | Cursor | 10 configured events [U] | No configured model route [M] | Tool, prompt, and subagent refusals [U] | Converted to deny with an explanation [U] | None. Cursor's model calls do not reach the proxy, so neither the session nor the day ceiling holds [M] | None. Out of scope: Cursor documents no base URL the proxy could take, so no list is checked [M] | No contained tier [T] |
 | Stella | 8 command events; no SessionEnd [S] | Anthropic provider route only [M] | Native deny [A] | Native `require_approval` [A] | Routed Anthropic session ceiling only with exactly one live Stella session [B], [M]. The day ceiling covers every routed Anthropic call, attributed or not [D] | Anthropic route only [L], [M] | No contained tier [T] |
 | Gemini CLI, not verified by enrollment | No Oxagen adapter [W]; vendor has hooks [G] | No Oxagen route [M]; API-key base-URL extension exists [GC] | Not implemented; vendor BeforeTool can refuse [G] | No native ask in the documented decision schema [G] | Not implemented; BeforeModel can refuse a call [G] | Not implemented [M] | No Oxagen contained tier [T] |
@@ -27,7 +27,8 @@ Each source abbreviation below links to the implementation. “Metered” and �
 [B]: ../../packages/tacho/src/collector/model-proxy.ts
 [D]: ../../packages/tacho/src/collector/day-spend.ts
 [L]: ../../packages/tacho/src/collector/model-allowlist.ts
-[T]: ../../packages/tacho/src/envelope.ts
+[T]: ../../packages/tacho/src/contained/launcher.ts
+[R]: ../../packages/tacho/src/contained/profile.ts
 [W]: ../../packages/tacho/src/wire.ts
 [O]: https://learn.chatgpt.com/docs/hooks
 [G]: https://geminicli.com/docs/hooks/reference/

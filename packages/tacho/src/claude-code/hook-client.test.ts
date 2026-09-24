@@ -1115,6 +1115,54 @@ describe("a mandate that denies git push, end to end", () => {
     expect(result.path).toBe("local");
     expect(JSON.parse(result.stdout)).toEqual({});
   });
+
+  it("denies git push when host.json is edited to claim observe mode", async () => {
+    // The defect this covers (#3944): an unverified bundle claiming observe
+    // mode answered allow for every tool, so editing `mode` in host.json was
+    // enough to switch enforcement off while the daemon was down. The signed
+    // copy allows the push by rule; the edited copy no longer verifies, so
+    // the push is denied and only read-only tools get through.
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const signed = signer.sign(
+      unsignedBundle({
+        mode: "enforce",
+        permissions: { allow: ["Bash(*)"], deny: [], ask: [] },
+      }),
+    );
+    const now = () => Date.parse("2026-09-10T12:00:00.000Z");
+    const hook = (stdin: string) =>
+      runTachoHook({ paths, env: {}, stdin, post: daemonDown, now });
+
+    writeHostFile(paths.hostFile, testHostFile(signer, signed));
+    expect(JSON.parse((await hook(PUSH)).stdout)).toMatchObject({
+      hookSpecificOutput: { permissionDecision: "allow" },
+    });
+
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, { ...signed, mode: "observe" }),
+    );
+    const push = await hook(PUSH);
+    expect(push.path).toBe("local");
+    expect(JSON.parse(push.stdout)).toMatchObject({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: expect.stringContaining("did not verify"),
+      },
+    });
+    const read = await hook(
+      JSON.stringify({
+        session_id: "s",
+        hook_event_name: "PreToolUse",
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/a" },
+        cwd: "/repo",
+      }),
+    );
+    expect(JSON.parse(read.stdout)).toEqual({});
+  });
 });
 
 describe("Codex approval translation", () => {

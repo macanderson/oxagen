@@ -5,8 +5,9 @@
 //
 // Money is summed and divided only through `@/data/contracts/money` (INV-09).
 // A figure a part is missing from is null, never a partial sum shown as the
-// whole: a sum of the classes the book priced is not the cost of the classes
-// it did not.
+// whole: a sum of the classes with a recorded cost is not the cost of the
+// classes without one. Nothing here multiplies a rate by a token count; the
+// rollup recorded every class's cost.
 import {
   compareMicros,
   type Money,
@@ -32,7 +33,7 @@ const INPUT: readonly TokenClass[] = [
 const OUTPUT: readonly TokenClass[] = ["output", "reasoning"];
 const CACHE_WRITE: readonly TokenClass[] = ["cache_write_5m", "cache_write_1h"];
 
-/** The classes' priced costs summed; null when any of them the book did not price. */
+/** The classes' recorded costs summed; null when any of them has none. */
 function priceOf(
   priced: PricedClasses | null,
   classes: readonly TokenClass[],
@@ -48,13 +49,13 @@ function priceOf(
 }
 
 export type ClassPrices = {
-  /** Every class priced: the total row of Spend by token class. */
+  /** Every class's recorded cost: the total row of Spend by token class. */
   total: Money | null;
   /** The four input classes: what the six input areas cost together. */
   input: Money | null;
   /** Output and reasoning: the Model output area. */
   output: Money | null;
-  /** The book's rate the input classes work out to, per million input tokens. */
+  /** The rate the input classes' recorded cost works out to, per million input tokens. */
   inputRate: Money | null;
   /** What the cache writes cost, of the total. */
   cacheWriteShare: number | null;
@@ -80,7 +81,7 @@ export function classPrices(
   };
 }
 
-/** A class's cost as a share of the priced total; null when either is not priced. */
+/** A class's cost as a share of the total; null when either has no recorded cost. */
 export function classShare(
   priced: PricedClasses | null,
   tokenClass: TokenClass,

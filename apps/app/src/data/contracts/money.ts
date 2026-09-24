@@ -70,29 +70,12 @@ export function mulMicros(value: Money, quantity: number): Money {
 const TOKENS_PER_MILLION = BigInt(1_000_000);
 
 /**
- * What `tokens` cost at a price book row's `ratePerMillion`: the rate times
- * the count, divided by a million on the micros, exact at any magnitude and
- * truncated toward zero. The Run page's Spend by token class and its cache
- * saving are priced this way from the book the run was priced against.
- */
-export function priceTokens(ratePerMillion: Money, tokens: number): Money {
-  if (!Number.isSafeInteger(tokens) || tokens < 0)
-    throw new InvalidQuantityError(tokens);
-  return {
-    micros: (
-      (toBigInt(ratePerMillion.micros) * BigInt(tokens)) /
-      TOKENS_PER_MILLION
-    ).toString(),
-    currency: ratePerMillion.currency,
-  };
-}
-
-/**
- * The rate per million tokens that `cost` for `tokens` works out to: the
- * inverse of `priceTokens`, exact at any magnitude and truncated toward zero.
- * The Run page's Prompt composition prints the effective input price this
- * way, the input classes' cost over the input tokens. Null for no tokens: a
- * price per token of nothing is not a rate anyone paid.
+ * The rate per million tokens that a recorded `cost` for `tokens` works out
+ * to, exact at any magnitude and truncated toward zero. It prices nothing: the
+ * Run page's Prompt composition prints the effective input price this way, the
+ * input classes' recorded cost over the input tokens. The app never multiplies
+ * a rate by a token count; the rollup records every cost (ADR-060, #4069).
+ * Null for no tokens: a price per token of nothing is not a rate anyone paid.
  */
 export function perMillionTokens(cost: Money, tokens: number): Money | null {
   if (!Number.isSafeInteger(tokens) || tokens < 0)
