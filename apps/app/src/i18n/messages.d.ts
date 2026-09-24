@@ -3981,6 +3981,8 @@ type Messages = {
         sealed: string;
         halted: string;
       };
+      player: string;
+      parked: string;
     };
     transcript: {
       title: string;
@@ -4294,6 +4296,7 @@ type Messages = {
           denied: string;
           other: string;
         };
+        needsSeal: string;
       };
     };
     gaps: string;
@@ -4489,10 +4492,30 @@ type Messages = {
       machineNotRecorded: string;
       machineRecorded: string;
       machineEnrollment: string;
+      eyebrow: string;
+      task: string;
+      effort: string;
+      notCaptured: string;
+      effortWhy: {
+        not_proxied: string;
+        not_sent: string;
+      };
+      pathNotEnrolled: string;
+      pathRecorded: string;
+      pausedTitle: string;
+      fit: {
+        fit: string;
+        wrongTier: string;
+      };
     };
     summary: {
       title: string;
       check: string;
+      generated: string;
+      onBehalfOf: string;
+      operator: string;
+      generatedBy: string;
+      notGenerated: string;
     };
     stats: {
       label: string;
@@ -4507,6 +4530,18 @@ type Messages = {
       wastedNote: string;
       running: string;
       noRollup: string;
+      oneShot: string;
+      corrective: string;
+      provisional: string;
+      basisNotRecorded: string;
+      nothingWasted: string;
+      mostly: {
+        model: string;
+        tool: string;
+        waiting: string;
+        harness: string;
+      };
+      saved: string;
     };
     issues: {
       title: string;
@@ -4549,6 +4584,26 @@ type Messages = {
       toolCalls: string;
       noSpend: string;
       callCount: string;
+      base: string;
+      baseNotRecorded: string;
+      checks: string;
+      noChecks: string;
+      ci: {
+        passing: string;
+        failing: string;
+        pending: string;
+        neutral: string;
+        unknown: string;
+      };
+      pr: {
+        open: string;
+        merged: string;
+        closed: string;
+      };
+      noPullRequestLive: string;
+      check: string;
+      inFiles: string;
+      loading: string;
     };
     workCi: {
       title: string;
@@ -4596,6 +4651,33 @@ type Messages = {
       };
       incomplete: string;
       loading: string;
+    };
+    states: {
+      empty: {
+        title: string;
+        body: string;
+        back: string;
+      };
+      error: {
+        title: string;
+        body: string;
+        trace: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        back: string;
+        signedIn: string;
+        signedInValue: string;
+        needed: string;
+        neededValue: string;
+        decidedBy: string;
+        decidedByValue: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
     };
   };
   runOutcomes: {
@@ -6626,18 +6708,22 @@ type Messages = {
       inspect: {
         label: string;
         help: string;
+        badge: string;
       };
       view: {
         label: string;
         help: string;
+        badge: string;
       };
       fork: {
         label: string;
         help: string;
+        badge: string;
       };
       retry: {
         label: string;
         help: string;
+        badge: string;
       };
     };
     enforcementTier: {

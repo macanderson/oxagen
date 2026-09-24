@@ -30,6 +30,7 @@ import { Panel } from "./parts";
 import { isNonEmpty } from "./transcript-model";
 import { TranscriptView } from "./transcript-view";
 import { LiveEmptyFollow } from "./live-empty-follow";
+import type { RunTabProps } from "./tab-props";
 
 type Place = { org: string; ws: string; runId: string };
 
@@ -170,5 +171,28 @@ export function TranscriptSection({
         runId={runId}
       />
     </div>
+  );
+}
+
+/**
+ * The Transcript tab over the page's bundle: the whole-run transcript the
+ * page already read, or, with chips pressed, the run narrowed to them.
+ */
+export async function TranscriptTab(props: RunTabProps) {
+  const { ctx, source, run, view, place, everything } = props;
+  const read =
+    view.kinds.length === 0
+      ? everything
+      : await source.runs.transcript(ctx, run.id, "everything", {
+          kinds: [...view.kinds],
+        });
+  return (
+    <TranscriptSection
+      read={read}
+      zoom={view.zoom}
+      kinds={view.kinds}
+      run={run}
+      {...place}
+    />
   );
 }

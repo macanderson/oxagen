@@ -29,7 +29,7 @@ import type {
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { eyebrow, mono } from "@/ui/control-styles";
+import { eyebrowQuiet, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 
@@ -428,20 +428,27 @@ export function OutputsSpine({
   ].filter((part) => part !== null);
 
   return (
-    <section aria-label={t("label")} data-testid="run-outputs">
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
-        <p className={`${eyebrow} m-0`}>{t("title")}</p>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span data-testid="run-outputs-tally">{counts.join(", ")}</span>
-          {tally.reads > 0 ? (
-            <SafeLink
-              to={href(place, { reads: !view.reads, open: view.open })}
-              className={linkQuiet}
-            >
-              {view.reads ? t("hideReads") : t("showReads")}
-            </SafeLink>
-          ) : null}
-        </div>
+    <section
+      aria-label={t("label")}
+      data-testid="run-outputs"
+      className="rounded-xl border border-border bg-card px-[18px] pb-[13px] pt-[15px] text-card-foreground"
+    >
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        <h2 className={`${eyebrowQuiet} m-0`}>{t("title")}</h2>
+        <span
+          data-testid="run-outputs-tally"
+          className="ml-auto font-mono text-[11px] text-dim"
+        >
+          {counts.join(" · ")}
+        </span>
+        {tally.reads > 0 ? (
+          <SafeLink
+            to={href(place, { reads: !view.reads, open: view.open })}
+            className={linkQuiet}
+          >
+            {view.reads ? t("hideReads") : t("showReads")}
+          </SafeLink>
+        ) : null}
       </div>
 
       {nodes.length === 0 ? (
@@ -472,7 +479,7 @@ export function OutputsSpine({
         </ol>
       )}
 
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-xs text-muted-foreground">
+      <p className="mt-[11px] flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-[11px] text-dim">
         <span>{t("footer")}</span>
         {complete ? null : <span>{t("cut")}</span>}
       </p>

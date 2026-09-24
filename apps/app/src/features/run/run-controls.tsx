@@ -37,7 +37,12 @@ import type { ActionResult } from "@/server/kernel";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { canCommandRun } from "@/shared/run-command-roles";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import {
+  buttonDanger,
+  buttonSecondary,
+  inputBase,
+  mono,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -172,7 +177,9 @@ function CommandDialog({
       <button
         type="button"
         data-testid={`run-${command}`}
-        className={buttonSecondary}
+        // `.btn.danger`: Cancel ends the run, so it carries the failed hue
+        // as ink; every other control is a plain `.btn`.
+        className={command === "cancel" ? buttonDanger : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
@@ -286,7 +293,7 @@ function DisabledControls({
             type="button"
             disabled
             data-testid={`run-${command}`}
-            className={buttonSecondary}
+            className={command === "cancel" ? buttonDanger : buttonSecondary}
           >
             {t(`${command}.open`)}
           </button>

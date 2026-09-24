@@ -1,55 +1,58 @@
-// The Run page's header (mockup `pRun`, spec pages/run.md): who ran it and
-// under what tier, the rig it ran on, where it ran, when, and the controls the
-// run's status allows. The run id is the page's h1, drawn by page.tsx.
+// The Run page's header (mockup `pRun`'s `.phead`, pages/run.md, Header):
+// the eyebrow and the run id, then who ran it and under what tier, the rig it
+// ran on, where the work is, when it started, and the actions its status
+// allows, always ending on Export.
 //
 // Every chip shows what the record holds. A fact the record does not capture
-// (a harness version the session did not report, the effort setting, the
-// checkout path) is said to be missing in words rather than left blank or
-// guessed, and the model-fit reading the mockup draws is left out because
-// nothing records it.
+// (a harness version the session did not report, the effort setting, a
+// checkout the host did not enroll) is said to be missing in words rather
+// than left blank or guessed.
+import { Folder, FolderTree, GitBranch, GitPullRequest } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Suspense, use } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
+import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
+import { parseGitHubUrl } from "@/shared/github-url";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
 import { Badge } from "@/ui/badge";
-import { mono } from "@/ui/control-styles";
+import { eyebrow, linkChip } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
-import { HarnessIcon } from "@/ui/harness-icon";
-import { OperatorName } from "@/ui/operator";
+import { GitHubLink } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
-import { CopyText } from "./copy-text";
-import { EnrichmentSwitch } from "./enrichment-switch";
-import { RecordActions } from "./record-actions";
+import { CopyPath } from "./copy-text";
+import { runFit, type RunFit } from "./fit";
+import type { RunMetrics } from "./metrics";
+import { ExportAction } from "./record-actions";
+import { ReplayActions } from "./replay-actions";
 import { RunControls } from "./run-controls";
+import type { Place } from "./tab-props";
 
-const chip = `${mono} inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-2 py-0.5 text-[11.5px]`;
-const missing = "text-[11.5px] text-muted-foreground";
-
-/** One labelled row of chips: the rig or the checkout. */
-function Strip({
-  label,
-  testId,
+/** `.b.b-q`: the quiet pill every strip chip is. */
+function Chip({
   children,
+  code = false,
+  testId,
+  title,
 }: {
-  label: string;
-  testId: string;
   children: React.ReactNode;
+  code?: boolean;
+  testId?: string;
+  title?: string;
 }) {
   return (
-    <div
+    <span
       data-testid={testId}
-      className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
+      title={title}
+      className={`inline-flex min-w-0 max-w-full items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-hl px-[7px] py-0.5 leading-normal tracking-[0.02em] text-muted-foreground ${code ? "font-mono text-[10.5px] font-medium" : "text-[11px] font-semibold"}`}
     >
-      <span className="w-16 shrink-0 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim">
-        {label}
-      </span>
       {children}
-    </div>
+    </span>
   );
 }
 
@@ -64,210 +67,305 @@ function harnessOf(agent: Read<AgentDetail> | null) {
 }
 
 /**
- * The harness name, the key its mark is drawn by, and its version. What the
- * wrapped session recorded wins over the registry, which names the harness an
- * agent was registered with but never a version.
+ * The harness name and its version. What the wrapped session recorded wins
+ * over the registry, which names the harness an agent was registered with but
+ * never a version.
  */
-function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
+export function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
   const ta = useTranslations("agents");
   const registered = harnessOf(agent);
   if (run.harness) {
-    return {
-      name: run.harness.name,
-      mark: run.harness.runtime ?? registered,
-      version: run.harness.version,
-    };
+    return { name: run.harness.name, version: run.harness.version };
   }
   if (registered === null) return null;
-  return {
-    name: ta(`harness.${registered}`),
-    mark: registered,
-    version: null,
-  };
+  return { name: ta(`harness.${registered}`), version: null };
 }
 
-function Rig({ run, agent }: { run: RunRow; agent: Read<AgentDetail> | null }) {
+/** `fitBadge`: the reading's word as a state pill; nothing when it read fit or could not read. */
+function FitBadges({ fit }: { fit: RunFit }) {
+  const t = useTranslations("run.header.fit");
+  const model = fit.model;
+  if (model === null) return null;
+  return model.verdict === "fit" ? (
+    <Badge tone="allowed" data-testid="run-fit-model">
+      {t("fit")}
+    </Badge>
+  ) : (
+    <Badge tone="approval" data-testid="run-fit-model">
+      {t("wrongTier")}
+    </Badge>
+  );
+}
+
+/** The rig: the harness and its version, the model, and the effort setting. */
+function Rig({
+  run,
+  agent,
+  fit,
+}: {
+  run: RunRow;
+  agent: Read<AgentDetail> | null;
+  fit: RunFit;
+}) {
   const t = useTranslations("run.header");
   const harness = useHarness(run, agent);
   const model = run.model;
   return (
-    <Strip label={t("rig")} testId="run-rig">
-      {harness === null ? (
-        <span className={missing}>{t("harnessNotRecorded")}</span>
-      ) : (
-        <span className={chip}>
-          <HarnessIcon harness={harness.mark} size={14} />
-          {harness.name}
-          <span className="text-muted-foreground">
-            {harness.version === null
-              ? t("versionNotCaptured")
-              : t("harnessVersion", { version: harness.version })}
+    <div
+      data-testid="run-rig"
+      className="mt-2 flex flex-wrap items-center gap-[9px]"
+    >
+      <Chip>
+        {harness === null ? (
+          <span className="font-normal text-dim">
+            {t("harnessNotRecorded")}
           </span>
-        </span>
-      )}
-      {model === null ? (
-        <span className={missing}>{t("modelNotRecorded")}</span>
-      ) : (
-        <span
-          className={chip}
-          title={[model.provider, model.tier]
-            .filter((part): part is string => part !== null)
-            .join(" ")}
-        >
-          {model.slug}
-        </span>
-      )}
-      <span className={missing}>{t("effortNotCaptured")}</span>
-    </Strip>
+        ) : (
+          <>
+            {harness.name}
+            {harness.version === null ? (
+              <span className="font-normal text-dim">
+                {t("versionNotCaptured")}
+              </span>
+            ) : (
+              <span className="font-mono font-normal text-dim">
+                {harness.version}
+              </span>
+            )}
+          </>
+        )}
+      </Chip>
+      <Chip
+        code
+        title={
+          model === null
+            ? undefined
+            : [model.provider, model.tier]
+                .filter((part): part is string => part !== null)
+                .join(" ")
+        }
+      >
+        {model === null ? t("modelNotRecorded") : model.slug}
+      </Chip>
+      <Chip testId="run-effort" title={t(`effortWhy.${fit.effort.why}`)}>
+        {t("effort")}{" "}
+        <span className="font-normal text-dim">{t("notCaptured")}</span>
+      </Chip>
+      <FitBadges fit={fit} />
+    </div>
   );
-}
-
-function joinFacts(parts: readonly (string | null)[]): string {
-  return parts.filter((part): part is string => part !== null).join(" · ");
 }
 
 /**
- * Where the host facts came from. A session observation and the enrollment
- * record keep separate labels, so an old enrollment is never read as what the
- * session saw.
+ * The checkout strip from what the outputs recorded, while the work read is
+ * still in flight or when it failed: the pull requests, and the host.
  */
-function MachineProvenance({ run }: { run: RunRow }) {
-  const t = useTranslations("run.header");
-  const machine = run.machine;
-  if (machine === null) {
-    return run.source === "ledger" ? (
-      <p className="text-xs text-muted-foreground">{t("noMachineOnLedger")}</p>
-    ) : null;
-  }
-  const recorded = machine.recorded;
-  return (
-    <p
-      data-testid="run-machine"
-      className="flex flex-col text-xs text-muted-foreground"
-    >
-      <span>
-        {recorded === undefined
-          ? t("machineNotRecorded")
-          : t("machineRecorded", {
-              facts: joinFacts([
-                recorded.platform,
-                recorded.osVersion,
-                recorded.arch,
-              ]),
-            })}
-      </span>
-      <span>
-        {t("machineEnrollment", {
-          facts: joinFacts([
-            machine.platform,
-            machine.osVersion,
-            machine.arch,
-            machine.nodeVersion,
-          ]),
-        })}
-      </span>
-    </p>
-  );
-}
-
-function Checkout({
+function WhereFromOutputs({
   run,
   pulls,
 }: {
   run: RunRow;
-  /** The pull requests the outputs recorded; null when the outputs read failed. */
   pulls: readonly RunOutputNode[] | null;
 }) {
   const t = useTranslations("run.header");
   return (
-    <Strip label={t("checkout")} testId="run-checkout">
-      <span className={missing}>{t("repoNotCaptured")}</span>
-      {pulls === null ? null : pulls.length === 0 ? (
-        <span className={missing}>{t("noPullRequest")}</span>
+    <WhereRow>
+      <Chip>{t("repoNotCaptured")}</Chip>
+      {pulls === null || pulls.length === 0 ? (
+        <Chip>
+          <span className="text-dim">{t("noPullRequest")}</span>
+        </Chip>
       ) : (
         pulls.map((pull) => (
-          <span key={`${pull.seq ?? ""}${pull.name}`} className={chip}>
+          <Chip key={`${pull.seq ?? ""}${pull.name}`} code>
+            <GitPullRequest aria-hidden="true" className="size-3 flex-none" />
             {pull.name}
-            {pull.where === null ? null : (
-              <span className="text-muted-foreground">{pull.where}</span>
-            )}
-          </span>
+          </Chip>
         ))
       )}
-      {run.machine === null ? (
-        <span className={missing}>{t("noMachine")}</span>
-      ) : (
-        <span className="inline-flex flex-wrap items-center gap-1.5">
-          <CopyText text={run.machine.hostname} />
-          <span className={missing}>{t("pathNotCaptured")}</span>
-          <Badge tone="quiet" dot={false}>
-            {t("derived")}
-          </Badge>
-        </span>
+      {run.machine === null ? null : (
+        <Chip code>
+          <FolderTree aria-hidden="true" className="size-3 flex-none" />
+          {run.machine.hostname}
+        </Chip>
       )}
-    </Strip>
+    </WhereRow>
   );
 }
 
-/** "<task> · started <t> by <operator> · sealed <t>". */
+function WhereRow({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      data-testid="run-checkout"
+      className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5"
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A link to the forge when the URL is one Oxagen can name, else the text alone. */
+function ForgeChip({
+  url,
+  children,
+  code = false,
+  title,
+}: {
+  url: string | null;
+  children: React.ReactNode;
+  code?: boolean;
+  title?: string;
+}) {
+  const target = parseGitHubUrl(url);
+  if (target === null)
+    return (
+      <Chip code={code} title={title}>
+        {children}
+      </Chip>
+    );
+  return (
+    <GitHubLink
+      to={target}
+      title={title}
+      className={`${linkChip} ${code ? "font-mono text-[10.5px] font-medium" : ""}`}
+    >
+      {children}
+    </GitHubLink>
+  );
+}
+
+/**
+ * The checkout (`runWhere`): the repository, the branch, one chip per pull
+ * request the run pushed to, and `<machine>:<path>` as a copy button. The work
+ * read records the checkout the host enrolled, so a path here is stated, never
+ * worked out; a run whose host enrolled none says so.
+ */
+function WhereFromWork({
+  read,
+  run,
+  pulls,
+}: {
+  read: Promise<Read<RunWork>>;
+  run: RunRow;
+  pulls: readonly RunOutputNode[] | null;
+}) {
+  const t = useTranslations("run.header");
+  const work = use(read);
+  if (!work.ok) return <WhereFromOutputs run={run} pulls={pulls} />;
+  const checkout = work.value.checkouts[0] ?? null;
+  const repo = checkout?.repository ?? work.value.pullRequests[0]?.repository;
+  const prs = work.value.pullRequests;
+  // A branch that is a pull request's head links to the pull request, never
+  // to `/tree/refs/pull/...`.
+  const headPr =
+    checkout?.branch === null || checkout === null
+      ? undefined
+      : prs.find((pr) => pr.headRef === checkout.branch);
+  const machine = work.value.machine?.name ?? run.machine?.hostname ?? null;
+  return (
+    <WhereRow>
+      {repo === undefined ? (
+        <Chip>{t("repoNotCaptured")}</Chip>
+      ) : (
+        <ForgeChip url={repo.url}>
+          {repo.owner}/{repo.name}
+        </ForgeChip>
+      )}
+      {checkout?.branch == null ? null : (
+        <ForgeChip
+          url={
+            headPr?.url ??
+            (repo === undefined ? null : `${repo.url}/tree/${checkout.branch}`)
+          }
+          code
+        >
+          <GitBranch aria-hidden="true" className="size-3 flex-none" />
+          {checkout.branch}
+        </ForgeChip>
+      )}
+      {prs.length === 0 ? (
+        <Chip>
+          <span className="text-dim">{t("noPullRequest")}</span>
+        </Chip>
+      ) : (
+        prs.map((pr) => (
+          <ForgeChip
+            key={`${pr.repository.url}/${String(pr.number)}`}
+            url={pr.url}
+            title={pr.title}
+            code
+          >
+            <GitPullRequest aria-hidden="true" className="size-3 flex-none" />
+            {pr.repository.owner}/{pr.repository.name}#{pr.number}
+          </ForgeChip>
+        ))
+      )}
+      {machine === null ? null : checkout === null ? (
+        <Chip code title={t("pathNotEnrolled", { machine })}>
+          <Folder aria-hidden="true" className="size-3 flex-none" />
+          {machine}
+          <span className="text-dim">{t("pathNotCaptured")}</span>
+        </Chip>
+      ) : (
+        <CopyPath
+          text={`${machine}:${checkout.path}`}
+          title={t("pathRecorded", { machine })}
+        />
+      )}
+    </WhereRow>
+  );
+}
+
+/** "<task title> · started <t>", with "· sealed <t>" once sealed. */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
-  const tr = useTranslations("run");
   const format = useFormatter();
   const when = (at: string) =>
-    format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "short" });
-  // A run with no operator on record says so, rather than dropping "by".
-  const operator =
-    run.operatorId === null && run.operatorName === null ? (
-      tr("notRecorded")
-    ) : (
-      <OperatorName
-        testId="run-operator-name"
-        operator={{
-          id: run.operatorId,
-          name: run.operatorName,
-          kind: run.operatorKind,
-        }}
-      >
-        {run.operatorName ??
-          (run.operatorKind === null ? (
-            // An id with no name and no kind is still a recorded operator:
-            // the id is the label, never "not recorded".
-            <span className={mono}>{run.operatorId}</span>
-          ) : (
-            tr(`facts.operatorKind.${run.operatorKind}`)
-          ))}
-      </OperatorName>
-    );
+    format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "medium" });
   const title =
     (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
   return (
     <p
       data-testid="run-when"
-      className="flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground"
+      className="mt-2 max-w-[70ch] text-[13px] text-muted-foreground"
     >
-      {title === null ? null : (
+      {title === null ? null : <>{title} · </>}
+      {t("started")} <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
+      {run.sealedAt === null ? null : (
         <>
-          <span className="font-medium text-foreground">{title}</span>
-          <span aria-hidden="true">·</span>
-        </>
-      )}
-      <span>
-        {t("started")}{" "}
-        <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
-      </span>
-      <span data-testid="run-operator">
-        {t("by")} {operator}
-      </span>
-      <span aria-hidden="true">·</span>
-      {run.sealedAt === null ? (
-        <span>{t("running")}</span>
-      ) : (
-        <span>
+          {" · "}
           {t("sealed")}{" "}
           <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time>
-        </span>
+        </>
       )}
+    </p>
+  );
+}
+
+/** The compact agent card's line: the harness, and the agent's 30-day figures where the read carries them. */
+function AgentLine({
+  run,
+  agent,
+}: {
+  run: RunRow;
+  agent: Read<AgentDetail> | null;
+}) {
+  const t = useTranslations("run.header");
+  const harness = useHarness(run, agent);
+  return harness === null ? t("harnessNotRecorded") : harness.name;
+}
+
+/** "Paused" or "Paused at …": the banner under the header while ingress is held. */
+function PauseBanner({ run }: { run: RunRow }) {
+  const t = useTranslations("run.header");
+  if (run.ingressPaused !== true) return null;
+  return (
+    <p
+      role="status"
+      data-testid="run-paused"
+      className="mb-3.5 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
+    >
+      <b className="text-info">{t("pausedTitle")}</b> {t("paused")}
     </p>
   );
 }
@@ -275,45 +373,55 @@ function When({ run }: { run: RunRow }) {
 export function RunHeader({
   run,
   agent,
+  work,
   pulls,
+  metrics,
   orgRole,
   wsRole,
-  org,
-  ws,
+  place,
 }: {
   run: RunRow;
   /** `get_agent` for the run's agent; null when the run names no agent. */
   agent: Read<AgentDetail> | null;
+  /** `get_run_work`, started by the page: the checkout strip awaits it. */
+  work: Promise<Read<RunWork>>;
+  /** The pull requests the outputs recorded; null when the outputs read failed. */
   pulls: readonly RunOutputNode[] | null;
+  metrics: RunMetrics;
   /**
    * The viewer's two roles, because the writes gate on them differently:
    * `dispatch_command` admits an org Owner or Admin or a workspace Owner or
-   * Member, `summarize_run` an org Owner, Admin or Member, `export_run` an org
-   * Owner or Admin. Each control is drawn disabled for a viewer its handler
-   * would refuse.
+   * Member, `export_run` an org Owner or Admin. Each control is drawn
+   * disabled for a viewer its handler would refuse.
    */
   orgRole: OrgRole;
   wsRole: WsRole;
-  org: string;
-  ws: string;
+  place: Place;
 }) {
   const t = useTranslations("run");
-  const harness = useHarness(run, agent);
+  const fit = runFit(run, metrics);
+  const sealed = run.status !== "live";
   return (
-    <header data-testid="run-header" className="flex flex-col gap-3">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 flex-col gap-2.5">
+    <>
+      <header
+        data-testid="run-header"
+        className="mb-[18px] flex flex-wrap items-start gap-[18px]"
+      >
+        <div className="min-w-0">
+          <p className={`${eyebrow} mb-2.5`}>{t("header.eyebrow")}</p>
+          <h1 className="mb-1 break-all font-mono text-[19px] font-bold leading-tight text-foreground">
+            {run.id}
+          </h1>
           <div
             data-testid="run-chips"
             aria-label={t("header.chips")}
-            className="flex flex-wrap items-center gap-x-3 gap-y-2"
+            className="mt-2 flex flex-wrap items-center gap-[9px]"
           >
             <AgentCard
+              layout="compact"
               agentKey={run.agentKey}
               notRecorded={t("notRecorded")}
-              sub={
-                harness === null ? t("header.harnessNotRecorded") : harness.name
-              }
+              sub={<AgentLine run={run} agent={agent} />}
             />
             <StatusBadge status={run.status} outcome={run.outcome} />
             <EnforcementTierBadge
@@ -324,70 +432,56 @@ export function RunHeader({
               <ReplayGradeBadge grade={run.replayGrade} />
             )}
             {run.taskRef === null ? null : (
-              <span data-testid="run-task" className={chip}>
-                {run.taskRef}
-              </span>
+              <Chip testId="run-task">
+                {t("header.task", { ref: run.taskRef })}
+              </Chip>
             )}
           </div>
-          <Rig run={run} agent={agent} />
-          <Checkout run={run} pulls={pulls} />
-          <MachineProvenance run={run} />
+          <Rig run={run} agent={agent} fit={fit} />
+          <Suspense fallback={<WhereFromOutputs run={run} pulls={pulls} />}>
+            <WhereFromWork read={work} run={run} pulls={pulls} />
+          </Suspense>
           <When run={run} />
-          <p className="text-xs text-muted-foreground">
-            {t(`source.${run.source}`)}
-          </p>
           {run.completenessGaps.length === 0 ? null : (
             <p
               data-testid="run-gaps"
-              className="max-w-prose text-xs text-muted-foreground"
+              className="mt-1 max-w-prose text-xs text-muted-foreground"
             >
               {t("gaps")}{" "}
               {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}
             </p>
           )}
-          <EnrichmentSwitch
-            org={org}
-            ws={ws}
-            enabled={run.enrichmentEnabled !== false}
-            canEdit={
-              ["owner", "admin"].includes(orgRole) ||
-              ["owner", "admin"].includes(wsRole)
-            }
-          />
         </div>
-        <div className="flex flex-col gap-3 lg:items-end">
-          <RunControls
-            org={org}
-            ws={ws}
-            runId={run.id}
-            status={run.status}
-            source={run.source}
-            enforcementTier={run.enforcementTier}
-            ingressRevoked={run.ingressRevoked}
-            ingressPaused={run.ingressPaused}
-            orgRole={orgRole}
-            wsRole={wsRole}
-          />
-          <RecordActions
-            org={org}
-            ws={ws}
-            runId={run.id}
-            sealed={run.status !== "live"}
-            hasSummary={run.summary !== null}
-            summarizable={run.canSummarize}
-            orgRole={orgRole}
-          />
-        </div>
-      </div>
-      {run.ingressPaused === true ? (
-        <p
-          role="status"
-          data-testid="run-paused"
-          className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-foreground"
+        <div
+          data-testid="run-actions"
+          className="ml-auto flex flex-wrap items-start gap-2"
         >
-          {t("header.paused")}
-        </p>
-      ) : null}
-    </header>
+          {sealed ? (
+            <ReplayActions org={place.org} ws={place.ws} run={run} />
+          ) : (
+            <RunControls
+              org={place.org}
+              ws={place.ws}
+              runId={run.id}
+              status={run.status}
+              source={run.source}
+              enforcementTier={run.enforcementTier}
+              ingressRevoked={run.ingressRevoked}
+              ingressPaused={run.ingressPaused}
+              orgRole={orgRole}
+              wsRole={wsRole}
+            />
+          )}
+          <ExportAction
+            org={place.org}
+            ws={place.ws}
+            runId={run.id}
+            sealed={sealed}
+            orgRole={orgRole}
+          />
+        </div>
+      </header>
+      <PauseBanner run={run} />
+    </>
   );
 }

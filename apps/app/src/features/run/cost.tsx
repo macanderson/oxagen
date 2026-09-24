@@ -28,6 +28,8 @@ import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { Fact, Facts, NoValue, Panel } from "./parts";
 import { Waterfall } from "./waterfall";
+import type { RunTabProps } from "./tab-props";
+import { readWholeTranscript } from "./whole-transcript";
 
 const TOKEN_CLASSES = [
   "inputUncached",
@@ -210,4 +212,15 @@ export function CostSection({
       </Panel>
     </div>
   );
+}
+
+/** The Cost tab over the page's bundle. */
+export async function CostTab({ ctx, source, run, cost }: RunTabProps) {
+  // The waterfall is the run's own per-turn ledger: the turns carry the bars
+  // and their running totals, the steps carry what sits inside each one.
+  const [turns, steps] = await Promise.all([
+    readWholeTranscript(source, ctx, run.id, "turns"),
+    readWholeTranscript(source, ctx, run.id, "steps"),
+  ]);
+  return <CostSection read={cost} turns={turns} steps={steps} />;
 }

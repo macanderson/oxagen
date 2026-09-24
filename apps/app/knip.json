@@ -19,8 +19,5 @@
     "src/ui/not-recorded.tsx"
   ],
   "preprocessor": "./knip.preprocessor.ts",
-  "ignoreIssues": {
-    "src/features/run/replay-actions.tsx": ["files"]
-  },
   "tags": ["-deregistered", "-internal"]
 }

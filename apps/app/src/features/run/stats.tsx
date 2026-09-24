@@ -1,166 +1,285 @@
-// The Run page's Summary panel and its six-figure stat row (mockup `pRun`,
-// spec pages/run.md): Tokens, Prompts, Cost, Wasted, Wall clock, Cache hit.
+// The Run page's Summary and its six figures (mockup `runSummary` and
+// `runStatRow`, pages/run.md): first in the main column, then one row of stat
+// boxes, Tokens, Prompts, Cost, Wasted, Wall clock and Cache hit, each with
+// one number and one line.
 //
-// Each figure is read from the record or left saying why it is missing. The
-// mockup computes waste from a heuristic over its fixture; here it is the
-// rollup's cost times the share the rollup did not count as productive, shown
-// only when the rollup holds both, and marked as derived. A prompt count read
-// from a transcript that stopped short is a floor, and says so.
+// Every figure comes from `runMetrics`, the one derivation the Cost and
+// Context tabs read too, so no two panels can disagree. A figure the record
+// does not carry reads "not recorded", never a zero.
 import { useLocale, useTranslations } from "next-intl";
-import { type Cost, shareOfMicros } from "@/data/contracts/money";
-import type { RunCost, RunTranscript } from "@/data/contracts/run";
+import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
+import type { OrgRole } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { AgentCard } from "@/ui/agent-card";
+import { Badge } from "@/ui/badge";
 import {
-  linkText,
-  mono,
-  statNote,
-  statTerm,
-  statTile,
-  statValue,
+  buttonSecondary,
+  eyebrowQuiet,
+  runStatNote,
+  runStatStrip,
+  runStatTerm,
+  runStatTile,
+  runStatValue,
 } from "@/ui/control-styles";
-import { GeneratedSummary } from "@/ui/generated-summary";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, formatDuration, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { NoValue, Panel } from "./parts";
-import { isWhole } from "./whole-transcript";
+import { OperatorName } from "@/ui/operator";
+import { EnrichmentSwitch } from "./enrichment-switch";
+import { useHarness } from "./header";
+import type { RunMetrics } from "./metrics";
+import { NoValue } from "./parts";
+import { SummarizeAction } from "./record-actions";
+import type { Place } from "./tab-props";
 
-export function SummaryPanel({
+/** `.inv`: the agent that acted, carrying the operator's authority. */
+function Involved({
   run,
-  org,
-  ws,
+  agent,
 }: {
   run: RunRow;
-  org: string;
-  ws: string;
+  agent: Read<AgentDetail> | null;
 }) {
   const t = useTranslations("run");
+  const harness = useHarness(run, agent);
+  const name = agent?.ok === true ? agent.value.identity.name : null;
+  const sub = [name, harness?.name ?? null]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  const hasOperator = run.operatorId !== null || run.operatorName !== null;
   return (
-    <Panel
-      title={t("summary.title")}
-      aside={
-        <SafeLink
-          to={routes.run(org, ws, run.id, { tab: "transcript" })}
-          className={`${linkText} text-xs`}
-        >
-          {t("summary.check")}
-        </SafeLink>
-      }
+    <div
+      data-testid="run-involved"
+      className="mt-2.5 flex flex-wrap items-center gap-2.5"
     >
-      {run.summary === null ? (
-        <p className="text-sm text-muted-foreground">{t("noSummary")}</p>
-      ) : (
-        <GeneratedSummary summary={run.summary} layout="block" />
-      )}
-    </Panel>
-  );
-}
-
-function Stat({
-  label,
-  note,
-  children,
-}: {
-  label: string;
-  note?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={statTile}>
-      <span className={statTerm}>{label}</span>
-      <span className={`${statValue} min-w-0 truncate`}>{children}</span>
-      {note === undefined ? null : <span className={statNote}>{note}</span>}
+      <AgentCard
+        layout="compact"
+        agentKey={run.agentKey}
+        notRecorded={t("notRecorded")}
+        sub={sub === "" ? t("header.harnessNotRecorded") : sub}
+      />
+      <span className="font-mono text-[11.5px] text-dim">
+        {t("summary.onBehalfOf")}
+      </span>
+      <span
+        data-testid="run-operator"
+        className="inline-flex min-w-0 max-w-full items-center gap-[9px] rounded-full border border-border bg-background py-[5px] pl-1.5 pr-3 text-[12.5px] text-foreground"
+      >
+        {hasOperator ? (
+          <OperatorName
+            testId="run-operator-name"
+            operator={{
+              id: run.operatorId,
+              name: run.operatorName,
+              kind: run.operatorKind,
+            }}
+          >
+            <span className="flex min-w-0 flex-col leading-tight">
+              <b className="truncate font-semibold">
+                {run.operatorName ??
+                  (run.operatorKind === null ? (
+                    // An id with no name and no kind is still a recorded
+                    // operator: the id is the label, never "not recorded".
+                    <span className="font-mono">{run.operatorId}</span>
+                  ) : (
+                    t(`facts.operatorKind.${run.operatorKind}`)
+                  ))}
+              </b>
+              <span className="truncate font-mono text-[10.5px] text-dim">
+                {t("summary.operator")}
+              </span>
+            </span>
+          </OperatorName>
+        ) : (
+          <span className="text-muted-foreground">{t("notRecorded")}</span>
+        )}
+      </span>
     </div>
   );
 }
 
-/**
- * The part of `cost` the rollup did not count as productive. Exact in micros:
- * the share is rounded to a millionth, never the money.
- */
-function wasted(
-  cost: Cost | null,
-  productiveRatio: number | null,
-): Cost | null {
-  if (cost === null || productiveRatio === null) return null;
-  const part = shareOfMicros(cost, 1 - productiveRatio);
-  return part === null ? null : { ...part, basis: cost.basis };
+export function SummaryPanel({
+  run,
+  agent,
+  place,
+  orgRole,
+  canEditEnrichment,
+}: {
+  run: RunRow;
+  agent: Read<AgentDetail> | null;
+  place: Place;
+  orgRole: OrgRole;
+  /** An org or workspace Owner or Admin may turn automatic summaries on or off. */
+  canEditEnrichment: boolean;
+}) {
+  const t = useTranslations("run");
+  const format = useFormatter();
+  const summary = run.enrichmentEnabled === false ? null : run.summary;
+  return (
+    <section
+      aria-labelledby="run-summary-title"
+      data-testid="run-summary"
+      className="rounded-xl border border-border bg-card px-[18px] py-4 text-card-foreground"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="run-summary-title" className={`${eyebrowQuiet} m-0`}>
+          {t("summary.title")}
+        </h2>
+        <Badge tone="quiet" dot={false}>
+          <span className="text-[10.5px]">{t("summary.generated")}</span>
+        </Badge>
+      </div>
+      <Involved run={run} agent={agent} />
+      {summary === null ? (
+        <p className="mb-2.5 mt-3 max-w-[78ch] text-sm text-muted-foreground">
+          {t("noSummary")}
+        </p>
+      ) : (
+        <p
+          data-testid="generated-summary"
+          className="mb-2.5 mt-3 max-w-[78ch] text-[15px] leading-[1.55] text-foreground"
+        >
+          {summary.text}
+        </p>
+      )}
+      <div className="mt-[13px] flex flex-wrap items-center gap-2.5 border-t border-border pt-[11px] font-mono text-[11px] text-dim">
+        <span className="min-w-0 flex-1">
+          {summary === null ? (
+            t("summary.notGenerated")
+          ) : (
+            <>
+              {t("summary.generatedBy")}{" "}
+              <b className="font-semibold text-muted-foreground">
+                {summary.model}
+              </b>{" "}
+              ·{" "}
+              <time dateTime={summary.generatedAt}>
+                {format.dateTime(new Date(summary.generatedAt), {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </time>
+            </>
+          )}
+        </span>
+        <SummarizeAction
+          org={place.org}
+          ws={place.ws}
+          runId={run.id}
+          sealed={run.status !== "live"}
+          hasSummary={run.summary !== null}
+          summarizable={run.canSummarize}
+          orgRole={orgRole}
+        />
+        <SafeLink
+          to={routes.run(place.org, place.ws, run.id, { tab: "actions" })}
+          className={`${buttonSecondary} min-h-7 px-2.5 font-sans text-xs`}
+        >
+          {t("summary.check")}
+        </SafeLink>
+      </div>
+      <div className="mt-2.5">
+        <EnrichmentSwitch
+          org={place.org}
+          ws={place.ws}
+          enabled={run.enrichmentEnabled !== false}
+          canEdit={canEditEnrichment}
+        />
+      </div>
+    </section>
+  );
+}
+
+/** `.rstats .stat`: one term, one figure and one line. */
+function Stat({
+  label,
+  note,
+  tone,
+  testId,
+  children,
+}: {
+  label: string;
+  note?: React.ReactNode;
+  /** The figure's colour, where the design gives one: approval above two prompts, critical above zero waste. */
+  tone?: "approval" | "critical";
+  testId: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div data-testid={testId} className={runStatTile}>
+      <span className={runStatTerm}>{label}</span>
+      <span
+        className={`${runStatValue} ${tone === "approval" ? "text-info" : tone === "critical" ? "text-critical" : ""}`}
+      >
+        {children}
+      </span>
+      {note === undefined ? null : <span className={runStatNote}>{note}</span>}
+    </div>
+  );
 }
 
 export function StatRow({
   run,
-  cost,
-  transcript,
+  metrics,
 }: {
   run: RunRow;
-  cost: Read<RunCost>;
-  /** The whole-run transcript the Prompts figure counts from. */
-  transcript: Read<RunTranscript>;
+  metrics: RunMetrics;
 }) {
   const t = useTranslations("run.stats");
-  const tc = useTranslations("run.cost");
-  const tr = useTranslations("run");
   const locale = useLocale();
-  const rollup = cost.ok ? cost.value.rollup : null;
-  const waste = wasted(rollup?.cost ?? null, rollup?.productiveRatio ?? null);
-  const tokens =
-    rollup === null
-      ? null
-      : Object.values(rollup.tokens).reduce((sum, count) => sum + count, 0);
-  const prompts = transcript.ok
-    ? transcript.value.entries.filter((entry) => entry.kinds.includes("prompt"))
-        .length
-    : null;
-  const runCost = rollup?.cost ?? run.cost;
-  // A finalized rollup wins. Otherwise the agent-reported cost is provisional.
-  const displayedCost = runCost ?? run.reportedCost ?? null;
-  const missingRollup = cost.ok && rollup === null ? t("noRollup") : undefined;
+  const count = (value: number) => formatCount(value, locale);
+  const { tokens, prompts, wall, priced } = metrics;
+  // A count read from a transcript that stopped short of the run is a floor.
+  const floor = metrics.whole ? "" : "+";
+  const displayedCost = metrics.cost ?? run.reportedCost ?? null;
+  const wastedPositive =
+    metrics.wasted !== null && metrics.wasted.micros !== "0";
   return (
     <section
       aria-label={t("label")}
       data-testid="run-stats"
-      className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6"
+      className={`${runStatStrip} my-3`}
     >
       <Stat
+        testId="run-stat-tokens"
         label={t("tokens")}
         note={
-          rollup === null
-            ? missingRollup
+          tokens === null
+            ? t("noRollup")
             : t("tokensNote", {
-                output: formatCount(rollup.tokens.output, locale),
+                input: count(tokens.input),
+                output: count(tokens.output),
               })
         }
       >
-        {tokens === null ? <NoValue /> : formatCount(tokens, locale)}
+        {tokens === null ? <NoValue /> : count(tokens.total)}
       </Stat>
       <Stat
+        testId="run-stat-prompts"
         label={t("prompts")}
+        tone={prompts !== null && prompts.count > 2 ? "approval" : undefined}
         note={
-          transcript.ok && !isWhole(transcript.value)
-            ? t("promptsCut")
-            : undefined
+          prompts === null
+            ? undefined
+            : prompts.count <= 1
+              ? t("oneShot")
+              : t("corrective", { count: prompts.corrective })
         }
       >
-        {prompts === null ? (
-          <NoValue />
-        ) : transcript.ok && !isWhole(transcript.value) ? (
-          `${formatCount(prompts, locale)}+`
-        ) : (
-          formatCount(prompts, locale)
-        )}
+        {prompts === null ? <NoValue /> : `${count(prompts.count)}${floor}`}
       </Stat>
       <Stat
+        testId="run-stat-cost"
         label={t("cost")}
         note={
           displayedCost === null ? undefined : (
-            <span className={mono}>
-              {runCost === null
-                ? tr("costReportedProvisional")
-                : tr("costFinalized", {
-                    basis: runCost.basis ?? tc("basisNotRecorded"),
-                  })}
+            <span className="font-mono text-[10.5px] text-dim">
+              {metrics.cost === null
+                ? t("provisional")
+                : (metrics.cost.basis ?? t("basisNotRecorded"))}
             </span>
           )
         }
@@ -168,25 +287,45 @@ export function StatRow({
         {displayedCost === null ? <NoValue /> : <Money value={displayedCost} />}
       </Stat>
       <Stat
+        testId="run-stat-wasted"
         label={t("wasted")}
-        note={waste === null ? missingRollup : t("wastedNote")}
+        tone={wastedPositive ? "critical" : undefined}
+        note={
+          metrics.wasted === null
+            ? t("noRollup")
+            : wastedPositive
+              ? t("wastedNote")
+              : t("nothingWasted")
+        }
       >
-        {waste === null ? <NoValue /> : <Money value={waste} />}
-      </Stat>
-      <Stat label={t("wallClock")}>
-        {run.sealedAt === null
-          ? t("running")
-          : formatDuration(
-              new Date(run.sealedAt).getTime() -
-                new Date(run.startedAt).getTime(),
-              locale,
-            )}
-      </Stat>
-      <Stat label={t("cacheHit")} note={missingRollup}>
-        {rollup?.cacheHitRate == null ? (
+        {metrics.wasted === null ? (
           <NoValue />
         ) : (
-          formatRatio(rollup.cacheHitRate, locale)
+          <Money value={metrics.wasted} />
+        )}
+      </Stat>
+      <Stat
+        testId="run-stat-wall"
+        label={t("wallClock")}
+        note={wall.lead === null ? undefined : t(`mostly.${wall.lead}`)}
+      >
+        {wall.ms === null ? <NoValue /> : formatDuration(wall.ms, locale)}
+      </Stat>
+      <Stat
+        testId="run-stat-cache"
+        label={t("cacheHit")}
+        note={
+          priced?.cacheSaved == null ? undefined : (
+            <>
+              {t("saved")} <Money value={priced.cacheSaved} />
+            </>
+          )
+        }
+      >
+        {metrics.cacheHit === null ? (
+          <NoValue />
+        ) : (
+          formatRatio(metrics.cacheHit, locale)
         )}
       </Stat>
     </section>

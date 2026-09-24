@@ -66,6 +66,39 @@ export function mulMicros(value: Money, quantity: number): Money {
   };
 }
 
+/** Tokens in the unit a price book row quotes. */
+const TOKENS_PER_MILLION = BigInt(1_000_000);
+
+/**
+ * What `tokens` cost at a price book row's `ratePerMillion`: the rate times
+ * the count, divided by a million on the micros, exact at any magnitude and
+ * truncated toward zero. The Run page's Spend by token class and its cache
+ * saving are priced this way from the book the run was priced against.
+ */
+export function priceTokens(ratePerMillion: Money, tokens: number): Money {
+  if (!Number.isSafeInteger(tokens) || tokens < 0)
+    throw new InvalidQuantityError(tokens);
+  return {
+    micros: (
+      (toBigInt(ratePerMillion.micros) * BigInt(tokens)) /
+      TOKENS_PER_MILLION
+    ).toString(),
+    currency: ratePerMillion.currency,
+  };
+}
+
+/**
+ * `a − b`, exact, or null when the two carry different currencies: a
+ * difference across currencies is not an amount anyone saved or spent.
+ */
+export function subMoney(a: Money, b: Money): Money | null {
+  if (a.currency !== b.currency) return null;
+  return {
+    micros: (toBigInt(a.micros) - toBigInt(b.micros)).toString(),
+    currency: a.currency,
+  };
+}
+
 /**
  * The sum of `values`, exact at any magnitude, or null when there is nothing
  * to sum or the values carry more than one currency: a total across currencies

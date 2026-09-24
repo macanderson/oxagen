@@ -17,6 +17,7 @@ import { cell, Table } from "@/ui/table";
 import { Panel } from "./parts";
 import { entryKey } from "./transcript-model";
 import { isWhole } from "./whole-transcript";
+import type { RunTabProps } from "./tab-props";
 
 type Place = { org: string; ws: string; runId: string };
 
@@ -208,4 +209,19 @@ export function ContextSection({
       )}
     </Panel>
   );
+}
+
+/** The Issues tab over the page's bundle. */
+export function IssuesTab({ run }: RunTabProps) {
+  return <IssuesSection run={run} />;
+}
+
+/** The Policy tab: the whole-run transcript narrowed to its decisions. */
+export function PolicyTab({ everything, place }: RunTabProps) {
+  return <PolicySection read={everything} place={place} />;
+}
+
+/** The Context tab: the whole-run transcript narrowed to its recalls. */
+export function ContextTab({ everything, place }: RunTabProps) {
+  return <ContextSection read={everything} place={place} />;
 }

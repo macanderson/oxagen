@@ -285,31 +285,26 @@ export function ReplayActions({
       : run.replayGrade === null
         ? t("forkNoGrade")
         : t("forkNeedsGrade", { grade: run.replayGrade });
+  // The two buttons sit in the header's action row beside Export, so a
+  // refusal is said on the disabled button itself rather than as a line
+  // under the row.
   return (
-    <div className="flex flex-col items-start gap-2 lg:items-end">
-      <div className="flex flex-wrap gap-2">
-        {forkable ? (
-          <ForkDialog org={org} ws={ws} runId={run.id} />
-        ) : (
-          <button
-            type="button"
-            disabled
-            data-testid="run-fork"
-            className={buttonSecondary}
-          >
-            {t("fork.open")}
-          </button>
-        )}
-        <BisectDialog org={org} ws={ws} runId={run.id} />
-      </div>
-      {forkable ? null : (
-        <p
-          data-testid="fork-refused"
-          className="max-w-prose text-xs text-muted-foreground lg:text-right"
+    <>
+      {forkable ? (
+        <ForkDialog org={org} ws={ws} runId={run.id} />
+      ) : (
+        <button
+          type="button"
+          disabled
+          title={reason}
+          aria-label={`${t("fork.open")}. ${reason}`}
+          data-testid="run-fork"
+          className={buttonSecondary}
         >
-          {reason}
-        </p>
+          {t("fork.open")}
+        </button>
       )}
-    </div>
+      <BisectDialog org={org} ws={ws} runId={run.id} />
+    </>
   );
 }

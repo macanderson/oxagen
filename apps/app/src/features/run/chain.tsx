@@ -21,6 +21,7 @@ import { ReadFailure } from "@/ui/read-failure";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { cell, numericCell, Table } from "@/ui/table";
 import { Fact, Facts, NoValue, Panel } from "./parts";
+import type { RunTabProps } from "./tab-props";
 
 function Gaps({
   gaps,
@@ -348,4 +349,9 @@ export function ChainSection({ read }: { read: Read<RunChain> }) {
       )}
     </Panel>
   );
+}
+
+/** The Chain and seal tab: the one tab that reads the chain. */
+export async function ChainTab({ ctx, source, run }: RunTabProps) {
+  return <ChainSection read={await source.runs.chain(ctx, run.id)} />;
 }

@@ -12,10 +12,12 @@ import {
   sumExceeds,
   moneyFromMicros,
   mulMicros,
+  priceTokens,
   ratioOfIntegers,
   ratioOfMicros,
   roundToCentsHalfEven,
   shareOfMicros,
+  subMoney,
   sumMoney,
 } from "./money";
 
@@ -100,6 +102,56 @@ describe("compareMicros", () => {
     expect(
       compareMicros({ micros: "1", currency: "EUR" }, usd("999")),
     ).toBeLessThan(0);
+  });
+});
+
+describe("priceTokens", () => {
+  const rate = { micros: "3000000", currency: "USD" };
+
+  it("prices a count at a rate per million: 607,784 tokens at $3.00 is $1.823352", () => {
+    expect(priceTokens(rate, 607_784)).toEqual({
+      micros: "1823352",
+      currency: "USD",
+    });
+  });
+
+  it("truncates toward zero below a micro, and prices nothing at zero", () => {
+    expect(priceTokens(rate, 1).micros).toBe("3");
+    expect(priceTokens({ micros: "300000", currency: "USD" }, 1).micros).toBe(
+      "0",
+    );
+    expect(priceTokens(rate, 0).micros).toBe("0");
+  });
+
+  it("refuses a count that is not a whole, non-negative number (negative)", () => {
+    expect(() => priceTokens(rate, 1.5)).toThrow("safe integer");
+    expect(() => priceTokens(rate, -1)).toThrow("safe integer");
+  });
+});
+
+describe("subMoney", () => {
+  it("answers the exact difference, negative when b is larger", () => {
+    expect(
+      subMoney(
+        { micros: "3000000", currency: "USD" },
+        { micros: "300000", currency: "USD" },
+      ),
+    ).toEqual({ micros: "2700000", currency: "USD" });
+    expect(
+      subMoney(
+        { micros: "1", currency: "USD" },
+        { micros: "3", currency: "USD" },
+      )?.micros,
+    ).toBe("-2");
+  });
+
+  it("answers null across two currencies (negative)", () => {
+    expect(
+      subMoney(
+        { micros: "1", currency: "USD" },
+        { micros: "1", currency: "EUR" },
+      ),
+    ).toBeNull();
   });
 });
 
