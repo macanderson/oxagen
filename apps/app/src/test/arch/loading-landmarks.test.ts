@@ -8,25 +8,26 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { APP_DIR, productionFiles } from "./parse";
+import { APP_DIR, productionFiles, WHOLE_TREE_TIMEOUT_MS } from "./parse";
 
 const MAIN_LANDMARK = /<main\b[^>]*\bid=["{]\s*["']?main\b/;
 
 describe("loading fallbacks", () => {
-  const fallbacks = productionFiles().filter(
-    (file) => path.basename(file) === "loading.tsx",
+  it(
+    "never render main#main, which the streamed page owns",
+    () => {
+      const fallbacks = productionFiles().filter(
+        (file) => path.basename(file) === "loading.tsx",
+      );
+      // An empty list would pass for the wrong reason.
+      expect(fallbacks.length).toBeGreaterThan(0);
+      const offenders = fallbacks.filter((file) =>
+        MAIN_LANDMARK.test(readFileSync(path.join(APP_DIR, file), "utf8")),
+      );
+      expect(offenders).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
   );
-
-  it("finds the route fallbacks it guards", () => {
-    expect(fallbacks.length).toBeGreaterThan(0);
-  });
-
-  it("never render main#main, which the streamed page owns", () => {
-    const offenders = fallbacks.filter((file) =>
-      MAIN_LANDMARK.test(readFileSync(path.join(APP_DIR, file), "utf8")),
-    );
-    expect(offenders).toEqual([]);
-  });
 
   it("catches a fallback that does", () => {
     expect(
