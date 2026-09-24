@@ -427,6 +427,7 @@ describe("bind_main_repository", () => {
           {
             id: "head-uuid",
             role: "main",
+            provider: "github",
             connectionId: "conn-uuid",
             providerRepositoryId: "4242",
             currentBindingId: "other-uuid",
@@ -450,6 +451,7 @@ describe("bind_main_repository", () => {
           {
             id: "head-uuid",
             role: "main",
+            provider: "github",
             // The head already names the connection the bind resolved, so
             // nothing has moved and nothing is written.
             connectionId: "conn-uuid",
@@ -503,6 +505,7 @@ describe("bind_main_repository", () => {
     const RETIRED_HEAD = {
       id: "head-uuid",
       role: "main",
+      provider: "github",
       // The connection this workspace acted through before the delete.
       connectionId: "retired-conn-uuid",
       providerRepositoryId: "9001",
@@ -634,6 +637,7 @@ describe("bind_main_repository", () => {
     const HEAD = {
       id: "head-uuid",
       role: "main",
+      provider: "github",
       connectionId: "conn-uuid",
       providerRepositoryId: "9001",
       currentBindingId: "binding-1",
@@ -767,6 +771,7 @@ describe("bind_main_repository", () => {
     const LINKED_HEAD = {
       id: "head-uuid",
       role: "linked",
+      provider: "github",
       connectionId: "conn-uuid",
       providerRepositoryId: "9001",
       currentBindingId: "binding-1",
@@ -813,6 +818,7 @@ describe("bind_main_repository", () => {
             {
               id: "other-head",
               role: "main",
+              provider: "github",
               connectionId: "conn-uuid",
               providerRepositoryId: "4242",
               currentBindingId: "other-binding",
@@ -846,6 +852,7 @@ describe("bind_main_repository", () => {
       );
       expect(head?.values).toMatchObject({
         role: "main",
+        provider: "github",
         currentBindingId: "binding-1",
       });
       expect(out.bindingId).toBe("rpb_first");
@@ -1122,5 +1129,111 @@ describe("bind_main_repository", () => {
         writes.inserts.filter((w) => w.table === schema.repositoryBindingHeads),
       ).toHaveLength(0);
     });
+  });
+});
+
+/**
+ * The GitLab arm (#3762). The project comes from the workspace's GitLab
+ * connection, read by id through its project access token; the fake stands in
+ * for that read. The GitLab arm makes no GitHub installation lookup, so the
+ * first queued `withTenantDb` answer (the installation read `wire` arms) is
+ * drained before the call.
+ */
+describe("bind_main_repository on GitLab", () => {
+  const GITLAB_TARGET = {
+    provider: "gitlab" as const,
+    connection: {
+      id: "gl-conn-uuid",
+      publicId: "con_gl1",
+      status: "connected",
+    },
+    repo: {
+      // Numerically equal to a GitHub id elsewhere in this file on purpose.
+      id: "4242",
+      owner: "acme/platform",
+      name: "rules",
+      fullName: "acme/platform/rules",
+      defaultBranch: "main",
+    },
+  };
+
+  async function gitlabRun(selects: unknown[][] = [[], []]) {
+    const writes = wire({ selects });
+    await mocks.withTenantDb(async () => null);
+    const gitlabProject = vi.fn(async () => GITLAB_TARGET);
+    const repository = vi.fn(async () => REPO);
+    const run = createMainRepositoryBindHandler({ repository, gitlabProject });
+    return { writes, gitlabProject, repository, run };
+  }
+
+  it("binds the project by id with provider gitlab and a nested namespace owner", async () => {
+    const { writes, gitlabProject, repository, run } = await gitlabRun();
+    const out = await run(
+      { provider: "gitlab", projectPath: "acme/platform/rules" },
+      makeCTX(),
+    );
+    expect(gitlabProject).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: expect.any(String) }),
+      "acme/platform/rules",
+    );
+    expect(repository).not.toHaveBeenCalled();
+    const binding = writes.inserts.find(
+      (w) => w.table === schema.repositoryBindings,
+    );
+    expect(binding?.values).toMatchObject({
+      connectionId: "gl-conn-uuid",
+      provider: "gitlab",
+      providerRepositoryId: "4242",
+      providerOwner: "acme/platform",
+      providerName: "rules",
+      providerFullName: "acme/platform/rules",
+      configuredDefaultRef: "main",
+    });
+    const head = writes.inserts.find(
+      (w) => w.table === schema.repositoryBindingHeads,
+    );
+    expect(head?.values).toMatchObject({ provider: "gitlab", role: "main" });
+    expect(out).toMatchObject({
+      provider: "gitlab",
+      connectionId: "con_gl1",
+      fullName: "acme/platform/rules",
+      defaultRef: "main",
+    });
+  });
+
+  it("does not mistake a GitHub head with the same id for this project", async () => {
+    const { run } = await gitlabRun([
+      [
+        {
+          id: "head-uuid",
+          role: "main",
+          provider: "github",
+          connectionId: "conn-uuid",
+          providerRepositoryId: "4242",
+          currentBindingId: "binding-1",
+        },
+      ],
+    ]);
+    await expect(
+      run(
+        { provider: "gitlab", projectPath: "acme/platform/rules" },
+        makeCTX(),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "main_repo_bound" });
+  });
+
+  it("passes the connection refusal through when the workspace has no GitLab connection", async () => {
+    wire({});
+    await mocks.withTenantDb(async () => null);
+    const run = createMainRepositoryBindHandler({
+      repository: vi.fn(),
+      gitlabProject: vi.fn(async () => {
+        const { gitlabNotConnected } = await import("./lib/gitlab-credential");
+        throw gitlabNotConnected();
+      }),
+    });
+    await expect(
+      run({ provider: "gitlab", projectPath: "acme/rules" }, makeCTX()),
+    ).rejects.toMatchObject({ reason: "gitlab_not_connected" });
   });
 });
