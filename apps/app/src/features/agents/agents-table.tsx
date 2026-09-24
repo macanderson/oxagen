@@ -45,6 +45,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
+import { pageList } from "@/ui/page-list";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { RetireAgent } from "./agent-actions";
 import { AgentStatusBadge, NotRecordedValue } from "./parts";
@@ -76,13 +77,19 @@ type Health = "tamper" | "notEnrolled" | "observe" | "healthy";
 
 /**
  * The Health verdict (agents.md, `agentHealth()`), in the spec's order: an open
- * tamper incident, then no enrollment, then the observe tier. Null when the
- * agent is enrolled and no wrapped session has recorded a tier, because
- * "healthy" would then be a claim the record does not make.
+ * tamper incident, then no enrollment, then the observe tier. A retired agent
+ * has no enrollment: `retire_agent` revokes its credential and every host, so
+ * it reads `not enrolled` whatever tier its last session recorded. Null when
+ * the record supports no verdict: a suspended agent, whose principal is
+ * refused at every call, and an enrolled agent no wrapped session has
+ * recorded a tier for. "healthy" would then be a claim the record does not
+ * make.
  */
 function healthOf(row: AgentRow): Health | null {
   if (row.tamperIncidents > 0) return "tamper";
-  if (row.status === "unenrolled") return "notEnrolled";
+  if (row.status === "unenrolled" || row.status === "retired")
+    return "notEnrolled";
+  if (row.status === "suspended") return null;
   if (row.enforcementTier === null) return null;
   if (row.enforcementTier === "observe") return "observe";
   return "healthy";
@@ -145,6 +152,16 @@ function HealthBadge({ row }: { row: AgentRow }) {
   const t = useTranslations("agents.list.health");
   const tier = useTranslations("agents.tier");
   const health = healthOf(row);
+  if (health === null && row.status === "suspended") {
+    return (
+      <span title={t("suspendedWhy")} data-health="none">
+        <span aria-hidden="true" className="text-muted-foreground">
+          —
+        </span>
+        <span className="sr-only">{t("suspendedWhy")}</span>
+      </span>
+    );
+  }
   if (health === null) return <NotRecordedValue gap="tier" />;
   // Each explanation names the record the verdict rests on and nothing more:
   // "healthy" is an enrolled agent with no open tamper incident whose latest
@@ -157,7 +174,9 @@ function HealthBadge({ row }: { row: AgentRow }) {
         ? t("healthyWhy", {
             tier: row.enforcementTier === null ? "" : tier(row.enforcementTier),
           })
-        : t(`${health}Why`);
+        : health === "notEnrolled" && row.status === "retired"
+          ? t("retiredWhy")
+          : t(`${health}Why`);
   return (
     <span title={why} className="inline-flex flex-col gap-0.5">
       <Badge tone={HEALTH_TONE[health]} data-health={health}>
@@ -286,8 +305,14 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
               {row.host ?? t("list.cells.none")}
             </span>
             <span className="block text-[10px] text-muted-foreground">
-              <NotRecordedValue gap="runtimeKind" />
-              {" · "}
+              {/* With no host there is no runtime to have a kind, so the
+                  line is the tier alone, as the design draws it. */}
+              {row.host === null ? null : (
+                <>
+                  <NotRecordedValue gap="runtimeKind" />
+                  {" · "}
+                </>
+              )}
               {row.enforcementTier === null ? (
                 <NotRecordedValue gap="tier" />
               ) : (
@@ -521,6 +546,22 @@ function searchText(row: AgentRow, harness: string): string {
     .filter((part): part is string => part !== null)
     .join(" ")
     .toLowerCase();
+}
+
+/**
+ * The page buttons the design's `ltPager` draws, zero-based: every page up to
+ * seven; past that the first, the current page and its neighbours, and the
+ * last, with null for each gap the ellipsis stands in. A pager of 20 pages at
+ * page 10 is 1 … 9 10 11 … 20, so it fits a phone's width. The window is the
+ * shared list table's (`pageList`), so the two pagers cannot drift apart.
+ */
+function pagerItems(
+  pages: number,
+  current: number,
+): readonly (number | null)[] {
+  return pageList(current + 1, pages).map((item) =>
+    typeof item === "number" ? item - 1 : null,
+  );
 }
 
 export function AgentsTable({
@@ -829,21 +870,32 @@ export function AgentsTable({
             >
               ‹
             </button>
-            {Array.from({ length: pages }, (_, index) => (
-              <button
-                key={index}
-                type="button"
-                aria-label={t("list.controls.page", { page: index + 1 })}
-                aria-current={index === current ? "page" : undefined}
-                data-touch-target=""
-                className={`${buttonSecondary} aria-[current=page]:border-gold`}
-                onClick={() => {
-                  setPage(index);
-                }}
-              >
-                {formatCount(index + 1, locale)}
-              </button>
-            ))}
+            {pagerItems(pages, current).map((item, position) =>
+              item === null ? (
+                <span
+                  // A gap sits before the current page or after it.
+                  key={position === 1 ? "gap-start" : "gap-end"}
+                  aria-hidden="true"
+                  className="self-center px-1 text-muted-foreground"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  aria-label={t("list.controls.page", { page: item + 1 })}
+                  aria-current={item === current ? "page" : undefined}
+                  data-touch-target=""
+                  className={`${buttonSecondary} aria-[current=page]:border-gold`}
+                  onClick={() => {
+                    setPage(item);
+                  }}
+                >
+                  {formatCount(item + 1, locale)}
+                </button>
+              ),
+            )}
             <button
               type="button"
               aria-label={t("list.controls.next")}

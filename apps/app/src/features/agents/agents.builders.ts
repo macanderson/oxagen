@@ -60,7 +60,9 @@ export function agentPage(
     totals: {
       identities: 7,
       enrolled: 2,
+      unenrolled: 5,
       holdingMandate: 1,
+      mandateHolders: ["acme.core.release-bot"],
       tamperIncidents: 3,
       tamper: {
         recorded: 4,
