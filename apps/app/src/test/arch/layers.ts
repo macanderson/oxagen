@@ -315,11 +315,16 @@ const PLATFORM_NAMED_ROWS: Readonly<
   },
   // The record wizard shows the label and file name a slug will get, using
   // the same pure functions the publish handler runs, so the preview matches.
+  // Both files check a slug against the pattern the contract enforces.
   "src/features/create/record-wizard.tsx": {
     "@oxagen/oxagen/context-record-label": [
+      "CONTEXT_RECORD_LINEAGE",
       "contextRecordLabel",
       "contextRecordSlug",
     ],
+  },
+  "src/features/create/record-file.ts": {
+    "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LINEAGE"],
   },
   "instrumentation.ts": {
     "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],
