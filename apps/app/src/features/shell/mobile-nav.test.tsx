@@ -27,6 +27,7 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { phoneWidth } from "@/test/phone";
 import en from "../../../messages/en.json";
+import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 import { approvalItem, shellData, shellWorkspace } from "./shell.builders";
@@ -117,6 +118,7 @@ function renderPhone(data: ShellData, page: ReactNode = null) {
         ...en,
         ...shellMessages,
         ...uiMessages,
+        ...createMessages,
       }}
     >
       <ShellClient data={data} />
@@ -618,6 +620,7 @@ describe("card tables", () => {
           ...en,
           ...shellMessages,
           ...uiMessages,
+          ...createMessages,
         }}
       >
         <ShellClient data={shellData()} />

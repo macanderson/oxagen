@@ -9,7 +9,7 @@
  * the others). Ask remains the default conversational front door via the nav;
  * this page gives operators a reason to land here first.
  *
- * See docs/web-app-2.0/workspace/overview/spec.md.
+ * See docs/web-app-2.0/workspace/overview/spec.md, removed 2026-09-23; git history keeps it.
  */
 import { getSessionOrRedirect } from "@/lib/session";
 import {

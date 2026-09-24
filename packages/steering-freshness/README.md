@@ -13,6 +13,55 @@ It depends on git and `zod`, and on nothing else. Oxagen governs whatever
 agent a team already runs, so the one thing this must never grow is a
 dependency on a particular harness.
 
+## Boundary
+
+- **Owns:** the freshness verdict for a checkout's `.oxagen/` directory, the
+  `steering` settings block and how its four scopes combine, the sync that
+  takes merged records from the production branch, the gate decision, the
+  per-harness renderers, and installing the gate hook into each harness's
+  config.
+- **Does not own:** the `oxagen steering` command and its flags
+  ([`apps/cli`](../../apps/cli/README.md), `apps/cli/src/commands/steering.ts`);
+  the platform signal (steering version and published commits), which the CLI
+  fetches and passes in; what the records say or how they reach a run
+  ([`@oxagen/steering-assembler`](../steering-assembler/README.md)).
+- **Depends on:** No `@oxagen/*` runtime dependencies. Its one runtime
+  dependency is `zod`, and it shells out to `git`.
+- **Used by:** `apps/cli` (`src/commands/steering.ts`).
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| `GitRunner` | port | `packages/steering-freshness/src/git.ts` | `execGit` is the default; tests inject a fake |
+| `PlatformSignal` | port | `packages/steering-freshness/src/check.ts` | `apps/cli/src/commands/steering.ts` supplies it from the platform |
+| `HARNESS_RENDERERS` / `renderGate` | registry | `packages/steering-freshness/src/render.ts` | `apps/cli/src/commands/steering.ts` (`--harness`) |
+| `installHook` / `removeHook` / `hookStatus` over `INSTALLABLE` | boundary | `packages/steering-freshness/src/hooks.ts` | `apps/cli/src/commands/steering.ts`. It writes `.claude/settings.json`, `$CODEX_HOME/hooks.json`, `~/.cursor/hooks.json`, and `$STELLA_HOME/stella.toml` |
+| Exit code contract (`0` runs, `2` refuses) | boundary | `packages/steering-freshness/src/render.ts` | Each harness's prompt-submit hook |
+
+## Entry points
+
+- `.` → `src/index.ts`: `checkSteeringFreshness`, `evaluateGate`,
+  `syncSteering`, `resolveSteeringPolicy`, the settings loaders, the renderers,
+  the hook installer, and `execGit`.
+
+## Rules
+
+- Every failure resolves to `unknown`, and `unknown` never blocks a run.
+- A later settings scope may switch a gate on and may never switch it off.
+- A new harness is an alias and a renderer, never a second copy of the
+  decision (ADR-101 names the four harnesses).
+- The package takes no dependency on a particular harness.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/steering-freshness test:unit src/check.test.ts
+```
+
+Never put `--` before the filename. Each module has a `src/<module>.test.ts`
+beside it, and `src/integration.test.ts` drives the modules together.
+
 ## The verdict
 
 `checkSteeringFreshness` compares the checkout against the remote production

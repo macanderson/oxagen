@@ -60,6 +60,12 @@
     flex: 1 1 45%;
   }
 
+  /* The footer's note reads first, on a line of its own above the buttons. */
+  [data-sheet-footer] > [data-footer-note] {
+    flex-basis: 100%;
+    order: -1;
+  }
+
   /* A list table becomes a stack of cards, each cell labelled by its column. */
   table[data-cards] {
     display: block;

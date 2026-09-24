@@ -603,10 +603,37 @@ export function runSource(reads: RunReads) {
     };
   };
   const source: DataSource = {
+    runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     runs: {
       list: refuse,
+      outcomesSettings: () =>
+        Promise.resolve(
+          readOk({
+            customerEnabled: false,
+            platformDisabled: false,
+            platformDisabledReason: null,
+            effectiveEnabled: false,
+          }),
+        ),
+      work: (_ctx, runId) =>
+        Promise.resolve(
+          readOk({
+            runId,
+            machine: null,
+            checkouts: [],
+            diffs: [],
+            pullRequests: [],
+            complete: false,
+            warnings: ["checkout_context_not_recorded"],
+          }),
+        ),
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost ?? readOk(runCost())),
@@ -633,6 +660,7 @@ export function runSource(reads: RunReads) {
         "resolvedApprovals",
         reads.resolvedApprovals ?? readOk([]),
       ),
+      resolvedSince: refuse,
     },
     agents: {
       list: refuse,
@@ -643,6 +671,7 @@ export function runSource(reads: RunReads) {
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,

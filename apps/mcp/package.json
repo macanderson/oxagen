@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@clickhouse/client": "1.19.0",
+    "@clickhouse/client": "1.23.1",
     "@oxagen/agent": "workspace:*",
     "@oxagen/auth": "workspace:*",
     "@oxagen/billing": "workspace:*",
@@ -25,19 +25,19 @@
     "@oxagen/plugins": "workspace:*",
     "@oxagen/rules": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
-    "ai": "7.0.14",
-    "better-auth": "1.6.11",
-    "drizzle-orm": "0.45.2",
+    "ai": "7.0.111",
+    "better-auth": "1.6.33",
+    "drizzle-orm": "0.45.3",
     "inngest": "3.54.2",
-    "neo4j-driver": "5.28.3",
+    "neo4j-driver": "6.2.0",
     "pdf-lib": "1.17.1",
     "postgres": "3.4.9",
     "stripe": "17.7.0",
-    "xmcp": "0.6.10",
+    "xmcp": "0.6.13",
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/node": "25.9.1",
+    "@types/node": "25.9.8",
     "@vitest/coverage-v8": "2.1.9",
     "typescript": "6.0.3",
     "vitest": "2.1.9"

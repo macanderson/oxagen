@@ -1,6 +1,7 @@
 // The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's ten
 // links in the mockup's order (Workspace: Fleet, Agents, Tools, Steering,
-// Runtimes, Repositories, Spend; Organization: Organization, Billing, Audit), the phone's thumb bar and More
+// Runtimes, Repositories, Spend; Organization: Organization, Billing, Audit),
+// the phone's thumb bar and More
 // sheet over the same keys, which item is current, and the breadcrumbs. Pure
 // functions of the URL, so the sidebar, top bar, command menu and <MobileNav>
 // agree on one model. Run has no entry: it opens from the Fleet runs table.
@@ -236,10 +237,18 @@ export type Crumb =
   | { kind: "name"; text: string; href: SafePath | null }
   | { kind: "id"; text: string; href: SafePath | null };
 
-/** Breadcrumbs for a pathname, per the mockup's `crumbs()`. The last crumb has no href. */
+/**
+ * Breadcrumbs for a pathname, per the mockup's `crumbs()`. The last crumb has
+ * no href. `record` is what the page declared it is showing (`PageRecord`),
+ * so a route whose segment is a key can end on the record's name.
+ */
 export function breadcrumbs(
   pathname: string,
-  names: { org: string; ws: string | null },
+  names: {
+    org: string;
+    ws: string | null;
+    record?: { id: string | null; label: string | null } | null;
+  },
 ): Crumb[] {
   const { org, ws, rest } = parseShellPath(pathname);
   if (org === null) return [];
@@ -274,26 +283,28 @@ export function breadcrumbs(
           out.push({ kind: "id", text: "source", href: null });
       }
       break;
-    case "runtimes":
-      // One host (`runtimes/{host}`) sits under the list, as a run sits under
-      // Fleet: Runtimes → the host id (mockup `crumbs()`).
-      if (id === undefined) {
-        out.push({ kind: "nav", key: "runtimes", href: null });
-        break;
-      }
-      out.push({
-        kind: "nav",
-        key: "runtimes",
-        href: pathOf(org, ws, "runtimes"),
-      });
-      out.push({ kind: "id", text: id, href: null });
-      break;
     case "mandates":
       // Flat route (ARCHITECTURE.md §1.2): the mandate is not nested under
       // its agent, but Agents is still the nav item it lights, so the trail
       // ends at Agents → the mandate id, mirroring the runs → fleet case.
       out.push({ kind: "nav", key: "agents", href: pathOf(org, ws, "agents") });
       if (id !== undefined) out.push({ kind: "id", text: id, href: null });
+      break;
+    case "runtimes":
+      // One runtime ends the trail on the runtime's name, under Runtimes
+      // (mockup `crumbs()`: the list is a link, the name is mono). The
+      // segment is the enrollment id, so the name is the one the page
+      // declared for that id; until it has, the id stands in. The id stays
+      // copyable on the page, in the rollback command.
+      out.push({
+        kind: "nav",
+        key: "runtimes",
+        href: pathOf(org, ws, "runtimes"),
+      });
+      if (id !== undefined) {
+        const label = names.record?.id === id ? (names.record.label ?? id) : id;
+        out.push({ kind: "id", text: label, href: null });
+      }
       break;
     default: {
       const key = currentNavKey(pathname);

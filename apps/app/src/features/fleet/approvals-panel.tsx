@@ -44,6 +44,7 @@ type Place = { org: string; ws: string };
 
 function ApprovalCard({
   item,
+  onResolved,
   mandate,
   now,
   org,
@@ -51,6 +52,7 @@ function ApprovalCard({
   on,
 }: {
   item: ApprovalItem;
+  onResolved?: () => void;
   /** The mandate the call drew on, when the viewer could read it. */
   mandate: MandateRow | null;
   now: number;
@@ -159,6 +161,7 @@ function ApprovalCard({
         </SafeLink>
       )}
       <ApprovalDecision
+        onResolved={onResolved}
         approvalId={item.id}
         tool={item.tool}
         eligibility={item.autoEligibility}
@@ -177,6 +180,7 @@ export function ApprovalsPanel({
   org,
   ws,
   on = "fleet",
+  onResolved,
 }: {
   approvals: Read<ApprovalQueue>;
   /** The mandates the cards name, by public id; empty when none was read. */
@@ -189,6 +193,7 @@ export function ApprovalsPanel({
    * acts on changes with it: an approval must read the same on both pages.
    */
   on?: "fleet" | "run";
+  onResolved?: () => void;
 } & Place) {
   const t = useTranslations("fleet.approvals");
   const locale = useLocale();
@@ -231,6 +236,7 @@ export function ApprovalsPanel({
         <ul className="grid gap-3 md:grid-cols-2">
           {approvals.value.items.map((item) => (
             <ApprovalCard
+              onResolved={onResolved}
               key={item.id}
               item={item}
               mandate={

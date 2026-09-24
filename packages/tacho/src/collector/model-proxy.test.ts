@@ -20,7 +20,7 @@ import {
 } from "node:http";
 import { connect } from "node:net";
 import { join } from "node:path";
-import { gzipSync, zstdCompressSync } from "node:zlib";
+import { deflateSync, gzipSync, zstdCompressSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
 import type { TachoEvent } from "../envelope";
@@ -1821,6 +1821,308 @@ describe("the loopback model proxy", () => {
     ).toBe(200);
     expect(fake.requests[0]!.url).toBe("/corp/anthropic/v1/messages");
   });
+
+  it("folds a request over the cap once it has a prior, and ships the fold (P0-1)", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-huge-fold");
+    const headers = [
+      "X-Api-Key",
+      FAKE_KEY,
+      "X-Claude-Code-Session-Id",
+      "sess-huge-fold",
+    ];
+    // Under the cap on its own, so the first call ships and establishes a
+    // prior a second call can actually dereference.
+    const system = [{ type: "text", text: "S".repeat(900_000) }];
+    const first = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [{ role: "user", content: PROMPT }],
+    });
+    await call(port, { path: "/anthropic/v1/messages", headers, body: first });
+    await until(() => frames(uuid).length === 1);
+    expect(
+      frames(uuid)[0]!.attrs["oxagen.request_body_omitted"],
+    ).toBeUndefined();
+
+    // A big new message pushes the second call's raw body over the cap, even
+    // though `system` repeats unchanged. Checking the raw bytes here — the
+    // bug — would skip folding and ship no request half at all; folding
+    // first brings the stored text down to just the new messages, which
+    // fits comfortably.
+    const bigReply = "C".repeat(200_000);
+    const second = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [
+        { role: "user", content: PROMPT },
+        { role: "assistant", content: bigReply },
+        { role: "user", content: "and then?" },
+      ],
+    });
+    expect(Buffer.byteLength(second, "utf8")).toBeGreaterThan(
+      TACHO_MAX_BODY_BYTES,
+    );
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers,
+      body: second,
+    });
+    await until(() => frames(uuid).length === 2);
+
+    const [, two] = frames(uuid);
+    expect(two!.attrs["oxagen.request_body_omitted"]).toBeUndefined();
+    expect(two!.attrs["oxagen.request_prior_digest"]).toBe(sha(first));
+    const [body] = handle.wal.bodiesFor([two!]);
+    expect(body).toBeDefined();
+    const exchange = JSON.parse(
+      Buffer.from(body!.bytes_base64, "base64").toString("utf8"),
+    ) as { request: string; response: string };
+    const stored = JSON.parse(exchange.request) as Record<string, unknown>;
+    expect(stored["messages"]).toEqual([
+      { role: "assistant", content: bigReply },
+      { role: "user", content: "and then?" },
+    ]);
+    expect(stored).not.toHaveProperty("system");
+    // The response half renders too: `content-blocks.ts`'s `responseWire`
+    // used to require both halves as strings, so a request-only exchange
+    // rendered fine but a response paired with a folded request also had to
+    // keep working.
+    expect(exchange.response).toBe(ANTHROPIC_EVENTS.join(""));
+  });
+
+  it("forgets a session's remembered prior when this call's own body never shipped (P1-4)", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-forget-prior");
+    const headers = [
+      "X-Api-Key",
+      FAKE_KEY,
+      "X-Claude-Code-Session-Id",
+      "sess-forget-prior",
+    ];
+    const system = [
+      { type: "text", text: "S".repeat(TACHO_MAX_BODY_BYTES + 4096) },
+    ];
+    const first = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [{ role: "user", content: PROMPT }],
+    });
+    await call(port, { path: "/anthropic/v1/messages", headers, body: first });
+    await until(() => frames(uuid).length === 1);
+    expect(frames(uuid)[0]!.attrs["oxagen.request_body_omitted"]).toBe(
+      "too_large",
+    );
+
+    // A second call that repeats the same oversized `system` block. Had the
+    // first call's digest stayed remembered as a valid prior (the bug this
+    // guards), this would fold `system` out, ship a small body, and point
+    // `unchanged_from` at a call whose own body the WAL never holds. The fix
+    // forgets the session's memory instead, so this call has nothing to fold
+    // against and is, correctly, over the cap again.
+    const second = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [{ role: "user", content: "a different question" }],
+    });
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers,
+      body: second,
+    });
+    await until(() => frames(uuid).length === 2);
+    const [, two] = frames(uuid);
+    expect(two!.attrs["oxagen.request_prior_digest"]).toBeUndefined();
+    expect(two!.attrs["oxagen.request_body_omitted"]).toBe("too_large");
+  });
+
+  it("keeps usage and cost when the response is too large to hold (P1-5)", async () => {
+    const oversized = "y".repeat(TACHO_MAX_BODY_BYTES + 4096);
+    const reply = `{"id":"msg_big2","model":"claude-sonnet-5","content":[{"type":"text","text":"${oversized}"}],"usage":{"input_tokens":7,"output_tokens":3}}`;
+    const fake = await vendor((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(reply);
+    });
+    const { port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-huge-usage");
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        FAKE_KEY,
+        "X-Claude-Code-Session-Id",
+        "sess-huge-usage",
+      ],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    await until(() => frames(uuid).length === 1);
+    const [frame] = frames(uuid);
+    // The response body is too large to hold, but the usage the vendor
+    // reported crossed the wire before the cap did and is still on the frame.
+    expect(frame!.body).toMatchObject({ input_tokens: 7, output_tokens: 3 });
+    expect(frame!.attrs["oxagen.response_body_omitted"]).toBe("too_large");
+  });
+
+  it("clamps an absurd model name so sealing the frame never throws, and the call still answers (P0-2)", async () => {
+    const fake = await vendor((_req, res) => {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end('{"error":{"message":"bad model"}}');
+    });
+    const { port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-huge-model");
+    const hugeModel = "m".repeat(600);
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        FAKE_KEY,
+        "X-Claude-Code-Session-Id",
+        "sess-huge-model",
+      ],
+      body: JSON.stringify({ model: hugeModel, messages: [] }),
+    });
+    // The client got its answer: an unclamped model name used to throw
+    // sealing the frame, from inside an event listener nothing above it
+    // could catch, which left nothing here to answer at all.
+    expect(answer.status).toBe(400);
+    await until(() => frames(uuid).length === 1);
+    const model = (frames(uuid)[0]!.body as Record<string, unknown>)["model"];
+    expect(typeof model).toBe("string");
+    expect((model as string).length).toBeLessThanOrEqual(512);
+
+    // The daemon is still standing: a second, ordinary call still answers.
+    const again = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        FAKE_KEY,
+        "X-Claude-Code-Session-Id",
+        "sess-huge-model",
+      ],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    expect(again.status).toBe(400);
+  });
+
+  it("settles and frees the in-flight slot when the response cannot be decoded (P1-3)", async () => {
+    const fake = await vendor((_req, res) => {
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Content-Encoding": "gzip",
+      });
+      // Not gzip at all: the decoder errors instead of ending normally.
+      res.end(Buffer.from("this is not gzip"));
+    });
+    const { port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-bad-gzip");
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        FAKE_KEY,
+        "X-Claude-Code-Session-Id",
+        "sess-bad-gzip",
+      ],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    expect(answer.status).toBe(200);
+    // A frame still seals: a decoder failure used to hang forever waiting on
+    // an `end` gzip was never going to emit, leaking the in-flight entry.
+    await until(() => frames(uuid).length === 1);
+    expect(frames(uuid)[0]!.attrs["oxagen.response_body_omitted"]).toBe(
+      "not_decoded",
+    );
+  });
+
+  it("decodes a deflate request, and records why one it cannot decode has no body (P2-9)", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-deflate");
+    const sent = JSON.stringify({
+      model: "claude-sonnet-5",
+      messages: [{ role: "user", content: "hello deflate" }],
+    });
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        FAKE_KEY,
+        "X-Claude-Code-Session-Id",
+        "sess-deflate",
+        "Content-Encoding",
+        "deflate",
+      ],
+      body: deflateSync(Buffer.from(sent)),
+    });
+    await until(() => frames(uuid).length === 1);
+    const [first] = frames(uuid);
+    const [body] = handle.wal.bodiesFor([first!]);
+    expect(body).toBeDefined();
+    const exchange = JSON.parse(
+      Buffer.from(body!.bytes_base64, "base64").toString("utf8"),
+    ) as { request: string };
+    expect(JSON.parse(exchange.request)).toMatchObject({
+      messages: [{ role: "user", content: "hello deflate" }],
+    });
+    expect(first!.attrs["oxagen.request_body_omitted"]).toBeUndefined();
+
+    // A body sent under an encoding this build cannot decode (or a
+    // corrupted one) is still forwarded, and the frame says why it has no
+    // request half rather than silently shipping nothing.
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        FAKE_KEY,
+        "X-Claude-Code-Session-Id",
+        "sess-deflate",
+        "Content-Encoding",
+        "compress",
+      ],
+      body: Buffer.from(sent),
+    });
+    await until(() => frames(uuid).length === 2);
+    const [, second] = frames(uuid);
+    expect(second!.attrs["oxagen.request_body_omitted"]).toBe("not_decoded");
+  });
+
+  it("correlates a Codex call by session_id as well as session-id (P2-12)", async () => {
+    const fake = await vendor((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        '{"id":"chatcmpl-1","model":"gpt-5","choices":[{"message":{"content":"hi"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}',
+      );
+    });
+    const { port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-underscore", "codex");
+    await call(port, {
+      path: "/openai/v1/chat/completions",
+      headers: ["session_id", "sess-underscore"],
+      body: JSON.stringify({ model: "gpt-5", messages: [] }),
+    });
+    await until(() => frames(uuid).length === 1);
+    expect(frames(uuid)[0]!.attrs["oxagen.correlation"]).toBe("harness_header");
+  });
 });
 
 describe("the credential seam (ADR-143)", () => {
@@ -2485,6 +2787,7 @@ describe("the wire and the host file", () => {
       "models_independent",
       "hook_fail_open",
       "steering_manifest",
+      "containment",
     ]);
   });
 

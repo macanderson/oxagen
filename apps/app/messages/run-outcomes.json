@@ -1,0 +1,33 @@
+{
+  "runOutcomes": {
+    "title": "Run follow-through",
+    "description": "Suggest follow-up issues from recorded changes and generate fix prompts after you create the selected issues. Stella model calls are metered. Repository evidence and run summaries keep their separate settings.",
+    "platformDisabled": "Oxagen has suspended run follow-through for this organization.",
+    "enabled": "Metered run follow-through is enabled for this organization.",
+    "disabled": "Metered run follow-through is off until an organization owner or admin enables it.",
+    "enable": "Enable metered follow-through",
+    "disable": "Disable follow-through",
+    "saving": "Saving",
+    "denied": "An organization owner or admin must change this setting.",
+    "saveFailed": "The setting could not be saved. Try again.",
+    "ownerRequired": "Ask an organization owner or admin to change this setting.",
+    "providersTitle": "Issue connections",
+    "loadProviders": "Check issue connections",
+    "loadingProviders": "Checking connections",
+    "providerFailed": "The connections could not be read. Try again.",
+    "providerConsent": "Enable Run follow-through before authorizing an issue provider.",
+    "providerOwner": "An organization owner or admin can authorize issue providers.",
+    "githubTitle": "GitHub",
+    "githubConnected": "The workspace GitHub installation is connected. Issue creation also requires its Issues write permission.",
+    "githubUnconfigured": "GitHub authorization is not configured for this deployment.",
+    "githubConnect": "Authorize GitHub",
+    "githubInstall": "Install the GitHub app",
+    "linearTitle": "Linear",
+    "linearConnect": "Authorize Linear",
+    "linearConnecting": "Opening Linear",
+    "linearUnconfigured": "Linear authorization is not configured for this deployment.",
+    "linearConnected": "Connected Linear workspace: {name}",
+    "linearEmpty": "No Linear issue connection is recorded.",
+    "authorizationFailed": "Authorization could not start. Check consent and try again."
+  }
+}

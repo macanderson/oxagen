@@ -73,8 +73,14 @@ const exportEvents = vi.fn<DataSource["audit"]["exportEvents"]>();
 const members = vi.fn<DataSource["org"]["members"]>();
 const refuse = () => Promise.reject(new Error("not an Audit read"));
 const source: DataSource = {
+  runtimes: { list: refuse, agents: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse, preferences },
+  shell: {
+    context: refuse,
+    preferences,
+    counts: refuse,
+    notifications: refuse,
+  },
   runs: {
     list: refuse,
     get: refuse,
@@ -83,8 +89,10 @@ const source: DataSource = {
     transcript: refuse,
     chain: refuse,
     outputs: refuse,
+    work: refuse,
+    outcomesSettings: refuse,
   },
-  approvals: { pending: refuse, resolved: refuse },
+  approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
   agents: {
     list: refuse,
     get: refuse,
@@ -94,6 +102,7 @@ const source: DataSource = {
   billing: {
     plan: refuse,
     usageCredits: refuse,
+    retention: refuse,
     bucket: refuse,
     contractRate: refuse,
     invoices: refuse,

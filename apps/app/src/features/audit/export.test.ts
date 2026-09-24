@@ -34,8 +34,14 @@ const exportEvents = vi.fn();
 const preferences = vi.fn<DataSource["shell"]["preferences"]>();
 const resolveViewer = vi.fn();
 const source: DataSource = {
+  runtimes: { list: refuse, agents: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse, preferences },
+  shell: {
+    context: refuse,
+    preferences,
+    counts: refuse,
+    notifications: refuse,
+  },
   runs: {
     list: refuse,
     get: refuse,
@@ -44,12 +50,15 @@ const source: DataSource = {
     transcript: refuse,
     chain: refuse,
     outputs: refuse,
+    work: refuse,
+    outcomesSettings: refuse,
   },
-  approvals: { pending: refuse, resolved: refuse },
+  approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
   agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
   billing: {
     plan: refuse,
     usageCredits: refuse,
+    retention: refuse,
     bucket: refuse,
     contractRate: refuse,
     invoices: refuse,

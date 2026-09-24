@@ -175,7 +175,7 @@ describe("workspace switcher", () => {
     const create = within(dialog).getByRole("link", {
       name: "Create a workspace",
     });
-    expect(create).toHaveAttribute("href", "/acme#org-workspaces");
+    expect(create).toHaveAttribute("href", "/acme?tab=workspaces");
     await userEvent.click(create);
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();

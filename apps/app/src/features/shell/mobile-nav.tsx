@@ -449,7 +449,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
           title={t("switcher.ws")}
           testId="more-workspace-switcher"
           kind="ws"
-          createHref={routes.orgWorkspaces(data.org.slug)}
+          createHref={routes.organization(data.org.slug, "workspaces")}
           current={ws}
           choices={workspaceChoices(data)}
           open={switcher === "ws"}

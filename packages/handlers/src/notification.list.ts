@@ -1,6 +1,7 @@
-import { and, eq, count, sql } from "drizzle-orm";
-import { schema, withTenantDb } from "@oxagen/database";
+import { and, eq, count, sql, isNull } from "drizzle-orm";
+import { schema, withTenantDb, withOrgDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
@@ -16,11 +17,18 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const orgId = ctx.orgId;
 
   try {
-    return await withTenantDb(async (tx) => {
+    const orgOnly =
+      !ctx.workspaceId || ctx.workspaceId === ORG_ONLY_WORKSPACE_ID;
+    const workspaceFilter = orgOnly
+      ? isNull(schema.notifications.workspaceId)
+      : undefined;
+    const readDb = orgOnly ? withOrgDb : withTenantDb;
+    return await readDb(async (tx) => {
       const conditions = [
         eq(schema.notifications.userId, userId),
         eq(schema.notifications.orgId, orgId),
         eq(schema.notifications.archived, false),
+        workspaceFilter,
       ];
       if (unreadOnly) {
         conditions.push(eq(schema.notifications.unread, true));
@@ -53,6 +61,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
               eq(schema.notifications.userId, userId),
               eq(schema.notifications.orgId, orgId),
               eq(schema.notifications.archived, false),
+              workspaceFilter,
               eq(schema.notifications.unread, true),
             ),
           ),

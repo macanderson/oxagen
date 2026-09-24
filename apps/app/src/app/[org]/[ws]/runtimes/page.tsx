@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { dataSource } from "@/data/source";
+import { getAuthUser } from "@/features/auth";
+import { Runtimes } from "@/features/runtimes";
 import { requireViewer } from "@/server/viewer";
-import { routes } from "@/shared/safe-path";
-import { linkText } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
-import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("pages");
@@ -12,40 +11,31 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // Runtimes (roadmap mockups/pages/runtimes.md): the hosts agents run on. The
-// sidebar, the More sheet and ⌘K link here, so the route exists and keeps the
-// shell around it (audit-prompt checks 1 and 4). The record holds one row per
-// enrollment (one agent key on one machine), not a runtime per host, so the
-// body says what is missing and where the enrollments are listed today
-// (#3816). The Runtimes lane replaces this body with the page it builds.
+// feature renders the header itself, because the error and access-denied
+// states replace the body with the header included.
 export default async function RuntimesPage({
   params,
-}: PageProps<"/[org]/[ws]/runtimes">) {
+}: {
+  params: Promise<{ org: string; ws: string }>;
+}) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
-  const t = await getTranslations("pages");
+  // requireViewer admitted a session, so the memoized user is present; the
+  // access-denied state names the person by it, as the mockup's does.
+  const user = await getAuthUser();
+  const viewerName = user === null ? "" : user.name || user.email;
   return (
     <main
       id="main"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader
-        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
-        title={t("runtimes")}
-        description={t("runtimesDescription")}
+      <Runtimes
+        ctx={ctx}
+        source={dataSource()}
+        org={org}
+        ws={ws}
+        viewerName={viewerName}
       />
-      <p
-        data-testid="runtimes-not-backed"
-        data-gap="#3816"
-        className="max-w-prose text-sm text-muted-foreground"
-      >
-        {t("runtimesNotBacked")}{" "}
-        <SafeLink
-          to={routes.agents(ctx.orgSlug, ctx.wsSlug)}
-          className={linkText}
-        >
-          {t("runtimesAgentsLink")}
-        </SafeLink>
-      </p>
     </main>
   );
 }

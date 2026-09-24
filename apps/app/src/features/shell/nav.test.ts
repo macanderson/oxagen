@@ -307,6 +307,41 @@ describe("breadcrumbs", () => {
     ]);
   });
 
+  it("runtimes ends on Runtimes, and one runtime ends on its id under a Runtimes link", () => {
+    expect(breadcrumbs("/acme/core-platform/runtimes", names).slice(2)).toEqual(
+      [{ kind: "nav", key: "runtimes", href: null }],
+    );
+    expect(
+      breadcrumbs("/acme/core-platform/runtimes/tch_1", names).slice(2),
+    ).toEqual([
+      { kind: "nav", key: "runtimes", href: "/acme/core-platform/runtimes" },
+      { kind: "id", text: "tch_1", href: null },
+    ]);
+  });
+
+  it("one runtime ends on the name its page declared for that id, and never on another id's name", () => {
+    const at = "/acme/core-platform/runtimes/tch_1";
+    expect(
+      breadcrumbs(at, {
+        ...names,
+        record: { id: "tch_1", label: "mbell-mbp-16" },
+      }).at(-1),
+    ).toEqual({ kind: "id", text: "mbell-mbp-16", href: null });
+    // A declaration left by the runtime being navigated away from names
+    // another host, so the id stands in until this page declares its own.
+    expect(
+      breadcrumbs(at, {
+        ...names,
+        record: { id: "tch_2", label: "ci-runner-07" },
+      }).at(-1),
+    ).toEqual({ kind: "id", text: "tch_1", href: null });
+    expect(
+      breadcrumbs(at, { ...names, record: { id: "tch_1", label: null } }).at(
+        -1,
+      ),
+    ).toEqual({ kind: "id", text: "tch_1", href: null });
+  });
+
   it("falls back to the slug for an unknown workspace name, and is empty outside an organization", () => {
     expect(breadcrumbs("/acme/finops", { org: "Acme", ws: null })[1]).toEqual({
       kind: "name",

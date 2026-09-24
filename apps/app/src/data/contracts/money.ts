@@ -82,6 +82,31 @@ export function sumMoney(values: readonly Money[]): Money | null {
   return { micros: total.toString(), currency: first.currency };
 }
 
+/** Micros in one cent. */
+const MICROS_PER_CENT = BigInt(10_000);
+
+/**
+ * `value` rounded to whole cents, half to even (banker's rounding), exact at
+ * any magnitude. A statement total is rounded once, here, after its lines are
+ * summed at full precision (pages/billing.md, This period).
+ */
+export function roundToCentsHalfEven(value: Money): Money {
+  const micros = toBigInt(value.micros);
+  const negative = micros < BigInt(0);
+  const magnitude = negative ? -micros : micros;
+  let cents = magnitude / MICROS_PER_CENT;
+  const rest = magnitude % MICROS_PER_CENT;
+  const half = MICROS_PER_CENT / BigInt(2);
+  if (rest > half || (rest === half && cents % BigInt(2) === BigInt(1))) {
+    cents += BigInt(1);
+  }
+  const rounded = cents * MICROS_PER_CENT;
+  return {
+    micros: (negative && rounded !== BigInt(0) ? -rounded : rounded).toString(),
+    currency: value.currency,
+  };
+}
+
 /** The precision `ratioOfMicros` divides at: a ratio carries six decimal places. */
 const RATIO_SCALE = 1_000_000;
 
@@ -99,6 +124,20 @@ export function ratioOfMicros(part: Money, whole: Money): number | null {
   if (divisor === BigInt(0)) return null;
   const scaled = (toBigInt(part.micros) * BigInt(RATIO_SCALE)) / divisor;
   return Number(scaled) / RATIO_SCALE;
+}
+
+/**
+ * Orders two amounts by their micros, for a column a person sorts by cost.
+ * Negative when `a` is smaller, positive when larger, zero when equal. The
+ * comparison is exact on the digit strings through BigInt, so two costs a
+ * float would round together still sort apart (INV-09). Amounts in different
+ * currencies have no order between them, so they sort by currency code.
+ */
+export function compareMicros(a: Money, b: Money): number {
+  if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
+  const x = toBigInt(a.micros);
+  const y = toBigInt(b.micros);
+  return x === y ? 0 : x < y ? -1 : 1;
 }
 
 /**

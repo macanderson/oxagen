@@ -1,7 +1,7 @@
 export const meta = {
   name: 'mc-0-rebaseline',
   description: 'Rev1 app session 0: re-baseline the gap record, record the 2026-09-14 cuts in an ADR, close the parity integrity holes, and bring the two open rev1 app PRs to green; one PR',
-  whenToUse: 'Run first. It unblocks sessions 1 to 5 and rewrites docs/mission-control/GAP-INVENTORY.md against head.',
+  whenToUse: 'Run first. It unblocks sessions 1 to 5 and rewrites oxagen-roadmap:docs/oxagen/mission-control/GAP-INVENTORY.md against head.',
   phases: [
     { title: 'Scout', detail: 'confirm each lane is still open on main' },
     { title: 'Build', detail: 'three lanes in parallel worktrees' },
@@ -12,8 +12,9 @@ export const meta = {
 
 // ---------------------------------------------------------------------------
 // Shared preamble. Every mc-* workflow carries an identical copy because a
-// workflow script cannot import another file. Edit docs/mission-control/
-// BUILD-CHUNKS.md §"Workflow shape" when you change it, and change every copy.
+// workflow script cannot import another file. Edit
+// oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md §"Workflow shape"
+// when you change it, and change every copy.
 // ---------------------------------------------------------------------------
 
 const RULES = `
@@ -35,11 +36,12 @@ HARD RULES for this repository. Restate them to any subagent you spawn.
 `
 
 const CONTEXT = `
+oxagen-roadmap:<path> means <path> in https://github.com/macanderson/oxagen-roadmap (the build plan, the gap inventory, and the product spec moved there on 2026-09-23, #3895). Read it from a checkout beside this repository (~/Projects/oxagen-roadmap, or ../oxagen-roadmap in a cloud session); a change to those files is a pull request in that repository.
 CONTEXT you must read before editing (paths relative to the repo root):
-- docs/mission-control/BUILD-CHUNKS.md: the session plan and the corrected gap facts. Your session's section names your lane and what is already built.
-- docs/audits/2026-09-19-mission-control-gap-inventory-review.md: why the older gap inventory is stale. Do not rebuild anything §1 there marks Built.
+- oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md: the session plan and the corrected gap facts. Your session's section names your lane and what is already built.
+- oxagen-roadmap:docs/oxagen/audits/2026-09-19-mission-control-gap-inventory-review.md: why the older gap inventory is stale. Do not rebuild anything §1 there marks Built.
 - apps/app/ARCHITECTURE.md §1.2 (the page set and what each page reads), §3 (viewer, kernel, ports, mappers, SSE, not recorded), §4 (invariants), §6 (testing).
-- docs/specs/mission-control/spec.md §14 (the page table), and the section your lane names.
+- oxagen-roadmap:docs/mission-control-spec.md §14 (the page table), and the section your lane names.
 - apps/app/capability-ui-map.json: the enforced binding of every app-layer capability to a page and a proof. Diff against it first, the spec second.
 The app: routes under apps/app/src/app/[org]/..., feature lanes under apps/app/src/features/<page>/, view models under apps/app/src/data/contracts/, live adapters and mappers under apps/app/src/data/live/, the UI kit under apps/app/src/ui/ imported as @/ui/<name>, messages under apps/app/messages/. Server writes go through the kernel seam in apps/app/src/server/kernel.ts, never a raw invoke.
 `
@@ -158,8 +160,8 @@ TASK: Integrate session ${session.id} (${session.title}) into one PR.
 1. git fetch origin && git worktree add ${wt(session.id)} -b mc/${session.id} ${base}; push -u.
 2. git merge (never rebase) each verified lane commit: ${built.map(b => `${b.head_sha} (refs/heads/${b.branch})`).join(', ')}. Verify each fetched remote branch still points to its reported SHA before merging; stop on a mismatch. Resolve conflicts in messages, capability-ui-map.json, data/contracts, and ports by keeping both lanes' hunks. ${cfg.mergeMain ? 'Then merge origin/main.' : ''}
    Lane summaries: ${JSON.stringify(built.map(b => ({ lane: b.lane, branch: b.branch, summary: b.summary, gaps: b.open_gaps, deviations: b.spec_deviations })))}
-3. Read the combined diff once, end to end, against docs/mission-control/BUILD-CHUNKS.md §${session.id} and the spec sections it names. Fix anything missing or inconsistent. Run the generators whose --check would fail (gen:messages, docs:schemas) and commit their output. Update apps/app/e2e/routes.ts for any new route.
-4. Update apps/app/ARCHITECTURE.md §1.2 rows the session changes, and tick the session's "Done when" boxes in docs/mission-control/BUILD-CHUNKS.md that are now true. Commit and push.
+3. Read the combined diff once, end to end, against oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md §${session.id} and the spec sections it names. Fix anything missing or inconsistent. Run the generators whose --check would fail (gen:messages, docs:schemas) and commit their output. Update apps/app/e2e/routes.ts for any new route.
+4. Update apps/app/ARCHITECTURE.md §1.2 rows the session changes, and tick the session's "Done when" boxes in oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md that are now true. Commit and push.
 5. Open a PR against main, ready for review, titled "${session.prTitle}". Body per .github/PULL_REQUEST_TEMPLATE.md: what ships and each defect that rode along, exactly one issue line (Closes #N only when the issue's whole DoD is done, otherwise Refs #N, otherwise the closes-nothing label), vision alignment, checklist, verification. ${session.issueHint} Then add the one-line "Landed in PR <url>" note under the session's heading in BUILD-CHUNKS.md, commit, and push.
 6. Watch CI. A conflicting PR gets no run, so merge main. Fix every failure and push, up to four rounds. Report exactly what still fails if red. Do not merge the PR.
 7. Remove the lane worktrees (git worktree remove, then prune). Keep the integration worktree.
@@ -243,12 +245,12 @@ const session = {
   lanes: [
     {
       id: 'docs', title: 'Gap record, cut ADR, spec and architecture corrections, missing capability docs',
-      owns: ['docs/mission-control/GAP-INVENTORY.md', 'docs/adr/ADR-1xx-*.md (one new file)', 'docs/specs/mission-control/spec.md §2.1 and §14 (notes only)', 'apps/app/ARCHITECTURE.md §1.2 lines for Skills and Mandate', 'docs/capabilities/*.md (twelve new files)', 'docs/capabilities/_index.md'],
+      owns: ['oxagen-roadmap:docs/oxagen/mission-control/GAP-INVENTORY.md', 'docs/adr/ADR-1xx-*.md (one new file)', 'oxagen-roadmap:docs/mission-control-spec.md §2.1 and §14 (notes only)', 'apps/app/ARCHITECTURE.md §1.2 lines for Skills and Mandate', 'docs/capabilities/*.md (twelve new files)', 'docs/capabilities/_index.md'],
       checks: ['GAP-INVENTORY.md still says Mandate detail Missing', 'ARCHITECTURE.md §1.2 still claims a skills/[[...tab]] catch-all', 'no ADR records the 2026-09-14 scope review', 'docs/capabilities lacks files for approval_rule.{list,set,delete,enabled.set}, approval.auto_eligibility.get, mandate.{grant,revoke,limits.update,request,list,get}, context.steering.freshness'],
       issues: ['#2957', '#3286', '#2592'],
-      task: `(a) Rewrite docs/mission-control/GAP-INVENTORY.md against origin/main: apply every correction in docs/audits/2026-09-19-mission-control-gap-inventory-review.md §1 to §3 and §5, keep the page-by-page table shape, add a "Class" column (UI-only, UI plus backend, backend, cut) per row, take the page set from apps/app/src/app with ARCHITECTURE.md §1.2 as the map, drop the scorecard, and name the owning issue per row. Keep the "Cut" rows and cite apps/app/ARCHITECTURE.md §9 (2026-09-14, 2026-09-15, 2026-09-18 entries) and ADR-062 for each.
+      task: `(a) Rewrite oxagen-roadmap:docs/oxagen/mission-control/GAP-INVENTORY.md against origin/main: apply every correction in oxagen-roadmap:docs/oxagen/audits/2026-09-19-mission-control-gap-inventory-review.md §1 to §3 and §5, keep the page-by-page table shape, add a "Class" column (UI-only, UI plus backend, backend, cut) per row, take the page set from apps/app/src/app with ARCHITECTURE.md §1.2 as the map, drop the scorecard, and name the owning issue per row. Keep the "Cut" rows and cite apps/app/ARCHITECTURE.md §9 (2026-09-14, 2026-09-15, 2026-09-18 entries) and ADR-062 for each.
 (b) Write one ADR, next free number after the highest in docs/adr, titled "The 2026-09-14 scope review: what the rev1 app does not build", recording the ten cuts and the two reversals (Audit page 2026-09-15 #3097, Model funding 2026-09-18) with their ARCHITECTURE.md §9 sources. Status Accepted, decided by the maintainer on the dates given. Follow the shape of docs/adr/ADR-095.
-(c) In docs/specs/mission-control/spec.md add a one-line status note under §2.1 that legal hold, reconciliation, and the ontology engine are cut for rev1 per that ADR. Do not rewrite the spec.
+(c) In oxagen-roadmap:docs/mission-control-spec.md add a one-line status note under §2.1 that legal hold, reconciliation, and the ontology engine are cut for rev1 per that ADR. Do not rewrite the spec.
 (d) In apps/app/ARCHITECTURE.md §1.2 correct the Skills row (no catch-all route exists; the page is one section; Phase 2 moves it under Steering per ADR-097) and the Mandate row's "not yet built" sentence (line ~90), and add a decision-log line dated today.
 (e) Write the twelve missing docs/capabilities/<stem>.md files (stem = the contract file's dotted stem) in the shape of an existing one such as docs/capabilities/kill_switch.set.md, with the Surfaces line matching each contract, and add them to docs/capabilities/_index.md. Run pnpm docs:schemas if it owns any of them and commit its output.`,
       done: 'GAP-INVENTORY.md has no row the review refutes; the ADR exists and is linked from ARCHITECTURE.md §9 and the inventory; pnpm check:contracts passes on the docs (it is a lightweight check and allowed); the twelve doc files exist and the index lists them.',
@@ -274,5 +276,5 @@ const session = {
   ],
 }
 
-const result = await runSession(session, 'docs/audits/2026-09-19-mission-control-gap-inventory-review.md §5, ADR-095 as the ADR shape, tools/scripts/check_ui_parity.mjs, docs/capabilities/kill_switch.set.md as the doc shape')
+const result = await runSession(session, 'oxagen-roadmap:docs/oxagen/audits/2026-09-19-mission-control-gap-inventory-review.md §5, ADR-095 as the ADR shape, tools/scripts/check_ui_parity.mjs, docs/capabilities/kill_switch.set.md as the doc shape')
 return result

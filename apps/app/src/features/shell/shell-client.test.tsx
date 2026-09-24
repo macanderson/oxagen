@@ -25,6 +25,7 @@ import {
 } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
+import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 
@@ -178,6 +179,7 @@ function renderShell(data: ShellData) {
         ...en,
         ...shellMessages,
         ...uiMessages,
+        ...createMessages,
       }}
     >
       <ShellClient data={data} />
@@ -308,6 +310,9 @@ describe("sidebar", () => {
       expect(link.getAttribute("href")).not.toMatch(
         /^\/acme\/core-platform\/(ontology|skills)(\/|$)/,
       );
+    expect(
+      within(main).getByRole("link", { name: "Agents" }),
+    ).toBeInTheDocument();
     expect(within(main).getByRole("link", { name: "Fleet" })).toHaveAttribute(
       "aria-current",
       "page",

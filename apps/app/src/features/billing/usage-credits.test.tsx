@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-// Usage credits over a fake top-up action: the balance in credits and at
-// face value, what credits pay for, the line a spent balance shows, the
+// Token balance over a fake top-up action: the balance at face value, what it
+// pays for, the line a spent balance shows, the
 // presets at the CREDIT_PACKS prices, and each refusal the action returns said
 // in words. An admin sees who can top up; a read that returned no value says
 // why. Axe checks every state. Which roles may top up is the page's decision,
 // tested in billing.test.tsx, as is the section's presence in both billing
-// modes — the section takes no mode, because credits are the second meter and
-// are metered apart from governed action units.
+// modes — the section takes no mode, because the balance is the second meter
+// and is metered apart from governed actions.
 import {
   CREDIT_TOPUP_PRESETS_USD,
   MIN_CREDIT_TOPUP_USD,
@@ -49,7 +49,7 @@ function renderSection({
   );
 }
 
-const region = () => screen.getByRole("region", { name: "Usage credits" });
+const region = () => screen.getByRole("region", { name: "Token balance" });
 const amount = () => screen.getByRole("spinbutton", { name: "Top-up amount" });
 const fact = (name: string) => {
   const found = region().querySelector(`[data-fact="${name}"] dd`);
@@ -71,38 +71,37 @@ afterEach(async () => {
   }
 });
 
-describe("Usage credits", () => {
-  it("prints the balance in credits and its face value, and says what credits pay for", () => {
+describe("Token balance", () => {
+  it("prints the balance at face value and says what it pays for", () => {
     renderSection();
-    expect(fact("balance")).toHaveTextContent(/^4,200 credits$/);
-    expect(fact("face-value")).toHaveTextContent(/^\$42\.00$/);
+    expect(fact("balance")).toHaveTextContent(/^\$42\.00$/);
     expect(region().querySelector("[data-basis]")).toHaveTextContent(
-      /^Credits pay for the in-app agent's model calls at provider cost times the published markup\. 1 credit = \$0\.01\.$/,
+      /^Pays for the tokens Oxagen buys for the in-app agent, at cost with no markup\. The balance is the cap\.$/,
     );
+    expect(region()).not.toHaveTextContent(/credit/i);
   });
 
   it("prints no token count and no per-call cost (negative)", () => {
     renderSection();
-    expect(region()).not.toHaveTextContent(/token/i);
+    expect(region()).not.toHaveTextContent(/\d tokens/i);
     expect(region()).not.toHaveTextContent(/per call/i);
   });
 
   it.each([
-    ["spent to zero", 0, /^0 credits$/, /^\$0\.00$/],
-    ["overdrawn", -150, /^-150 credits$/, /^-\$1\.50$/],
+    ["spent to zero", 0, /^\$0\.00$/],
+    ["overdrawn", -150, /^-\$1\.50$/],
   ])(
-    "says the agent's platform-paid turns stop for a balance %s",
-    (_state, balanceCredits, credits, faceValue) => {
+    "says the agent's turns on Oxagen's model key stop for a balance %s",
+    (_state, balanceCredits, faceValue) => {
       renderSection({ credits: readOk(usageCredits(balanceCredits)) });
-      expect(fact("balance")).toHaveTextContent(credits);
-      expect(fact("face-value")).toHaveTextContent(faceValue);
+      expect(fact("balance")).toHaveTextContent(faceValue);
       expect(region().querySelector("[data-exhausted]")).toHaveTextContent(
-        /^The in-app agent's platform-paid turns stop until a top-up lands\.$/,
+        /^The in-app agent's turns on Oxagen's model key stop until a top-up lands\.$/,
       );
     },
   );
 
-  it("does not draw that line while credits remain (negative)", () => {
+  it("does not draw that line while the balance remains (negative)", () => {
     renderSection();
     expect(region().querySelector("[data-exhausted]")).toBeNull();
   });
@@ -159,7 +158,7 @@ describe("Usage credits", () => {
     [
       "denied",
       { ok: false, reason: "denied", code: "org_role_required" },
-      "Your role cannot top up usage credits. An owner or a billing member can.",
+      "Your role cannot top up the token balance. An owner or a billing member can.",
     ],
     [
       "unavailable",
@@ -182,7 +181,7 @@ describe("Usage credits", () => {
     renderSection({ topUp: "role" });
     expect(region()).toHaveAttribute("data-state", "denied");
     expect(region()).toHaveTextContent(
-      "An owner or a billing member can top up usage credits.",
+      "An owner or a billing member can top up the token balance.",
     );
     expect(screen.queryByRole("spinbutton")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
@@ -196,7 +195,7 @@ describe("Usage credits", () => {
     renderSection({ topUp: "plan" });
     expect(region()).toHaveAttribute("data-state", "plan");
     expect(region()).toHaveTextContent(
-      "Usage credits need a Build plan or above. Subscribe first and the top-up opens here.",
+      "A top-up needs a Build plan or above. Subscribe first and the top-up opens here.",
     );
     expect(screen.queryByRole("spinbutton")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
@@ -208,12 +207,12 @@ describe("Usage credits", () => {
     [
       "denied",
       { ok: false, reason: "denied", permission: "org.billing" } as const,
-      "You cannot see Usage credits for this organization. Your role does not include org.billing",
+      "You cannot see Token balance for this organization. Your role does not include org.billing",
     ],
     [
       "error",
       readError("stripe_unreachable", 502),
-      "Usage credits could not be loaded: the billing service answered stripe_unreachable",
+      "Token balance could not be loaded: the billing service answered stripe_unreachable",
     ],
   ])(
     "says why the balance could not be read: %s (negative)",

@@ -339,7 +339,7 @@ export function WorkspaceSwitcher({
       testId="workspace-switcher"
       kind="ws"
       current={ws}
-      createHref={routes.orgWorkspaces(data.org.slug)}
+      createHref={routes.organization(data.org.slug, "workspaces")}
       choices={choices}
     >
       <Tile text={ws.slice(0, 2)} mono />

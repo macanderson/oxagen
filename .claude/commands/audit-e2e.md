@@ -61,9 +61,9 @@ Do **not** write the test files unless the user confirms. Output the specs in th
 
 ## Output
 
-`mkdir -p docs/audits/e2e-audits`
+`mkdir -p verifications/audits/e2e-audits`
 
-Write: `docs/audits/e2e-audits/<SHORT_SHA>_<TIMESTAMP>_e2e-audit.html`
+Write: `verifications/audits/e2e-audits/<SHORT_SHA>_<TIMESTAMP>_e2e-audit.html`
 
 The report must be a self-contained standalone HTML file (all CSS + JS inline, no external assets) with:
 

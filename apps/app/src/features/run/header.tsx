@@ -23,6 +23,7 @@ import { OperatorName } from "@/ui/operator";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyText } from "./copy-text";
+import { EnrichmentSwitch } from "./enrichment-switch";
 import { RecordActions } from "./record-actions";
 import { RunControls } from "./run-controls";
 
@@ -238,7 +239,8 @@ function When({ run }: { run: RunRow }) {
           ))}
       </OperatorName>
     );
-  const title = run.name ?? run.taskRef;
+  const title =
+    (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
   return (
     <p
       data-testid="run-when"
@@ -343,6 +345,15 @@ export function RunHeader({
               {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}
             </p>
           )}
+          <EnrichmentSwitch
+            org={org}
+            ws={ws}
+            enabled={run.enrichmentEnabled !== false}
+            canEdit={
+              ["owner", "admin"].includes(orgRole) ||
+              ["owner", "admin"].includes(wsRole)
+            }
+          />
         </div>
         <div className="flex flex-col gap-3 lg:items-end">
           <RunControls

@@ -71,9 +71,9 @@ Do **not** write test files unless the user confirms. Output specs in the report
 
 ## Output
 
-`mkdir -p docs/audits/test-audits`
+`mkdir -p verifications/audits/test-audits`
 
-Write: `docs/audits/test-audits/<SHORT_SHA>_<TIMESTAMP>_test-audit.html`
+Write: `verifications/audits/test-audits/<SHORT_SHA>_<TIMESTAMP>_test-audit.html`
 
 Self-contained HTML (all CSS + JS inline). Must contain:
 

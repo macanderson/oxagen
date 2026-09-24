@@ -44,6 +44,32 @@ export function definitionBudget(doc: unknown): DefinitionBudget | undefined {
   return out;
 }
 
+/**
+ * `[containment] required = true`: the agent runs only under the contained
+ * launcher (ADR-152). The host's hook refuses a session the launcher did not
+ * start. `required = false` and an absent table both state no requirement.
+ */
+export function definitionContainment(
+  doc: unknown,
+): { required: true } | undefined {
+  const raw = table(doc)?.["containment"];
+  if (raw === undefined) return undefined;
+  const containment = table(raw);
+  const required = containment?.["required"];
+  if (
+    !containment ||
+    typeof required !== "boolean" ||
+    Object.keys(containment).some((key) => key !== "required")
+  )
+    throw new HandlerError({
+      code: "conflict",
+      reason: "invalid_definition_source",
+      message:
+        "The definition containment table takes one key, required, a boolean.",
+    });
+  return required ? { required: true } : undefined;
+}
+
 /** Parse the complete source, including tables after the identity header. */
 export function parseAgentDefinitionSource(
   source: string,
@@ -60,6 +86,7 @@ export function parseAgentDefinitionSource(
     });
   }
   definitionBudget(doc);
+  definitionContainment(doc);
   if (
     doc["tools"] !== undefined &&
     (!Array.isArray(doc["tools"]) ||

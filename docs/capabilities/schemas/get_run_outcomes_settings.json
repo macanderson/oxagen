@@ -1,0 +1,55 @@
+{
+  "name": "get_run_outcomes_settings",
+  "domain": "run",
+  "description": "Read organization consent and platform suspension for metered run follow-through.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "customerEnabled": {
+        "type": "boolean"
+      },
+      "platformDisabled": {
+        "type": "boolean"
+      },
+      "platformDisabledReason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "effectiveEnabled": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "customerEnabled",
+      "platformDisabled",
+      "platformDisabledReason",
+      "effectiveEnabled"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -42,11 +42,13 @@ const pending = vi.fn();
 const resolvedSince = vi.fn();
 const mandatesList = vi.fn();
 const source = {
+  runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context, preferences, counts, notifications },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
+    retention: vi.fn(),
     bucket: vi.fn(),
     contractRate: vi.fn(),
     invoices: vi.fn(),
@@ -59,6 +61,8 @@ const source = {
     transcript: vi.fn(),
     chain: vi.fn(),
     outputs: vi.fn(),
+    work: vi.fn(),
+    outcomesSettings: vi.fn(),
   },
   approvals: { pending, resolved: vi.fn(), resolvedSince },
   agents: {

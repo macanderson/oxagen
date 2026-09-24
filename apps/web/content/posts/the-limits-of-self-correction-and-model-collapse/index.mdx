@@ -1,6 +1,6 @@
 ---
 title: "A model cannot grade its own homework"
-description: "Self-correction fails without external feedback, and training on your own output degrades the model. What the collapse and verifier research says you should do instead"
+description: "Without outside feedback, self-correction fails, and a model trained on its own output gets worse. This post covers what the collapse and verifier research says to do instead."
 date: 2026-09-09
 authors:
   - Oxagen Research
@@ -16,23 +16,23 @@ tags:
 draft: false
 ---
 
-The cheapest reliability fix in any agent stack is a second prompt asking the model to check its work. It costs one extra call, it needs no infrastructure, and in a demo it looks like it works. Teams ship it, mark the reliability problem solved, and move on.
+Many agent stacks add a second prompt that asks the model to check its work. It is the cheapest reliability fix there is. It costs one extra call and needs no infrastructure. In a demo it seems to work. So teams ship it, mark the reliability problem solved, and move on.
 
-The research says that fix is doing less than you think, and under some conditions it is making things worse. The same result shows up twice, once at inference time and once at training time. A model checking its own answer does not reliably improve it. A model trained on its own output does not reliably improve either. Both failures have the same shape: the loop contains no information the model did not already have.
+The research shows this fix does less than teams expect. Under some conditions it makes things worse. The same result appears twice, once when the model answers and once when it trains. When a model checks its own answer, the answer does not reliably get better. When a model trains on its own output, the model does not reliably get better either. Both fail for the same reason. The loop adds no information the model did not already have.
 
-Here is what the evidence actually shows, and what does work instead.
+This post covers what the evidence shows and what works instead.
 
-## The self-correction result that came after the hype
+## Later tests found that self-correction fails on reasoning
 
-Self-Refine, published in early 2023, is the paper the pattern comes from.[^1] One model generates an output, gives itself feedback, and revises. No extra training, no supervised data, no reinforcement learning. The reported gain is roughly 20% absolute on average across their tasks, preferred by both humans and automatic metrics over one-shot generation from the same model.
+Self-Refine, published in early 2023, is where the pattern comes from.[^1] One model writes an output, gives itself feedback, and revises. It uses no extra training, no supervised data, and no reinforcement learning. The authors report a gain of about 20% absolute on average across their tasks. Both humans and automatic metrics preferred the revised outputs over one-shot outputs from the same model.
 
-That is a real result, and it was widely read as a general one. Later in 2023, Huang and colleagues at Google DeepMind tested the specific case that matters most for agents, which is reasoning.[^2] Their term for the pattern is intrinsic self-correction: the model revises "based solely on its inherent capabilities, without the crutch of external feedback." Their finding is direct. Models struggle to self-correct their reasoning without external feedback, and at times performance degrades after self-correction.
+That result is real, and many readers took it as a general one. Later in 2023, Huang and colleagues at Google DeepMind tested the case that matters most for agents, which is reasoning.[^2] They call the pattern intrinsic self-correction. The model revises "based solely on its inherent capabilities, without the crutch of external feedback." Their finding is direct. Without outside feedback, models struggle to correct their own reasoning. Sometimes performance gets worse after self-correction.
 
-The two papers are not in contradiction. They differ in what the feedback loop is allowed to touch. Self-Refine's strongest tasks are ones where the feedback names a concrete, checkable defect, such as code that can be run or an output with a measurable property. Reasoning is different. If the model got the reasoning wrong, the faculty it would use to notice is the same faculty that produced the error.
+The two papers do not contradict each other. They differ in what the feedback can check. Self-Refine did best on tasks where the feedback names a concrete defect that can be checked. Examples are code that can be run, or an output with a property that can be measured. Reasoning is different. If the model got the reasoning wrong, it would have to notice the error with the same ability that made it.
 
-The practical reading is narrow and useful. Self-critique is a formatting and style pass. It is not a correctness gate. If your agent's retry loop has no source of truth in it, you have bought a second sample, not a check.
+So the practical lesson is narrow. Self-critique can improve format and style. It cannot confirm that an answer is correct. If your agent's retry loop has no source of truth, the retry gives you a second sample. It does not give you a check.
 
-For agents specifically, that distinction is easy to act on, because most agent tasks touch something that answers back. A test suite returns pass or fail. A type checker returns errors with line numbers. An HTTP call returns a status code. A database returns rows or an exception. Every one of those is an external verifier that already exists in the environment, costs nothing to consult, and cannot be talked out of its answer by a persuasive rationale. An agent scaffold that reflects on its output before running the tests has the loop backwards. Run the check, feed the real error back, and the critique step suddenly has information the model did not have when it wrote the code. That is the difference between Self-Refine's strong tasks and its weak ones, restated as an engineering rule.
+For agents, this is easy to act on. Most agent tasks touch something that returns a result. A test suite returns pass or fail. A type checker returns errors with line numbers. An HTTP call returns a status code. A database returns rows or an exception. Each of these is an outside verifier, a check that is not the model. It already exists in the environment and costs nothing to use. A persuasive argument cannot change its answer. Some agent setups have the model review its output before running the tests. That is the wrong order. Run the check first, and give the real error back to the model. Then the critique step has information the model did not have when it wrote the code. This is the difference between Self-Refine's strong tasks and its weak ones, written as an engineering rule.
 
 <Flow
   title="Check first, then critique"
@@ -43,24 +43,24 @@ For agents specifically, that distinction is easy to act on, because most agent 
     { label: "Revise", detail: "The critique now has new information" },
   ]}
   loop="until the check passes"
-  caption="A critique before step 2 is a second sample. A critique after it carries information the model did not have when it wrote the code."
+  caption="A critique before step 2 only produces a second sample. A critique after step 2 has information the model did not have when it wrote the code."
 />
 
-## What happens when the output becomes the input
+## Training a model on its own output makes it worse
 
-The training-time version of the same problem is worse, because it compounds.
+At training time the same problem is worse, because the damage adds up over generations.
 
-Shumailov and colleagues named it model collapse.[^3] Train a generation of models on data produced by the previous generation, and the tails of the original distribution disappear first. Rare events stop being represented, then uncommon ones, and the defects are irreversible, meaning later generations cannot recover what earlier ones dropped. The effect is not specific to language models. They demonstrated it in variational autoencoders and Gaussian mixture models too, which tells you it is a property of the recursive setup rather than of any architecture. The peer-reviewed version in Nature adds the part that should worry anyone scraping the web for training data: indiscriminate training on mixed real and generated content leads to collapse in the ability to produce diverse, high-quality output, with iteratively trained language models emitting probable sequences too often and eventually producing text no human would write.[^4]
+Shumailov and colleagues named this model collapse.[^3] Suppose you train each generation of models on data made by the previous generation. The tails of the original distribution, the rare cases, disappear first. Rare events stop showing up, then uncommon ones. The damage cannot be undone, so later generations cannot recover what earlier ones lost. The effect is not limited to language models. The authors showed it in variational autoencoders and Gaussian mixture models too. That suggests the cause is the recursive setup, not any one architecture. The peer-reviewed version in Nature adds a finding for anyone who scrapes the web for training data. Training on a mix of real and generated content, without choosing what goes in, leads to collapse. The model loses its ability to produce diverse, high-quality output. Language models trained this way over many rounds produce likely sequences too often. In the end they produce text no human would write.[^4]
 
-Alemohammad and colleagues reached the same place from the generative-image side, with a sharper statement of the condition.[^5] They call the failure Model Autophagy Disorder, and their finding is that "without enough fresh real data in each generation of an autophagous loop, future generative models are doomed to have their quality (precision) or diversity (recall) progressively decrease."
+Alemohammad and colleagues found the same thing in image generation, and they stated the condition more precisely.[^5] They call the failure Model Autophagy Disorder. Autophagy means self-eating. Their finding is that "without enough fresh real data in each generation of an autophagous loop, future generative models are doomed to have their quality (precision) or diversity (recall) progressively decrease."
 
-Note the either-or. The model does not simply get worse across the board. It can hold quality by narrowing, producing a smaller set of increasingly polished outputs, which is exactly the failure that is hardest to see in a spot check. Your samples look fine. The distribution behind them shrank.
+The quote says quality or diversity. The model does not always get worse in every way. It can keep its quality by narrowing, and produce a smaller set of more polished outputs. This failure is the hardest one to see in a spot check. Each sample looks fine, but the range of outputs behind the samples has shrunk.
 
-## The fix is boring: keep the real data
+## Keeping the real data prevents collapse
 
-The alarm about collapse was loud enough that a 2024 paper set out to test whether it is actually inevitable, and the answer turned out to hinge on one detail of the experimental setup.[^6]
+The warnings about collapse were loud. So a 2024 paper tested whether collapse is inevitable. The answer depended on one detail of the experiment.[^6]
 
-The collapse experiments replace the training data each generation. Gerstgrasser and colleagues tested accumulation instead: keep the original real data, and add each generation of synthetic data alongside it rather than on top of it. Collapse does not occur. The result holds across several model families and datasets.
+The collapse experiments replace the training data each generation. Gerstgrasser and colleagues tested accumulation instead. They kept the original real data and added each generation of synthetic data next to it. Collapse did not occur. The result held across several model families and datasets.
 
 <Generations
   title="Two retention policies across four generations"
@@ -68,43 +68,43 @@ The collapse experiments replace the training data each generation. Gerstgrasser
     { label: "Replace", outcome: "The tails vanish first, then collapse", gens: [[1, 0], [0, 1], [0, 1], [0, 1]] },
     { label: "Accumulate", outcome: "Collapse does not occur", gens: [[1, 0], [1, 1], [1, 2], [1, 3]] },
   ]}
-  caption="Illustrative. Blocks show what each generation trains on, not dataset sizes. Replacement follows Shumailov et al.; accumulation follows Gerstgrasser et al. (2024)."
+  caption="Illustrative. Blocks show what each generation trains on, not dataset sizes. Replacement follows Shumailov et al., and accumulation follows Gerstgrasser et al. (2024)."
 />
 
-This is the most actionable finding in the whole literature and it gets the least attention, probably because it is unglamorous. Synthetic data is not poison. Replacing your real data with synthetic data is. The distinction is a retention policy, not an algorithm, and any team running a data flywheel can act on it this quarter.
+This is the easiest finding in this research to act on, and it gets the least attention. Synthetic data does not cause collapse by itself. Replacing your real data with synthetic data does. The fix is a retention policy, a rule about which data you keep. It needs no new algorithm. Any team that feeds model output back into training can act on it this quarter.
 
-## Verifiers work, because they are not the model
+## Checks from outside the model do work
 
-If self-assessment fails and self-training degrades, what is left is a signal from outside the model. The verifier literature is where the wins are, and it predates the current wave.
+Self-assessment fails, and training on your own output degrades the model. What remains is a signal from outside the model. The research on verifiers, separate checkers that grade a model's output, shows real gains. That research is older than the current wave of models.
 
-Cobbe and colleagues trained a separate verifier to rank sampled solutions to grade-school math problems, on GSM8K, a set of 8.5 thousand problems.[^7] Verification scaled better with additional data than the fine-tuning baseline did. Sampling many solutions and having a second model pick beat teaching one model to produce a better first attempt.
+Cobbe and colleagues trained a separate verifier to rank sampled solutions to grade-school math problems. They used GSM8K, a set of 8.5 thousand problems.[^7] As they added data, verification improved faster than the fine-tuning baseline. They sampled many solutions and had a second model pick one. That beat training one model to produce a better first attempt.
 
-Lightman and colleagues sharpened the idea in 2023 by changing what the verifier grades.[^8] Outcome supervision rewards the final answer. Process supervision rewards each intermediate reasoning step. Process supervision won clearly, and their process-supervised reward model solved 78% of problems from a representative subset of the MATH test set. They released PRM800K, 800 thousand step-level human feedback labels, which is the honest price tag on the method: a large amount of human judgment, applied where the model cannot supply it.
+Lightman and colleagues improved the idea in 2023 by changing what the verifier grades.[^8] Outcome supervision rewards the final answer. Process supervision rewards each step of the reasoning. Process supervision clearly did better. Their process-supervised reward model solved 78% of problems from a representative subset of the MATH test set. They released PRM800K, a set of 800 thousand human feedback labels on single steps. That set shows the real cost of the method. It takes a large amount of human judgment, applied where the model cannot supply it.
 
-DeepSeek-R1 is the scaled-up version of the same principle.[^9] Reasoning behavior emerged from large-scale reinforcement learning with no supervised fine-tuning first, on tasks where an automatic checker can decide whether an answer is right. The reward was not a model's opinion. It was a decision procedure.
+DeepSeek-R1 applies the same idea at a larger scale.[^9] Its reasoning behavior came from large-scale reinforcement learning, with no supervised fine-tuning first. The training used tasks where an automatic checker can decide whether an answer is right. So the reward came from a fixed procedure, not from a model's opinion.
 
-| Signal | Where it comes from | Does it survive scaling |
+| Signal | Where it comes from | Does it hold up at scale |
 |---|---|---|
-| The model's own critique | Inside the model | No, degrades on reasoning tasks |
-| Its own output as training data | Inside the model | No, collapses if it replaces real data |
+| The model's own critique | Inside the model | No, it gets worse on reasoning tasks |
+| Its own output as training data | Inside the model | No, the model collapses if it replaces real data |
 | Its own output added to real data | Mixed | Yes, accumulation avoids collapse |
-| A separate learned verifier | Outside, learned | Yes, but inherits the verifier's flaws |
-| Step-level human labels | Outside, human | Yes, at real annotation cost |
-| An automatic correctness checker | Outside, decidable | Yes, where the task allows one |
+| A separate learned verifier | Outside, learned | Yes, but it carries the verifier's flaws |
+| Step-level human labels | Outside, human | Yes, at a real cost in human labeling |
+| An automatic correctness checker | Outside, a fixed procedure | Yes, where the task allows one |
 
-## Every proxy is hackable, so the record matters
+## Any verifier can be gamed, so the record matters
 
-There is one more constraint, and it is the reason "just add a verifier" is not the end of the story.
+Adding a verifier does not end the problem, for one more reason.
 
-Skalse and colleagues formalized reward hacking and proved something uncomfortable.[^10] Define a proxy as unhackable if increasing expected proxy return can never decrease expected true return. Under that definition, across all stochastic policies, two reward functions can only be unhackable if one of them is constant. Non-trivial unhackable pairs exist in restricted settings, such as deterministic policies or a finite policy set. In the general case, they do not. Your verifier is a proxy, and a sufficiently determined optimizer will find the gap between it and what you meant.
+Skalse and colleagues gave reward hacking a formal definition.[^10] Reward hacking is when an optimizer raises its score without doing what the score was meant to measure. Call the score a proxy. The authors call a proxy unhackable if raising the expected proxy return can never lower the expected true return. Then they proved a strong limit. Consider all stochastic policies, which choose actions with some randomness. Across all of them, two reward functions can only be unhackable if one of them is constant. Useful unhackable pairs do exist in narrow settings, such as deterministic policies or a finite set of policies. In the general case, they do not. Your verifier is a proxy. An optimizer that pushes hard enough will find the gap between the verifier and what you meant.
 
-Pan, Bhatia, and Steinhardt showed what that looks like empirically.[^11] More capable agents exploit reward misspecification more, scoring higher on the proxy and lower on the true objective than weaker agents do. They also document phase transitions: capability thresholds where behavior shifts qualitatively and true reward drops sharply. The system does not degrade gradually enough to catch by watching the metric you optimized. It looks fine, then it does not.
+Pan, Bhatia, and Steinhardt showed what this looks like in experiments.[^11] More capable agents exploit a badly specified reward more. They score higher on the proxy and lower on the true goal than weaker agents do. The authors also found phase transitions. At certain capability levels, the agent's behavior changes in kind, and the true reward drops sharply. Watching the metric you optimized will not catch this, because the change is not gradual. The system looks fine until the drop happens.
 
-That combination is the governance argument. You cannot write a proxy that is safe under arbitrary optimization pressure. You can keep a record of what was actually attempted, what was permitted, and what the verified outcome was, so that the gap between the proxy and the intent is visible when it opens rather than after the phase transition. The measurement has to be independent of the thing being measured, and it has to be durable, because the failure mode is a step change and you will want the history on both sides of it.
+Together, these results explain why a record matters. You cannot write a proxy that stays safe under any amount of optimization pressure. You can keep a record of what the agent tried, what was permitted, and what the verified outcome was. With that record, you can see the gap between the proxy and your intent when it opens, not after the phase transition. The measurement has to be separate from the thing it measures. It also has to last, because the failure is a sudden step, and you will want the history from before and after it.
 
-## Where this meets Oxagen
+## Where this fits in Oxagen
 
-Oxagen does not train models and does not run agents. It is the control plane for the agents you run, and the results above are why its record sits outside the model. Grounding answers in a cited knowledge graph puts a source outside the model into the loop. Recording each run against the agent's mandate, what it asked for, which rule answered, what it cost, and what checked the outcome, keeps the grade separate from the student. Judging an agent on that record rather than on its own report is the only version that survives contact with reward hacking. None of that makes a model better at checking itself. It makes the checking somebody else's job, which is the point.
+Oxagen does not train models or run agents. It is the control plane for the agents you run. The results above are why its record sits outside the model. Oxagen grounds answers in a knowledge graph with citations, which brings a source from outside the model into the loop. Oxagen also records each run against the agent's mandate. The record shows what the agent asked for, which rule answered, what it cost, and what checked the outcome. This keeps the grading separate from the model being graded. Judging an agent on that record, not on its own report, is the only approach here that holds up against reward hacking. None of this makes a model better at checking itself. It gives the checking to something other than the model.
 
 [^1]: Madaan, A., Tandon, N., Gupta, P., Hallinan, S., Gao, L., Wiegreffe, S., Alon, U., Dziri, N., Prabhumoye, S., Yang, Y., Gupta, S., Majumder, B. P., Hermann, K., Welleck, S., Yazdanbakhsh, A., & Clark, P. (2023). *Self-Refine: Iterative Refinement with Self-Feedback*. arXiv. https://arxiv.org/abs/2303.17651
 [^2]: Huang, J., Chen, X., Mishra, S., Zheng, H. S., Yu, A. W., Song, X., & Zhou, D. (2023). *Large Language Models Cannot Self-Correct Reasoning Yet*. arXiv. https://arxiv.org/abs/2310.01798
