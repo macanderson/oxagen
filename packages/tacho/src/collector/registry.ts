@@ -145,6 +145,22 @@ export interface SessionFacts {
    * and it is the honest limit of a baseline nobody recorded at the start.
    */
   baselineCommit?: string;
+  /**
+   * The repository root `baselineCommit` was taken in. A session can edit
+   * a different worktree from the one it started in, so the baseline is bound
+   * to the root it was read from and is retaken when the work moves to
+   * another root.
+   */
+  baselineRoot?: string;
+  /**
+   * The directory of the file the agent last wrote. The session's `cwd` is
+   * where it started. An agent working in a git worktree often keeps that
+   * `cwd` on the primary checkout and edits files by absolute path, so git
+   * read from `cwd` described the primary checkout on `main`. The run then
+   * showed no branch, no diff, and a PR somebody once opened from `main`.
+   * Git reads start here when it is set.
+   */
+  workDir?: string;
 }
 
 export interface SessionRecord extends SessionFacts {
@@ -475,8 +491,15 @@ export class SessionRegistry {
         // after a move makes reconciliation diff against a sha that may
         // not exist here, fall back to the new HEAD, and drop work the
         // session already committed in the new tree.
-        if (existing.cwd !== undefined && facts.cwd !== existing.cwd) {
+        // A session that writes files by path reads git from `workDir`, and
+        // its baseline stays with that root whatever `cwd` does.
+        if (
+          existing.cwd !== undefined &&
+          facts.cwd !== existing.cwd &&
+          existing.workDir === undefined
+        ) {
           delete existing.baselineCommit;
+          delete existing.baselineRoot;
         }
         existing.cwd = facts.cwd;
       }
@@ -485,6 +508,9 @@ export class SessionRegistry {
         existing.lastHookEvent = facts.lastHookEvent;
       if (facts.baselineCommit !== undefined)
         existing.baselineCommit = facts.baselineCommit;
+      if (facts.baselineRoot !== undefined)
+        existing.baselineRoot = facts.baselineRoot;
+      if (facts.workDir !== undefined) existing.workDir = facts.workDir;
       if (facts.ambient === false) existing.ambient = false;
       existing.lastSeenAt = now;
       this.noteAgent(existing, false);
@@ -723,5 +749,9 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
     ...(facts.baselineCommit !== undefined
       ? { baselineCommit: facts.baselineCommit }
       : {}),
+    ...(facts.baselineRoot !== undefined
+      ? { baselineRoot: facts.baselineRoot }
+      : {}),
+    ...(facts.workDir !== undefined ? { workDir: facts.workDir } : {}),
   };
 }

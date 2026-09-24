@@ -107,6 +107,7 @@ import {
   type GitFacts,
   type GitWorkingTreeChange,
   readGitFacts,
+  readGitRoot,
   readWorkingTreeChanges,
   worktreeReconciledBody,
 } from "./git-facts";
@@ -1686,6 +1687,8 @@ async function initializeDaemon(
        * discarded instead when the session has moved.
        */
       cwd: string;
+      /** The directory the read started from, before resolving its root. */
+      dir: string;
       ending?: HookEnvelope;
       // Absent for a repository with no commit yet, which has no HEAD to
       // describe but does have a worktree to reconcile.
@@ -1700,11 +1703,12 @@ async function initializeDaemon(
       if (want === undefined) continue;
       const session = registry.byUuid(harnessSessionId);
       const ending = pendingSessionEnds.get(harnessSessionId);
-      const cwd = session?.cwd;
+      // Where the agent last wrote, falling back to where it started.
+      const dir = session?.workDir ?? session?.cwd;
       if (
         session === undefined ||
         session.sealed ||
-        cwd === undefined ||
+        dir === undefined ||
         ending?.terminal !== undefined
       ) {
         if (ending !== undefined) {
@@ -1739,6 +1743,16 @@ async function initializeDaemon(
         continue;
       }
       if (due) lastReconcileAt.set(harnessSessionId, at);
+      // Every read runs at the worktree root, so an edit in a subdirectory and
+      // one at the top describe the same checkout, and the baseline is
+      // retaken only when the work moves to another root.
+      const cwd = (await readGitRoot(execAsync, dir)) ?? dir;
+      if (session.baselineRoot === undefined && session.baselineCommit)
+        session.baselineRoot = cwd;
+      if (session.baselineRoot !== undefined && session.baselineRoot !== cwd) {
+        delete session.baselineCommit;
+        delete session.baselineRoot;
+      }
       const facts = await gitFactsFor(cwd, want.force);
       // Undefined means `rev-parse HEAD` did not answer, which covers a
       // directory that is not a repository AND a repository whose first
@@ -1752,11 +1766,14 @@ async function initializeDaemon(
       // that the session's own commits keep moving. `ensure` clears the
       // baseline when `cwd` changes, so a move to another repository
       // captures that tree's HEAD instead of diffing against the old one.
-      if (facts !== undefined && session.baselineCommit === undefined)
+      if (facts !== undefined && session.baselineCommit === undefined) {
         session.baselineCommit = facts.head_sha;
+        session.baselineRoot = cwd;
+      }
       if (facts === undefined && !due) continue;
       found.push({
         session,
+        dir,
         cwd,
         ending,
         facts,
@@ -1787,11 +1804,19 @@ async function initializeDaemon(
     }
     if (found.length === 0) return;
     await serial.run(async () => {
-      for (const { session, cwd, facts, changes, snapshot, ending } of found) {
+      for (const {
+        session,
+        cwd,
+        dir,
+        facts,
+        changes,
+        snapshot,
+        ending,
+      } of found) {
         if (session.sealed) continue;
         // The session moved while the probe ran, so this answer describes a
         // repository it is no longer in. A later turn reads the new one.
-        if (session.cwd !== cwd) {
+        if ((session.workDir ?? session.cwd) !== dir) {
           if (ending !== undefined)
             requestGitRead(session.recorder.sessionUuid, {
               force: true,
@@ -1799,8 +1824,14 @@ async function initializeDaemon(
             });
           continue;
         }
+        // The root rides with the git facts, so the run's checkout names the
+        // worktree the facts came from rather than the directory the session
+        // was started in.
         if (facts !== undefined)
-          session.recorder.noteContext(gitContextOf(facts));
+          session.recorder.noteContext({
+            ...gitContextOf(facts),
+            worktree_path: cwd,
+          });
         if (changes !== undefined)
           recordReconciliation(session, changes, snapshot);
         if (
