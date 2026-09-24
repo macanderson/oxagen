@@ -18,9 +18,9 @@
  * (ADR-043).
  */
 import {
-  RATE_CARD,
   compareModels,
   formatUsd,
+  listRateCard,
   projectCost,
   type CostProjection,
 } from "@oxagen/billing/rate-card";
@@ -45,8 +45,9 @@ export function handleCost(
 /** Dump the baked-in rate card (USD per 1M tokens). */
 function printRates(json: boolean, writer: CommandWriter): void {
   const out = writer.write;
+  const rows = listRateCard();
   if (json) {
-    out(JSON.stringify(RATE_CARD, null, 2));
+    out(JSON.stringify(rows, null, 2));
     return;
   }
   out("Rate card (USD per 1,000,000 tokens):");
@@ -54,7 +55,7 @@ function printRates(json: boolean, writer: CommandWriter): void {
   out(
     `  ${"model".padEnd(16)}${"vendor".padEnd(12)}${"input".padStart(10)}${"output".padStart(10)}`,
   );
-  for (const e of RATE_CARD) {
+  for (const e of rows) {
     out(
       `  ${e.label.padEnd(16)}${e.vendor.padEnd(12)}` +
         `${("$" + e.rate.inputPer1M).padStart(10)}${("$" + e.rate.outputPer1M).padStart(10)}`,
