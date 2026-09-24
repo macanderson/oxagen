@@ -555,6 +555,42 @@ describe("CostTab", () => {
     expect(screen.getByTestId("token-class-total")).toHaveTextContent("$4.13");
   });
 
+  it("claims neither a saving nor a missing one for a run that read nothing from the cache (negative)", () => {
+    // The rollup records a zero saving for a model that read nothing, and
+    // `runMetrics` claims no saving over it, so `cacheSaved` is null here
+    // exactly as on a legacy row. Only the cache-read count tells them apart.
+    renderTab(
+      props({
+        cost: readOk(
+          costRollup({
+            micros: "4130000",
+            tokens: {
+              inputUncached: 732_270,
+              cacheRead: 0,
+              cacheWrite5m: 0,
+              cacheWrite1h: 0,
+              output: 24_229,
+              reasoning: 12_482,
+            },
+            byClass: { ...RELEASE_RUN_CLASSES, cacheRead: "0" },
+            cacheSaving: "0",
+            cacheHitRate: 0,
+            modelCalls: 10,
+          }),
+        ),
+      }),
+      { withStats: true },
+    );
+    const tile = screen.getByTestId("inst-cost");
+    expect(tile).toHaveTextContent("cache hit 0%");
+    expect(tile).not.toHaveTextContent("saving not recorded");
+    expect(tile).not.toHaveTextContent("saved about");
+    const stat = screen.getByTestId("run-stat-cache");
+    expect(stat).toHaveTextContent("0%");
+    expect(stat).not.toHaveTextContent("saving not recorded");
+    expect(stat).not.toHaveTextContent("saved about");
+  });
+
   it("shows the recorded saving on the instrument and the stat row", () => {
     renderTab(props(), { withStats: true });
     // 607,784 cache reads, recorded as saving $5.470056.
