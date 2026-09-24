@@ -44,6 +44,7 @@ const {
   Organization,
   OrganizationRoles,
   OrganizationApiKeys,
+  OrganizationModelFunding,
   OnboardingGate,
   Skills,
   SkillsLoading,
@@ -86,6 +87,7 @@ const {
     Organization: vi.fn((_props: Record<string, unknown>) => null),
     OrganizationRoles: vi.fn((_props: Record<string, unknown>) => null),
     OrganizationApiKeys: vi.fn((_props: Record<string, unknown>) => null),
+    OrganizationModelFunding: vi.fn((_props: Record<string, unknown>) => null),
     // The gate's own states are its component test; here it only has to render.
     OnboardingGate: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="onboarding-gate" />
@@ -157,6 +159,7 @@ vi.mock("@/features/organization", async (importOriginal) => ({
   Organization,
   OrganizationRoles,
   OrganizationApiKeys,
+  OrganizationModelFunding,
 }));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
@@ -701,6 +704,25 @@ describe("Organization", () => {
   });
 });
 
+describe("Organization › Model funding", () => {
+  it("resolves the organization viewer, names the page once and hands the viewer and the data source to Model funding", async () => {
+    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
+    requireViewer.mockResolvedValue(ctx);
+    OrganizationModelFunding.mockClear();
+    await expectOrganizationRoute(
+      await import("./model-funding/page"),
+      routeProps(SEGMENTS),
+      title("modelFunding"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(OrganizationModelFunding).toHaveBeenCalledOnce();
+    expect(OrganizationModelFunding.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source,
+    });
+  });
+});
+
 describe("Organization › Roles", () => {
   it("resolves the organization viewer, names the page once and hands the viewer and the data source to Roles", async () => {
     const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
@@ -818,6 +840,7 @@ describe("a person requireViewer refuses", () => {
     ["people", () => import("./page")] as const,
     ["roles", () => import("./roles/page")] as const,
     ["apiKeys", API_KEYS] as const,
+    ["modelFunding", () => import("./model-funding/page")] as const,
   ])("pages.%s renders nothing (negative)", async (_key, load) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(
