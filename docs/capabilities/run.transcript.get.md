@@ -2,7 +2,11 @@
 
 One run read as a transcript at one of three zoom levels (Mission Control spec §8.4, §14 "the transcript at three zoom levels (turns, steps, everything)"; ADR-058). The transcript is derived on the server from the frames and the bodies the recorder kept; nothing is stored.
 
-A wrapped run's subagents record on chains of their own. The transcript reads every chain under the run's root session and places each subagent chain directly after the `subagent_start` that spawned it. An entry from a subagent chain carries `subagent`, and its body halves and decisions carry `sessionUuid`, because a subagent chain numbers its frames from 0 like the run's. `get_run_frame_body` reads the run's own chain only. A cursor is `t:<seq>` on the run's chain or `t:<session uuid>:<seq>` on a subagent's; both forms are accepted.
+A wrapped run's subagents record on chains of their own. The transcript reads every chain under the run's root session and places each subagent chain directly after the `subagent_start` that spawned it. An entry from a subagent chain carries `subagent`, and its body halves and decisions carry `sessionUuid`, because a subagent chain numbers its frames from 0 like the run's. `get_run_frame_body` reads the run's own chain only.
+
+The cursor is opaque. It names two frames: the opening of the last entry sent, and the latest frame any page has delivered. An entry whose frames grew past that second frame since it was sent (a step that gained its result, a turn that gained a step, a Task call whose subagent recorded more) is sent again once, ahead of the new entries, and no entry after it is sent again (#4048). A reader keeps each entry once by its opening frame, `seq` together with `subagent.sessionUuid`, and replaces a copy it holds with the one sent again. A cursor written before the two-frame form, which names one frame, is still accepted.
+
+A page reads a bounded range of the run's frames rather than the run from the cursor to its end, and a subagent chain is read by its `session_uuid` from the list Postgres keeps, so a read's cost does not grow with the workspace. A whole-run reader pages at the largest `limit` the contract allows. The Cost tab's per-turn ledger is `get_run_turns`, which counts every frame of the run in one grouped read rather than paging this one (#4067).
 
 A body the store cannot return reads as `text: null` on its half; the rest of the page is still answered.
 
