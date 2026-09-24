@@ -55,7 +55,8 @@ const { Spend } = await import("./spend");
 const { SpendLoading } = await import("./states");
 const { parseSpendView } = await import("./view");
 
-const ctx = unsafeMint(WsCtx, {
+/** The workspace context's fields, before minting, so a test can change the role. */
+const CTX_FIELDS = {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   orgId: "7a000000-0000-4000-8000-0000000000a1",
   orgSlug: "acme",
@@ -65,7 +66,8 @@ const ctx = unsafeMint(WsCtx, {
   wsSlug: "core-platform",
   wsName: "Core platform",
   wsRole: "member",
-});
+} as const;
+const ctx = unsafeMint(WsCtx, CTX_FIELDS);
 
 const TODAY = new Date("2026-09-15T12:00:00.000Z");
 const PERIOD = { from: "2026-09-01", to: "2026-09-15" };
@@ -1367,7 +1369,7 @@ describe("Spend › a tab's own read failing", () => {
     await renderSpend(
       ["budgets"],
       undefined,
-      unsafeMint(WsCtx, { ...ctx, wsRole: "owner" }),
+      unsafeMint(WsCtx, { ...CTX_FIELDS, wsRole: "owner" }),
     );
     expect(document.querySelector("#gateway-mode")).not.toBeNull();
   });

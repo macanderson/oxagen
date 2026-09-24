@@ -7,6 +7,7 @@
 // The actions are the seam. They are proven against the real kernel seam in
 // actions.test.ts; here they answer the way the capabilities answer, so what
 // is under test is the page.
+import { nth } from "@/test/nth";
 import {
   cleanup,
   render,
@@ -1384,7 +1385,7 @@ describe("the other tabs", () => {
         changes: [
           ...CHANGES.changes,
           {
-            ...(CHANGES.changes[0] as RepositoryChanges["changes"][number]),
+            ...nth(CHANGES.changes, 0, "change"),
             proposalId: "prp_run1",
             lineage: "ctx.scr.003-running",
             status: "checks_running",

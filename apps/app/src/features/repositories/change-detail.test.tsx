@@ -414,8 +414,9 @@ describe("closing without merging", () => {
     await waitFor(() => {
       expect(actions.closeRepositoryChange).toHaveBeenCalledOnce();
     });
-    const [org, ws, proposalId, sent] =
+    const call: readonly unknown[] =
       actions.closeRepositoryChange.mock.calls[0] ?? [];
+    const [org, ws, proposalId, sent] = call;
     expect([org, ws, proposalId]).toEqual([
       "acme",
       "core-platform",
