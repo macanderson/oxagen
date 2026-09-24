@@ -77,17 +77,9 @@ const {
     Agents: vi.fn((props: { header?: ReactNode }) => <>{props.header}</>),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     AgentSource: vi.fn((_props: Record<string, unknown>) => null),
-    Steering: vi.fn(
-      (props: {
-        view: { tab: string };
-        header: (actions: ReactNode) => ReactNode;
-      }) => (
-        <>
-          {props.header(<span data-testid="steering-actions" />)}
-          <p data-testid="steering-body" data-tab={props.view.tab} />
-        </>
-      ),
-    ),
+    Steering: vi.fn((props: { searchParams: Record<string, string> }) => (
+      <p data-testid="steering-body" data-tab={props.searchParams.tab} />
+    )),
     Spend: vi.fn((props: { searchParams: Record<string, string> }) => (
       <p data-testid="spend-body" data-tab={props.searchParams.tab} />
     )),
@@ -187,9 +179,6 @@ vi.mock("@/features/organization/api-key-actions", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
-  notFound: () => {
-    throw new Error("NEXT_NOT_FOUND");
-  },
 }));
 // The Skills route only moves to the Steering tab, and the Steering route moves
 // a legacy `?tab=` URL to its path; each redirect throws, as Next's does, with
@@ -227,9 +216,7 @@ const title = translator("pages");
 /** A redirect with no title of its own, so not a `Load`. */
 const SKILLS = () => import("./[ws]/skills/page");
 const TOOLS: Load = () => import("./[ws]/tools/[[...tab]]/page");
-const SKILLS_VIEW = () => import("./[ws]/skills/[...rest]/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
-const STEERING_VIEW = () => import("./[ws]/steering/[...view]/page");
 
 const FLEET: Load = () => import("./[ws]/(fleet)/page");
 const AGENTS: Load = () => import("./[ws]/agents/page");
@@ -367,78 +354,38 @@ describe("the Billing page", () => {
 });
 
 describe("the Steering page", () => {
-  it("resolves the workspace viewer, names the page once and hands the viewer, the data source and the view to Steering", async () => {
-    const ctx = {
-      orgSlug: "acme",
-      wsSlug: "core-platform",
-      wsName: "Core platform",
-    };
+  it("resolves the workspace viewer, names the page once and hands the viewer, the data source and the query to Steering", async () => {
+    const ctx = { orgSlug: "acme", wsSlug: "core-platform" };
     requireViewer.mockResolvedValue(ctx);
-    const page = await expectPageTitle(
+    await expectPageTitle(
       await STEERING(),
-      routeProps(SEGMENTS),
+      routeProps(SEGMENTS, { proposal: "prp_1" }),
       title("steering"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(Steering).toHaveBeenCalledOnce();
-    expect(Steering.mock.calls[0]?.[0]).toMatchObject({
+    expect(Steering.mock.calls[0]?.[0]).toEqual({
       ctx,
       source,
-      view: { tab: "library" },
+      searchParams: { proposal: "prp_1" },
     });
-    // The eyebrow is the workspace name and the subtext the design's sentence.
-    expect(page.textContent).toContain("Core platform");
-    expect(page.textContent).toContain(
-      "Everything that can steer an agent in this workspace competes in one assembler.",
-    );
-    expect(screen.getByTestId("steering-actions")).toBeInTheDocument();
+    expect(screen.getByTestId("steering-body")).toBeInTheDocument();
+    expect(screen.getByTestId("steering-create")).toBeInTheDocument();
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("moves a ?tab= link from the one-route page to the path it names", async () => {
+  it("moves a legacy ?tab= URL to the tab's path segment and keeps the selected proposal", async () => {
     requireViewer.mockResolvedValue({
       orgSlug: "acme",
       wsSlug: "core-platform",
     });
+    const { default: page } = await STEERING();
     await expect(
-      Promise.resolve(
-        (await STEERING()).default(
-          routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" }),
-        ),
-      ),
+      page(routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" })),
     ).rejects.toThrow(
-      "REDIRECT /acme/core-platform/steering/proposals/prs?proposal=prp_1",
+      /^REDIRECT \/acme\/core-platform\/steering\/proposals\b.*prp_1/,
     );
-  });
-
-  it("renders a tab segment on the catch-all route", async () => {
-    requireViewer.mockResolvedValue({
-      orgSlug: "acme",
-      wsSlug: "core-platform",
-      wsName: "Core platform",
-    });
-    await expectPageTitle(
-      await STEERING_VIEW(),
-      routeProps({ ...SEGMENTS, view: ["gates"] }),
-      title("steering"),
-    );
-    expect(Steering.mock.calls[0]?.[0]).toMatchObject({
-      view: { tab: "gates" },
-    });
-  });
-
-  it("answers a segment that names nothing with a 404 (negative)", async () => {
-    requireViewer.mockResolvedValue({
-      orgSlug: "acme",
-      wsSlug: "core-platform",
-    });
-    await expect(
-      Promise.resolve(
-        (await STEERING_VIEW()).default(
-          routeProps({ ...SEGMENTS, view: ["nowhere"] }),
-        ),
-      ),
-    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(Steering).not.toHaveBeenCalled();
   });
 });
 
@@ -475,54 +422,11 @@ describe("the Skills route", () => {
       Promise.resolve(
         (await SKILLS()).default(routeProps(SEGMENTS, { cursor: "c2" })),
       ),
-    ).rejects.toThrow("REDIRECT /acme/core-platform/steering/skills?cursor=c2");
+    ).rejects.toThrow(
+      "REDIRECT /acme/core-platform/steering?tab=skills&cursor=c2",
+    );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(Skills).not.toHaveBeenCalled();
-  });
-
-  it.each<[string[], Record<string, string>, string]>([
-    [["search"], {}, "/acme/core-platform/steering/skills?view=search"],
-    [["versions"], {}, "/acme/core-platform/steering/skills?view=versions"],
-    [
-      ["catalog"],
-      { cursor: "c2" },
-      "/acme/core-platform/steering/skills?cursor=c2",
-    ],
-    [
-      ["a-intel.release-notes", "source"],
-      {},
-      "/acme/core-platform/steering/skills/a-intel.release-notes/source",
-    ],
-  ])(
-    "moves the old /skills/%j to the Skills shelf of Steering",
-    async (rest, query, to) => {
-      requireViewer.mockResolvedValue({
-        orgSlug: "acme",
-        wsSlug: "core-platform",
-      });
-      await expect(
-        Promise.resolve(
-          (await SKILLS_VIEW()).default(
-            routeProps({ ...SEGMENTS, rest }, query),
-          ),
-        ),
-      ).rejects.toThrow(`REDIRECT ${to}`);
-      expect(requireViewer).toHaveBeenCalledWith(...WS);
-    },
-  );
-
-  it("answers an old /skills address that names nothing with a 404 (negative)", async () => {
-    requireViewer.mockResolvedValue({
-      orgSlug: "acme",
-      wsSlug: "core-platform",
-    });
-    await expect(
-      Promise.resolve(
-        (await SKILLS_VIEW()).default(
-          routeProps({ ...SEGMENTS, rest: ["nowhere"] }),
-        ),
-      ),
-    ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("moves to the first page when the URL names no cursor", async () => {
@@ -532,7 +436,7 @@ describe("the Skills route", () => {
     });
     await expect(
       Promise.resolve((await SKILLS()).default(routeProps(SEGMENTS))),
-    ).rejects.toThrow("REDIRECT /acme/core-platform/steering/skills");
+    ).rejects.toThrow("REDIRECT /acme/core-platform/steering?tab=skills");
   });
 });
 
@@ -563,6 +467,21 @@ describe("the Fleet page", () => {
   });
 });
 
+/**
+ * The agent and source routes draw no h1 of their own: the feature draws it
+ * (the agent card, the file path) once the identity is read. So the route
+ * owns only the document title.
+ */
+async function expectBodyTitled<P extends object>(
+  page: PageModule<P>,
+  props: RouteProps<P>,
+  documentTitle: string,
+): Promise<void> {
+  expect((await page.generateMetadata(props)).title).toBe(documentTitle);
+  const container = await renderPage(await page.default(props));
+  expect(container.querySelectorAll("h1")).toHaveLength(0);
+}
+
 describe("the Agents pages", () => {
   const ctx = { wsSlug: "core-platform" };
   beforeEach(() => {
@@ -586,6 +505,7 @@ describe("the Agents pages", () => {
       "cursor",
       "header",
       "source",
+      "viewerName",
     ]);
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
@@ -601,7 +521,7 @@ describe("the Agents pages", () => {
   });
 
   it("the agent page hands the agent, the tab and the cursor the URL names to Agent", async () => {
-    await expectPageTitle(
+    await expectBodyTitled(
       await AGENT(),
       routeProps(SEGMENTS, { tab: "incidents", cursor: "c3" }),
       title("agent"),
@@ -614,7 +534,7 @@ describe("the Agents pages", () => {
       tab: "incidents",
       cursor: "c3",
     });
-    await expectPageTitle(await AGENT(), routeProps(SEGMENTS), title("agent"));
+    await expectBodyTitled(await AGENT(), routeProps(SEGMENTS), title("agent"));
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
       cursor: null,
@@ -628,7 +548,7 @@ describe("the Agents pages", () => {
   });
 
   it("the source page hands the agent to AgentSource", async () => {
-    await expectPageTitle(
+    await expectBodyTitled(
       await AGENT_SOURCE(),
       routeProps(SEGMENTS),
       title("agentSource"),

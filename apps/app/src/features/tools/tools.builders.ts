@@ -260,9 +260,6 @@ export function toolsSource(reads: ToolsReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
-      hub: refuse,
-      memories: refuse,
-      tree: refuse,
       deliveries: refuse,
     },
     tools: {
