@@ -166,8 +166,9 @@ const RunCostProvisional = z.object({
 });
 
 /**
- * `get_run_cost`: `rollup` is null until the rollup has rebuilt the run after
- * its seal; `provisional` fills that gap for a wrapped run.
+ * `get_run_cost`: `rollup` is null until the rollup has built a row for the
+ * run, which it does while the run is open; `provisional` fills that gap for
+ * a wrapped run.
  */
 export const RunCost = z.object({
   rollup: RunCostRollup.nullable(),
