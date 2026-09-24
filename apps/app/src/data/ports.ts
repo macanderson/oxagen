@@ -17,10 +17,12 @@ import type {
   ResolvedApprovalItem,
 } from "./contracts/approvals";
 import type {
+  AuditBundle,
   AuditExport,
   AuditExportQuery,
   AuditPage,
   AuditPageQuery,
+  AuditRetention,
 } from "./contracts/audit";
 import type {
   ContractRate,
@@ -35,10 +37,12 @@ import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
   ApiKey,
   CostCenterList,
+  DataPlane,
   MemberList,
   ModelCredential,
   RoleCatalog,
   SsoSettings,
+  WorkspaceFacts,
   WorkspaceList,
 } from "./contracts/org";
 import type {
@@ -363,6 +367,13 @@ export interface DataSource {
     roles(ctx: OrgCtx): Promise<Read<RoleCatalog>>;
     /** list_workspaces, archived rows included */
     workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
+    /**
+     * list_repositories and list_agents inside one workspace: its bound
+     * repositories and its agent count, for the Workspaces row. A `WsCtx`,
+     * because both reads are workspace-scoped; the tab makes one per workspace
+     * the viewer may enter.
+     */
+    workspaceFacts(ctx: WsCtx): Promise<Read<WorkspaceFacts>>;
     /** list_cost_centers, the organization's live chargeback labels (ADR-142) */
     costCenters(ctx: OrgCtx): Promise<Read<CostCenterList>>;
     /**
@@ -379,6 +390,8 @@ export interface DataSource {
      * Org-scoped: the key pays for every workspace's assistant turns.
      */
     modelCredential(ctx: OrgCtx): Promise<Read<ModelCredential>>;
+    /** get_data_plane {kind:"postgres"}, redacted; the Data plane tab. */
+    dataPlane(ctx: OrgCtx): Promise<Read<DataPlane>>;
     /**
      * list_sso_providers — the organisation's identity providers, their
      * domain proofs and group mappings, and whether SSO is required. No
@@ -399,6 +412,18 @@ export interface DataSource {
     events(ctx: OrgCtx, q: AuditPageQuery): Promise<Read<AuditPage>>;
     /** export_audit_events: the signed file over the same window */
     exportEvents(ctx: OrgCtx, q: AuditExportQuery): Promise<Read<AuditExport>>;
+    /**
+     * get_evidence_retention (org Owner, Admin or Billing): the body retention
+     * the header's mono line and the Retention tab print; caller
+     * features/audit/audit.tsx.
+     */
+    retention(ctx: OrgCtx): Promise<Read<AuditRetention>>;
+    /**
+     * get_export_status for the organization export Build bundle queued, read
+     * back by the id the Exports tab's URL carries; caller
+     * features/audit/audit.tsx.
+     */
+    bundle(ctx: OrgCtx, exportId: string): Promise<Read<AuditBundle>>;
   };
   /**
    * list_skills, one page by name over its default window (noBillingGate;

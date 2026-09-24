@@ -352,8 +352,16 @@ describe("Sso: a read that did not list", () => {
     });
     expect(screen.getByTestId("sso-denied")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add provider" })).toBeNull();
-    const tab = screen.getByRole("link", { name: "Single sign-on" });
-    expect(tab.getAttribute("aria-current")).toBe("page");
+    // Single sign-on is not one of the design's seven tabs: the row stays,
+    // and no tab is marked current on this page.
+    const tabs = within(
+      screen.getByRole("tablist", { name: "Organization" }),
+    ).getAllByRole("tab");
+    expect(tabs).toHaveLength(7);
+    expect(tabs.some((tab) => tab.hasAttribute("aria-current"))).toBe(false);
+    expect(
+      tabs.every((tab) => tab.getAttribute("aria-selected") === "false"),
+    ).toBe(true);
     await expectNoAxe(container);
   });
 
@@ -363,7 +371,7 @@ describe("Sso: a read that did not list", () => {
       "data-reason",
       "error",
     );
-    expect(screen.getByRole("link", { name: "Single sign-on" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /^Roles/ })).toBeTruthy();
   });
 });
 

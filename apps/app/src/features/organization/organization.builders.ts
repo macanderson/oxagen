@@ -8,6 +8,7 @@
 import type {
   ApiKey,
   CostCenterList,
+  DataPlane,
   ModelCredential,
   MemberList,
   Permission,
@@ -16,6 +17,7 @@ import type {
   SsoProvider,
   SsoSettings,
   Workspace,
+  WorkspaceFacts,
   WorkspaceList,
 } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
@@ -44,6 +46,7 @@ export function roleRow(overrides: Partial<Role> = {}): Role {
     permissions: ["run.read"],
     heldBy: 2,
     createdBy: "Priya Natarajan",
+    createdAt: "2026-08-30T09:00:00.000Z",
     ...overrides,
   };
 }
@@ -61,6 +64,7 @@ export function workspaceRow(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
     slug: "core-platform",
+    namespace: "core",
     name: "Core platform",
     role: "Owner",
     archivedAt: null,
@@ -79,6 +83,20 @@ export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
     expiresAt: null,
     revokedAt: null,
     rotatable: true,
+    ...overrides,
+  };
+}
+
+/** The shared plane, healthy, as `get_data_plane` answers an organization with no binding row. */
+export function dataPlane(overrides: Partial<DataPlane> = {}): DataPlane {
+  return {
+    mode: "shared",
+    status: "active",
+    host: null,
+    database: null,
+    schemaVersion: null,
+    lastVerifiedAt: null,
+    rotatedAt: null,
     ...overrides,
   };
 }
@@ -150,8 +168,11 @@ type OrgReads = {
   workspaces?: Read<WorkspaceList>;
   apiKeys?: Read<ApiKey[]>;
   modelCredential?: Read<ModelCredential>;
+  dataPlane?: Read<DataPlane>;
   sso?: Read<SsoSettings>;
   costCenters?: Read<CostCenterList>;
+  /** What each workspace answers `org.workspaceFacts`, by slug. */
+  workspaceFacts?: Readonly<Record<string, Read<WorkspaceFacts>>>;
 };
 
 export function orgSource(reads: OrgReads): {
@@ -164,8 +185,10 @@ export function orgSource(reads: OrgReads): {
     workspaces: [],
     apiKeys: [],
     modelCredential: [],
+    dataPlane: [],
     sso: [],
     costCenters: [],
+    workspaceFacts: [],
   };
   const refuse = () => Promise.reject(new Error("not an Organization read"));
   const answer =
@@ -231,10 +254,26 @@ export function orgSource(reads: OrgReads): {
       apiKeys: answer(reads.apiKeys, "apiKeys"),
       costCenters: answer(reads.costCenters, "costCenters"),
       modelCredential: answer(reads.modelCredential, "modelCredential"),
+      dataPlane: answer(reads.dataPlane, "dataPlane"),
       sso: answer(reads.sso, "sso"),
+      workspaceFacts: (ctx: { wsSlug: string }, ...rest: unknown[]) => {
+        calls.workspaceFacts.push([ctx, ...rest]);
+        const { wsSlug } = ctx;
+        const read = reads.workspaceFacts?.[wsSlug];
+        return read === undefined
+          ? Promise.reject(
+              new Error(`org.workspaceFacts(${wsSlug}) was not expected`),
+            )
+          : Promise.resolve(read);
+      },
     },
     mandates: { list: refuse, get: refuse },
-    audit: { events: refuse, exportEvents: refuse },
+    audit: {
+      events: refuse,
+      exportEvents: refuse,
+      retention: refuse,
+      bundle: refuse,
+    },
     skills: { inventory: refuse, configuration: refuse },
     steering: {
       records: refuse,

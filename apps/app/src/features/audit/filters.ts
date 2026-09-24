@@ -11,11 +11,16 @@
 import { EMITTED_SECURITY_EVENT_TYPES } from "@oxagen/compliance";
 import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
 import {
-  AUDIT_PAGE_SIZE,
+  AUDIT_DEFAULT_RANGE,
+  AUDIT_DEFAULT_ROWS,
+  AUDIT_RANGES,
+  AUDIT_ROWS,
   type AuditExportFormat,
   type AuditFilters,
   AuditOutcome,
   type AuditQuery,
+  type AuditRange,
+  type AuditRows,
   type AuditWindow,
 } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
@@ -28,7 +33,10 @@ import {
 } from "@/shared/calendar-day";
 import { firstParam } from "@/shared/safe-path";
 
-/** The event types the filter offers, in the order the platform declares them. */
+/**
+ * The event types the filter offers, in the order the platform declares them.
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const AUDIT_EVENT_TYPES: readonly string[] =
   EMITTED_SECURITY_EVENT_TYPES;
 
@@ -72,19 +80,30 @@ function range(params: Params): Pick<AuditFilters, "from" | "to"> {
   return { from, to };
 }
 
+/** The Range select's value, thirty days when the URL names none it offers. */
+function rangeOf(params: Params): AuditRange {
+  const raw = firstParam(params.range);
+  return AUDIT_RANGES.find((range) => range === raw) ?? AUDIT_DEFAULT_RANGE;
+}
+
+/** The Rows select's value, ten when the URL names none it offers. */
+function rowsOf(params: Params): AuditRows {
+  const raw = Number(firstParam(params.rows));
+  return AUDIT_ROWS.find((rows) => rows === raw) ?? AUDIT_DEFAULT_ROWS;
+}
+
 /** Where the page starts: a whole number of events, rounded down to a page boundary. */
-function offsetOf(params: Params): number {
+function offsetOf(params: Params, rows: AuditRows): number {
   const raw = Number(firstParam(params.offset));
   if (!Number.isFinite(raw) || raw <= 0) return 0;
-  return (
-    Math.floor(Math.min(raw, MAX_OFFSET) / AUDIT_PAGE_SIZE) * AUDIT_PAGE_SIZE
-  );
+  return Math.floor(Math.min(raw, MAX_OFFSET) / rows) * rows;
 }
 
 export function parseAuditQuery(params: Params): AuditQuery {
   const outcome = value(params, "outcome", (raw) =>
     AUDIT_OUTCOMES.some((option) => option === raw),
   );
+  const rows = rowsOf(params);
   return {
     eventType: value(params, "eventType", (raw) =>
       AUDIT_EVENT_TYPES.includes(raw),
@@ -92,15 +111,21 @@ export function parseAuditQuery(params: Params): AuditQuery {
     outcome: outcome === null ? null : AuditOutcome.parse(outcome),
     actor: value(params, "actor", (raw) => ACTOR.test(raw)),
     capability: value(params, "capability", (raw) => CAPABILITY.test(raw)),
+    range: rangeOf(params),
     ...range(params),
-    offset: offsetOf(params),
+    rows,
+    offset: offsetOf(params, rows),
   };
 }
 
-/** Whether any filter is set, which is what tells an empty record from an empty answer. */
+/** Whether a filter narrows the record past its window: the result, the actor, the event or the capability. */
 export function hasAuditFilters(query: AuditQuery): boolean {
-  const { offset: _offset, ...filters } = query;
-  return Object.values(filters).some((filter) => filter !== null);
+  return (
+    query.eventType !== null ||
+    query.outcome !== null ||
+    query.actor !== null ||
+    query.capability !== null
+  );
 }
 
 /** The query values a link carries: every set filter, and an offset past the first page. */
@@ -114,15 +139,26 @@ export function auditQueryParams(
     outcome: query.outcome ?? undefined,
     actor: query.actor ?? undefined,
     capability: query.capability ?? undefined,
+    range: query.range === AUDIT_DEFAULT_RANGE ? undefined : query.range,
     from: query.from ?? undefined,
     to: query.to ?? undefined,
+    rows: query.rows === AUDIT_DEFAULT_ROWS ? undefined : String(query.rows),
     offset: offset > 0 ? String(offset) : undefined,
     format: over.format,
   };
 }
 
+const HOUR_MS = 3_600_000;
+/** How far back each Range option reads. */
+const RANGE_MS: Record<AuditRange, number> = {
+  "48h": 48 * HOUR_MS,
+  "7d": 7 * 24 * HOUR_MS,
+  "30d": 30 * 24 * HOUR_MS,
+};
+
 /**
- * The reader's days as the instants the record is queried and exported over.
+ * The window the record is queried and exported over: the Range select's span
+ * ending now, or the reader's days when a link carries `from` or `to`.
  *
  * The days come off the query string, and a day is a pair of instants only once
  * a zone is known: Sep 18 in Los Angeles is not Sep 18 in Tokyo. The zone is the
@@ -143,10 +179,18 @@ export async function auditWindow(
   ctx: OrgCtx,
   source: Pick<DataSource, "shell">,
   filters: AuditFilters,
+  /** The instant the Range ends at, taken once by the caller for every read it makes. */
+  now: number,
 ): Promise<AuditWindow> {
-  const { from, to, ...rest } = filters;
+  const { from, to, range: window, ...rest } = filters;
   if (from === null && to === null) {
-    return { ...rest, since: null, until: null };
+    // The Range select: a window ending now, open at the top so an event
+    // written while the page is read still lands in it.
+    return {
+      ...rest,
+      since: new Date(now - RANGE_MS[window]).toISOString(),
+      until: null,
+    };
   }
   const preferences = await source.shell.preferences(ctx);
   const stored = preferences.ok

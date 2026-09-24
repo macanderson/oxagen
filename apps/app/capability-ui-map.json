@@ -369,6 +369,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_data_plane": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=dataPlane: the Data plane tab reads the Postgres binding through get_data_plane (data/live/org.ts, data/live/mappers/org.ts, features/organization/data-plane.tsx)",
+      "proof": "apps/app/src/features/organization/data-plane.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+    },
     "get_evidence_retention": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
@@ -621,6 +629,14 @@
           "proof": "apps/app/src/features/fleet/steer-fleet.test.tsx",
           "verifiedAt": "2026-09-23",
           "verifiedBy": "session-01GDv3vs-fleet-rev1"
+        },
+        {
+          "route": "/[org]?tab=workspaces",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "Organization › Workspaces: the Agents count of each workspace the viewer may enter, and the Agents fact in Edit workspace (data/live/org.ts org.workspaceFacts, features/organization/workspaces.tsx)",
+          "proof": "apps/app/src/data/live/org.test.ts",
+          "verifiedAt": "2026-09-24",
+          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
         }
       ]
     },
@@ -702,7 +718,17 @@
       "entry": "Repositories \u203a the Not linked table of repositories the installation reaches, and the main-repository picker (features/repositories/bound-repositories.tsx, features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
+      "verifiedBy": "session-mc-repositories-page",
+      "also": [
+        {
+          "route": "/[org]",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "Organization › Create a workspace: the Main repository select offers the repositories the organization's installations reach, and Production branch the default branch create_workspace records (features/organization/workspace-reads.ts, features/organization/workspace-actions.tsx)",
+          "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
+          "verifiedAt": "2026-09-24",
+          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+        }
+      ]
     },
     "list_invoices": {
       "route": "/[org]/billing",
@@ -782,7 +808,17 @@
       "entry": "Repositories \u203a the repository table every visit reads, main first, with role, production branch, .oxagen/, events and symbols (features/repositories/repositories.tsx, features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
+      "verifiedBy": "session-mc-repositories-page",
+      "also": [
+        {
+          "route": "/[org]?tab=workspaces",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "Organization › Workspaces: Main repo, Production branch and Linked repos, read inside each workspace the viewer may enter, and the main repository and branch in Edit workspace (data/live/org.ts org.workspaceFacts, features/organization/workspaces.tsx, features/organization/workspace-actions.tsx)",
+          "proof": "apps/app/src/features/organization/workspaces.test.tsx",
+          "verifiedAt": "2026-09-24",
+          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+        }
+      ]
     },
     "list_resolved_approvals": {
       "route": "/[org]/[ws]/runs/[run]",

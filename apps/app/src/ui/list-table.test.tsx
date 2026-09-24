@@ -11,13 +11,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import {
-  facetsOf,
-  type ListRow,
-  ListTable,
-  leadingNumber,
-  pageList,
-} from "./list-table";
+import { facetsOf, type ListRow, ListTable, leadingNumber } from "./list-table";
+import { pageList } from "./page-list";
 
 const COLUMNS = [
   { label: "Invoice" },
@@ -286,6 +281,28 @@ describe("ListTable filters", () => {
     );
   }
 
+  it("offers none of its own when the caller draws its filters, so no column gets two (negative)", () => {
+    render(
+      <IntlProvider>
+        <ListTable
+          label="Invoices"
+          columns={STATUS_COLUMNS}
+          rows={statusRows()}
+          filters={
+            <select aria-label="Status">
+              <option>All · Status</option>
+            </select>
+          }
+        />
+      </IntlProvider>,
+    );
+    expect(
+      screen
+        .getAllByRole("combobox")
+        .map((select) => select.getAttribute("aria-label")),
+    ).toEqual(["Status", null]);
+  });
+
   it("offers a status-like column first, reads the values the cells show, and filters on one", async () => {
     renderStatuses(statusRows());
     const filters = screen
@@ -397,6 +414,49 @@ describe("facetsOf", () => {
     expect(facetsOf(columns, texts)).toEqual([
       { column: 2, values: ["a", "b"] },
     ]);
+  });
+});
+
+describe("ListTable: a caller's filters and empty line", () => {
+  it("draws the caller's filters between the search box and Rows", () => {
+    render(
+      <IntlProvider>
+        <ListTable
+          label="Invoices"
+          columns={COLUMNS}
+          rows={rowsOf(2)}
+          filters={
+            <select aria-label="Status">
+              <option>All · Status</option>
+            </select>
+          }
+        />
+      </IntlProvider>,
+    );
+    const search = screen.getByRole("searchbox", { name: "Search this list" });
+    const status = screen.getByRole("combobox", { name: "Status" });
+    const rows = screen.getByRole("combobox", { name: "Rows" });
+    expect(
+      search.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      status.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("prints the caller's line when no row shows (negative)", () => {
+    render(
+      <IntlProvider>
+        <ListTable
+          label="Invoices"
+          columns={COLUMNS}
+          rows={[]}
+          empty="No invoice has been issued."
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByText("No invoice has been issued.")).toBeVisible();
+    expect(screen.queryByText("No rows match.")).toBeNull();
   });
 });
 

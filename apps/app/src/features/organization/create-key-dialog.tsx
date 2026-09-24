@@ -18,7 +18,12 @@ import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
 import { endOfUtcDay } from "@/shared/expiry-day";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import {
+  buttonDanger,
+  buttonSecondary,
+  inputBase,
+  mono,
+} from "@/ui/control-styles";
 import { useExitGuard } from "@/ui/exit-guard";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -29,6 +34,7 @@ import {
   revokeApiKey,
   rotateApiKey,
 } from "./api-key-actions";
+import { recordReceipt } from "./receipt";
 
 type Failure = Exclude<ActionResult<unknown>, { ok: true }>;
 
@@ -128,28 +134,39 @@ function SecretPanel({ secret }: { secret: NewApiKey }) {
 function KeyWriteDialog({
   open: openLabel,
   title,
+  subtitle,
   confirm,
   pending: pendingLabel,
   testId,
   write,
+  receipt,
   listedIds,
   after,
+  danger = false,
   children,
 }: {
   open: string;
   title: string;
+  /** Revoke: the row's button and the confirm are the design's `btn danger`. */
+  danger?: boolean;
+  /** The key the write acts on, under the title. */
+  subtitle?: string;
   confirm: string;
   pending: string;
   testId: string;
   write: () => Promise<ActionResult<Written>>;
+  /** The line the write leaves once it answered ok. */
+  receipt: string;
   listedIds: readonly string[];
   /** The page, reloaded once a write answered. */
   after: SafePath;
   children?: ReactNode;
 }) {
   const t = useTranslations("organization.apiKeys.actions");
+  const tActions = useTranslations("organization.actions");
   const failureText = useFailureText();
   const navigate = useNavigate();
+  const formId = `${testId}-form`;
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -210,6 +227,7 @@ function KeyWriteDialog({
         setFailure(failureText(result));
         return;
       }
+      recordReceipt(receipt);
       const minted = secretOf(result.value);
       if (minted === null) {
         setOpen(false);
@@ -234,21 +252,41 @@ function KeyWriteDialog({
     <>
       <button
         type="button"
-        className={buttonSecondary}
+        className={danger ? buttonDanger : buttonSecondary}
         onClick={() => {
           openChange(true);
         }}
       >
         {openLabel}
       </button>
+      {/* The form reads Cancel then the confirm in the footer, with the
+          header's x, as the design draws `apikey`, `rotatekey` and
+          `revokekey`. The one showing of a secret has a single way out, the
+          footer's Close, so it carries no header x beside it. */}
       <SheetDialog
         open={showing}
         onOpenChange={openChange}
         title={secret === null ? title : t("secret.title")}
+        subtitle={secret === null ? subtitle : undefined}
+        headerClose={secret === null}
+        closeLabel={secret === null ? tActions("cancel") : undefined}
+        footer={
+          secret === null ? (
+            <SubmitButton
+              form={formId}
+              pending={pending}
+              label={confirm}
+              pendingLabel={pendingLabel}
+              fullWidth={false}
+              danger={danger}
+            />
+          ) : undefined
+        }
         testId={testId}
       >
         {secret === null ? (
           <form
+            id={formId}
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
@@ -256,11 +294,6 @@ function KeyWriteDialog({
             {failure === null ? null : (
               <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
             )}
-            <SubmitButton
-              pending={pending}
-              label={confirm}
-              pendingLabel={pendingLabel}
-            />
           </form>
         ) : (
           <SecretPanel secret={secret} />
@@ -268,6 +301,26 @@ function KeyWriteDialog({
       </SheetDialog>
     </>
   );
+}
+
+/** The design's expiry choices, as a number of days from today or one year on. */
+const EXPIRY_PRESETS = ["d90", "d180", "y1"] as const;
+type ExpiryPreset = (typeof EXPIRY_PRESETS)[number];
+
+/**
+ * The calendar day, in UTC, a preset lands on from `now`: 90 or 180 days on,
+ * or the same date a year on. The action takes a day and ends the key at the
+ * end of it in UTC (`shared/expiry-day.ts`), so this hands it the day.
+ *
+ * @internal Exported for its unit test.
+ */
+export function expiryDayOf(preset: ExpiryPreset, now: Date): string {
+  const day = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  if (preset === "y1") day.setUTCFullYear(day.getUTCFullYear() + 1);
+  else day.setUTCDate(day.getUTCDate() + (preset === "d90" ? 90 : 180));
+  return day.toISOString().slice(0, 10);
 }
 
 export function CreateKeyDialog({
@@ -283,12 +336,16 @@ export function CreateKeyDialog({
   after: SafePath;
 }) {
   const t = useTranslations("organization.apiKeys.actions.create");
+  const tReceipt = useTranslations("organization.receipts");
   const [name, setName] = useState("");
-  const [expiresOn, setExpiresOn] = useState("");
-  // The control carries no timezone, so the note under it prints the instant
-  // the chosen day encodes. The action encodes with the same function, so the
-  // label and the stored value cannot drift (`shared/expiry-day.ts`).
-  const stored = expiresOn === "" ? null : endOfUtcDay(expiresOn);
+  const [preset, setPreset] = useState<ExpiryPreset>("d90");
+  // The day is taken when the person submits, so a dialog left open past
+  // midnight does not hand the action yesterday's arithmetic.
+  const expiresOn = () => expiryDayOf(preset, new Date());
+  // The note under the select prints the instant the chosen day encodes. The
+  // action encodes with the same function, so the note and the stored value
+  // cannot drift (`shared/expiry-day.ts`).
+  const stored = endOfUtcDay(expiresOn());
   return (
     <KeyWriteDialog
       open={t("open")}
@@ -296,10 +353,12 @@ export function CreateKeyDialog({
       confirm={t("confirm")}
       pending={t("pending")}
       testId="create-api-key"
-      write={() => createApiKey(org, ws, name, expiresOn)}
+      write={() => createApiKey(org, ws, name, expiresOn())}
+      receipt={tReceipt("keyCreated", { name: name.trim() })}
       listedIds={listedIds}
       after={after}
     >
+      <p className="text-sm text-muted-foreground">{t("body")}</p>
       <label htmlFor="api-key-name" className="text-sm font-medium">
         {t("name")}
       </label>
@@ -314,20 +373,27 @@ export function CreateKeyDialog({
       <label htmlFor="api-key-expires" className="text-sm font-medium">
         {t("expires")}
       </label>
-      <input
+      <select
         id="api-key-expires"
-        type="date"
-        value={expiresOn}
+        value={preset}
         aria-describedby="api-key-expires-note"
         className={inputBase}
         onChange={(event) => {
-          setExpiresOn(event.currentTarget.value);
+          const { value } = event.currentTarget;
+          setPreset(EXPIRY_PRESETS.find((p) => p === value) ?? "d90");
         }}
-      />
-      <p id="api-key-expires-note" className="text-sm text-muted-foreground">
-        {stored === null ? t("expiresUtc") : t("expiresAt", { at: stored })}
-      </p>
-      <p className="text-sm text-muted-foreground">{t("body")}</p>
+      >
+        {EXPIRY_PRESETS.map((option) => (
+          <option key={option} value={option}>
+            {t(`expiresOptions.${option}`)}
+          </option>
+        ))}
+      </select>
+      {stored === null ? null : (
+        <p id="api-key-expires-note" className="text-sm text-muted-foreground">
+          {t("expiresAt", { at: stored })}
+        </p>
+      )}
     </KeyWriteDialog>
   );
 }
@@ -337,6 +403,7 @@ export function KeyRowActions({
   ws,
   keyId,
   keyName,
+  keyPrefix,
   rotatable,
   listedIds,
   after,
@@ -347,6 +414,8 @@ export function KeyRowActions({
   ws: string;
   keyId: string;
   keyName: string;
+  /** The masked key, printed under the dialog titles beside the name. */
+  keyPrefix?: string;
   /**
    * Whether Rotate is offered. The row decides it against its own clock and
    * what `list_api_keys` reported (`key-row.tsx`), so one place holds the rule
@@ -364,16 +433,21 @@ export function KeyRowActions({
   afterRotate: SafePath;
 }) {
   const t = useTranslations("organization.apiKeys.actions");
+  const tReceipt = useTranslations("organization.receipts");
+  const subtitle =
+    keyPrefix === undefined ? keyName : `${keyName} ${keyPrefix}…`;
   return (
     <div className="flex flex-wrap gap-2">
       {rotatable ? (
         <KeyWriteDialog
           open={t("rotate.open")}
-          title={t("rotate.title", { name: keyName })}
+          title={t("rotate.title")}
+          subtitle={subtitle}
           confirm={t("rotate.confirm")}
           pending={t("rotate.pending")}
           testId="rotate-api-key"
           write={() => rotateApiKey(org, ws, keyId)}
+          receipt={tReceipt("keyRotated", { name: keyName })}
           listedIds={listedIds}
           after={afterRotate}
         >
@@ -382,11 +456,14 @@ export function KeyRowActions({
       ) : null}
       <KeyWriteDialog
         open={t("revoke.open")}
-        title={t("revoke.title", { name: keyName })}
+        title={t("revoke.title")}
+        subtitle={subtitle}
         confirm={t("revoke.confirm")}
         pending={t("revoke.pending")}
         testId="revoke-api-key"
+        danger
         write={() => revokeApiKey(org, ws, keyId)}
+        receipt={tReceipt("keyRevoked", { name: keyName })}
         listedIds={listedIds}
         after={after}
       >

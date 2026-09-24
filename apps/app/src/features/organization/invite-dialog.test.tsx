@@ -33,6 +33,8 @@ vi.mock("./actions", () => ({
 }));
 
 const { InviteDialog } = await import("./invite-dialog");
+const { Receipts } = await import("./receipt");
+const { phoneWidth } = await import("@/test/phone");
 
 const HERE = routes.people("acme");
 /** The invitation the roster on screen already lists. */
@@ -48,6 +50,7 @@ const answered = (id: string) => ({
 function renderDialog(
   pendingIds: readonly string[] = [PENDING],
   allowed = true,
+  twoFactorRequired = false,
 ) {
   return render(
     <IntlProvider>
@@ -55,14 +58,18 @@ function renderDialog(
         org="acme"
         pendingIds={pendingIds}
         allowed={allowed}
+        twoFactorRequired={twoFactorRequired}
         after={HERE}
       />
     </IntlProvider>,
   );
 }
 
-async function openForm(pendingIds: readonly string[] = [PENDING]) {
-  renderDialog(pendingIds);
+async function openForm(
+  pendingIds: readonly string[] = [PENDING],
+  twoFactorRequired = false,
+) {
+  renderDialog(pendingIds, true, twoFactorRequired);
   await userEvent.click(screen.getByRole("button", { name: "Invite" }));
   return screen.getByTestId("send-invitation");
 }
@@ -71,13 +78,10 @@ async function fillAndSend(email: string, role?: string) {
   const dialog = await openForm();
   await userEvent.type(within(dialog).getByLabelText("Email"), email);
   if (role !== undefined) {
-    await userEvent.selectOptions(
-      within(dialog).getByLabelText("Role offered"),
-      role,
-    );
+    await userEvent.selectOptions(within(dialog).getByLabelText("Role"), role);
   }
   await userEvent.click(
-    within(dialog).getByRole("button", { name: "Send invitation" }),
+    within(dialog).getByRole("button", { name: "Send the invitation" }),
   );
   return dialog;
 }
@@ -94,23 +98,24 @@ afterEach(async () => {
 });
 
 describe("the form", () => {
-  it("asks for an email, a role and an optional note, and for no workspace (negative)", async () => {
+  it("asks for an email and a role, the design's two fields, and for no workspace or note (negative)", async () => {
     const dialog = await openForm();
     expect(within(dialog).getByLabelText("Email")).toHaveAttribute(
       "type",
       "email",
     );
-    const role = within(dialog).getByLabelText("Role offered");
+    const role = within(dialog).getByLabelText("Role");
     expect(
       within(role)
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["Member", "Admin", "Owner"]);
+    ).toEqual(["org.member", "org.admin", "org.owner"]);
     expect(role).toHaveValue("member");
-    expect(within(dialog).getByLabelText("Note (optional)")).not.toBeRequired();
+    expect(within(dialog).queryByLabelText(/note/i)).toBeNull();
     expect(dialog).toHaveTextContent(
-      "The invitation admits this person to the organization with the role you pick. It grants no workspace of its own.",
+      "An invitation is the only way into the organization. It expires in seven days, and accepting it requires a verified email.",
     );
+    expect(dialog).not.toHaveTextContent("two-factor");
     expect(within(dialog).queryByLabelText(/workspace/i)).toBeNull();
     expect(
       within(dialog).queryByRole("combobox", { name: /workspace/i }),
@@ -123,8 +128,17 @@ describe("the form", () => {
   });
 });
 
+describe("the two-factor policy", () => {
+  it("says accepting asks for two-factor when the organization requires it", async () => {
+    const dialog = await openForm([PENDING], true);
+    expect(dialog).toHaveTextContent(
+      "An invitation is the only way into the organization. It expires in seven days, and accepting it requires a verified email and two-factor.",
+    );
+  });
+});
+
 describe("an invitation that was made", () => {
-  it("sends the email, the role and the note, and says who was invited", async () => {
+  it("sends the email and the role, and says who was invited", async () => {
     sendInvitation.mockResolvedValue(answered(FRESH));
     const dialog = await openForm();
     await userEvent.type(
@@ -132,25 +146,21 @@ describe("an invitation that was made", () => {
       "dana.reyes@acme.example",
     );
     await userEvent.selectOptions(
-      within(dialog).getByLabelText("Role offered"),
+      within(dialog).getByLabelText("Role"),
       "admin",
     );
-    await userEvent.type(
-      within(dialog).getByLabelText("Note (optional)"),
-      "Joining the platform team.",
-    );
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Send invitation" }),
+      within(dialog).getByRole("button", { name: "Send the invitation" }),
     );
     expect(sendInvitation).toHaveBeenCalledWith("acme", {
       email: "dana.reyes@acme.example",
       role: "admin",
-      message: "Joining the platform team.",
+      message: "",
     });
     const panel = await screen.findByTestId("invitation-sent");
     expect(panel).toHaveTextContent("Invitation sent");
     expect(panel).toHaveTextContent(
-      "dana.reyes@acme.example was invited as Admin.",
+      "dana.reyes@acme.example was invited as org.admin.",
     );
     expect(screen.queryByTestId("invitation-already")).toBeNull();
   });
@@ -274,7 +284,7 @@ describe("a refusal", () => {
     sendInvitation.mockResolvedValueOnce(answered(FRESH));
     await userEvent.type(within(dialog).getByLabelText("Email"), ".example");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Send invitation" }),
+      within(dialog).getByRole("button", { name: "Send the invitation" }),
     );
     await waitFor(() => {
       expect(screen.queryByTestId("send-invitation-failure")).toBeNull();
@@ -292,5 +302,50 @@ describe("a viewer who may not invite", () => {
     expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
     expect(screen.queryByTestId("send-invitation")).toBeNull();
     expect(sendInvitation).not.toHaveBeenCalled();
+  });
+});
+
+describe("the design's labels, the receipt and the phone", () => {
+  it("is titled Invite a person and sends with Send the invitation", async () => {
+    const dialog = await openForm();
+    expect(
+      within(dialog).getByRole("heading", { name: "Invite a person" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Send the invitation" }),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves a receipt naming the audit record once the invitation is sent", async () => {
+    sendInvitation.mockResolvedValue(answered(FRESH));
+    await fillAndSend("new@acme.example");
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+        "Invitation sent to new@acme.example. Recorded in the audit record.",
+      );
+    });
+  });
+
+  it("draws every input at 16px on a phone, so iOS does not zoom on focus", async () => {
+    const phone = phoneWidth();
+    try {
+      const dialog = await openForm();
+      const inputs = [
+        within(dialog).getByLabelText("Email"),
+        within(dialog).getByLabelText("Role"),
+      ];
+      for (const input of inputs) {
+        expect(getComputedStyle(input).fontSize).toBe("16px");
+        // The class list says so as well, for a reader of the markup.
+        expect(input.className).toContain("max-md:text-base");
+      }
+    } finally {
+      phone.restore();
+    }
   });
 });
