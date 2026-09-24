@@ -1,5 +1,5 @@
 {
-  "generatedCount": 372,
+  "generatedCount": 373,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -120,6 +120,16 @@
     },
     {
       "name": "attach_github_installation",
+      "domain": "repository",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "attach_gitlab_project",
       "domain": "repository",
       "surfaces": [
         "api"

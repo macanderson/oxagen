@@ -28,17 +28,41 @@
 //
 // Steps 3–5 call GitHub, so they run before the transaction and fail closed:
 // a refusal there writes nothing.
+//
+// A GitLab main project (#3762) replaces steps 3–4: the request carries a
+// project access token, verified as `attach_gitlab_project` verifies it, and
+// the transaction writes a GitLab connection holding that token encrypted
+// instead of a GitHub one. No GitHub authorization is read. The project
+// webhook is registered last inside the transaction, once the connection id
+// it names exists.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import {
   workspaceCreate,
   type WorkspaceCreateOutput,
 } from "@oxagen/oxagen/contracts/workspace.create";
-import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import {
+  schema,
+  withTenantDb,
+  isUniqueViolation,
+  type Tx,
+} from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
+import { GitLabApiError, parseGitLabProjectPath } from "@oxagen/gitlab";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
-import { writeRepositoryHead } from "./repository.binding-write";
+import {
+  writeRepositoryHead,
+  type BindableRepository,
+  type RepositoryProvider,
+} from "./repository.binding-write";
+import { GITLAB_AUTH_SCHEME, GITLAB_PROVIDER } from "./lib/gitlab-credential";
+import type { GitLabDeliveryConfig } from "./repository.gitlab-connection";
+import {
+  gitlabAttachDeps,
+  verifyProjectToken,
+  type GitLabAttachDeps,
+} from "./repository.gitlab.attach";
 import {
   GITHUB_PROVIDER,
   orgGithubOauthAccountId,
@@ -67,7 +91,211 @@ const slugTaken = (slug: string) =>
   });
 
 export type WorkspaceCreateDeps = GithubUserInstallationsDeps &
-  MainRepositoryDeps;
+  MainRepositoryDeps & {
+    /** GitLab client, sealing and webhook URL; defaults to the attach flow's. */
+    gitlab?: GitLabAttachDeps;
+  };
+
+/**
+ * What a creation binds: the repository as its host reported it, and the
+ * writer of the new workspace's connection to that host, run inside the
+ * creation's transaction.
+ */
+interface CreationTarget {
+  provider: RepositoryProvider;
+  repo: BindableRepository;
+  writeConnection(
+    tx: Tx,
+    args: { orgId: string; workspaceId: string; userId: string; now: Date },
+  ): Promise<{ id: string; publicId: string }>;
+}
+
+/**
+ * The GitLab arm: verify the token for the project, seal it with a fresh
+ * webhook secret, and write the connection and its credential. The hook is
+ * registered after both rows exist; a token whose role cannot manage hooks
+ * still creates the workspace, and `attach_gitlab_project` registers the hook
+ * later.
+ */
+async function gitlabCreationTarget(
+  deps: GitLabAttachDeps,
+  input: { projectPath: string; token: string },
+  ctx: { surface: string; messageId: string | null },
+): Promise<CreationTarget> {
+  // A token is accepted only from a person's own request: the web app or the
+  // HTTP API, outside a chat turn. An MCP client, a runner, or the in-app
+  // agent (a call that carries a chat `messageId`) keeps its tool input in a
+  // transcript, which is no place for a credential. The kernel's `agent`
+  // surface is not visible here, so the chat message is what marks it.
+  if (
+    !(ctx.surface === "api" || ctx.surface === "app") ||
+    ctx.messageId !== null
+  )
+    throw new HandlerError({
+      code: "conflict",
+      reason: "gitlab_token_surface",
+      message:
+        "A GitLab project access token is accepted from the web app or the API only, never through an agent or MCP transcript.",
+    });
+  const path = parseGitLabProjectPath(input.projectPath);
+  if (!path)
+    throw new HandlerError({
+      code: "conflict",
+      reason: "invalid_project_path",
+      message: `${input.projectPath} is not a gitlab.com project path. Use group/project, or group/subgroup/project.`,
+    });
+  const gl = deps.client(input.token);
+  const { project } = await verifyProjectToken(gl, path.fullPath);
+  const webhookSecret = deps.newSecret();
+  const sealed = await deps.seal(
+    JSON.stringify({ token: input.token, webhookSecret }),
+  );
+  return {
+    provider: GITLAB_PROVIDER,
+    repo: {
+      id: project.id,
+      owner: project.namespaceFullPath,
+      name: project.path,
+      fullName: project.pathWithNamespace,
+      // verifyProjectToken refused a project without one.
+      defaultBranch: project.defaultBranch as string,
+    },
+    async writeConnection(tx, { orgId, workspaceId, userId, now }) {
+      const config: GitLabDeliveryConfig = {
+        projectId: project.id,
+        projectPath: project.pathWithNamespace,
+        webhookId: null,
+      };
+      const [connection] = await tx
+        .insert(schema.sourceConnections)
+        .values({
+          orgId,
+          workspaceId,
+          connectorId: GITLAB_PROVIDER,
+          displayName: `GitLab · ${project.pathWithNamespace}`,
+          authScheme: GITLAB_AUTH_SCHEME,
+          deliveryMethod: "webhook",
+          deliveryConfig: config,
+          status: "connected",
+          createdAt: now,
+          updatedAt: now,
+          createdById: userId,
+        })
+        .returning({
+          id: schema.sourceConnections.id,
+          publicId: schema.sourceConnections.publicId,
+        });
+      if (!connection)
+        throw new Error("source_connections insert returned no row");
+      await tx.insert(schema.authCredentials).values({
+        connectionId: connection.id,
+        authScheme: GITLAB_AUTH_SCHEME,
+        encryptedPayload: sealed,
+      });
+      try {
+        const hook = await gl.createProjectHook({
+          project: project.id,
+          url: deps.webhookUrl(connection.publicId),
+          token: webhookSecret,
+          mergeRequestsEvents: true,
+          pushEvents: false,
+        });
+        await tx
+          .update(schema.sourceConnections)
+          .set({ deliveryConfig: { ...config, webhookId: hook.id } })
+          .where(eq(schema.sourceConnections.id, connection.id));
+      } catch (err) {
+        if (!(err instanceof GitLabApiError && err.status === 403)) throw err;
+      }
+      return connection;
+    },
+  };
+}
+
+/**
+ * The GitHub arm: the installation the org's own GitHub authorization reaches
+ * on the repository's owner, and the repository read through it.
+ */
+async function githubCreationTarget(
+  deps: WorkspaceCreateDeps,
+  ctx: { orgId: string; workspaceId: string },
+  mainRepo: { owner: string; name: string },
+): Promise<CreationTarget> {
+  const { owner, name } = mainRepo;
+  // ── The installation, from the org's own GitHub authorization ──────────
+  const candidates = await deps.candidates({
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+  });
+  if (candidates === null) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "github_not_authorized",
+      message:
+        "This organization has no usable GitHub authorization to reach a repository with; connect GitHub from an existing workspace's settings first",
+    });
+  }
+  // One App installation per account, and a repository's owner IS the
+  // account it is installed on, so the owner picks the installation. GitHub
+  // logins are case-insensitive.
+  const installation = candidates.find(
+    (c) => c.accountLogin?.toLowerCase() === owner.toLowerCase(),
+  );
+  if (!installation) {
+    throw new HandlerError({
+      code: "not_found",
+      reason: "installation_unreachable",
+      message: `The GitHub App is not installed on ${owner}, or the organization's GitHub account cannot reach that installation`,
+    });
+  }
+
+  const repo = await deps.repository(installation.installationId, owner, name);
+  if (!repo) {
+    throw new HandlerError({
+      code: "not_found",
+      reason: "repository_not_installed",
+      message: `The GitHub App installation on ${owner} cannot see ${owner}/${name}`,
+    });
+  }
+
+  return {
+    provider: GITHUB_PROVIDER,
+    repo,
+    async writeConnection(tx, { orgId, workspaceId, userId, now }) {
+      // The connection the install callback would otherwise have written,
+      // with the OAuth account linked for the reason
+      // `attachWorkspaceGithubInstallation` gives: a `connected` row with no
+      // credential degrades on every poll.
+      const oauthAccountId = await orgGithubOauthAccountId(tx, orgId);
+      const [connection] = await tx
+        .insert(schema.sourceConnections)
+        .values({
+          orgId,
+          workspaceId,
+          connectorId: GITHUB_PROVIDER,
+          displayName: "GitHub",
+          authScheme: "oauth2_authorization_code",
+          deliveryMethod: "webhook",
+          deliveryConfig: { installationId: installation.installationId },
+          ...(oauthAccountId ? { oauthAccountId } : {}),
+          // Connected: the workspace binds a repository through it from its
+          // first instant, which is the state `bind_main_repository` promotes
+          // a connection to.
+          status: "connected",
+          createdAt: now,
+          updatedAt: now,
+          createdById: userId,
+        })
+        .returning({
+          id: schema.sourceConnections.id,
+          publicId: schema.sourceConnections.publicId,
+        });
+      if (!connection)
+        throw new Error("source_connections insert returned no row");
+      return connection;
+    },
+  };
+}
 
 export function createWorkspaceCreateHandler(
   deps: WorkspaceCreateDeps,
@@ -110,46 +338,15 @@ export function createWorkspaceCreateHandler(
       throw slugTaken(input.slug);
     }
 
-    // ── The installation, from the org's own GitHub authorization ──────────
-    const { owner, name } = input.mainRepo;
-    const candidates = await deps.candidates({
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
-    });
-    if (candidates === null) {
-      throw new HandlerError({
-        code: "conflict",
-        reason: "github_not_authorized",
-        message:
-          "This organization has no usable GitHub authorization to reach a repository with; connect GitHub from an existing workspace's settings first",
-      });
-    }
-    // One App installation per account, and a repository's owner IS the
-    // account it is installed on, so the owner picks the installation. GitHub
-    // logins are case-insensitive.
-    const installation = candidates.find(
-      (c) => c.accountLogin?.toLowerCase() === owner.toLowerCase(),
-    );
-    if (!installation) {
-      throw new HandlerError({
-        code: "not_found",
-        reason: "installation_unreachable",
-        message: `The GitHub App is not installed on ${owner}, or the organization's GitHub account cannot reach that installation`,
-      });
-    }
-
-    const repo = await deps.repository(
-      installation.installationId,
-      owner,
-      name,
-    );
-    if (!repo) {
-      throw new HandlerError({
-        code: "not_found",
-        reason: "repository_not_installed",
-        message: `The GitHub App installation on ${owner} cannot see ${owner}/${name}`,
-      });
-    }
+    const target =
+      input.mainRepo.provider === "gitlab"
+        ? await gitlabCreationTarget(
+            deps.gitlab ?? gitlabAttachDeps,
+            input.mainRepo,
+            ctx,
+          )
+        : await githubCreationTarget(deps, ctx, input.mainRepo);
+    const { repo, provider } = target;
 
     // ── Does another workspace already hold this repository? ──────────────
     // Main or linked: a repository another workspace links cannot become
@@ -158,7 +355,7 @@ export function createWorkspaceCreateHandler(
     // catch below turns a lost race into the same sentence. No workspace to
     // exclude: this one does not exist yet.
     await assertGlobalClaimIsKnowable(ctx.orgId);
-    const held = await headsHeldElsewhere(repo.id, null);
+    const held = await headsHeldElsewhere(repo.id, null, provider);
     if (held.length > 0) {
       logger.warn(
         { orgId: ctx.orgId, repository: repo.fullName },
@@ -187,42 +384,19 @@ export function createWorkspaceCreateHandler(
         const scope = { orgId: ctx.orgId, workspaceId: ws.id };
         await assertPlaneStillShared(scope);
 
-        // The connection the install callback would otherwise have written,
-        // with the OAuth account linked for the reason
-        // `attachWorkspaceGithubInstallation` gives: a `connected` row with no
-        // credential degrades on every poll.
-        const oauthAccountId = await orgGithubOauthAccountId(tx, ctx.orgId);
-        const [connection] = await tx
-          .insert(schema.sourceConnections)
-          .values({
-            orgId: ctx.orgId,
-            workspaceId: ws.id,
-            connectorId: GITHUB_PROVIDER,
-            displayName: "GitHub",
-            authScheme: "oauth2_authorization_code",
-            deliveryMethod: "webhook",
-            deliveryConfig: { installationId: installation.installationId },
-            ...(oauthAccountId ? { oauthAccountId } : {}),
-            // Connected: the workspace binds a repository through it from its
-            // first instant, which is the state `bind_main_repository` promotes
-            // a connection to.
-            status: "connected",
-            createdAt: now,
-            updatedAt: now,
-            createdById: userId,
-          })
-          .returning({
-            id: schema.sourceConnections.id,
-            publicId: schema.sourceConnections.publicId,
-          });
-        if (!connection)
-          throw new Error("source_connections insert returned no row");
+        const connection = await target.writeConnection(tx, {
+          orgId: ctx.orgId,
+          workspaceId: ws.id,
+          userId,
+          now,
+        });
 
         const head = await writeRepositoryHead(tx, {
           scope,
           connectionId: connection.id,
           repo,
           role: "main",
+          provider,
           userId,
           now,
         });
@@ -293,6 +467,7 @@ export function createWorkspaceCreateHandler(
       mainRepo: {
         bindingId: created.bindingPublicId,
         connectionId: created.connectionPublicId,
+        provider,
         fullName: repo.fullName,
         defaultRef: repo.defaultBranch,
       },

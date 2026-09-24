@@ -169,18 +169,16 @@ export function rowsPerPageOf(value: string): RowsPerPage {
 }
 
 /** The columns a header click sorts on. */
-const SORT_KEYS = [
-  "run",
-  "agent",
-  "operator",
-  "status",
-  "tier",
-  "replay",
-  "cost",
-  "frames",
-  "started",
-] as const;
-export type SortKey = (typeof SORT_KEYS)[number];
+export type SortKey =
+  | "run"
+  | "agent"
+  | "operator"
+  | "status"
+  | "tier"
+  | "replay"
+  | "cost"
+  | "frames"
+  | "started";
 
 type Sort = { key: SortKey; dir: 1 | -1 } | null;
 
