@@ -55,7 +55,9 @@ Every figure is counted from a store that exists or is `null` with the reason on
 | `nextCursor` | `string \| null` | |
 | `totals.identities` | `number` | Live agents in the workspace. |
 | `totals.enrolled` | `number` | Of those, `enrolled`. |
+| `totals.unenrolled` | `number` | Of those, `unenrolled`: neither retired nor suspended, with no credential and no host. Retired and suspended agents are in `identities` and in neither count. |
 | `totals.holdingMandate` | `number` | Live agents in the workspace whose principal holds at least one active mandate. |
+| `totals.mandateHolders` | `string[]` | The agent keys of the agents `holdingMandate` counts, in slug order, at most 100. |
 | `totals.tamperIncidents` | `number` | Open incidents of a tamper kind (`hooks_removed`, `config_change`, `chain_break`, `checkpoint_lapse`, `token_replay`, `spoofed_event`), summed over the workspace's agents through the hosts enrolled under each agent key. An incident on a host no listed agent holds is not in it. |
 | `totals.tamper` | `object` | `{ recorded, open, newest }`: every tamper incident the store keeps summed over the same agents, how many are open, and the newest as `{ agentKey, kind, detectedAt }` (null when there is none). The Agents page's Tamper incidents tile. |
 

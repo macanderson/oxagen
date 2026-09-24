@@ -158,6 +158,7 @@ export function RegisterAgent({
                 autoComplete="off"
                 aria-invalid={slug !== "" && !slugOk}
                 aria-describedby={`${TEST_ID}-slug-hint`}
+                data-touch-target=""
                 className={`${inputBase} ${mono}`}
                 onChange={(event) => {
                   setSlug(event.target.value.toLowerCase());
@@ -226,6 +227,7 @@ export function RegisterAgent({
                 name="harness"
                 required
                 defaultValue=""
+                data-touch-target=""
                 className={inputBase}
               >
                 <option value="" disabled>
@@ -244,6 +246,7 @@ export function RegisterAgent({
                 id={`${TEST_ID}-tier`}
                 name="tier"
                 defaultValue={tiers[0]}
+                data-touch-target=""
                 className={inputBase}
               >
                 {tiers.map((tier) => (
