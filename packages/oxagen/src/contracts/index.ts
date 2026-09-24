@@ -99,6 +99,9 @@ import { repositoryInstallationList } from "./repository.installation.list";
 import { repositoryInstallationCandidates } from "./repository.installation.candidates";
 import { repositoryInstallationAttach } from "./repository.installation.attach";
 import { repositoryGitlabAttach } from "./repository.gitlab.attach";
+import { workingCopyRecord } from "./repository.working_copy.record";
+import { workingCopyList } from "./repository.working_copy.list";
+import { steeringPull } from "./context.steering.pull";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runTurnsGet } from "./run.turns.get";
@@ -443,6 +446,14 @@ export type {
 // capability, so exported here to satisfy the file-coverage guard.
 export { operatorFactsSchema } from "./operator.shared";
 export type { OperatorFacts } from "./operator.shared";
+// Working-copy vocabulary shared by record_working_copy and
+// list_working_copies. Not a capability, so exported here to satisfy the
+// file-coverage guard.
+export {
+  workingCopyIdSchema,
+  workingCopySymlinksSchema,
+  workingCopyEventSchema,
+} from "./repository.working_copy.shared";
 // Steering vocabulary (ADR-061) shared by the context.* contracts. Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -728,6 +739,9 @@ export {
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
   repositoryGitlabAttach,
+  workingCopyRecord,
+  workingCopyList,
+  steeringPull,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1125,6 +1139,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
   repositoryGitlabAttach,
+  workingCopyRecord,
+  workingCopyList,
+  steeringPull,
   runList,
   runGet,
   runFrameBodyGet,

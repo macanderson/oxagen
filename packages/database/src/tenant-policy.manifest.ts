@@ -185,6 +185,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // org_id + workspace_id NOT NULL → standard.
   { table: "ingestion.repository_bindings", policyClass: "standard" },
   { table: "ingestion.repository_binding_heads", policyClass: "standard" },
+  // A directory the CLI linked to a workspace (record_working_copy).
+  { table: "ingestion.working_copies", policyClass: "standard" },
 
   // ── mcp.* — all three tables below are tenant-owned (workspace-scoped).
   //   catalog_servers still exists (schema/mcp.ts) but is deliberately NOT

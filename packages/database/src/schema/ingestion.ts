@@ -596,3 +596,62 @@ export const repositoryBindingHeads = ingestionSchema.table(
 export type RepositoryBinding = typeof repositoryBindings.$inferSelect;
 export type NewRepositoryBinding = typeof repositoryBindings.$inferInsert;
 export type RepositoryBindingHead = typeof repositoryBindingHeads.$inferSelect;
+
+// A directory on a machine that `oxagen init` linked to a workspace (MC spec
+// §10.1, the Repositories page's Working copies tab). The CLI reports it with
+// `record_working_copy` from `oxagen init` and `oxagen pull`; nothing reads a
+// machine to find one. One row per machine and directory: a later report
+// updates the row and moves `last_seen_at`. The row describes the directory
+// as of that report and no later, and holds no file contents.
+export const workingCopies = ingestionSchema.table(
+  "working_copies",
+  {
+    ...idMixin("wcp"),
+    ...orgScopeMixin(),
+    // A hash the CLI derives on the machine; never a hardware serial.
+    machineId: text("machine_id").notNull(),
+    hostname: text("hostname").notNull(),
+    directory: text("directory").notNull(),
+    // `owner/name` from the `origin` remote; null when there is none.
+    repositoryFullName: text("repository_full_name"),
+    branch: text("branch"),
+    headCommit: text("head_commit"),
+    oxagenPresent: boolean("oxagen_present").notNull(),
+    symlinks: text("symlinks").notNull(),
+    // The published commit the last `oxagen pull` wrote into the directory.
+    pulledCommit: text("pulled_commit"),
+    lastEvent: text("last_event").notNull(),
+    cliVersion: text("cli_version"),
+    reportedById: uuid("reported_by_id"),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    directoryUniq: uniqueIndex("working_copies_directory_uq").on(
+      t.orgId,
+      t.workspaceId,
+      t.machineId,
+      t.directory,
+    ),
+    seenIdx: index("working_copies_seen_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.lastSeenAt,
+    ),
+    symlinksCheck: check(
+      "working_copies_symlinks_check",
+      sql`${t.symlinks} IN ('linked', 'missing', 'none')`,
+    ),
+    lastEventCheck: check(
+      "working_copies_last_event_check",
+      sql`${t.lastEvent} IN ('init', 'pull')`,
+    ),
+  }),
+);
+
+export type WorkingCopy = typeof workingCopies.$inferSelect;
+export type NewWorkingCopy = typeof workingCopies.$inferInsert;
