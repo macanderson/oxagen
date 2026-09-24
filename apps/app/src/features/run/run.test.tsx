@@ -154,7 +154,13 @@ async function renderRun(
     spine: view.spine ?? null,
     now: NOW,
   });
-  const { container } = render(<IntlProvider>{element}</IntlProvider>);
+  // The header's checkout strips suspend on the work read (`use(work)`). A
+  // render inside a synchronous act never flushes that retry, so the strips
+  // stayed on their fallback; awaiting act lets the resolved read land.
+  let container!: HTMLElement;
+  await act(async () => {
+    ({ container } = render(<IntlProvider>{element}</IntlProvider>));
+  });
   return { container, calls };
 }
 
