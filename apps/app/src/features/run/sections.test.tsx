@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { runTranscript, transcriptEntry } from "./run.builders";
 
@@ -59,8 +60,8 @@ const recallEntry = (seq: string, chainRef?: string) =>
   });
 
 describe("PolicySection", () => {
-  it("links the run's own decision, names a subagent's without a link, and says nothing is cut when the read is whole", () => {
-    render(
+  it("links the run's own decision, names a subagent's without a link, and says nothing is cut when the read is whole", async () => {
+    const { container } = render(
       <IntlProvider>
         <PolicySection
           read={readOk(
@@ -83,6 +84,7 @@ describe("PolicySection", () => {
     expect(within(subagent).queryByRole("link")).toBeNull();
     expect(rows[1]?.textContent).toContain("4");
     expect(screen.queryByText(/prefix|first|cut/i)).toBeNull();
+    await expectNoAxe(container);
   });
 
   it("says the list is a prefix when another page lies past it", () => {
@@ -117,7 +119,7 @@ describe("PolicySection", () => {
 });
 
 describe("ContextSection", () => {
-  it("links the run's own recall, names a subagent's without a link, and marks a cut list", () => {
+  it("links the run's own recall, names a subagent's without a link, and marks a cut list", async () => {
     const { container } = render(
       <IntlProvider>
         <ContextSection
@@ -140,6 +142,7 @@ describe("ContextSection", () => {
     expect(within(own).queryByRole("link")).not.toBeNull();
     expect(within(subagent).queryByRole("link")).toBeNull();
     expect(container.querySelector("p.pt-3")).not.toBeNull();
+    await expectNoAxe(container);
   });
 
   it("says there is nothing to list, and shows a failed read instead of a list", () => {
