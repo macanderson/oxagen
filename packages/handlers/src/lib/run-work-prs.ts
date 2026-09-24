@@ -27,6 +27,7 @@ export interface WorkPrDeps {
       | "getPullRequest"
       | "listCiChecks"
       | "listPullRequestFiles"
+      | "getRepoInfo"
     >
   >;
   now: () => string;
@@ -82,6 +83,7 @@ export async function readWorkPullRequests(
     });
   }
   const seenBranches = new Map<string, string[]>();
+  const defaultBranches = new Map<string, string>();
   let discoveries = 0;
   for (const { checkout, recorded: receipt } of targets) {
     const repo = repositories.find(
@@ -113,6 +115,24 @@ export async function readWorkPullRequests(
     seenBranches.set(discoveryKey, discovered);
     try {
       const gh = await deps.client(scope, repo);
+      // Every PR opened from a repository's default branch has that branch as
+      // its head, so a checkout on `main` matched whatever PR anyone ever
+      // opened from `main`, and a session started today showed one from July.
+      // A checkout on the default branch or a detached HEAD names no work of
+      // its own. Only a recorded receipt links a PR to it.
+      if (!receipt && checkout.branch) {
+        let defaultBranch = defaultBranches.get(repo.url);
+        if (defaultBranch === undefined) {
+          defaultBranch = (
+            await gh.getRepoInfo({ owner: repo.owner, repo: repo.name })
+          ).defaultBranch;
+          defaultBranches.set(repo.url, defaultBranch);
+        }
+        if (checkout.branch === defaultBranch || checkout.branch === "HEAD") {
+          warnings.add("default_branch_not_linked");
+          continue;
+        }
+      }
       const prs = receipt
         ? [{ number: receipt.number }]
         : await gh.listPullRequests({

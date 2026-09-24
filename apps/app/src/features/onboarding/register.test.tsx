@@ -1,20 +1,27 @@
 // @vitest-environment jsdom
-// Register an agent over a fake DataSource: the stepper, the name form, the
-// two wrap paths, the wait for the first frame and the frame once it lands,
-// plus the states each step reaches when a read is refused or no identity
-// exists. Axe runs after every test.
-import { cleanup, render, screen } from "@testing-library/react";
+// Register an agent over a fake DataSource, inside its gate: the top bar and
+// the rail on every step, the name step's namespaces and reserved key, the
+// wrap step's identity and gate reads, the run step's wait, the first frame
+// once it lands, and the error, denied and loading states each spec lists.
+// Axe runs after every test.
+import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { agentDetail } from "../agents/agents.builders";
+import { runChain, runDetail, runFrame } from "../run/run.builders";
 import {
   firstFrame,
   onboardingGate,
   onboardingSource,
 } from "./onboarding.builders";
+
+const { readRegisterPlace, getAuthUser } = vi.hoisted(() => ({
+  readRegisterPlace: vi.fn(),
+  getAuthUser: vi.fn(),
+}));
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -33,32 +40,48 @@ vi.mock("./actions", () => ({
   advanceOnboarding: vi.fn(),
   bindMainRepository: vi.fn(),
 }));
-vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("./register-actions", () => ({
+  readRegisterPlace,
+  cancelRegistration: vi.fn(),
+  issueAgentCredential: vi.fn(),
+}));
+vi.mock("@/server/session", () => ({ getSession: vi.fn(), getAuthUser }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { RegisterAgent } = await import("./register");
+const { RegisterAgent, RegisterGate, RegisterSkeleton } = await import(
+  "./register"
+);
 
-const ctx = unsafeMint(WsCtx, {
-  userId: "usr_marcusbell",
-  orgId: "7a000000-0000-4000-8000-0000000000a1",
-  orgSlug: "acme",
-  orgName: "Acme Robotics",
-  orgRole: "owner",
-  workspaceId: "7b000000-0000-4000-8000-000000000001",
-  wsSlug: "core-platform",
-  wsName: "Core platform",
-  wsRole: "member",
-});
+function viewer(orgRole: "owner" | "member") {
+  return unsafeMint(WsCtx, {
+    userId: "usr_marcusbell",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole,
+    workspaceId: "7b000000-0000-4000-8000-000000000001",
+    wsSlug: "core-platform",
+    wsName: "Core platform",
+    wsRole: "member",
+  });
+}
+const ctx = viewer("owner");
+
+const HOST_ID = "tch_0123456789abcdefghijkl";
+const CAPTION =
+  "Registration does not complete until the agent has talked to Oxagen. That first frame is also the installer's smoke test, so there is one path, not two. Cancel at any time.";
 
 async function renderStep(
   step: "name" | "wrap" | "run",
   agent: string | null,
   reads: Parameters<typeof onboardingSource>[0] = {},
+  who = ctx,
 ) {
   const { source, calls } = onboardingSource(reads);
-  const element = await RegisterAgent({ ctx, source, step, agent });
+  const body = await RegisterAgent({ ctx: who, source, step, agent });
+  const element = await RegisterGate({ ctx: who, step, agent, children: body });
   render(<IntlProvider>{element}</IntlProvider>);
   return calls;
 }
@@ -69,31 +92,184 @@ const railSteps = () =>
     state: step.getAttribute("data-state"),
   }));
 
+beforeEach(() => {
+  readRegisterPlace.mockReset();
+  readRegisterPlace.mockResolvedValue({
+    ok: true,
+    value: { keyPrefix: "acme.core", repository: "acme/platform" },
+  });
+  getAuthUser.mockReset();
+  getAuthUser.mockResolvedValue({
+    id: "usr_marcusbell",
+    name: "Marcus Bell",
+    email: "marcus@acme.example",
+  });
+});
+
 afterEach(async () => {
   await expectNoAxe(document.body);
   cleanup();
 });
 
-describe("the name step", () => {
-  it("draws the stepper with the first step current and reads nothing", async () => {
-    const calls = await renderStep("name", null);
+describe("the gate", () => {
+  it("draws the brandmark, the signed-in email, Cancel, the rail and the caption", async () => {
+    await renderStep("name", null);
+    expect(screen.getByRole("link", { name: "Oxagen home" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform",
+    );
+    expect(screen.getByTestId("register-email")).toHaveTextContent(
+      "marcus@acme.example",
+    );
+    expect(screen.getByTestId("register-cancel-top")).toHaveAttribute(
+      "href",
+      "/acme/core-platform",
+    );
+    expect(screen.getByText(CAPTION)).toBeInTheDocument();
+  });
+
+  it("marks the first step current and disables the two after it", async () => {
+    await renderStep("name", null);
+    const rail = screen.getByRole("navigation", { name: "Register an agent" });
     expect(railSteps()).toEqual([
       { step: "name", state: "current" },
       { step: "wrap", state: "todo" },
       { step: "run", state: "todo" },
     ]);
-    expect(calls.state).toEqual([]);
-    expect(calls.agent).toEqual([]);
+    expect(
+      within(rail).getByText("Name the agent").closest("[aria-current]"),
+    ).toHaveAttribute("aria-current", "step");
+    for (const label of ["Wrap the agent", "Wait for the first frame"])
+      expect(
+        within(rail).getByRole("button", { name: new RegExp(label) }),
+      ).toBeDisabled();
   });
 
-  it("names the step under the page and offers the form", async () => {
+  it("turns each done step into a link back carrying the identity", async () => {
+    await renderStep("run", "agt_releasebot", {
+      firstFrame: readOk(firstFrame()),
+      agent: readOk(agentDetail()),
+    });
+    const rail = screen.getByRole("navigation", { name: "Register an agent" });
+    expect(railSteps()).toEqual([
+      { step: "name", state: "done" },
+      { step: "wrap", state: "done" },
+      { step: "run", state: "current" },
+    ]);
+    expect(
+      within(rail).getByRole("link", { name: /Name the agent/ }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/register/name?agent=agt_releasebot",
+    );
+    expect(
+      within(rail).getByRole("link", { name: /Wrap the agent/ }),
+    ).toHaveTextContent("✓");
+  });
+
+  it("keeps the rail under the loading skeleton: four tiles and a panel of seven rows", () => {
+    render(
+      <IntlProvider>
+        <RegisterSkeleton />
+      </IntlProvider>,
+    );
+    const loading = screen.getByTestId("register-loading");
+    expect(loading).toHaveAttribute("role", "status");
+    expect(loading).toHaveTextContent("Loading the step");
+    expect(loading.querySelectorAll(".h-16")).toHaveLength(4);
+    expect(loading.querySelectorAll(".h-9")).toHaveLength(7);
+  });
+});
+
+describe("the denied state", () => {
+  it("names the missing permission, offers Request access and Back to Fleet, and reads nothing", async () => {
+    const calls = await renderStep(
+      "wrap",
+      "agt_releasebot",
+      {},
+      viewer("member"),
+    );
+    const denied = screen.getByTestId("register-denied");
+    expect(
+      within(denied).getByRole("heading", {
+        level: 1,
+        name: "You cannot see agent registration",
+      }),
+    ).toBeInTheDocument();
+    expect(denied).toHaveTextContent(
+      "Your roles on Acme Robotics do not include agent.register on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+    );
+    expect(
+      within(denied).getByRole("button", { name: "Request access" }),
+    ).toBeInTheDocument();
+    expect(
+      within(denied).getByRole("link", { name: "Back to Fleet" }),
+    ).toHaveAttribute("href", "/acme/core-platform");
+    expect(denied).toHaveTextContent(
+      "Signed in asMarcus Bell · member · core-platform",
+    );
+    expect(denied).toHaveTextContent("Neededagent.register on core-platform");
+    expect(denied).toHaveTextContent(
+      "Decided byregister_agent · organization owner or admin",
+    );
+    expect(calls.agent).toEqual([]);
+    expect(calls.state).toEqual([]);
+    expect(readRegisterPlace).not.toHaveBeenCalled();
+    // The rail stays so the viewer keeps their bearings.
+    expect(railSteps()).toHaveLength(3);
+  });
+});
+
+describe("the name step", () => {
+  it("heads the step verbatim and builds the key from the workspace namespaces", async () => {
     await renderStep("name", null);
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
     expect(
-      screen.getByRole("form", { name: "Name the agent" }),
+      screen.getByRole("heading", { level: 1, name: "Name the agent" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Slug")).toBeInTheDocument();
-    expect(screen.getByLabelText("Harness")).toBeInTheDocument();
+    expect(
+      screen.getByText("The key is reserved now and is immutable."),
+    ).toBeInTheDocument();
+    expect(readRegisterPlace).toHaveBeenCalledWith("acme", "core-platform");
+    expect(screen.getByLabelText("Workspace")).toHaveValue(
+      "Core platform · acme/platform",
+    );
+    expect(screen.getAllByTestId("register-key")[0]).toHaveTextContent(
+      "acme.core.agent",
+    );
+  });
+
+  it("says a workspace with no main repository has none", async () => {
+    readRegisterPlace.mockResolvedValue({
+      ok: true,
+      value: { keyPrefix: "acme.core", repository: null },
+    });
+    await renderStep("name", null);
+    expect(screen.getByLabelText("Workspace")).toHaveValue(
+      "Core platform · no main repository",
+    );
+  });
+
+  it("names a refused workspace read instead of drawing a key it cannot build (negative)", async () => {
+    readRegisterPlace.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    await renderStep("name", null);
+    expect(screen.getByTestId("register-place-failure")).toHaveTextContent(
+      "This account may not register agents here.",
+    );
+    expect(screen.queryByLabelText("Slug")).not.toBeInTheDocument();
+  });
+
+  it("reads the identity already reserved and shows its key read-only", async () => {
+    const calls = await renderStep("name", "agt_releasebot", {
+      agent: readOk(agentDetail()),
+    });
+    expect(calls.agent).toEqual([[ctx, "agt_releasebot"]]);
+    expect(screen.getByLabelText("Slug")).toHaveValue("release-bot");
+    expect(screen.getByLabelText("Slug")).toHaveAttribute("readonly");
   });
 });
 
@@ -106,129 +282,226 @@ describe("the wrap step", () => {
     expect(calls.agent).toEqual([]);
   });
 
-  it("reads the identity and offers the host path for a hook-based harness", async () => {
+  it("reads the identity and the gate and heads the step with the agent key", async () => {
     const calls = await renderStep("wrap", "agt_releasebot", {
       state: readOk(onboardingGate()),
       agent: readOk(agentDetail()),
     });
     expect(calls.agent).toEqual([[ctx, "agt_releasebot"]]);
-    expect(screen.getByTestId("register-identity")).toHaveTextContent(
-      "acme.core.release-bot",
-    );
+    expect(calls.state).toHaveLength(1);
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Mint the one-time token" }),
+      screen.getByRole("heading", { level: 1, name: "Wrap the agent" }),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("wrap-unavailable")).toBeNull();
-  });
-
-  it("shows the missing SDK adapter without invented installation instructions", async () => {
-    await renderStep("wrap", "agt_releasebot", {
-      state: readOk(onboardingGate()),
-      agent: readOk(agentDetail({ identity: { harness: "claude-agent-sdk" } })),
-    });
-    expect(screen.getByTestId("wrap-unavailable")).toHaveTextContent(
-      "Wrapping is not available for this harness",
+    expect(screen.getByText(/The enrollment token for/)).toHaveTextContent(
+      "The enrollment token for acme.core.release-bot is single use, so the machine that presents it becomes this agent's host.",
     );
-    expect(
-      screen.queryByRole("button", { name: "Mint the one-time token" }),
-    ).toBeNull();
+    expect(screen.getByRole("tabpanel")).toHaveAttribute(
+      "data-tab",
+      "claude-code",
+    );
   });
 
-  it("renders the read's failure in place of the step (negative)", async () => {
+  it("answers an identity outside this workspace with a 404 (negative)", async () => {
+    await expect(
+      renderStep("wrap", "agt_gone", {
+        state: readOk(onboardingGate()),
+        agent: readError("agent_not_found", 404),
+      }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("names a refused identity read and draws no tabs (negative)", async () => {
     await renderStep("wrap", "agt_releasebot", {
       state: readOk(onboardingGate()),
-      agent: { ok: false, reason: "denied", permission: "agent.read" },
+      agent: readError("upstream", 503),
     });
-    expect(screen.getByText(/You cannot see Register an agent/)).toBeVisible();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.getByText(/upstream/)).toBeInTheDocument();
   });
 });
 
 describe("the run step", () => {
-  it("waits on the record with the contract's budget and names the host that enrolled", async () => {
+  const waitingFrame = firstFrame({
+    agentKey: "acme.core.release-bot",
+    host: {
+      hostEnrollmentId: HOST_ID,
+      enrolledAt: "2026-09-15T14:01:48.000Z",
+      lastHeartbeatAt: "2026-09-15T14:01:52.000Z",
+      hooksOk: true,
+    },
+  });
+
+  it("waits with the spinner, the chips, the recorded log lines and no gold action", async () => {
     const calls = await renderStep("run", "agt_releasebot", {
-      state: readOk(onboardingGate({ step: "run" })),
-      firstFrame: readOk(firstFrame()),
+      firstFrame: readOk(waitingFrame),
+      agent: readOk(agentDetail()),
     });
     expect(calls.firstFrame).toEqual([
       [ctx, "agt_releasebot", { waitMs: 20_000 }],
     ]);
-    expect(screen.getByTestId("first-frame-waiting")).toHaveTextContent(
-      "Waiting for the first frame",
-    );
-    expect(screen.getByTestId("first-frame-host")).toHaveTextContent(
-      "Hooks written and checked.",
-    );
-  });
-
-  it("says nothing has enrolled yet rather than waiting on nothing (negative)", async () => {
-    await renderStep("run", "agt_releasebot", {
-      state: readOk(onboardingGate({ step: "run" })),
-      firstFrame: readOk(firstFrame({ host: null })),
-    });
-    expect(screen.getByTestId("first-frame-no-host")).toHaveTextContent(
-      "No host has enrolled for this agent",
-    );
-    expect(screen.queryByTestId("first-frame-host")).toBeNull();
-  });
-
-  it("offers the detected repository while the workspace is provisional", async () => {
-    await renderStep("run", "agt_releasebot", {
-      state: readOk(onboardingGate({ step: "run" })),
-      firstFrame: readOk(firstFrame()),
-    });
-    const panel = screen.getByTestId("detected-repository");
-    expect(panel).toHaveTextContent("acme/platform");
     expect(
-      screen.getByRole("button", {
-        name: "Bind acme/platform as the main repo",
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Wait for the first frame",
       }),
+    ).toBeInTheDocument();
+    const card = screen.getByTestId("first-frame-waiting");
+    expect(
+      within(card).getByRole("heading", {
+        name: "Waiting for the first frame",
+      }),
+    ).toBeInTheDocument();
+    expect(card).toHaveTextContent("polling");
+    expect(
+      within(screen.getByTestId("first-frame-chips"))
+        .getAllByText(/./)
+        .map((chip) => chip.textContent),
+    ).toEqual(["acme.core.release-bot", "Claude Code", "host build-01"]);
+    const log = screen.getByTestId("first-frame-log");
+    expect(log).toHaveTextContent("host enrolled · device key sha256:ab12cd34");
+    expect(log).toHaveTextContent("collector reported");
+    expect(log).toHaveTextContent("hooks written · ~/.claude/settings.json");
+    expect(log).toHaveTextContent("waiting…");
+    expect(card).toHaveTextContent(
+      "Start Claude Code in any repository on build-01. This card flips on its own when the first frame lands.",
+    );
+    expect(
+      screen.getByText("There is no Done button. The frame is the completion."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Done|Finish/ })).toBeNull();
+    expect(
+      document.querySelectorAll('[class*="bg-button-primary-bg"]'),
+    ).toHaveLength(0);
+  });
+
+  it("says no host has enrolled when none has", async () => {
+    await renderStep("run", "agt_releasebot", {
+      firstFrame: readOk(firstFrame({ host: null })),
+      agent: readOk(agentDetail({ hosts: [] })),
+    });
+    expect(screen.getByText("no host yet")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No host has enrolled for this agent. The token from the previous step is what enrols one.",
+      ),
     ).toBeInTheDocument();
   });
 
-  it("drops the repository offer once a main repo is bound (negative)", async () => {
-    await renderStep("run", "agt_releasebot", {
-      state: readOk(
-        onboardingGate({
-          step: "run",
-          provisional: {
-            until: "2026-09-29T00:00:00.000Z",
-            mainRepoBoundAt: "2026-09-16T00:00:00.000Z",
-            detectedRepository: {
-              provider: "github",
-              owner: "acme",
-              name: "platform",
-            },
-          },
-        }),
-      ),
-      firstFrame: readOk(firstFrame()),
-    });
-    expect(screen.queryByTestId("detected-repository")).toBeNull();
-  });
-
-  it("shows the frame and the run it opened once one arrives", async () => {
-    await renderStep("run", "agt_releasebot", {
-      state: readOk(onboardingGate({ step: "unlocked" })),
+  it("shows the first frames, the recorded tier, grade and chain, and Open in Fleet", async () => {
+    const calls = await renderStep("run", "agt_releasebot", {
       firstFrame: readOk(
         firstFrame({
           firstFrame: {
-            runId: "tse_first",
-            receivedAt: "2026-09-15T14:02:11.000Z",
+            runId: "run_first",
+            receivedAt: "2026-09-15T14:02:11.402Z",
+          },
+        }),
+      ),
+      agent: readOk(agentDetail()),
+      run: readOk(
+        runDetail({
+          frames: {
+            frames: [
+              runFrame({
+                seq: "0",
+                type: "agent_start",
+                summary: "harness=claude-code",
+              }),
+              runFrame({
+                seq: "1",
+                type: "oxagen:run.start",
+                summary: "tier=harness",
+              }),
+              runFrame({ seq: "2", type: "model.call_completed" }),
+            ],
+            cursor: null,
+            more: false,
+          },
+        }),
+      ),
+      chain: readOk(runChain()),
+    });
+    expect(calls.run).toEqual([[ctx, "run_first", { framesAfter: null }]]);
+    const card = screen.getByTestId("first-frame-received");
+    expect(card).toHaveTextContent("connected");
+    expect(
+      within(card).getByRole("heading", { name: "First frame received" }),
+    ).toBeInTheDocument();
+    const frames = within(screen.getByTestId("first-frames")).getAllByRole(
+      "listitem",
+    );
+    expect(frames).toHaveLength(2);
+    expect(frames[0]).toHaveTextContent("agent_start");
+    expect(frames[1]).toHaveTextContent("oxagen:run.start");
+    const badges = screen.getByTestId("first-frame-badges");
+    expect(badges).toHaveTextContent("harness");
+    expect(badges).toHaveTextContent("replay grade: fork");
+    expect(badges).toHaveTextContent("chain intact");
+    expect(card).toHaveTextContent(
+      "The hooks answered, so this run is harness: delivered, recorded, client-attested, fail-open.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Open in Fleet" }),
+    ).toBeInTheDocument();
+    expect(document.getElementById("regAuto")).toHaveTextContent(
+      "Opening automatically…",
+    );
+  });
+
+  it("claims nothing stronger than the recorded tier and chain (negative)", async () => {
+    await renderStep("run", "agt_releasebot", {
+      firstFrame: readOk(
+        firstFrame({
+          firstFrame: {
+            runId: "run_first",
+            receivedAt: "2026-09-15T14:02:11.402Z",
+          },
+        }),
+      ),
+      agent: readOk(agentDetail()),
+      run: readOk(runDetail()),
+      chain: readOk(
+        runChain({
+          enforcementTier: "observe",
+          recordedGrade: null,
+          gaps: {
+            missingSequences: [{ from: "3", to: "4" }],
+            missingFrameCount: 2,
+            missingBodies: 0,
+            recorded: [],
           },
         }),
       ),
     });
-    const panel = screen.getByTestId("first-frame-received");
-    expect(panel).toHaveTextContent("tse_first");
-    expect(panel).toHaveTextContent("Open in Fleet");
-    expect(screen.queryByTestId("first-frame-waiting")).toBeNull();
+    const badges = screen.getByTestId("first-frame-badges");
+    expect(badges).toHaveTextContent("observe");
+    expect(badges).toHaveTextContent("2 frames missing");
+    expect(badges).not.toHaveTextContent("chain intact");
+    expect(badges).not.toHaveTextContent("replay grade");
+    expect(screen.queryByText(/this run is/)).not.toBeInTheDocument();
   });
 
-  it("renders the read's failure in place of the step (negative)", async () => {
+  it("names a failed first-frame read with Check again, Cancel and Back, and no gold action", async () => {
     await renderStep("run", "agt_releasebot", {
-      state: readOk(onboardingGate({ step: "run" })),
-      firstFrame: readError("onboarding_state_unavailable", 503),
+      firstFrame: readError("upstream", 503),
+      agent: readOk(agentDetail()),
     });
-    expect(screen.getByText(/onboarding_state_unavailable/)).toBeVisible();
+    const error = screen.getByTestId("first-frame-error");
+    expect(
+      within(error).getByRole("heading", {
+        name: "The first frame cannot be read",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(error).getByRole("button", { name: "Check again" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/register/wrap?agent=agt_releasebot",
+    );
+    expect(
+      document.querySelectorAll('[class*="bg-button-primary-bg"]'),
+    ).toHaveLength(0);
   });
 });

@@ -122,8 +122,7 @@ function lcsTable(a: readonly string[], b: readonly string[]): Uint32Array {
 
 /**
  * Every line of both texts, in order, each marked with what happened to it.
- *
- * @internal Exported for its unit test; nothing outside this module imports it.
+ * The record's propose dialog draws it whole; `buildDiff` trims it to hunks.
  */
 export function diffLines(before: string, after: string): DiffLine[] {
   const a = lines(before);

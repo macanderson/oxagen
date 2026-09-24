@@ -1,6 +1,6 @@
-// The frame every sign-in and organization-creation screen sits in (mockup `obShell` @
-// mc-baseline-w1): the brand on the top bar, a faint gold wash, and one centred
-// column.
+// The frame every sign-in and organization-creation screen sits in (mockup
+// `obShell`): the brand on the top bar, a faint 48px grid that fades out down
+// the page, and one centred column.
 import { OxagenWordmark } from "@oxagen/ui";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
@@ -30,7 +30,7 @@ export function AuthShell({
     <div className="relative isolate flex min-h-dvh flex-col items-center bg-background px-4 pb-14 sm:px-5">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(760px_420px_at_50%_-6%,color-mix(in_oklch,var(--foreground)_14%,transparent),transparent_70%)]"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-50 [background:repeating-linear-gradient(0deg,transparent_0_47px,var(--border)_47px_48px),repeating-linear-gradient(90deg,transparent_0_47px,var(--border)_47px_48px)] [mask-image:linear-gradient(180deg,#000_0%,transparent_78%)]"
       />
       <header className="flex w-full max-w-5xl items-center gap-3 pt-6">
         <Brandmark />

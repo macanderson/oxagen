@@ -7,11 +7,10 @@
  * become plain tokens, so an assertion can read which table and which
  * columns a statement touched without compiling SQL.
  *
- * The invariants under test are the ones a wrong answer here costs:
- *   - an Owner is never touched by SSO (no write at all);
- *   - no mapped group means no role and no membership (deny by default);
- *   - a grant resurrects with onConflictDoUpdate and is re-read before the
- *     transaction commits, so a grant that did not take throws.
+ * The role write moved to @oxagen/database/member-lifecycle, where its
+ * invariants are tested: an Owner is never touched, no mapped group is a full
+ * member removal, and a grant that did not take throws. Here the store must
+ * read the right rows and run that write once, in one transaction.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -52,6 +51,13 @@ const { orgHasSso } = vi.hoisted(() => ({
   orgHasSso: vi.fn(async () => true),
 }));
 vi.mock("./entitlement", () => ({ orgHasSso }));
+
+const { applyMappedOrgRoleInTx } = vi.hoisted(() => ({
+  applyMappedOrgRoleInTx: vi.fn(),
+}));
+vi.mock("@oxagen/database/member-lifecycle", () => ({
+  applyMappedOrgRoleInTx,
+}));
 
 vi.mock("drizzle-orm", () => ({
   and: (...conds: unknown[]) => ({ and: conds }),
@@ -150,192 +156,24 @@ const writes = (statements: Statement[]) =>
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const USER = "00000000-0000-4000-8000-000000000002";
-const PRINCIPAL = "00000000-0000-4000-8000-000000000003";
-const ROLE_ID = "00000000-0000-4000-8000-000000000004";
-const PRA_ID = "00000000-0000-4000-8000-000000000005";
 const PROVIDER = "acme-okta";
 
 beforeEach(() => {
   withSystemDbMock.mockReset();
+  applyMappedOrgRoleInTx.mockReset();
 });
 
 describe("createPgSsoProvisioningStore().applyRole", () => {
-  it("leaves an Owner untouched: one locked read and no write", async () => {
-    const { statements } = useTx([[{ role: "Owner" }]]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role: null,
-    });
-    expect(statements).toHaveLength(1);
-    expect(tableOf(statements[0]!)).toBe("orgUsers");
-    // The read locks the row so a concurrent promotion to Owner wins.
-    expect(callOf(statements[0]!, "for")?.args).toEqual(["update"]);
-  });
-
-  it("treats a lowercase owner the same way", async () => {
-    const { statements } = useTx([[{ role: "owner" }]]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
+  // The role write itself is applyMappedOrgRoleInTx, proven statement by
+  // statement in packages/database/src/member-lifecycle.test.ts. Here the store
+  // must run it once, in one withSystemDb transaction, as the person signing
+  // in, and report a SCIM suspension back to the provisioner.
+  it("runs the shared role write in one withSystemDb transaction", async () => {
+    const { tx } = useTx([]);
+    applyMappedOrgRoleInTx.mockResolvedValueOnce({
+      kind: "granted",
       role: "admin",
     });
-    expect(writes(statements)).toEqual([]);
-  });
-
-  it("with no mapped role, revokes org-wide assignments and removes the membership", async () => {
-    const { statements } = useTx([
-      [{ role: "admin" }], // member row
-      [{ id: PRINCIPAL }], // existing principal
-      undefined, // revoke
-      undefined, // delete org_users
-    ]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role: null,
-    });
-
-    const w = writes(statements);
-    expect(w.map((s) => [s.kind, tableOf(s)])).toEqual([
-      ["update", "principalRoleAssignments"],
-      ["delete", "orgUsers"],
-    ]);
-    const revoke = w[0]!;
-    const set = callOf(revoke, "set")!.args[0] as Record<string, unknown>;
-    expect(set.deletedAt).toBeInstanceOf(Date);
-    expect(set.deletedById).toBe(USER);
-    // Only live, org-wide rows of this principal in this org are revoked.
-    expect(callOf(revoke, "where")!.args[0]).toEqual({
-      and: [
-        { eq: ["principalRoleAssignments.principalId", PRINCIPAL] },
-        { eq: ["principalRoleAssignments.orgId", ORG] },
-        { isNull: "principalRoleAssignments.workspaceId" },
-        { isNull: "principalRoleAssignments.deletedAt" },
-      ],
-    });
-    expect(callOf(w[1]!, "where")!.args[0]).toEqual({
-      and: [{ eq: ["orgUsers.orgId", ORG] }, { eq: ["orgUsers.userId", USER] }],
-    });
-  });
-
-  it("grants Admin: resurrecting upsert, post-condition read, then org_users upsert", async () => {
-    const { statements } = useTx([
-      [{ role: "member" }], // member row
-      [{ id: PRINCIPAL }], // existing principal
-      undefined, // revoke
-      [{ id: ROLE_ID }], // IAM role lookup
-      undefined, // PRA upsert
-      [{ id: PRA_ID }], // post-condition read
-      undefined, // org_users upsert
-    ]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role: "admin",
-    });
-
-    const roleLookup = statements.find(
-      (s) => s.kind === "select" && tableOf(s) === "roles",
-    )!;
-    expect(callOf(roleLookup, "where")!.args[0]).toEqual({
-      and: [
-        { eq: ["roles.orgId", ORG] },
-        { eq: ["roles.scopeKind", "org"] },
-        { eq: ["roles.name", "Admin"] },
-      ],
-    });
-
-    const w = writes(statements);
-    expect(w.map((s) => [s.kind, tableOf(s)])).toEqual([
-      ["update", "principalRoleAssignments"],
-      ["insert", "principalRoleAssignments"],
-      ["insert", "orgUsers"],
-    ]);
-
-    const grant = w[1]!;
-    expect(callOf(grant, "values")!.args[0]).toMatchObject({
-      principalId: PRINCIPAL,
-      roleId: ROLE_ID,
-      orgId: ORG,
-      assignedBy: USER,
-    });
-    // Never onConflictDoNothing: a soft-deleted row must come back to life.
-    expect(callOf(grant, "onConflictDoNothing")).toBeUndefined();
-    const conflict = callOf(grant, "onConflictDoUpdate")!.args[0] as {
-      target: unknown[];
-      targetWhere: unknown;
-      set: Record<string, unknown>;
-    };
-    expect(conflict.target).toEqual([
-      "principalRoleAssignments.principalId",
-      "principalRoleAssignments.roleId",
-      "principalRoleAssignments.orgId",
-    ]);
-    expect(conflict.targetWhere).toEqual({
-      isNull: "principalRoleAssignments.workspaceId",
-    });
-    expect(conflict.set).toMatchObject({
-      deletedAt: null,
-      deletedById: null,
-      expiresAt: null,
-    });
-
-    const membership = w[2]!;
-    expect(callOf(membership, "values")!.args[0]).toMatchObject({
-      orgId: ORG,
-      userId: USER,
-      role: "admin",
-    });
-    const memberConflict = callOf(membership, "onConflictDoUpdate")!
-      .args[0] as { target: unknown[]; set: Record<string, unknown> };
-    expect(memberConflict.target).toEqual([
-      "orgUsers.orgId",
-      "orgUsers.userId",
-    ]);
-    expect(memberConflict.set.role).toBe("admin");
-  });
-
-  it.each([
-    ["compliance", "Compliance"],
-    ["billing", "Billing"],
-  ] as const)("maps %s to the %s IAM role", async (role, iamName) => {
-    const { statements } = useTx([
-      [],
-      [{ id: PRINCIPAL }],
-      undefined,
-      [{ id: ROLE_ID }],
-      undefined,
-      [{ id: PRA_ID }],
-      undefined,
-    ]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role,
-    });
-    const roleLookup = statements.find(
-      (s) => s.kind === "select" && tableOf(s) === "roles",
-    )!;
-    expect(
-      (callOf(roleLookup, "where")!.args[0] as { and: unknown[] }).and,
-    ).toContainEqual({ eq: ["roles.name", iamName] });
-  });
-
-  it("throws when the grant did not take, so the revocation rolls back", async () => {
-    const { statements } = useTx([
-      [{ role: "admin" }],
-      [{ id: PRINCIPAL }],
-      undefined,
-      [{ id: ROLE_ID }],
-      undefined,
-      [], // post-condition read finds nothing
-    ]);
     await expect(
       createPgSsoProvisioningStore().applyRole({
         orgId: ORG,
@@ -343,152 +181,40 @@ describe("createPgSsoProvisioningStore().applyRole", () => {
         providerId: PROVIDER,
         role: "admin",
       }),
-    ).rejects.toThrow(/did not take/);
-    // Nothing after the failed post-condition: org_users is not rewritten.
-    expect(
-      writes(statements).some(
-        (s) => s.kind === "insert" && tableOf(s) === "orgUsers",
-      ),
-    ).toBe(false);
+    ).resolves.toBe("applied");
+    expect(withSystemDbMock).toHaveBeenCalledTimes(1);
+    expect(applyMappedOrgRoleInTx).toHaveBeenCalledWith(tx, {
+      orgId: ORG,
+      userId: USER,
+      role: "admin",
+      actorId: USER,
+      trigger: "sso_deny",
+    });
   });
 
-  it("throws when the organisation has no such IAM role", async () => {
-    useTx([[{ role: "member" }], [{ id: PRINCIPAL }], undefined, []]);
+  it("hands a null role to the shared removal", async () => {
+    useTx([]);
+    applyMappedOrgRoleInTx.mockResolvedValueOnce({
+      kind: "removed",
+      removal: {} as never,
+    });
     await expect(
       createPgSsoProvisioningStore().applyRole({
         orgId: ORG,
         userId: USER,
         providerId: PROVIDER,
-        role: "compliance",
+        role: null,
       }),
-    ).rejects.toThrow(/no 'Compliance' org role/);
-  });
-
-  it("maps member to membership with no org-wide role", async () => {
-    const { statements } = useTx([
-      [{ role: "admin" }], // an Admin demoted by the IdP
-      [{ id: PRINCIPAL }],
-      undefined, // revoke
-      undefined, // org_users upsert
-    ]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role: "member",
-    });
-    expect(
-      statements.some((s) => s.kind === "select" && tableOf(s) === "roles"),
-    ).toBe(false);
-    const w = writes(statements);
-    expect(w.map((s) => [s.kind, tableOf(s)])).toEqual([
-      ["update", "principalRoleAssignments"],
-      ["insert", "orgUsers"],
-    ]);
-    expect(callOf(w[1]!, "values")!.args[0]).toMatchObject({ role: "member" });
-  });
-
-  it("creates the member principal when none exists, named after the user", async () => {
-    const { statements } = useTx([
-      [], // no membership yet: first SSO sign-in
-      [], // no principal
-      [{ displayName: "Ada Lovelace", email: "ada@example.com" }],
-      [{ id: PRINCIPAL }], // insert returning
-      undefined, // revoke
-      undefined, // org_users upsert
-    ]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role: "member",
-    });
-    const insert = statements.find(
-      (s) => s.kind === "insert" && tableOf(s) === "principals",
-    )!;
-    expect(callOf(insert, "values")!.args[0]).toMatchObject({
-      orgId: ORG,
-      kind: "human",
-      displayName: "Ada Lovelace",
-      status: "active",
-      parentUserId: USER,
-    });
-    expect(callOf(insert, "onConflictDoNothing")).toBeDefined();
-    const revoke = statements.find((s) => s.kind === "update")!;
-    expect(
-      (callOf(revoke, "where")!.args[0] as { and: unknown[] }).and,
-    ).toContainEqual({
-      eq: ["principalRoleAssignments.principalId", PRINCIPAL],
-    });
-  });
-
-  it("falls back to the email, then the user id, for the principal's name", async () => {
-    const byEmail = useTx([
-      [],
-      [],
-      [{ displayName: null, email: "ada@example.com" }],
-      [{ id: PRINCIPAL }],
-      undefined,
-      undefined,
-    ]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role: "member",
-    });
-    const first = byEmail.statements.find(
-      (s) => s.kind === "insert" && tableOf(s) === "principals",
-    )!;
-    expect(callOf(first, "values")!.args[0]).toMatchObject({
-      displayName: "ada@example.com",
-    });
-
-    const byId = useTx([[], [], [], [{ id: PRINCIPAL }], undefined, undefined]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role: "member",
-    });
-    const second = byId.statements.find(
-      (s) => s.kind === "insert" && tableOf(s) === "principals",
-    )!;
-    expect(callOf(second, "values")!.args[0]).toMatchObject({
-      displayName: USER,
-    });
-  });
-
-  it("reads the winner's principal after losing an insert race", async () => {
-    const { statements } = useTx([
-      [],
-      [],
-      [{ displayName: "Ada", email: "ada@example.com" }],
-      [], // insert conflicted: nothing returned
-      [{ id: PRINCIPAL }], // reselect
-      undefined,
-      undefined,
-    ]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role: "member",
-    });
-    const principalReads = statements.filter(
-      (s) => s.kind === "select" && tableOf(s) === "principals",
+    ).resolves.toBe("applied");
+    expect(applyMappedOrgRoleInTx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ role: null, trigger: "sso_deny" }),
     );
-    expect(principalReads).toHaveLength(2);
-    const revoke = statements.find((s) => s.kind === "update")!;
-    expect(
-      (callOf(revoke, "where")!.args[0] as { and: unknown[] }).and,
-    ).toContainEqual({
-      eq: ["principalRoleAssignments.principalId", PRINCIPAL],
-    });
   });
 
-  it("throws when neither the insert nor the reselect yields a principal", async () => {
-    const { statements } = useTx([[], [], [], [], []]);
+  it("reports a person a SCIM deprovision suspended", async () => {
+    useTx([]);
+    applyMappedOrgRoleInTx.mockResolvedValueOnce({ kind: "scim_suspended" });
     await expect(
       createPgSsoProvisioningStore().applyRole({
         orgId: ORG,
@@ -496,19 +222,7 @@ describe("createPgSsoProvisioningStore().applyRole", () => {
         providerId: PROVIDER,
         role: "member",
       }),
-    ).rejects.toThrow(/could not create a principal/);
-    expect(statements.some((s) => s.kind === "update")).toBe(false);
-  });
-
-  it("runs the whole change in one withSystemDb transaction", async () => {
-    useTx([[{ role: "Owner" }]]);
-    await createPgSsoProvisioningStore().applyRole({
-      orgId: ORG,
-      userId: USER,
-      providerId: PROVIDER,
-      role: "admin",
-    });
-    expect(withSystemDbMock).toHaveBeenCalledTimes(1);
+    ).resolves.toBe("scim_suspended");
   });
 });
 

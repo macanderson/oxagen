@@ -11,13 +11,18 @@
 //
 // Secrets cross this boundary once, inward. No action returns one: the
 // contracts answer with the redacted provider view, and these actions pass on
-// less than that.
+// less than that. The one exception is the SCIM token (#3734): minting and
+// rotating answer it once, because the admin must paste it into the identity
+// provider and Oxagen keeps only its hash.
 import { orgSsoCreate } from "@oxagen/oxagen/contracts/org.sso.create";
 import { orgSsoDelete } from "@oxagen/oxagen/contracts/org.sso.delete";
 import { orgSsoGroupRolesSet } from "@oxagen/oxagen/contracts/org.sso.group_roles.set";
 import { orgSsoPolicySet } from "@oxagen/oxagen/contracts/org.sso.policy.set";
 import { orgSsoUpdate } from "@oxagen/oxagen/contracts/org.sso.update";
 import { orgSsoVerifyDomain } from "@oxagen/oxagen/contracts/org.sso.verify_domain";
+import { orgScimTokenCreate } from "@oxagen/oxagen/contracts/org.scim_token.create";
+import { orgScimTokenRevoke } from "@oxagen/oxagen/contracts/org.scim_token.revoke";
+import { orgScimTokenRotate } from "@oxagen/oxagen/contracts/org.scim_token.rotate";
 import type { SsoGroupRole, SsoProtocol } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
@@ -263,4 +268,56 @@ export async function setSsoGroupRoles(
   });
   if (!result.ok) return result;
   return { ok: true, value: { mappings: result.value.mappings } };
+}
+
+/** A minted SCIM token, answered once, with the endpoint it authenticates. */
+export type MintedScimToken = {
+  readonly token: string;
+  readonly baseUrl: string;
+  readonly prefix: string;
+};
+
+/**
+ * Mints the organization's SCIM token. A live token already present is a
+ * `conflict` with the reason `scim_token_exists`: rotate it instead.
+ */
+export async function createScimToken(
+  org: string,
+): Promise<ActionResult<MintedScimToken>> {
+  const ctx = await requireViewer(org);
+  const result = await kernelWrite(ctx, orgScimTokenCreate, {});
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: {
+      token: result.value.token,
+      baseUrl: result.value.baseUrl,
+      prefix: result.value.view.tokenPrefix,
+    },
+  };
+}
+
+/** Replaces the SCIM token. The old one stops working when this returns. */
+export async function rotateScimToken(
+  org: string,
+): Promise<ActionResult<MintedScimToken>> {
+  const ctx = await requireViewer(org);
+  const result = await kernelWrite(ctx, orgScimTokenRotate, {});
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: {
+      token: result.value.token,
+      baseUrl: result.value.baseUrl,
+      prefix: result.value.view.tokenPrefix,
+    },
+  };
+}
+
+/** Revokes the SCIM token, so the identity provider can no longer push. */
+export async function revokeScimToken(
+  org: string,
+): Promise<ActionResult<{ revoked: boolean }>> {
+  const ctx = await requireViewer(org);
+  return kernelWrite(ctx, orgScimTokenRevoke, {});
 }
