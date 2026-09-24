@@ -67,6 +67,26 @@
                 "win32"
               ]
             },
+            "osVersion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "arch": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "osUser": {
               "type": "string"
             },
@@ -233,6 +253,8 @@
             "agentKey",
             "hostname",
             "platform",
+            "osVersion",
+            "arch",
             "osUser",
             "status",
             "mode",
