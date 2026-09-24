@@ -326,6 +326,277 @@ describe("Linked work", () => {
     ).toBeTruthy();
     expect(screen.queryByTestId("run-linked-repository")).toBeNull();
   });
+
+  it("says a checkout's repository, branch and head were not recorded, and prints the path alone when no machine is named (negative)", async () => {
+    const [checkout] = runWork().checkouts;
+    if (checkout === undefined) throw new Error("a checkout");
+    await renderIssues({
+      work: readOk(
+        runWork({
+          machine: null,
+          checkouts: [
+            {
+              ...checkout,
+              repository: null,
+              branch: null,
+              headSha: null,
+              firstSeq: "3",
+              lastSeq: "3",
+            },
+          ],
+          pullRequests: [],
+          diffs: [],
+        }),
+      ),
+      outputs: readOk(runOutputs([])),
+    });
+    const [repo] = await screen.findAllByTestId("run-linked-repository");
+    if (repo === undefined) throw new Error("a repository");
+    expect(within(repo).getByText("Repository not identified")).toBeTruthy();
+    expect(within(repo).queryByRole("link", { name: /platform/ })).toBeNull();
+    expect(
+      within(repo).getByText(
+        "branch not recorded · ~/src/platform/.worktrees/release-4.11.0-notes",
+      ),
+    ).toBeTruthy();
+    // Seen on one frame, so one frame chip.
+    expect(
+      within(repo)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["fr 3"]);
+  });
+
+  it("lists a repository only a pull request names under that pull request's own match, and shows the match in the legend", async () => {
+    const [pull] = runWork().pullRequests;
+    if (pull === undefined) throw new Error("a pull request");
+    await renderIssues({
+      work: readOk(
+        runWork({
+          checkouts: [],
+          diffs: [],
+          pullRequests: [{ ...pull, association: "head_commit" }],
+        }),
+      ),
+      outputs: readOk(runOutputs([])),
+    });
+    const [repo] = await screen.findAllByTestId("run-linked-repository");
+    if (repo === undefined) throw new Error("a repository");
+    expect(
+      within(repo).getByText("named by a pull request, no checkout recorded"),
+    ).toBeTruthy();
+    expect(within(repo).getByText("commit match")).toBeTruthy();
+    expect(within(repo).queryByText("observed")).toBeNull();
+    expect(within(repo).queryByRole("link", { name: /^fr / })).toBeNull();
+    const [row] = screen.getAllByTestId("run-linked-pull");
+    if (row === undefined) throw new Error("a pull request");
+    expect(within(row).getByText("commit match")).toBeTruthy();
+    expect(screen.getByTestId("run-linked-work")).toHaveTextContent(
+      "a pull request whose head is a commit the run recorded",
+    );
+    expect(screen.getByTestId("run-linked-work")).not.toHaveTextContent(
+      "a pull request on a branch the run recorded",
+    );
+  });
+
+  it("says a pull request's checks could not be read, and when its check list is partial, lists every failing check (negative)", async () => {
+    const [pull] = runWork().pullRequests;
+    if (pull === undefined || pull.ci === null)
+      throw new Error("a pull request with checks");
+    type Check = NonNullable<
+      RunWork["pullRequests"][number]["ci"]
+    >["runs"][number];
+    const failing = (name: string, conclusion: Check["conclusion"]): Check => ({
+      name,
+      status: "completed",
+      conclusion,
+      url: null,
+      startedAt: null,
+      completedAt: null,
+      durationMs: null,
+      app: null,
+    });
+    await renderIssues({
+      work: readOk(
+        runWork({
+          pullRequests: [
+            { ...pull, number: 511, ci: null },
+            {
+              ...pull,
+              number: 512,
+              url: "https://github.com/a-intel/platform/pull/512",
+              ci: {
+                ...pull.ci,
+                complete: false,
+                runs: [
+                  failing("e2e", "timed_out"),
+                  failing("deploy", "cancelled"),
+                  failing("typecheck", "success"),
+                ],
+              },
+            },
+          ],
+        }),
+      ),
+      outputs: readOk(runOutputs([])),
+    });
+    const [unread, partial] = await screen.findAllByTestId("run-linked-pull");
+    if (unread === undefined || partial === undefined)
+      throw new Error("two pull requests");
+    expect(within(unread).getByText("checks could not be read")).toBeTruthy();
+    expect(
+      within(partial).getByText("the check list is incomplete"),
+    ).toBeTruthy();
+    // A check with no URL is named, not linked; a check that passed is not listed.
+    expect(
+      within(partial).getByTestId("run-linked-failed-checks"),
+    ).toHaveTextContent(/^failing: e2e, deploy$/);
+    expect(within(partial).queryByRole("link", { name: "e2e" })).toBeNull();
+  });
+
+  it("links a recorded commit and branch on the forge, and names what it cannot link without inventing a URL (negative)", async () => {
+    const node = (overrides: Parameters<typeof runOutputNode>[0]) =>
+      runOutputNode({ state: "pushed", note: null, stat: null, ...overrides });
+    await renderIssues({
+      outputs: readOk(
+        runOutputs([
+          node({
+            seq: "40",
+            kind: "commit",
+            name: "3f2a9c1",
+            where: "a-intel/platform",
+          }),
+          node({ seq: "41", kind: "commit", name: "HEAD~1", where: null }),
+          node({
+            seq: null,
+            kind: "media",
+            name: "release-banner.png",
+            where: null,
+            state: "created",
+          }),
+          node({
+            seq: "43",
+            kind: "change",
+            name: "change 7",
+            nameIsLocator: true,
+            where: "a-intel/platform",
+            note: "2 files",
+          }),
+          // An output pull request the work read does not hold.
+          node({ seq: "44", kind: "pr", name: "a-intel/docs#9", where: null }),
+        ]),
+      ),
+    });
+    const rows = await screen.findAllByTestId("run-linked-artifact");
+    const byName = (name: string) => {
+      const row = rows.find((candidate) =>
+        candidate.textContent?.includes(name),
+      );
+      if (row === undefined) throw new Error(`no row for ${name}`);
+      return within(row);
+    };
+    expect(
+      byName("3f2a9c1").getByRole("link", { name: "3f2a9c1" }),
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/a-intel/platform/commit/3f2a9c1",
+    );
+    // A commit named by something other than a sha is not a commit URL.
+    expect(byName("HEAD~1").queryByRole("link", { name: "HEAD~1" })).toBeNull();
+    // An output with no frame of its own offers no frame chip, and one with
+    // no place and no note draws no line between its name and its edge.
+    const banner = byName("release-banner.png");
+    expect(banner.queryByRole("link", { name: /^fr / })).toBeNull();
+    const title = banner.getByText("release-banner.png").closest("b");
+    expect(title?.nextElementSibling?.tagName).toBe("DIV");
+    // A locator is not a path on the forge.
+    const change = byName("change 7");
+    expect(change.queryByRole("link", { name: "change 7" })).toBeNull();
+    expect(
+      change.getByText("The ledger recorded this change without its path."),
+    ).toBeTruthy();
+    expect(change.getByText("a-intel/platform · 2 files")).toBeTruthy();
+    expect(
+      byName("a-intel/docs#9").getByRole("link", { name: "fr 44" }),
+    ).toBeTruthy();
+  });
+
+  it("says the outputs read failed where no pull request is listed, and still draws the captured diffs (negative)", async () => {
+    const [diff] = runWork().diffs;
+    if (diff === undefined) throw new Error("a diff");
+    await renderIssues({
+      work: readOk(
+        runWork({
+          pullRequests: [],
+          diffs: [
+            {
+              ...diff,
+              digest: null,
+              completeness: "not_retained",
+              limitations: ["binary files skipped", "over 1 MB"],
+            },
+          ],
+        }),
+      ),
+      outputs: readError("frame_store_unreachable", 502),
+    });
+    expect(
+      await screen.findByText(
+        "The outputs read failed, so only the pull requests are listed.",
+      ),
+    ).toBeTruthy();
+    const files = region("Files changed");
+    expect(files.queryAllByTestId("run-linked-file")).toHaveLength(0);
+    expect(files.queryByText(/as the recorder reported them/)).toBeNull();
+    const [captured] = files.getAllByTestId("run-linked-captured");
+    if (captured === undefined) throw new Error("a captured diff");
+    expect(captured).toHaveTextContent("digest recorded, bytes not retained");
+    expect(captured).toHaveTextContent("binary files skipped, over 1 MB");
+    // No digest was recorded, so no digest is printed.
+    expect(captured.querySelector("code")).toBeNull();
+  });
+
+  it("numbers a patch's removed and unchanged lines on the old side, and skips the no-newline marker", async () => {
+    const [pull] = runWork().pullRequests;
+    if (pull === undefined || pull.diff === null)
+      throw new Error("a pull request with a diff");
+    await renderIssues({
+      work: readOk(
+        runWork({
+          pullRequests: [
+            {
+              ...pull,
+              diff: {
+                ...pull.diff,
+                files: [
+                  {
+                    path: "RELEASE-4.11.0.md",
+                    previousPath: null,
+                    status: "modified",
+                    additions: 1,
+                    deletions: 1,
+                    patch:
+                      "@@ -10,2 +10,2 @@\n context\n-old line\n+new line\n\\ No newline at end of file",
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      ),
+    });
+    const [release] = await screen.findAllByTestId("run-linked-file");
+    if (release === undefined) throw new Error("a file");
+    const lines = [...release.querySelectorAll("details > div > div")].map(
+      (line) => [...line.children].map((cell) => cell.textContent),
+    );
+    expect(lines).toEqual([
+      ["", "", " @@ -10,2 +10,2 @@"],
+      ["10", "10", " context"],
+      ["11", "", "−old line"],
+      ["", "11", "+new line"],
+    ]);
+  });
 });
 
 describe("the follow-through panels", () => {

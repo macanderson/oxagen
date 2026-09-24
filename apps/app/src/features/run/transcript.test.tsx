@@ -580,6 +580,97 @@ describe("the rows", () => {
   });
 });
 
+describe("event rows", () => {
+  /**
+   * One turn holding three frames that are neither a call nor a reply: a
+   * decision recorded on no call frame, a notice with two lines of text, and
+   * a hook the recorder filed under errors with nothing to read.
+   */
+  const EVENTS: FrameSpec[] = [
+    {
+      seq: 1,
+      t: 0,
+      type: "turn_start",
+      kind: "frame",
+      turn: 1,
+      response: "Cut the release.",
+    },
+    {
+      seq: 2,
+      t: 1,
+      type: "policy_decision",
+      kind: "frame",
+      label: "deny Bash",
+      decision: "deny",
+      turn: 1,
+    },
+    {
+      seq: 3,
+      t: 2,
+      type: "notification",
+      kind: "frame",
+      turn: 1,
+      response: "Build finished\nall 42 tests passed",
+    },
+    {
+      seq: 4,
+      t: 3,
+      type: "hook_error",
+      kind: "frame",
+      turn: 1,
+      kinds: ["errors"],
+    },
+  ];
+  const events = () =>
+    rows().filter((row) => row.getAttribute("data-kind") === "event");
+
+  it("names a decision on no recorded call by the call its label names, marks a denial failed, and links the decision, not the frame", () => {
+    renderSection({ read: readOk(transcriptOf(EVENTS)) });
+    expect(events()).toHaveLength(3);
+    const [decision] = events();
+    if (decision === undefined) throw new Error("a decision row");
+    expect(decision).toHaveTextContent("✗");
+    expect(within(decision).getByText("Bash")).toBeTruthy();
+    expect(
+      within(decision).getByRole("link", { name: "deny · fr 2" }),
+    ).toBeTruthy();
+    expect(within(decision).queryByText("policy_decision · fr 2")).toBeNull();
+  });
+
+  it("shows an event's first line and folds the rest until asked, then folds it again", () => {
+    renderSection({ read: readOk(transcriptOf(EVENTS)) });
+    const [, notice] = events();
+    if (notice === undefined) throw new Error("a notice row");
+    expect(notice).toHaveTextContent("●");
+    expect(within(notice).getByText("notification")).toBeTruthy();
+    expect(within(notice).getByTitle("Build finished")).toBeTruthy();
+    expect(within(notice).queryByText(/all 42 tests passed/)).toBeNull();
+    const fold = within(notice).getByRole("button", { name: "Show the rest" });
+    expect(fold).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(fold);
+    expect(notice.querySelector("pre")).toHaveTextContent(
+      "Build finished all 42 tests passed",
+    );
+    fireEvent.click(within(notice).getByRole("button", { name: "Show less" }));
+    expect(notice.querySelector("pre")).toBeNull();
+    expect(
+      within(notice).getByRole("link", { name: "notification · fr 3" }),
+    ).toBeTruthy();
+  });
+
+  it("draws an event filed under errors as failed even with no text, and offers nothing to fold (negative)", () => {
+    renderSection({ read: readOk(transcriptOf(EVENTS)) });
+    const [, , hook] = events();
+    if (hook === undefined) throw new Error("a hook row");
+    expect(hook).toHaveTextContent("✗");
+    expect(within(hook).getByText("hook_error")).toBeTruthy();
+    expect(within(hook).queryByRole("button")).toBeNull();
+    expect(
+      within(hook).getByRole("link", { name: "hook_error · fr 4" }),
+    ).toBeTruthy();
+  });
+});
+
 describe("the search", () => {
   it("shows every match at once, counts them and marks them", () => {
     renderSection();

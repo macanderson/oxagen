@@ -331,4 +331,92 @@ describe("ContextTab", () => {
     ).toBeTruthy();
     expect(screen.queryByTestId("run-manifest")).toBeNull();
   });
+
+  it("names the operator by id when no name is recorded, and says so when neither is (negative)", async () => {
+    await renderContext({ run: runRow({ operatorName: null }) });
+    expect(
+      region("Prompt").getByText("Written by prn_marcusbell"),
+    ).toBeTruthy();
+    cleanup();
+    await renderContext({
+      run: runRow({ operatorName: null, operatorId: null }),
+    });
+    expect(region("Prompt").getByText("Operator not recorded")).toBeTruthy();
+  });
+
+  it("says the first prompt's text was not retained rather than quoting nothing (negative)", async () => {
+    const base = evidenceTranscript();
+    const entries = base.entries.map((entry) =>
+      entry.type === "turn_start" && entry.response !== null
+        ? { ...entry, response: { ...entry.response, text: null } }
+        : entry,
+    );
+    await renderContext({ everything: readOk({ ...base, entries }) });
+    expect(screen.getByTestId("run-context-first-prompt")).toHaveTextContent(
+      "The first prompt's text was not retained.",
+    );
+  });
+
+  it("says how much came from cache when the request did not report every input class (negative)", async () => {
+    const base = evidenceTranscript();
+    const entries = base.entries.map((entry) =>
+      entry.usage === null || entry.usage === undefined
+        ? entry
+        : { ...entry, usage: { ...entry.usage, cacheWrite: null } },
+    );
+    await renderContext({ everything: readOk({ ...base, entries }) });
+    const prompt = region("Prompt");
+    expect(
+      prompt.getByText(
+        /12,000 tokens of the first request came from cache\. Its full input was not reported\./,
+      ),
+    ).toBeTruthy();
+    expect(prompt.getByText(/tok sent not recorded/)).toBeTruthy();
+  });
+
+  it("names a cut with no reason, draws no line for a reason it does not know, and folds nothing at three cuts or fewer", async () => {
+    const item = (
+      id: string,
+      overrides: Record<string, unknown> = {},
+    ): Record<string, unknown> => ({
+      id,
+      kind: "record",
+      force: "should",
+      tokens: 10,
+      outcome: "included",
+      ...overrides,
+    });
+    await renderContext({
+      everything: readOk(
+        evidenceTranscript(
+          {},
+          manifestText({
+            items: [
+              item("steer.release-freeze", { kind: "steer", force: "must" }),
+              item("ctx.unreasoned", { outcome: "cut" }),
+              item("ctx.pinned", { outcome: "cut", reason: "pinned" }),
+            ],
+            bundle_version: undefined,
+          }),
+        ),
+      ),
+    });
+    const items = screen.getAllByTestId("run-manifest-item");
+    expect(items).toHaveLength(3);
+    const [steer, unreasoned, pinned] = items;
+    if (steer === undefined || unreasoned === undefined || pinned === undefined)
+      throw new Error("three items");
+    expect(steer).toHaveTextContent("steer");
+    expect(unreasoned).toHaveTextContent("cut: no reason recorded");
+    expect(pinned).toHaveTextContent("cut: pinned");
+    // A reason this page has no sentence for is shown as its word, never explained.
+    expect(pinned.querySelector("p")).toBeNull();
+    expect(screen.queryByText(/more cut/)).toBeNull();
+    // A manifest that names no bundle says only the frame it was recorded at.
+    expect(
+      region("Steering manifest").getByText(
+        /^Recorded once at frame 1\. A recorded frame never changes/,
+      ),
+    ).toBeTruthy();
+  });
 });

@@ -22,6 +22,8 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { mandateList, mandateRow } from "@/test/mandate-views";
+import { agentDetail } from "../agents/agents.builders";
+import { opusBook } from "./cost.builders";
 import {
   NOW,
   runChain,
@@ -543,6 +545,224 @@ describe("header", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.queryByTestId("run-witnessed")).toBeNull();
+  });
+
+  it("names the harness the agent registry holds when the session recorded none, and says no version was captured", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ harness: null }) })),
+      transcript: ok(runTranscript()),
+      agent: ok(agentDetail({ identity: { harness: "codex" } })),
+    });
+    const rig = within(screen.getByTestId("run-rig"));
+    expect(rig.getByText("Codex")).toBeTruthy();
+    expect(rig.getByText("version not captured")).toBeTruthy();
+    // The summary's card names the agent the registry returned, then its harness.
+    expect(screen.getByTestId("run-involved")).toHaveTextContent(
+      "Release bot · Codex",
+    );
+  });
+
+  it("says the agent is not recorded when the run names none, and reads no agent (negative)", async () => {
+    const { calls } = await renderRun({
+      detail: ok(runDetail({ run: runRow({ agentKey: null }) })),
+      transcript: ok(runTranscript()),
+      roster: ok(runRoster()),
+    });
+    expect(calls.agent).toHaveLength(0);
+    const chips = screen.getByTestId("run-chips");
+    expect(chips).toHaveTextContent("not recorded");
+    expect(chips).not.toHaveTextContent("runs 30d");
+    expect(screen.getByTestId("run-involved")).toHaveTextContent(
+      "not recorded",
+    );
+  });
+
+  it("leaves the 30-day figures off when the Agents read fails, and the spend off when the row carries none (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      roster: readError("agents_unreachable", 502),
+    });
+    expect(screen.getByTestId("run-chips")).not.toHaveTextContent("runs 30d");
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      roster: ok(runRoster({ spend30d: null })),
+    });
+    const chips = screen.getByTestId("run-chips");
+    expect(chips).toHaveTextContent("Claude Code · 212 runs 30d");
+    expect(chips).not.toHaveTextContent("$612.48");
+  });
+
+  it("draws the pull requests the outputs recorded when the work read fails, and says the repository was not captured (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: readError("github_unreachable", 502),
+      outputs: ok(
+        runOutputs([
+          runOutputNode({ seq: "300", kind: "pr", name: "acme/platform#482" }),
+          // A pull request the spine holds with no frame of its own.
+          runOutputNode({ seq: null, kind: "pr", name: "acme/docs#17" }),
+        ]),
+      ),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    expect(
+      checkout.getByText("repository and branch not captured"),
+    ).toBeTruthy();
+    expect(checkout.getByText("acme/platform#482")).toBeTruthy();
+    expect(checkout.getByText("acme/docs#17")).toBeTruthy();
+    expect(checkout.queryByText("no pull request")).toBeNull();
+    // No checkout was read, so no path is offered to copy.
+    expect(checkout.queryByTestId("run-checkout-path")).toBeNull();
+    expect(checkout.getByTestId("run-machine")).toHaveTextContent(
+      "mac-studio.local",
+    );
+  });
+
+  it("links a branch that heads no pull request to its tree on the forge", async () => {
+    const base = runWork();
+    const [checkout] = base.checkouts;
+    if (checkout === undefined) throw new Error("the builder holds a checkout");
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({ checkouts: [{ ...checkout, branch: "feature/fix-tags" }] }),
+      ),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    expect(
+      strip
+        .getByRole("link", { name: "feature/fix-tags" })
+        .getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/tree/feature/fix-tags");
+  });
+
+  it("draws a repository on a forge Oxagen cannot name as text, never as a link (negative)", async () => {
+    const base = runWork();
+    const [checkout] = base.checkouts;
+    if (checkout === undefined) throw new Error("the builder holds a checkout");
+    const gitlab = {
+      host: "gitlab.com",
+      owner: "acme",
+      name: "platform",
+      url: "https://gitlab.com/acme/platform",
+      connected: false,
+    };
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          checkouts: [{ ...checkout, repository: gitlab }],
+          pullRequests: [],
+        }),
+      ),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    expect(strip.getByText("acme/platform")).toBeTruthy();
+    expect(strip.queryByRole("link", { name: "acme/platform" })).toBeNull();
+    expect(strip.queryByRole("link", { name: "release/3.2" })).toBeNull();
+    expect(strip.getByText("no pull request")).toBeTruthy();
+  });
+
+  it("draws a branch whose repository nobody recorded as text beside the not-captured chip (negative)", async () => {
+    const base = runWork();
+    const [checkout] = base.checkouts;
+    if (checkout === undefined) throw new Error("the builder holds a checkout");
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          machine: null,
+          checkouts: [{ ...checkout, repository: null }],
+          pullRequests: [],
+        }),
+      ),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    // The chip reads "repository and branch not captured" while the branch is
+    // drawn beside it: the words are the design's, and the branch is recorded.
+    expect(strip.getByText("repository and branch not captured")).toBeTruthy();
+    expect(strip.getByText("release/3.2")).toBeTruthy();
+    expect(strip.queryByRole("link")).toBeNull();
+    // The work read named no machine, so the path is the run row's host.
+    expect(strip.getByTestId("run-checkout-path")).toHaveTextContent(
+      "mac-studio.local:~/src/platform/.worktrees/release-3.2",
+    );
+  });
+
+  it("copies the checkout path and says so, and says the copy failed when the clipboard refuses (negative)", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    try {
+      await renderRun({
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        work: ok(runWork()),
+      });
+      const strip = within(await screen.findByTestId("run-checkout"));
+      const path = strip.getByTestId("run-checkout-path");
+      await act(async () => {
+        fireEvent.click(path);
+      });
+      const text = "mac-studio.local:~/src/platform/.worktrees/release-3.2";
+      expect(writeText).toHaveBeenCalledWith(text);
+      expect(strip.getByRole("status")).toHaveTextContent(`Copied ${text}`);
+      writeText.mockImplementationOnce(() =>
+        Promise.reject(new Error("NotAllowedError")),
+      );
+      await act(async () => {
+        fireEvent.click(path);
+      });
+      expect(strip.getByRole("status")).toHaveTextContent(
+        "Copy failed. Select the text and copy it.",
+      );
+      // The path stays on screen to select by hand.
+      expect(path).toHaveTextContent(text);
+    } finally {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("leaves the title off the when line when the run has neither a name nor a task reference (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ name: null, taskRef: null, summary: null }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-when")).toHaveTextContent(/^started /);
+    expect(screen.queryByTestId("run-task")).toBeNull();
+  });
+
+  it("lists the gaps the seal recorded, in words, under the header", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ completenessGaps: ["digest_only", "chain_break"] }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-gaps")).toHaveTextContent(
+      "The seal recorded these gaps in the record: digests kept, bodies not retained, the hash chain does not hold end to end",
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-gaps")).toBeNull();
   });
 });
 
@@ -1234,6 +1454,36 @@ describe("failures", () => {
     expect(calls.cost).toHaveLength(0);
     await expectNoAxe(container);
   });
+
+  it("keeps a live run with no frames yet on its empty state, following quietly where the browser cannot stream", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ frames: 0, status: "live" }) })),
+    });
+    expect(screen.getByTestId("run-empty")).toBeTruthy();
+    // jsdom has no EventSource, so the follower mounts and says nothing.
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("says the viewer's access request is waiting, names it, and reads nothing else (negative)", async () => {
+    const { container, calls } = await renderRun({
+      detail: {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: "areq_01k4qj9e",
+      },
+    });
+    const state = within(screen.getByTestId("run-pending"));
+    expect(
+      state.getByRole("heading", { name: "Your access request is waiting" }),
+    ).toBeTruthy();
+    expect(state.getByText(/The request is areq_01k4qj9e\./)).toBeTruthy();
+    // A pending read offers no action: the request is already made.
+    expect(state.queryByRole("button")).toBeNull();
+    expect(state.queryByRole("link")).toBeNull();
+    expect(calls.transcript).toHaveLength(0);
+    expect(notFound).not.toHaveBeenCalled();
+    await expectNoAxe(container);
+  });
 });
 
 describe("chips", () => {
@@ -1586,6 +1836,88 @@ describe("figures", () => {
       within(screen.getByTestId("run-stat-prompts")).getByText("1+"),
     ).toBeTruthy();
   });
+
+  it("prints the agent's own report as provisional when nothing metered the run (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            cost: null,
+            reportedCost: {
+              micros: "2500000",
+              currency: "USD",
+              basis: "client_attested",
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      cost: ok(runCost({ rollup: null })),
+    });
+    const cost = within(screen.getByTestId("run-stat-cost"));
+    expect(cost.getByText("$2.50")).toBeTruthy();
+    expect(cost.getByText("agent reported, provisional")).toBeTruthy();
+    // Nothing metered, so no share of it can be called wasted.
+    expect(
+      within(screen.getByTestId("run-stat-wasted")).getByText(
+        "not rolled up yet",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says the cost's basis was not recorded rather than naming one (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            cost: { micros: "4131265", currency: "USD", basis: null },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      cost: ok(runCost({ rollup: null })),
+    });
+    expect(
+      within(screen.getByTestId("run-stat-cost")).getByText(
+        "basis not recorded",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says nothing was wasted, in no warning hue, when the rollup counted every step productive", async () => {
+    const rollup = runCost().rollup;
+    if (rollup === null) throw new Error("the builder's rollup is present");
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      cost: ok(runCost({ rollup: { ...rollup, productiveRatio: 1 } })),
+    });
+    const wasted = screen.getByTestId("run-stat-wasted");
+    expect(within(wasted).getByText("$0.00")).toBeTruthy();
+    expect(within(wasted).getByText("nothing bought nothing")).toBeTruthy();
+    expect(wasted.innerHTML).not.toContain("text-critical");
+  });
+
+  it("prices the cache's saving from the organization's price book, and says none when the book is refused (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      priceBook: ok(opusBook()),
+    });
+    // 91,022 cache reads at $5.00 less $0.50 a million is $0.409599.
+    expect(screen.getByTestId("run-stat-cache")).toHaveTextContent(
+      "83%saved about $0.41",
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      priceBook: DENIED,
+    });
+    expect(screen.getByTestId("run-stat-cache")).toHaveTextContent(
+      /^Cache hit83%$/,
+    );
+  });
 });
 
 describe("the work", () => {
@@ -1656,6 +1988,89 @@ describe("the work", () => {
     ).toBeTruthy();
     expect(changes.getByText("none reported")).toBeTruthy();
     expect(changes.queryByText("+0")).toBeNull();
+  });
+
+  it("heads Changes with the pull request's state when no check was read, and names a pull request it cannot link as text (negative)", async () => {
+    const [pull] = runWork().pullRequests;
+    if (pull === undefined) throw new Error("the builder holds a pull request");
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          pullRequests: [
+            {
+              ...pull,
+              state: "merged",
+              url: "https://gitlab.com/acme/platform/-/merge_requests/482",
+              ci: null,
+            },
+          ],
+        }),
+      ),
+    });
+    const panel = await screen.findByTestId("run-changes");
+    const changes = within(panel);
+    expect(changes.getByText("acme/platform#482")).toBeTruthy();
+    expect(
+      changes.queryByRole("link", { name: "acme/platform#482" }),
+    ).toBeNull();
+    // With no check read, the panel's head is the pull request's own state.
+    expect(changes.getAllByText("merged")).toHaveLength(2);
+    expect(changes.getByText("none reported")).toBeTruthy();
+  });
+
+  it("names the pull request read's failure in Changes rather than saying there is none (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: readError("github_unreachable", 502),
+    });
+    const changes = within(await screen.findByTestId("run-changes"));
+    expect(changes.queryByText("none")).toBeNull();
+    expect(changes.getByText(/github_unreachable/)).toBeTruthy();
+  });
+
+  it("names a running check by its status, marks a partial outputs read's file count as a floor, and folds files past eight into a count", async () => {
+    const [pull] = runWork().pullRequests;
+    if (pull === undefined || pull.ci === null)
+      throw new Error("the builder holds a pull request with checks");
+    const [check] = pull.ci.runs;
+    if (check === undefined) throw new Error("the builder holds a check");
+    const files = Array.from({ length: 10 }, (_, index) =>
+      runOutputNode({
+        seq: index === 0 ? null : String(100 + index),
+        name: `src/release/file-${String(index)}.ts`,
+        stat: { added: 1, removed: 0 },
+      }),
+    );
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          pullRequests: [
+            {
+              ...pull,
+              ci: {
+                ...pull.ci,
+                overall: "pending",
+                runs: [{ ...check, status: "in_progress", conclusion: null }],
+              },
+            },
+            { ...pull, number: 483, ci: null },
+          ],
+        }),
+      ),
+      outputs: ok(runOutputs(files, { complete: false })),
+    });
+    const changes = within(await screen.findByTestId("run-changes"));
+    expect(changes.getByText("test in_progress")).toBeTruthy();
+    expect(changes.getByText("in 10 files+")).toBeTruthy();
+    expect(
+      within(changes.getByTestId("run-changed-files")).getAllByRole("listitem"),
+    ).toHaveLength(9);
+    expect(changes.getByText("2 more in the outputs")).toBeTruthy();
   });
 });
 
