@@ -1608,6 +1608,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       );
       let decoderFailed = false;
       decoder?.on("data", (chunk: Buffer) => {
+        // The meter ended at settle; see the upstream `data` listener below.
+        if (settled) return;
         meter?.write(chunk);
         responseBody.write(chunk);
       });
@@ -1630,6 +1632,16 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       res.socket?.setNoDelay(true);
 
       upstream.on("data", (chunk: Buffer) => {
+        // A call can settle while the response still has a chunk buffered:
+        // the caller closed, the operator interrupted, or the upstream
+        // failed, and the stream's own `resume` delivers one more chunk on
+        // the next tick. `settle` has already sealed the frame and finalized
+        // `responseHash`, so hashing that chunk throws
+        // ERR_CRYPTO_HASH_FINALIZED from this listener, and Node exits on
+        // an uncaught throw from a listener (#4107). The frame's digest and
+        // byte count describe the bytes seen up to settle; a later chunk
+        // belongs to no frame. `pipe` reads the chunk on its own listener.
+        if (settled) return;
         responseBytes += chunk.length;
         responseHash.update(chunk);
         if (decoder !== undefined) decoder.write(chunk);
