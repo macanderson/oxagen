@@ -1,4 +1,4 @@
-# ADR-166: A session and its subagents share one model-call ledger and one tool-call ledger
+# ADR-168: A session and its subagents share one model-call ledger and one tool-call ledger
 
 Status: Accepted
 Date: 2026-09-24
