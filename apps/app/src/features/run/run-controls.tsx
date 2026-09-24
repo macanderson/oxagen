@@ -16,27 +16,39 @@
 //
 // A sealed or halted run has nothing to reach, so it draws no controls. A
 // ledger run can pause, resume, or cancel evidence ingress. Steering stays
-// disabled until the producer carries it. An `observe`-tier run draws them
-// disabled for the same reason from the other direction: the session only
-// records what an agent did, and Oxagen was never in the path, so there is
-// nothing at the other end of a command. A viewer `dispatch_command`
-// would refuse (neither an org Owner or Admin nor a workspace Owner or
-// Member) sees them disabled with that reason, not a button that ends in
-// `org_role_required`.
+// disabled until the producer carries it. A wrapped run takes commands through
+// its host's command poll, whatever its enforcement tier (ADR-163): an
+// `observe`-tier run whose host is polling can be paused, steered and
+// cancelled. When the row says a command cannot reach the run (`commandBlock`:
+// no host, a revoked host, or a host that has stopped polling) the controls
+// draw disabled with that reason. A row that does not say is offered the
+// controls, and the handler's refusal names the reason. `steerBlock` works the
+// same way for Steer alone: a harness that reads steering text only when a
+// session starts (Stella) keeps pause, resume and cancel, and Steer draws
+// disabled with the reason. The handler refuses the steer either way.
+//
+// A viewer `dispatch_command` would refuse (neither an org Owner or Admin nor
+// a workspace Owner or Member) sees them disabled with that reason, not a
+// button that ends in `org_role_required`.
 //
 // Re-reading the run refreshes the route the person is on, so the tab, zoom
 // and frames page they were using stay put.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import {
-  acceptsCommands,
+  type CommandBlock,
   DeliveryMode,
   type RunRow,
+  type SteerBlock,
 } from "@/data/contracts/runs";
 import type { ActionResult } from "@/server/kernel";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { canCommandRun } from "@/shared/run-command-roles";
-import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
+import {
+  COMMAND_BLOCK_COPY,
+  UNANSWERED,
+  useActionFailure,
+} from "@/ui/command-failure";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -57,7 +69,13 @@ const DELIVERY_COPY = {
   turn_boundary: "turnBoundary",
 } as const satisfies Record<DeliveryMode, string>;
 const DELIVERY_MODES = DeliveryMode.options;
+
 const DELIVERY_DEFAULT: DeliveryMode = "next_step";
+
+/** The key under `run.commands.steerBlocked` for each reason Steer is disabled. */
+const STEER_BLOCK_COPY = {
+  no_prompt_carrier: "noPromptCarrier",
+} as const satisfies Record<SteerBlock, string>;
 
 /**
  * When the agent sees the steering text. One radio per mode with the line
@@ -389,7 +407,8 @@ export function RunControls({
   runId,
   status,
   source,
-  enforcementTier,
+  commandBlock = null,
+  steerBlock = null,
   ingressRevoked = false,
   ingressPaused = false,
   orgRole,
@@ -401,13 +420,15 @@ export function RunControls({
   runId: string;
   status: RunRow["status"];
   source: RunRow["source"];
-  /** Where the run was observed from; an `observe` tier has no connection point. */
-  enforcementTier: RunRow["enforcementTier"];
   /**
-   * Why a command cannot reach the run, from the row; null or absent when it
-   * can. Accepted ahead of #4034, which draws the controls from it.
+   * Where the run was observed from. It does not decide whether a command
+   * reaches the run (ADR-163); `commandBlock` does.
    */
-  commandBlock?: RunRow["commandBlock"];
+  enforcementTier?: RunRow["enforcementTier"];
+  /** Why a command cannot reach the run, from the row; null or absent when it can. */
+  commandBlock?: CommandBlock | null;
+  /** Why a steer cannot reach the run when the other commands can; null or absent when it can. */
+  steerBlock?: SteerBlock | null;
   ingressRevoked?: boolean;
   ingressPaused?: boolean;
   orgRole: OrgRole;
@@ -422,11 +443,11 @@ export function RunControls({
   const paused = ingressPaused;
   const transition = usePauseTransition(paused);
   if (status !== "live") return null;
-  if (source !== "ledger" && !acceptsCommands(enforcementTier)) {
+  if (source !== "ledger" && commandBlock !== null) {
     return (
       <DisabledControls
-        reason={t("observeReason")}
-        testId="observe-no-control"
+        reason={t(`blocked.${COMMAND_BLOCK_COPY[commandBlock]}`)}
+        testId="host-no-control"
         paused={paused}
         after={after}
       />
@@ -490,24 +511,48 @@ export function RunControls({
       </div>
     );
   }
-  return (
+  const controls = (
     <div className="flex flex-wrap gap-2">
-      {commandsFor(paused).map((command) => (
-        <CommandDialog
-          key={command}
-          command={command}
-          runId={runId}
-          {...(command === "pause" || command === "resume"
-            ? { busy: transition.busy, onQueued: transition.queued }
-            : {})}
-          write={(text, mode) =>
-            command === "steer"
-              ? steerRun(org, ws, runId, text, mode)
-              : haltRun(org, ws, runId, command, text)
-          }
-        />
-      ))}
+      {commandsFor(paused).map((command) =>
+        command === "steer" && steerBlock !== null ? (
+          <button
+            key={command}
+            type="button"
+            disabled
+            data-testid="run-steer"
+            className={buttonSecondary}
+          >
+            {t("steer.open")}
+          </button>
+        ) : (
+          <CommandDialog
+            key={command}
+            command={command}
+            runId={runId}
+            {...(command === "pause" || command === "resume"
+              ? { busy: transition.busy, onQueued: transition.queued }
+              : {})}
+            write={(text, mode) =>
+              command === "steer"
+                ? steerRun(org, ws, runId, text, mode)
+                : haltRun(org, ws, runId, command, text)
+            }
+          />
+        ),
+      )}
       {after}
+    </div>
+  );
+  if (steerBlock === null) return controls;
+  return (
+    <div className="flex flex-col items-start gap-2 lg:items-end">
+      {controls}
+      <p
+        data-testid="steer-no-control"
+        className="max-w-prose text-xs text-muted-foreground lg:text-right"
+      >
+        {t(`steerBlocked.${STEER_BLOCK_COPY[steerBlock]}`)}
+      </p>
     </div>
   );
 }
@@ -523,6 +568,7 @@ export function PauseBannerActions({
   ws,
   runId,
   source,
+  commandBlock = null,
   ingressRevoked = false,
   orgRole,
   wsRole,
@@ -531,12 +577,17 @@ export function PauseBannerActions({
   ws: string;
   runId: string;
   source: RunRow["source"];
+  /** Why a command cannot reach the run, from the row; null or absent when it can. */
+  commandBlock?: CommandBlock | null;
   ingressRevoked?: boolean;
   orgRole: OrgRole;
   wsRole: WsRole;
 }) {
   const t = useTranslations("run.commands");
-  const allowed = canCommandRun(orgRole, wsRole) && !ingressRevoked;
+  const allowed =
+    canCommandRun(orgRole, wsRole) &&
+    !ingressRevoked &&
+    (source === "ledger" || commandBlock === null);
   return (
     <span className="flex flex-col items-start gap-1.5">
       <span className="flex flex-wrap gap-2">

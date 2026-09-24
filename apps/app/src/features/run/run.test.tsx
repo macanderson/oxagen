@@ -1050,6 +1050,21 @@ describe("controls", () => {
     expect(actions.queryByTestId("run-pause")).toBeNull();
   });
 
+  it("disables only Steer on a live run whose harness carries no mid-session prompt", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ status: "live", steerBlock: "no_prompt_carrier" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    for (const command of ["pause", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
+    }
+  });
+
   it("allows ledger ingress control and explains the remaining control limit", async () => {
     await renderRun({
       detail: ok(
@@ -2976,6 +2991,7 @@ describe("policy and context", () => {
       "Frame",
       "Call",
       "Outcome",
+      "Decided by",
       "Rules that fired",
       "Taint",
       "Latency",

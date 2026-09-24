@@ -699,6 +699,7 @@ export function RunHeader({
               source={run.source}
               enforcementTier={run.enforcementTier}
               commandBlock={run.commandBlock}
+              steerBlock={run.steerBlock}
               ingressRevoked={run.ingressRevoked}
               ingressPaused={run.ingressPaused}
               orgRole={orgRole}
@@ -735,6 +736,7 @@ export function RunHeader({
             ws={ws}
             runId={run.id}
             source={run.source}
+            commandBlock={run.commandBlock}
             ingressRevoked={run.ingressRevoked}
             orgRole={orgRole}
             wsRole={wsRole}

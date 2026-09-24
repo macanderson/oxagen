@@ -2,7 +2,8 @@
 // The Policy and Context tabs: each lists the entries of its own chip, links a
 // frame on the run's own chain, names a subagent's frame without a link (the
 // Frames tab reads the run's chain, where that seq is a different frame), and
-// says the list is a prefix whenever another page lies past it.
+// says the list is a prefix whenever another page lies past it. Policy leads
+// with Oxagen and operator decisions and folds the harness's checks away.
 import type { ReactNode } from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -43,6 +44,23 @@ const policyEntry = (seq: string, chainRef?: string) =>
     ...(chainRef === undefined
       ? {}
       : { subagent: { chainRef, type: "Explore" } }),
+  });
+
+/** A decision with a recorded source and outcome, on the run's own chain. */
+const sourcedEntry = (
+  seq: string,
+  source: string | null,
+  decision: string,
+  type = "policy_decision",
+) =>
+  transcriptEntry({
+    seq,
+    endSeq: seq,
+    type,
+    kind: "frame",
+    kinds: ["policy"],
+    label: `${decision} Bash`,
+    decision: { seq, decision, type, source, at: AT },
   });
 
 const recallEntry = (seq: string, chainRef?: string) =>
@@ -119,6 +137,90 @@ describe("PolicySection", () => {
       </IntlProvider>,
     );
     expect(container.querySelector("table")).toBeNull();
+  });
+});
+
+// Oxagen policy and operator decisions lead, and the harness's own
+// permission checks fold below them (#4023).
+describe("PolicySection by who decided", () => {
+  it("lists Oxagen and operator decisions and folds harness checks away", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <PolicySection
+          read={readOk(
+            runTranscript({
+              entries: [
+                sourcedEntry("2", "harness", "allow"),
+                sourcedEntry("3", "bundle", "deny"),
+                sourcedEntry("4", "managed_settings", "allow"),
+                sourcedEntry("5", "human", "pause", "oxagen:command_applied"),
+              ],
+              cursor: null,
+              complete: true,
+            }),
+          )}
+          place={PLACE}
+        />
+      </IntlProvider>,
+    );
+    const lead = screen.getByRole("table", { name: "Policy decisions" });
+    const rows = within(lead).getAllByRole("row").slice(1);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Oxagen policy"),
+      expect.stringContaining("Operator"),
+    ]);
+    expect(rows[1]?.textContent).toContain("pause");
+    const checks = screen.getByTestId("harness-checks");
+    expect(checks).not.toHaveAttribute("open");
+    expect(checks.querySelector("summary")?.textContent).toBe(
+      "2 harness checks",
+    );
+    expect(
+      within(checks).getAllByRole("row", { hidden: true }).slice(1),
+    ).toHaveLength(2);
+    await expectNoAxe(container);
+  });
+
+  it("says only harness checks were recorded when nothing else decided", () => {
+    const { container } = render(
+      <IntlProvider>
+        <PolicySection
+          read={readOk(
+            runTranscript({
+              entries: [sourcedEntry("2", "harness", "allow")],
+              cursor: null,
+              complete: true,
+            }),
+          )}
+          place={PLACE}
+        />
+      </IntlProvider>,
+    );
+    expect(container.textContent).toContain(
+      "Neither Oxagen policy nor an operator made a decision on this run.",
+    );
+    expect(screen.getByTestId("harness-checks")).toBeInTheDocument();
+  });
+
+  it("keeps a decision with no recorded source in the lead list", () => {
+    render(
+      <IntlProvider>
+        <PolicySection
+          read={readOk(
+            runTranscript({
+              entries: [sourcedEntry("2", null, "allow")],
+              cursor: null,
+              complete: true,
+            }),
+          )}
+          place={PLACE}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getAllByRole("row").slice(1)[0]?.textContent).toContain(
+      "Not recorded",
+    );
+    expect(screen.queryByTestId("harness-checks")).toBeNull();
   });
 });
 

@@ -5511,7 +5511,10 @@ type Messages = {
         runNotFound: string;
         noConnectionPoint: string;
         runSealed: string;
-        observeTier: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+        noPromptCarrier: string;
         runNotSealed: string;
         digestOnly: string;
         steerText: string;
@@ -5529,7 +5532,15 @@ type Messages = {
         commandReason: string;
         rowCommand: string;
       };
-      observeReason: string;
+      blocked: {
+        runSealed: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+      };
+      steerBlocked: {
+        noPromptCarrier: string;
+      };
       delivery: {
         legend: string;
         nextStep: {
@@ -5955,7 +5966,18 @@ type Messages = {
       rules: string;
       taint: string;
       latency: string;
+      decidedBy: string;
+      by: {
+        oxagen: string;
+        operator: string;
+        harness: string;
+        managedSettings: string;
+        unrecorded: string;
+      };
       empty: string;
+      onlyChecks: string;
+      checks: string;
+      checksTitle: string;
       note: string;
       cut: string;
     };
