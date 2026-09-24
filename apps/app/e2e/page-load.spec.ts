@@ -40,6 +40,11 @@ for (const row of SIGNED_IN_ROUTES) {
     page,
   }) => {
     await loadsAndTitlesItself(page, row);
+    // A route with a loading.tsx renders its own `main#main` so the skip link
+    // keeps a target while the page streams. Until React swaps the streamed
+    // page in, both are in the DOM, so wait for one before asserting on it
+    // (Billing failed here when the check landed inside that window).
+    await expect(page.locator("main#main")).toHaveCount(1);
     await expect(page.locator("main#main")).toBeVisible();
     const desktopPath = test.info().outputPath("desktop.png");
     await page.screenshot({
