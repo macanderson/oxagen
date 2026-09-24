@@ -50,6 +50,13 @@ type ShellState = {
   setAvatarOpen: (open: boolean) => void;
   assistantOpen: boolean;
   setAssistantOpen: (open: boolean) => void;
+  /**
+   * A reply landed while the flyout was closed. The launcher shines until the
+   * flyout opens again, and opening it clears the flag.
+   */
+  assistantUnread: boolean;
+  /** Called when a turn settles. Marks it unread only if the flyout is closed. */
+  noteAssistantReply: () => void;
   theme: Theme;
   setTheme: (theme: Theme, expectedRevision?: number) => void;
   themeRevision: () => number;
@@ -106,7 +113,15 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     setAccountOpen(!open);
     if (!open) setAccountTab("profile");
   }, []);
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  // Open and unread live in one state so a reply that lands in the same tick
+  // as a close reads the close, not a stale `open` captured by the caller.
+  const [assistant, setAssistant] = useState({ open: false, unread: false });
+  const setAssistantOpen = useCallback((open: boolean) => {
+    setAssistant((s) => ({ open, unread: open ? false : s.unread }));
+  }, []);
+  const noteAssistantReply = useCallback(() => {
+    setAssistant((s) => (s.open ? s : { ...s, unread: true }));
+  }, []);
   const { theme, setTheme, previewTheme, themeRevision } = useTheme();
 
   useEffect(() => {
@@ -139,8 +154,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       openAccount,
       avatarOpen: avatarOpenRaw,
       setAvatarOpen,
-      assistantOpen,
+      assistantOpen: assistant.open,
       setAssistantOpen,
+      assistantUnread: assistant.unread,
+      noteAssistantReply,
       theme,
       setTheme,
       previewTheme,
@@ -156,7 +173,9 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       openAccount,
       avatarOpenRaw,
       setAvatarOpen,
-      assistantOpen,
+      assistant,
+      setAssistantOpen,
+      noteAssistantReply,
       theme,
       setTheme,
       previewTheme,

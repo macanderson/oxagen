@@ -9,10 +9,13 @@ import {
   STELLA_ICON_MARK,
   STELLA_ICON_TRANSFORM,
   STELLA_ICON_VIEWBOX,
+  STELLA_SHIMMER,
+  STELLA_SPINNER_TRANSFORM,
   STELLA_WORDMARK_ACCENT,
   STELLA_WORDMARK_LETTERS,
   STELLA_WORDMARK_VIEWBOX,
   StellaIcon,
+  StellaSpinner,
   StellaWordmark,
 } from "./stella-mark";
 
@@ -29,7 +32,7 @@ function attr(svg: string, pattern: RegExp): string {
   return found;
 }
 
-describe("the Stella marks match the house kit", () => {
+describe("the stella marks match the house kit", () => {
   const wordmark = vendored("stella-wordmark.svg");
   const icon = vendored("stella-icon.svg");
 
@@ -74,18 +77,97 @@ describe("StellaWordmark", () => {
   });
 
   it("is an image named by its title", async () => {
-    const { getByRole, container } = render(<StellaWordmark title="Stella" />);
-    expect(getByRole("img", { name: "Stella" })).toBeTruthy();
+    const { getByRole, container } = render(<StellaWordmark title="stella" />);
+    expect(getByRole("img", { name: "stella" })).toBeTruthy();
     await expectNoAxe(container);
   });
 });
 
 describe("StellaIcon", () => {
   it("draws the gold asterisk alone", async () => {
-    const { container } = render(<StellaIcon title="Stella" />);
+    const { container } = render(<StellaIcon title="stella" />);
     const paths = container.querySelectorAll("path");
     expect(paths).toHaveLength(1);
     expect(paths[0]?.getAttribute("fill")).toBe(STELLA_GOLD);
+    await expectNoAxe(container);
+  });
+});
+
+describe("StellaSpinner", () => {
+  it("draws the kit spinner: the gold asterisk turning, a light sweeping across it", () => {
+    const { container } = render(<StellaSpinner />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("data-mark")).toBe("stella-spinner");
+    expect(svg?.getAttribute("viewBox")).toBe(STELLA_ICON_VIEWBOX);
+    // The kit's placement for the spinner, and the kit's shimmer colour.
+    expect(STELLA_SPINNER_TRANSFORM).toBe(
+      "translate(8.813,117.886) scale(1.11248)",
+    );
+    expect(STELLA_SHIMMER).toBe("#F1CE65");
+    expect(
+      container.querySelector(`g[transform="${STELLA_SPINNER_TRANSFORM}"]`),
+    ).not.toBeNull();
+
+    const turn = container.querySelector(".ox-stella-turn");
+    expect(turn).not.toBeNull();
+    const mark = turn?.querySelector(":scope > path");
+    expect(mark?.getAttribute("d")).toBe(STELLA_ICON_MARK);
+    expect(mark?.getAttribute("fill")).toBe(STELLA_GOLD);
+    // The sweep is clipped to the same asterisk, so the light stays on it.
+    expect(container.querySelector("clipPath path")?.getAttribute("d")).toBe(
+      STELLA_ICON_MARK,
+    );
+    const stops = Array.from(container.querySelectorAll("stop"));
+    expect(stops.map((s) => s.getAttribute("stop-color"))).toEqual([
+      STELLA_SHIMMER,
+      STELLA_SHIMMER,
+      STELLA_SHIMMER,
+    ]);
+    expect(container.querySelector("rect.ox-stella-sweep")).not.toBeNull();
+  });
+
+  it("gives each spinner its own clip and gradient ids, so two on a page do not share one", () => {
+    const { container } = render(
+      <>
+        <StellaSpinner />
+        <StellaSpinner />
+      </>,
+    );
+    const clips = Array.from(container.querySelectorAll("clipPath")).map(
+      (c) => c.id,
+    );
+    const gradients = Array.from(
+      container.querySelectorAll("linearGradient"),
+    ).map((g) => g.id);
+    expect(new Set(clips).size).toBe(2);
+    expect(new Set(gradients).size).toBe(2);
+    // Each sweep points at its own spinner's gradient and clip.
+    const svgs = container.querySelectorAll("svg");
+    svgs.forEach((svg) => {
+      const gradient = svg.querySelector("linearGradient")?.id ?? "";
+      const clip = svg.querySelector("clipPath")?.id ?? "";
+      expect(gradient).toMatch(/^stella-spin-sweep-[\w-]+$/);
+      expect(svg.querySelector("rect")?.getAttribute("fill")).toBe(
+        `url(#${gradient})`,
+      );
+      expect(svg.querySelector("g[clip-path]")?.getAttribute("clip-path")).toBe(
+        `url(#${clip})`,
+      );
+    });
+  });
+
+  it("is hidden from assistive technology without a title, and named by one", async () => {
+    const hidden = render(<StellaSpinner />);
+    expect(
+      hidden.container.querySelector("svg")?.getAttribute("aria-hidden"),
+    ).toBe("true");
+    await expectNoAxe(hidden.container);
+    cleanup();
+
+    const { getByRole, container } = render(
+      <StellaSpinner title="stella is thinking" />,
+    );
+    expect(getByRole("img", { name: "stella is thinking" })).toBeTruthy();
     await expectNoAxe(container);
   });
 });
