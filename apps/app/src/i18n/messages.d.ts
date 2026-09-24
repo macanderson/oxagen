@@ -7568,7 +7568,6 @@ type Messages = {
     assistant: {
       label: string;
       launcher: string;
-      launcherHint: string;
       launcherUnread: string;
       resize: string;
       close: string;
