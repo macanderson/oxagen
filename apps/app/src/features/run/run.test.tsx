@@ -2242,7 +2242,13 @@ describe("issues", () => {
       },
       { tab: "issues" },
     );
-    expect(screen.getByText("This run names no issue.")).toBeTruthy();
+    // The default work read lists no pull requests, so the run's own pull
+    // requests were read and close nothing (#4024).
+    expect(
+      screen.getByText(
+        "This run names no issue, and no pull request it opened closes one.",
+      ),
+    ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("0");
   });
 });
