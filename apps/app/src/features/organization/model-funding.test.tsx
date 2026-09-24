@@ -74,7 +74,7 @@ describe("ModelFunding", () => {
 
   it("offers the Model funding tab as the current one", async () => {
     await renderSection({ ok: true, value: STORED });
-    const tab = screen.getByRole("link", { name: "Model funding" });
+    const tab = screen.getByRole("link", { name: "Model funding and routes" });
     expect(tab.getAttribute("aria-current")).toBe("page");
   });
 
@@ -92,7 +92,7 @@ describe("ModelFunding", () => {
     await renderSection(readError("kernel_failure", 503));
     expect(screen.queryByTestId("funding-form")).toBeNull();
     // The tabs survive a failed read.
-    expect(screen.getByRole("link", { name: "Model funding" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Model funding and routes" })).toBeTruthy();
   });
 
   it("has no axe violations", async () => {
