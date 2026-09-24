@@ -115,9 +115,10 @@ jobs:
   # A push to main gets its own concurrency group (see the comment above) so
   # a queued run can never be evicted, but nothing stopped an already-started
   # run from spending the full ~75-minute gate on a commit a later push
-  # already supersedes — deploy-web/deploy-node already refuse to ship that
-  # commit (check-deploy-tip.mjs, #2874), so the work bought nothing but a
-  # held runner. This job asks once, cheaply, before the expensive jobs
+  # already supersedes. The later push's run checks and ships everything this
+  # one would, so the work bought nothing but a held runner. A run that
+  # starts its gate still ships when it finishes, even after main moves on
+  # (check-deploy-tip.mjs). This job asks once, cheaply, before the expensive jobs
   # start; see check-main-preflight.mjs for the full reasoning and why this
   # checks tips at the front rather than cancelling a run in flight.
   preflight:
@@ -1170,36 +1171,46 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
+    # One web deploy at a time, and never cancelled mid-flight. When several
+    # runs wait, GitHub keeps the newest pending one (check-deploy-tip.mjs).
+    concurrency:
+      group: production-web
+      cancel-in-progress: false
     permissions:
       contents: read
       # Mints the OIDC token the role trusts. Job-scoped, so the jobs that run
       # on pull requests cannot request one.
       id-token: write
+      # Reads and writes the record of what is live (check-deploy-tip.mjs).
+      deployments: write
     steps:
       - uses: actions/checkout@v5
 
-      # An older commit's run can reach this job after a newer commit already
-      # deployed (queue order is not commit order, #2874). Ask for the tip of
-      # main now; every step below is gated on the answer, so a superseded run
-      # skips its publish and stays green. Shape held by check-deploy-tip
-      # --guard in check:contracts.
-      - name: Refuse to ship a commit that is no longer the tip of main
-        id: tip
+      # Ship unless a newer commit is already live for this service. A run
+      # superseded on main still ships when it moves production forward, so a
+      # burst of merges cannot starve the deploy; an older commit reaching
+      # here after a newer one shipped skips, so production never moves
+      # backwards (#2874). Every step below is gated on the answer, and the
+      # job holds the production-<service> lock while it runs. Shape held by
+      # check-deploy-tip --guard in check:contracts.
+      - name: Refuse to ship a commit older than what is live
+        id: order
         env:
           GH_TOKEN: ${{ github.token }}
+          DEPLOY_SERVICE: web
         run: node tools/scripts/check-deploy-tip.mjs
 
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-        if: steps.tip.outputs.at_tip == 'true'
+        if: steps.order.outputs.ship == 'true'
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
 
       - uses: ./.github/actions/pnpm-install
-        if: steps.tip.outputs.at_tip == 'true'
+        if: steps.order.outputs.ship == 'true'
 
       - name: Build the marketing site
-        if: steps.tip.outputs.at_tip == 'true'
+        if: steps.order.outputs.ship == 'true'
         run: |
           set -euo pipefail
           # apps/web is hand-authored HTML plus a blog compiled from
@@ -1220,7 +1231,7 @@ jobs:
           echo "publishing $count files"
 
       - name: Publish the marketing site
-        if: steps.tip.outputs.at_tip == 'true'
+        if: steps.order.outputs.ship == 'true'
         env:
           BUCKET: oxagen-web-916294258235
           DISTRIBUTION: E2NYX5PXV8HXB3
@@ -1247,7 +1258,7 @@ jobs:
             --distribution-id "$DISTRIBUTION" --id "$invalidation"
 
       - name: Verify through the public hostname
-        if: steps.tip.outputs.at_tip == 'true'
+        if: steps.order.outputs.ship == 'true'
         run: |
           set -euo pipefail
           for attempt in $(seq 1 10); do
@@ -1259,6 +1270,17 @@ jobs:
           done
           echo "::error::oxagen.sh did not return 200 after the deploy (last status $code)"
           exit 1
+
+      # Record what shipped, so the next run can tell whether it is newer.
+      # Last, so a deploy that failed above records nothing.
+      - name: Record $web as live at this commit
+        id: record
+        if: steps.order.outputs.ship == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SERVICE: web
+        run: node tools/scripts/check-deploy-tip.mjs --record
+
 
   deploy-node:
     name: deploy ${{ matrix.service }}.oxagen.sh
@@ -1281,9 +1303,17 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     environment: production
+    # One deploy of each service at a time, across runs, and never cancelled
+    # mid-flight. When several runs wait, GitHub keeps the newest pending one
+    # (check-deploy-tip.mjs).
+    concurrency:
+      group: production-${{ matrix.service }}
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
+      # Reads and writes the record of what is live (check-deploy-tip.mjs).
+      deployments: write
     strategy:
       # One at a time. Every service in the matrix below lands on the same 8 GB
       # instance, which also runs Neo4j and ClickHouse (Postgres moved to Aurora
@@ -1312,27 +1342,30 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # An older commit's run can reach this job after a newer commit already
-      # deployed (queue order is not commit order, #2874). Ask for the tip of
-      # main now; every step below is gated on the answer, so a superseded run
-      # skips its publish and stays green. Shape held by check-deploy-tip
-      # --guard in check:contracts.
-      - name: Refuse to ship a commit that is no longer the tip of main
-        id: tip
+      # Ship unless a newer commit is already live for this service. A run
+      # superseded on main still ships when it moves production forward, so a
+      # burst of merges cannot starve the deploy; an older commit reaching
+      # here after a newer one shipped skips, so production never moves
+      # backwards (#2874). Every step below is gated on the answer, and the
+      # job holds the production-<service> lock while it runs. Shape held by
+      # check-deploy-tip --guard in check:contracts.
+      - name: Refuse to ship a commit older than what is live
+        id: order
         env:
           GH_TOKEN: ${{ github.token }}
+          DEPLOY_SERVICE: ${{ matrix.service }}
         run: node tools/scripts/check-deploy-tip.mjs
 
       # This job runs on a bare arm runner (the artifact's architecture has to
       # match the instance's), so the action installs Node and pnpm rather than
       # taking the oxagen-ci-* image's, and keys its store cache on the arch.
       - uses: ./.github/actions/pnpm-install
-        if: steps.tip.outputs.at_tip == 'true'
+        if: steps.order.outputs.ship == 'true'
 
       # Credentials are assumed before packaging, not after: the build itself
       # needs Parameter Store now, where previously only the upload did.
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-        if: steps.tip.outputs.at_tip == 'true'
+        if: steps.order.outputs.ship == 'true'
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
@@ -1351,7 +1384,7 @@ jobs:
       # build environment to resolve; build-env.ts refuses a service it does
       # not know, which is what stopped the first engine deploy (#2833).
       - name: Resolve the build environment for ${{ matrix.service }}
-        if: steps.tip.outputs.at_tip == 'true' && (matrix.service != 'stella-serve')
+        if: steps.order.outputs.ship == 'true' && (matrix.service != 'stella-serve')
         env:
           PARAMETER_PREFIX: /oxagen/production
         run: |
@@ -1373,7 +1406,7 @@ jobs:
       # `pnpm install` above — which runs third-party lifecycle scripts — has no
       # business seeing them.
       - name: Package ${{ matrix.service }}
-        if: steps.tip.outputs.at_tip == 'true'
+        if: steps.order.outputs.ship == 'true'
         run: |
           set -euo pipefail
           if [ -f "$RUNNER_TEMP/build-env" ]; then
@@ -1384,7 +1417,7 @@ jobs:
           tools/scripts/package-for-node.sh ${{ matrix.service }}
 
       - uses: ./.github/actions/ship-to-node
-        if: steps.tip.outputs.at_tip == 'true'
+        if: steps.order.outputs.ship == 'true'
         id: ship
         with:
           service: ${{ matrix.service }}
@@ -1401,7 +1434,7 @@ jobs:
       - name: Sync Inngest functions and verify the key pair
         env:
           NODE_ENV: production
-        if: steps.tip.outputs.at_tip == 'true' && matrix.service == 'api'
+        if: steps.order.outputs.ship == 'true' && matrix.service == 'api'
         run: |
           set -euo pipefail
           INNGEST_EVENT_KEY=$(aws ssm get-parameter --name /oxagen/production/INNGEST_EVENT_KEY --with-decryption --query Parameter.Value --output text)
@@ -1410,6 +1443,16 @@ jobs:
           echo "::add-mask::$INNGEST_SIGNING_KEY"
           export INNGEST_EVENT_KEY INNGEST_SIGNING_KEY
           pnpm inngest:verify --url https://api.oxagen.sh/api/inngest
+
+      # Record what shipped, so the next run can tell whether it is newer.
+      # Last, so a deploy that failed above records nothing.
+      - name: Record $${{ matrix.service }} as live at this commit
+        id: record
+        if: steps.order.outputs.ship == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SERVICE: ${{ matrix.service }}
+        run: node tools/scripts/check-deploy-tip.mjs --record
 
 
   manual-app-deploy:
