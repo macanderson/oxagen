@@ -3284,7 +3284,6 @@ type Messages = {
         rotateBody: string;
         revokeTitle: string;
         revokeBody: string;
-        revoked: string;
         cancel: string;
         readOnly: string;
       };

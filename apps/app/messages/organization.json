@@ -604,7 +604,6 @@
         "rotateBody": "The current token stops working at once. Enter the new token in your identity provider before its next push.",
         "revokeTitle": "Revoke the SCIM token",
         "revokeBody": "Your identity provider can no longer create or remove people. People it already created keep their access.",
-        "revoked": "Token revoked.",
         "cancel": "Cancel",
         "readOnly": "Only an Owner or an Admin can manage the SCIM token."
       }
