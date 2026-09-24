@@ -5,10 +5,7 @@
 // translated text or reads its own namespace.
 import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
-import type {
-  RuntimeEnrollment,
-  RuntimePlatform,
-} from "@/data/contracts/runtimes";
+import type { RuntimeEnrollment } from "@/data/contracts/runtimes";
 import { Badge } from "@/ui/badge";
 import {
   mono,
@@ -246,11 +243,6 @@ export function HealthBadge({
       <NotBacked gap="gaps">{children}</NotBacked>
     </span>
   );
-}
-
-export function PlatformName({ platform }: { platform: RuntimePlatform }) {
-  const t = useTranslations("runtimes.platform");
-  return t(platform);
 }
 
 /**

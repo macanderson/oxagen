@@ -11,7 +11,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { facetsOf, type ListRow, ListTable, leadingNumber } from "./list-table";
+import {
+  facetsOf,
+  type ListRow,
+  ListTable,
+  leadingNumber,
+  pageList,
+} from "./list-table";
 
 const COLUMNS = [
   { label: "Invoice" },
@@ -415,4 +421,25 @@ describe("leadingNumber", () => {
       expect(leadingNumber(text)).toBeNull();
     },
   );
+});
+
+describe("pageList", () => {
+  it("draws every page up to seven, then the first, the neighbours of the current page and the last", () => {
+    expect(pageList(1, 1)).toEqual([1]);
+    expect(pageList(7, 7)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(pageList(1, 8)).toEqual([1, 2, "gap-after", 8]);
+    expect(pageList(10, 20)).toEqual([
+      1,
+      "gap-before",
+      9,
+      10,
+      11,
+      "gap-after",
+      20,
+    ]);
+    expect(pageList(20, 20)).toEqual([1, "gap-before", 19, 20]);
+    // As in the design, an ellipsis can stand in for one page.
+    expect(pageList(4, 8)).toEqual([1, "gap-before", 3, 4, 5, "gap-after", 8]);
+    expect(pageList(3, 8)).toEqual([1, 2, 3, 4, "gap-after", 8]);
+  });
 });

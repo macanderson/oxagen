@@ -19,7 +19,6 @@ const Instant = z.iso.datetime({ offset: true });
 const Count = z.number().int().nonnegative();
 
 const RuntimePlatform = z.enum(["darwin", "linux", "win32"]);
-export type RuntimePlatform = z.infer<typeof RuntimePlatform>;
 
 /** The enrollment's recorded status. `expired` is not a stored value: the page judges it from `expiresAt`. */
 const RuntimeStatus = z.enum(["active", "paused", "suspended", "revoked"]);
