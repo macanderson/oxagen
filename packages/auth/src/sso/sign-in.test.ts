@@ -290,6 +290,12 @@ async function buildAuth(opts: {
   const auth = betterAuth({
     baseURL: BASE_URL,
     secret: "test-secret-that-is-at-least-thirty-two-characters",
+    // The mock IdP listens on 127.0.0.1. Since 1.6.33 the SSO plugin refuses
+    // an OIDC endpoint on a host that is not publicly routable unless its
+    // origin is in trustedOrigins, the plugin's documented allowance for an
+    // internal IdP. Without it, sign-in stops with a 400 before the IdP is
+    // reached (`discovery_private_host`).
+    trustedOrigins: [new URL(idp.issuer).origin],
     database: withSsoSecrets(memoryAdapter(db), () => kms),
     plugins: [
       buildSsoPlugin({

@@ -73,6 +73,7 @@ import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get"
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
+import { runIssueProvidersGet } from "@oxagen/oxagen/contracts/run.issue.providers.get";
 import { REQUIRED_GITHUB_APP_ENV } from "./repository.main.get";
 import { GITHUB_TOKEN_DECRYPT_ENV } from "./repository.github-user-installations";
 
@@ -177,6 +178,16 @@ const FLOW: readonly FlowEntry[] = [
     handlerFile: "workspace.create.ts",
     reads: GITHUB_TOKEN_DECRYPT_ENV,
     via: "resolveWorkspaceGithubUserToken, via githubUserInstallationsDeps",
+  },
+  // `get_run_issue_providers` returns the GitHub App's connect, install and
+  // manage links from `envGithubUrls` (#3779). It runs on the api surface and
+  // in the app, so both need all six variables, or the links come back null
+  // as if this deployment had no GitHub App.
+  {
+    capability: runIssueProvidersGet,
+    handlerFile: "run.issue.providers.get.ts",
+    reads: REQUIRED_GITHUB_APP_ENV,
+    via: "envGithubUrls",
   },
 ];
 
