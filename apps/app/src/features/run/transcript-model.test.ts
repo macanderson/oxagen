@@ -19,6 +19,7 @@ import {
   type Frames,
   isOperatorPrompt,
   mergeEntries,
+  rebaseEntries,
   stepDigest,
   stepTool,
   type TranscriptStep,
@@ -704,6 +705,87 @@ describe("mergeEntries", () => {
   it("answers the held entries for an empty page", () => {
     const held = [entry("1")] as const;
     expect(mergeEntries(held, [])).toEqual([entry("1")]);
+  });
+});
+
+describe("rebaseEntries", () => {
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c1";
+  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_A" };
+  const entry = (seq: string, over: Partial<TranscriptEntry> = {}) =>
+    transcriptEntry({ seq, endSeq: seq, frames: 1, ...over });
+
+  it("takes a fresh read's order, so a late subagent entry sits under its call, not at the foot (#4083)", () => {
+    const held = [
+      entry("1"),
+      entry("2"),
+      entry("0", { subagent: sub }),
+      entry("3"),
+    ] as const;
+    const fresh = [
+      entry("1"),
+      entry("2"),
+      entry("0", { subagent: sub }),
+      entry("1", { subagent: sub }),
+      entry("3"),
+    ] as const;
+    expect(rebaseEntries(fresh, held).map(entryKey)).toEqual([
+      "1",
+      "2",
+      `${CHAIN}:0`,
+      `${CHAIN}:1`,
+      "3",
+    ]);
+    // Appending, as a tail page does, would have drawn it after seq 3.
+    expect(mergeEntries(held, fresh).map(entryKey).at(-1)).toBe(`${CHAIN}:1`);
+  });
+
+  it("keeps the held entries a fresh read stopped short of, after its own", () => {
+    const held = [entry("1"), entry("2"), entry("3")] as const;
+    const fresh = [entry("1"), entry("2", { frames: 2 })] as const;
+    const rebased = rebaseEntries(fresh, held);
+    expect(rebased.map((e) => [e.seq, e.frames])).toEqual([
+      ["1", 1],
+      ["2", 2],
+      ["3", 1],
+    ]);
+  });
+
+  it("answers the fresh read itself when it holds everything (negative)", () => {
+    const fresh = [entry("1"), entry("2")] as const;
+    expect(rebaseEntries(fresh, [entry("1")])).toBe(fresh);
+  });
+});
+
+describe("a tool request sealed twice under one call key (#3994)", () => {
+  // The reproduction from #3994: two requests and two calls on one key. A
+  // PreToolUse hook delivered twice writes the request twice
+  // (tacho claude-code/hooks.ts writes one `tool_requested` per delivery).
+  const frames = (kind: TranscriptEntry["kind"]) => [
+    edgeFrame({ seq: "0", kind, type: "tool_requested", callKey: "K" }),
+    edgeFrame({ seq: "1", kind, type: "tool_requested", callKey: "K" }),
+    edgeFrame({ seq: "2", kind, type: "tool_call", callKey: "K" }),
+    edgeFrame({ seq: "3", kind, type: "tool_call", callKey: "K" }),
+  ];
+  const owners = (steps: readonly TranscriptStep[]) => {
+    const seen = steps.flatMap((s) => s.frames.map((f) => f.seq));
+    return { seen, unique: new Set(seen).size };
+  };
+
+  it("draws the recorded call as one step holding each frame once", () => {
+    const steps = stepsIn(frames("tool_call"));
+    expect(shape(steps)).toEqual([["s0", ["0", "1", "2", "3"]]]);
+  });
+
+  it("pairs each request with a call no other request took, when the frames pair by type", () => {
+    // Frames the contract filed as no call kind reach the pairing by type,
+    // which is where a result could be claimed twice.
+    const steps = stepsIn(frames("frame"));
+    expect(shape(steps)).toEqual([
+      ["s0", ["0", "2"]],
+      ["s1", ["1", "3"]],
+    ]);
+    const { seen, unique } = owners(steps);
+    expect(unique).toBe(seen.length);
   });
 });
 
@@ -1947,6 +2029,31 @@ describe("stepTool", () => {
       group: "shell",
       headline: "ls -la",
     });
+  });
+
+  it("reads an entry carrying both halves by name: the result as the output, the request as the input (#3375)", () => {
+    // A folded step, as the contract answers at `steps`: one entry, its
+    // request what went out and its response what came back.
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Bash ok",
+        request: body("1", '{"command":"ls -la"}'),
+        response: body("1", '{"output":"a.ts\\nb.ts"}'),
+      }),
+    ]);
+    const detail = stepTool(nth(steps, 0));
+    expect(detail).toMatchObject({
+      name: "Bash",
+      headline: "ls -la",
+      output: "a.ts\nb.ts",
+    });
+    expect(detail?.output).not.toContain("command");
+    const [row] = tools(buildFeed(steps[0]?.frames ?? []));
+    expect(row?.call.output).toBe("a.ts\nb.ts");
+    expect(row?.call.arg).toBe("ls -la");
   });
 
   it("falls back to the request's input when the call never completed", () => {
