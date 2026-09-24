@@ -278,6 +278,13 @@ export const runItemSchema = z
     source: runSourceSchema,
     /** A ledger append fence, independent of the external process status. */
     ingressRevoked: z.boolean().optional(),
+    /**
+     * Whether a live run is paused. A ledger run: its evidence ingress is
+     * paused, and new batches are refused. A wrapped run: the latest pause or
+     * resume its host applied is a pause, so the host refuses the agent's
+     * tool calls. False once the run seals. Absent where the reader did not
+     * read it.
+     */
     ingressPaused: z.boolean().optional(),
     /** `org_ns.ws_ns.slug` (ADR-024); null when the ledger row names no agent. */
     agentKey: z.string().nullable(),

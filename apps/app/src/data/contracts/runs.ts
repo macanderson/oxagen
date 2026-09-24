@@ -299,6 +299,10 @@ export const RunRow = z.object({
   /** Why a steer cannot reach this run; null or absent when it can. */
   steerBlock: SteerBlock.nullable().optional(),
   ingressRevoked: z.boolean().optional(),
+  /**
+   * Whether the live run is paused. A ledger run's evidence ingress is paused;
+   * a wrapped run's host applied a pause and refuses the agent's tool calls.
+   */
   ingressPaused: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */
   completenessGaps: z.array(CompletenessGap),

@@ -14,6 +14,14 @@
 // a person can tell "Oxagen accepted this" from "the agent has stopped". The
 // page then reloads, because the run's own status is what says whether it did.
 //
+// A live run offers Pause or Resume, never both (#4112): Pause while it runs,
+// Resume while it is paused, then Steer and Cancel. The disabled sets follow
+// the same rule. `ingressPaused` says which: a ledger run reads it from its
+// own ingress fence, a wrapped run from the last pause or resume its host
+// applied. After a pause or resume is queued and its dialog closed, the page
+// re-reads the run every few seconds, for at most a minute, until the status
+// says the command took effect, so a person does not have to reload to see it.
+//
 // A sealed or halted run has nothing to reach, so it draws no controls. A
 // ledger run can pause, resume, or cancel evidence ingress. Steering stays
 // disabled until the producer carries it. A wrapped run takes commands through
@@ -34,7 +42,13 @@
 // Re-reading the run refreshes the route the person is on, so the tab, zoom
 // and frames page they were using stay put.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useId, useState } from "react";
+import {
+  type SyntheticEvent,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import {
   type CommandBlock,
   DeliveryMode,
@@ -60,8 +74,53 @@ import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { haltRun, type QueuedCommand, steerRun } from "./actions";
 
-const COMMANDS = ["pause", "resume", "steer", "cancel"] as const;
-type Command = (typeof COMMANDS)[number];
+type Command = "pause" | "resume" | "steer" | "cancel";
+
+/**
+ * The controls a live run offers, in order. Pause and Resume share one slot:
+ * only one of them can apply to a run at a time.
+ */
+function commandsFor(paused: boolean): readonly Command[] {
+  return [paused ? "resume" : "pause", "steer", "cancel"];
+}
+
+/**
+ * How often the page re-reads a run after a pause or resume was queued, and
+ * how many times. A host applies a command on its next poll, so a minute
+ * covers a live host; past it, the status is left to the next reload.
+ */
+export const HALT_FOLLOW_EVERY_MS = 4_000;
+export const HALT_FOLLOW_READS = 15;
+
+/**
+ * Re-read the run until its paused state matches the one a queued pause or
+ * resume asked for, at most `HALT_FOLLOW_READS` times. Returns the function
+ * that starts following: `true` for a pause, `false` for a resume.
+ */
+function useFollowHalt(paused: boolean): (expected: boolean) => void {
+  const navigate = useNavigate();
+  // Read through a ref so a new router object does not restart the count.
+  const refresh = useRef(navigate.refresh);
+  refresh.current = navigate.refresh;
+  const [expected, setExpected] = useState<boolean | null>(null);
+  // The status caught up, so stop following. Setting state while rendering is
+  // React's pattern for state that tracks a prop.
+  if (expected !== null && expected === paused) setExpected(null);
+  const following = expected !== null && expected !== paused;
+  useEffect(() => {
+    if (!following) return;
+    let reads = 0;
+    const timer = setInterval(() => {
+      reads += 1;
+      refresh.current();
+      if (reads >= HALT_FOLLOW_READS) clearInterval(timer);
+    }, HALT_FOLLOW_EVERY_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [following]);
+  return setExpected;
+}
 
 /**
  * The delivery modes `dispatch_command`'s `payload.requestedMode` accepts, in
@@ -132,10 +191,16 @@ function CommandDialog({
   runId,
   write,
   ledgerControl = false,
+  onQueuedClose,
 }: {
   command: Command;
   runId: string;
   ledgerControl?: boolean;
+  /**
+   * Called when the dialog closes after the control plane queued the command
+   * for at least one recipient, so the page can follow the run's status.
+   */
+  onQueuedClose?: () => void;
   /**
    * The reason a pause carries, or the text a steer sends with the delivery
    * mode picked for it. A halt ignores the mode: the contract refuses a
@@ -166,6 +231,7 @@ function CommandDialog({
 
   function openChange(next: boolean) {
     setOpen(next);
+    if (!next && queued !== null && queued.length > 0) onQueuedClose?.();
     if (!next) {
       setFailure(null);
       setQueued(null);
@@ -297,15 +363,18 @@ function CommandDialog({
 function DisabledControls({
   reason,
   testId,
+  paused,
 }: {
   reason: string;
   testId: string;
+  /** Draws Resume in Pause's slot, as the enabled set would. */
+  paused: boolean;
 }) {
   const t = useTranslations("run.commands");
   return (
     <div className="flex flex-col items-start gap-2 lg:items-end">
       <div className="flex flex-wrap gap-2">
-        {COMMANDS.map((command) => (
+        {commandsFor(paused).map((command) => (
           <button
             key={command}
             type="button"
@@ -360,18 +429,29 @@ export function RunControls({
   wsRole: WsRole;
 }) {
   const t = useTranslations("run.commands");
+  const follow = useFollowHalt(ingressPaused);
   if (status !== "live") return null;
+  // The one slot Pause and Resume share, and the command it sends.
+  const halt = ingressPaused ? "resume" : "pause";
+  const followHalt = () => {
+    follow(halt === "pause");
+  };
   if (source !== "ledger" && commandBlock !== null) {
     return (
       <DisabledControls
         reason={t(`blocked.${COMMAND_BLOCK_COPY[commandBlock]}`)}
         testId="host-no-control"
+        paused={ingressPaused}
       />
     );
   }
   if (!canCommandRun(orgRole, wsRole)) {
     return (
-      <DisabledControls reason={t("roleReason")} testId="role-no-control" />
+      <DisabledControls
+        reason={t("roleReason")}
+        testId="role-no-control"
+        paused={ingressPaused}
+      />
     );
   }
   if (source === "ledger" && ingressRevoked)
@@ -379,6 +459,7 @@ export function RunControls({
       <DisabledControls
         reason={t("ledgerRevoked")}
         testId="ledger-ingress-revoked"
+        paused={ingressPaused}
       />
     );
   if (source === "ledger") {
@@ -386,12 +467,12 @@ export function RunControls({
       <div className="flex flex-col items-start gap-2 lg:items-end">
         <div className="flex flex-wrap gap-2">
           <CommandDialog
-            command={ingressPaused ? "resume" : "pause"}
+            key={halt}
+            command={halt}
             runId={runId}
             ledgerControl
-            write={(text) =>
-              haltRun(org, ws, runId, ingressPaused ? "resume" : "pause", text)
-            }
+            write={(text) => haltRun(org, ws, runId, halt, text)}
+            onQueuedClose={followHalt}
           />
           <button
             type="button"
@@ -419,7 +500,7 @@ export function RunControls({
   }
   const controls = (
     <div className="flex flex-wrap gap-2">
-      {COMMANDS.map((command) =>
+      {commandsFor(ingressPaused).map((command) =>
         command === "steer" && steerBlock !== null ? (
           <button
             key={command}
@@ -430,16 +511,20 @@ export function RunControls({
           >
             {t("steer.open")}
           </button>
+        ) : command === "steer" ? (
+          <CommandDialog
+            key={command}
+            command={command}
+            runId={runId}
+            write={(text, mode) => steerRun(org, ws, runId, text, mode)}
+          />
         ) : (
           <CommandDialog
             key={command}
             command={command}
             runId={runId}
-            write={(text, mode) =>
-              command === "steer"
-                ? steerRun(org, ws, runId, text, mode)
-                : haltRun(org, ws, runId, command, text)
-            }
+            write={(text) => haltRun(org, ws, runId, command, text)}
+            {...(command === "cancel" ? {} : { onQueuedClose: followHalt })}
           />
         ),
       )}
