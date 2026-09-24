@@ -259,7 +259,6 @@ describe("runMetrics", () => {
     });
     expect(m.tokens).toBeNull();
     expect(m.cost).toBeNull();
-    expect(m.wasted).toBeNull();
     expect(m.prompts).toBeNull();
     expect(m.wall.ms).toBeNull();
     expect(m.turns).toBeNull();
@@ -553,7 +552,7 @@ describe("runMetrics over a partial record", () => {
     expect(m.priced?.byClass.output?.micros).toBe("2041842");
   });
 
-  it("takes the run row's cost when the rollup carries none, and prices the waste against it with its basis", () => {
+  it("takes the run row's cost when the rollup carries none", () => {
     const rollup = runCost().rollup;
     if (rollup === null) throw new Error("the builder's rollup is present");
     const m = runMetrics({
@@ -568,36 +567,18 @@ describe("runMetrics over a partial record", () => {
       currency: "USD",
       basis: "estimated",
     });
-    // 29% of $1.00 was not productive.
-    expect(m.wasted).toEqual({
-      micros: "290000",
-      currency: "USD",
-      basis: "estimated",
-    });
   });
 
-  it("prices the waste as the unproductive share of the rollup's cost, truncated to the micro", () => {
-    const m = runMetrics({
-      run: runRow(),
-      cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript()),
-    });
-    // $4.131265 times 0.29 is $1.19806685, which truncates to $1.198066.
-    expect(m.wasted).toEqual({
-      micros: "1198066",
-      currency: "USD",
-      basis: "gateway_observed",
-    });
-  });
-
-  // The contract refuses a ratio outside 0 to 1, so the first two rows guard
-  // the derivation against a value only a hand-built rollup can carry.
+  // The contract calls the ratio the share of steps that advanced the task and
+  // never says it is weighted by cost, so cost x (1 - ratio) would be a guess
+  // printed as money. The ratio passes through; no wasted figure is derived.
   it.each<[string, number | null]>([
-    ["above one", 1.2],
-    ["below zero", -0.1],
+    ["recorded", 0.71],
+    ["zero", 0],
+    ["one", 1],
     ["not recorded", null],
   ])(
-    "claims no wasted spend for a productive ratio %s (negative)",
+    "derives no wasted spend from a productive ratio %s (negative)",
     (_, productiveRatio) => {
       const rollup = runCost().rollup;
       if (rollup === null) throw new Error("the builder's rollup is present");
@@ -606,7 +587,8 @@ describe("runMetrics over a partial record", () => {
         cost: readOk(runCost({ rollup: { ...rollup, productiveRatio } })),
         transcript: readOk(mockupTranscript()),
       });
-      expect(m.wasted).toBeNull();
+      expect(m).not.toHaveProperty("wasted");
+      expect(m.productiveRatio).toBe(productiveRatio);
       expect(m.cost?.micros).toBe("4131265");
     },
   );

@@ -21,7 +21,6 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
     priced: null,
     cost: null,
     costIsEstimate: false,
-    wasted: null,
     cacheHit: null,
     productiveRatio: null,
     prompts: { count: 1, corrective: 0 },

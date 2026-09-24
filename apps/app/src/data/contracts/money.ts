@@ -91,6 +91,23 @@ export function perMillionTokens(cost: Money, tokens: number): Money | null {
 }
 
 /**
+ * `a − b`, exact, or null when the two carry different currencies: a
+ * difference across currencies is not an amount anyone saved or spent.
+ *
+ * @internal No production caller since #4071 moved the run's cache saving to
+ * the price book. Kept for the Wasted figure being ported into
+ * `features/run/metrics.ts`. Once that caller lands, knip reports this tag as
+ * unused, and the tag goes.
+ */
+export function subMoney(a: Money, b: Money): Money | null {
+  if (a.currency !== b.currency) return null;
+  return {
+    micros: (toBigInt(a.micros) - toBigInt(b.micros)).toString(),
+    currency: a.currency,
+  };
+}
+
+/**
  * The sum of `values`, exact at any magnitude, or null when there is nothing
  * to sum or the values carry more than one currency: a total across currencies
  * is not a figure anyone was charged.
@@ -205,9 +222,8 @@ export function compareMicros(a: Money, b: Money): number {
 }
 
 /**
- * The part of `value` a `share` between 0 and 1 names: the Run page's wasted
- * spend is its cost times the share the rollup did not count as productive.
- * The share is rounded to a millionth and the micros are divided by BigInt, so
+ * The part of `value` a `share` between 0 and 1 names, such as a share of a
+ * recorded cost. The share is rounded to a millionth and the micros are divided by BigInt, so
  * the money stays exact and truncates toward zero. A share outside 0 to 1
  * names no part of the value, so the answer is null and the caller shows the
  * figure as missing.
@@ -286,4 +302,19 @@ export function microsFromDecimal(text: string): string | null {
   if (match === null) return null;
   const [, whole = "", fraction = ""] = match;
   return `${whole}${fraction.padEnd(6, "0")}`.replace(/^0+(?=\d)/, "");
+}
+
+/**
+ * Integer micros as the plain decimal a person would type back into a form:
+ * `"12500000"` is `"12.5"`, `"50000000"` is `"50"`. No grouping, no currency
+ * sign, and no trailing zeros, so `microsFromDecimal` reads the result back
+ * to the same micros. Digit shifting on the string, like its inverse, so no
+ * float carries the amount. Null for anything but a non-negative integer.
+ */
+export function decimalFromMicros(micros: string): string | null {
+  if (!/^\d+$/.test(micros)) return null;
+  const digits = micros.replace(/^0+(?=\d)/, "").padStart(7, "0");
+  const whole = digits.slice(0, -6).replace(/^0+(?=\d)/, "");
+  const fraction = digits.slice(-6).replace(/0+$/, "");
+  return fraction === "" ? whole : `${whole}.${fraction}`;
 }

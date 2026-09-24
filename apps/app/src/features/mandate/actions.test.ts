@@ -29,7 +29,12 @@
 // field is absent, and a submission that changed only the validity window names
 // no measure at all.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MANDATE_ID, mandateOutput } from "@/test/mandate-outputs";
+import {
+  authorityOutput,
+  MANDATE_ID,
+  mandateGetOutput,
+  mandateOutput,
+} from "@/test/mandate-outputs";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
@@ -95,8 +100,15 @@ function kernelAnswers(options: {
   writeThrows?: Error;
   timezone?: string;
   preferencesThrows?: Error;
+  /** What `get_mandate` answers: the stored kind a money edit is checked against. */
+  mandate?: unknown;
+  mandateThrows?: Error;
 }) {
   invoke.mockImplementation((name: string) => {
+    if (name === "get_mandate")
+      return options.mandateThrows !== undefined
+        ? Promise.reject(options.mandateThrows)
+        : Promise.resolve(options.mandate ?? mandateGetOutput());
     if (name === "get_user_preferences") {
       return options.preferencesThrows !== undefined
         ? Promise.reject(options.preferencesThrows)
@@ -551,7 +563,11 @@ describe("changeMandateLimits", () => {
 
   // A limit denominated in an ISO 4217 code reads back as money while the figure
   // beside it is whole units: the one shape this form cannot write correctly.
-  it("refuses a currency unit in either casing, before the kernel runs (negative)", async () => {
+  // The record holds `amount` as money and nothing named `rows`, so a currency
+  // on `rows` has no stored kind to scale by. It is refused, in either casing,
+  // and the read that established it is the only call made.
+  it("refuses a currency unit on a measure the record does not hold as money, and writes nothing (negative)", async () => {
+    kernelAnswers({});
     for (const unit of ["USD", "usd"]) {
       expect(
         await changeMandateLimits("a-intel", "core-platform", {
@@ -565,7 +581,9 @@ describe("changeMandateLimits", () => {
         field: "unit",
       });
     }
-    expect(invoke).not.toHaveBeenCalled();
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(0);
   });
 
   // `calls` is the built-in measure: every call draws exactly one of it whatever
@@ -629,6 +647,7 @@ describe("changeMandateLimits", () => {
   // bound the form cannot write correctly has to stop the submission rather than
   // be quietly left out of the change and sent anyway.
   it("refuses a unit the form cannot write even when it equals the prefill (negative)", async () => {
+    kernelAnswers({});
     expect(
       await changeMandateLimits("a-intel", "core-platform", {
         ...untouched,
@@ -642,7 +661,9 @@ describe("changeMandateLimits", () => {
       code: "invalid_input",
       field: "unit",
     });
-    expect(invoke).not.toHaveBeenCalled();
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(0);
   });
 
   // A shape check accepted this and `endOfZonedDay` rolled it to 3 March, so a
@@ -728,6 +749,240 @@ describe("changeMandateLimits", () => {
     expect(
       await changeMandateLimits("a-intel", "core-platform", draft),
     ).toEqual({ ok: false, reason: "conflict", code: "mandate_ended" });
+  });
+});
+
+/**
+ * A dialog opened on the fixture mandate's money limit: `amount` in USD at
+ * $250 a call and $2,000 a month, which the record holds as micros with the
+ * kind the handler stamped (ADR-108).
+ */
+const MONEY = {
+  measure: "amount",
+  unit: "USD",
+  period: "monthly" as const,
+  perCall: "250",
+  perPeriod: "2000",
+  callsPerDay: "",
+};
+const moneyUntouched = {
+  mandateId: MANDATE_ID,
+  ...MONEY,
+  validTo: "",
+  baseline: MONEY,
+};
+
+describe("changeMandateLimits on a money limit (ADR-108)", () => {
+  it("scales a typed amount to micros by the stored kind, and sends only the figure that moved", async () => {
+    kernelAnswers({});
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", {
+        ...moneyUntouched,
+        perPeriod: "1500.50",
+      }),
+    ).toEqual({ ok: true, value: { mandateId: MANDATE_ID, status: "active" } });
+    // $1,500.50 is 1,500,500,000 micros. The currency is the stored one and is
+    // not restated; the per-call bound was an echo and stays out.
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: { amount: { perPeriod: "1500500000" } },
+    });
+    // One read for the stored kind, then the one write. The read's record is
+    // not merged into the write.
+    expect(invoke.mock.calls.map(([name]) => name)).toEqual([
+      "get_mandate",
+      "update_mandate_limits",
+    ]);
+    expect(invoke.mock.calls[0]?.[1]).toEqual({
+      mandateId: MANDATE_ID,
+      ledgerLimit: 1,
+    });
+  });
+
+  it("reads 2000.00 against a prefill of 2000 as the same micros, not an edit", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...moneyUntouched,
+      perCall: "250.00",
+      perPeriod: "2000.000000",
+      unit: "usd",
+      callsPerDay: "30",
+    });
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: { calls: { perPeriod: "30", currencyOrUnit: "calls" } },
+    });
+  });
+
+  // ADR-108's case: a tool may declare a count denominated in a currency code.
+  // The record then holds `amount` as a count, and a figure typed against it
+  // must not be multiplied by a million because its unit is spelled USD.
+  it("refuses to scale a figure the record holds as a count under a currency code (negative)", async () => {
+    kernelAnswers({
+      mandate: mandateGetOutput(
+        [],
+        mandateOutput({
+          authority: [
+            authorityOutput({
+              kind: "count",
+              perCall: "250",
+              perPeriod: "2000",
+              settled: "0",
+              reserved: "0",
+              remaining: "2000",
+            }),
+          ],
+        }),
+      ),
+    });
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", {
+        ...moneyUntouched,
+        perPeriod: "1500",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "unit",
+    });
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(0);
+  });
+
+  it("refuses a currency other than the one the record holds (negative)", async () => {
+    kernelAnswers({});
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", {
+        ...moneyUntouched,
+        measure: "fees",
+        unit: "EUR",
+        perPeriod: "10",
+        baseline: { ...MONEY, measure: "fees", unit: "EUR" },
+        callsPerDay: "",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "unit",
+    });
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(0);
+  });
+
+  // The test above names a measure the record does not hold at all, so the
+  // missing entry refuses it. This one holds `fees` as money in EUR, so only
+  // the currency comparison stands between a typed USD figure and a write.
+  // A money edit never sends `currencyOrUnit`, so the merge would keep EUR and
+  // store the USD amount as EUR micros.
+  describe("on a second measure the record holds as money in another currency", () => {
+    const twoCurrencies = () =>
+      mandateGetOutput(
+        [],
+        mandateOutput({
+          authority: [
+            authorityOutput(),
+            authorityOutput({ measure: "fees", currencyOrUnit: "EUR" }),
+          ],
+        }),
+      );
+    const onFees = (unit: string) => ({
+      ...moneyUntouched,
+      measure: "fees",
+      unit,
+      perPeriod: "10",
+    });
+
+    it("refuses a figure typed in a currency the measure is not held in (negative)", async () => {
+      kernelAnswers({ mandate: twoCurrencies() });
+      expect(
+        await changeMandateLimits("a-intel", "core-platform", onFees("USD")),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "unit",
+      });
+      expect(invoke.mock.calls.map(([name]) => name)).toEqual(["get_mandate"]);
+    });
+
+    it("scales the figure in the currency the measure is held in", async () => {
+      kernelAnswers({ mandate: twoCurrencies() });
+      expect(
+        await changeMandateLimits("a-intel", "core-platform", onFees("eur")),
+      ).toMatchObject({ ok: true });
+      expect(written()).toEqual({
+        mandateId: MANDATE_ID,
+        limitChanges: {
+          fees: {
+            perCall: "250000000",
+            perPeriod: "10000000",
+            period: "monthly",
+          },
+        },
+      });
+    });
+  });
+
+  it("refuses a change of the limit's currency before the kernel runs (negative)", async () => {
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", {
+        ...moneyUntouched,
+        unit: "EUR",
+        perPeriod: "1800",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "unit",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it.each(["12.0000001", "1,500", "-5", "1e3"])(
+    "refuses %j as an amount before the kernel runs (negative)",
+    async (typed) => {
+      expect(
+        await changeMandateLimits("a-intel", "core-platform", {
+          ...moneyUntouched,
+          perPeriod: typed,
+        }),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "perPeriod",
+      });
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it("writes nothing when the mandate read is refused, and says why (negative)", async () => {
+    kernelAnswers({ mandateThrows: denied("get_mandate") });
+    const result = await changeMandateLimits("a-intel", "core-platform", {
+      ...moneyUntouched,
+      perPeriod: "1500",
+    });
+    expect(result).toMatchObject({ ok: false, reason: "denied" });
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(0);
+  });
+
+  it("changes only the window on a money mandate, reading the kind but sending no limit", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...moneyUntouched,
+      validTo: "2027-01-31",
+    });
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      validTo: "2027-02-01T07:59:59.999Z",
+    });
   });
 });
 

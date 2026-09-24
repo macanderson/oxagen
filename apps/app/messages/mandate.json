@@ -110,7 +110,7 @@
         "measure": "Measure",
         "measureHint": "The measure the tool version declares the limit under. Only this measure's limit changes; every other measure keeps the bound it holds.",
         "unit": "Unit",
-        "unitHint": "What the measure counts, in its own name. Never a currency code: this form writes counts and stores the figure exactly as typed.",
+        "unitHint": "What the measure counts, in its own name. A money limit keeps the currency it was granted in, and its figures are amounts such as 12.50. Add a new money limit over the API.",
         "perCall": "Per call",
         "perPeriod": "Per period",
         "period": "Period",

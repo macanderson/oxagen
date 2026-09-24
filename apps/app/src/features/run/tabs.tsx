@@ -5,7 +5,10 @@
 // A tab is a query value on the run's one route, so it survives a reload and
 // a shared link. It is still a tab to assistive tech: `role="tablist"` over
 // links carrying `role="tab"` and `aria-selected`, which is what the design's
-// buttons carry.
+// buttons carry. Only the open tab's panel is on the page, so only the open
+// tab names it in `aria-controls`, and the panel names that tab back
+// (`RUN_TAB_PANEL`, `runTabId`). A reference to a panel that is not rendered
+// points at nothing.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { routes } from "@/shared/safe-path";
@@ -39,6 +42,14 @@ const TAB_ALIASES: Record<string, Tab> = {
   dod: "cost",
   ladder: "cost",
 };
+
+/** The id of the open tab's panel, which the page draws under the strip. */
+export const RUN_TAB_PANEL = "run-tab-panel";
+
+/** The id of one tab in the strip, which the open panel is labelled by. */
+export function runTabId(tab: Tab): string {
+  return `run-tab-label-${tab}`;
+}
 
 export function tabOf(raw: string | null): Tab {
   return (
@@ -80,12 +91,15 @@ export function RunTabs({
     >
       {TABS.map((tab) => {
         const figure = figures[tab] ?? {};
+        const open = tab === selected;
         return (
           <SafeLink
             key={tab}
+            id={runTabId(tab)}
             role="tab"
-            aria-selected={tab === selected}
-            aria-current={tab === selected ? "page" : undefined}
+            aria-selected={open}
+            aria-controls={open ? RUN_TAB_PANEL : undefined}
+            aria-current={open ? "page" : undefined}
             // The Transcript tab keeps the chips a link opened it with, so
             // leaving it for the chain and coming back does not reset them.
             to={routes.run(
@@ -108,11 +122,16 @@ export function RunTabs({
               </span>
             )}
             {figure.parked === true ? (
+              // The dot is the sighted reading. The sentence inside it is the
+              // same fact for a screen reader, and on a touch screen, where a
+              // `title` never shows.
               <span
                 data-testid={`run-tab-parked-${tab}`}
                 title={t("parked")}
                 className="ml-0.5 inline-block size-1.5 rounded-full bg-info align-middle"
-              />
+              >
+                <span className="sr-only">{t("parked")}</span>
+              </span>
             ) : null}
           </SafeLink>
         );

@@ -269,8 +269,6 @@ export function StatRow({
   // A count read from a transcript that stopped short of the run is a floor.
   const floor = metrics.whole ? "" : "+";
   const displayedCost = metrics.cost ?? run.reportedCost ?? null;
-  const wastedPositive =
-    metrics.wasted !== null && metrics.wasted.micros !== "0";
   return (
     <section
       aria-label={t("label")}
@@ -332,23 +330,15 @@ export function StatRow({
       >
         {displayedCost === null ? <NoValue /> : <Money value={displayedCost} />}
       </Stat>
+      {/* The rollup records what share of steps advanced the task, not what
+          share of the cost they carried, so no wasted figure is derived from
+          it (metrics.ts, `productiveRatio`). */}
       <Stat
         testId="run-stat-wasted"
         label={t("wasted")}
-        tone={wastedPositive ? "critical" : undefined}
-        note={
-          metrics.wasted === null
-            ? t("noRollup")
-            : wastedPositive
-              ? t("wastedNote")
-              : t("nothingWasted")
-        }
+        note={t("wastedNotRecorded")}
       >
-        {metrics.wasted === null ? (
-          <NoValue />
-        ) : (
-          <Money value={metrics.wasted} />
-        )}
+        <NoValue />
       </Stat>
       <Stat
         testId="run-stat-wall"
