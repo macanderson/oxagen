@@ -1623,6 +1623,11 @@ export const contextProposals = agentSchema.table(
     // The governance mode read from .oxagen/rules/governance.toml when the PR
     // was opened; merge_context_pr reads the file again.
     governanceMode: text("governance_mode"),
+    // The host the PR lives on: 'github' or 'gitlab' (#3762). `pr_number` is
+    // only meaningful with it. A GitHub PR number and a GitLab merge request
+    // IID are both scoped to one repository on one host, so a number is never
+    // read back through a different host than the one that issued it.
+    provider: text("provider"),
     repository: text("repository"),
     baseRef: text("base_ref"),
     branch: text("branch"),
@@ -1684,6 +1689,14 @@ export const contextProposals = agentSchema.table(
     statusCheck: check(
       "context_proposals_status_check",
       sql`${t.status} IN ('proposed', 'pr_open', 'checks_running', 'checks_passed', 'checks_failed', 'merged', 'rejected')`,
+    ),
+    providerCheck: check(
+      "context_proposals_provider_check",
+      sql`${t.provider} IS NULL OR ${t.provider} IN ('github', 'gitlab')`,
+    ),
+    prProviderCheck: check(
+      "context_proposals_pr_provider_check",
+      sql`${t.prNumber} IS NULL OR ${t.provider} IS NOT NULL`,
     ),
     governanceModeCheck: check(
       "context_proposals_governance_mode_check",

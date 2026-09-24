@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ComponentProps, useMemo } from "react";
 import type { GitHubUrl } from "@/shared/github-url";
+import type { GitLabUrl } from "@/shared/gitlab-url";
 import type { HostedInvoiceUrl } from "@/shared/invoice-url";
 import type { RunExportDownloadUrl } from "@/shared/run-export-download-url";
 import type { PullRequestUrl } from "@/shared/pull-request-url";
@@ -117,6 +118,16 @@ export function GitHubLink({
   ...props
 }: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & {
   to: GitHubUrl;
+}) {
+  return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
+}
+
+/** A project page on gitlab.com, opened without handing it this window (#3762). */
+export function GitLabLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & {
+  to: GitLabUrl;
 }) {
   return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
 }

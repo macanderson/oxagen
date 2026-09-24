@@ -43,6 +43,7 @@ import {
 } from "./context.steering.file";
 import {
   assertProductionBase,
+  assertSameHost,
   type SteeringRepository,
 } from "./context.steering.github";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
@@ -185,6 +186,7 @@ export function createOpenContextPrHandler(
         {
           status: "pr_open",
           governanceMode: mode,
+          provider: repo.provider,
           repository: repo.fullName,
           baseRef: repo.defaultBranch,
           branch,
@@ -200,6 +202,7 @@ export function createOpenContextPrHandler(
         ["proposed"],
       );
     } else {
+      assertSameHost(repo, row.provider, row.prUrl);
       const pr = await deps.github.getPullRequest(repo, row.prNumber!);
       assertProductionBase(repo, pr.baseRef, row.prUrl);
       row = await deps.store.updateProposal(

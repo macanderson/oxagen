@@ -1,7 +1,7 @@
 {
   "name": "open_context_pr",
   "domain": "context",
-  "description": "Open the Context PR for a proposal: branch context/<lineage> from the production branch, the single record file under .oxagen/rules/, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs. Re-runs the checks when the PR is already open.",
+  "description": "Open the Context PR for a proposal: branch context/<lineage> from the production branch, the single record file under .oxagen/rules/, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs or GitLab commit statuses. On GitLab the PR is a merge request. Re-runs the checks when the PR is already open.",
   "mode": "sync",
   "surfaces": [
     "api"
@@ -80,6 +80,13 @@
               "url": {
                 "type": "string"
               },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "gitlab"
+                ]
+              },
               "repository": {
                 "type": "string"
               },
@@ -106,6 +113,7 @@
             "required": [
               "number",
               "url",
+              "provider",
               "repository",
               "baseRef",
               "branch",
