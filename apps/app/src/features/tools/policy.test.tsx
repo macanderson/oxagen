@@ -12,7 +12,7 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentPage } from "@/data/contracts/agents";
 import type { OrgRole } from "@/data/contracts/common";
 import type { MandateList } from "@/data/contracts/mandates";
@@ -38,6 +38,22 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
+// Every record picker on this tab reads its options through the shell's client
+// entry. The reads are Server Actions, so the suite answers them itself.
+const { choices } = vi.hoisted(() => ({
+  choices: {
+    chooseAgents: vi.fn(),
+    chooseApprovers: vi.fn(),
+    chooseToolPatterns: vi.fn(),
+  },
+}));
+vi.mock("@/features/shell/client", () => choices);
+
+/** One loaded option list, as a picker's `load` answers it. */
+const loaded = (options: { value: string; label: string }[]) => ({
+  ok: true as const,
+  value: { options, partial: false },
+});
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -92,6 +108,12 @@ async function renderLedger(
 }
 
 const ledger = () => screen.getByRole("region", { name: "Mandates ledger" });
+
+beforeEach(() => {
+  choices.chooseAgents.mockReset().mockResolvedValue(loaded([]));
+  choices.chooseApprovers.mockReset().mockResolvedValue(loaded([]));
+  choices.chooseToolPatterns.mockReset().mockResolvedValue(loaded([]));
+});
 
 afterEach(async () => {
   try {
@@ -556,17 +578,19 @@ describe("Tools › mandates ledger › grant", () => {
     fireEvent.click(
       within(ledger()).getByRole("button", { name: "Grant a mandate" }),
     );
-    const picker = within(screen.getByTestId("grant-mandate")).getByLabelText(
-      "Agent",
-    );
+    const form = screen.getByTestId("grant-mandate");
+    fireEvent.focus(within(form).getByRole("combobox", { name: "Agent" }));
     expect(
-      within(picker)
+      within(within(form).getByRole("listbox"))
         .getAllByRole("option")
-        .map((option) => option.getAttribute("value")),
+        .map((option) => option.getAttribute("data-value")),
     ).toEqual(["agt_invoicebot"]);
   });
 
-  it("says the picker holds one page when the agents read has more", async () => {
+  it("reads every agent when the page holds only the first", async () => {
+    choices.chooseAgents.mockResolvedValue(
+      loaded([{ value: "agt_docsbot", label: "Docs bot" }]),
+    );
     await renderGrant(
       "owner",
       mandateList([mandateRow()]),
@@ -575,8 +599,11 @@ describe("Tools › mandates ledger › grant", () => {
     fireEvent.click(
       within(ledger()).getByRole("button", { name: "Grant a mandate" }),
     );
-    expect(screen.getByTestId("grant-mandate")).toHaveTextContent(
-      "The first page of this workspace's agents.",
+    const form = screen.getByTestId("grant-mandate");
+    fireEvent.focus(within(form).getByRole("combobox", { name: "Agent" }));
+    expect(choices.chooseAgents).toHaveBeenCalledWith("acme", "core-platform");
+    expect(await within(form).findByRole("option")).toHaveTextContent(
+      "Docs bot",
     );
   });
 

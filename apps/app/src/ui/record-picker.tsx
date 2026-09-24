@@ -42,7 +42,7 @@ export type PickerOption = {
 };
 
 /** One loaded list. `partial` says the list stopped at a bound before the end. */
-type OptionPage = {
+export type OptionPage = {
   options: readonly PickerOption[];
   partial: boolean;
 };

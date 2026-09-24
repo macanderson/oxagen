@@ -230,6 +230,7 @@ describe("DefinitionForm", () => {
         });
       },
     );
+    await userEvent.type(screen.getByLabelText(/Summary/), "Tools");
     await userEvent.click(
       screen.getByRole("button", { name: "Commit and open a pull request" }),
     );
@@ -643,15 +644,15 @@ describe("DefinitionForm over a file it cannot fully read", () => {
 });
 
 describe("DefinitionForm edits that change nothing", () => {
-  it("writes no draft for a blank chip, a repeated chip, an unchanged name or a budget past what the file can hold (negative)", () => {
+  it("writes no draft for a blank entry, an unchanged name or a budget past what the file can hold (negative)", () => {
     renderForm();
-    const add = screen.getByRole("textbox", { name: "Add to tools" });
+    // Whitespace is not a chip, whether it is entered or left behind. A value
+    // already chosen is no longer part of this case: the picker is a combobox,
+    // so entering one that is already a chip removes it.
+    const add = screen.getByRole("combobox", { name: "tools" });
     fireEvent.change(add, { target: { value: "   " } });
     fireEvent.keyDown(add, { key: "Enter" });
-    fireEvent.change(add, { target: { value: "github__*" } });
-    fireEvent.keyDown(add, { key: "Enter" });
-    fireEvent.change(add, { target: { value: "linear__x" } });
-    fireEvent.keyDown(add, { key: "Tab" });
+    fireEvent.blur(add);
     expect(dirtyBar()).toBeNull();
     const name = screen.getByRole("textbox", { name: "Name" });
     fireEvent.blur(name);

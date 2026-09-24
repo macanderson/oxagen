@@ -1308,7 +1308,7 @@ The billing amendment itself changed, beyond the above: §0 items 2, 8 and 9; §
 
 ### Shell activity boundaries
 
-The shell drawers reuse the typed data ports in `features/shell/activity-actions.ts`. That server action resolves each viewer before reading a port and returns an explicit `ActionResult`. The layer rule admits `data/source` only from this action module, so the drawer keeps the existing approval and mandate mapping without copying it.
+The shell drawers reuse the typed data ports in `features/shell/activity-actions.ts`. That server action resolves each viewer before reading a port and returns an explicit `ActionResult`. The layer rule admits `data/source` from that module and from `features/shell/choice-actions.ts`, which answers a record picker's option list when a person opens it, and from no other; both resolve a viewer first and return an `ActionResult`, so a drawer and a picker each keep the existing mapping instead of copying it. `layers.ts` holds the pair as `PORT_READING_ACTIONS`, and a third module needs its own reason written there.
 
 `features/fleet/client.ts` is the public client entry for the shared approvals panel. Client drawers import it instead of the server barrel. The entry exports only client-compatible components.
 

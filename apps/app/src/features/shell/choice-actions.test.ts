@@ -1,8 +1,10 @@
 // The lists the record pickers offer (choice-actions.ts), over a stubbed data
 // source: a cursor read stops at its bound and says partial, a retired agent is
 // never offered, each tool gets one `slug@*` row, a model named twice is listed
-// once, and one failed read of two leaves a partial list instead of none.
+// once, one failed read of two leaves a partial list instead of none, and a
+// refused read answers with the reason the store gave rather than a bare no.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readError } from "@/data/read";
 
 const { source } = vi.hoisted(() => ({
   source: {
@@ -61,9 +63,28 @@ describe("chooseToolPatterns", () => {
     expect(result.ok && result.value.partial).toBe(true);
   });
 
-  it("fails the list when a page fails", async () => {
-    source.tools.versions.mockResolvedValue({ ok: false });
-    expect(await chooseToolPatterns("acme", "core")).toEqual({ ok: false });
+  it("fails the list with the reason the page gave", async () => {
+    source.tools.versions.mockResolvedValue(
+      readError("tool_registry_unavailable", 503),
+    );
+    expect(await chooseToolPatterns("acme", "core")).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "tool_registry_unavailable",
+    });
+  });
+
+  it("carries a denial as a denial, not as an outage (negative)", async () => {
+    source.tools.versions.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      permission: "tools.read",
+    });
+    expect(await chooseToolPatterns("acme", "core")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "tools.read",
+    });
   });
 });
 
@@ -132,7 +153,9 @@ describe("chooseModels", () => {
   });
 
   it("keeps the list it could read when one read fails", async () => {
-    source.spend.priceBook.mockResolvedValue({ ok: false });
+    source.spend.priceBook.mockResolvedValue(
+      readError("price_book_unavailable", 503),
+    );
     source.spend.unpricedModels.mockResolvedValue(
       ok({ models: [{ model: "kimi-k2", provider: "moonshot" }] }),
     );
