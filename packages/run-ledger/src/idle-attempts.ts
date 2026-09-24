@@ -126,8 +126,9 @@ export async function listIdleLedgerAttempts(args: {
   cutoff: Date;
   limit: number;
 }): Promise<IdleLedgerAttempt[]> {
-  // tenancy: a cross-tenant scan by design, like the wrapped-session idle
-  // close. It reads ids and timestamps only; the seal runs per tenant.
+  // tenancy: a scheduled cross-tenant scan by design, like the wrapped-session
+  // idle close. It reads ids and timestamps only; each seal is then scoped to
+  // the row's own orgId and workspaceId.
   const rows = await withSystemDb(
     async (tx: Tx) =>
       (await tx.execute(
