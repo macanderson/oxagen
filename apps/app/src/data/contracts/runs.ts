@@ -153,16 +153,34 @@ const RunMachine = z.object({
 });
 
 /**
- * Can a direct command reach this run? An `observe`-tier session only records
- * what an agent did and gives Oxagen no connection point, so a queued pause,
- * resume, steer or cancel would have nothing to travel down (#3285).
+ * Why a pause, resume, steer or cancel cannot reach a wrapped run, mirrored
+ * from `list_runs`' `commandBlock` (ADR-163). The enforcement tier is not
+ * among them: an `observe`-tier run whose host is polling takes commands.
+ */
+export const CommandBlock = z.enum([
+  "run_sealed",
+  "no_host",
+  "host_revoked",
+  "host_offline",
+]);
+export type CommandBlock = z.infer<typeof CommandBlock>;
+
+/**
+ * Why a direct command cannot reach this run, or null when it can.
+ *
+ * The control plane answers it on the row from the same rule
+ * `dispatch_command` refuses on, so a page never offers a control the handler
+ * refuses (#3285, ADR-163). A row that carries no answer is read as
+ * reachable, and the handler's refusal names the reason if it is not.
  *
  * Every surface that offers a run control answers from here: the Run page's
  * controls and the Fleet row controls. One rule, so a row cannot offer what
  * its run page refuses.
  */
-export function acceptsCommands(tier: EnforcementTier): boolean {
-  return tier !== "observe";
+export function commandBlockOf(run: {
+  commandBlock?: CommandBlock | null;
+}): CommandBlock | null {
+  return run.commandBlock ?? null;
 }
 
 export const RunRow = z.object({
@@ -202,6 +220,8 @@ export const RunRow = z.object({
   replayGrade: ReplayGrade.nullable(),
   verdict: ProofVerdict.nullable(),
   enforcementTier: EnforcementTier,
+  /** Why a command cannot reach this run; null or absent when it can. */
+  commandBlock: CommandBlock.nullable().optional(),
   ingressRevoked: z.boolean().optional(),
   ingressPaused: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */

@@ -617,11 +617,29 @@ describe("the Runs panel", () => {
     expect(dispatchRunCommand).not.toHaveBeenCalled();
   });
 
+  it("says why a run whose host stopped polling cannot be paused (negative)", async () => {
+    await loaded({
+      runs: runPage([
+        runRow({ id: "tse_quiet", commandBlock: "host_offline" }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    expect(screen.getByTestId("pause-refusal")).toHaveTextContent(
+      "This run's host has not checked for commands in the last five minutes.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Pause at the next boundary" }),
+    ).toBeDisabled();
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+  });
+
   it("names the refusal a pause came back with (negative)", async () => {
     dispatchRunCommand.mockResolvedValue({
       ok: false,
       reason: "denied",
-      code: "observe_tier",
+      code: "host_offline",
     });
     await loaded();
     const user = userEvent.setup();

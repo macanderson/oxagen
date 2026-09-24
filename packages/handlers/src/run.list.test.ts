@@ -925,6 +925,89 @@ describe("the row a caller decides from (#3285)", () => {
   });
 });
 
+// ADR-163, #4023: the row answers `dispatch_command`'s own rule, so the page
+// offers the controls on an observe-tier run whose host is polling and
+// withholds them, with the reason, where no host would take the command.
+describe("a run row says whether a command can reach it", () => {
+  const host = (status: string, secondsAgo: number | null) => ({
+    hostname: "mac-studio.local",
+    platform: "darwin",
+    osVersion: "15.6",
+    arch: "arm64",
+    nodeVersion: "v24.4.0",
+    status,
+    lastSeenAt:
+      secondsAgo === null ? null : new Date(Date.now() - secondsAgo * 1000),
+  });
+  const live = { outcome: "running", sealedAt: null };
+
+  it("reads the host's liveness in the page's own statement", () => {
+    const db = drizzle.mock({ schema });
+    const query = tachoPageQuery(db, SCOPE, {
+      cursor: null,
+      limit: 50,
+      withoutWitnessRuns: false,
+    }).toSQL();
+    expect(query.sql).toContain('"tacho"."hosts"."last_seen_at"');
+    expect(query.sql).toContain('"tacho"."hosts"."status"');
+  });
+
+  it("answers null for a live observe-tier run whose host polled a minute ago", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_observe",
+          session: { ...live, enforcementTier: "observe" },
+          host: host("active", 60),
+        }),
+      ],
+    );
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run?.enforcementTier).toBe("observe");
+    expect(run?.commandBlock).toBeNull();
+  });
+
+  it("names why a command cannot reach the run (negative)", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_quiet",
+          session: live,
+          host: host("active", 3 * 24 * 3600),
+        }),
+        tachoSession({
+          publicId: "tse_revoked",
+          session: live,
+          host: host("revoked", 10),
+        }),
+        tachoSession({
+          publicId: "tse_hostless",
+          session: live,
+          host: null,
+        }),
+        tachoSession({ publicId: "tse_sealed", host: host("active", 10) }),
+      ],
+    );
+    const byId = new Map(
+      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+    );
+    expect(byId.get("tse_quiet")?.commandBlock).toBe("host_offline");
+    expect(byId.get("tse_revoked")?.commandBlock).toBe("host_revoked");
+    expect(byId.get("tse_hostless")?.commandBlock).toBe("no_host");
+    expect(byId.get("tse_sealed")?.commandBlock).toBe("run_sealed");
+  });
+
+  it("answers null on a ledger run, whose controls fence ingress", async () => {
+    const { list } = handlerOver(
+      [ledgerRun({ publicId: "arun_a", runId: RUN_A })],
+      [],
+    );
+    expect((await list({ limit: 50 }, ctx())).runs[0]?.commandBlock).toBeNull();
+  });
+});
+
 describe("a run row names who ran it, on what, with which model", () => {
   const db = drizzle.mock({ schema });
   const page = { cursor: null, limit: 50, withoutWitnessRuns: false };

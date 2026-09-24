@@ -4845,7 +4845,9 @@ type Messages = {
         runNotFound: string;
         noConnectionPoint: string;
         runSealed: string;
-        observeTier: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
         runNotSealed: string;
         digestOnly: string;
         steerText: string;
@@ -4863,7 +4865,12 @@ type Messages = {
         commandReason: string;
         rowCommand: string;
       };
-      observeReason: string;
+      blocked: {
+        runSealed: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+      };
       delivery: {
         legend: string;
         nextStep: {

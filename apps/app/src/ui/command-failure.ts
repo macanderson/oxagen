@@ -16,9 +16,22 @@
 // rather than falling through to a sentence that does not fit it.
 import { COMMAND_REASON_MAX } from "@oxagen/oxagen/tacho/command-limits";
 import { useTranslations } from "next-intl";
+import type { CommandBlock } from "@/data/contracts/runs";
 import { type ActionFailure, readFailure, unanswered } from "./action-failure";
 
 export type CommandFailure = ActionFailure;
+
+/**
+ * The key under `run.commands.blocked` that says why a command cannot reach a
+ * run, for the row's `commandBlock` (ADR-163). The Run page's controls and a
+ * Fleet row's pause both draw it, so the two say the same thing.
+ */
+export const COMMAND_BLOCK_COPY = {
+  run_sealed: "runSealed",
+  no_host: "noHost",
+  host_revoked: "hostRevoked",
+  host_offline: "hostOffline",
+} as const satisfies Record<CommandBlock, string>;
 
 const WORDS = {
   refused: {
@@ -27,7 +40,9 @@ const WORDS = {
     run_not_found: "runNotFound",
     no_connection_point: "noConnectionPoint",
     run_sealed: "runSealed",
-    observe_tier: "observeTier",
+    no_host: "noHost",
+    host_revoked: "hostRevoked",
+    host_offline: "hostOffline",
     run_not_sealed: "runNotSealed",
     digest_only: "digestOnly",
     fork_requires_ledger_run: "forkRequiresLedger",

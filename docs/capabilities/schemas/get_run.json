@@ -302,6 +302,22 @@
           "canSummarize": {
             "type": "boolean"
           },
+          "commandBlock": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "run_sealed",
+                  "no_host",
+                  "host_revoked",
+                  "host_offline"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "model": {
             "anyOf": [
               {

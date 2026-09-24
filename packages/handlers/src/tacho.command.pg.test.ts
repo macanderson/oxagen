@@ -15,7 +15,10 @@ import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { asc, eq, inArray } from "drizzle-orm";
-import { tachoCommandDispatchHandler } from "./tacho.command.dispatch";
+import {
+  BUNDLE_FEATURE_STEER_NEXT_STEP,
+  tachoCommandDispatchHandler,
+} from "./tacho.command.dispatch";
 import { tachoCommandFetchHandler } from "./tacho.command.fetch";
 import { tachoCommandListHandler } from "./tacho.command.list";
 
@@ -188,6 +191,10 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
         expiresAt: new Date("2027-01-01T00:00:00.000Z"),
         status: "active",
         mode: "enforce",
+        // A host that polled a moment ago and carries a steer to the next
+        // model call, so a command can reach its runs (ADR-163).
+        lastSeenAt: new Date(),
+        bundleFeatures: [BUNDLE_FEATURE_STEER_NEXT_STEP],
       });
       await tx.insert(schema.tachoSessions).values([
         session("live", { outcome: "running", enforcementTier: "harness" }),
@@ -234,8 +241,10 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
   });
 
   it("queues, supersedes, sends, acknowledges, expires and reports", async () => {
-    // 1. A broadcast: the live harness run is queued with interrupt degraded,
-    //    the observe run is recorded failed, the sealed run is not reached.
+    // 1. A broadcast: the live harness run and the observe-tier run on the
+    //    same live host are both queued with interrupt degraded to the next
+    //    step (the tier does not decide reach, ADR-163); the sealed run is not
+    //    reached.
     const first = await dispatch({
       target: { kind: "workspace", id: workspaceId },
       command: "steer",
@@ -261,9 +270,10 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     });
     const observeRows = await rowsFor(publicIds.observe);
     expect(observeRows[0]).toMatchObject({
-      outcome: "failed",
-      outcomeDetail: "observe_tier",
-      deliveryMode: null,
+      outcome: "queued",
+      requestedMode: "interrupt",
+      deliveryMode: "next_step",
+      degradedReason: "harness_tier",
     });
     expect(await rowsFor(publicIds.sealed)).toEqual([]);
 
@@ -291,8 +301,8 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
         .map((r) => r.command),
     ).toEqual(["pause", "steer"]);
 
-    // 3. The host polls: the two queued rows leave as `sent`, in issue order,
-    //    each carrying its modes; the failed observe row never leaves.
+    // 3. The host polls: the three queued rows leave as `sent`, in issue
+    //    order, each carrying its modes, the observe run's steer first.
     const poll = await fetch({
       schema: "tacho.commands.v2",
       host_enrollment_id: hostPublicId,
@@ -300,6 +310,7 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     expect(
       poll.control.commands.map((c) => [c.command, c.delivery_mode, c.reason]),
     ).toEqual([
+      ["steer", "next_step", null],
       ["pause", null, "review the plan"],
       ["steer", "next_step", null],
     ]);
@@ -427,8 +438,8 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
       degradedReason: "harness_tier",
     });
     expect((await report(publicIds.observe)).commands[0]).toMatchObject({
-      status: "failed",
-      detail: "observe_tier",
+      status: "sent",
+      deliveryMode: "next_step",
     });
   });
 });
