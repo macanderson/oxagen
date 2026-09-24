@@ -766,13 +766,18 @@ export async function runGovernedTurn(
         try {
           result = await provider(request, context);
         } catch (err) {
-          if (!context.signal.aborted) modelFailure ??= modelCallFailure(err);
+          // The turn's own abort, read directly: `driveTurn` aborts the
+          // request's `context.signal` only after its cancel grace period, so
+          // a caller that disconnects mid-call would otherwise read as a
+          // provider failure here.
+          const cancelled = turnAbort.signal.aborted || context.signal.aborted;
+          if (!cancelled) modelFailure ??= modelCallFailure(err);
           if (ledger) {
             await recorded(() =>
               ledger.modelCall({
                 ...receipt,
                 model: modelId,
-                outcome: context.signal.aborted ? "cancelled" : "failed",
+                outcome: cancelled ? "cancelled" : "failed",
               }),
             );
           }

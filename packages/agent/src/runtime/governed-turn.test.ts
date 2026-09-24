@@ -1082,6 +1082,61 @@ describe("runGovernedTurn on the engine", () => {
       }
     });
 
+    it("says the call failed before the provider answered when there is no status", async () => {
+      const errors = await failWith(new Error("socket hang up"));
+      expect(errors.length).toBeGreaterThan(0);
+      for (const error of errors) {
+        expect(error).toMatchObject({
+          code: "model_call_failed",
+          status: null,
+        });
+        expect((error as Error).message).toBe(
+          "the model call failed before the provider answered",
+        );
+      }
+    });
+
+    // A cancel is the turn's own doing, not the provider's. A caller that
+    // disconnects mid-call must read as engine_aborted (409), not as a model
+    // failure (502) that sends an owner to check the model key.
+    it("leaves the turn's own cancel alone (negative)", async () => {
+      streamAgentReply.mockReset();
+      const controller = new AbortController();
+      streamAgentReply.mockImplementation(() => {
+        controller.abort();
+        throw Object.assign(new Error("aborted"), { statusCode: 499 });
+      });
+      const { client } = setup(failingScript());
+      const modelCalls: TurnLedgerModelCall[] = [];
+      const result = await runGovernedTurn({
+        telemetry,
+        system: "s",
+        history: [],
+        instruction: "hi",
+        tools: {},
+        abortSignal: controller.signal,
+        engine: client,
+        ledger: {
+          modelCallStarted: async () => undefined,
+          modelCall: async (record) => {
+            modelCalls.push(record);
+          },
+          toolCallStarted: async () => undefined,
+          toolCall: async () => undefined,
+          seal: async () => undefined,
+        },
+      });
+      const parts = await drain(result);
+      const errors = parts
+        .filter((p) => p.type === "error")
+        .map((p) => p.error);
+      expect(errors.length).toBeGreaterThan(0);
+      for (const error of errors)
+        expect(error).not.toBeInstanceOf(ModelCallFailedError);
+      // The record says the call was cancelled, not that the provider failed.
+      expect(modelCalls.map((c) => c.outcome)).toEqual(["cancelled"]);
+    });
+
     it("keeps a failure that already carries a code", async () => {
       const limit = Object.assign(new Error("daily ceiling"), {
         code: "assistant_model_key_limit",

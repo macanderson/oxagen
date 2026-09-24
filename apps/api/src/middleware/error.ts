@@ -68,12 +68,18 @@ const HANDLER_ERROR_STATUS: Record<HandlerErrorCode, 403 | 404 | 409> = {
 // budget stop) conflicts with the state the caller asked in. A model call the
 // provider refused or failed (`ModelCallFailedError`) is an upstream failure,
 // so a 502; its message names the provider's status and nothing the vendor
-// said.
-export const ASSISTANT_TURN_ERROR_STATUS: Record<string, 409 | 502 | 503> = {
+// said. The key Oxagen minted for the organisation reaching its daily ceiling
+// (`AssistantModelKeyLimitError`, @oxagen/ai, ADR-131 §3) is a payment
+// decision, so a 402; it used to fall through to the 500 catch-all.
+export const ASSISTANT_TURN_ERROR_STATUS: Record<
+  string,
+  402 | 409 | 502 | 503
+> = {
   engine_unavailable: 503,
   assistant_run_not_recorded: 503,
   engine_aborted: 409,
   model_call_failed: 502,
+  assistant_model_key_limit: 402,
 };
 
 // A store that is up and refusing work it cannot take right now
@@ -102,7 +108,7 @@ function isStoreOverloadedError(err: unknown): err is StoreOverloadedError {
 
 function assistantTurnFailure(
   err: unknown,
-): { code: string; status: 409 | 502 | 503 } | null {
+): { code: string; status: 402 | 409 | 502 | 503 } | null {
   if (typeof err !== "object" || err === null) return null;
   const code = (err as Record<string, unknown>).code;
   if (typeof code !== "string") return null;

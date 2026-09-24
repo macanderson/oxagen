@@ -508,22 +508,73 @@ describe("AssistantFlyout", () => {
 
   // #3227: each of these used to read "could not be reached", whatever the
   // cause. The sentence names the cause and the code rides beneath it.
+  // The phrase is what the person reads. The test id alone comes from the
+  // refusal's key, so a sentence mapped back to the generic one would still
+  // find it; the phrase is what fails then.
   it.each([
-    ["unavailable", "engine_unavailable", "assistant-engine", true],
-    ["unavailable", "assistant_run_not_recorded", "assistant-unrecorded", true],
-    ["conflict", "engine_aborted", "assistant-aborted", true],
-    ["exhausted", "insufficient_credits", "assistant-noCredit", false],
-    ["exhausted", "assistant_spend_cap", "assistant-spendCap", false],
-    ["exhausted", "assistant_model_key_limit", "assistant-keyLimit", false],
-    ["unavailable", "model_call_failed", "assistant-model", true],
-    ["unavailable", "kernel_failure", "assistant-unavailable", true],
+    [
+      "unavailable",
+      "engine_unavailable",
+      "assistant-engine",
+      "engine could not be reached",
+      true,
+    ],
+    [
+      "unavailable",
+      "assistant_run_not_recorded",
+      "assistant-unrecorded",
+      "could not be recorded as a run",
+      true,
+    ],
+    [
+      "conflict",
+      "engine_aborted",
+      "assistant-aborted",
+      "stopped this turn before it answered",
+      true,
+    ],
+    [
+      "exhausted",
+      "insufficient_credits",
+      "assistant-noCredit",
+      "no credit left for Stella",
+      false,
+    ],
+    [
+      "exhausted",
+      "assistant_spend_cap",
+      "assistant-spendCap",
+      "reached its monthly cap",
+      false,
+    ],
+    [
+      "exhausted",
+      "assistant_model_key_limit",
+      "assistant-keyLimit",
+      "daily spend ceiling",
+      false,
+    ],
+    [
+      "unavailable",
+      "model_call_failed",
+      "assistant-model",
+      "model provider refused or failed",
+      true,
+    ],
+    [
+      "unavailable",
+      "kernel_failure",
+      "assistant-unavailable",
+      "Stella could not be reached",
+      true,
+    ],
   ] as const)(
     "tells a %s refusal coded %s apart (negative)",
-    async (reason, code, testId, retryable) => {
+    async (reason, code, testId, phrase, retryable) => {
       askAssistant.mockResolvedValue({ ok: false, reason, code });
       const { user, flyout } = await openFlyout();
       await ask(user, "what is live?");
-      expect(await screen.findByTestId(testId)).toBeTruthy();
+      expect(await screen.findByTestId(testId)).toHaveTextContent(phrase);
       expect(screen.getByTestId("assistant-refusal-code")).toHaveTextContent(
         code,
       );
