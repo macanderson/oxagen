@@ -139,7 +139,13 @@ describe("Agent header", () => {
     );
     const badges = screen.getByTestId("agent-badges");
     expect(badges).toHaveTextContent("enrolled");
-    expect(badges).toHaveTextContent("observed at the harness");
+    // The tier badge prints the tier's own word, with the longer reading on
+    // hover, as the mockup's `tierBadge` draws it on every page.
+    expect(badges).toHaveTextContent("harness");
+    expect(within(badges).getByText("harness")).toHaveAttribute(
+      "title",
+      "observed at the harness",
+    );
     expect(badges).toHaveTextContent("replay fork");
     expect(badges).toHaveTextContent("operator Marcus Bell");
     expect(header).toHaveTextContent(
