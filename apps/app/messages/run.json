@@ -256,6 +256,7 @@
         "noHost": "This run names no enrolled host, so nothing can receive the command. Nothing was queued.",
         "hostRevoked": "This run's host was revoked and no longer collects commands. Nothing was queued.",
         "hostOffline": "This run's host has not checked for commands in the last five minutes, so nothing would read this one. Nothing was queued.",
+        "noPromptCarrier": "This agent reads steering text only when a session starts, so this run would never see it. Pause, resume and cancel still reach it. Nothing was queued.",
         "runNotSealed": "This run is still live. Both of these need a complete record, so they run after the seal.",
         "digestOnly": "This recording kept digests and no bodies, so there is nothing for a model to read.",
         "steerText": "Steering text is required, and it has a length limit.",

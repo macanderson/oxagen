@@ -194,6 +194,26 @@ describe("run controls", () => {
     expect(screen.queryByTestId("queued-command")).toBeNull();
   });
 
+  // #4023: a Stella run reads steering text only at session start.
+  it("says why a steer to a Stella run was refused (negative)", async () => {
+    steerRun.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "no_prompt_carrier",
+    });
+    const user = userEvent.setup();
+    renderControls();
+    await user.click(screen.getByTestId("run-steer"));
+    await user.type(screen.getByLabelText("What to tell the agent"), "go on");
+    await user.click(screen.getByRole("button", { name: "Send it" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("run-steer-failure")).toHaveTextContent(
+        "This agent reads steering text only when a session starts",
+      );
+    });
+    expect(screen.queryByTestId("queued-command")).toBeNull();
+  });
+
   it("offers no delivery mode on a halt, which the contract refuses a payload on (negative)", async () => {
     const user = userEvent.setup();
     renderControls();

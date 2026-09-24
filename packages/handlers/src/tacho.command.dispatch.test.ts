@@ -296,8 +296,8 @@ describe("resolveDeliveryMode", () => {
   });
 });
 
-// A host with the carrier still cannot move a Cursor or Stella steer earlier:
-// Cursor's adapter delivers at Stop, Stella's at SessionStart.
+// A host with the carrier still cannot move a Cursor steer earlier: Cursor's
+// adapter delivers at Stop. (A Stella steer is refused before this runs.)
 describe("resolveDeliveryMode by runtime", () => {
   const carrier = [BUNDLE_FEATURE_STEER_NEXT_STEP];
 
@@ -308,8 +308,8 @@ describe("resolveDeliveryMode by runtime", () => {
     });
   });
 
-  it("records a Cursor or Stella steer at the turn boundary", () => {
-    for (const runtime of ["cursor", "stella", "custom"]) {
+  it("records a Cursor steer at the turn boundary", () => {
+    for (const runtime of ["cursor", "custom"]) {
       for (const mode of ["next_step", "interrupt"] as const) {
         expect(resolveDeliveryMode(mode, "gateway", carrier, runtime)).toEqual({
           deliveryMode: "turn_boundary",
@@ -561,6 +561,45 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
       ),
     ).rejects.toSatisfy(conflict(reason));
     expect(store.rows).toEqual([]);
+  });
+
+  // #4023: Stella's adapter hands steering text to the agent only at
+  // SessionStart, which a live run has already passed.
+  it("refuses a steer to a live Stella run, and queues its pause", async () => {
+    const store = new MemoryStore([session({ runtime: "stella" })]);
+    await expect(
+      handlerOver(store)(
+        parse({
+          target: { kind: "run", id: RUN },
+          command: "steer",
+          payload: { text: "x" },
+        }),
+        OPERATOR,
+      ),
+    ).rejects.toSatisfy(conflict("no_prompt_carrier"));
+    expect(store.rows).toEqual([]);
+    await handlerOver(store)(
+      parse({ target: { kind: "run", id: RUN }, command: "pause" }),
+      OPERATOR,
+    );
+    expect(store.rows.map((r) => r.outcome)).toEqual(["queued"]);
+  });
+
+  it("records a broadcast steer to a Stella run as failed with the reason", async () => {
+    const store = new MemoryStore([session({ runtime: "stella" })]);
+    await handlerOver(store)(
+      parse({
+        target: { kind: "workspace", id: WORKSPACE },
+        command: "steer",
+        payload: { text: "all hands" },
+      }),
+      OPERATOR,
+    );
+    expect(store.rows[0]).toMatchObject({
+      outcome: "failed",
+      outcomeDetail: "no_prompt_carrier",
+      deliveryMode: null,
+    });
   });
 
   it("cancels a ledger run through its transactional cancellation seam", async () => {

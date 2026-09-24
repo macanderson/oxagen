@@ -43,6 +43,7 @@ const WORDS = {
     no_host: "noHost",
     host_revoked: "hostRevoked",
     host_offline: "hostOffline",
+    no_prompt_carrier: "noPromptCarrier",
     run_not_sealed: "runNotSealed",
     digest_only: "digestOnly",
     fork_requires_ledger_run: "forkRequiresLedger",

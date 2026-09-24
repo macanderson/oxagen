@@ -54,10 +54,19 @@ reason, so the page never offers a command the handler refuses.
 advertises the `steer_next_step` bundle feature (#4027) can put a steer in
 front of the agent mid-turn, but only for a harness whose hooks give it a
 place to: Claude Code and Codex, at `PostToolUse` and at `Stop`. Cursor's
-adapter delivers at `Stop`, the end of the turn (ADR-141), and Stella's at
-`SessionStart`. Without the feature, or on any other harness, `next_step` and
-`interrupt` are recorded as `turn_boundary` with
-`degraded_reason = no_step_carrier`. With it, `interrupt`
+adapter delivers at `Stop`, the end of the turn (ADR-141). Without the
+feature, or on any other harness, `next_step` and `interrupt` are recorded as
+`turn_boundary` with `degraded_reason = no_step_carrier`.
+
+**A steer no event on the run will deliver is refused, not labelled.**
+Stella's adapter passes steering text to the agent only at `SessionStart`,
+and a live session has already passed it. `steer` and `message` to a Stella
+run are refused with `no_prompt_carrier`, and a broadcast records that run as
+`failed` with the reason. Pause, resume and cancel still reach it through
+`PreToolUse`. A new `session_start` delivery mode was rejected: it would
+promise delivery to a session that will not start again, and hosts already
+installed parse `delivery_mode` as a closed set of three words, so a fourth
+would break their command polls. With it, `interrupt`
 still needs the run's model traffic on the host's loopback proxy (`gateway` or
 `contained`), and lands as `next_step` (`harness_tier`) elsewhere. The command
 records the requested mode and the one it will get.

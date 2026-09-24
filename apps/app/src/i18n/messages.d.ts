@@ -4848,6 +4848,7 @@ type Messages = {
         noHost: string;
         hostRevoked: string;
         hostOffline: string;
+        noPromptCarrier: string;
         runNotSealed: string;
         digestOnly: string;
         steerText: string;
