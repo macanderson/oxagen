@@ -23,6 +23,7 @@ const scope = { orgId: "org", workspaceId: "workspace" };
 function setup(moving = false) {
   let reads = 0;
   const client = {
+    getRepoInfo: vi.fn().mockResolvedValue({ defaultBranch: "main" }),
     listPullRequests: vi
       .fn()
       .mockResolvedValue([{ number: 2, htmlUrl: `${repo.url}/pull/2` }]),
@@ -124,5 +125,20 @@ describe("run pull request evidence", () => {
       ci: { complete: false },
       diff: { complete: false, limitations: ["patch_not_available"] },
     });
+  });
+
+  it("links no PR to a checkout on the default branch or a detached HEAD", async () => {
+    for (const branch of ["main", "HEAD"]) {
+      const { deps, client } = setup();
+      const output = await readWorkPullRequests(
+        scope,
+        [{ ...checkout, branch }],
+        [repo],
+        deps,
+      );
+      expect(client.listPullRequests).not.toHaveBeenCalled();
+      expect(output.pullRequests).toEqual([]);
+      expect(output.warnings).toContain("default_branch_not_linked");
+    }
   });
 });

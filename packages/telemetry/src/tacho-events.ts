@@ -8,7 +8,13 @@
  * construction: chInsert stamps the authenticated ambient scope, and
  * `chain_verified` is the control plane's verdict, never the producer's.
  */
-import { ENVELOPE_COLUMNS, flattenEvent, type TachoEvent } from "@oxagen/tacho";
+import {
+  ENVELOPE_COLUMNS,
+  flattenEvent,
+  TACHO_METERING_ATTR,
+  TACHO_METERING_OBSERVED,
+  type TachoEvent,
+} from "@oxagen/tacho";
 import { TACHO_EVENTS_TABLE, tachoEventsColumns } from "./tacho-events-ddl";
 import { chInsert, chSelect } from "./tenant";
 
@@ -407,6 +413,62 @@ export async function selectTachoStoredFrames(args: {
       contentDigest: r.content_digest,
       bytesRef: r.bytes_ref,
     });
+  }
+  return out;
+}
+
+/**
+ * An agent's observed model spend on one UTC day, per host (ADR-160).
+ *
+ * Summed from the `llm_call` frames the loopback model proxy sealed and
+ * priced (`fidelity = 'proxy'`, `source = 'collector'`,
+ * `oxagen.metering = observed`), the same calls ingest counts as usage. The
+ * day is read from each frame's own `ts`, never from `received_at`, so a
+ * frame shipped after midnight still counts toward the day it was recorded
+ * in, which is the day the host charged it to. `FINAL` collapses a
+ * redelivered frame so it is counted once.
+ *
+ * `hostEnrollmentIds` are the agent's hosts, every status included: a host
+ * revoked at noon still spent its morning. Returns micro-USD by host
+ * enrollment id; a host with no priced call that day is absent.
+ */
+export async function selectAgentDaySpend(args: {
+  day: string;
+  hostEnrollmentIds: readonly string[];
+}): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (args.hostEnrollmentIds.length === 0) return out;
+  const start = `${args.day} 00:00:00.000`;
+  const res = await chSelect<{
+    host_enrollment_id: string;
+    micros: string | number;
+  }>({
+    query: `
+      SELECT host_enrollment_id, sum(cost_usd_micros) AS micros
+      FROM ${TACHO_EVENTS_TABLE} FINAL
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND host_enrollment_id IN {hosts:Array(String)}
+        AND kind = 'llm_call'
+        AND source = 'collector'
+        AND fidelity = 'proxy'
+        AND attrs[{meteringAttr:String}] = {metered:String}
+        AND cost_usd_micros IS NOT NULL
+        AND ts >= toDateTime64({start:String}, 3, 'UTC')
+        AND ts < toDateTime64({start:String}, 3, 'UTC') + INTERVAL 1 DAY
+      GROUP BY host_enrollment_id
+    `,
+    params: {
+      hosts: [...args.hostEnrollmentIds],
+      meteringAttr: TACHO_METERING_ATTR,
+      metered: TACHO_METERING_OBSERVED,
+      start,
+    },
+  });
+  for (const row of res.data) {
+    const micros = Number(row.micros);
+    if (Number.isFinite(micros) && micros > 0)
+      out.set(row.host_enrollment_id, micros);
   }
   return out;
 }
