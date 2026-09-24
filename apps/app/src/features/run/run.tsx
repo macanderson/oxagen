@@ -617,6 +617,7 @@ export async function Run({
         run={run}
         agent={agent}
         figures={figures}
+        parked={isParked(pending.approvals)}
         pulls={
           outputs.ok
             ? outputs.value.nodes.filter((node) => node.kind === "pr")

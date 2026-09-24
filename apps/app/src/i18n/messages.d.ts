@@ -4288,6 +4288,8 @@ type Messages = {
       pausedFacts: string;
       runs30d: string;
       copiedText: string;
+      statusPaused: string;
+      statusParked: string;
     };
     summary: {
       title: string;

@@ -576,6 +576,45 @@ describe("header figures and denied viewer", () => {
     ).not.toHaveTextContent("runs 30d");
   });
 
+  it("reads paused or parked in the status word of a live run that is not moving", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            source: "ledger",
+            ingressPaused: true,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-status-word")).toHaveTextContent("paused");
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ status: "live" }) })),
+      transcript: ok(runTranscript()),
+      approvals: ok({
+        items: [
+          {
+            id: "apr_1",
+            runId: "tse_7k2m9q",
+            tool: "create_release",
+            agentKey: "acme.core.release-bot",
+            requester: "usr_marcusbell",
+            mandateId: null,
+            rule: null,
+            autoEligibility: null,
+            createdAt: new Date(NOW - 60_000).toISOString(),
+            expiresAt: new Date(NOW + 3_600_000).toISOString(),
+          },
+        ],
+        more: false,
+      }),
+    });
+    expect(screen.getByTestId("run-status-word")).toHaveTextContent("parked");
+  });
+
   it("names the signed-in person on the denied state's Signed in as line", async () => {
     await renderRun({ detail: DENIED }, { viewerName: "Marcus Bell" });
     expect(screen.getByTestId("run-denied-viewer")).toHaveTextContent(

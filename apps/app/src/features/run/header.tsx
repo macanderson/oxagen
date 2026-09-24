@@ -18,6 +18,7 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
+import { Badge } from "@/ui/badge";
 import { eyebrow, mono } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
@@ -382,6 +383,7 @@ export function RunHeader({
   run,
   agent,
   figures = null,
+  parked = false,
   pulls,
   work,
   orgRole,
@@ -394,6 +396,8 @@ export function RunHeader({
   agent: Read<AgentDetail> | null;
   /** The agent's row from `list_agents`; null when the read did not find it. */
   figures?: AgentFigures | null;
+  /** True while a call on this run waits on a person: the status word reads parked. */
+  parked?: boolean;
   pulls: readonly RunOutputNode[] | null;
   /**
    * `get_run_work`, started by the page and never awaited by it: the
@@ -446,7 +450,20 @@ export function RunHeader({
                 <AgentSub harness={harness?.name ?? null} figures={figures} />
               }
             />
-            <StatusBadge status={run.status} outcome={run.outcome} />
+            {/* A live run that is paused or has a call parked says which, in
+                the word and the dot, because "live" alone hides that nothing
+                is moving. An ended run reads its recorded outcome. */}
+            {run.status === "live" && run.ingressPaused === true ? (
+              <Badge tone="approval" data-testid="run-status-word">
+                {t("header.statusPaused")}
+              </Badge>
+            ) : run.status === "live" && parked ? (
+              <Badge tone="approval" data-testid="run-status-word">
+                {t("header.statusParked")}
+              </Badge>
+            ) : (
+              <StatusBadge status={run.status} outcome={run.outcome} />
+            )}
             <EnforcementTierBadge
               tier={run.enforcementTier}
               testId="run-tier"

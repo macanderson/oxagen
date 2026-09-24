@@ -661,7 +661,9 @@
       "pathRecorded": "Recorded by the collector on this host, frames {from} to {to}.",
       "pausedFacts": "The turn, step, actor, time and reason of this pause are not recorded on the run yet (#3972).",
       "runs30d": "{count} runs 30d",
-      "copiedText": "Copied {text}"
+      "copiedText": "Copied {text}",
+      "statusPaused": "paused",
+      "statusParked": "parked"
     },
     "summary": {
       "title": "Summary",
