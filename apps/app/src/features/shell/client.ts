@@ -9,7 +9,6 @@ export { openApprovals } from "./shell-actions";
 export {
   chooseAgents,
   chooseApprovers,
-  chooseMcpServers,
   chooseModels,
   chooseRuns,
   chooseSwitchTargets,

@@ -123,7 +123,11 @@ export async function chooseAgents(
   return agentOptions(await requireViewer(org, ws));
 }
 
-/** Recent runs by id, labelled with the name `summarize_run` gave them. */
+/**
+ * Recent runs by id, labelled with the name `summarize_run` gave them.
+ *
+ * @deregistered Retained with the replay UI under ADR-130.
+ */
 export async function chooseRuns(org: string, ws: string): Promise<OptionLoad> {
   const ctx = await requireViewer(org, ws);
   const list = await walk(RUN_PAGE_BOUND, async (cursor) => {
@@ -146,8 +150,12 @@ export async function chooseRuns(org: string, ws: string): Promise<OptionLoad> {
   );
 }
 
-/** The workspace's registered MCP servers by `mcs_…` id. */
-export async function chooseMcpServers(
+/**
+ * The workspace's registered MCP servers by `mcs_…` id. Not exported: its one
+ * caller is `chooseSwitchTargets` below, and every export of a `"use server"`
+ * module is a server action any client can call.
+ */
+async function chooseMcpServers(
   org: string,
   ws: string,
 ): Promise<OptionLoad> {
