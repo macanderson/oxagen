@@ -55,6 +55,9 @@ export const setAgentRole = defineTool({
     // Carried from assign, whose `.describe()` names both the system-role and
     // custom-role forms the handler accepts.
     roleName: agentRoleAssign.input.shape.roleName,
+    // Carried from assign (#3914): the optional reason an approver reads in
+    // the audit event's recorded input. `revoke_agent_role` takes none.
+    reason: agentRoleAssign.input.shape.reason,
 
     /** ADR-025: the verb the two v1 contracts encoded in their names. */
     action: z.enum(["assign", "revoke"]),
