@@ -427,6 +427,7 @@ export async function Run({
             ? outputs.value.nodes.filter((node) => node.kind === "pr")
             : null
         }
+        work={work}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         org={place.org}

@@ -105,9 +105,17 @@ export function StatRow({
   const locale = useLocale();
   const rollup = cost.ok ? cost.value.rollup : null;
   const waste = wasted(rollup?.cost ?? null, rollup?.productiveRatio ?? null);
+  // Before the rollup rebuilds a sealed run, the session's own sums over its
+  // llm_call frames stand in, so a live run shows its tokens too.
+  const reported = run.reportedTokens ?? null;
   const tokens =
     rollup === null
-      ? null
+      ? reported === null
+        ? null
+        : reported.input +
+          reported.output +
+          reported.cacheRead +
+          reported.cacheWrite
       : Object.values(rollup.tokens).reduce((sum, count) => sum + count, 0);
   const prompts = transcript.ok
     ? transcript.value.entries.filter((entry) => entry.kinds.includes("prompt"))
@@ -127,7 +135,11 @@ export function StatRow({
         label={t("tokens")}
         note={
           rollup === null
-            ? missingRollup
+            ? reported === null
+              ? missingRollup
+              : t("tokensNote", {
+                  output: formatCount(reported.output, locale),
+                })
             : t("tokensNote", {
                 output: formatCount(rollup.tokens.output, locale),
               })

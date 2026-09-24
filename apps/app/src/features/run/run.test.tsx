@@ -258,8 +258,161 @@ describe("header", () => {
     // The session recorded its harness, so the rig names it and its version.
     expect(rig.getByText("Claude Code")).toBeTruthy();
     expect(rig.getByText("version 2.1.0")).toBeTruthy();
-    expect(rig.getByText("effort not captured")).toBeTruthy();
+    // The session row holds no effort or mode, so the rig says so.
+    expect(rig.getByText("effort not recorded")).toBeTruthy();
+    expect(rig.getByText("mode not recorded")).toBeTruthy();
     await expectNoAxe(container);
+  });
+
+  it("reads effort, permission mode, tokens and cost from the session row", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: "high",
+            permissionMode: "acceptEdits",
+            reportedTokens: {
+              input: 1200,
+              output: 340,
+              cacheRead: 56000,
+              cacheWrite: 7800,
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const rig = within(screen.getByTestId("run-rig"));
+    expect(rig.getByTestId("run-effort")).toHaveTextContent("effort high");
+    expect(rig.getByTestId("run-permission-mode")).toHaveTextContent(
+      "mode acceptEdits",
+    );
+    const usage = within(screen.getByTestId("run-usage"));
+    expect(usage.getByText("1,200 input")).toBeTruthy();
+    expect(usage.getByText("340 output")).toBeTruthy();
+    expect(usage.getByText("56,000 cache read")).toBeTruthy();
+    expect(usage.getByText("7,800 cache write")).toBeTruthy();
+    // The row carries a finalized cost, so it is not marked as reported.
+    expect(usage.getByTestId("run-usage-cost")).toHaveTextContent("$4.13");
+    expect(usage.queryByText("agent reported")).toBeNull();
+  });
+
+  it("marks an agent-reported cost and says when no tokens were recorded", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            cost: null,
+            reportedCost: { micros: "250000", currency: "USD", basis: null },
+            reportedTokens: null,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const usage = within(screen.getByTestId("run-usage"));
+    expect(usage.getByText("tokens not recorded")).toBeTruthy();
+    expect(usage.getByTestId("run-usage-cost")).toHaveTextContent("$0.25");
+    expect(usage.getByText("agent reported")).toBeTruthy();
+  });
+
+  it("draws the repository, branch, local directory and subagents the work frames recorded", async () => {
+    const repository = {
+      host: "github.com",
+      owner: "macanderson",
+      name: "oxagen",
+      url: "https://github.com/macanderson/oxagen",
+      connected: true,
+    };
+    const checkout = (
+      ref: string,
+      path: string,
+      branch: string,
+      lastSeq: string,
+    ) => ({
+      ref,
+      path,
+      branch,
+      headSha: null,
+      remoteDigest: null,
+      repository,
+      firstSeq: "1",
+      lastSeq,
+    });
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok({
+        runId: "tse_7k2m9q",
+        machine: null,
+        checkouts: [
+          checkout("co_1", "/Users/mac/Projects/oxagen", "main", "9"),
+          checkout(
+            "co_2",
+            "/Users/mac/Projects/.worktrees/oxagen/run-header-facts",
+            "fix/run-header-facts",
+            "40",
+          ),
+        ],
+        diffs: [],
+        pullRequests: [],
+        subagents: [
+          {
+            id: "a0182b6cd3a21d284",
+            type: "Explore",
+            firstSeq: "12",
+            lastSeq: "30",
+            stopped: true,
+          },
+          {
+            id: "b77c01e9f2d4a8c10",
+            type: null,
+            firstSeq: "31",
+            lastSeq: "31",
+            stopped: false,
+          },
+        ],
+        complete: true,
+        warnings: [],
+      }),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    // The checkout touched last (seq 40 beats seq 9) is the one shown.
+    expect(
+      strip.getByRole("link", { name: "macanderson/oxagen" }),
+    ).toHaveAttribute("href", "https://github.com/macanderson/oxagen");
+    expect(strip.getByTestId("run-branch")).toHaveTextContent(
+      "fix/run-header-facts",
+    );
+    expect(
+      strip.getByText("/Users/mac/Projects/.worktrees/oxagen/run-header-facts"),
+    ).toBeTruthy();
+    expect(strip.getByText("1 more checkout")).toBeTruthy();
+    const subagents = within(screen.getByTestId("run-subagents"));
+    expect(subagents.getByTitle("a0182b6cd3a21d284")).toHaveTextContent(
+      "Explore",
+    );
+    // A sealed run whose subagent never stopped says the stop is missing.
+    expect(subagents.getByTitle("b77c01e9f2d4a8c10")).toHaveTextContent(
+      "type not recorded",
+    );
+    expect(subagents.getByText("no stop recorded")).toBeTruthy();
+  });
+
+  it("says the checkout was not read when the work read fails", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: readError("unavailable", 503),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    expect(strip.getByText("checkout not read")).toBeTruthy();
+    expect(strip.getByText("mac-studio.local")).toBeTruthy();
+    expect(
+      within(screen.getByTestId("run-subagents")).getByText(
+        "subagents not read",
+      ),
+    ).toBeTruthy();
   });
 
   it("names the operator and the machine the run ran on, with a copy button for the host", async () => {
@@ -275,10 +428,20 @@ describe("header", () => {
     expect(when.getByTestId("operator-card")).toHaveTextContent(
       "prn_marcusbell",
     );
-    const checkout = within(screen.getByTestId("run-checkout"));
+    const checkout = within(await screen.findByTestId("run-checkout"));
     expect(checkout.getByText("mac-studio.local")).toBeTruthy();
-    expect(checkout.getByRole("button", { name: /Copy/ })).toBeTruthy();
-    expect(checkout.getByText("path not captured")).toBeTruthy();
+    expect(
+      checkout.getByRole("button", { name: "Copy mac-studio.local" }),
+    ).toBeTruthy();
+    // The default work read recorded no checkout.
+    expect(checkout.getByText("repository not recorded")).toBeTruthy();
+    expect(checkout.getByText("branch not recorded")).toBeTruthy();
+    expect(checkout.getByText("path not recorded")).toBeTruthy();
+    expect(
+      within(screen.getByTestId("run-subagents")).getByText(
+        "no subagents recorded",
+      ),
+    ).toBeTruthy();
     const machine = within(screen.getByTestId("run-machine"));
     expect(
       machine.getByText("Session machine facts not recorded."),
@@ -348,7 +511,7 @@ describe("header", () => {
     // No session harness and a denied agent read: the harness is not guessed.
     expect(rig.getByText("harness not recorded")).toBeTruthy();
     expect(
-      within(screen.getByTestId("run-checkout")).getByText(
+      within(await screen.findByTestId("run-checkout")).getByText(
         "machine not recorded",
       ),
     ).toBeTruthy();
@@ -1709,6 +1872,28 @@ describe("figures", () => {
     const stats = within(screen.getByTestId("run-stats"));
     expect(stats.getByText("1+")).toBeTruthy();
     expect(stats.getByText("at least this many")).toBeTruthy();
+  });
+
+  it("counts the session's reported tokens before the rollup rebuilds the run", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            reportedTokens: {
+              input: 1000,
+              output: 200,
+              cacheRead: 3000,
+              cacheWrite: 400,
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      cost: ok(runCost({ rollup: null })),
+    });
+    const stats = within(screen.getByTestId("run-stats"));
+    expect(stats.getByText("4,600")).toBeTruthy();
+    expect(stats.getByText("200 output")).toBeTruthy();
   });
 });
 

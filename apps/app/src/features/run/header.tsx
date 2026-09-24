@@ -2,23 +2,30 @@
 // under what tier, the rig it ran on, where it ran, when, and the controls the
 // run's status allows. The run id is the page's h1, drawn by page.tsx.
 //
-// Every chip shows what the record holds. A fact the record does not capture
-// (a harness version the session did not report, the effort setting, the
-// checkout path) is said to be missing in words rather than left blank or
-// guessed, and the model-fit reading the mockup draws is left out because
-// nothing records it.
-import { useTranslations } from "next-intl";
+// Every chip shows what the record holds. The rig reads the session row
+// (model, effort, permission mode), the checkout and subagent strips read
+// `get_run_work` (the worktree frames and the subagent hook frames), and the
+// usage strip reads the session's token counts, which ingest sums from its
+// `llm_call` frames. A fact the record does not hold is said to be missing in
+// words rather than left blank or guessed. The model-fit reading the mockup
+// draws is left out because nothing records it.
+import { useLocale, useTranslations } from "next-intl";
+import { Suspense, use } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
+import type { RunWork, RunSubagent } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import type { OrgRole, WsRole } from "@/server/viewer";
+import { parseGitHubUrl } from "@/shared/github-url";
 import { AgentCard } from "@/ui/agent-card";
-import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
 import { HarnessIcon } from "@/ui/harness-icon";
+import { Money } from "@/ui/money";
+import { formatCount } from "@/ui/money-format";
+import { GitHubLink } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
@@ -30,7 +37,10 @@ import { RunControls } from "./run-controls";
 const chip = `${mono} inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-2 py-0.5 text-[11.5px]`;
 const missing = "text-[11.5px] text-muted-foreground";
 
-/** One labelled row of chips: the rig or the checkout. */
+/** Subagent chips drawn before the rest are counted as "N more". */
+const SUBAGENT_CHIPS = 12;
+
+/** One labelled row of chips: the rig, the checkout, the subagents or the usage. */
 function Strip({
   label,
   testId,
@@ -45,7 +55,7 @@ function Strip({
       data-testid={testId}
       className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
     >
-      <span className="w-16 shrink-0 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim">
+      <span className="w-20 shrink-0 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim">
         {label}
       </span>
       {children}
@@ -117,7 +127,20 @@ function Rig({ run, agent }: { run: RunRow; agent: Read<AgentDetail> | null }) {
           {model.slug}
         </span>
       )}
-      <span className={missing}>{t("effortNotCaptured")}</span>
+      {run.effort == null ? (
+        <span className={missing}>{t("effortNotRecorded")}</span>
+      ) : (
+        <span data-testid="run-effort" className={chip}>
+          {t("effort", { value: run.effort })}
+        </span>
+      )}
+      {run.permissionMode == null ? (
+        <span className={missing}>{t("permissionModeNotRecorded")}</span>
+      ) : (
+        <span data-testid="run-permission-mode" className={chip}>
+          {t("permissionMode", { value: run.permissionMode })}
+        </span>
+      )}
     </Strip>
   );
 }
@@ -170,39 +193,255 @@ function MachineProvenance({ run }: { run: RunRow }) {
   );
 }
 
+/** Seqs are decimal strings: the longer one is later, then the larger. */
+function laterSeq(a: string, b: string): boolean {
+  return a.length === b.length ? a > b : a.length > b.length;
+}
+
+/** The checkout the session touched last, and how many others it recorded. */
+function primaryCheckout(work: RunWork) {
+  const primary = work.checkouts.reduce<RunWork["checkouts"][number] | null>(
+    (latest, checkout) =>
+      latest === null || laterSeq(checkout.lastSeq, latest.lastSeq)
+        ? checkout
+        : latest,
+    null,
+  );
+  return { primary, others: Math.max(work.checkouts.length - 1, 0) };
+}
+
+function RepoLink({ url, children }: { url: string; children: string }) {
+  const target = parseGitHubUrl(url);
+  return target ? (
+    <GitHubLink to={target} className="underline underline-offset-4">
+      {children}
+    </GitHubLink>
+  ) : (
+    <span>{children}</span>
+  );
+}
+
+function PullChips({ pulls }: { pulls: readonly RunOutputNode[] | null }) {
+  const t = useTranslations("run.header");
+  if (pulls === null) return null;
+  if (pulls.length === 0) {
+    return <span className={missing}>{t("noPullRequest")}</span>;
+  }
+  return pulls.map((pull) => (
+    <span key={`${pull.seq ?? ""}${pull.name}`} className={chip}>
+      {pull.name}
+      {pull.where === null ? null : (
+        <span className="text-muted-foreground">{pull.where}</span>
+      )}
+    </span>
+  ));
+}
+
+function Hostname({ run }: { run: RunRow }) {
+  const t = useTranslations("run.header");
+  return run.machine === null ? (
+    <span className={missing}>{t("noMachine")}</span>
+  ) : (
+    <CopyText text={run.machine.hostname} />
+  );
+}
+
+/**
+ * The checkout strip: repository, branch, pull requests, machine and the
+ * local directory, from the worktree frames `get_run_work` reads. A session
+ * that moved between checkouts shows the one it touched last and counts the
+ * rest. When the work read fails, the pull requests fall back to the ones the
+ * run's outputs recorded.
+ */
 function Checkout({
   run,
   pulls,
+  work,
 }: {
   run: RunRow;
   /** The pull requests the outputs recorded; null when the outputs read failed. */
   pulls: readonly RunOutputNode[] | null;
+  work: Read<RunWork>;
 }) {
   const t = useTranslations("run.header");
+  if (!work.ok) {
+    return (
+      <Strip label={t("checkout")} testId="run-checkout">
+        <span className={missing}>{t("workUnread")}</span>
+        <PullChips pulls={pulls} />
+        <Hostname run={run} />
+      </Strip>
+    );
+  }
+  const { primary, others } = primaryCheckout(work.value);
+  const repository = primary?.repository ?? null;
+  const recordedPulls = work.value.pullRequests;
   return (
     <Strip label={t("checkout")} testId="run-checkout">
-      <span className={missing}>{t("repoNotCaptured")}</span>
-      {pulls === null ? null : pulls.length === 0 ? (
-        <span className={missing}>{t("noPullRequest")}</span>
+      {repository === null ? (
+        <span className={missing}>{t("repoNotRecorded")}</span>
       ) : (
-        pulls.map((pull) => (
-          <span key={`${pull.seq ?? ""}${pull.name}`} className={chip}>
-            {pull.name}
-            {pull.where === null ? null : (
-              <span className="text-muted-foreground">{pull.where}</span>
-            )}
+        <span data-testid="run-repository" className={chip}>
+          <RepoLink url={repository.url}>
+            {`${repository.owner}/${repository.name}`}
+          </RepoLink>
+        </span>
+      )}
+      {primary?.branch == null ? (
+        <span className={missing}>{t("branchNotRecorded")}</span>
+      ) : (
+        <span data-testid="run-branch" className={chip}>{primary.branch}</span>
+      )}
+      {recordedPulls.length === 0 ? (
+        <PullChips pulls={pulls} />
+      ) : (
+        recordedPulls.map((pr) => (
+          <span
+            key={`${pr.repository.url}#${String(pr.number)}`}
+            className={chip}
+          >
+            <RepoLink url={pr.url}>{`#${String(pr.number)}`}</RepoLink>
+            <span className="text-muted-foreground">{pr.state}</span>
           </span>
         ))
       )}
-      {run.machine === null ? (
-        <span className={missing}>{t("noMachine")}</span>
+      <Hostname run={run} />
+      {primary === null ? (
+        <span className={missing}>{t("pathNotRecorded")}</span>
       ) : (
-        <span className="inline-flex flex-wrap items-center gap-1.5">
-          <CopyText text={run.machine.hostname} />
-          <span className={missing}>{t("pathNotCaptured")}</span>
-          <Badge tone="quiet" dot={false}>
-            {t("derived")}
-          </Badge>
+        <CopyText text={primary.path} />
+      )}
+      {others === 0 ? null : (
+        <span className={missing}>{t("moreCheckouts", { count: others })}</span>
+      )}
+    </Strip>
+  );
+}
+
+function SubagentChip({
+  subagent,
+  live,
+}: {
+  subagent: RunSubagent;
+  live: boolean;
+}) {
+  const t = useTranslations("run.header");
+  return (
+    <span className={chip} title={subagent.id}>
+      {subagent.type ?? (
+        <span className="text-muted-foreground">
+          {t("subagentTypeNotRecorded")}
+        </span>
+      )}
+      <span className="text-muted-foreground">{subagent.id.slice(0, 7)}</span>
+      {subagent.stopped ? null : (
+        <span className="text-muted-foreground">
+          {live ? t("subagentRunning") : t("subagentNoStop")}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The subagents the session started, one chip per recorded agent id. */
+function Subagents({ run, work }: { run: RunRow; work: Read<RunWork> }) {
+  const t = useTranslations("run.header");
+  const subagents = work.ok ? (work.value.subagents ?? []) : null;
+  return (
+    <Strip label={t("subagents")} testId="run-subagents">
+      {subagents === null ? (
+        <span className={missing}>{t("subagentsUnread")}</span>
+      ) : subagents.length === 0 ? (
+        <span className={missing}>{t("noSubagents")}</span>
+      ) : (
+        <>
+          {subagents.slice(0, SUBAGENT_CHIPS).map((subagent) => (
+            <SubagentChip
+              key={subagent.id}
+              subagent={subagent}
+              live={run.sealedAt === null}
+            />
+          ))}
+          {subagents.length > SUBAGENT_CHIPS ? (
+            <span className={missing}>
+              {t("moreSubagents", { count: subagents.length - SUBAGENT_CHIPS })}
+            </span>
+          ) : null}
+        </>
+      )}
+    </Strip>
+  );
+}
+
+/** The two strips `get_run_work` feeds, drawn once its read settles. */
+function WorkStrips({
+  run,
+  pulls,
+  work,
+}: {
+  run: RunRow;
+  pulls: readonly RunOutputNode[] | null;
+  work: Promise<Read<RunWork>>;
+}) {
+  const read = use(work);
+  return (
+    <>
+      <Checkout run={run} pulls={pulls} work={read} />
+      <Subagents run={run} work={read} />
+    </>
+  );
+}
+
+function WorkStripsLoading() {
+  const t = useTranslations("run.header");
+  return (
+    <Strip label={t("checkout")} testId="run-checkout-loading">
+      <span role="status" className={missing}>
+        {t("workLoading")}
+      </span>
+    </Strip>
+  );
+}
+
+/**
+ * Token counts and cost. The counts are the session's sums over its `llm_call`
+ * frames. The cost is the finalized rollup when there is one, and otherwise
+ * what the agent reported, marked as such.
+ */
+function Usage({ run }: { run: RunRow }) {
+  const t = useTranslations("run.header");
+  const locale = useLocale();
+  const tokens = run.reportedTokens ?? null;
+  const cost = run.cost ?? run.reportedCost ?? null;
+  const count = (n: number) => formatCount(n, locale);
+  return (
+    <Strip label={t("usage")} testId="run-usage">
+      {tokens === null ? (
+        <span className={missing}>{t("tokensNotRecorded")}</span>
+      ) : (
+        <>
+          <span className={chip}>
+            {t("tokensInput", { count: count(tokens.input) })}
+          </span>
+          <span className={chip}>
+            {t("tokensOutput", { count: count(tokens.output) })}
+          </span>
+          <span className={chip}>
+            {t("tokensCacheRead", { count: count(tokens.cacheRead) })}
+          </span>
+          <span className={chip}>
+            {t("tokensCacheWrite", { count: count(tokens.cacheWrite) })}
+          </span>
+        </>
+      )}
+      {cost === null ? (
+        <span className={missing}>{t("costNotRecorded")}</span>
+      ) : (
+        <span data-testid="run-usage-cost" className={chip}>
+          <Money value={cost} />
+          {run.cost === null ? (
+            <span className="text-muted-foreground">{t("costReported")}</span>
+          ) : null}
         </span>
       )}
     </Strip>
@@ -276,6 +515,7 @@ export function RunHeader({
   run,
   agent,
   pulls,
+  work,
   orgRole,
   wsRole,
   org,
@@ -285,6 +525,11 @@ export function RunHeader({
   /** `get_agent` for the run's agent; null when the run names no agent. */
   agent: Read<AgentDetail> | null;
   pulls: readonly RunOutputNode[] | null;
+  /**
+   * `get_run_work`, started by the page and not awaited, so the checkout and
+   * subagent strips stream in without holding the rest of the header.
+   */
+  work: Promise<Read<RunWork>>;
   /**
    * The viewer's two roles, because the writes gate on them differently:
    * `dispatch_command` admits an org Owner or Admin or a workspace Owner or
@@ -330,7 +575,10 @@ export function RunHeader({
             )}
           </div>
           <Rig run={run} agent={agent} />
-          <Checkout run={run} pulls={pulls} />
+          <Suspense fallback={<WorkStripsLoading />}>
+            <WorkStrips run={run} pulls={pulls} work={work} />
+          </Suspense>
+          <Usage run={run} />
           <MachineProvenance run={run} />
           <When run={run} />
           <p className="text-xs text-muted-foreground">
