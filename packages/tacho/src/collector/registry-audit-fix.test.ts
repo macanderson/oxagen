@@ -252,7 +252,7 @@ describe("a quiet session with a pid", () => {
     expect(record?.closedIdle).toBeUndefined();
   });
 
-  it("records the reopen as the chain's restart, so the control plane reopens the run (ADR-170)", async () => {
+  it("records the reopen as the chain's restart, so the control plane reopens the run (ADR-172)", async () => {
     const { registry, advance, hook, chain } = harness();
     await hook(registry, "SessionStart", { source: "startup" });
     advance(STALE_PID_SESSION_MS + 60_000);

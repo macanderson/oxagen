@@ -975,7 +975,7 @@ export const IDLE_CLOSE_UNDONE = {
 
 /**
  * What reopening a host-sealed session writes when its host starts the chain
- * again (ADR-170): the idle close's columns, plus the two reasons a host's
+ * again (ADR-172): the idle close's columns, plus the two reasons a host's
  * `agent_stop` records and the idle close does not.
  */
 const HOST_SEAL_UNDONE = {
@@ -985,7 +985,7 @@ const HOST_SEAL_UNDONE = {
 } as const;
 
 /**
- * The host started this chain again after its stop (ADR-170). A resumed
+ * The host started this chain again after its stop (ADR-172). A resumed
  * session's `SessionStart` hook seals an `agent_start`: Claude Code sends one
  * on `--resume`, and a background session sends one each time its process
  * comes back for the next message. The daemon seals one when any other hook
@@ -1516,14 +1516,15 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       const idleClosed =
         !!existing?.sealedAt && existing.sealSource === "idle_timeout";
       // A host's seal holds against every later frame but one: the host
-      // starting the chain again (ADR-170). Claude Code resumes a session
+      // starting the chain again (ADR-172). Claude Code resumes a session
       // under the id it ended with, so its chain carries on past the stop,
       // and one session stays one run. An operator's seal stays final
       // (ADR-169). A row sealed before `seal_source` existed reads as the
       // host's.
       const resumed =
         !!existing?.sealedAt &&
-        (existing.sealSource === "agent_stop" || existing.sealSource === null) &&
+        (existing.sealSource === "agent_stop" ||
+          existing.sealSource === null) &&
         fresh.some(isRestart);
       const openExisting =
         existing && (idleClosed || resumed)
