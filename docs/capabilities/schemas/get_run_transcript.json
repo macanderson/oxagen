@@ -37,14 +37,16 @@
           "enum": [
             "prompt",
             "responses",
+            "thinking",
             "tools",
             "policy",
-            "recall",
             "usage",
+            "recall",
+            "seal",
             "errors"
           ]
         },
-        "maxItems": 7,
+        "maxItems": 9,
         "default": []
       },
       "after": {
@@ -83,10 +85,12 @@
           "enum": [
             "prompt",
             "responses",
+            "thinking",
             "tools",
             "policy",
-            "recall",
             "usage",
+            "recall",
+            "seal",
             "errors"
           ]
         }
@@ -272,10 +276,12 @@
                 "enum": [
                   "prompt",
                   "responses",
+                  "thinking",
                   "tools",
                   "policy",
-                  "recall",
                   "usage",
+                  "recall",
+                  "seal",
                   "errors"
                 ]
               }

@@ -49,15 +49,17 @@ Claude Code's own permission check (`tool_decision` and `tool.blocked_on_user` i
 |---|---|
 | `prompt` | the request half of a model call, or the `turn_start` an operator typed to open a turn of a wrapped run. A subagent's `turn_start` and the `oxagen:message` copies of the same prompt are not counted, so each prompt counts once |
 | `responses` | the response half of a model call, or a single model receipt |
+| `thinking` | a model call whose usage records reasoning tokens. A wrapped session records them from Claude Code's `thinking_tokens`; a duplicate sighting of the same call carries no usage and is not counted |
 | `tools` | either half of a tool call |
 | `policy` | a decision a rule or a person made: allow, deny, route |
 | `recall` | what was pulled into the model's context |
 | `usage` | a frame that carried a cost record |
+| `seal` | a frame that records the chain's own integrity: a `checkpoint`, a `telemetry_gap`, or the ledger event that closes an attempt |
 | `errors` | a call whose recorded outcome is failed, denied, cancelled, error, timeout or refused |
 
 The filter selects frames and the fold runs over what is left, so a filtered transcript is the transcript of those frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
 
-The Mission Control mockup also draws a `thinking` chip. Neither the ledger's event vocabulary nor a wrapped session's kinds records a reasoning segment in this revision, so there is no kind for it — a chip that can only ever answer "none" would be the placeholder §3.4 forbids. It arrives with the frame type that records reasoning content, not before.
+The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query hides every chip and reads nothing.
 
 ## Output
 

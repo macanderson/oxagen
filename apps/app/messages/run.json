@@ -99,10 +99,12 @@
       "chip": {
         "prompt": "Prompt",
         "responses": "Responses",
+        "thinking": "Thinking",
         "tools": "Tools",
         "policy": "Policy",
         "recall": "Recall",
         "usage": "Usage",
+        "seal": "Seal",
         "errors": "Errors"
       },
       "chipsClear": "Clear the filter",

@@ -735,6 +735,36 @@ describe("frameKinds and filterFramesByKind", () => {
     ).toEqual(["6"]);
   });
 
+  it("answers thinking for a call that reasoned, and seal for the chain's own integrity frames", () => {
+    const reasoned = {
+      ...usage,
+      usage: {
+        inputUncached: null,
+        cacheRead: null,
+        cacheWrite: null,
+        output: 40,
+        reasoning: 12,
+      },
+    };
+    const plain = { ...usage, usage: { ...reasoned.usage, reasoning: 0 } };
+    const checkpoint = tachoFrame(tachoRow(9, "checkpoint"));
+    const gap = tachoFrame(tachoRow(10, "telemetry_gap"));
+    const terminated = ledgerFrame({
+      ...event(11, "terminal.attempt_terminated", {}),
+      stage: "terminal",
+    });
+    expect(frameKinds(reasoned).sort()).toEqual([
+      "responses",
+      "thinking",
+      "usage",
+    ]);
+    expect(frameKinds(plain)).not.toContain("thinking");
+    expect(frameKinds(checkpoint)).toEqual(["seal"]);
+    expect(frameKinds(gap)).toEqual(["seal"]);
+    expect(frameKinds(terminated)).toEqual(["seal"]);
+    expect(frameKinds(tool)).not.toContain("seal");
+  });
+
   it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {
     const frames = [model, tool, usage, policy, recall];
     expect(filterFramesByKind(frames, [])).toHaveLength(5);

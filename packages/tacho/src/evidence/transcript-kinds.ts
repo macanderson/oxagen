@@ -1,6 +1,6 @@
 /**
- * The chip vocabulary a run's transcript filters on (Mission Control mockup
- * `TX_GROUPS`; spec §14).
+ * The chip vocabulary a run's transcript filters on (the run page mockup's
+ * transcript chips, `mockups/pages/run.md`; spec §14).
  *
  * It lives here, in the leaf package, for the same reason `REPLAY_GRADES`
  * does: the capability contract publishes it as a closed enum and the
@@ -8,11 +8,8 @@
  * not depend on each other. One list, read by both, is what keeps a chip the
  * interface offers and a chip the server understands the same set.
  *
- * The mockup also draws a `thinking` chip. Neither the ledger's event
- * vocabulary nor a wrapped session's kinds records a reasoning segment in this
- * revision, so there is no kind for it: a chip that can only ever answer
- * "none" would be the placeholder §3.4 forbids. It arrives with the frame type
- * that records reasoning content, not before.
+ * The order is the mockup's, so a filter's URL lists its chips the way the
+ * page draws them. `policy` is not a mockup chip; the Policy tab reads it.
  */
 
 export const TRANSCRIPT_KINDS = [
@@ -23,14 +20,26 @@ export const TRANSCRIPT_KINDS = [
   "prompt",
   /** What came back from a model: the response half, or a single receipt. */
   "responses",
+  /**
+   * A model call that spent reasoning tokens (`thinking_tokens`). The text of
+   * the reasoning shows where the recorder kept the stream; the count shows
+   * wherever the provider reported it.
+   */
+  "thinking",
   /** Either half of a tool call. */
   "tools",
   /** A decision a rule or a person made about a call: allow, deny, route. */
   "policy",
-  /** What was pulled into the model's context. */
-  "recall",
   /** A frame that carried a cost record. */
   "usage",
+  /** What was pulled into the model's context. */
+  "recall",
+  /**
+   * The chain's own integrity record: a wrapped session's signed
+   * `checkpoint` and its `telemetry_gap`, or the ledger event that closes an
+   * attempt before its seal.
+   */
+  "seal",
   /** A call that did not do what it was asked to. */
   "errors",
 ] as const;

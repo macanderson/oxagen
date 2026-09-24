@@ -63,6 +63,12 @@ export interface FrameIdentity {
    * URL from the body's `tool_target`. Absent where the frame names none.
    */
   target?: string | null;
+  /**
+   * The reasoning effort the harness ran a model call at (`low`, `medium`,
+   * `high`), as a wrapped session's frame recorded it. Absent where it
+   * recorded none; the ledger records none.
+   */
+  effort?: string;
 }
 
 /**
@@ -430,6 +436,8 @@ export interface TachoFrameRowLike {
   ttftMs?: number | null;
   /** The provider call's wall time; null when untimed. */
   apiDurationMs?: number | null;
+  /** The reasoning effort the call ran at; empty when unrecorded. */
+  effort?: string;
   /** The chain the row was recorded on; set by a read across a run's chains. */
   sessionUuid?: string;
   rootSessionUuid?: string;
@@ -490,6 +498,8 @@ function tachoChainFacts(
   return out;
 }
 
+/** The longest effort label a frame carries; the column is a short enum. */
+const EFFORT_MAX = 32;
 /** The longest `tool_target` a frame carries into the transcript. */
 const TARGET_MAX = 400;
 
@@ -600,6 +610,9 @@ export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
       ...(target === null || target === ""
         ? {}
         : { target: target.slice(0, TARGET_MAX) }),
+      ...(row.effort === undefined || row.effort === ""
+        ? {}
+        : { effort: row.effort.slice(0, EFFORT_MAX) }),
     },
     timing: {
       ttftMs: row.ttftMs ?? null,
@@ -700,6 +713,15 @@ const RECALL_TYPES: ReadonlySet<string> = new Set([
   // what it cut (ADR-093).
   "steering.manifest",
 ]);
+/**
+ * A wrapped chain's own integrity frames: the signed checkpoint over the
+ * chain so far, and the gap it records where frames were lost. A ledger
+ * attempt's counterpart is its terminal-stage event, read by stage.
+ */
+const SEAL_TYPES: ReadonlySet<string> = new Set([
+  "checkpoint",
+  "telemetry_gap",
+]);
 /** Tool outcomes that record a call that did not do what it was asked to. */
 const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
   "failed",
@@ -726,10 +748,16 @@ export function frameKinds(frame: RunFrame): TranscriptKind[] {
   // counted. Nor is the transcript's or OTel's `oxagen:message` copy of the
   // same prompt, which would count each prompt two or three times.
   if (opensRunTurn(frame)) kinds.add("prompt");
+  // A model call that reasoned. The count is the provider's own report, so a
+  // call whose text was not kept still answers the chip.
+  if ((frame.usage?.reasoning ?? 0) > 0) kinds.add("thinking");
   if (TOOL_TYPES.has(frame.type)) kinds.add("tools");
   if (POLICY_TYPES.has(frame.type)) kinds.add("policy");
   if (RECALL_TYPES.has(frame.type)) kinds.add("recall");
   if (frame.costMicros !== null) kinds.add("usage");
+  if (SEAL_TYPES.has(frame.type) || frame.stage === "terminal") {
+    kinds.add("seal");
+  }
   const status = frame.identity.toolStatus;
   if (status !== null && FAILED_OUTCOMES.has(status)) kinds.add("errors");
   if (frame.type === "error" || frame.type.endsWith(".error")) {

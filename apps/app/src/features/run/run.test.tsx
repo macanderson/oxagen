@@ -1315,10 +1315,9 @@ describe("chips", () => {
   it("drops a word the contract does not publish rather than refusing the page (negative)", async () => {
     const { calls } = await renderRun(
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
-      { tab: "transcript", kinds: "thinking,proof,tools" },
+      { tab: "transcript", kinds: "proof,tools" },
     );
     expect(calls.transcript[1]?.[3]).toEqual({ kinds: ["tools"] });
-    expect(screen.queryByTestId("chip-thinking")).toBeNull();
     expect(screen.queryByTestId("chip-proof")).toBeNull();
   });
 

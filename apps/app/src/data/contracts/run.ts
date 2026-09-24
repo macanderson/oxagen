@@ -172,10 +172,12 @@ type TranscriptEntryKind = z.infer<typeof TranscriptEntryKind>;
 export const TRANSCRIPT_KINDS = [
   "prompt",
   "responses",
+  "thinking",
   "tools",
   "policy",
-  "recall",
   "usage",
+  "recall",
+  "seal",
   "errors",
 ] as const;
 export const TranscriptKind = z.enum(TRANSCRIPT_KINDS);

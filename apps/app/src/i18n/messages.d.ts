@@ -4691,10 +4691,12 @@ type Messages = {
       chip: {
         prompt: string;
         responses: string;
+        thinking: string;
         tools: string;
         policy: string;
         recall: string;
         usage: string;
+        seal: string;
         errors: string;
       };
       chipsClear: string;

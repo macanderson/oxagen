@@ -431,20 +431,21 @@ describe("a decision on a subagent's chain", () => {
 });
 
 describe("the filter chips", () => {
-  it("draws one chip per kind the contract publishes, and none the mockup drew that it does not (negative)", () => {
+  it("draws one chip per kind the contract publishes, and no proof chip, which it does not publish (negative)", () => {
     renderSection();
     for (const kind of [
       "prompt",
       "responses",
+      "thinking",
       "tools",
       "policy",
       "recall",
       "usage",
+      "seal",
       "errors",
     ]) {
       expect(screen.getByTestId(`chip-${kind}`)).toBeInTheDocument();
     }
-    expect(screen.queryByTestId("chip-thinking")).toBeNull();
     expect(screen.queryByTestId("chip-proof")).toBeNull();
   });
 
