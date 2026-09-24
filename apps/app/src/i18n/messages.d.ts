@@ -3945,10 +3945,6 @@ type Messages = {
       description: string;
     };
     noSummary: string;
-    source: {
-      ledger: string;
-      tacho: string;
-    };
     facts: {
       operatorKind: {
         human: string;
@@ -3989,7 +3985,6 @@ type Messages = {
       status: {
         live: string;
         sealed: string;
-        halted: string;
       };
       player: string;
       parked: string;
@@ -4730,8 +4725,6 @@ type Messages = {
         withheld: string;
       };
     };
-    costReportedProvisional: string;
-    costFinalized: string;
     tokenUsage: {
       title: string;
       missing: string;
@@ -4746,22 +4739,14 @@ type Messages = {
     header: {
       chips: string;
       harnessNotRecorded: string;
-      rig: string;
       versionNotCaptured: string;
-      harnessVersion: string;
-      effortNotCaptured: string;
-      checkout: string;
       repoNotCaptured: string;
       noPullRequest: string;
       pathNotCaptured: string;
-      derived: string;
       noMachine: string;
       started: string;
       sealed: string;
-      running: string;
-      by: string;
       paused: string;
-      copy: string;
       copyLabel: string;
       copied: string;
       copyFailed: string;
@@ -4805,9 +4790,7 @@ type Messages = {
       wallClock: string;
       cacheHit: string;
       tokensNote: string;
-      promptsCut: string;
       wastedNote: string;
-      running: string;
       noRollup: string;
       oneShot: string;
       corrective: string;
@@ -4853,16 +4836,10 @@ type Messages = {
       changes: string;
       pullRequest: string;
       noPullRequest: string;
-      commits: string;
       diff: string;
-      diffStat: string;
       noDiff: string;
       openDiff: string;
       more: string;
-      spend: string;
-      toolCalls: string;
-      noSpend: string;
-      callCount: string;
       base: string;
       baseNotRecorded: string;
       checks: string;

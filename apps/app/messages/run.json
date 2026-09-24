@@ -6,10 +6,6 @@
       "description": "Stella reads captured turns and uses organization credits. Applies to this workspace. Turning this off shows run IDs; recorded repositories, files, outputs, and harness facts remain available."
     },
     "noSummary": "No summary yet. Open the transcript to review recorded prompts, model calls, and tools.",
-    "source": {
-      "ledger": "recorded in the evidence ledger",
-      "tacho": "recorded by a wrapped agent"
-    },
     "facts": {
       "operatorKind": {
         "human": "A person, name not recorded",
@@ -49,8 +45,7 @@
       "atLeast": "{count}+",
       "status": {
         "live": "live",
-        "sealed": "sealed",
-        "halted": "halted"
+        "sealed": "sealed"
       },
       "player": "Player",
       "parked": "A call is parked for approval"
@@ -791,8 +786,6 @@
         "withheld": "withheld"
       }
     },
-    "costReportedProvisional": "Agent reported. Provisional until finalized.",
-    "costFinalized": "Finalized rollup ({basis})",
     "tokenUsage": {
       "title": "Reported tokens",
       "missing": "Token usage was not recorded for these frames.",
@@ -807,22 +800,14 @@
     "header": {
       "chips": "Run identity",
       "harnessNotRecorded": "harness not recorded",
-      "rig": "Rig",
       "versionNotCaptured": "version not captured",
-      "harnessVersion": "version {version}",
-      "effortNotCaptured": "effort not captured",
-      "checkout": "Checkout",
       "repoNotCaptured": "repository and branch not captured",
       "noPullRequest": "no pull request",
       "pathNotCaptured": "path not captured",
-      "derived": "derived",
       "noMachine": "machine not recorded",
       "started": "started",
       "sealed": "sealed",
-      "running": "still running",
-      "by": "by",
       "paused": "Ingress is paused. The agent takes no new step until you resume it.",
-      "copy": "Copy",
       "copyLabel": "Copy {text}",
       "copied": "Copied {text}",
       "copyFailed": "Copy failed. Select the text and copy it.",
@@ -866,9 +851,7 @@
       "wallClock": "Wall clock",
       "cacheHit": "Cache hit",
       "tokensNote": "{input} in, {output} out",
-      "promptsCut": "at least this many",
       "wastedNote": "steps that did not advance the task",
-      "running": "still running",
       "noRollup": "not rolled up yet",
       "oneShot": "one-shot session",
       "corrective": "{count} corrective",
@@ -914,16 +897,10 @@
       "changes": "Changes",
       "pullRequest": "Pull request",
       "noPullRequest": "none",
-      "commits": "Commits",
       "diff": "Diff",
-      "diffStat": "{added} added, {removed} removed in {files, plural, one {# file} other {# files}}",
       "noDiff": "no file change recorded",
       "openDiff": "Open the diff in the transcript",
       "more": "{count} more in the outputs",
-      "spend": "Spend by area",
-      "toolCalls": "Tool calls",
-      "noSpend": "No cost rollup yet. It is built after the run seals.",
-      "callCount": "{count, plural, one {# call} other {# calls}}",
       "base": "Base",
       "baseNotRecorded": "not recorded",
       "checks": "Checks",
