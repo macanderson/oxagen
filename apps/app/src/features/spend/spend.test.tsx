@@ -391,7 +391,7 @@ function tile(term: string): HTMLElement {
 function headers(table: HTMLElement): string[] {
   return within(table)
     .getAllByRole("columnheader")
-    .map((th) => th.textContent ?? "");
+    .map((th) => th.textContent);
 }
 
 describe("Spend › header, tiles and tabs", () => {
@@ -691,8 +691,10 @@ describe("Spend › Tokens", () => {
     expect(rows[0]).toHaveTextContent("a-intel.core.agent-12");
     expect(rows[0]).toHaveTextContent("260");
     expect(rows[0]).toHaveTextContent("130");
+    const [first] = rows;
+    if (first === undefined) throw new Error("Expected a first agent row");
     expect(
-      within(rows[0] as HTMLElement).getByRole("link", {
+      within(first).getByRole("link", {
         name: "a-intel.core.agent-12",
       }),
     ).toHaveAttribute("href", "/acme/core-platform/agents/agent-12");
@@ -877,7 +879,10 @@ describe("Spend › By tool", () => {
       "Avg per call",
     ]);
     expect(buttons[0]).toHaveAttribute("aria-pressed", "true");
-    await userEvent.click(buttons[2] as HTMLElement);
+    const perCall = buttons[2];
+    if (perCall === undefined)
+      throw new Error("Expected the Avg per call button");
+    await userEvent.click(perCall);
     expect(within(chart).getByRole("heading")).toHaveTextContent(
       "Avg per call",
     );

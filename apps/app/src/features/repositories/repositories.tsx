@@ -221,10 +221,16 @@ export function Repositories({
       ) : (
         <ErrorBody
           failure={list.failure}
-          readAt={format.dateTime(failedAt ?? new Date(), {
-            dateStyle: "medium",
-            timeStyle: "medium",
-          })}
+          readAt={
+            // The failed read stamps failedAt in the same update that
+            // records it, so a failed list always carries its instant.
+            failedAt === null
+              ? ""
+              : format.dateTime(failedAt, {
+                  dateStyle: "medium",
+                  timeStyle: "medium",
+                })
+          }
           onRetry={reread}
         />
       );

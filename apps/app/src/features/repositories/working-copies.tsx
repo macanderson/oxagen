@@ -129,7 +129,7 @@ export function WorkingCopies({
             <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-[13px] leading-relaxed max-sm:grid-cols-1">
               {SYNC.map((command) => (
                 <div key={command} className="contents" data-command={command}>
-                  <dt className={`${mono} text-dim`}>oxagen {command}</dt>
+                  <dt className={`${mono} text-dim`}>{`oxagen ${command}`}</dt>
                   <dd className="text-foreground">
                     {t.rich(`sync.${command}`, { code })}
                   </dd>

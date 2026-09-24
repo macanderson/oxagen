@@ -87,7 +87,7 @@ function Header({
 
 export async function Spend({ ctx, source, view, today }: SpendProps) {
   const at: SpendAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
-  const now = today ?? new Date();
+  const now = today ?? requestInstant();
   const period = monthToDate(now);
   const failure = {
     ctx,
@@ -296,4 +296,14 @@ async function body({
       return <PricingSection book={book} unpriced={unpriced} at={at} />;
     }
   }
+}
+
+/**
+ * The instant this request reads the month to date. Outside the component so
+ * the purity rule, which is syntactic, does not read an async server
+ * component's once-per-request clock as a render-time impurity (as
+ * `features/agents` and `features/mandate` do).
+ */
+function requestInstant(): Date {
+  return new Date();
 }

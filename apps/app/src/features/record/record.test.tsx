@@ -46,13 +46,13 @@ vi.mock("next/navigation", () => ({
     throw new Error("NEXT_NOT_FOUND");
   },
 }));
-const revise = vi.fn();
+const revise = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("./actions", () => ({
-  reviseRecord: (...args: unknown[]) => revise(...args) as unknown,
+  reviseRecord: (...args: unknown[]) => revise(...args),
 }));
-const session = vi.fn();
+const session = vi.fn<() => unknown>();
 vi.mock("@/server/session", () => ({
-  getSession: () => session() as unknown,
+  getSession: () => session(),
 }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -443,10 +443,7 @@ describe("Record › the six kinds", () => {
     for (const kind of RECORD_KINDS) {
       await renderRecord({ record: readOk(ofKind(kind)) });
       openings.add(
-        (screen.getByTestId("record-kind-panel").textContent ?? "").slice(
-          0,
-          90,
-        ),
+        screen.getByTestId("record-kind-panel").textContent.slice(0, 90),
       );
       cleanup();
     }
@@ -560,7 +557,7 @@ describe("Record › the six kinds", () => {
 
   it("never labels a counter a score, a verdict or a proof", async () => {
     await renderRecord({ record: readOk(ofKind("rule")) });
-    const text = document.body.textContent?.toLowerCase() ?? "";
+    const text = document.body.textContent.toLowerCase();
     for (const word of ["score", "verdict", "proven", "proof"])
       expect(text).not.toContain(word);
   });

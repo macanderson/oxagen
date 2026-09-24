@@ -143,10 +143,10 @@ export function StatementEditor({
 }) {
   const t = useTranslations("record.editor");
   const findId = useId();
-  const area = useRef<HTMLTextAreaElement>(null);
-  const find = useRef<HTMLInputElement>(null);
-  const paint = useRef<HTMLDivElement>(null);
-  const restore = useRef<{ start: number; end: number } | null>(null);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+  const findRef = useRef<HTMLInputElement>(null);
+  const paintRef = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<{ start: number; end: number } | null>(null);
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const [query, setQuery] = useState("");
   const [current, setCurrent] = useState<number | null>(null);
@@ -163,16 +163,20 @@ export function StatementEditor({
   // heights and the band's place measured from the painted blocks. Both read
   // layout, so both run before paint.
   useLayoutEffect(() => {
-    const pending = restore.current;
-    if (pending !== null && area.current !== null) {
-      area.current.setSelectionRange(pending.start, pending.end);
-      restore.current = null;
+    const pending = restoreRef.current;
+    if (pending !== null && areaRef.current !== null) {
+      areaRef.current.setSelectionRange(pending.start, pending.end);
+      restoreRef.current = null;
     }
-    const blocks = paint.current?.children;
+    const blocks = paintRef.current?.children;
     if (blocks === undefined) return;
     const measured = Array.from(blocks, (block) =>
       block instanceof HTMLElement ? block.offsetHeight || LINE : LINE,
     );
+    // A measurement of the layout this render produced, so it can only be
+    // stored after paint's layout exists; the updater returns the previous
+    // array when nothing moved, which ends the pass.
+    // eslint-disable-next-line @eslint-react/set-state-in-effect -- layout measurement, see above
     setHeights((previous) =>
       previous.length === measured.length &&
       previous.every((height, i) => height === measured[i])
@@ -182,6 +186,7 @@ export function StatementEditor({
     const row = blocks[caret.line - 1];
     const top = row instanceof HTMLElement ? PAD + row.offsetTop : PAD;
     const height = row instanceof HTMLElement ? row.offsetHeight || LINE : LINE;
+    // eslint-disable-next-line @eslint-react/set-state-in-effect -- layout measurement; the updater keeps the previous band when it did not move
     setBand((previous) =>
       previous.top === top && previous.height === height
         ? previous
@@ -190,13 +195,13 @@ export function StatementEditor({
   }, [value, caret.line]);
 
   function track() {
-    const node = area.current;
+    const node = areaRef.current;
     if (node === null) return;
     setSelection({ start: node.selectionStart, end: node.selectionEnd });
   }
 
   function apply(edit: { value: string; start: number; end: number }) {
-    restore.current = { start: edit.start, end: edit.end };
+    restoreRef.current = { start: edit.start, end: edit.end };
     setSelection({ start: edit.start, end: edit.end });
     setCurrent(null);
     onChange(edit.value);
@@ -209,8 +214,8 @@ export function StatementEditor({
     const modifier = event.metaKey || event.ctrlKey;
     if (modifier && event.key.toLowerCase() === "f") {
       event.preventDefault();
-      find.current?.focus();
-      find.current?.select();
+      findRef.current?.focus();
+      findRef.current?.select();
       return;
     }
     if (event.key === "Tab") {
@@ -231,7 +236,7 @@ export function StatementEditor({
   }
 
   function step(direction: 1 | -1) {
-    const node = area.current;
+    const node = areaRef.current;
     if (node === null || matches.length === 0) return;
     const from = direction > 0 ? node.selectionEnd : node.selectionStart - 1;
     const next =
@@ -281,7 +286,7 @@ export function StatementEditor({
           <span className="sr-only">{t("findLabel")}</span>
           <input
             id={findId}
-            ref={find}
+            ref={findRef}
             type="search"
             data-testid="record-find"
             value={query}
@@ -299,7 +304,7 @@ export function StatementEditor({
                 event.stopPropagation();
                 setQuery("");
                 setCurrent(null);
-                area.current?.focus();
+                areaRef.current?.focus();
               }
             }}
             className="w-[170px] max-w-full rounded-[7px] border border-border bg-input-bg px-2 py-1 font-mono text-base text-foreground outline-none focus-visible:border-input-border-focus sm:text-xs"
@@ -322,6 +327,7 @@ export function StatementEditor({
           className="sticky left-0 z-[4] min-w-11 select-none border-r border-border bg-code-bg py-3 pr-2.5 pl-3.5 text-right text-dim"
         >
           {lines.map((_, i) => (
+            // eslint-disable-next-line @eslint-react/no-array-index-key -- the key is the line number, which is what this gutter row is
             <div key={i} style={{ height: heights[i] ?? LINE }}>
               {i + 1}
             </div>
@@ -335,18 +341,20 @@ export function StatementEditor({
             style={{ top: band.top, height: band.height }}
           />
           <div
-            ref={paint}
+            ref={paintRef}
             aria-hidden="true"
             data-testid="record-paint"
             className={`${layer} pointer-events-none relative z-[2] text-foreground`}
           >
             {painted.map((tokens, i) => (
+              // eslint-disable-next-line @eslint-react/no-array-index-key -- one painted block per source line, keyed by its line number like the gutter beside it
               <div key={i} className="min-h-5">
                 {tokens.map((token, j) => {
                   const className = TOKEN_CLASS[token.kind];
                   return className === null ? (
                     token.text
                   ) : (
+                    // eslint-disable-next-line @eslint-react/no-array-index-key -- a token's place in its line is its identity; the tokenizer re-derives the line whole on every edit
                     <span key={j} data-token={token.kind} className={className}>
                       {token.text}
                     </span>
@@ -368,7 +376,7 @@ export function StatementEditor({
             />
           </div>
           <textarea
-            ref={area}
+            ref={areaRef}
             aria-label={path}
             data-testid="record-statement"
             value={value}

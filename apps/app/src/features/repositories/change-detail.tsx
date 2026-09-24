@@ -97,8 +97,11 @@ export function ChangeDetail({
   const [closing, setClosing] = useState(false);
 
   useEffect(() => {
+    // The first read starts from the loading state; a re-read after a merge
+    // or a close keeps the pull request on screen until the answer replaces
+    // it. The page keys this component by proposal, so another change
+    // mounts a fresh one.
     const live = { current: true };
-    setRead({ kind: "loading" });
     const load = async () => {
       let result;
       try {
@@ -524,8 +527,13 @@ function ClosePullRequestDialog({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const path = routes.repositories(org, ws, "changes", proposalId);
+  // The close comment on GitHub links back here, so it needs the absolute
+  // URL. It is read, never navigated to: the document's base URL resolves the
+  // typed path without touching location.
   const url =
-    typeof window === "undefined" ? path : `${window.location.origin}${path}`;
+    typeof document === "undefined"
+      ? path
+      : new URL(path, document.baseURI).href;
   const closedBy = t("closedBy", {
     name: closer.name,
     email: `<${closer.email}>`,

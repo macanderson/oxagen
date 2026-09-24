@@ -33,6 +33,16 @@ import { code, type Load, note, Panel, PanelBody } from "./parts";
 
 type Status = RepositoryChange["status"];
 
+/** Every state a change can be in, in the order the State filter lists them. */
+const STATUSES: readonly Status[] = [
+  "pr_open",
+  "checks_running",
+  "checks_passed",
+  "checks_failed",
+  "merged",
+  "rejected",
+];
+
 export const STATUS_TONE: Record<Status, BadgeTone> = {
   pr_open: "quiet",
   checks_running: "approval",
@@ -163,7 +173,7 @@ function ChangeTable({
     {
       key: "state",
       label: t("filters.state"),
-      options: (Object.keys(STATUS_TONE) as Status[]).map((status) => ({
+      options: STATUSES.map((status) => ({
         value: status,
         label: t(`states.${status}`),
       })),

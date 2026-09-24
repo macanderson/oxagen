@@ -55,10 +55,10 @@ export function useList<T>(
     filters?: readonly ListFilter<T>[];
   },
 ): ListState<T> {
-  const [query, setQueryState] = useState("");
-  const [sort, setSortState] = useState(options.sorts?.[0]?.value ?? "");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState(options.sorts?.[0]?.value ?? "");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [perPage, setPerPageState] = useState<number>(PER_PAGE[0]);
+  const [perPage, setPerPage] = useState<number>(PER_PAGE[0]);
   const [page, setPage] = useState(1);
   const { text, sorts, filters: facets } = options;
 
@@ -94,12 +94,12 @@ export function useList<T>(
     to: start + shown.length,
     query,
     setQuery: (next) => {
-      setQueryState(next);
+      setQuery(next);
       setPage(1);
     },
     sort,
     setSort: (next) => {
-      setSortState(next);
+      setSort(next);
       setPage(1);
     },
     filters,
@@ -109,7 +109,7 @@ export function useList<T>(
     },
     perPage,
     setPerPage: (next) => {
-      setPerPageState(next);
+      setPerPage(next);
       setPage(1);
     },
     setPage,
