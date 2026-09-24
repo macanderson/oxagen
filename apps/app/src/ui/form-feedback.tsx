@@ -4,6 +4,7 @@
 import { CircleCheck, LoaderCircle, Lock, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { buttonPrimary, buttonSecondary, panel } from "./control-styles";
+import { FocusedHeading } from "./focused-heading";
 
 export function FormAlert({
   children,
@@ -79,13 +80,21 @@ export function SubmitButton({
 
 export type OutcomeTone = "ok" | "deny" | "neutral";
 
+const OUTCOME_TITLE = "text-lg font-semibold text-foreground";
+
 const toneClass: Record<OutcomeTone, string> = {
   ok: "border-success/45 bg-success/10 text-success",
   deny: "border-destructive/45 bg-destructive/10 text-destructive",
   neutral: "border-border bg-muted text-muted-foreground",
 };
 
-/** A centred result: a glyph, a heading, a body and actions. `role` defaults to status. */
+/**
+ * A centred result: a glyph, a heading, a body and actions. A panel that
+ * replaces a form the person just submitted sets `announce`: it becomes a
+ * status region and its heading takes focus, because the submit button that
+ * held focus is gone. A panel a page renders on load leaves it off, so opening
+ * the page does not move focus.
+ */
 export function OutcomePanel({
   tone,
   title,
@@ -93,6 +102,7 @@ export function OutcomePanel({
   actions,
   testId,
   icon,
+  announce = false,
 }: {
   tone: OutcomeTone;
   title: string;
@@ -100,6 +110,7 @@ export function OutcomePanel({
   actions?: ReactNode;
   testId?: string;
   icon?: ReactNode;
+  announce?: boolean;
 }) {
   const glyph =
     icon ??
@@ -112,6 +123,7 @@ export function OutcomePanel({
     ));
   return (
     <section
+      role={announce ? "status" : undefined}
       aria-labelledby={testId ? `${testId}-title` : undefined}
       data-testid={testId}
       className={`${panel} flex flex-col items-center gap-3 px-6 py-9 text-center`}
@@ -121,12 +133,21 @@ export function OutcomePanel({
       >
         {glyph}
       </div>
-      <h2
-        id={testId ? `${testId}-title` : undefined}
-        className="text-lg font-semibold text-foreground"
-      >
-        {title}
-      </h2>
+      {announce ? (
+        <FocusedHeading
+          id={testId ? `${testId}-title` : undefined}
+          className={OUTCOME_TITLE}
+        >
+          {title}
+        </FocusedHeading>
+      ) : (
+        <h2
+          id={testId ? `${testId}-title` : undefined}
+          className={OUTCOME_TITLE}
+        >
+          {title}
+        </h2>
+      )}
       {children ? (
         <div className="max-w-prose text-sm leading-relaxed text-muted-foreground">
           {children}
