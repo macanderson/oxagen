@@ -12,7 +12,6 @@
 
 /**
  * The commands a run's row sends. `dispatch_command` refuses a payload on all three.
- *
  * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export const ROW_COMMANDS = ["pause", "resume", "cancel"] as const;

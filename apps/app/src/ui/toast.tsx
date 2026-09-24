@@ -15,7 +15,6 @@ type Toast = { id: number; text: string; tone: ToastTone };
 
 /**
  * engine.js: `setTimeout(function(){t.remove();},4200)`.
- *
  * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export const TOAST_MS = 4200;

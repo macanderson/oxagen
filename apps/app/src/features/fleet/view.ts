@@ -21,7 +21,10 @@ import type { RunRow } from "@/data/contracts/runs";
  */
 export type RowState = "live" | "parked" | "sealed" | "halted";
 
-/** @internal Exported for its unit test; nothing outside this module imports it. */
+/**
+ * The state a row's badge names.
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function rowState(run: RunRow, parked: ReadonlySet<string>): RowState {
   if (run.status === "live") return parked.has(run.id) ? "parked" : "live";
   return run.status;
@@ -161,16 +164,18 @@ export function rowsPerPageOf(value: string): RowsPerPage {
 }
 
 /** The columns a header click sorts on. */
-export type SortKey =
-  | "run"
-  | "agent"
-  | "operator"
-  | "status"
-  | "tier"
-  | "replay"
-  | "cost"
-  | "frames"
-  | "started";
+const SORT_KEYS = [
+  "run",
+  "agent",
+  "operator",
+  "status",
+  "tier",
+  "replay",
+  "cost",
+  "frames",
+  "started",
+] as const;
+export type SortKey = (typeof SORT_KEYS)[number];
 
 type Sort = { key: SortKey; dir: 1 | -1 } | null;
 
