@@ -39,11 +39,15 @@ A body the store cannot return reads as `text: null` on its half; the rest of th
 
 A step is one request and one response wherever the producer writes two — the write-ahead intention and the terminal receipt. They pair on the call id the receipt records (`tool_call_id`, `model_call_id`); a wrapped session's rows carry no call id, so its halves pair on adjacency within the step kind. A producer that appends a single terminal receipt for the whole exchange records it as the `response`, because its body is the result, and `request` is then null.
 
+A wrapped Claude Code session writes several frames for one tool call, all carrying the call's `tool_use_id` as `callId`: Oxagen's gate decision, the hook's request, the harness's own permission check, and the receipt. They are often not adjacent. The Run page gathers every frame with the same `callId` into one step, and reads the gate's recorded `target` as the step's command when the receipt kept no body.
+
+Claude Code's own permission check (`tool_decision` and `tool.blocked_on_user` in its OTel log) is recorded as `harness_permission`, not `policy_decision`. It runs on every call and is not a decision a rule made, so it answers to no chip. A row stored before this kind existed, as a `policy_decision` from `otel_log` or `otel_span` with `policy_source: harness`, reads as `harness_permission` too.
+
 ## Chips (`kinds`)
 
 | Chip | Frames it selects |
 |---|---|
-| `prompt` | the request half of a model call |
+| `prompt` | the request half of a model call, or the `turn_start` an operator typed to open a turn of a wrapped run. A subagent's `turn_start` and the `oxagen:message` copies of the same prompt are not counted, so each prompt counts once |
 | `responses` | the response half of a model call, or a single model receipt |
 | `tools` | either half of a tool call |
 | `policy` | a decision a rule or a person made: allow, deny, route |
@@ -68,6 +72,8 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].type`, `label` | string | the opening frame's recorded type and its machine-derived label |
 | `entries[].callId` | string or null | the call the opening frame belongs to (`tool_call_id`, `model_call_id`, or a wrapped `toolUseId`); null when the producer recorded none. Clients that rebuild steps at `everything` pair halves on this value rather than on adjacency |
 | `entries[].kinds` | string[] | the chips this entry answers to |
+| `entries[].target` | string or null | what Oxagen's gate recorded the call acting on (`tool_target`: a command, a path, a pattern), cut at 400 characters; absent when the gate recorded none |
+| `entries[].subagent` | object or absent | on an entry from a subagent chain: `{ sessionUuid, id, type }`, plus `spawnCallId`, the `tool_use_id` of the Task or Agent call that spawned it, so a client can nest the subagent's steps under that call |
 | `entries[].request` | object or null | what went out; null when the recording has only the terminal receipt |
 | `entries[].response` | object or null | what came back; null when only a write-ahead intention was recorded |
 | `entries[].{request,response}.seq`, `.type` | string | the frame that carried the half |

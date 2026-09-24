@@ -918,7 +918,7 @@ describe("transcript", () => {
         vi.advanceTimersByTime(2000);
       });
       expect(readout).toHaveTextContent("frame 2 /");
-      fireEvent.click(screen.getByRole("button", { name: "×2" }));
+      fireEvent.click(screen.getByRole("button", { name: "2×" }));
       act(() => {
         vi.advanceTimersByTime(1000);
       });

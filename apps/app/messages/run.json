@@ -84,7 +84,7 @@
       "position": "frame {n}",
       "of": "/ {n}",
       "speedLabel": "Playback speed",
-      "speed": "×{speed}",
+      "speed": "{speed}×",
       "transportNote": "The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
       "frameHead": "seq {seq} · +{time} · {fidelity}",
       "subagent": "subagent",
