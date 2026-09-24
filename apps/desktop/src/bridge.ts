@@ -110,6 +110,13 @@ export interface DesktopState {
   app_version: string;
   config: CliConfigView;
   host: HostView | null;
+  /**
+   * Why `host_path` exists but could not be read (unreadable, not UTF-8, not
+   * a JSON object). Set, the machine may well be enrolled, so the app must not
+   * offer the setup that would write over it. Optional: an older Rust shell
+   * reports nothing and an unreadable file reads as no enrollment.
+   */
+  host_error?: string | null;
   host_path: string;
   daemon: DaemonStatus | null;
   log_path: string;
@@ -167,6 +174,23 @@ export const uninstallCli = () => invoke<string[]>("uninstall_cli");
 export const removeLocalData = () => invoke<RemovalReport>("remove_local_data");
 export const logTail = (lines = 120) => invoke<string>("log_tail", { lines });
 
+/**
+ * What a sidecar needs in its environment on top of the app's own:
+ * `TACHO_BIN_DIR` at the durable copy of the tools while the app runs from a
+ * directory that is gone after this launch (a mounted .dmg, an AppImage, App
+ * Translocation), so the hooks and service an enroll writes point at a binary
+ * that lasts. Asked before each run, so a copy made during this launch is used
+ * at once. A Rust shell that predates the command answers nothing, and the
+ * sidecar then inherits the app's environment as before.
+ */
+export async function sidecarEnv(): Promise<Record<string, string>> {
+  try {
+    return (await invoke<Record<string, string>>("sidecar_env")) ?? {};
+  } catch {
+    return {};
+  }
+}
+
 export interface OrgItem {
   id: string;
   slug: string;
@@ -181,6 +205,47 @@ export interface WorkspaceItem {
 export const listOrganizations = async (): Promise<OrgItem[]> =>
   (await apiPost<{ organizations: OrgItem[] }>("/v1/user/organizations", {}))
     .organizations;
+
+/** `api_post` rejects with "401: ..." when the session token is dead. */
+export function isUnauthorized(e: unknown): boolean {
+  const text = e instanceof Error ? e.message : String(e);
+  return /^401\b/.test(text);
+}
+
+export type SessionCheck =
+  | { live: true }
+  | { live: false; expired: boolean; message: string };
+
+/**
+ * Whether the saved session still works, asked of the control plane right
+ * before an action that needs it. `tacho reassign` revokes the enrollment
+ * first and enrolls again with the session; with a dead token it revoked,
+ * stripped the hooks, failed to enroll and removed the service, so a harness
+ * or workspace change unenrolled the machine. `logged_in` in config.json
+ * only says a token is on disk, and the picker's 401 is learned once, at
+ * launch. A control plane that cannot be reached is refused as well: the
+ * same enroll would fail the same way.
+ */
+export async function checkLiveSession(
+  list: () => Promise<unknown> = listOrganizations,
+): Promise<SessionCheck> {
+  try {
+    await list();
+    return { live: true };
+  } catch (e) {
+    if (isUnauthorized(e))
+      return {
+        live: false,
+        expired: true,
+        message: "Sign in again first. Nothing was changed.",
+      };
+    return {
+      live: false,
+      expired: false,
+      message: `Could not reach Oxagen to check your sign-in: ${e instanceof Error ? e.message : String(e)}. Nothing was changed.`,
+    };
+  }
+}
 
 export const listWorkspaces = async (
   orgSlug: string,
@@ -207,9 +272,15 @@ export async function runSidecar(
   name: Sidecar,
   args: string[],
   onLine?: (line: string, stream: "stdout" | "stderr") => void,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; env?: Record<string, string> } = {},
 ): Promise<RunResult> {
-  const command = Command.sidecar(`binaries/${name}`, args);
+  // Extra variables only: an empty or absent `env` inherits the app's
+  // environment, and Tauri clears it only for an explicit null.
+  const env =
+    options.env !== undefined && Object.keys(options.env).length > 0
+      ? { env: options.env }
+      : undefined;
+  const command = Command.sidecar(`binaries/${name}`, args, env);
   let stdout = "";
   let stderr = "";
   command.stdout.on("data", (line: string) => {
@@ -294,14 +365,28 @@ export interface DetectReport {
   harnesses: DetectedHarness[];
 }
 
-/** Two login-shell probes plus two `--version` calls, each bounded to 10 s in tacho. */
-const DETECT_TIMEOUT_MS = 45_000;
+/**
+ * Four harnesses, each up to two login-shell lookups and a `--version` call,
+ * every one bounded to 10 s in tacho: 120 s when every shell profile is at
+ * its slowest. 45 s cut a slow but working scan short.
+ */
+export const DETECT_TIMEOUT_MS = 150_000;
 
-export async function detectHarnesses(): Promise<DetectReport | null> {
+/**
+ * The detect document. A run that printed none is a failed scan and rejects:
+ * read as an empty list, it told the operator none of their agents was
+ * installed beside the error that said the scan had not worked.
+ */
+export async function detectHarnesses(): Promise<DetectReport> {
   const result = await runSidecar("tacho", ["detect", "--json"], undefined, {
     timeoutMs: DETECT_TIMEOUT_MS,
   });
-  return parseDetect(result.stdout);
+  const report = parseDetect(result.stdout);
+  if (report !== null) return report;
+  throw new Error(
+    result.stderr.trim() ||
+      `tacho detect exited ${result.code ?? "?"} without a report`,
+  );
 }
 
 /** The detect document, or null when the sidecar printed none. */

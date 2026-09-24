@@ -310,4 +310,47 @@ describe("RecordMultiPicker", () => {
     await user.keyboard("{Enter}");
     expect(onChange).toHaveBeenLastCalledWith([]);
   });
+
+  it("keeps a chosen value when its exact text is typed again (negative)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker
+          id="tools"
+          options={[{ value: "github__*", label: "github__*" }]}
+          value={["github__*"]}
+          onChange={onChange}
+          freeform
+        />
+      </IntlProvider>,
+    );
+    const input = screen.getByRole("combobox");
+    await user.type(input, "github__*");
+    await user.keyboard("{Enter}");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input).toHaveValue("");
+  });
+
+  it("keeps a chosen record when its full name is typed in any case (negative)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <IntlProvider>
+        <label htmlFor="agents">Agents</label>
+        <RecordMultiPicker
+          id="agents"
+          options={AGENTS}
+          value={["agt_2"]}
+          onChange={onChange}
+        />
+      </IntlProvider>,
+    );
+    const input = screen.getByRole("combobox");
+    await user.type(input, "release captain");
+    await user.keyboard("{Enter}");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input).toHaveValue("");
+  });
 });

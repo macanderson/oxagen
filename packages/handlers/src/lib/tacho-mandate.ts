@@ -99,9 +99,10 @@ export function decisionRuleToHarnessRule(
  * The one pure mapping: a flat, ordered list of harness rules to the bundle's
  * `permissions` shape. Order within a bucket is preserved (tacho's own
  * evaluator is first-match-wins per bucket); which bucket wins for a given
- * call is the evaluator's own fixed deny-then-allow-then-ask precedence
- * (`packages/tacho/src/host/bundle.ts`), unaffected by the order rules were
- * appended here.
+ * call is the evaluator's own fixed deny-then-ask-then-allow precedence
+ * (`packages/tacho/src/host/bundle.ts`, Claude Code's own order), unaffected
+ * by the order rules were appended here. So a `github:*` allow beside a
+ * `github:merge_pull_request` ask still asks for the merge.
  *
  * An empty input produces empty arrays: the safe default this replaces, not
  * an invented one. A mandate with nothing to say permits nothing extra and

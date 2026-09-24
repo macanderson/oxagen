@@ -50,7 +50,9 @@ export async function exportCommand(
   }
   const text = exportSession(wal.read(uuid), options.format ?? "tacho");
   if (options.out !== undefined) {
-    writeFileSync(options.out, text);
+    // An export carries the run's prompts, tool input and output: private
+    // to its owner, like the WAL it came from.
+    writeFileSync(options.out, text, { mode: 0o600 });
     deps.out(`wrote ${options.out}`);
   } else {
     deps.out(text.replace(/\n$/, ""));

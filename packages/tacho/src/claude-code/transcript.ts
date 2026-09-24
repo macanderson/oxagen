@@ -17,6 +17,8 @@ export interface TranscriptDraft {
   context: Record<string, unknown>;
   turn?: { prompt_id?: string };
   is_sidechain?: boolean;
+  /** The record that named a session title: `ai-title` or `custom-title`. */
+  hook_source_kind?: SessionTitleSource;
   raw_source_digest: `sha256:${string}`;
   /**
    * The bytes the frame's `content.digest` will name: the assistant's text
@@ -37,12 +39,28 @@ export interface TranscriptTotals {
   has_unknown_model_cost?: boolean;
   models_used?: Record<string, unknown>;
   session_title?: string;
+  /** Which record named `session_title`; the recorder keeps it. */
+  session_title_source?: SessionTitleSource;
   permission_mode?: string;
 }
+
+/**
+ * The record a session title came from. Claude Code writes an `ai-title` it
+ * generates, and rewrites it as the session goes, and a `custom-title` when
+ * the person renames the session, which outranks it.
+ */
+export type SessionTitleSource = "ai-title" | "custom-title";
 
 export interface TranscriptNormalized {
   drafts: TranscriptDraft[];
   totals: Partial<TranscriptTotals>;
+  /** The session's title, when this line names one. */
+  title?: { text: string; source: SessionTitleSource };
+  /**
+   * The person stopped the turn (Esc). Claude Code fires no `Stop` for it,
+   * so this is the only word that the turn ended.
+   */
+  interrupted?: { ts: string; prompt_id?: string };
 }
 
 type Rec = Record<string, unknown>;
@@ -62,6 +80,29 @@ function n(value: unknown): number | undefined {
 }
 function b(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+/** The text Claude Code writes as a user message when the person presses Esc. */
+const INTERRUPT_MARKER = "[Request interrupted by user";
+
+/**
+ * Whether a user record says the person interrupted the turn: the marker
+ * text, as the message or as one of its text blocks, or an
+ * `interruptedMessageId` on a record that is not a typed prompt (a typed
+ * prompt is the next turn, which its own hook has opened).
+ */
+function isInterrupt(record: Rec, content: unknown): boolean {
+  if (typeof content === "string")
+    return content.trimStart().startsWith(INTERRUPT_MARKER);
+  if (!Array.isArray(content)) return false;
+  if (s(record["interruptedMessageId"]) !== undefined) return true;
+  return content.some((block) => {
+    const item = rec(block);
+    return (
+      s(item?.["type"]) === "text" &&
+      (s(item?.["text"]) ?? "").trimStart().startsWith(INTERRUPT_MARKER)
+    );
+  });
 }
 
 /**
@@ -156,6 +197,21 @@ export function normalizeTranscriptLine(
       ? { is_sidechain: b(record["isSidechain"]) }
       : {}),
     raw_source_digest: raw,
+  });
+  // One `oxagen:session_title` frame, whichever record named the title; the
+  // recorder seals it only when it renames the session.
+  const titled = (
+    text: string,
+    source: SessionTitleSource,
+  ): TranscriptNormalized => ({
+    drafts: [
+      {
+        ...draft("oxagen:session_title", { session_title: text }),
+        hook_source_kind: source,
+      },
+    ],
+    totals: { session_title: text },
+    title: { text, source },
   });
 
   switch (type) {
@@ -292,7 +348,20 @@ export function normalizeTranscriptLine(
       const totals: Partial<TranscriptTotals> = {};
       if (s(record["permissionMode"]) !== undefined)
         totals.permission_mode = s(record["permissionMode"]);
-      return { drafts, totals };
+      return {
+        drafts,
+        totals,
+        ...(isInterrupt(record, content)
+          ? {
+              interrupted: {
+                ts,
+                ...(s(record["promptId"]) !== undefined
+                  ? { prompt_id: s(record["promptId"]) }
+                  : {}),
+              },
+            }
+          : {}),
+      };
     }
     case "system": {
       const subtype = s(record["subtype"]);
@@ -458,10 +527,13 @@ export function normalizeTranscriptLine(
       // frame ships each one now, so a live run has a title while it runs.
       const title = s(record["aiTitle"]);
       if (title === undefined) return { drafts: [], totals: {} };
-      return {
-        drafts: [draft("oxagen:session_title", { session_title: title })],
-        totals: { session_title: title },
-      };
+      return titled(title, "ai-title");
+    }
+    case "custom-title": {
+      // The name the person gave the session, which outranks Claude Code's.
+      const title = s(record["customTitle"]);
+      if (title === undefined) return { drafts: [], totals: {} };
+      return titled(title, "custom-title");
     }
     case "pr-link": {
       // Claude Code writes this line when the session opens a pull request.

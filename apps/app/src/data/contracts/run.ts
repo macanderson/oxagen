@@ -203,6 +203,43 @@ export const RunCost = z.object({
 });
 export type RunCost = z.infer<typeof RunCost>;
 
+/**
+ * One turn of `get_run_turns`: what the turn cost, how many steps and frames
+ * it took, and the input its model calls reported. The Cost tab's waterfall,
+ * its ledger table, and the Shape of the run and Cost so far instruments are
+ * drawn from these rows.
+ */
+const RunTurn = z.object({
+  /** 1-based, the number the transcript's entries carry for the same turn. */
+  turn: z.number().int().positive(),
+  /** The frame the turn opens on. */
+  seq: z.string().regex(/^\d+$/),
+  at: z.iso.datetime({ offset: true }),
+  frames: Count,
+  modelSteps: Count,
+  toolSteps: Count,
+  /** Null when no frame of the turn carried a cost record. */
+  cost: Cost.nullable(),
+  /** Every cost record of the run through this turn; null before the first. */
+  cumulativeCost: Cost.nullable(),
+  /** The input the turn's model calls reported; null for a class none reported. */
+  tokens: z.object({
+    inputUncached: Count.nullable(),
+    cacheRead: Count.nullable(),
+  }),
+});
+export type RunTurn = z.infer<typeof RunTurn>;
+
+/**
+ * `get_run_turns`: every turn of the run, over every frame it recorded.
+ * `complete` is false when the list stops short of the run's end.
+ */
+export const RunTurns = z.object({
+  turns: z.array(RunTurn),
+  complete: z.boolean(),
+});
+export type RunTurns = z.infer<typeof RunTurns>;
+
 const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
 export const TranscriptZoom = z.enum(TRANSCRIPT_ZOOMS);
 export type TranscriptZoom = z.infer<typeof TranscriptZoom>;
@@ -242,6 +279,12 @@ export type TranscriptKind = z.infer<typeof TranscriptKind>;
  * builtins and cannot be bundled for the browser.
  */
 export const TRANSCRIPT_ENTRY_DEFAULT = 200;
+/**
+ * The most entries one page carries: the contract's `limit` ceiling, mirrored
+ * for the same reason. A reader that pages a whole run asks for this, so it
+ * makes the fewest reads the contract allows.
+ */
+export const TRANSCRIPT_ENTRY_MAX = 500;
 
 /**
  * One half of an exchange: the frame that carried it, and what it said.

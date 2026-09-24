@@ -7490,7 +7490,9 @@ type Messages = {
     assistant: {
       label: string;
       launcher: string;
-      launcherNotBacked: string;
+      launcherHint: string;
+      launcherUnread: string;
+      resize: string;
       close: string;
       thinking: string;
       recordedAs: string;
@@ -9227,6 +9229,7 @@ type Messages = {
       toolsHint: string;
       nothingListed: string;
       listed: string;
+      filter: string;
       selected: string;
       allPins: string;
       grantsNothingTitle: string;
@@ -10130,6 +10133,13 @@ type Messages = {
         decidedBy: string;
         decidedByValue: string;
         policyNotRecorded: string;
+      };
+      notFound: {
+        title: string;
+        bodyWorkspace: string;
+        bodyOrganization: string;
+        backFleet: string;
+        backOrganization: string;
       };
     };
     list: {

@@ -36,6 +36,6 @@ The generated name and summary of a sealed run (Mission Control mockup 2821-2835
 
 - `forbidden` (403): the actor holds none of Owner, Admin, Member in the org.
 - `not_found` (404): no run with that id in the caller's workspace.
-- `conflict` (409), by `reason`: `run_not_sealed` (the record is not yet complete); `digest_only` (the seal recorded a `digest_only` gap: there are no bodies for a model to read, and a summary written from receipts alone would be the placeholder the interface forbids).
+- `conflict` (409), by `reason`: `run_not_sealed` (the record is not yet complete); `digest_only` (the seal recorded a `digest_only` gap: there are no bodies for a model to read, and a summary written from receipts alone would be the placeholder the interface forbids); `enrichment_disabled` (the workspace turned run enrichment off, so no summary is written for it).
 
 The action now dispatches `run/enrich`, the same Stella path used by the automatic five-minute sweep. It reads all retained frames in chronological chunks instead of a sixty-step prefix. A repeated request with the same input digest does not spend credits again. The workspace's `runEnrichmentEnabled` setting also gates manual requests; disabling it leaves evidence intact and suppresses generated display text. The action's sealed-run and retained-body admission checks remain in place.

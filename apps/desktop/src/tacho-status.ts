@@ -284,3 +284,31 @@ export function serviceStatusText(
 ): string {
   return `${service.kind} ${service.running === null ? `state unknown${service.detail ? `: ${service.detail}` : ""}` : service.running ? "running" : service.installed ? "installed, stopped" : "not installed"}`;
 }
+
+/**
+ * The Gateway line of the This machine panel: the model proxy, then the tier
+ * each wrapped harness earned. What the app has not been told reads as
+ * unknown. The line used to say "not available on this build" whenever
+ * `tacho status` had not answered, and "no run yet" for every harness with
+ * the collector down, neither of which the app knew.
+ */
+export function gatewayText(
+  tacho: TachoStatus | null,
+  daemonUp: boolean,
+  harnesses: readonly string[],
+): string {
+  const proxy = tacho?.gateway
+    ? `model proxy ${tacho.gateway.listening ? `listening on 127.0.0.1:${tacho.gateway.port}` : "not listening"}`
+    : tacho === null || !daemonUp
+      ? "model proxy unknown"
+      : // The collector answered and reported no proxy: it predates one.
+        "not available on this build";
+  if (harnesses.length === 0) return proxy;
+  const tiers = harnesses
+    .map(
+      (h) =>
+        `${h}: ${tacho === null || !daemonUp ? "unknown" : (tacho.tiers?.[h] ?? "no run yet")}`,
+    )
+    .join(", ");
+  return `${proxy}; ${tiers}`;
+}

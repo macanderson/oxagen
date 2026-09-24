@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   ago,
+  collectorText,
+  deregisterNeedsSession,
   HARNESS_TIER,
   isConnected,
   isWrapped,
@@ -290,6 +292,28 @@ describe("wizard and de-register", () => {
     });
   });
 
+  it("needs a live sign-in to de-register when agents would remain, not for the last one", () => {
+    // `reassign` revokes, then enrolls again with the session.
+    expect(deregisterNeedsSession(["claude-code", "codex"], "codex")).toBe(
+      true,
+    );
+    expect(
+      deregisterNeedsSession(
+        ["claude-code", "claude-desktop"],
+        "claude-desktop",
+      ),
+    ).toBe(true);
+    // `unenroll` finishes offline.
+    expect(deregisterNeedsSession(["claude-code"], "claude-code")).toBe(false);
+  });
+
+  it("says the collector is not answering rather than starting", () => {
+    expect(collectorText(true, 47001)).toBe("running on 127.0.0.1:47001");
+    expect(collectorText(false, 47001)).toBe(
+      "not answering on 127.0.0.1:47001",
+    );
+  });
+
   it("links the workspace root the host reports to, not the nonexistent /runs", () => {
     expect(workspaceUrl("https://app.oxagen.sh/", "acme", "core")).toBe(
       "https://app.oxagen.sh/acme/core",
@@ -308,7 +332,7 @@ describe("wizard and de-register", () => {
       "claude-desktop",
     ]);
     for (const h of HARNESSES) expect(HARNESS_LABEL[h]).toBeTruthy();
-    expect(HARNESS_LABEL.stella).toBe("Stella");
+    expect(HARNESS_LABEL.stella).toBe("stella");
     expect(HARNESS_LABEL.cursor).toBe("Cursor");
   });
 

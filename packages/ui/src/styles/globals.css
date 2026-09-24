@@ -357,6 +357,11 @@
     /* ── App chrome ───────────────────────────────────────────────────────── */
     --app-panel-bg: var(--surface);
     --app-panel-fg: var(--surface-foreground);
+    /* A shell surface raised above the page body: the approvals drawer, the
+       assistant flyout and the phone bar's count pills (the mockup's --panel).
+       It stays on the card when an app moves the page body to the ink. */
+    --app-raised-bg: var(--card);
+    --app-raised-fg: var(--card-foreground);
     /* Topbar = the page background (off-white in light, near-black in dark), so
        the header reads as part of the canvas rather than a separate bar. */
     --app-topbar-bg: var(--background);
@@ -849,6 +854,8 @@
   /* App chrome */
   --color-app-panel-bg: var(--app-panel-bg);
   --color-app-panel-fg: var(--app-panel-fg);
+  --color-app-raised-bg: var(--app-raised-bg);
+  --color-app-raised-fg: var(--app-raised-fg);
   --color-app-topbar-bg: var(--app-topbar-bg);
   --color-app-topbar-fg: var(--app-topbar-fg);
   --color-app-topbar-border: var(--app-topbar-border);

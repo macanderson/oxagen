@@ -4,8 +4,8 @@
 // check on every render.
 //
 // Two rules the tests hold the page to, because breaking either is how a
-// console starts lying: a tab's own heavy read (the chain, the cost ledger,
-// the frames page) happens only when that tab is open, and a value the
+// console starts lying: a tab's own heavy read (the chain, the per-turn
+// ledger, the frames page) happens only when that tab is open, and a value the
 // contract did not carry reads "not recorded" rather than a zero.
 import {
   act,
@@ -39,6 +39,7 @@ import {
   runSource,
   runRoster,
   runTranscript,
+  runTurns,
   runWork,
   transcriptEntry,
 } from "./run.builders";
@@ -1130,6 +1131,8 @@ describe("tabs", () => {
     ]);
     expect(calls.cost).toHaveLength(1);
     expect(calls.chain).toHaveLength(0);
+    // The per-turn ledger belongs to the Cost tab.
+    expect(calls.turns).toHaveLength(0);
   });
 
   it("opens Transcript for a tab that is not a section, and Cost for the retired proof tab (negative)", async () => {
@@ -2048,19 +2051,23 @@ describe("approvals on the run", () => {
 });
 
 describe("cost", () => {
-  it("reads the rollup once and lays out the run's own per-turn ledger from the page's one transcript read", async () => {
+  it("reads the rollup once, and lays out the per-turn ledger from its own one get_run_turns read", async () => {
     const { calls } = await renderRun(
       {
         detail: ok(runDetail()),
         cost: ok(runCost()),
         transcript: ok(mockupTranscript()),
+        turns: ok(runTurns()),
       },
       { tab: "cost" },
     );
     expect(calls.cost).toHaveLength(1);
-    // The waterfall reads the metrics the page derived, not another zoom.
+    // The page's figures read the one transcript, at no other zoom.
     expect(calls.transcript.map((call) => call[2])).toEqual(["everything"]);
-    expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(2);
+    expect(calls.turns).toEqual([[ctx, "tse_7k2m9q"]]);
+    // Two turns; the second carries no cost, so it draws no bar.
+    expect(screen.getAllByTestId("waterfall-row")).toHaveLength(2);
+    expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(1);
   });
 });
 

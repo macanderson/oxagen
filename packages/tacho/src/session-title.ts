@@ -17,7 +17,8 @@
  * Order is deliberate. The place comes first because that is what tells two
  * runs apart in a list, the branch second because that is what tells two runs
  * in the same place apart, and the size last because it is the part that
- * changes while you watch.
+ * changes while you watch. It reads as a phrase, `oxagen on agent/volta
+ * (3 files)`, since a label joined with separators is hard to scan.
  */
 
 /** What the session row and its rollups know, at any point in a run. */
@@ -66,6 +67,18 @@ function countPart(count: number, one: string, many: string): string {
 }
 
 /**
+ * `text` cut to `max` units with an ellipsis, never between the two halves of
+ * a surrogate pair, which would leave a character that is not Unicode.
+ */
+function shorten(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let end = max - 1;
+  const code = text.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return `${text.slice(0, end).trimEnd()}…`;
+}
+
+/**
  * A name for this run, or undefined when the record says nothing worth
  * naming it by. Undefined is the honest answer for a session that has
  * reported no place and done no work: a caller that invents one anyway is
@@ -74,28 +87,34 @@ function countPart(count: number, one: string, many: string): string {
 export function deriveSessionTitle(
   facts: SessionTitleFacts,
 ): string | undefined {
-  const parts: string[] = [];
-
   const place =
     basename(facts.worktreePath ?? "") ??
     basename(facts.projectDir ?? "") ??
     basename(facts.cwd ?? "");
-  if (place !== undefined) parts.push(place);
 
-  const branch = facts.gitBranch?.trim();
-  if (branch !== undefined && !UNREMARKABLE_BRANCHES.has(branch)) {
-    parts.push(branch);
-  }
+  const trimmed = facts.gitBranch?.trim();
+  const branch =
+    trimmed !== undefined && !UNREMARKABLE_BRANCHES.has(trimmed)
+      ? trimmed
+      : undefined;
+
+  const where =
+    place !== undefined && branch !== undefined
+      ? `${place} on ${branch}`
+      : (place ?? branch);
 
   const changed = facts.filesChanged ?? 0;
   const commands = facts.commandsRun ?? 0;
-  if (changed > 0) parts.push(countPart(changed, "file", "files"));
-  else if (commands > 0)
-    parts.push(countPart(commands, "command", "commands"));
+  const size =
+    changed > 0
+      ? countPart(changed, "file", "files")
+      : commands > 0
+        ? countPart(commands, "command", "commands")
+        : undefined;
 
-  if (parts.length === 0) return undefined;
-  const title = parts.join(" · ");
-  return title.length <= TITLE_MAX
-    ? title
-    : `${title.slice(0, TITLE_MAX - 1).trimEnd()}…`;
+  if (where === undefined) return size;
+  if (size === undefined) return shorten(where, TITLE_MAX);
+  // A long place or branch gives way, so the size is always read whole.
+  const suffix = ` (${size})`;
+  return `${shorten(where, TITLE_MAX - suffix.length)}${suffix}`;
 }

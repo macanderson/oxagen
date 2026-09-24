@@ -6,9 +6,10 @@
 //     health checks the endpoint, envelope-encrypts the auth config and records
 //     the tools it lists), or picks one already registered.
 //  2. **Review tools/list** offers every tool the provider listed, each checked,
-//     so a person can leave one out. A provider picked from the roster lists no
-//     names on this read, so the step takes names typed, or every pin when left
-//     blank.
+//     so a person can leave one out, and a filter narrows a long list. A
+//     provider picked from the roster lists no names on this read, so the step
+//     offers the names its imported versions carry, takes any other typed, and
+//     imports every pin when left blank.
 //  3. **Classify and import** says what import does and does not do, then runs
 //     `import_tools`: one immutable version per changed manifest, idempotent on
 //     an unchanged one. An imported version lands unclassified; the tool dialog
@@ -17,6 +18,7 @@
 // The auth config is secret material: typed once, sent once, never rendered
 // back and never in a failure message.
 import { useTranslations } from "next-intl";
+import { chooseServerTools } from "@/features/shell/client";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import {
   MCP_AUTH_STRATEGIES,
@@ -32,10 +34,11 @@ import {
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
+import { RecordMultiPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { importTools, registerServer } from "./actions";
-import { parseMeasureLines, splitTags, textValue, type ToolsAt } from "./view";
+import { parseMeasureLines, textValue, type ToolsAt } from "./view";
 
 const TESTID = "tools-import";
 const NEW = "__new__";
@@ -142,7 +145,8 @@ export function ImportProvider({
   const [selected, setSelected] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = useState<readonly string[]>([]);
+  const [filter, setFilter] = useState("");
   const [done, setDone] = useState<{
     published: number;
     unchanged: number;
@@ -155,7 +159,8 @@ export function ImportProvider({
     setStrategy("none");
     setConnected(null);
     setSelected(new Set());
-    setTyped("");
+    setTyped([]);
+    setFilter("");
     setDone(null);
   }
 
@@ -211,9 +216,9 @@ export function ImportProvider({
     }
   }
 
-  /** The names step 3 imports: the checked ones, or the typed ones (blank is every pin). */
+  /** The names step 3 imports: the checked ones, or the picked ones (none is every pin). */
   const chosenTools: readonly string[] =
-    connected?.listed === null ? splitTags(typed) : [...selected];
+    connected?.listed === null ? typed : [...selected];
 
   async function runImport() {
     if (pending || connected === null) return;
@@ -462,13 +467,14 @@ export function ImportProvider({
           {step === 2 ? (
             listed === null ? (
               <Field id="import-tools" label={t("tools")} hint={t("toolsHint")}>
-                <input
+                <RecordMultiPicker
                   id="import-tools"
+                  freeform
+                  load={() =>
+                    chooseServerTools(at.org, at.ws, connected?.id ?? "")
+                  }
                   value={typed}
-                  onChange={(event) => {
-                    setTyped(event.currentTarget.value);
-                  }}
-                  className={`${inputBase} ${mono}`}
+                  onChange={setTyped}
                 />
               </Field>
             ) : listed.length === 0 ? (
@@ -480,24 +486,42 @@ export function ImportProvider({
                 <legend className="mb-1 text-sm font-medium text-foreground">
                   {t("listed")}
                 </legend>
-                {listed.map((tool) => (
-                  <label
-                    key={tool}
-                    className="flex min-h-9 items-center gap-2.5 rounded-md border border-border px-3 py-1.5 text-[13px] max-md:min-h-11"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(tool)}
-                      onChange={(event) => {
-                        const next = new Set(selected);
-                        if (event.currentTarget.checked) next.add(tool);
-                        else next.delete(tool);
-                        setSelected(next);
-                      }}
-                    />
-                    <span className={mono}>{tool}</span>
-                  </label>
-                ))}
+                <label htmlFor="import-filter" className="sr-only">
+                  {t("filter")}
+                </label>
+                <input
+                  id="import-filter"
+                  type="search"
+                  value={filter}
+                  placeholder={t("filter")}
+                  autoComplete="off"
+                  onChange={(event) => {
+                    setFilter(event.currentTarget.value);
+                  }}
+                  className={`${inputBase} mb-1`}
+                />
+                {listed
+                  .filter((tool) =>
+                    tool.toLowerCase().includes(filter.trim().toLowerCase()),
+                  )
+                  .map((tool) => (
+                    <label
+                      key={tool}
+                      className="flex min-h-9 items-center gap-2.5 rounded-md border border-border px-3 py-1.5 text-[13px] max-md:min-h-11"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(tool)}
+                        onChange={(event) => {
+                          const next = new Set(selected);
+                          if (event.currentTarget.checked) next.add(tool);
+                          else next.delete(tool);
+                          setSelected(next);
+                        }}
+                      />
+                      <span className={mono}>{tool}</span>
+                    </label>
+                  ))}
                 <p
                   data-testid={`${TESTID}-selected`}
                   className="text-xs text-muted-foreground"

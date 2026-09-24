@@ -10,8 +10,11 @@ import {
   createPoller,
   describeInstallResult,
   describeRemoval,
+  uninstallFinished,
+  uninstallToast,
   isEnrolled,
   isRetired,
+  statusBanner,
 } from "./machine-state";
 
 describe("enrolled means hooks and a service, not a host.json", () => {
@@ -180,5 +183,101 @@ describe("the poller", () => {
     await poller.poll();
     expect(errors).toEqual(["Error: boom"]);
     expect(applied).toEqual([7]);
+  });
+});
+
+describe("a read started before an action", () => {
+  it("is dropped when the action invalidates it, and the next poll reads afresh", async () => {
+    const applied: string[] = [];
+    const gates: Array<(value: string) => void> = [];
+    const poller = createPoller(
+      () => new Promise<string>((resolve) => gates.push(resolve)),
+      (value) => applied.push(value),
+    );
+    // A slow `tacho status` goes out, then an action starts.
+    const before = poller.poll();
+    poller.invalidate();
+    // A tick during the action does not join the stale read.
+    const during = poller.poll();
+    expect(gates).toHaveLength(2);
+    gates[1]?.("after the action");
+    await during;
+    // The old read lands last and changes nothing.
+    gates[0]?.("before the action");
+    await before;
+    expect(applied).toEqual(["after the action"]);
+  });
+
+  it("drops a stale failure too", async () => {
+    const errors: unknown[] = [];
+    let reject: (error: Error) => void = () => undefined;
+    const poller = createPoller(
+      () =>
+        new Promise<number>((_, fail) => {
+          reject = fail;
+        }),
+      () => undefined,
+      (error) => errors.push(error),
+    );
+    const stale = poller.poll();
+    poller.invalidate();
+    reject(new Error("host.json is being rewritten"));
+    await stale;
+    expect(errors).toEqual([]);
+  });
+});
+
+describe("the tacho status banner", () => {
+  const failure = "tacho status failed: timed out";
+
+  it("shows a failure once and leaves it while it repeats", () => {
+    expect(statusBanner(null, null, { ok: false, error: failure })).toBe(
+      failure,
+    );
+    // The action cleared the banner; the same failure is not raised again.
+    expect(statusBanner(null, failure, { ok: false, error: failure })).toBe(
+      null,
+    );
+    const other = "tacho status failed: cannot read host.json";
+    expect(statusBanner(failure, failure, { ok: false, error: other })).toBe(
+      other,
+    );
+  });
+
+  it("clears a recovered failure, and only that", () => {
+    expect(statusBanner(failure, failure, { ok: true })).toBeNull();
+    // An action's own error is not the status failure: it stays.
+    expect(
+      statusBanner("tacho reassign exited 1; see the output below.", failure, {
+        ok: true,
+      }),
+    ).toBe("tacho reassign exited 1; see the output below.");
+    expect(statusBanner("some other error", null, { ok: true })).toBe(
+      "some other error",
+    );
+    expect(statusBanner(null, null, { ok: true })).toBeNull();
+  });
+});
+
+describe("a finished uninstall", () => {
+  it("is finished only when nothing was left on the machine", () => {
+    expect(uninstallFinished({ removed: ["~/.config/oxagen"], left: [] })).toBe(
+      true,
+    );
+    expect(uninstallFinished({ removed: [], left: [] })).toBe(true);
+    expect(
+      uninstallFinished({
+        removed: ["~/.local/bin/oxagen"],
+        left: ["~/.config/oxagen/tacho: permission denied"],
+      }),
+    ).toBe(false);
+  });
+
+  it("says what happened, then the step the app cannot take", () => {
+    expect(
+      uninstallToast("Drag Oxagen from Applications to the Trash to finish."),
+    ).toBe(
+      "Oxagen was removed from this machine. Drag Oxagen from Applications to the Trash to finish.",
+    );
   });
 });

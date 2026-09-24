@@ -3,9 +3,9 @@
 // cost accumulating across them as a dashed line, and the per-turn table
 // under it with a total row.
 //
-// It reads the per-turn ledger `runMetrics` derives from the whole-run
-// transcript (`metrics.turns`), summed by `ledgerOf`, so a turn's cost here is
-// the same figure the Transcript tab prints against that turn, and the total
+// It reads the per-turn ledger `get_run_turns` counts over every frame of the
+// run (#4067), summed by `ledgerOf`, so a turn's cost here is the sum of the
+// costs the Transcript tab prints against that turn's entries, and the total
 // row's steps and frames are the Shape of the run instrument's. The total row
 // is the sum of the rows, set against the run's recorded cost ("of $ recorded")
 // rather than typed as it: the two differ when a cost record sits outside
@@ -22,7 +22,6 @@ import {
   ratioOfIntegers,
   shareOfMicros,
 } from "@/data/contracts/money";
-import type { RunTranscript } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
@@ -138,7 +137,7 @@ function Chart({ ledger, total }: { ledger: Ledger; total: Money }) {
       />
       {ledger.rows.map((row, index) => {
         const top = barY(row.cost);
-        const turn = row.turn ?? index + 1;
+        const { turn } = row;
         return (
           <g key={row.seq}>
             {top === null || row.cost === null ? null : (
@@ -262,10 +261,10 @@ function LedgerTable({
         { label: t("columns.pinned") },
       ]}
     >
-      {ledger.rows.map((row, index) => (
+      {ledger.rows.map((row) => (
         <tr key={row.seq} data-testid="waterfall-row" data-seq={row.seq}>
           <td className={`${cell} ${mono}`}>
-            {t("turnLabel", { turn: row.turn ?? index + 1 })}
+            {t("turnLabel", { turn: row.turn })}
           </td>
           <td className={numericCell}>{count(row.steps)}</td>
           <td className={numericCell}>{count(row.frames)}</td>
@@ -322,15 +321,18 @@ function LedgerTable({
   );
 }
 
+/**
+ * The `get_run_turns` read as the panel draws it: the ledger `ledgerOf` summed
+ * from its rows, and whether the rows reached the run's last turn.
+ */
+export type TurnLedger = { ledger: Ledger; complete: boolean };
+
 export function WaterfallPanel({
   metrics,
-  ledger,
-  transcript,
+  turns,
 }: {
   metrics: RunMetrics;
-  ledger: Ledger;
-  /** The whole-run transcript the ledger was derived from, for its failure. */
-  transcript: Read<RunTranscript>;
+  turns: Read<TurnLedger>;
 }) {
   const t = useTranslations("run.waterfall");
   const tCost = useTranslations("run.cost");
@@ -342,12 +344,12 @@ export function WaterfallPanel({
       testId="waterfall-panel"
       flush
       aside={
-        metrics.turns === null ? undefined : (
+        !turns.ok ? undefined : (
           <Badge tone="quiet" dot={false}>
             {cost === null
-              ? t("asideTurns", { turns: ledger.rows.length })
+              ? t("asideTurns", { turns: turns.value.ledger.rows.length })
               : t("aside", {
-                  turns: ledger.rows.length,
+                  turns: turns.value.ledger.rows.length,
                   cost: formatMoney(cost, { locale, precision: "cents" }),
                   basis: cost.basis ?? tCost("basisNotRecorded"),
                 })}
@@ -355,75 +357,88 @@ export function WaterfallPanel({
         )
       }
     >
-      {!transcript.ok ? (
-        <PanelBody>
-          <ReadFailure read={transcript} section={t("title")} />
-        </PanelBody>
-      ) : ledger.rows.length === 0 ? (
-        <PanelBody>
-          <p
-            data-testid="waterfall-empty"
-            className="m-0 max-w-prose text-sm text-muted-foreground"
-          >
-            {t("empty")}
-          </p>
-        </PanelBody>
+      {turns.ok ? (
+        <WaterfallBody metrics={metrics} {...turns.value} />
       ) : (
-        <>
-          <PanelBody>
-            {ledger.cost === null ? (
-              <p
-                data-testid="waterfall-unpriced"
-                className="m-0 max-w-prose text-[12.5px] text-muted-foreground"
-              >
-                {/* No total means either no turn carried a cost, or the
-                    turns carry more than one currency and no sum spans
-                    them. The rows below show which, so the line says it. */}
-                {ledger.rows.some((row) => row.cost !== null)
-                  ? t("mixedCurrency")
-                  : t("unpriced")}
-              </p>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <Chart ledger={ledger} total={ledger.cost} />
-                </div>
-                <div className={chartLegend}>
-                  <span className="inline-flex items-center gap-[5px]">
-                    <i aria-hidden="true" className={swatch} />
-                    {t("turnCost")}
-                  </span>
-                  <span className="inline-flex items-center gap-[5px]">
-                    <i aria-hidden="true" className={dashKey} />
-                    {t("soFar")}
-                  </span>
-                </div>
-                <p className={caption}>
-                  {t("caption", {
-                    total: formatMoney(ledger.cost, {
-                      locale,
-                      precision: "cents",
-                    }),
-                  })}
-                </p>
-              </>
-            )}
-          </PanelBody>
-          <div className="border-t border-border">
-            <LedgerTable metrics={metrics} ledger={ledger} />
-          </div>
-          {metrics.whole ? null : (
-            <PanelBody rule>
-              <p
-                data-testid="waterfall-cut"
-                className="m-0 max-w-prose text-[11.5px] text-muted-foreground"
-              >
-                {t("cut")}
-              </p>
-            </PanelBody>
-          )}
-        </>
+        <PanelBody>
+          <ReadFailure read={turns} section={t("title")} />
+        </PanelBody>
       )}
     </Panel>
+  );
+}
+
+/** The panel over a ledger that loaded: the chart, the table, and the cut note. */
+function WaterfallBody({
+  metrics,
+  ledger,
+  complete,
+}: TurnLedger & { metrics: RunMetrics }) {
+  const t = useTranslations("run.waterfall");
+  const locale = useLocale();
+  if (ledger.rows.length === 0) {
+    return (
+      <PanelBody>
+        <p
+          data-testid="waterfall-empty"
+          className="m-0 max-w-prose text-sm text-muted-foreground"
+        >
+          {t("empty")}
+        </p>
+      </PanelBody>
+    );
+  }
+  return (
+    <>
+      <PanelBody>
+        {ledger.cost === null ? (
+          <p
+            data-testid="waterfall-unpriced"
+            className="m-0 max-w-prose text-[12.5px] text-muted-foreground"
+          >
+            {/* No total means either no turn carried a cost, or the turns
+                carry more than one currency and no sum spans them. The rows
+                below show which, so the line says it. */}
+            {ledger.rows.some((row) => row.cost !== null)
+              ? t("mixedCurrency")
+              : t("unpriced")}
+          </p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <Chart ledger={ledger} total={ledger.cost} />
+            </div>
+            <div className={chartLegend}>
+              <span className="inline-flex items-center gap-[5px]">
+                <i aria-hidden="true" className={swatch} />
+                {t("turnCost")}
+              </span>
+              <span className="inline-flex items-center gap-[5px]">
+                <i aria-hidden="true" className={dashKey} />
+                {t("soFar")}
+              </span>
+            </div>
+            <p className={caption}>
+              {t("caption", {
+                total: formatMoney(ledger.cost, { locale, precision: "cents" }),
+              })}
+            </p>
+          </>
+        )}
+      </PanelBody>
+      <div className="border-t border-border">
+        <LedgerTable metrics={metrics} ledger={ledger} />
+      </div>
+      {complete ? null : (
+        <PanelBody rule>
+          <p
+            data-testid="waterfall-cut"
+            className="m-0 max-w-prose text-[11.5px] text-muted-foreground"
+          >
+            {t("cut", { count: ledger.rows.length })}
+          </p>
+        </PanelBody>
+      )}
+    </>
   );
 }

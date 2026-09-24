@@ -52,6 +52,7 @@ import type {
   RunFrameBody,
   RunOutputs,
   RunTranscript,
+  RunTurns,
   TranscriptKind,
   TranscriptZoom,
 } from "./contracts/run";
@@ -194,15 +195,22 @@ export interface DataSource {
     ): Promise<Read<RunFrameBody>>;
     cost(ctx: WsCtx, runId: string): Promise<Read<RunCost>>;
     /**
+     * `get_run_turns`, the run's per-turn ledger over every frame, read only
+     * when the Cost tab is open; caller features/run/cost.tsx.
+     */
+    turns(ctx: WsCtx, runId: string): Promise<Read<RunTurns>>;
+    /**
      * `get_run_transcript` at one zoom level, narrowed to the chips pressed
      * and paged on the cursor the last page carried. An empty `kinds` keeps
      * every frame: no chip pressed is not the same as every chip pressed off.
+     * `limit` is the entries a page carries, the contract's default when
+     * omitted.
      */
     transcript(
       ctx: WsCtx,
       runId: string,
       zoom: TranscriptZoom,
-      q?: { kinds?: TranscriptKind[]; after?: string | null },
+      q?: { kinds?: TranscriptKind[]; after?: string | null; limit?: number },
     ): Promise<Read<RunTranscript>>;
     chain(ctx: WsCtx, runId: string): Promise<Read<RunChain>>;
     /**

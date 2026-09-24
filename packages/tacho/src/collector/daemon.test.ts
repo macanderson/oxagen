@@ -5,7 +5,14 @@
  * `tacho-hook` run against the socket. Covers acceptance criteria 2, 4, 6,
  * 9, and the restart path.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +36,21 @@ import {
   TACHO_BUNDLE_FEATURES,
 } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
+import { HOOK_ID_REPLAY_WINDOW_MS } from "./registry";
+
+// The command test's session reports pid 59942, which is not running here, so
+// the first sweep would seal it and the inbox then refuses commands for it.
+// Treat the pids a test adds as alive.
+const alive = vi.hoisted(() => new Set<number>());
+vi.mock("../host/process-scan", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("../host/process-scan")>();
+  return {
+    ...original,
+    isProcessAlive: (pid: number) =>
+      alive.has(pid) || original.isProcessAlive(pid),
+  };
+});
 
 /**
  * The connect budget a hook gets when the test needs it to REACH the daemon.
@@ -350,6 +372,7 @@ describe("tachod", () => {
   const handles: DaemonHandle[] = [];
   afterEach(async () => {
     for (const handle of handles.splice(0)) await handle.stop();
+    alive.clear();
   });
 
   async function boot(
@@ -513,6 +536,117 @@ describe("tachod", () => {
       (e) => e.session_uuid === genesis.session_uuid,
     );
     expect(verifyChain(chain, { expectGenesis: true }).violations).toEqual([]);
+  });
+
+  it("drops the spool replay of a hook recorded just before a crash", async () => {
+    // The ledger reaches disk with the state file, which the daemon writes
+    // once per tick. A daemon that died in between restarted without the ids
+    // of its last hooks, and their spool replays sealed a second time. The
+    // hook-id journal carries those ids across the restart.
+    //
+    // Neither daemon listens, so no interval tick can write the state file
+    // between the hook and the copy that stands in for the crash.
+    const first = fakeControlPlane("etag-3");
+    const { handle, paths } = await boot(first, scratchPaths(), {
+      listen: false,
+    });
+    const all = fixtures();
+    const start = all.find(
+      (f) => f.stdin["hook_event_name"] === "SessionStart",
+    ) as Fixture;
+    const prompt = all.find(
+      (f) => f.stdin["hook_event_name"] === "UserPromptSubmit",
+    ) as Fixture;
+    await handle.api.handleHook({
+      payload: start.stdin,
+      env: start.env,
+      hook_id: "hook_start",
+    });
+    await handle.tick();
+    await handle.api.handleHook({
+      payload: prompt.stdin,
+      env: prompt.env,
+      hook_id: "hook_prompt",
+    });
+
+    // The crash: everything on disk right now, and nothing the daemon would
+    // have written on its way down.
+    const crashed = scratchPaths();
+    cpSync(paths.root, crashed.root, {
+      recursive: true,
+      filter: (source) => source !== paths.socket,
+    });
+    expect(readFileSync(crashed.hookIdJournal, "utf8")).toContain(
+      "hook_prompt",
+    );
+    // The client's request timed out on its own side, so it spooled the hook.
+    mkdirSync(crashed.spool, { recursive: true });
+    writeFileSync(
+      join(crashed.spool, "hook_prompt.json"),
+      JSON.stringify({
+        schema: "tacho.spool.v1",
+        received_at: new Date().toISOString(),
+        hook_id: "hook_prompt",
+        payload: prompt.stdin,
+        env: prompt.env,
+      }),
+    );
+
+    const second = fakeControlPlane("etag-3");
+    const { handle: restarted } = await boot(second, crashed, {
+      listen: false,
+    });
+    await restarted.tick();
+    expect(
+      readdirSync(crashed.spool).filter((n) => n.endsWith(".json")),
+    ).toEqual([]);
+    expect(second.ingested.filter((e) => e.kind === "turn_start")).toHaveLength(
+      1,
+    );
+    // The state file now holds the id, so the journal is gone.
+    expect(existsSync(crashed.hookIdJournal)).toBe(false);
+  });
+
+  it("forgets a hook id a window after its hook, and holds it across a sleep", async () => {
+    // A laptop that sleeps wakes with its wall clock far ahead while the
+    // client's own timer has barely moved. That client can still spool its
+    // hook, so the jump must not count toward the window.
+    let clock = Date.now();
+    const plane = fakeControlPlane("etag-3");
+    const { handle } = await boot(plane, scratchPaths(), {
+      listen: false,
+      now: () => clock,
+    });
+    const start = fixtures().find(
+      (f) => f.stdin["hook_event_name"] === "SessionStart",
+    ) as Fixture;
+    await handle.api.handleHook({
+      payload: start.stdin,
+      env: start.env,
+      hook_id: "hook_start",
+    });
+    const holds = () =>
+      handle.registry
+        .get(String(start.stdin["session_id"]))
+        ?.hookIds.has("hook_start");
+    await handle.tick();
+
+    // The wake: one tick lands a full window and a minute later.
+    clock += HOOK_ID_REPLAY_WINDOW_MS + 60_000;
+    await handle.tick();
+    expect(holds()).toBe(true);
+
+    // Ordinary ticks, each under a minute apart, until the window that the
+    // wake opened has run out.
+    const heldUntil = clock + HOOK_ID_REPLAY_WINDOW_MS;
+    while (clock + 55_000 < heldUntil) {
+      clock += 55_000;
+      await handle.tick();
+      expect(holds()).toBe(true);
+    }
+    clock = heldUntil;
+    await handle.tick();
+    expect(holds()).toBe(false);
   });
 
   it(
@@ -745,6 +879,7 @@ describe("tachod", () => {
   it(
     "applies pause, message, cancel, and revoke commands from the ingest response",
     async () => {
+      alive.add(59942);
       const plane = fakeControlPlane("etag-3");
       const killed: Array<[number, string]> = [];
       const { handle, paths } = await boot(plane, scratchPaths(), {

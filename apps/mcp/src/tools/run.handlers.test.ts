@@ -1,6 +1,6 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
-// (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_chain,
-// bisect_runs, get_run_export, and seal_run (#4073, ADR-169).
+// (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_turns,
+// get_run_chain, bisect_runs, get_run_export, and seal_run (#4073, ADR-169).
 // fork_run, export_run and summarize_run check an org role in the handler and
 // an MCP context carries no user, so they have no MCP tool. get_run_export and
 // seal_run check a role too but their contracts declare the mcp surface; the
@@ -39,6 +39,10 @@ import runBisectTool, {
   schema as bisectSchema,
   metadata as bisectMetadata,
 } from "./run.bisect";
+import runTurnsGetTool, {
+  schema as turnsSchema,
+  metadata as turnsMetadata,
+} from "./run.turns.get";
 import runChainGetTool, {
   schema as chainSchema,
   metadata as chainMetadata,
@@ -132,6 +136,50 @@ const CASES: ToolCase[] = [
       kinds: [],
       entries: [],
       cursor: null,
+      complete: true,
+    },
+  },
+  {
+    name: "get_run_turns",
+    handler: runTurnsGetTool,
+    schema: turnsSchema,
+    metadata: turnsMetadata,
+    fields: ["runId"],
+    readOnly: true,
+    args: { runId: TACHO_ID },
+    validOutput: {
+      runId: TACHO_ID,
+      turns: [
+        {
+          turn: 1,
+          seq: "1",
+          at: "2026-09-11T09:00:01.000Z",
+          frames: 7,
+          modelSteps: 1,
+          toolSteps: 2,
+          cost: null,
+          cumulativeCost: null,
+          tokens: { inputUncached: null, cacheRead: null },
+        },
+      ],
+      complete: true,
+    },
+    // A turn numbered from 0: the transcript's turns are 1-based.
+    invalidOutput: {
+      runId: TACHO_ID,
+      turns: [
+        {
+          turn: 0,
+          seq: "1",
+          at: "2026-09-11T09:00:01.000Z",
+          frames: 7,
+          modelSteps: 1,
+          toolSteps: 2,
+          cost: null,
+          cumulativeCost: null,
+          tokens: { inputUncached: null, cacheRead: null },
+        },
+      ],
       complete: true,
     },
   },

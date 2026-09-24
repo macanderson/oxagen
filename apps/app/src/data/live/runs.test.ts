@@ -9,6 +9,7 @@ import { runList } from "@oxagen/oxagen/contracts/run.list";
 import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -608,6 +609,70 @@ describe("runs.cost", () => {
   });
 });
 
+describe("runs.turns", () => {
+  const usd = (micros: string) => ({
+    micros,
+    currency: "USD",
+    basis: "client_attested" as const,
+  });
+
+  it("reads get_run_turns and keeps each cost's basis and each unreported class as null", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        turns: [
+          {
+            turn: 1,
+            seq: "1",
+            at: "2026-09-15T08:00:01.000Z",
+            frames: 22,
+            modelSteps: 4,
+            toolSteps: 4,
+            cost: usd("121000"),
+            cumulativeCost: usd("126000"),
+            tokens: { inputUncached: 16, cacheRead: 105 },
+          },
+          {
+            turn: 2,
+            seq: "17",
+            at: "2026-09-15T08:00:30.000Z",
+            frames: 7,
+            modelSteps: 2,
+            toolSteps: 3,
+            cost: null,
+            cumulativeCost: usd("126000"),
+            tokens: { inputUncached: null, cacheRead: null },
+          },
+        ],
+        complete: false,
+      }),
+    );
+    const read = await runs.turns(ctx, "tse_4f0a");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTurnsGet,
+      input: { runId: "tse_4f0a" },
+      page: "run",
+    });
+    expect(read.ok && read.value.complete).toBe(false);
+    expect(read.ok && read.value.turns[0]).toEqual({
+      turn: 1,
+      seq: "1",
+      at: "2026-09-15T08:00:01.000Z",
+      frames: 22,
+      modelSteps: 4,
+      toolSteps: 4,
+      cost: usd("121000"),
+      cumulativeCost: usd("126000"),
+      tokens: { inputUncached: 16, cacheRead: 105 },
+    });
+    expect(read.ok && read.value.turns[1]?.cost).toBeNull();
+    expect(read.ok && read.value.turns[1]?.tokens).toEqual({
+      inputUncached: null,
+      cacheRead: null,
+    });
+  });
+});
+
 describe("runs.transcript", () => {
   it("asks for the level it was given and maps the entries", async () => {
     kernelRead.mockResolvedValue(
@@ -692,6 +757,13 @@ describe("runs.transcript", () => {
     // omits the key rather than sending a null it would reject.
     expect(kernelRead.mock.calls[0]?.[1]).toMatchObject({
       input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
+    });
+
+    // A reader that pages the whole run asks for the largest page.
+    kernelRead.mockClear();
+    await runs.transcript(ctx, "tse_4f0a", "everything", { limit: 500 });
+    expect(kernelRead.mock.calls[0]?.[1]).toMatchObject({
+      input: { runId: "tse_4f0a", zoom: "everything", kinds: [], limit: 500 },
     });
     expect(kernelRead.mock.calls[0]?.[1]).not.toHaveProperty("input.after");
   });
@@ -882,6 +954,7 @@ describe("a refused read passes through every run read (negative)", () => {
     ["work", () => runs.work(ctx, "tse_4f0a")],
     ["get", () => runs.get(ctx, "tse_4f0a", { framesAfter: null })],
     ["cost", () => runs.cost(ctx, "tse_4f0a")],
+    ["turns", () => runs.turns(ctx, "tse_4f0a")],
     ["transcript", () => runs.transcript(ctx, "tse_4f0a", "turns")],
     ["outputs", () => runs.outputs(ctx, "tse_4f0a")],
     ["chain", () => runs.chain(ctx, "tse_4f0a")],

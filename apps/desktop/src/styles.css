@@ -314,6 +314,42 @@ label.check.off {
   color: var(--danger);
 }
 
+/* A transient confirmation, bottom right. Neutral like every other state:
+   the check glyph carries the meaning, not a hue. */
+.toast {
+  position: fixed;
+  right: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  max-width: min(440px, calc(100vw - 40px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.12);
+  animation: toast-in 180ms ease-out;
+}
+
+.toast-glyph {
+  font-weight: 600;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
+
 details summary {
   cursor: pointer;
   color: var(--muted);

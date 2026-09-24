@@ -40,6 +40,12 @@ export interface TachoPaths {
    * can hold a run's content and has to be purged with the WAL (ADR-139).
    */
   pendingEnds: string;
+  /**
+   * Hook ids the daemon recorded since it last wrote `daemonState`, one JSON
+   * line each, so a crash between two state writes does not forget which
+   * hooks a spool replay would repeat. Ids and seqs only, no content.
+   */
+  hookIdJournal: string;
   /** Transcript byte cursors, so a restart does not re-read every transcript. */
   transcriptTailState: string;
   /** The daemon's pid file. */
@@ -80,14 +86,49 @@ export interface TachoPaths {
   daemonLauncher: string;
 }
 
+/** Claude Code's config directory: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
+export function claudeConfigDirFor(
+  env: Record<string, string | undefined>,
+  home: string,
+): string {
+  return env["CLAUDE_CONFIG_DIR"] ?? join(home, ".claude");
+}
+
+/** Codex's home directory: `$CODEX_HOME`, else `~/.codex`. */
+export function codexHomeFor(
+  env: Record<string, string | undefined>,
+  home: string,
+): string {
+  return env["CODEX_HOME"] ?? join(home, ".codex");
+}
+
+/**
+ * The Claude Code and Codex directories for `home`, resolved the way
+ * `tachoPaths` resolves them. The variables describe the running user's own
+ * home, so they apply only when `home` is that home: a caller that names
+ * another one (a test's scratch directory) gets that home's defaults and
+ * never the real directory a variable points at.
+ */
+export function harnessConfigDirs(
+  home: string,
+  env: Record<string, string | undefined> = process.env,
+  ownHome: string = homedir(),
+): { claudeConfigDir: string; codexHome: string } {
+  const own = home === ownHome ? env : {};
+  return {
+    claudeConfigDir: claudeConfigDirFor(own, home),
+    codexHome: codexHomeFor(own, home),
+  };
+}
+
 export function tachoPaths(
   env: Record<string, string | undefined> = process.env,
   home: string = homedir(),
   platform: NodeJS.Platform = process.platform,
 ): TachoPaths {
   const root = env["TACHO_HOME"] ?? join(home, ".config", "oxagen", "tacho");
-  const claudeConfigDir = env["CLAUDE_CONFIG_DIR"] ?? join(home, ".claude");
-  const codexHome = env["CODEX_HOME"] ?? join(home, ".codex");
+  const claudeConfigDir = claudeConfigDirFor(env, home);
+  const codexHome = codexHomeFor(env, home);
   const stellaHome = env["STELLA_HOME"] ?? join(home, ".stella");
   return {
     root,
@@ -102,6 +143,7 @@ export function tachoPaths(
     quarantine: join(root, "quarantine"),
     daemonState: join(root, "daemon.json"),
     pendingEnds: join(root, "pending-session-ends.json"),
+    hookIdJournal: join(root, "hook-ids.jsonl"),
     transcriptTailState: join(root, "transcript-tail.json"),
     pid: join(root, "tachod.pid"),
     log: join(root, "tachod.log"),

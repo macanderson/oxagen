@@ -49,7 +49,8 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { WelcomeInstaller, WelcomeRun, WelcomeWrap } = await import("./welcome");
+const { WelcomeInstaller, WelcomeLoading, WelcomeRun, WelcomeWrap } =
+  await import("./welcome");
 
 function ctxAs(orgRole: "owner" | "admin" | "member") {
   return unsafeMint(WsCtx, {
@@ -189,5 +190,20 @@ describe("the installer's screens", () => {
     await renderPage(element);
     expect(screen.getByTestId("installer-download")).toBeInTheDocument();
     expect(screen.queryByTestId("gate-rail")).toBeNull();
+  });
+
+  it("while the screens load, holds the skeleton in the same auth shell, with no rail and no main", async () => {
+    await renderPage(<WelcomeLoading step="installer" />);
+    const skeleton = screen.getByTestId("page-state-loading");
+    expect(skeleton.closest("[aria-busy='true']")).not.toBeNull();
+    expect(screen.queryByTestId("gate-rail")).toBeNull();
+    // The streamed screens own main#main. The fallback beside them does not.
+    expect(document.querySelector("main")).toBeNull();
+  });
+
+  it("keeps the gate shell and its rail for the gate's own steps", async () => {
+    await renderPage(<WelcomeLoading step="wrap" />);
+    expect(screen.getByTestId("gate-rail")).toBeInTheDocument();
+    expect(screen.getByTestId("page-state-loading")).toBeInTheDocument();
   });
 });

@@ -220,7 +220,8 @@ describe("two parallel subagents under one parent", () => {
         {},
         at,
       );
-      // No `agent_id` on the record, so it files on the root chain.
+      // No `agent_id` on the record. The hook named the call first, so it
+      // routes to that subagent's chain.
       root.ingestOtlp(
         otelLog("tool_result", {
           tool_name: "Read",

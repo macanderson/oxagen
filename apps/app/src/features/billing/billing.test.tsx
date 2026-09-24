@@ -1033,8 +1033,11 @@ describe("loading", () => {
     );
     const skeleton = screen.getByRole("status", { name: "Loading billing" });
     expect(skeleton).toHaveAttribute("aria-busy", "true");
-    expect(skeleton.firstElementChild?.children).toHaveLength(4);
-    expect(skeleton.querySelectorAll("span.h-7")).toHaveLength(7);
+    expect(skeleton.querySelectorAll("[data-skeleton-tile]")).toHaveLength(4);
+    expect(skeleton.querySelectorAll("[data-skeleton-row]")).toHaveLength(7);
+    // Every bone is the design's shimmer, as on every other page, and none pulses.
+    expect(skeleton.querySelectorAll(".skeleton")).toHaveLength(12);
+    expect(skeleton.querySelector(".animate-pulse")).toBeNull();
     expect(skeleton.textContent).toBe("");
   });
 });

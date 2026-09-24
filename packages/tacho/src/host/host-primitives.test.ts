@@ -42,6 +42,7 @@ describe("paths", () => {
     // The terminal journal can hold a run's content, so it is named here and
     // purged with the WAL rather than left under an ad-hoc path (ADR-139).
     expect(paths.pendingEnds).toBe("/t/pending-session-ends.json");
+    expect(paths.hookIdJournal).toBe("/t/hook-ids.jsonl");
     const defaults = tachoPaths({}, "/home/x");
     expect(defaults.root).toBe("/home/x/.config/oxagen/tacho");
     expect(defaults.claudeSettings).toBe("/home/x/.claude/settings.json");

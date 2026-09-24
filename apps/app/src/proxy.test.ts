@@ -215,6 +215,10 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
     },
   );
 
+  it("leaves /{org}/agent-iam alone: a workspace may carry that slug (negative)", () => {
+    expect(locationOf("/acme/agent-iam")).toBeNull();
+  });
+
   it("sends no row to Ontology, and no row under the Audit export (negative)", () => {
     for (const { from, to } of LEGACY_ROUTES) {
       expect(to).not.toMatch(/ontology/);
@@ -226,9 +230,10 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
   });
 
   // The oracle: every route apps/app_deprecated shipped outside §1.2 and the
-  // two billing routes, with the page each lands on — the deprecated audit
-  // viewer among them, which lands on the Audit page (#3097). Dropping a row
-  // from the table fails its entry here.
+  // two billing routes, with the page each lands on. The deprecated audit
+  // viewer lands on the Audit page (#3097), and the rev1 Agent IAM path
+  // lands on Agents (#4048). Dropping a row from the table fails its entry
+  // here.
   it.each([
     ["/acme/security", "/acme"],
     ["/acme/security/audit", "/acme/audit"],
@@ -272,6 +277,9 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
     ["/acme/core/workbench/agents/agt_1", "/acme/core/agents"],
     ["/acme/core/workbench/environments", "/acme/core/agents"],
     ["/acme/core/settings/agent-defaults", "/acme/core/agents"],
+    ["/acme/core/agent-iam", "/acme/core/agents"],
+    ["/acme/core/agent-iam/agt_1", "/acme/core/agents"],
+    ["/acme/core/agent-iam/agt_1/identity", "/acme/core/agents"],
     ["/acme/core/workbench/tools", "/acme/core/tools"],
     ["/acme/core/workbench/tools/capabilities", "/acme/core/tools"],
     ["/acme/core/workbench/tools/mcp", "/acme/core/tools"],

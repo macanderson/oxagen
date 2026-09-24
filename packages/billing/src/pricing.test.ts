@@ -76,6 +76,18 @@ describe("resolveRate", () => {
     expect(resolveRate("claude-sonnet-5").outputPer1M).toBe(10.0);
   });
 
+  it("prices Codex's current model by its own row", () => {
+    expect(resolveRate("gpt-5.3-codex")).toBe(
+      PROVIDER_RATE_CARD["gpt-5.3-codex"],
+    );
+    expect(resolveRate("openai/gpt-5.3-codex").outputPer1M).toBe(14.0);
+  });
+
+  it("leaves the dotted names of other vendors' models alone", () => {
+    // gpt-5.5 and gpt-5 are separately priced products, keyed dotted.
+    expect(resolveRate("gpt-5.5")).toBe(PROVIDER_RATE_CARD["gpt-5.5"]);
+  });
+
   it("matches the longest prefix for a versioned/date-stamped Sonnet 5 id", () => {
     // A dated Sonnet 5 id must resolve to claude-sonnet-5, not fall through to
     // the shorter claude-sonnet-4 / claude-sonnet-4-6 rows.

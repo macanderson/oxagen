@@ -300,7 +300,7 @@ describe("syncPriceBookFromSources", () => {
       write: write.write,
     });
 
-    // The operator's rate, not the card's $3 and not the catalog's $9.
+    // The operator's rate, not the card's $2 and not the catalog's $9.
     expect(
       seedFor(write.seeds, "claude-sonnet-5", "input_uncached")
         ?.microsPerMillion,

@@ -1,6 +1,7 @@
 // The organization layout resolves the viewer for the organization slug and
 // hands the context to the shell chrome and to the clock around its pages; a
-// stranger is a 404 and neither renders.
+// stranger is a 404 and neither renders. While the viewer resolves, the page
+// body is the shared skeleton rather than nothing.
 import { type ReactNode, Suspense } from "react";
 import { renderToReadableStream } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -10,7 +11,9 @@ const { NotFound, requireViewer } = vi.hoisted(() => ({
   requireViewer: vi.fn((org: string) =>
     org === "acme"
       ? Promise.resolve({ orgSlug: "acme" })
-      : Promise.reject(new NotFound("NEXT_NOT_FOUND")),
+      : org === "slow"
+        ? new Promise<never>(() => undefined)
+        : Promise.reject(new NotFound("NEXT_NOT_FOUND")),
   ),
 }));
 vi.mock("@/server/viewer", () => ({ requireViewer }));
@@ -47,6 +50,10 @@ vi.mock("@/features/shell", () => ({
       {children}
     </div>
   ),
+}));
+
+vi.mock("@/ui/page-states", () => ({
+  PageSkeleton: () => <div data-testid="page-skeleton" />,
 }));
 
 import OrganizationLayout from "./layout";
@@ -88,6 +95,21 @@ describe("OrganizationLayout", () => {
     expect(html).toMatch(
       /data-testid="clock" data-org="acme">.*data-testid="page".*data-testid="signed-in-notice"/s,
     );
+  });
+
+  it("draws the shared skeleton in the page's place while the viewer resolves", async () => {
+    const reading = new AbortController();
+    const stream = await renderToReadableStream(
+      <OrganizationLayout params={Promise.resolve({ org: "slow" })}>
+        <main data-testid="page">page</main>
+      </OrganizationLayout>,
+      { signal: reading.signal, onError: () => undefined },
+    );
+    // The shell has streamed and the viewer has not answered: stop there.
+    reading.abort();
+    const html = await new Response(stream).text();
+    expect(html).toContain('data-testid="page-skeleton"');
+    expect(html).not.toContain('data-testid="page"');
   });
 
   it("is not found for an organization the viewer does not belong to, and neither the chrome nor the page renders", async () => {

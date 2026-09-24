@@ -97,7 +97,7 @@ describe("Register an agent", () => {
       "Claude Code",
       "Codex",
       "Cursor",
-      "Stella",
+      "stella",
       "complex",
       "light",
     ]);

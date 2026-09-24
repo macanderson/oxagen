@@ -66,15 +66,19 @@
  * The budget is checked when a call is admitted, so calls already in flight
  * finish and a session can end one turn past its limit. It is never checked
  * mid-stream: cutting a response in half to save its last tokens would cost
- * the operator the whole call.
+ * the operator the whole call. A call in flight holds its ceiling against the
+ * budget until it settles, so calls admitted side by side see each other
+ * rather than all reading the same settled spend.
  *
  * ## Which session a call belongs to
  *
- * Four sources are tried in order. First the `x-oxagen-session` header. Then
+ * Five sources are tried in order. First the `x-oxagen-session` header. Then
  * the harness's own session header (`X-Claude-Code-Session-Id`, or Codex's
- * `session-id`). Then the session id inside an Anthropic `metadata.user_id`.
- * Last, the one live session of that harness on this host, when there is
- * exactly one. A call that
+ * `session_id` and `conversation_id`). Then the session id inside an
+ * Anthropic `metadata.user_id`, or the `prompt_cache_key` Codex sets to its
+ * conversation id on a Responses call, taken only when it names a session
+ * this host already knows. Last, the one live session of that harness on
+ * this host, when there is exactly one. A call that
  * matches none is sealed on the daemon's own chain and says so, because a call
  * filed under the wrong session is worse than one filed under none.
  */
@@ -87,6 +91,7 @@ import {
   Agent as HttpAgent,
 } from "node:http";
 import { Agent as HttpsAgent, request as httpsRequest } from "node:https";
+import type { Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import {
   gunzipSync,
@@ -137,7 +142,12 @@ import {
   utcDay,
 } from "./day-spend";
 import { modelVerdict } from "./model-allowlist";
-import { priceObservedUsage, usdToMicros } from "./model-pricing";
+import {
+  callCeilingMicros,
+  priceObservedUsage,
+  resolveModelPriceMatch,
+  usdToMicros,
+} from "./model-pricing";
 import { RequestPrefixMemory } from "./request-prefix";
 import {
   type AttachedCredential,
@@ -154,6 +164,7 @@ import {
 } from "./model-routes";
 import {
   decoderFor,
+  estimateCutUsage,
   hasTokenCounts,
   type ModelApi,
   type ModelProvider,
@@ -276,6 +287,8 @@ export interface ModelProxyDeps {
   maxRequestBytes?: number;
   /** Abort an upstream that sends nothing for this long. */
   upstreamIdleMs?: number;
+  /** Answer 504 when no connection to the vendor is open this long after the call. */
+  upstreamConnectMs?: number;
   /** The port the listener answers on, for the loopback guard. */
   port: () => number | undefined;
   log: (line: string) => void;
@@ -310,6 +323,14 @@ export interface ModelProxy {
 const DEFAULT_MAX_REQUEST_BYTES = 64 * 1024 * 1024;
 const DEFAULT_UPSTREAM_IDLE_MS = 10 * 60_000;
 const DEFAULT_BEFORE_FORWARD_TIMEOUT_MS = 250;
+const DEFAULT_UPSTREAM_CONNECT_MS = 30_000;
+/**
+ * How long a pooled upstream connection may sit idle before the proxy closes
+ * it. Below the vendors' own keep-alive windows, so the proxy retires a
+ * connection before the vendor does: sending a call down one the far end
+ * has just closed is what turns a healthy call into an `ECONNRESET`.
+ */
+const FREE_SOCKET_TIMEOUT_MS = 30_000;
 
 /**
  * Why a cut call may be retried. `daemon_stopping`: the service manager
@@ -327,6 +348,27 @@ interface InFlight {
    * harness must not retry. Every `RetryableCut` is answered as retryable.
    */
   abort: (reason: string, retry?: RetryableCut) => void;
+  /** The ceiling the call holds against its session's budget until it settles. */
+  reserved: number;
+}
+
+/**
+ * Close a pooled connection once it has idled `FREE_SOCKET_TIMEOUT_MS`. The
+ * agent's own `free` listener runs first and either hands the socket to a
+ * queued call or pools it, and only a pooled one is timed: the agent destroys
+ * a pooled socket on its `timeout`, and the next call that takes one from the
+ * pool sets its own idle timeout.
+ */
+export function retireIdleSockets(agent: HttpAgent): void {
+  agent.on("free", (socket: Socket) => {
+    const pooled = Object.values(agent.freeSockets).some(
+      (sockets) => sockets?.includes(socket) === true,
+    );
+    if (!pooled) return;
+    const timeout = socket.timeout ?? 0;
+    if (timeout === 0 || timeout > FREE_SOCKET_TIMEOUT_MS)
+      socket.setTimeout(FREE_SOCKET_TIMEOUT_MS);
+  });
 }
 
 function isLoopbackPeer(address: string | undefined): boolean {
@@ -592,6 +634,10 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   const priors = new RequestPrefixMemory();
   let callsObserved = 0;
   let refused = 0;
+  retireIdleSockets(httpAgent);
+  retireIdleSockets(httpsAgent);
+  const upstreamConnectMs =
+    deps.upstreamConnectMs ?? DEFAULT_UPSTREAM_CONNECT_MS;
 
   const HOST_KEY = "host";
 
@@ -606,6 +652,43 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       spent.set(sessionUuid, value);
     }
     return value;
+  }
+
+  /** The ceilings a session's calls in flight hold against its budget. */
+  function heldFor(sessionUuid: string): number {
+    let held = 0;
+    for (const call of inFlight.get(sessionUuid) ?? []) held += call.reserved;
+    return held;
+  }
+
+  /**
+   * The ceiling an admitted call holds against its session's budget while it
+   * is in flight (`callCeilingMicros`), from the output cap the request
+   * states. Nothing unless the budget is enforced with a limit: an observed
+   * budget refuses no call, so a call has nothing to hold.
+   */
+  function ceilingFor(
+    route: ModelRoute,
+    model: string | undefined,
+    requestBytes: number,
+    json: Record<string, unknown> | undefined,
+  ): number {
+    const { budget, model_prices: prices } = deps.policy().bundle;
+    if (budget.mode !== "enforced" || budget.session_limit_usd === undefined)
+      return 0;
+    const cap =
+      json?.["max_tokens"] ??
+      json?.["max_output_tokens"] ??
+      json?.["max_completion_tokens"];
+    return callCeilingMicros(
+      prices,
+      route.provider,
+      model,
+      requestBytes,
+      typeof cap === "number" && Number.isFinite(cap) && cap > 0
+        ? Math.ceil(cap)
+        : undefined,
+    );
   }
 
   function harnessFor(provider: ModelProvider): TachoHarness {
@@ -632,6 +715,30 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     if (id === undefined && route.api === "anthropic.messages") {
       id = sessionFromAnthropicMetadata(body());
       how = "request_metadata";
+    }
+    if (
+      id === undefined &&
+      route.harness === undefined &&
+      route.provider === "openai"
+    ) {
+      // Codex sends its conversation id twice, as `session_id` and as
+      // `conversation_id`; the second is read here.
+      id = header(req, "conversation_id");
+      how = "harness_header";
+    }
+    if (
+      id === undefined &&
+      route.harness === undefined &&
+      route.api === "openai.responses"
+    ) {
+      // Codex also sets `prompt_cache_key` to its conversation id. Any client
+      // may set that key to anything, so it is taken only when it names a
+      // session this host already knows, and never opens one.
+      const key = body()?.["prompt_cache_key"];
+      if (typeof key === "string" && deps.registry.get(key) !== undefined) {
+        id = key;
+        how = "request_cache_key";
+      }
     }
     if (id !== undefined && !isInternalSession(id) && id.length <= 256) {
       const known = deps.registry.get(id);
@@ -761,10 +868,16 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     ) {
       const limit = usdToMicros(budget.session_limit_usd);
       const used = spendFor(record.recorder.sessionUuid);
-      if (used >= limit) {
+      // What the calls already in flight may still spend counts as spent, so
+      // parallel calls cannot all pass on the same settled figure.
+      const held = heldFor(record.recorder.sessionUuid);
+      if (used + held >= limit) {
         return {
           code: "session_budget_exceeded",
-          message: `This session reached its Oxagen budget: $${(used / 1_000_000).toFixed(2)} observed of a $${budget.session_limit_usd.toFixed(2)} limit. Ask the workspace's operator to raise the limit, or start a new session.`,
+          message:
+            held > 0
+              ? `This session's Oxagen budget is taken: $${(used / 1_000_000).toFixed(2)} observed and up to $${(held / 1_000_000).toFixed(2)} held by calls in flight, of a $${budget.session_limit_usd.toFixed(2)} limit. Send the call again once those finish, or ask the workspace's operator to raise the limit.`
+              : `This session reached its Oxagen budget: $${(used / 1_000_000).toFixed(2)} observed of a $${budget.session_limit_usd.toFixed(2)} limit. Ask the workspace's operator to raise the limit, or start a new session.`,
           source: "bundle",
         };
       }
@@ -917,9 +1030,12 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(error.body),
       "x-oxagen-refusal": code,
-      // Both vendors' SDKs read this. A refusal must not be retried; a call
-      // cut off by the daemon restarting should be.
+      // Both vendors' SDKs read this. A refusal must not be retried. A call
+      // cut off by the daemon restarting or by a steer should be, and so
+      // should a failure on the way to the vendor, a second later: without
+      // it a reset connection reached the person as a failed turn.
       "x-should-retry": retryable ? "true" : "false",
+      ...(retryable ? { "retry-after": "1" } : {}),
     });
     res.end(error.body);
   }
@@ -978,6 +1094,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     req: IncomingMessage,
     res: ServerResponse,
     route: ModelRoute,
+    admitted: { release?: () => void },
   ): Promise<void> {
     const startedAt = deps.now();
     const received = await readBody(req);
@@ -1084,6 +1201,70 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       return;
     }
 
+    // The call is in flight from the moment it is admitted: a pause, cancel
+    // or interrupt that lands while `beforeForward` runs finds it and stops
+    // it before anything is sent, and the ceiling it holds counts against the
+    // budget of every call admitted after it.
+    const requestTextBytes = readable()?.length ?? body.length;
+    let abortReason: string | undefined;
+    let upstreamReq: ClientRequest | undefined;
+    const entry: InFlight = {
+      reserved:
+        metered && record !== undefined
+          ? ceilingFor(route, askedModel, requestTextBytes, json())
+          : 0,
+      abort: (reason, retry) => {
+        abortReason = reason;
+        upstreamReq?.destroy(new Error(reason));
+        if (!res.headersSent) {
+          // A 403 reads to Claude Code as a failed login and tells the person
+          // to run /login, which is wrong for a daemon restart. That case gets
+          // a 503 the harness retries once the service is back.
+          if (retry === "steer")
+            sendProviderError(
+              res,
+              route,
+              503,
+              "steered_by_operator",
+              `The session's Oxagen operator sent a steer during this model call: ${reason}. Retry the call.`,
+              true,
+            );
+          else if (retry === "daemon_stopping")
+            sendProviderError(
+              res,
+              route,
+              503,
+              "daemon_stopping",
+              `The Oxagen daemon restarted during this model call: ${reason}. Retry the call.`,
+              true,
+            );
+          else
+            sendProviderError(
+              res,
+              route,
+              403,
+              "interrupted_by_operator",
+              `This model call was interrupted by the session's Oxagen operator: ${reason}`,
+            );
+        } else {
+          res.destroy();
+        }
+      },
+    };
+    const set = inFlight.get(sessionKey) ?? new Set<InFlight>();
+    set.add(entry);
+    inFlight.set(sessionKey, set);
+    // `settle` takes the entry off. This is for a throw before there is a
+    // request to settle, so the call does not hold its ceiling forever.
+    admitted.release = () => {
+      if (
+        set.delete(entry) &&
+        set.size === 0 &&
+        inFlight.get(sessionKey) === set
+      )
+        inFlight.delete(sessionKey);
+    };
+
     let injected = false;
     let dropContentEncoding = false;
     let path = route.path;
@@ -1153,7 +1334,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const requestBytes = body.length;
 
     let settled = false;
-    let abortReason: string | undefined;
+    let retried = false;
     let firstByteAt: number | undefined;
     let status: number | undefined;
     let requestId: string | undefined;
@@ -1170,62 +1351,6 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       dropContentEncoding,
       credential.attach,
     );
-    const upstreamReq: ClientRequest = (secure ? httpsRequest : httpRequest)({
-      protocol: target.protocol,
-      hostname: target.hostname,
-      port: target.port.length > 0 ? Number(target.port) : secure ? 443 : 80,
-      method: req.method ?? "GET",
-      path: `${target.pathname}${target.search}`,
-      headers,
-      agent: secure ? httpsAgent : httpAgent,
-    });
-    upstreamReq.setTimeout(upstreamIdleMs, () => {
-      upstreamReq.destroy(new Error("upstream idle timeout"));
-    });
-
-    const entry: InFlight = {
-      abort: (reason, retry) => {
-        abortReason = reason;
-        upstreamReq.destroy(new Error(reason));
-        if (!res.headersSent) {
-          // A 403 reads to Claude Code as a failed login and tells the person
-          // to run /login, which is wrong for a daemon restart. That case gets
-          // a 503 the harness retries once the service is back.
-          if (retry === "steer")
-            sendProviderError(
-              res,
-              route,
-              503,
-              "steered_by_operator",
-              `The session's Oxagen operator sent a steer during this model call: ${reason}. Retry the call.`,
-              true,
-            );
-          else if (retry === "daemon_stopping")
-            sendProviderError(
-              res,
-              route,
-              503,
-              "daemon_stopping",
-              `The Oxagen daemon restarted during this model call: ${reason}. Retry the call.`,
-              true,
-            );
-          else
-            sendProviderError(
-              res,
-              route,
-              403,
-              "interrupted_by_operator",
-              `This model call was interrupted by the session's Oxagen operator: ${reason}`,
-            );
-        } else {
-          res.destroy();
-        }
-      },
-    };
-    const set = inFlight.get(sessionKey) ?? new Set<InFlight>();
-    set.add(entry);
-    inFlight.set(sessionKey, set);
-
     const settle = (errorClass: string | undefined): void => {
       if (settled) return;
       settled = true;
@@ -1251,13 +1376,27 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       if (!metered) return;
       const usage: ObservedUsage = meter?.end() ?? {};
       const model = usage.model ?? requestModel;
+      // A stream that stopped before the vendor's closing count (the caller
+      // left, the operator cut it, the connection reset) still spent what it
+      // carried. Its count is completed by estimate, and the frame says so,
+      // rather than billing the budget the one token a stream opens with.
+      const cut = meter?.cutShort === true;
+      if (cut)
+        Object.assign(
+          usage,
+          estimateCutUsage(usage, meter?.contentBytes ?? 0, requestTextBytes),
+        );
+      const prices = deps.policy().bundle.model_prices;
       const priced = hasTokenCounts(usage)
-        ? priceObservedUsage(
-            deps.policy().bundle.model_prices,
-            route.provider,
-            { ...usage, ...(model !== undefined ? { model } : {}) },
-          )
+        ? priceObservedUsage(prices, route.provider, {
+            ...usage,
+            ...(model !== undefined ? { model } : {}),
+          })
         : undefined;
+      // Priced by a family row alone: the figure is the family's, not the model's.
+      const familyPriced =
+        priced !== undefined &&
+        resolveModelPriceMatch(prices, route.provider, model)?.family === true;
       // One clock read stamps the frame and picks the day it is charged to,
       // so the record and the day budget cannot disagree about a call that
       // settles on a UTC midnight (ADR-160).
@@ -1351,7 +1490,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
               ...(priced !== undefined ? { cost_usd_micros: priced } : {}),
               cost_basis:
                 priced !== undefined
-                  ? "observed"
+                  ? cut || familyPriced
+                    ? "estimated"
+                    : "observed"
                   : hasTokenCounts(usage)
                     ? "observed_unpriced"
                     : "observed_no_usage",
@@ -1366,7 +1507,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                 : {}),
               api_duration_ms: Math.max(0, deps.now() - startedAt),
               ...(status !== undefined ? { api_status_code: status } : {}),
-              ...(failed !== undefined ? { api_error_class: failed } : {}),
+              ...(failed !== undefined || usage.streamError !== undefined
+                ? { api_error_class: failed ?? `stream_${usage.streamError}` }
+                : {}),
               ...(requestId !== undefined ? { request_id: requestId } : {}),
               ...(usage.responseId !== undefined
                 ? { message_id: usage.responseId }
@@ -1425,6 +1568,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                 ...(abortReason !== undefined
                   ? { "oxagen.interrupted": "1" }
                   : {}),
+                ...(cut ? { "oxagen.usage_partial": "1" } : {}),
               },
             },
           ),
@@ -1436,11 +1580,11 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // The caller went away: stop paying for tokens nobody will read.
     res.on("close", () => {
       if (settled || res.writableFinished) return;
-      upstreamReq.destroy(new Error("client closed the connection"));
+      upstreamReq?.destroy(new Error("client closed the connection"));
       settle(abortReason !== undefined ? "interrupted" : "client_aborted");
     });
 
-    upstreamReq.on("response", (upstream) => {
+    const onResponse = (upstream: IncomingMessage): void => {
       status = upstream.statusCode ?? 502;
       firstByteAt = deps.now();
       const idHeader =
@@ -1544,12 +1688,31 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       // `pipe` carries the backpressure: a slow reader pauses the vendor's
       // stream instead of growing a buffer here.
       upstream.pipe(res);
-    });
+    };
 
-    upstreamReq.on("error", (error) => {
-      if (settled) return;
+    const onError = (
+      failed: ClientRequest,
+      error: NodeJS.ErrnoException,
+    ): void => {
+      if (settled || failed !== upstreamReq) return;
       if (abortReason !== undefined) {
         settle("interrupted");
+        return;
+      }
+      // A pooled connection the vendor closed while it idled fails the next
+      // call sent down it with a reset before a byte of answer. Nothing was
+      // answered, so the call goes again once, on a connection of its own.
+      if (
+        !retried &&
+        status === undefined &&
+        failed.reusedSocket &&
+        error.code === "ECONNRESET"
+      ) {
+        retried = true;
+        deps.log(
+          `model proxy: ${target.host} reset a pooled connection, sending the call again on a new one`,
+        );
+        upstreamReq = openUpstream(true);
         return;
       }
       deps.log(
@@ -1562,10 +1725,65 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         502,
         "upstream_unreachable",
         `The Oxagen gateway could not reach ${target.host}: ${error.message}`,
+        true,
       );
-    });
+    };
 
-    upstreamReq.end(body);
+    /**
+     * Send the call. The idle timeout arms only once a connection is open, so
+     * a call still waiting for one, or for its connect to finish, is timed
+     * separately: past `upstreamConnectMs` it is answered 504 rather than
+     * left to wait on a connection that is not coming.
+     */
+    const openUpstream = (fresh: boolean): ClientRequest => {
+      const created = (secure ? httpsRequest : httpRequest)({
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port.length > 0 ? Number(target.port) : secure ? 443 : 80,
+        method: req.method ?? "GET",
+        path: `${target.pathname}${target.search}`,
+        headers,
+        agent: fresh ? false : secure ? httpsAgent : httpAgent,
+      });
+      created.setTimeout(upstreamIdleMs, () => {
+        created.destroy(new Error("upstream idle timeout"));
+      });
+      const connectTimer = setTimeout(() => {
+        if (settled || created !== upstreamReq) return;
+        deps.log(
+          `model proxy: no connection to ${target.host} within ${upstreamConnectMs}ms`,
+        );
+        created.destroy(new Error("upstream connect timeout"));
+        settle("upstream_connect_timeout");
+        sendProviderError(
+          res,
+          route,
+          504,
+          "upstream_connect_timeout",
+          `The Oxagen gateway could not open a connection to ${target.host} within ${Math.round(upstreamConnectMs / 1000)}s.`,
+          true,
+        );
+      }, upstreamConnectMs);
+      connectTimer.unref();
+      const connected = (): void => clearTimeout(connectTimer);
+      created.once("socket", (socket) => {
+        if (socket.connecting) socket.once("connect", connected);
+        else connected();
+      });
+      created.once("close", connected);
+      created.on("response", onResponse);
+      created.on("error", (error) => onError(created, error));
+      created.end(body);
+      return created;
+    };
+
+    // Interrupted while `beforeForward` ran: the refusal is already sent, and
+    // nothing reaches the vendor.
+    if (abortReason !== undefined) {
+      settle("interrupted");
+      return;
+    }
+    upstreamReq = openUpstream(false);
   }
 
   return {
@@ -1634,9 +1852,11 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
           req.resume();
           return;
         }
+        const admitted: { release?: () => void } = {};
         try {
-          await forward(req, res, route);
+          await forward(req, res, route, admitted);
         } catch (error) {
+          admitted.release?.();
           deps.log(
             `model proxy: ${req.method ?? "?"} ${route.provider} ${route.api} failed: ${error instanceof Error ? error.message : String(error)}`,
           );
@@ -1646,6 +1866,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             502,
             "gateway_error",
             "The Oxagen gateway failed before it could forward this call.",
+            true,
           );
         }
       })();

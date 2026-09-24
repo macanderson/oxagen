@@ -70,7 +70,7 @@ describe("retainsBody", () => {
   it("keeps nothing for a kind the table does not name", () => {
     // Frames arrive faster than mandates are rewritten. An unmapped kind
     // failing open would retain content nobody authorised.
-    expect(retainsBody("oxagen:notification", exact(["model_call"]))).toBe(
+    expect(retainsBody("oxagen:config_change", exact(["model_call"]))).toBe(
       false,
     );
     expect(retainsBody("", exact(["model_call"]))).toBe(false);

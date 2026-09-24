@@ -92,6 +92,34 @@ export async function chooseToolPatterns(
   return loaded([...every.values(), ...each], list.partial);
 }
 
+/**
+ * The tool names one provider has had imported, for picking which of its pins
+ * to import again. A version keeps its pin's name, so these are names
+ * `import_tools` accepts. A pin never imported is absent, so the picker takes
+ * typed names too.
+ */
+export async function chooseServerTools(
+  org: string,
+  ws: string,
+  serverId: string,
+): Promise<ActionResult<OptionPage>> {
+  const ctx = await requireViewer(org, ws);
+  const list = await walk(PAGE_BOUND, (cursor) =>
+    dataSource().tools.versions(ctx, { category: null, cursor }),
+  );
+  if (!list.ok) return readToActionResult<OptionPage>(list.read);
+  const names = new Map<string, PickerOption>();
+  for (const version of list.items) {
+    if (version.serverId !== serverId || names.has(version.name)) continue;
+    names.set(version.name, {
+      value: version.name,
+      label: version.name,
+      detail: version.slug,
+    });
+  }
+  return loaded([...names.values()], list.partial);
+}
+
 /** Who may answer a parked call: the four approver roles, then every member. */
 export async function chooseApprovers(
   org: string,

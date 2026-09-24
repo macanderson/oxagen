@@ -24,6 +24,7 @@ import {
   COMMAND_HOOK_TIMEOUTS_S,
   commandHookEntry,
   documentShapeProblem,
+  type HookEntry,
   type HookGroup,
   type HookInstallConfig,
   isTachoGroup,
@@ -50,24 +51,53 @@ export type CodexHookEventName = (typeof CODEX_HOOK_EVENTS)[number];
 
 const TELEMETRY_TIMEOUT_S = 5;
 
+/**
+ * Codex's `additionalContextLimit` for the handlers that answer with text
+ * (verified 2026-09-23 against learn.chatgpt.com/docs/hooks, "Large hook
+ * output"). Codex spills `additionalContext` past about 2,500 tokens to a
+ * file and shows the model a head-and-tail preview, so the steering prefix
+ * and the operator messages the daemon delivers would be sealed as delivered
+ * while the agent read part of them. The daemon holds one answer under 9,500
+ * characters (`ADDITIONAL_CONTEXT_MAX_CHARS` in `collector/hook-handler.ts`),
+ * and the limit counts approximate tokens, of which that text is fewer than
+ * 10,000 however it is counted.
+ */
+export const CODEX_ADDITIONAL_CONTEXT_LIMIT = 10_000;
+
+/**
+ * The events whose answer carries `additionalContext`: the two that open a
+ * turn, and `PostToolUse`, where the daemon delivers a steer mid-turn. Codex
+ * reports a configuration warning for the limit on an event that cannot
+ * produce context, so no other entry has it.
+ */
+const CONTEXT_EVENTS: ReadonlySet<string> = new Set([
+  "SessionStart",
+  "UserPromptSubmit",
+  "PostToolUse",
+]);
+
+function withContextLimit(event: string, entry: HookEntry): HookEntry {
+  return CONTEXT_EVENTS.has(event)
+    ? { ...entry, additionalContextLimit: CODEX_ADDITIONAL_CONTEXT_LIMIT }
+    : entry;
+}
+
 /** The hook groups Tacho installs into `hooks.json`, by event. */
 export function codexHookEntries(
   config: HookInstallConfig,
 ): Record<CodexHookEventName, HookGroup[]> {
   const out = {} as Record<CodexHookEventName, HookGroup[]>;
   for (const event of COMMAND_HOOK_EVENTS) {
-    out[event] = [
-      {
-        hooks: [
-          commandHookEntry(config, COMMAND_HOOK_TIMEOUTS_S[event], "codex"),
-        ],
-      },
-    ];
+    const entry = commandHookEntry(
+      config,
+      COMMAND_HOOK_TIMEOUTS_S[event],
+      "codex",
+    );
+    out[event] = [{ hooks: [withContextLimit(event, entry)] }];
   }
   for (const event of CODEX_TELEMETRY_EVENTS) {
-    out[event] = [
-      { hooks: [commandHookEntry(config, TELEMETRY_TIMEOUT_S, "codex")] },
-    ];
+    const entry = commandHookEntry(config, TELEMETRY_TIMEOUT_S, "codex");
+    out[event] = [{ hooks: [withContextLimit(event, entry)] }];
   }
   return out;
 }

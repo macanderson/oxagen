@@ -49,6 +49,7 @@ import { basename, dirname, join } from "node:path";
 import { BROKERABLE_HARNESS_PROVIDER, type BrokerableHarness } from "../wire";
 import type { CredentialKind, HeldCredential } from "./credential-store";
 import { claudeManagedSettingsPath } from "./model-base-url";
+import { harnessConfigDirs } from "./paths";
 import {
   looksLikeRunToken,
   peekRunTokenClaims,
@@ -68,6 +69,14 @@ export const HARNESS_PROVIDER: Record<
 export interface ModelCredentialOptions {
   /** The user's home directory; `~/.claude` and `~/.codex` are read under it. */
   home: string;
+  /**
+   * Claude Code's config directory, `$CLAUDE_CONFIG_DIR`. When absent it is
+   * resolved as `tachoPaths` resolves the hooks file (`harnessConfigDirs`),
+   * so the key is taken from the `settings.json` Claude Code reads.
+   */
+  claudeConfigDir?: string;
+  /** Codex's home, `$CODEX_HOME`, resolved the same way when absent. */
+  codexHome?: string;
   harnesses: ModelCredentialHarness[];
   /**
    * The command line Claude Code's `apiKeyHelper` runs. Ends in
@@ -159,10 +168,25 @@ export function helperCommandFor(tachoCommand: string): string {
   return `${tachoCommand} credential issue --harness claude-code`;
 }
 
-function fileFor(harness: ModelCredentialHarness, home: string): string {
+/** Where the harness files live: the home, and the directories that move them. */
+type CredentialHomes = Pick<
+  ModelCredentialOptions,
+  "home" | "claudeConfigDir" | "codexHome"
+>;
+
+function fileFor(
+  harness: ModelCredentialHarness,
+  homes: CredentialHomes,
+): string {
   return harness === "claude-code"
-    ? join(home, ".claude", "settings.json")
-    : join(home, ".codex", "auth.json");
+    ? join(
+        homes.claudeConfigDir ?? harnessConfigDirs(homes.home).claudeConfigDir,
+        "settings.json",
+      )
+    : join(
+        homes.codexHome ?? harnessConfigDirs(homes.home).codexHome,
+        "auth.json",
+      );
 }
 
 function sidecarFor(file: string): string {
@@ -173,8 +197,9 @@ function sidecarFor(file: string): string {
 export function modelCredentialBackupPath(
   harness: ModelCredentialHarness,
   home: string,
+  dirs: Omit<CredentialHomes, "home"> = {},
 ): string {
-  return sidecarFor(fileFor(harness, home));
+  return sidecarFor(fileFor(harness, { ...dirs, home }));
 }
 
 function sha256(text: string): string {
@@ -298,7 +323,9 @@ function parseObject(text: string | undefined, file: string): JsonObject {
   if (text === undefined || text.trim().length === 0) return {};
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    // A byte order mark (Windows Notepad) is not JSON; `serializeLike` puts
+    // it back.
+    parsed = JSON.parse(text.replace(/^\uFEFF/, ""));
   } catch (error) {
     throw new Error(
       `${file} is not valid JSON, so it was left untouched: ${error instanceof Error ? error.message : String(error)}`,
@@ -336,7 +363,8 @@ function serializeLike(text: string | undefined, value: JsonObject): string {
   const eol = text !== undefined && text.includes("\r\n") ? "\r\n" : "\n";
   const body = JSON.stringify(value, null, indent).replace(/\n/g, eol);
   const final = text === undefined || /\r?\n$/.test(text) ? eol : "";
-  return `${body}${final}`;
+  const bom = text?.startsWith("\uFEFF") === true ? "\uFEFF" : "";
+  return `${bom}${body}${final}`;
 }
 
 function managedHelperShadow(
@@ -375,7 +403,7 @@ function describe(
   internals: ModelCredentialInternals,
   reason?: ModelCredentialHarnessState["reason"],
 ): ModelCredentialHarnessState {
-  const file = fileFor(harness, options.home);
+  const file = fileFor(harness, options);
   const backup = sidecarFor(file);
   const text = readTextIfExists(file);
   let brokered = false;
@@ -445,7 +473,7 @@ function applyClaude(
   options: ModelCredentialOptions,
   taken: TakenCredential[],
 ): { changed: boolean; reason?: ModelCredentialHarnessState["reason"] } {
-  const file = fileFor("claude-code", options.home);
+  const file = fileFor("claude-code", options);
   const backup = sidecarFor(file);
   const text = readTextIfExists(file);
   const settings = parseObject(text, file);
@@ -522,7 +550,7 @@ function applyCodex(
   options: ModelCredentialOptions,
   taken: TakenCredential[],
 ): { changed: boolean; reason?: ModelCredentialHarnessState["reason"] } {
-  const file = fileFor("codex", options.home);
+  const file = fileFor("codex", options);
   const backup = sidecarFor(file);
   const token = options.staticTokens?.codex;
   const text = readTextIfExists(file);
@@ -588,7 +616,7 @@ function restoreClaude(
   options: ModelCredentialOptions,
   released: HeldCredential | undefined,
 ): RestoreOutcome {
-  const file = fileFor("claude-code", options.home);
+  const file = fileFor("claude-code", options);
   const backup = sidecarFor(file);
   const sidecar = readSidecar(backup);
   const text = readTextIfExists(file);
@@ -663,7 +691,7 @@ function restoreCodex(
   options: ModelCredentialOptions,
   released: HeldCredential | undefined,
 ): RestoreOutcome {
-  const file = fileFor("codex", options.home);
+  const file = fileFor("codex", options);
   const backup = sidecarFor(file);
   const sidecar = readSidecar(backup);
   const text = readTextIfExists(file);
@@ -731,7 +759,7 @@ export async function applyModelCredentials(
 ): Promise<ModelCredentialState> {
   const taken: TakenCredential[] = [];
   const harnesses = unique(options.harnesses).map((harness) => {
-    const file = fileFor(harness, options.home);
+    const file = fileFor(harness, options);
     if (linked(file, internals))
       return describe(harness, options, false, internals, "symlink");
     const outcome =
@@ -783,7 +811,7 @@ export async function peekModelCredentials(
 ): Promise<TakenCredential[]> {
   const taken: TakenCredential[] = [];
   for (const harness of unique(options.harnesses)) {
-    const file = fileFor(harness, options.home);
+    const file = fileFor(harness, options);
     const text = readTextIfExists(file);
     if (text === undefined) continue;
     const document = parseObject(text, file);
@@ -841,8 +869,9 @@ export async function readModelCredentialState(
 export function hasOrphanedModelCredential(
   harness: ModelCredentialHarness,
   home: string,
+  dirs: Omit<CredentialHomes, "home"> = {},
 ): boolean {
-  const file = fileFor(harness, home);
+  const file = fileFor(harness, { ...dirs, home });
   const text = readTextIfExists(file);
   if (text === undefined) return false;
   try {
@@ -906,8 +935,11 @@ export function staticTokenStillGood(
  * it holds: a vendor key, a static run token, or nothing. The one reader the
  * CLI and the daemon share, on the same file apply edits.
  */
-export function readCodexApiKeyMember(home: string): string | undefined {
-  const file = fileFor("codex", home);
+export function readCodexApiKeyMember(
+  home: string,
+  dirs: Omit<CredentialHomes, "home"> = {},
+): string | undefined {
+  const file = fileFor("codex", { ...dirs, home });
   try {
     const text = readTextIfExists(file);
     if (text === undefined) return undefined;

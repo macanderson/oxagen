@@ -14,7 +14,9 @@
 // Open an incident (#3847) and Request access (#3820) have no capability
 // behind them yet: each opens a dialog that says what it would do and that
 // nothing was sent.
-import { CircleAlert, LayoutPanelTop, Lock } from "lucide-react";
+//
+// The frame is the shared `StateWrap`. Each state replaces the page header
+// too, so its title is the page's one h1.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Read } from "@/data/read";
@@ -23,66 +25,54 @@ import type { SafePath } from "@/shared/safe-path";
 import {
   buttonPrimary,
   buttonSecondary,
+  kvTerm,
+  kvValue,
   mono,
   panel,
+  panelBody,
+  panelHeader,
+  statStrip,
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import {
+  StateWrap,
+  type StateTone,
+  stateCode,
+  stateFacts,
+  stateTrace,
+} from "@/ui/state-wrap";
 import { StubDialog } from "./stub-dialog";
 import { CreateWorkspace } from "./workspace-actions";
 
 type Failure = Extract<Read<unknown>, { reason: "error" }>;
 
-/** The centred state block: a glyph, a heading, a body, actions, and facts beneath. */
+/** The shared `.state-wrap`, titled with the page's h1. */
 function StateBlock({
   testId,
   tone,
-  icon,
   title,
   children,
   actions,
   after,
 }: {
   testId: string;
-  tone: "neutral" | "error" | "deny";
-  icon: ReactNode;
+  tone: StateTone;
   title: string;
   children: ReactNode;
   actions?: ReactNode;
   after?: ReactNode;
 }) {
-  const ring =
-    tone === "error"
-      ? "border-error/45 text-error-ink"
-      : tone === "deny"
-        ? "border-warning/45 text-warning"
-        : "border-border text-foreground";
   return (
-    <section
-      aria-labelledby={`${testId}-title`}
-      data-testid={testId}
-      className="mx-auto flex max-w-[34rem] flex-col items-center gap-3 px-4 py-14 text-center"
+    <StateWrap
+      heading="h1"
+      testId={testId}
+      tone={tone}
+      title={title}
+      actions={actions}
+      after={after}
     >
-      <div
-        className={`grid size-11 place-items-center rounded-xl border bg-card ${ring}`}
-      >
-        {icon}
-      </div>
-      <h1
-        id={`${testId}-title`}
-        className="text-lg font-bold tracking-[-0.01em] text-foreground"
-      >
-        {title}
-      </h1>
-      <div className="text-[13px] leading-relaxed text-muted-foreground">
-        {children}
-      </div>
-      {actions ? (
-        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-          {actions}
-        </div>
-      ) : null}
-      {after}
-    </section>
+      {children}
+    </StateWrap>
   );
 }
 
@@ -96,25 +86,25 @@ export function OrganizationSkeleton() {
       className="flex flex-col gap-4"
     >
       <span className="sr-only">{t("loading")}</span>
-      <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]">
+      <div className={statStrip}>
         {["a", "b", "c", "d"].map((tile) => (
           <div
             key={tile}
             data-skeleton="tile"
-            className="h-16 animate-pulse rounded-xl border border-border bg-card motion-reduce:animate-none"
+            className="skeleton h-16 rounded-[11px]"
           />
         ))}
       </div>
       <div className={panel}>
-        <div className="border-b border-border px-4 py-3">
-          <div className="h-3.5 w-32 animate-pulse rounded bg-hl motion-reduce:animate-none" />
+        <div className={panelHeader}>
+          <div className="skeleton h-[22px] w-[180px] max-w-full rounded-[7px]" />
         </div>
-        <div className="flex flex-col gap-2 px-4 py-3.5">
+        <div className={`${panelBody} flex flex-col gap-2`}>
           {[1, 2, 3, 4, 5, 6, 7].map((row) => (
             <div
               key={row}
               data-skeleton="row"
-              className="h-9 animate-pulse rounded-md bg-hl motion-reduce:animate-none"
+              className="skeleton h-[38px] rounded-[9px]"
             />
           ))}
         </div>
@@ -129,7 +119,6 @@ export function OrganizationEmpty({ org }: { org: string }) {
     <StateBlock
       testId="organization-empty"
       tone="neutral"
-      icon={<LayoutPanelTop aria-hidden className="size-5" />}
       title={t("title")}
       actions={<CreateWorkspace org={org} primary />}
     >
@@ -160,8 +149,7 @@ export function OrganizationError({
   return (
     <StateBlock
       testId="organization-error"
-      tone="error"
-      icon={<CircleAlert aria-hidden className="size-5" />}
+      tone="failed"
       title={t("title")}
       actions={
         <>
@@ -177,16 +165,12 @@ export function OrganizationError({
         </>
       }
       after={
-        <p
-          data-testid="organization-error-trace"
-          className={`${mono} text-[11px] text-dim`}
-        >
+        <p data-testid="organization-error-trace" className={stateTrace}>
           {line}
         </p>
       }
     >
-      {t("answered")}{" "}
-      <code className={`${mono} rounded bg-hl px-1`}>{code}</code>. {t("body")}
+      {t("answered")} <code className={stateCode}>{code}</code>. {t("body")}
     </StateBlock>
   );
 }
@@ -209,12 +193,10 @@ export function OrganizationDenied({
   const t = useTranslations("organization.states.denied");
   const tRole = useTranslations("organization.roles");
   const tStub = useTranslations("organization.states.stub.requestAccess");
-  const fact = "text-left text-[12.5px]";
   return (
     <StateBlock
       testId="organization-denied"
-      tone="deny"
-      icon={<Lock aria-hidden className="size-5" />}
+      tone="denied"
       title={t("title")}
       actions={
         <>
@@ -231,24 +213,21 @@ export function OrganizationDenied({
         </>
       }
       after={
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-          <dt className={`${fact} text-muted-foreground`}>{t("signedIn")}</dt>
-          <dd className={fact} data-testid="denied-signed-in">
+        <dl className={stateFacts}>
+          <dt className={kvTerm}>{t("signedIn")}</dt>
+          <dd className={kvValue} data-testid="denied-signed-in">
             {name} · <span className={mono}>{tRole(role)}</span> ·{" "}
             <span className={mono}>{org}</span>
           </dd>
-          <dt className={`${fact} text-muted-foreground`}>
-            {t("neededLabel")}
-          </dt>
-          <dd className={`${fact} ${mono}`}>{t("needed")}</dd>
-          <dt className={`${fact} text-muted-foreground`}>{t("decidedBy")}</dt>
-          <dd className={fact}>{t("decider")}</dd>
+          <dt className={kvTerm}>{t("neededLabel")}</dt>
+          <dd className={`${kvValue} ${mono}`}>{t("needed")}</dd>
+          <dt className={kvTerm}>{t("decidedBy")}</dt>
+          <dd className={kvValue}>{t("decider")}</dd>
         </dl>
       }
     >
       {t("bodyBefore")} <b className="text-foreground">{orgName}</b>{" "}
-      {t("bodyAfter")}{" "}
-      <code className={`${mono} rounded bg-hl px-1`}>{t("needed")}</code>.{" "}
+      {t("bodyAfter")} <code className={stateCode}>{t("needed")}</code>.{" "}
       {t("grant")}
     </StateBlock>
   );
