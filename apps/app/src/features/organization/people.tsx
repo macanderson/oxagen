@@ -8,7 +8,7 @@
 // catalogue. `list_members` records a member's name, email, role and join
 // date. It records no per-member workspaces, two-factor method or last sign-in,
 // and no organization two-factor policy, so those cells say "not recorded"
-// rather than a guess (macanderson/oxagen, the People issue this lane filed).
+// rather than a guess (#3932).
 // Every member on the roster holds a membership row, so Status reads "active".
 //
 // Invitations: Email, Role offered, Invited by, Sent and Expires, with Resend

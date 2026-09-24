@@ -7,7 +7,8 @@
 // Held by reads the role's active assignments (`memberCount`): people for a
 // human role, agents for an agent role, "nobody" at zero. `list_iam_roles`
 // does not split a count between people, agents and keys, so a role is counted
-// in the one unit its kind names.
+// in the one unit its kind names, and the filters offer only the kinds and
+// scopes a role can hold today (#3937).
 //
 // The read reports whether Oxagen resolves these grants for this
 // organization's tier (ARCHITECTURE.md §1.5), and the tab says so under the

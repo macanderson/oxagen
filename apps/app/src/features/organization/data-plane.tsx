@@ -9,7 +9,7 @@
 // key, the gateway placement, a firewall bundle or the retention windows, so
 // those rows say "not recorded". Request a change of plane and Rotate keys have
 // no capability behind them yet and open dialogs that say what they would do
-// (macanderson/oxagen, the Data plane issue this lane filed). Tenant isolation
+// (#3935). Tenant isolation
 // states the platform's own guarantees, which hold for every organization on
 // the shared plane: row-level security on every tenant table, the kernel as
 // the only writer of a workspace id, and the startup guard in

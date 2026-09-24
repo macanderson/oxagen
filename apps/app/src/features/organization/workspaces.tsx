@@ -8,8 +8,8 @@
 // agent count or owner, and the governance mode lives in
 // `.oxagen/rules/governance.toml` on the main repository, which no contract
 // reads back. Those cells say "not recorded", and the Governance chip says the
-// mode is not recorded with the namespace beneath it (macanderson/oxagen, the
-// Workspaces issue this lane filed).
+// mode is not recorded with the namespace beneath it (#3933 for the columns,
+// #3907 for the governance mode).
 //
 // Open goes to the workspace's Fleet. A workspace the viewer holds no
 // membership of cannot be opened (`requireViewer` answers not found), so its

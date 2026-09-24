@@ -138,6 +138,8 @@ export function KeyRow({
           {t("masked", { prefix: apiKey.prefix })}
         </div>
       </td>
+      {/* Principal, Grants and Created by: list_api_keys returns none of
+          them, and Actions 30d below has no per-key count (#3934). */}
       <td className={cell}>
         <NotRecorded />
       </td>
