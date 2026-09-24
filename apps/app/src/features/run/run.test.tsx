@@ -486,14 +486,14 @@ describe("header", () => {
         pullRequests: [],
         subagents: [
           {
-            id: "a0182b6cd3a21d284",
+            agentRef: "a0182b6cd3a21d284",
             type: "Explore",
             firstSeq: "12",
             lastSeq: "30",
             stopped: true,
           },
           {
-            id: "b77c01e9f2d4a8c10",
+            agentRef: "b77c01e9f2d4a8c10",
             type: null,
             firstSeq: "31",
             lastSeq: "31",
