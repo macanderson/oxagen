@@ -214,7 +214,9 @@ export interface HookRunDeps {
    * stdin is read — `runHookProcess` does this rather than leaving it to
    * default here, so the id is fixed before the network attempt that might
    * time out, not after. Defaults to a fresh id for a caller (a test, an
-   * SDK adapter) that has no earlier point to generate one from.
+   * SDK adapter) that has no earlier point to generate one from. The daemon
+   * keeps it for as long as this client could still write the spool file
+   * (see `SessionRecord.hookIds` in `collector/registry.ts`).
    */
   hookId?: string;
 }

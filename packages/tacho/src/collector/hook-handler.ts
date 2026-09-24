@@ -147,6 +147,12 @@ export interface HookOutcome {
   response: Record<string, unknown>;
   record?: SessionRecord;
   evaluation?: Evaluation;
+  /**
+   * The key this hook holds in its session's replay ledger (see
+   * `hookLedgerKey`), or undefined when it has none. The daemon forgets it
+   * when the WAL write fails and journals it when the write lands.
+   */
+  hookKey?: string;
 }
 
 /** `HookOutcome` before the bodies are drained; `routeHook` returns this. */
@@ -458,6 +464,50 @@ function drainMidTurn(
 }
 
 /**
+ * The events a harness fires once per tool call, each with the harness's
+ * own id for that call. A second arrival of one of them with the same id is
+ * a replay, never a new call.
+ */
+const TOOL_CALL_HOOK_EVENTS: ReadonlySet<string> = new Set([
+  "PreToolUse",
+  "PermissionRequest",
+  "PostToolUse",
+  "PostToolUseFailure",
+]);
+
+/**
+ * The key a hook holds in its session's replay ledger
+ * (`SessionRecord.hookIds`), or undefined when nothing can tell its replay
+ * from a new hook.
+ *
+ * The client's `hook_id` comes first. A `tacho-hook` older than the id, and
+ * a spool file it left behind, send none, so a tool-call event falls back to
+ * `${hook_event_name}:${tool_use_id}`: the harness issues that id once per
+ * call. Stella is left out because the daemon derives its tool-use ids (see
+ * `invocationToolUseId`). An event with no id of its own (`Stop`,
+ * `UserPromptSubmit`, `Notification`) gets no key. Two of them can carry
+ * byte-identical payloads and both be real, so a key built from the content
+ * would drop a real one.
+ */
+export function hookLedgerKey(
+  raw: unknown,
+  harness: TachoHarness | undefined,
+  hookId: string | undefined,
+): string | undefined {
+  if (hookId !== undefined) return hookId;
+  if (harness === "stella" || typeof raw !== "object" || raw === null)
+    return undefined;
+  const { hook_event_name: event, tool_use_id: id } = raw as Record<
+    string,
+    unknown
+  >;
+  if (typeof event !== "string" || !TOOL_CALL_HOOK_EVENTS.has(event))
+    return undefined;
+  if (typeof id !== "string" || id.length === 0) return undefined;
+  return `${event}:${id}`;
+}
+
+/**
  * Map one hook payload to its events and its answer. `agent` names a custom
  * agent (`tacho hook --agent <name>`): its payload is Claude Code's shape and
  * its session is labelled `runtime: "custom"`, `harness: <name>`.
@@ -466,9 +516,9 @@ function drainMidTurn(
  * its live request and the spool file it falls back to when that request
  * times out on the client's own side (see `HookRunDeps.hookId` in
  * `claude-code/hook-client.ts`). A client timeout does not mean the daemon
- * never received the hook — this function may already have run for it —
- * so a replay carrying an id this session already recorded is dropped
- * rather than sealing everything a second time.
+ * never received the hook. This function may already have run for it, so a
+ * replay whose ledger key (`hookLedgerKey`) this session already recorded is
+ * dropped rather than sealing everything a second time.
  */
 export async function handleHookEvent(
   raw: unknown,
@@ -491,16 +541,29 @@ export async function handleHookEvent(
   // Remembered after the route, not before it: a route that throws (a
   // policy read, a git lookup, a parse) sends the client a failure, the
   // client spools the same id, and that replay is the only copy the daemon
-  // will ever see. Remembering an id the ledger already holds is a no-op, so
+  // will ever see. Remembering a key the ledger already holds is a no-op, so
   // the dedupe branch passes through here harmlessly. A WAL write that fails
-  // after this point is undone by the daemon with `forgetHookId`.
-  if (hookId !== undefined && outcome.record !== undefined) {
-    rememberHookId(outcome.record, hookId);
+  // after this point is undone by the daemon with `forgetHookId`. The time
+  // is the one `ensure` stamped on the record, so this reads no clock.
+  const hookKey =
+    outcome.record === undefined
+      ? undefined
+      : hookLedgerKey(raw, outcome.record.harness, hookId);
+  if (hookKey !== undefined && outcome.record !== undefined) {
+    rememberHookId(
+      outcome.record,
+      hookKey,
+      Date.parse(outcome.record.lastSeenAt),
+    );
   }
   // Drained after the route, whichever branch returned: every event the
   // route sealed is in `events` by now, so every body is pending on the
   // recorder, and taking them here is what keeps the two lists paired.
-  return { ...outcome, bodies: outcome.record?.recorder.takeBodies() ?? [] };
+  return {
+    ...outcome,
+    bodies: outcome.record?.recorder.takeBodies() ?? [],
+    ...(hookKey === undefined ? {} : { hookKey }),
+  };
 }
 
 /**
@@ -620,10 +683,18 @@ async function routeHook(
   // `UserPromptSubmit`) a phantom prompt nobody sent twice. Nothing new is
   // sealed for the replay; the answer is empty, which is safe here because a
   // replay is fed back into the daemon for its record only, not read by a
-  // harness waiting on stdout. The id is remembered only once the route
+  // harness waiting on stdout. The key is remembered only once the route
   // succeeds (in `handleHookEvent`), so a live request that threw leaves no
-  // sighting behind and its spool replay is sealed.
-  if (hookId !== undefined && sawHookId(record, hookId)) {
+  // sighting behind and its spool replay is sealed. A key the harness issued
+  // (no `hook_id`) drops only a replay: a live request is answered in full,
+  // because a harness waiting on a `PreToolUse` must get the policy's
+  // decision, never an empty answer.
+  const hookKey = hookLedgerKey(raw, record.harness, hookId);
+  if (
+    hookKey !== undefined &&
+    (hookId !== undefined || replay !== undefined) &&
+    sawHookId(record, hookKey)
+  ) {
     return { events: [], response: {}, record };
   }
   // Stella's tool-use ids are derived from the call, so the daemon numbers
