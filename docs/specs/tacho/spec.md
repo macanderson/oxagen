@@ -345,7 +345,24 @@ Precedence at the host is the CLI's four-scope model (`apps/cli/src/config/resol
 
 ### 7.2 Standing grants and the `PreToolUse` decision
 
-For every `PreToolUse`, `tacho-hook` evaluates, in order: host and session status (paused or suspended → deny with the operator's reason); bundle freshness (a `deny_generation` newer than the cached bundle marks it stale; a stale bundle allows read-only tools and requires a synchronous re-evaluation for the rest, failing closed if the control plane is unreachable); explicit `deny` rules (always win); `allow` rules (allow); `ask` rules or no rule (the decision falls through to Claude Code's own permission flow, which surfaces as `PermissionRequest` and thereby to elevation). In `observe` mode the evaluation is recorded and the answer is always allow.
+*Amended 2026-09-24 (#3944): an unverified bundle denies mutating tools in either mode, `ask` rules are checked before `allow` rules, and the host renews an unchanged mandate's signature.*
+
+For every `PreToolUse`, `tacho-hook` evaluates, in order:
+
+1. **Host and session status.** A paused or suspended host or session is denied with the operator's reason.
+2. **The signature.** An unverified bundle is treated as absent. Read-only tools are allowed and every other tool is denied, whatever `mode` or `tools` declarations the bundle claims. An unsigned `host.json` therefore cannot switch enforcement off or declare `Bash` read-only.
+3. **Containment.** A verified enforce-mode mandate that requires the contained tier denies every tool in a session the launcher did not start (ADR-152).
+4. **Freshness.** A `deny_generation` newer than the cached bundle marks it stale, and so does a bundle the control plane has not confirmed within its signed window. A stale bundle allows read-only tools and requires a synchronous re-evaluation for the rest, failing closed if the control plane is unreachable.
+5. **`deny` rules.** A match is denied. Deny always wins.
+6. **`ask` rules.** A match falls through to Claude Code's own permission flow, which surfaces as `PermissionRequest` and thereby to elevation.
+7. **`allow` rules.** A match is allowed.
+8. **No rule.** The call falls through to Claude Code's permission flow, as for `ask`.
+
+Ask before allow is Claude Code's own precedence (deny, then ask, then allow). A narrow `ask` such as `Bash(git push*)` still asks when a broad `allow` such as `Bash(*)` also matches. In `observe` mode, a verified bundle's rule evaluation is recorded and the answer is allow.
+
+The etag covers policy content only, so an unchanged mandate answers `not_modified` on every poll and the signed copy on disk keeps its first `expires_at`. The daemon counts each `not_modified` as a confirmation, but only in memory. Once the cached copy is past half its signed window, the daemon polls without the etag, and the control plane signs the unchanged mandate again with a new window. A restart, or the hook when the daemon is down, then reads a fresh bundle rather than one stale since the last policy edit.
+
+The host takes a same-etag copy only when its window starts later than the one it holds, so a window never moves back. A cached copy that does not verify is never confirmed by its etag, because an edit to `host.json` keeps the etag it was signed with. The daemon fetches it again without the etag and replaces it with the verified copy, whatever that copy's window.
 
 Tool calls to the Oxagen MCP endpoint (`mcp__oxagen__*`) are not evaluated here at all; the kernel evaluates them on the server, and those calls are what earn a session the `gateway` tier.
 

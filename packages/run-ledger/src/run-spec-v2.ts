@@ -104,7 +104,10 @@ function writeCanonical(value: unknown, path: string): string {
       return JSON.stringify(value);
     case "number":
       if (!Number.isFinite(value)) {
-        throw new CanonicalJsonError(path, "only finite numbers have a JSON form");
+        throw new CanonicalJsonError(
+          path,
+          "only finite numbers have a JSON form",
+        );
       }
       // ECMAScript Number-to-String, the serialization RFC 8785 requires.
       return JSON.stringify(value);

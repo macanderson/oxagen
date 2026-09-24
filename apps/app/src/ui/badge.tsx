@@ -36,6 +36,7 @@ export function Badge({
   tone,
   dot = true,
   mono = false,
+  title,
   children,
   ...rest
 }: {
@@ -47,11 +48,14 @@ export function Badge({
   dot?: boolean | "pulse";
   /** `.b-tier`: mono, lowercase, regular weight. */
   mono?: boolean;
+  /** The longer reading, on hover and to assistive tech. */
+  title?: string;
   children: ReactNode;
 } & Record<`data-${string}`, string | undefined>) {
   return (
     <span
       {...rest}
+      title={title}
       className={`${badgeBase} ${TONE[tone]} ${mono ? "font-mono text-[10.5px] font-medium lowercase" : ""}`}
     >
       {dot ? (

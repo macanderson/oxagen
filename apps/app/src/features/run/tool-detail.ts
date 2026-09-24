@@ -1,37 +1,28 @@
-// What a tool step actually did, read out of the body the recorder kept.
+// What a tool call actually did, read out of the body the recorder kept.
 //
 // A tool frame's body is JSON: `tool_call` holds `{input, output}` together
 // (tacho `toolCallContent`), `tool_requested` holds the bare input, and a
 // producer that records a content block holds `{tool_use: {name, input}}`.
-// Before this module the transcript printed that JSON at the reader and let
-// them find the command in it. The point here is that a reader should never
-// have to: the step line says which tool ran and what it ran on, and the
-// panes below it show the command, the diff or the contents as source, not as
-// an escaped string inside an object.
+// The transcript row for a call (mockup `txRow`, kind `tool`) leads with the
+// tool's short name and what it acted on, and under it shows the output it
+// read and, for an edit or a new file, the change as a diff. This module reads
+// those out of the body so the row never prints the JSON at the reader.
 //
 // Three rules hold everywhere below:
 //
 //  1. **Nothing is invented.** A field the body did not carry is null, and the
-//     surface leaves it out rather than drawing a placeholder. The digest is a
-//     reading of the record, never an addition to it.
+//     surface leaves it out rather than drawing a placeholder.
 //  2. **An unknown tool still reads.** A tool this module has no shape for
-//     falls back to its input's first useful string, then to pretty-printed
-//     JSON in a `json` pane — which is strictly better than the raw one-line
-//     JSON it replaced, and never worse.
+//     heads its line with its arguments in order, and keeps its input as
+//     formatted JSON behind the row's fold.
 //  3. **Pure.** No React, no formatting, no i18n. It is tested without a
 //     render, and the view decides how much of what it returns to show.
 
-import { type CodeLanguage, languageForPath } from "@/shared/code-highlight";
 import { buildDiff, type LineDiff } from "@/shared/line-diff";
 
 /**
- * The family a tool belongs to. It decides the icon, and only the icon.
- *
- * Grouping rather than one icon per tool is deliberate: a reader scanning a
- * long run is looking for "where did it touch the disk" and "where did it run
- * something", not for the difference between `Grep` and `Glob`. The tool's
- * own name is always written beside the icon, so the group never has to carry
- * a distinction the name already makes.
+ * The family a tool belongs to. It decides the colour of the row's name
+ * (`inspect`, `mutate`, `execute`, `delegate` in the design), and only that.
  */
 export type ToolGroup =
   | "shell"
@@ -48,63 +39,33 @@ export type ToolGroup =
   | "mcp"
   | "tool";
 
-/** One block of content under a step: source, a diff, or plain prose. */
-/**
- * What a pane holds, as a key the surface translates.
- *
- * A key rather than a heading, because this module is pure and the app is
- * translated: a literal here would be one English word the catalogue never
- * sees, in a file no translator opens.
- *
- * @internal Exported for its unit test; nothing outside this module imports it.
- */
-export type PaneLabel =
-  | "command"
-  | "output"
-  | "diff"
-  | "contents"
-  | "asked"
-  | "arguments"
-  | "brief"
-  | "plan"
-  | "input"
-  | "reply";
-
-/** One pane of a tool reading.
- *
- * @internal Exported for its unit test; nothing outside this module imports it.
- */
-export type ToolPane =
-  | {
-      kind: "code";
-      /** What the pane holds, for the heading above it. */
-      label: PaneLabel;
-      text: string;
-      language: CodeLanguage;
-      /** The line number the first line carries. */
-      startLine: number;
-      /** Lines shown before the reader expands it; null shows all of them. */
-      preview: number | null;
-    }
-  | { kind: "diff"; label: PaneLabel; path: string; diff: LineDiff }
-  | { kind: "note"; label: PaneLabel; text: string };
+/** One change a call made to a file, as a diff of the two halves it recorded. */
+export type ToolDiff = {
+  path: string;
+  diff: LineDiff;
+  /** The call wrote a file that was not there: the diff is all additions. */
+  created: boolean;
+};
 
 export type ToolDetail = {
-  /** The tool's own name, as the producer recorded it. */
+  /** The tool's short name: no harness prefix, no version, no `mcp__`. */
   name: string;
   group: ToolGroup;
   /**
-   * The one line that says what the step acted on: a command's first line, a
-   * file's path, a search's pattern, a skill's name. Null when the body
-   * carried nothing worth a headline, and the surface then shows the name
-   * alone rather than an empty slot.
+   * The one line that says what the call acted on: a command's first line, a
+   * file's path, a search's pattern, the arguments of a tool with no shape.
+   * Null when the body carried nothing worth a headline.
    */
   headline: string | null;
-  /** A short qualifier after the headline, such as a skill's version. */
+  /** A short qualifier after the headline, such as a read's line range. */
   detail: string | null;
   /** True when the headline is the first line of something longer. */
   multiline: boolean;
-  panes: ToolPane[];
+  /** The call as it was made: a command's whole text, or the input as formatted JSON. */
+  raw: string | null;
+  /** What the call returned, as text; null when the body kept no output. */
+  output: string | null;
+  diffs: ToolDiff[];
 };
 
 // ── Reading the body ────────────────────────────────────────────────────────
@@ -133,7 +94,7 @@ function firstStr(source: Json | null, ...keys: string[]): string | null {
 /**
  * The body text as JSON, or null when it is not JSON at all.
  *
- * @internal Exported for its unit test; nothing outside this module imports it.
+ * @internal Exported for its unit test and the transcript's model.
  */
 export function parseBody(text: string | null): unknown {
   if (text === null) return null;
@@ -184,16 +145,52 @@ export function splitBody(parsed: unknown): {
   return { input: parsed, output: null, name: null };
 }
 
-/** The output's text, however the producer spelled it. */
+/**
+ * The output's text, however the producer spelled it: a string, a shell's
+ * streams, a text field, or a read's `file.content`. An output with none of
+ * those is kept as formatted JSON rather than dropped.
+ */
 function outputText(output: unknown): string | null {
+  if (output === null || output === undefined) return null;
   if (typeof output === "string") return output === "" ? null : output;
-  if (!isObject(output)) return null;
-  const stdout = str(output, "stdout");
-  const stderr = str(output, "stderr");
-  if (stdout !== null || stderr !== null) {
-    return [stdout, stderr].filter((part) => part !== null).join("\n");
+  if (isObject(output)) {
+    const stdout = str(output, "stdout");
+    const stderr = str(output, "stderr");
+    if (stdout !== null || stderr !== null) {
+      return [stdout, stderr].filter((part) => part !== null).join("\n");
+    }
+    const file = output["file"];
+    const content = isObject(file) ? str(file, "content") : null;
+    if (content !== null) return content;
+    const text = firstStr(
+      output,
+      "text",
+      "content",
+      "result",
+      "output",
+      "message",
+    );
+    if (text !== null) return text;
+    // An object with only empty streams carried no text at all.
+    if (
+      Object.keys(output).every((key) => key === "stdout" || key === "stderr")
+    )
+      return null;
   }
-  return firstStr(output, "text", "content", "result", "output", "message");
+  return pretty(output);
+}
+
+/** Formatted JSON, so a value with no text of its own still reads as source. */
+function pretty(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  try {
+    const text = JSON.stringify(value, null, 2);
+    if (typeof text !== "string" || text === "{}" || text === "null")
+      return null;
+    return text;
+  } catch {
+    return null;
+  }
 }
 
 // ── Naming ──────────────────────────────────────────────────────────────────
@@ -207,15 +204,19 @@ const GROUPS: Readonly<Record<string, ToolGroup>> = {
   terminal: "shell",
   read: "read",
   readfile: "read",
+  read_file: "read",
   view: "read",
   cat: "read",
+  get_file_contents: "read",
   edit: "edit",
+  edit_file: "edit",
   multiedit: "edit",
   str_replace: "edit",
   str_replace_editor: "edit",
   applypatch: "edit",
   write: "create",
   writefile: "create",
+  write_file: "create",
   create: "create",
   createfile: "create",
   delete: "delete",
@@ -241,22 +242,31 @@ const GROUPS: Readonly<Record<string, ToolGroup>> = {
   notebookread: "notebook",
 };
 
+/** The harnesses whose tool names a gateway records with a prefix (`claude_code__Bash`). */
+const HARNESS_PREFIX = /^(claude_code|codex|stella|cursor)__/;
+
 /**
- * The family a tool name belongs to; `mcp__server__tool` is always `mcp`.
+ * A tool's name as a reader knows it (mockup `txToolName`): the harness
+ * prefix and a trailing `@version` dropped, and an MCP tool named by its
+ * server and tool (`mcp__github__create_release` reads `github__create_release`).
  *
  * @internal Exported for its unit test; nothing outside this module imports it.
  */
-export function groupOf(name: string): ToolGroup {
-  if (name.startsWith("mcp__")) return "mcp";
-  return GROUPS[name.toLowerCase()] ?? "tool";
+export function shortName(name: string): string {
+  const bare = name.replace(HARNESS_PREFIX, "").replace(/@[\d.]+$/, "");
+  return bare.startsWith("mcp__") ? bare.slice("mcp__".length) : bare;
 }
 
-/** An `mcp__server__tool` name as the server and tool a reader recognises. */
-function mcpParts(name: string): { server: string; tool: string } | null {
-  if (!name.startsWith("mcp__")) return null;
-  const [, server, ...rest] = name.split("__");
-  if (server === undefined || rest.length === 0) return null;
-  return { server, tool: rest.join("__") };
+/**
+ * The family a tool name belongs to; `mcp__server__tool` is always `mcp`, and
+ * an MCP tool whose own name has a shape (`github__get_file_contents`) takes it.
+ *
+ * @internal Exported for its unit test and the Run page's metrics.
+ */
+export function groupOf(name: string): ToolGroup {
+  if (name.startsWith("mcp__")) return "mcp";
+  const bare = name.replace(HARNESS_PREFIX, "").replace(/@[\d.]+$/, "");
+  return GROUPS[bare.toLowerCase()] ?? "tool";
 }
 
 /**
@@ -272,66 +282,27 @@ export function shortPath(path: string): string {
 
 // ── Per-tool readings ───────────────────────────────────────────────────────
 
-/**
- * How many lines of a created file or a fetched body open expanded.
- *
- * @internal Exported for its unit test; nothing outside this module imports it.
- */
-export const CREATE_PREVIEW = 20;
-/**
- * How many lines of a read file, a command's output or an unknown input open
- * expanded.
- *
- * @internal Exported for its unit test; nothing outside this module imports it.
- */
-export const OUTPUT_PREVIEW = 5;
-
 function firstLine(text: string): { head: string; multiline: boolean } {
   const index = text.indexOf("\n");
   if (index === -1) return { head: text, multiline: false };
   return { head: text.slice(0, index), multiline: true };
 }
 
-function shellDetail(
-  name: string,
-  input: Json | null,
-  output: unknown,
-): ToolDetail {
+type Reading = Omit<ToolDetail, "name" | "group" | "raw" | "output"> & {
+  raw?: string | null;
+};
+
+function shellReading(input: Json | null): Reading {
   const command = firstStr(input, "command", "cmd", "script");
   const description = firstStr(input, "description");
-  const panes: ToolPane[] = [];
-  if (command !== null) {
-    panes.push({
-      kind: "code",
-      label: "command",
-      text: command,
-      language: "shell",
-      startLine: 1,
-      // A one-line command is already in the headline, so its pane opens
-      // whole; a longer one opens at the line the headline showed and the
-      // reader unfolds the rest.
-      preview: command.includes("\n") ? 1 : null,
-    });
-  }
-  const out = outputText(output);
-  if (out !== null) {
-    panes.push({
-      kind: "code",
-      label: "output",
-      text: out,
-      language: "text",
-      startLine: 1,
-      preview: OUTPUT_PREVIEW,
-    });
-  }
   const head = command === null ? null : firstLine(command);
   return {
-    name,
-    group: groupOf(name),
     headline: head?.head ?? description,
     detail: command === null ? null : description,
     multiline: head?.multiline ?? false,
-    panes,
+    // The command is the call; its JSON wrapper would only escape its lines.
+    raw: command,
+    diffs: [],
   };
 }
 
@@ -346,7 +317,7 @@ function pathOf(input: Json | null): string | null {
   );
 }
 
-function readDetail(name: string, input: Json | null): ToolDetail {
+function readReading(input: Json | null): Reading {
   const path = pathOf(input);
   const offset = input?.["offset"];
   const limit = input?.["limit"];
@@ -359,28 +330,16 @@ function readDetail(name: string, input: Json | null): ToolDetail {
         }`
       : null;
   return {
-    name,
-    group: groupOf(name),
     headline: path === null ? null : shortPath(path),
     detail: range,
     multiline: false,
-    panes: [],
+    diffs: [],
   };
 }
 
-/** One `old_string`/`new_string` pair as a diff pane. */
-function editPane(path: string, before: string, after: string): ToolPane {
-  return {
-    kind: "diff",
-    label: "diff",
-    path,
-    diff: buildDiff(before, after),
-  };
-}
-
-function editDetail(name: string, input: Json | null): ToolDetail {
+function editReading(input: Json | null): Reading {
   const path = pathOf(input) ?? "(no path recorded)";
-  const panes: ToolPane[] = [];
+  const diffs: ToolDiff[] = [];
   const edits = input?.["edits"];
   if (Array.isArray(edits)) {
     // MultiEdit: every replacement against the same file, in the order it
@@ -389,82 +348,65 @@ function editDetail(name: string, input: Json | null): ToolDetail {
       if (!isObject(edit)) continue;
       const before = firstStr(edit, "old_string", "oldString") ?? "";
       const after = firstStr(edit, "new_string", "newString") ?? "";
-      panes.push(editPane(path, before, after));
+      diffs.push({ path, diff: buildDiff(before, after), created: false });
     }
   } else {
     const before = firstStr(input, "old_string", "oldString");
     const after = firstStr(input, "new_string", "newString");
     if (before !== null || after !== null) {
-      panes.push(editPane(path, before ?? "", after ?? ""));
+      diffs.push({
+        path,
+        diff: buildDiff(before ?? "", after ?? ""),
+        created: false,
+      });
     }
   }
-  const total = panes.reduce(
-    (sum, pane) => (pane.kind === "diff" ? sum + pane.diff.added : sum),
-    0,
-  );
-  const cut = panes.reduce(
-    (sum, pane) => (pane.kind === "diff" ? sum + pane.diff.removed : sum),
-    0,
-  );
   return {
-    name,
-    group: groupOf(name),
     headline: shortPath(path),
-    detail: panes.length === 0 ? null : `+${String(total)} −${String(cut)}`,
+    detail: null,
     multiline: false,
-    panes,
+    diffs,
   };
 }
 
-function createDetail(name: string, input: Json | null): ToolDetail {
+/** A new file reads as the diff it is: every line an addition (`txDiffBlock`, "new file"). */
+function createReading(input: Json | null): Reading {
   const path = pathOf(input);
   const content = firstStr(input, "content", "contents", "text", "new_string");
-  const panes: ToolPane[] = [];
-  if (content !== null) {
-    panes.push({
-      kind: "code",
-      label: "contents",
-      text: content,
-      language: path === null ? "text" : languageForPath(path),
-      startLine: 1,
-      preview: CREATE_PREVIEW,
-    });
-  }
-  const lineCount = content === null ? null : content.split("\n").length;
   return {
-    name,
-    group: groupOf(name),
     headline: path === null ? null : shortPath(path),
-    detail: lineCount === null ? null : `${String(lineCount)} lines`,
+    detail: null,
     multiline: false,
-    panes,
+    diffs:
+      content === null
+        ? []
+        : [
+            {
+              path: path ?? "(no path recorded)",
+              diff: buildDiff("", content),
+              created: true,
+            },
+          ],
   };
 }
 
-function searchDetail(name: string, input: Json | null): ToolDetail {
+function searchReading(input: Json | null): Reading {
   const pattern = firstStr(input, "pattern", "query", "regex", "glob");
   const where = firstStr(input, "path", "directory", "include", "cwd");
   return {
-    name,
-    group: groupOf(name),
     headline: pattern,
     detail: where === null ? null : `in ${shortPath(where)}`,
     multiline: false,
-    panes: [],
+    diffs: [],
   };
 }
 
-function webDetail(name: string, input: Json | null): ToolDetail {
-  const url = firstStr(input, "url", "query");
-  const prompt = firstStr(input, "prompt");
+function webReading(input: Json | null): Reading {
   return {
-    name,
-    group: groupOf(name),
-    headline: url,
+    headline: firstStr(input, "url", "query"),
     detail: null,
     multiline: false,
-    panes:
-      prompt === null ? [] : [{ kind: "note", label: "asked", text: prompt }],
+    diffs: [],
   };
 }
 
@@ -473,141 +415,132 @@ function webDetail(name: string, input: Json | null): ToolDetail {
  * shipped no version reads as the skill's name alone, because a version the
  * record does not hold is not one this page may print.
  */
-function skillDetail(name: string, input: Json | null): ToolDetail {
-  const skill = firstStr(input, "skill", "name", "id");
+function skillReading(input: Json | null): Reading {
   const version = firstStr(input, "version", "skill_version", "v");
-  const args = firstStr(input, "args", "arguments", "input");
   return {
-    name,
-    group: "skill",
-    headline: skill,
+    headline: firstStr(input, "skill", "name", "id"),
     detail: version === null ? null : `v${version.replace(/^v/, "")}`,
     multiline: false,
-    panes:
-      args === null ? [] : [{ kind: "note", label: "arguments", text: args }],
+    diffs: [],
   };
 }
 
-function agentDetail(name: string, input: Json | null): ToolDetail {
+function agentReading(input: Json | null): Reading {
   const type = firstStr(input, "subagent_type", "agent_type", "type");
   const what = firstStr(input, "description", "name");
-  const prompt = firstStr(input, "prompt", "task", "instructions");
   return {
-    name,
-    group: "agent",
     headline: what ?? type,
     detail: what !== null && type !== null ? type : null,
     multiline: false,
-    panes:
-      prompt === null ? [] : [{ kind: "note", label: "brief", text: prompt }],
+    diffs: [],
   };
 }
 
-function planDetail(name: string, input: Json | null): ToolDetail {
+function planReading(input: Json | null): Reading {
   const todos = input?.["todos"];
-  const count = Array.isArray(todos) ? todos.length : null;
   const plan = firstStr(input, "plan");
   return {
-    name,
-    group: "plan",
-    headline:
-      count === null
-        ? plan === null
-          ? null
-          : firstLine(plan).head
-        : `${String(count)} items`,
+    headline: Array.isArray(todos)
+      ? `${String(todos.length)} items`
+      : plan === null
+        ? null
+        : firstLine(plan).head,
     detail: null,
     multiline: false,
-    panes: plan === null ? [] : [{ kind: "note", label: "plan", text: plan }],
+    diffs: [],
   };
 }
 
-/** Pretty JSON, so an unknown tool's input is at least readable as source. */
-function jsonPane(label: PaneLabel, value: unknown): ToolPane | null {
-  if (value === null || value === undefined) return null;
-  try {
-    const text = JSON.stringify(value, null, 2);
-    if (typeof text !== "string" || text === "{}" || text === "null")
-      return null;
-    return {
-      kind: "code",
-      label,
-      text,
-      language: "json",
-      startLine: 1,
-      preview: OUTPUT_PREVIEW,
-    };
-  } catch {
-    return null;
+/** A scalar argument as text; null for an object, an array or an empty string. */
+function scalar(value: unknown): string | null {
+  if (typeof value === "string") return value === "" ? null : value;
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
+  return null;
+}
+
+/**
+ * A tool with no shape of its own: its arguments on one line, in the order
+ * the call gave them (mockup `txRow`, `.arg`). The first reads bare, because
+ * it is nearly always what the call is about (a repository, a path, a query);
+ * the rest read as `key value`, so `closed` is never left to mean itself.
+ */
+function genericReading(input: Json | null): Reading {
+  const parts = Object.entries(input ?? {}).flatMap(([key, value], index) => {
+    const text = scalar(value);
+    if (text === null) return [];
+    const { head } = firstLine(text);
+    return [index === 0 ? head : `${key} ${head}`];
+  });
+  const firstValue = Object.values(input ?? {}).map(scalar)[0] ?? null;
+  return {
+    headline: parts.length === 0 ? null : parts.join(" · "),
+    detail: null,
+    multiline: firstValue === null ? false : firstLine(firstValue).multiline,
+    diffs: [],
+  };
+}
+
+function readingOf(group: ToolGroup, input: Json | null): Reading {
+  switch (group) {
+    case "shell":
+      return shellReading(input);
+    case "read":
+    case "delete":
+      return readReading(input);
+    case "edit":
+    case "notebook":
+      return editReading(input);
+    case "create":
+      return createReading(input);
+    case "search":
+      return searchReading(input);
+    case "web":
+      return webReading(input);
+    case "skill":
+      return skillReading(input);
+    case "agent":
+      return agentReading(input);
+    case "plan":
+      return planReading(input);
+    default:
+      return genericReading(input);
   }
 }
 
 /**
- * A tool with no shape of its own. The headline is the input's first short
- * string value, which in practice is the thing the call was about, and the
- * whole input follows as formatted JSON.
- */
-function genericDetail(
-  name: string,
-  input: Json | null,
-  output: unknown,
-): ToolDetail {
-  const mcp = mcpParts(name);
-  const candidate = Object.entries(input ?? {}).find(
-    ([, value]) => typeof value === "string" && value !== "",
-  );
-  const raw = typeof candidate?.[1] === "string" ? candidate[1] : null;
-  const head = raw === null ? null : firstLine(raw);
-  const panes = [jsonPane("input", input), jsonPane("output", output)].filter(
-    (pane): pane is ToolPane => pane !== null,
-  );
-  return {
-    name: mcp === null ? name : mcp.tool,
-    group: groupOf(name),
-    headline: head?.head ?? null,
-    detail: mcp?.server ?? null,
-    multiline: head?.multiline ?? false,
-    panes,
-  };
-}
-
-/**
- * What the step did, read from the tool's name and the body the recorder
+ * What the call did, read from the tool's name and the body the recorder
  * kept. `name` is the tool the frame identified; the body may name it again,
  * and the body wins only when the frame named nothing.
+ *
+ * @internal Exported for its unit test; the transcript reads a body it has
+ * already parsed, through `toolDetailOf`.
  */
 export function toolDetail(
   name: string | null,
   body: string | null,
 ): ToolDetail | null {
-  const parsed = parseBody(body);
+  return toolDetailOf(name, parseBody(body));
+}
+
+/**
+ * `toolDetail` over a value already parsed: a model's `tool_use` block, whose
+ * input arrives as an object and was never a body of its own.
+ */
+export function toolDetailOf(
+  name: string | null,
+  parsed: unknown,
+): ToolDetail | null {
   const { input, output, name: bodyName } = splitBody(parsed);
   const tool = name ?? bodyName;
   if (tool === null) return null;
-  switch (groupOf(tool)) {
-    case "shell":
-      return shellDetail(tool, input, output);
-    case "read":
-      return readDetail(tool, input);
-    case "edit":
-      return editDetail(tool, input);
-    case "create":
-      return createDetail(tool, input);
-    case "delete":
-      return readDetail(tool, input);
-    case "search":
-      return searchDetail(tool, input);
-    case "web":
-      return webDetail(tool, input);
-    case "skill":
-      return skillDetail(tool, input);
-    case "agent":
-      return agentDetail(tool, input);
-    case "plan":
-      return planDetail(tool, input);
-    case "notebook":
-      return editDetail(tool, input);
-    default:
-      return genericDetail(tool, input, output);
-  }
+  const group = groupOf(tool);
+  const { raw, ...reading } = readingOf(group, input);
+  return {
+    name: shortName(tool),
+    group,
+    ...reading,
+    raw: raw ?? pretty(input),
+    output: outputText(output),
+  };
 }

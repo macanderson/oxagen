@@ -1451,3 +1451,48 @@ describe("the credential basis on a git_push frame (#3788)", () => {
     expect(push?.attrs?.["oxagen.credential_basis"]).toBe("harness_held");
   });
 });
+
+describe("a bundle that did not verify, on the daemon's path (#3944)", () => {
+  const fixture = (name: string) =>
+    loadFixtures().find((f) => f.name === name) as Fixture;
+  const decisionOf = (events: TachoEvent[]) =>
+    events.find((event) => event.kind === "policy_decision")?.body;
+
+  it("denies a mutating tool whatever mode the bundle claims, and lets a read-only one through", async () => {
+    // The daemon verifies the same host.json the hook reads and hands the
+    // result to this path. An unverified bundle claiming observe mode used to
+    // answer allow for every tool, so editing `mode` in the file switched
+    // enforcement off here as well as on the hook's own path.
+    const { deps } = harness(
+      {
+        mode: "observe",
+        permissions: { allow: ["Bash(*)"], deny: [], ask: [] },
+      },
+      { verified: false },
+    );
+    const bash = await handleHookEvent(
+      fixture("06-PreToolUse.json").stdin,
+      {},
+      deps,
+    );
+    expect(bash.response).toMatchObject({
+      hookSpecificOutput: { permissionDecision: "deny" },
+    });
+    expect(decisionOf(bash.events)).toMatchObject({
+      policy_decision: "deny",
+      policy_reason_code: "bundle_unverified",
+    });
+    const read = await handleHookEvent(
+      fixture("04-PreToolUse.json").stdin,
+      {},
+      deps,
+    );
+    expect(read.response).not.toMatchObject({
+      hookSpecificOutput: { permissionDecision: "deny" },
+    });
+    expect(decisionOf(read.events)).toMatchObject({
+      policy_decision: "allow",
+      policy_reason_code: "bundle_unverified",
+    });
+  });
+});

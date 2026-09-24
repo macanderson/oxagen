@@ -103,8 +103,11 @@ the calls the harness routes through it (a person can remove the hook entry,
 disable hooks, or run another build of the harness, and none of that is visible to
 Oxagen). It fails open exactly where the mandate names no rule for a tool,
 deferring to the harness's own permission prompt rather than to a silent Oxagen
-allow. Today agents sit on observe or harness; the gateway tier is in build
-and the contained tier is not started. Completion checks are an optional
+allow. Today agents sit on observe or harness, and the gateway tier is in build.
+The contained tier's launcher is on `main` (ADR-152): `tacho run --contained`
+starts Claude Code or Codex in a Docker container, on Linux with Docker only.
+Its CI job stays off until `OXAGEN_CONTAINED_ENABLED` is set, and no production
+run has reached the tier yet. Completion checks are an optional
 control for bounded tasks, and a passing verdict means the specified checks held.
 Cost copy claims attribution, not savings, unless the workload was measured. The
 approved copy lives in the message registry in `oxagenai/oxagen-brand` `messages/`.
@@ -141,9 +144,10 @@ and then passes it is a label made as a side effect of doing the work.
    a product. Real gap.
 5. **Vendor-neutral agent platform (no cloud gravity).** Every full platform pulls
    toward a cloud (Azure/GCP) or a model (OpenAI/Anthropic/Cognition). A credibly
-   neutral, BYOK, self-hostable-or-hosted platform is underserved — especially for
-   teams burned by OpenAI's AgentKit deprecation and Microsoft's forced AutoGen/SK
-   migration.
+   neutral BYOK platform is underserved, especially for teams burned by OpenAI's
+   AgentKit deprecation and Microsoft's forced AutoGen/SK migration. Oxagen is
+   hosted today. Single-tenant deployment in a customer's own AWS account is a
+   possible later offer.
 6. **Fleet-scale lineage + metering.** Everyone ships "parallel agents"; nobody
    records a fleet where each agent grounds in a shared typed graph and every step
    emits lineage + cost. Partially owned by no one — but requires proof to claim.
@@ -203,7 +207,8 @@ enforce or record it:
   entitlement gates and full API/MCP/CLI/UI parity; nothing ships as an ungoverned
   tool surface.
 - **Vendor neutrality:** BYOK paths, model/provider abstraction (`modelIdOf()`, the AI
-  Gateway), self-hostable surfaces, and zero hard vendor lock-in.
+  Gateway), a hosted service that could later deploy single-tenant into a
+  customer's own AWS account, and zero hard vendor lock-in.
 - **External-agent governance:** Oxagen governs ANY agent, first- or third-party
   (ADR-040, ADR-043). Wrapper SDKs/shims that make external agents observable,
   permission-requesting, and CGP-conformant advance the wedge directly.
