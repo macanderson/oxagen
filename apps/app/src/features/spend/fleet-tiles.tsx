@@ -19,6 +19,11 @@ type FleetSpendTilesProps = {
   embedded?: boolean;
 };
 
+/**
+ * Spend today and Cache hit rate, as two tiles. No page draws them since
+ * Fleet's rev1 rebuild (#3928) sums its own rows.
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export async function FleetSpendTiles({
   ctx,
   source,
