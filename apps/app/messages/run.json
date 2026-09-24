@@ -832,7 +832,9 @@
         "title": "This run could not be loaded",
         "body": "The control plane answered <code>{answer}</code>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
         "retry": "Try again",
-        "readAt": "read at {at}"
+        "readAt": "read at {at}",
+        "incident": "Open an incident",
+        "incidentGap": "Oxagen cannot open an incident from this page yet. Report the code and the time above to your organization owner."
       },
       "denied": {
         "title": "You cannot see this run",
@@ -842,7 +844,9 @@
         "roles": "organization {org} · workspace {ws} · {slug}",
         "neededLabel": "Needed",
         "decidedByLabel": "Decided by",
-        "decidedBy": "the workspace’s decision rules · deny wins over every allow"
+        "decidedBy": "the workspace’s decision rules · deny wins over every allow",
+        "request": "Request access",
+        "requestGap": "Oxagen cannot file an access request from this page yet. An organization owner grants the role on the Organization page."
       },
       "pending": {
         "title": "Access to this run is waiting for approval",

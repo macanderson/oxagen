@@ -3,12 +3,10 @@
 // the page BODY and never the shell, so the sidebar, the breadcrumbs and the
 // search stay and a person keeps their bearings.
 //
-// The copy is the spec's, verbatim. Two controls the spec draws are not here
-// and neither is stubbed: Request access and Open an incident each need a write
-// no contract carries (no capability lets a person ask for a role or file an
-// incident). A button that silently did nothing would be worse than none, so
-// the denied state names the permission and who can grant it, and the error
-// state names its code and the instant it was read so it can be reported.
+// The copy is the spec's, verbatim. Two controls the spec draws have no write
+// behind them: Request access and Open an incident each need a capability no
+// contract carries yet (#3846, #3847). Each renders as a disabled button with
+// the sentence that says what is missing, so neither silently does nothing.
 import { useTranslations } from "next-intl";
 import type { Read } from "@/data/read";
 import type { OrgRole, WsRole } from "@/server/viewer";
@@ -21,6 +19,42 @@ import { SafeLink } from "@/ui/navigation";
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
 type Place = { org: string; ws: string };
+
+/**
+ * A spec control with no write behind it: a real disabled button, described
+ * by the sentence that says why it is off.
+ */
+function Unbacked({
+  label,
+  why,
+  testId,
+}: {
+  label: string;
+  why: string;
+  testId: string;
+}) {
+  const id = `${testId}-why`;
+  return (
+    <span className="flex flex-col items-start gap-1">
+      <button
+        type="button"
+        disabled
+        aria-describedby={id}
+        data-testid={testId}
+        data-gap={testId}
+        className={`${buttonSecondary} disabled:cursor-not-allowed disabled:opacity-60`}
+      >
+        {label}
+      </button>
+      <span
+        id={id}
+        className="max-w-xs text-left text-[11px] text-muted-foreground"
+      >
+        {why}
+      </span>
+    </span>
+  );
+}
 
 function BackToFleet({ org, ws }: Place) {
   const t = useTranslations("run.state");
@@ -84,7 +118,16 @@ export function RunReadFailure({
           tone="deny"
           testId="run-denied"
           title={t("denied.title")}
-          actions={<BackToFleet org={org} ws={ws} />}
+          actions={
+            <>
+              <Unbacked
+                label={t("denied.request")}
+                why={t("denied.requestGap")}
+                testId="run-request-access"
+              />
+              <BackToFleet org={org} ws={ws} />
+            </>
+          }
         >
           <span className="flex flex-col gap-3">
             <span>
@@ -135,9 +178,16 @@ export function RunReadFailure({
           testId="run-error"
           title={t("error.title")}
           actions={
-            <SafeLink to={retry} className={buttonPrimary}>
-              {t("error.retry")}
-            </SafeLink>
+            <>
+              <SafeLink to={retry} className={buttonPrimary}>
+                {t("error.retry")}
+              </SafeLink>
+              <Unbacked
+                label={t("error.incident")}
+                why={t("error.incidentGap")}
+                testId="run-open-incident"
+              />
+            </>
           }
         >
           <span className="flex flex-col gap-3">

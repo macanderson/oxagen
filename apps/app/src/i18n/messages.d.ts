@@ -4459,6 +4459,8 @@ type Messages = {
         body: string;
         retry: string;
         readAt: string;
+        incident: string;
+        incidentGap: string;
       };
       denied: {
         title: string;
@@ -4469,6 +4471,8 @@ type Messages = {
         neededLabel: string;
         decidedByLabel: string;
         decidedBy: string;
+        request: string;
+        requestGap: string;
       };
       pending: {
         title: string;

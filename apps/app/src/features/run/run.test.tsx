@@ -1390,6 +1390,13 @@ describe("failures", () => {
       "/acme/core-platform/runs/tse_7k2m9q",
     );
     expect(screen.getByTestId("run-error")).toHaveTextContent(/read at /);
+    // Open an incident has no write behind it, so it is a real disabled
+    // button that says why, never a control that silently does nothing.
+    const incident = state.getByRole("button", { name: "Open an incident" });
+    expect(incident).toBeDisabled();
+    expect(incident).toHaveAccessibleDescription(
+      "Oxagen cannot open an incident from this page yet. Report the code and the time above to your organization owner.",
+    );
     // The header, the tabs and the side column are not drawn over a failure.
     expect(screen.queryByTestId("run-header")).toBeNull();
     expect(screen.queryByRole("tablist")).toBeNull();
@@ -1412,6 +1419,11 @@ describe("failures", () => {
     ).toBeTruthy();
     expect(state.getByText("Needed")).toBeTruthy();
     expect(state.getByText("Decided by")).toBeTruthy();
+    const request = state.getByRole("button", { name: "Request access" });
+    expect(request).toBeDisabled();
+    expect(request).toHaveAccessibleDescription(
+      "Oxagen cannot file an access request from this page yet. An organization owner grants the role on the Organization page.",
+    );
     expect(state.getByRole("link", { name: "Back to Fleet" })).toHaveAttribute(
       "href",
       "/acme/core-platform",
