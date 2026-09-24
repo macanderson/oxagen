@@ -6458,7 +6458,6 @@ type Messages = {
       label: string;
       spend: string;
       currency: string;
-      estimated: string;
       tokens: string;
       cache: string;
       cacheNotRecorded: string;
@@ -6466,6 +6465,7 @@ type Messages = {
       observedNote: string;
       wasted: string;
       wastedShare: string;
+      estimated: string;
     };
     states: {
       loading: string;

@@ -605,14 +605,14 @@
       "label": "Month to date",
       "spend": "Spend",
       "currency": "{currency}",
-      "estimated": "{count, plural, one {includes # open run as an estimate} other {includes # open runs as estimates}}",
       "tokens": "Tokens",
       "cache": "{share} served from cache",
       "cacheNotRecorded": "cache share not recorded",
       "observed": "Observed by the gateway",
       "observedNote": "of tokens counted by the proxy",
       "wasted": "Wasted",
-      "wastedShare": "{share} of spend"
+      "wastedShare": "{share} of spend",
+      "estimated": "{count, plural, one {includes an estimate for # open run} other {includes estimates for # open runs}}"
     },
     "states": {
       "loading": "Loading spend",

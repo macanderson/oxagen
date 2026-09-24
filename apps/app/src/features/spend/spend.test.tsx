@@ -402,6 +402,38 @@ function headers(table: HTMLElement): string[] {
     .map((th) => th.textContent);
 }
 
+/** The month by model, with `estimatedRuns` runs still open. */
+function openRuns(estimatedRuns: number) {
+  const month = monthByModel();
+  if (!month.ok) throw new Error("monthByModel must answer");
+  byGroup.mockImplementation((_ctx, groupBy) =>
+    Promise.resolve(
+      groupBy === "model"
+        ? readOk({ ...month.value, estimatedRuns })
+        : report([]),
+    ),
+  );
+}
+
+describe("Spend › open runs (#3980)", () => {
+  it("says the Spend tile includes estimates while runs in the month are still open", async () => {
+    loaded();
+    openRuns(2);
+    await renderSpend();
+    expect(tile("Spend")).toHaveTextContent(
+      "includes estimates for 2 open runs",
+    );
+  });
+
+  it("says nothing of estimates once every run in the month has sealed (negative)", async () => {
+    loaded();
+    openRuns(0);
+    await renderSpend();
+    expect(tile("Spend")).not.toHaveTextContent("estimate");
+    expect(screen.queryByTestId("spend-estimate")).toBeNull();
+  });
+});
+
 describe("Spend › header, tiles and tabs", () => {
   it("names the workspace, says what the page is for, and offers Export report and Set a budget with one gold action", async () => {
     loaded();
@@ -1208,27 +1240,6 @@ describe("Spend › states", () => {
     budgets.mockResolvedValue(readOk([]));
     await renderSpend();
     expect(screen.getByTestId("spend-pending")).toHaveTextContent("areq_1");
-  });
-
-  it("says the month's Spend includes open runs at their running cost (#3980)", async () => {
-    loaded();
-    byGroup.mockImplementation((_ctx, groupBy) => {
-      if (groupBy !== "model") return Promise.resolve(report([]));
-      const month = monthByModel();
-      if (!month.ok) return Promise.resolve(month);
-      const { period, total, rows } = month.value;
-      return Promise.resolve(readOk({ period, total, rows, estimatedRuns: 2 }));
-    });
-    await renderSpend();
-    expect(screen.getByTestId("spend-estimated")).toHaveTextContent(
-      "includes 2 open runs as estimates",
-    );
-  });
-
-  it("says nothing of estimates once every run in the month has sealed (negative)", async () => {
-    loaded();
-    await renderSpend();
-    expect(screen.queryByTestId("spend-estimated")).toBeNull();
   });
 
   it("replaces only a tab's body when the tab's own read fails, keeping one h1 (negative)", async () => {
