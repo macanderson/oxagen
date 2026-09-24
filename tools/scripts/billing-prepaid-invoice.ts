@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * billing-prepaid-invoice: issue an enterprise's prepaid order on a Stripe
- * invoice through `create_prepaid_invoice` (ADR-158).
+ * invoice through `create_prepaid_invoice` (ADR-165).
  *
  *   pnpm billing:prepaid-invoice --org acme --agreement MSA-2026-014 --po PO-7781 \
  *     --licence-usd 120000 --licence-from 2026-10-01 --licence-to 2027-10-01 \

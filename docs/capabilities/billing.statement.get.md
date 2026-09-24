@@ -10,7 +10,7 @@
 
 ## Intent
 
-The organization's billing statement for one period, as structured data (ADR-158). It is the document a finance team reconciles an invoice against. Every figure is read from a ledger, and the `reconciliation` list names each identity the figures satisfy and whether it held.
+The organization's billing statement for one period, as structured data (ADR-165). It is the document a finance team reconciles an invoice against. Every figure is read from a ledger, and the `reconciliation` list names each identity the figures satisfy and whether it held.
 
 A period is one of:
 

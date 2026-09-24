@@ -395,7 +395,7 @@ export function buildProgram(): Command {
     });
 
   // ── billing: the organization's statement (get_billing_statement /
-  //    export_billing_statement, ADR-158). Owner/Admin/Billing only. ────────
+  //    export_billing_statement, ADR-165). Owner/Admin/Billing only. ────────
 
   const billingCmd = program
     .command("billing")

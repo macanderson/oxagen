@@ -1,6 +1,6 @@
 /**
  * `create_prepaid_invoice`: the platform operator issues an enterprise's
- * prepaid order and its Stripe invoice (billing.prepaid_orders, ADR-158).
+ * prepaid order and its Stripe invoice (billing.prepaid_orders, ADR-165).
  *
  * One order carries up to three lines, each optional but at least one:
  *   - `licence`: the platform licence for a period, printed with the

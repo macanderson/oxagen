@@ -1,6 +1,6 @@
 /**
  * `list_prepaid_orders`: an organization's prepaid orders, newest first
- * (billing.prepaid_orders, ADR-158).
+ * (billing.prepaid_orders, ADR-165).
  *
  * A prepaid order is what an enterprise paid for in advance on one invoice:
  * the platform licence for a period, governed action units, and usage

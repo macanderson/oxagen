@@ -808,9 +808,9 @@ orgScoped.route("/cost/price-entries/remove", costPriceEntryRemoveRoute);
 orgScoped.route("/cost/unpriced-models", costUnpricedModelListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
-// ADR-158: the prepaid orders an enterprise paid for in advance.
+// ADR-165: the prepaid orders an enterprise paid for in advance.
 orgScoped.route("/billing/prepaid-orders", billingPrepaidOrderListRoute);
-// ADR-158: the billing statement for a period, as data and as a file.
+// ADR-165: the billing statement for a period, as data and as a file.
 orgScoped.route("/billing/statement", billingStatementGetRoute);
 orgScoped.route("/billing/statement/export", billingStatementExportRoute);
 orgScoped.route("/billing/auto-topup", billingAutoTopupSetRoute);

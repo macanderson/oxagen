@@ -1,6 +1,6 @@
 /**
  * `get_billing_statement`: the organization's billing statement for one
- * period, as structured data (ADR-158). A period is a UTC calendar week
+ * period, as structured data (ADR-165). A period is a UTC calendar week
  * (Monday to Sunday), month, quarter or year containing an anchor date, or a
  * custom range longer than 48 hours and at most 366 days.
  *

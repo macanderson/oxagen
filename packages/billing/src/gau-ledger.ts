@@ -1,5 +1,5 @@
 /**
- * gau-ledger.ts: the itemised record behind the month bucket (ADR-158).
+ * gau-ledger.ts: the itemised record behind the month bucket (ADR-165).
  *
  * `billing.gau_buckets.used_gau` is the balance the gate reads. On its own it
  * is a number nobody can cite: a customer disputing an invoice line, or asking

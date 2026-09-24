@@ -1,6 +1,6 @@
 "use server";
 // The Statements section's one call: export_billing_statement on the kernel
-// seam (ADR-158). The period is checked here with the form's own rules and
+// seam (ADR-165). The period is checked here with the form's own rules and
 // again by the handler, which also checks the role (org Owner, Admin or
 // Billing, INV-29) and is the authority on both.
 //

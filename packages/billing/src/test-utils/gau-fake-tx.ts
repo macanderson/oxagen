@@ -72,7 +72,7 @@ export interface FakeGauStore {
   settlements: Row[];
   reversals: Row[];
   paymentMethods: Row[];
-  /** billing.gau_ledger (ADR-158): one row per billed governed action. */
+  /** billing.gau_ledger (ADR-165): one row per billed governed action. */
   ledger: Row[];
   log: StatementLog[];
 }

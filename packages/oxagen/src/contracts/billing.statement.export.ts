@@ -1,6 +1,6 @@
 /**
  * `export_billing_statement`: the organization's billing statement for one
- * period as a file (ADR-158). The period rules are `get_billing_statement`'s.
+ * period as a file (ADR-165). The period rules are `get_billing_statement`'s.
  *
  *   - `csv`: a header block with the statement's summary, then one line per
  *     `billing.gau_ledger` row billed in the period (billed and occurred

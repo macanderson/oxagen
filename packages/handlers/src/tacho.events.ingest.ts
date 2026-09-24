@@ -23,7 +23,7 @@
 // on a root session emits `cost/run.sealed` so the rollup job rebuilds the
 // run's `cost.run_totals` row from its frames (ADR-060 §3).
 //
-// Billing (ADR-158): each tool call a wrapped harness made and Tacho allowed
+// Billing (ADR-165): each tool call a wrapped harness made and Tacho allowed
 // is one governed action unit on the per-action ledger, keyed by the call's
 // `tool_use_id` so a re-sent batch bills nothing twice (`isBillableToolCall`
 // has the rule). Denials are free. The control envelope is built after
@@ -481,7 +481,7 @@ export interface ToolCallAttribution {
 }
 
 /**
- * The ledger entries for a batch's billable tool calls (ADR-158): one per
+ * The ledger entries for a batch's billable tool calls (ADR-165): one per
  * call, keyed `tacho:<session_uuid>:<tool_use_id>`.
  *
  * `tool_use_id` is unique within a session for every harness Tacho wraps
@@ -2060,7 +2060,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     }
   }
 
-  // Billing: one governed action unit per allowed tool call (ADR-158). Run
+  // Billing: one governed action unit per allowed tool call (ADR-165). Run
   // after every write above, so a charge never lands for a frame the record
   // does not hold, and before the control envelope, for the reason given
   // there.

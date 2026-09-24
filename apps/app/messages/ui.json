@@ -146,6 +146,25 @@
       "previous": "Previous page",
       "next": "Next page",
       "pages": "{label} pages"
+    },
+    "desktopDownloads": {
+      "title": "Install the Oxagen app",
+      "lead": "Install it first, on the machine the agent runs on. The app puts the <code>oxagen</code> and <code>tacho</code> commands on PATH, and enrollment runs through them.",
+      "platforms": {
+        "macos": "macOS",
+        "windows": "Windows",
+        "linux": "Linux"
+      },
+      "installers": {
+        "macAppleSilicon": "Apple silicon (.dmg)",
+        "macIntel": "Intel (.dmg)",
+        "windowsExe": "Installer (.exe)",
+        "windowsMsi": "Installer (.msi)",
+        "linuxDeb": ".deb (Debian, Ubuntu)",
+        "linuxRpm": ".rpm (Fedora, RHEL)",
+        "linuxAppImage": "AppImage"
+      },
+      "all": "Every version, with SHA-256 checksums"
     }
   }
 }

@@ -547,7 +547,7 @@ export const orgBillingSettings = billingSchema.table(
     // debitable only under the reason that accrued it.
     //
     // A value is the sub-credit remainder, in [0, 1e6), plus, for a reason
-    // whose shortfall is kept (`consume_assistant_tokens`, ADR-158), the whole
+    // whose shortfall is kept (`consume_assistant_tokens`, ADR-165), the whole
     // credits the balance could not cover times 1e6. consumeCredits collects
     // that debt first on the reason's next charge, and settleOwedCredits
     // collects it from the next grant. consumeCredits refuses to write a value
@@ -1172,7 +1172,7 @@ export const gauReversals = billingSchema.table(
 
 // ── gau_ledger ───────────────────────────────────────────────────────────────
 //
-// ADR-158: one row per billed governed action, written in the same
+// ADR-165: one row per billed governed action, written in the same
 // transaction that adds its units to the month bucket's `used_gau`. The bucket
 // is the balance the gate reads; this is the itemisation behind it, so a
 // statement or an invoice line can be cited down to the agent, the operator
@@ -1276,7 +1276,7 @@ export const gauLedger = billingSchema.table(
 
 // ── prepaid_orders ───────────────────────────────────────────────────────────
 //
-// ADR-158: an enterprise order paid in advance on a Stripe invoice. One order
+// ADR-165: an enterprise order paid in advance on a Stripe invoice. One order
 // can carry up to three lines: the platform licence for a period, prepaid
 // governed action units, and prepaid usage credits for the in-app assistant.
 // A platform operator issues it (`create_prepaid_invoice`, platformOnly); the

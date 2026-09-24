@@ -1,4 +1,4 @@
-# ADR-158: Every billed governed action is a ledger row, wrapped tool calls bill, and statements and prepaid orders read from the ledger
+# ADR-165: Every billed governed action is a ledger row, wrapped tool calls bill, and statements and prepaid orders read from the ledger
 
 Status: Accepted
 Date: 2026-09-23

@@ -377,7 +377,7 @@ function modelToolCallId(
 
 /**
  * Record one governed action unit for an external MCP tool call that
- * completed (ADR-158, source `external_tool`).
+ * completed (ADR-165, source `external_tool`).
  *
  * The call is keyed by the model's tool-call id within the run (or the turn,
  * when there is no run), because a provider's id is unique within a
@@ -778,7 +778,7 @@ export async function materializeTools(
               await refuseIfKilled();
             }
             // The model's tool-call id rides on the context so the kernel keys
-            // this call's ledger row by it (ADR-158): a retried tool call bills
+            // this call's ledger row by it (ADR-165): a retried tool call bills
             // once. Without an id the context goes through unchanged.
             const toolCallId = modelToolCallId(options);
             const result = await invoke(
@@ -865,7 +865,7 @@ export async function materializeTools(
   //   2. METERED via insertToolInvocation — whether the call was allowed,
   //      blocked by IAM, or failed. The full invocation trail is preserved
   //      ([[instrument-everything]]).
-  //   3. BILLED as one governed action unit when it completes (ADR-158):
+  //   3. BILLED as one governed action unit when it completes (ADR-165):
   //      admitted by `assertGauAvailable` after IAM, recorded on the ledger
   //      by `recordExternalToolCall` after the server answers. A refused or
   //      failed call bills nothing.
@@ -1130,7 +1130,7 @@ export async function materializeTools(
               }
               // ── End IAM gate ────────────────────────────────────────────────
 
-              // ── Governed action admission (ADR-055, ADR-158) ────────────────
+              // ── Governed action admission (ADR-055, ADR-165) ────────────────
               // An external call Oxagen authorises bills one governed action
               // unit, so it is admitted by the same gate the kernel runs after
               // IAM for a capability (`assertGauAvailable`, installed there by

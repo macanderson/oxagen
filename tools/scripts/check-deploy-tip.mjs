@@ -50,10 +50,10 @@
  *    what shipped. A failed record only warns: the next run compares against
  *    an older record, sees itself ahead, and deploys, which is safe.
  * 3. `node check-deploy-tip.mjs --guard` (from `check:contracts`) asserts
- *    the shape of both deploy jobs: the order step, the gate on every later
- *    step, the record step and the per-service concurrency group. Dropping
- *    any of them would look like a tidy-up in review and would let a deploy
- *    move production backwards.
+ *    the shape of every deploy job, the installer publish included: the
+ *    order step, the gate on every later step, the record step and the
+ *    per-service concurrency group. Dropping any of them would look like a
+ *    tidy-up in review and would let a deploy move production backwards.
  *
  * The file keeps its #2874 name so `check:contracts` and the history still
  * point at it.
@@ -68,7 +68,7 @@ const pipelinePath = join(repoRoot, ".github", "workflows", "pipeline.yml");
 export const ORDER_STEP_ID = "order";
 export const RECORD_STEP_ID = "record";
 export const SHIP_GATE = `steps.${ORDER_STEP_ID}.outputs.ship == 'true'`;
-export const DEPLOY_JOBS = ["deploy-web", "deploy-node"];
+export const DEPLOY_JOBS = ["deploy-web", "deploy-node", "publish-installers"];
 export const DEPLOY_ENVIRONMENT = "production";
 
 /** The deployment task that records `service` as live. */
@@ -447,7 +447,7 @@ if (isEntrypoint) {
       process.exit(1);
     }
     console.log(
-      "check-deploy-tip: both deploy jobs ship forward only, hold a per-service lock and record what shipped.",
+      "check-deploy-tip: every deploy job ships forward only, holds a per-service lock and records what shipped.",
     );
   } else {
     const sha = process.env.GITHUB_SHA;

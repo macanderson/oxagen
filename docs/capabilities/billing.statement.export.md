@@ -10,7 +10,7 @@
 
 ## Intent
 
-The billing statement `get_billing_statement` builds, as a file (ADR-158). The period rules are the same.
+The billing statement `get_billing_statement` builds, as a file (ADR-165). The period rules are the same.
 
 - `csv`: a header block with the statement's summary, a blank line, the column line, then one line per `billing.gau_ledger` row billed in the period. A year can hold millions of rows, so rows come in pages of at most `limit`, read on a keyset over `(billed_at, id)`. The first page carries the header block and the column line. When more rows follow, the answer carries `nextCursor`. Pass it back with the same period for the next page, which carries rows only, so the pages concatenate in order into one file. The header's `Ledger rows in the period` is the number of rows the complete file holds.
 - `html`: one self-contained, printable document: inline CSS, the mark drawn inline, no script and no external asset. It carries every section of the statement and its reconciliation notes, and prints to A4 and US Letter. The line items are the CSV's.

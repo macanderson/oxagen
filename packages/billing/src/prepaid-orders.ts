@@ -1,6 +1,6 @@
 /**
  * prepaid-orders.ts: an enterprise order paid in advance on a Stripe invoice
- * (billing.prepaid_orders, ADR-158).
+ * (billing.prepaid_orders, ADR-165).
  *
  * One order carries up to three lines: the platform licence for a period,
  * prepaid governed action units, and prepaid usage credits for the in-app

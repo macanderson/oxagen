@@ -171,7 +171,7 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
   })),
 }));
 
-// Governed action billing (ADR-158). The admission gate and the recorder are
+// Governed action billing (ADR-165). The admission gate and the recorder are
 // spies; the ledger helpers stay real, so the keys these tests read are the
 // keys production writes. Each spy records the tenant scope it ran in, since
 // both write or read through withTenantDb.
@@ -464,7 +464,7 @@ describe("materializeTools", () => {
     });
   });
 
-  it("hands the model's tool-call id to the kernel so a retried call bills once (ADR-158)", async () => {
+  it("hands the model's tool-call id to the kernel so a retried call bills once (ADR-165)", async () => {
     const { tools } = await materializeTools(CTX);
     const t = tools.capA as unknown as {
       execute: (
@@ -1102,7 +1102,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     );
   });
 
-  describe("governed action billing (ADR-158)", () => {
+  describe("governed action billing (ADR-165)", () => {
     const KEY = `mcp.${MCP_SERVER.id}.list_pull_requests`;
     const RUN_CTX = { ...CTX, runId: "run_1" };
     type Execute = (

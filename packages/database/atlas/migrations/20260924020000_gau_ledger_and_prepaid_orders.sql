@@ -1,4 +1,4 @@
--- ADR-158: every billed governed action is a ledger row, and an enterprise
+-- ADR-165: every billed governed action is a ledger row, and an enterprise
 -- order paid in advance is a prepaid order.
 --
 -- 1. billing.gau_ledger: one row per billed governed action, written in the

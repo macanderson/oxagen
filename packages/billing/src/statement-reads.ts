@@ -1,6 +1,6 @@
 /**
  * statement-reads.ts — the Postgres reads behind a billing statement
- * (statements.ts, ADR-158).
+ * (statements.ts, ADR-165).
  *
  * Every read runs on the one transaction `withOrgDb` opens (ADR-086): the
  * organisation-wide read seam, which admits the org_only billing tables and

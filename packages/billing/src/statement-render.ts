@@ -1,5 +1,5 @@
 /**
- * statement-render.ts — a billing statement as a file (ADR-158).
+ * statement-render.ts — a billing statement as a file (ADR-165).
  *
  *   renderStatementCsv   the header block and one line per ledger row
  *   renderStatementHtml  one self-contained, printable document

@@ -1,4 +1,4 @@
-// A billing statement against a real Postgres (ADR-158). The unit tests in
+// A billing statement against a real Postgres (ADR-165). The unit tests in
 // statements.test.ts check the arithmetic over fixed reads; this file checks
 // the reads themselves: the ledger aggregates, the bucket subqueries, the
 // invoice and settlement joins, the credit roll-forward, the labels, and the

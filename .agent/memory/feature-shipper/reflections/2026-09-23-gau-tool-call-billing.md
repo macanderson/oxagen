@@ -3,7 +3,7 @@
 ### What I set out to do
 Bill one governed action unit per allowed tool call in a wrapped harness
 (Tacho ingest) and per completed external MCP call in the agent runtime, on
-the ADR-158 ledger, with retries deduplicated. Pass the model's tool-call id
+the ADR-165 ledger, with retries deduplicated. Pass the model's tool-call id
 through to `invoke()` for capability tools.
 
 ### What I actually did (measurable deltas)

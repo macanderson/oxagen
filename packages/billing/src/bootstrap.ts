@@ -46,7 +46,7 @@ export function bootstrapBillingRuntime(): void {
     // The recorder resolves the org's terms, mode and period itself: a caller
     // cannot talk itself onto cheaper terms by claiming them.
     //
-    // The whole record goes on the ledger (ADR-158): the workspace, the agent,
+    // The whole record goes on the ledger (ADR-165): the workspace, the agent,
     // the operator, the tool call and the dedup key are what let an invoice
     // line be cited down to the action, and what makes a retried tool call
     // bill once. Before the ledger this handed on four fields and logged the

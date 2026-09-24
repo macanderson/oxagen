@@ -113,7 +113,7 @@ principal, and — where the caller supplied one — a `runId`, so a customer ca
 attribute a line to a team, a workspace or an agent. `runId` is metadata for
 grouping, never a billing unit.
 
-**Amended 2026-09-23 (ADR-158).** The attribution is now stored, not only
+**Amended 2026-09-23 (ADR-165).** The attribution is now stored, not only
 carried. Before this amendment the billing bootstrap passed four fields to the
 recorder, which counted the action in `billing.gau_buckets` and logged the rest.
 Every billed action is now a row in `billing.gau_ledger`, written in the same
@@ -545,7 +545,7 @@ was never changed. What is built:
   an estimate and is never billed on.
 - **Tacho ingest.** `ingest_tacho_events` is `noBillingGate: true`: recording
   a run is not a governed action.
-  **Amended 2026-09-23 (ADR-158, maintainer decision).** Recording a run is
+  **Amended 2026-09-23 (ADR-165, maintainer decision).** Recording a run is
   still not a governed action, and the admission gate never refuses one. Each
   tool call in the batch that a wrapped harness made and Tacho allowed is now one
   governed action. The ingest records it on the ledger with source `tacho`, keyed

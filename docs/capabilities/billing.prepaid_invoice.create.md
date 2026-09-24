@@ -11,7 +11,7 @@
 
 ## Intent
 
-Invoice an enterprise in advance (ADR-158). One order carries up to three lines, and at least one:
+Invoice an enterprise in advance (ADR-165). One order carries up to three lines, and at least one:
 
 | Line | What it sells | Granted as |
 |---|---|---|

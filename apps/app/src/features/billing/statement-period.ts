@@ -1,5 +1,5 @@
 // The Statements form's period, as the export contract takes it
-// (export_billing_statement, ADR-158). A calendar period is the UTC week,
+// (export_billing_statement, ADR-165). A calendar period is the UTC week,
 // month, quarter or year containing a day; a custom period is a first and a
 // last day, both included, which the contract takes as the half-open range
 // [first 00:00 UTC, the day after last 00:00 UTC).

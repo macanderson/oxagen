@@ -89,6 +89,19 @@ afterEach(async () => {
   }
 });
 
+/** accept-invitation.md, Mobile: below md each action runs the full width, one above the other, at 44 px. */
+function expectStackedOnPhone(actions: readonly HTMLElement[]): void {
+  const row = actions[0]?.parentElement;
+  expect(row?.className).toContain("max-md:flex-col");
+  expect(row?.className).toContain("max-md:items-stretch");
+  for (const action of actions) {
+    expect(action.parentElement).toBe(row);
+    expect(action.className).toContain("max-md:w-full");
+    expect(action.className).not.toContain("max-md:flex-1");
+    expect(action).toHaveAttribute("data-touch-target");
+  }
+}
+
 const invitation = {
   token: "invi_1",
   orgName: "Acme Robotics",
@@ -124,7 +137,8 @@ describe("InvitationBody", () => {
     expect(screen.getByText("Does not expire")).toBeInTheDocument();
     const accept = screen.getByRole("button", { name: "Accept invitation" });
     expect(accept.className).toContain("bg-button-primary-bg");
-    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
+    const decline = screen.getByRole("button", { name: "Decline" });
+    expectStackedOnPhone([accept, decline]);
     // The footer sits under the card, not inside it.
     expect(card).not.toHaveTextContent("Signed in as");
     expect(document.body).toHaveTextContent(
@@ -201,6 +215,10 @@ describe("InvitationBody", () => {
     expect(
       screen.getByRole("link", { name: "Log in to accept" }),
     ).toHaveAttribute("href", "/login?next=%2Finvite%2Finvi_1");
+    expectStackedOnPhone([
+      screen.getByRole("link", { name: "Log in to accept" }),
+      screen.getByRole("link", { name: "Create an account" }),
+    ]);
     expect(screen.getByText("18 Sep 2026")).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("Signed in as");
   });
@@ -231,6 +249,10 @@ describe("InvitationBody", () => {
       screen.getByRole("button", { name: "Accept invitation" }),
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Decline" })).toBeDisabled();
+    expectStackedOnPhone([
+      screen.getByRole("button", { name: "Accept invitation" }),
+      screen.getByRole("button", { name: "Decline" }),
+    ]);
     expect(document.body).toHaveTextContent(
       "Signed in as marcus.bell@acme.example · Not you?",
     );
@@ -250,11 +272,58 @@ describe("InvitationBody", () => {
     expect(document.body).not.toHaveTextContent("Signed in as");
   });
 
+  it("closed · accepted and signed out, the footer offers the Log in its alert names", async () => {
+    await renderServer(
+      <InvitationBody
+        invitation={invitation}
+        decision={{ kind: "closed", status: "accepted", signedInAs: null }}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Log in instead.");
+    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+    expect(document.body).not.toHaveTextContent("Signed in as");
+  });
+
+  it.each(["declined", "revoked", "expired"] as const)(
+    "closed · %s and signed out, no Log in is drawn, because the alert names none (negative)",
+    async (status) => {
+      await renderServer(
+        <InvitationBody
+          invitation={invitation}
+          decision={{ kind: "closed", status, signedInAs: null }}
+        />,
+      );
+      expect(screen.queryByRole("link", { name: "Log in" })).toBeNull();
+    },
+  );
+
+  it("closed · accepted while signed in, the footer names the account and draws no second Log in (negative)", async () => {
+    await renderServer(
+      <InvitationBody
+        invitation={invitation}
+        decision={{
+          kind: "closed",
+          status: "accepted",
+          signedInAs: "marcus.bell@acme.example",
+        }}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: "Log in" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Not you?" })).toBeInTheDocument();
+  });
+
   it("not found", async () => {
     await renderServer(<InvitationNotFound />);
-    expect(screen.getByTestId("invite-not-found")).toHaveTextContent(
-      "does not work",
+    const card = screen.getByTestId("invite-not-found");
+    expect(card).toHaveTextContent("does not work");
+    // The subtext under the h2 is one sentence (accept-invitation.md, rules).
+    expect(card).toHaveTextContent(
+      "Ask the person who invited you for a new invitation.",
     );
+    expect(card).not.toHaveTextContent("The link is incomplete");
   });
 });
 

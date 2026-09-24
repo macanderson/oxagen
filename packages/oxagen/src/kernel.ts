@@ -127,7 +127,7 @@ export interface GovernedActionRecord {
    */
   toolCallId: string | null;
   /**
-   * The key the ledger deduplicates on (ADR-158). Derived from the tool-call
+   * The key the ledger deduplicates on (ADR-165). Derived from the tool-call
    * id or the lifecycle idempotency key when the invocation has one, so a
    * retried tool call bills once; otherwise unique to this invocation.
    */
@@ -240,7 +240,7 @@ export function governedActionUnits(
 }
 
 /**
- * The ledger's dedup key for one kernel invocation (ADR-158).
+ * The ledger's dedup key for one kernel invocation (ADR-165).
  *
  * A retry must bill once, so the key is taken from whatever names the logical
  * action rather than the attempt at it:

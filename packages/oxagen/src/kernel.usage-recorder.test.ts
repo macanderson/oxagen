@@ -136,7 +136,7 @@ describe("kernel governed-action usage recorder", () => {
     expect(recorded[0]?.runId).toBeNull();
   });
 
-  // ── ADR-158: the ledger's attribution and dedup key ──────────────────────
+  // ── ADR-165: the ledger's attribution and dedup key ──────────────────────
 
   it("attributes an action to the operator who signed in, with no agent, when a person acts", async () => {
     defineCap({ name: "accrual_person" });

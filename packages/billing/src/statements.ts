@@ -1,6 +1,6 @@
 /**
  * statements.ts — the organization's billing statement for one period
- * (ADR-158; contracts `get_billing_statement`, `export_billing_statement`).
+ * (ADR-165; contracts `get_billing_statement`, `export_billing_statement`).
  *
  * A statement is built from ledgers only, never from a running total a writer
  * could have drifted, and every figure it prints reconciles against another

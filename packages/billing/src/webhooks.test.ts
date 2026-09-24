@@ -1250,7 +1250,7 @@ describe("processStripeEvent — governed-action settlement invoices", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Prepaid orders (prepaid-orders.ts, ADR-158)
+// Prepaid orders (prepaid-orders.ts, ADR-165)
 // ---------------------------------------------------------------------------
 
 describe("processStripeEvent: prepaid-order invoices", () => {

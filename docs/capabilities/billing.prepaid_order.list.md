@@ -10,7 +10,7 @@
 
 ## Intent
 
-What an enterprise paid for in advance, order by order (ADR-158): the licence period, the governed action units and the usage credits on each invoice, its status, when the units and the credits were granted, and the invoice's number and hosted page.
+What an enterprise paid for in advance, order by order (ADR-165): the licence period, the governed action units and the usage credits on each invoice, its status, when the units and the credits were granted, and the invoice's number and hosted page.
 
 The list reads `billing.prepaid_orders`, LEFT JOINed to the webhook mirror `billing.invoices` on `stripe_invoice_id`. That column is unique in the mirror and an order records one invoice, so the join adds columns and never a row. An order still in `draft` has sent nothing and is not listed. Newest first by the order's creation time, keyset-paged on an opaque cursor.
 

@@ -381,7 +381,7 @@ describe("recordGovernedAction", () => {
     expect(txs).toHaveLength(1);
   });
 
-  // ── ADR-158: the ledger ──────────────────────────────────────────────────
+  // ── ADR-165: the ledger ──────────────────────────────────────────────────
 
   it("writes one ledger row per action, on the bucket it debited, with the entry's attribution", async () => {
     const result = await recordGovernedAction({

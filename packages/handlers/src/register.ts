@@ -152,7 +152,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./billing.invoice.list"))
         .billingInvoiceListHandler as CapabilityHandlerFn,
   );
-  // ADR-158 — the billing statement for a week, month, quarter, year or
+  // ADR-165 — the billing statement for a week, month, quarter, year or
   // custom period, as data and as a CSV or HTML file.
   registerHandler(
     "get_billing_statement",
@@ -182,7 +182,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./billing.org_terms.set"))
         .billingOrgTermsSetHandler as CapabilityHandlerFn,
   );
-  // ADR-158: enterprise invoicing. set_contract_terms and create_prepaid_invoice
+  // ADR-165: enterprise invoicing. set_contract_terms and create_prepaid_invoice
   // are platformOnly and on no surface, like set_org_billing_terms (INV-31);
   // list_prepaid_orders is the customer's read of what it prepaid.
   registerHandler(

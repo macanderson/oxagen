@@ -224,7 +224,7 @@ export interface RecordActionArgs {
   /** The run this action belongs to. Metadata only, never a billing unit. */
   runId?: string | null;
   /**
-   * The ledger row for this action (ADR-158). Absent only for a caller that
+   * The ledger row for this action (ADR-165). Absent only for a caller that
    * predates the ledger; the recorder then writes a row with the capability
    * and run it was given and a key unique to this call, so nothing is
    * deduplicated and nothing goes unrecorded.
@@ -290,7 +290,7 @@ export interface RecordActionsArgs {
 
 /**
  * Record governed actions against the organisation's month bucket and its
- * ledger (ADR-055, ADR-158).
+ * ledger (ADR-055, ADR-165).
  *
  *   a. Resolve the terms, the settings and the period.
  *   b. Debit: `debitWithLedger` writes one `billing.gau_ledger` row per entry

@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * billing-statement — one organisation's billing statement, for a person at
- * Oxagen (ADR-158).
+ * Oxagen (ADR-165).
  *
  *   pnpm billing:statement --org acme --period month --anchor 2026-09-01 \
  *                          --format html --out ./statement.html

@@ -48,7 +48,7 @@ export * from "./gau-reversals";
 export * from "./gau-settlements";
 export * from "./negotiated-terms";
 export * from "./prepaid-orders";
-// Billing statements (ADR-158): get_billing_statement, export_billing_statement
+// Billing statements (ADR-165): get_billing_statement, export_billing_statement
 // and `pnpm billing:statement`.
 export {
   resolveStatementPeriod,

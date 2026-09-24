@@ -1,6 +1,6 @@
 /**
  * `oxagen billing statement …` — CLI parity surface for
- * `get_billing_statement` and `export_billing_statement` (ADR-158).
+ * `get_billing_statement` and `export_billing_statement` (ADR-165).
  *
  *   oxagen billing statement --period month --anchor 2026-09-01
  *   oxagen billing statement --period quarter --anchor 2026-07-01 --json

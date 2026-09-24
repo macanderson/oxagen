@@ -1,6 +1,6 @@
 # Invoicing an enterprise customer
 
-An enterprise pays in advance: its platform licence for a period, usage credits for the in-app assistant, and optionally governed action units (GAUs). This runbook takes one customer from a signed agreement to a paid invoice with the credits and units in its account. The decisions behind it are in ADR-158 and ADR-055.
+An enterprise pays in advance: its platform licence for a period, usage credits for the in-app assistant, and optionally governed action units (GAUs). This runbook takes one customer from a signed agreement to a paid invoice with the credits and units in its account. The decisions behind it are in ADR-165 and ADR-055.
 
 Every command below runs against the database `DATABASE_URL` names, and each one prints the target host first. Check it before you answer anything. A shell-exported `DATABASE_URL` beats `.env.local`, so `unset DATABASE_URL` when the env file should choose.
 

@@ -4389,7 +4389,7 @@ describe("observed metering from the model proxy", () => {
   });
 });
 
-describe("governed action billing for wrapped-harness tool calls (ADR-158)", () => {
+describe("governed action billing for wrapped-harness tool calls (ADR-165)", () => {
   const CHILD = sessionUuid(HOST_PUBLIC, "sess-child");
 
   function chain(drafts: UnsealedTachoEvent[]): TachoEvent[] {

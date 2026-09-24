@@ -3,7 +3,7 @@
 //
 // The platform operator issues an enterprise's prepaid order: the licence for
 // a period, governed action units and usage credits, on one Stripe invoice
-// (ADR-158). The sequence is packages/billing/src/prepaid-orders.ts's:
+// (ADR-165). The sequence is packages/billing/src/prepaid-orders.ts's:
 //
 //   1. resolve the defaults from the org's negotiated terms (currency,
 //      agreement, rate); an order for units needs a rate, and only a

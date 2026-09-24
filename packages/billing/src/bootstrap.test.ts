@@ -188,7 +188,7 @@ describe("bootstrapBillingRuntime", () => {
 
     // The terms, mode and period are resolved inside the recorder, never taken
     // from the record — a caller cannot talk itself onto cheaper terms. The
-    // attribution goes on the ledger (ADR-158).
+    // attribution goes on the ledger (ADR-165).
     expect(recordGovernedActionMock).toHaveBeenCalledWith({
       orgId: "org-test",
       actions: 3,
