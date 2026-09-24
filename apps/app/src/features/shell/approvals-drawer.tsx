@@ -44,8 +44,12 @@ const INTERJECTION_GAP = "#3849";
 /** Under two minutes left, a countdown takes the critical ink (mockup `sec<120`, `.apsm-clk.warn`). */
 const WARN_BELOW_SECONDS = 120;
 
-/** `m:ss` until `at`, or null once it has passed. */
-function countdown(at: number, now: number): string | null {
+/**
+ * `m:ss` until `at`, or null once it has passed.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
+export function countdown(at: number, now: number): string | null {
   const left = Math.floor((at - now) / 1000);
   if (left <= 0) return null;
   const m = Math.floor(left / 60);
