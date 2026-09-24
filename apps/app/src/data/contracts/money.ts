@@ -234,9 +234,8 @@ export function compareMicros(a: Money, b: Money): number {
 }
 
 /**
- * The part of `value` a `share` between 0 and 1 names: the Run page's wasted
- * spend is its cost times the share the rollup did not count as productive.
- * The share is rounded to a millionth and the micros are divided by BigInt, so
+ * The part of `value` a `share` between 0 and 1 names, such as a share of a
+ * recorded cost. The share is rounded to a millionth and the micros are divided by BigInt, so
  * the money stays exact and truncates toward zero. A share outside 0 to 1
  * names no part of the value, so the answer is null and the caller shows the
  * figure as missing.
