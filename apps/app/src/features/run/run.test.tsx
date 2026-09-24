@@ -160,6 +160,7 @@ async function renderRun(
   let container!: HTMLElement;
   await act(async () => {
     ({ container } = render(<IntlProvider>{element}</IntlProvider>));
+    await Promise.resolve();
   });
   return { container, calls };
 }
