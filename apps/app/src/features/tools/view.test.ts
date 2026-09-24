@@ -1,5 +1,6 @@
-// Which Tools view a query asks for, and the link back to it: the default
-// tab, a value the page does not know, the category chip only on Registry,
+// Which Tools view a request asks for, and the link back to it: the tab path
+// segment and its aliases (`/tools/servers`, the pre-rev1 `?tab=` values), a
+// tab id no longer served, the category chip only on the Tools tab,
 // the names toggle, and a cursor whose shape is checked before it goes back
 // to the kernel. Also the `measure = value` lines the auto-approval dialog
 // writes its ceilings and allow lists in.
@@ -7,82 +8,118 @@ import { describe, expect, it } from "vitest";
 import {
   carriedBy,
   parseMeasureLines,
+  parseToolsTab,
   parseToolsView,
   splitCommas,
   splitLines,
   textValue,
   TOOLS_TABS,
   toolsLink,
+  toolsTabOf,
   weekdayKey,
 } from "./view";
 
 const at = { org: "acme", ws: "core-platform" };
 
+describe("parseToolsTab", () => {
+  it("is Tools on the bare path, and each served tab on its own segment", () => {
+    expect(parseToolsTab(undefined, undefined)).toBe("tools");
+    expect(parseToolsTab([], undefined)).toBe("tools");
+    for (const tab of TOOLS_TABS)
+      expect(parseToolsTab([tab], undefined)).toBe(tab);
+  });
+
+  it("lands /tools/servers on Providers, the tab that took its name", () => {
+    expect(parseToolsTab(["servers"], undefined)).toBe("providers");
+    expect(parseToolsTab(undefined, "servers")).toBe("providers");
+  });
+
+  it("lands each query tab written before rev1 on the tab that absorbed it", () => {
+    expect(parseToolsTab(undefined, "registry")).toBe("tools");
+    expect(parseToolsTab(undefined, "connections")).toBe("providers");
+    expect(parseToolsTab(undefined, "switches")).toBe("switches");
+    expect(parseToolsTab(undefined, "mandates")).toBe("policy");
+    expect(parseToolsTab(undefined, "autoapprovals")).toBe("policy");
+  });
+
+  // The unknown value is one no lane will ever ship, not the name of a tab
+  // that has not landed yet: a fixture that is only unknown until someone
+  // does their job is not a fixture.
+  it("falls back to Tools on a tab id that is no longer served, so an old link never renders an empty page", () => {
+    expect(parseToolsTab(["not-a-tab"], undefined)).toBe("tools");
+    expect(parseToolsTab(undefined, "not-a-tab")).toBe("tools");
+    expect(parseToolsTab(undefined, "")).toBe("tools");
+  });
+
+  it("prefers the path segment over a legacy query", () => {
+    expect(parseToolsTab(["policy"], "switches")).toBe("policy");
+  });
+
+  it("names no page for a path deeper than one segment (negative)", () => {
+    expect(parseToolsTab(["providers", "extra"], undefined)).toBeNull();
+  });
+
+  it("reads a raw id the same way toolsTabOf does", () => {
+    expect(toolsTabOf(undefined)).toBe("tools");
+    expect(toolsTabOf("servers")).toBe("providers");
+    expect(toolsTabOf("toolbelts")).toBe("toolbelts");
+  });
+});
+
 describe("parseToolsView", () => {
-  it("defaults to the registry on labels, with no category and no cursor", () => {
-    expect(parseToolsView({})).toEqual({
-      tab: "registry",
+  it("defaults to labels, with no category and no cursor", () => {
+    expect(parseToolsView("tools", {})).toEqual({
+      tab: "tools",
       category: null,
       names: "labels",
       cursor: null,
     });
   });
 
-  // The unknown value is one no lane will ever ship, not the name of a tab
-  // that has not landed yet: `mandates` stood here until #2957 made it real,
-  // and then this case asserted that a live tab was unreachable. A fixture
-  // that is only unknown until someone does their job is not a fixture.
-  it("takes a tab it knows and falls back to the registry on one it does not", () => {
-    for (const tab of TOOLS_TABS) expect(parseToolsView({ tab }).tab).toBe(tab);
-    expect(parseToolsView({ tab: "not-a-tab" }).tab).toBe("registry");
-    expect(parseToolsView({ tab: "" }).tab).toBe("registry");
-    expect(parseToolsView({}).tab).toBe("registry");
-  });
-
-  it("reads a consequence tag only on the registry, and only in the contract's shape", () => {
-    expect(parseToolsView({ category: "moves_money" }).category).toBe(
+  it("reads a consequence tag only on the Tools tab, and only in the contract's shape", () => {
+    expect(parseToolsView("tools", { category: "moves_money" }).category).toBe(
       "moves_money",
     );
-    expect(parseToolsView({ category: "Moves Money" }).category).toBeNull();
     expect(
-      parseToolsView({ tab: "switches", category: "moves_money" }).category,
+      parseToolsView("tools", { category: "Moves Money" }).category,
+    ).toBeNull();
+    expect(
+      parseToolsView("switches", { category: "moves_money" }).category,
     ).toBeNull();
   });
 
   it("takes the API-names toggle and ignores anything else", () => {
-    expect(parseToolsView({ names: "api" }).names).toBe("api");
-    expect(parseToolsView({ names: "mono" }).names).toBe("labels");
+    expect(parseToolsView("tools", { names: "api" }).names).toBe("api");
+    expect(parseToolsView("tools", { names: "mono" }).names).toBe("labels");
   });
 
   it("keeps a cursor that looks like one and drops anything else", () => {
-    expect(parseToolsView({ cursor: "eyJ2IjoxfQ==" }).cursor).toBe(
+    expect(parseToolsView("tools", { cursor: "eyJ2IjoxfQ==" }).cursor).toBe(
       "eyJ2IjoxfQ==",
     );
-    expect(parseToolsView({ cursor: "a b" }).cursor).toBeNull();
-    expect(parseToolsView({ cursor: "" }).cursor).toBeNull();
+    expect(parseToolsView("tools", { cursor: "a b" }).cursor).toBeNull();
+    expect(parseToolsView("tools", { cursor: "" }).cursor).toBeNull();
   });
 
   it("takes the first value when a parameter arrives repeated", () => {
-    expect(parseToolsView({ tab: ["switches", "registry"] }).tab).toBe(
-      "switches",
+    expect(parseToolsView("tools", { names: ["api", "labels"] }).names).toBe(
+      "api",
     );
   });
 });
 
 describe("toolsLink", () => {
-  it("leaves every default off the query", () => {
-    expect(toolsLink(at, { tab: "registry" })).toBe(
-      "/acme/core-platform/tools",
-    );
-    expect(toolsLink(at, { tab: "registry", names: "labels" })).toBe(
+  it("leaves every default off the path and the query", () => {
+    expect(toolsLink(at, { tab: "tools" })).toBe("/acme/core-platform/tools");
+    expect(toolsLink(at, { tab: "tools", names: "labels" })).toBe(
       "/acme/core-platform/tools",
     );
   });
 
-  it("carries the tab, the category, the toggle and the cursor", () => {
+  it("puts the tab in the path and the category, toggle and cursor in the query", () => {
     expect(
       toolsLink(at, {
-        tab: "registry",
+        tab: "tools",
         category: "moves_money",
         names: "api",
         cursor: "c2",
@@ -91,20 +128,23 @@ describe("toolsLink", () => {
       "/acme/core-platform/tools?category=moves_money&names=api&cursor=c2",
     );
     expect(toolsLink(at, { tab: "switches" })).toBe(
-      "/acme/core-platform/tools?tab=switches",
+      "/acme/core-platform/tools/switches",
     );
-    expect(toolsLink(at, { tab: "autoapprovals" })).toBe(
-      "/acme/core-platform/tools?tab=autoapprovals",
+    expect(toolsLink(at, { tab: "policy" })).toBe(
+      "/acme/core-platform/tools/policy",
     );
   });
 
-  it("round-trips through parseToolsView", () => {
-    const link = toolsLink(at, { tab: "connections", cursor: "c9" });
-    const query = Object.fromEntries(
-      new URL(link, "https://mission-control.invalid").searchParams,
-    );
-    expect(parseToolsView(query)).toEqual({
-      tab: "connections",
+  it("round-trips through parseToolsTab and parseToolsView", () => {
+    const link = toolsLink(at, { tab: "providers", cursor: "c9" });
+    const url = new URL(link, "https://mission-control.invalid");
+    const segments = url.pathname.split("/").slice(4);
+    const tab = parseToolsTab(segments, undefined);
+    expect(tab).toBe("providers");
+    expect(
+      parseToolsView("providers", Object.fromEntries(url.searchParams)),
+    ).toEqual({
+      tab: "providers",
       category: null,
       names: "labels",
       cursor: "c9",

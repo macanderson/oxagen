@@ -2,7 +2,13 @@
 // The request-a-mandate dialog: it collects the grant a person asks for,
 // sends it to the action for this agent and workspace, returns to the agent's
 // mandates on success, and names a refusal in the dialog without navigating.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
@@ -222,5 +228,38 @@ describe("RequestMandate", () => {
       await within(dialog()).findByTestId("request-mandate-failure"),
     ).toHaveTextContent(/action_failed/);
     expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("RequestMandate while the dialog is open", () => {
+  it("sends one request however often the form is submitted while it is pending (negative)", async () => {
+    requestMandate.mockReturnValue(new Promise(() => undefined));
+    draw();
+    await open();
+    const form = dialog().querySelector("form");
+    if (form === null) throw new Error("request form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(requestMandate).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgets a refused request when the dialog is closed and opened again", async () => {
+    requestMandate.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    draw();
+    const user = await open();
+    const form = dialog().querySelector("form");
+    if (form === null) throw new Error("request form not drawn");
+    fireEvent.submit(form);
+    await screen.findByTestId("request-mandate-failure");
+    await user.click(
+      within(dialog()).getByRole("button", { name: /^(Close|Cancel)$/ }),
+    );
+    await open();
+    expect(screen.queryByTestId("request-mandate-failure")).toBeNull();
+    await expectNoAxe(document.body);
   });
 });

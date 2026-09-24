@@ -7,6 +7,8 @@
 //          path the session touched, already carrying its counters, its diff
 //          stat, git's word for what happened to it, and the frames that
 //          touched it. The row names a path, so the node names a file.
+//          Each `oxagen:pr_link` frame the harness wrote adds a pull-request
+//          node, one per URL, at the frame that linked it.
 //   arun_… an evidence-ledger run, read from its `change.recorded` and
 //          `provider_publish.*` receipts. Those carry a payload, and a
 //          `RunFrame` does not, so they are read through the store's own
@@ -39,6 +41,8 @@ import {
   sessionFileNode,
   tally,
 } from "./lib/run-outputs";
+import { prLinkOf, readWorkPrLinks, WORK_PR_LINK_CAP } from "./lib/run-work";
+import { logger } from "./logger";
 import { runScope } from "./run.list";
 import {
   defaultRunReadDeps,
@@ -58,7 +62,16 @@ const LEDGER_PAGE = 500;
 /** The most gates one spine shows. */
 const GATE_MAX = 50;
 
-export type RunOutputsGetDeps = RunReadDeps & { outputs: RunOutputQueries };
+export type RunOutputsGetDeps = RunReadDeps & {
+  outputs: RunOutputQueries;
+  prLinks: typeof readWorkPrLinks;
+};
+
+/** ClickHouse's `2026-09-23 10:00:00.000` in UTC, as RFC 3339; null when unreadable. */
+function chInstant(ts: string): string | null {
+  const parsed = new Date(`${ts.replace(" ", "T")}Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
 
 /** A wrapped session's paths, in the order the frames touched them. */
 async function wrappedNodes(
@@ -67,15 +80,51 @@ async function wrappedNodes(
   sessionUuid: string,
 ): Promise<{ nodes: RunOutputNode[]; complete: boolean }> {
   // One over the cap, so a full page is told apart from a cut read.
-  const rows = await deps.outputs.sessionFiles(
-    scope,
-    sessionUuid,
-    RUN_OUTPUT_NODE_MAX + 1,
-  );
-  const complete = rows.length <= RUN_OUTPUT_NODE_MAX;
+  // The PR receipts come from ClickHouse. A failed read must not hide the
+  // files the Postgres read found, so the spine is drawn without them and
+  // marked incomplete.
+  const [rows, links] = await Promise.all([
+    deps.outputs.sessionFiles(scope, sessionUuid, RUN_OUTPUT_NODE_MAX + 1),
+    deps.prLinks(sessionUuid).catch((err: unknown) => {
+      logger.warn(
+        { err, sessionUuid },
+        "get_run_outputs: the PR links could not be read; the spine is drawn without them",
+      );
+      return null;
+    }),
+  ]);
+  const pulls: RunOutputNode[] = [];
+  for (const row of (links ?? []).slice(0, WORK_PR_LINK_CAP)) {
+    const link = prLinkOf(row);
+    if (link === null) continue;
+    pulls.push({
+      seq: String(row.seq),
+      kind: "pr",
+      name: `#${link.number}`,
+      nameIsLocator: false,
+      where: `${link.owner}/${link.name}`,
+      state: "open",
+      note: link.url,
+      stat: null,
+      observedAt: chInstant(row.ts),
+      digestBefore: null,
+      digestAfter: null,
+    });
+  }
+  // Both lists arrive in frame order, and the spine promises that order, so
+  // the PR nodes are merged in by their frame rather than appended.
+  const nodes = [...rows.map(sessionFileNode), ...pulls].sort((a, b) => {
+    const x = BigInt(a.seq ?? "0");
+    const y = BigInt(b.seq ?? "0");
+    return x < y ? -1 : x > y ? 1 : 0;
+  });
   return {
-    nodes: rows.slice(0, RUN_OUTPUT_NODE_MAX).map(sessionFileNode),
-    complete,
+    nodes: nodes.slice(0, RUN_OUTPUT_NODE_MAX),
+    complete:
+      rows.length <= RUN_OUTPUT_NODE_MAX &&
+      links !== null &&
+      links.length <= WORK_PR_LINK_CAP &&
+      nodes.length <= RUN_OUTPUT_NODE_MAX,
   };
 }
 
@@ -145,4 +194,5 @@ export function createRunOutputsGetHandler(
 export const runOutputsGetHandler = createRunOutputsGetHandler({
   ...defaultRunReadDeps(),
   outputs: postgresRunOutputQueries,
+  prLinks: readWorkPrLinks,
 });

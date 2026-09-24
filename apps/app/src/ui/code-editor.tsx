@@ -10,7 +10,7 @@
 // any line wider than the viewport. Monaspace Neon
 // (`--font-mono`) sets both, with texture healing on, and the ground is the
 // code surface (`--code-bg`): a shade off the panel in either theme.
-import { type ReactNode, useMemo } from "react";
+import { type KeyboardEvent, type ReactNode, type Ref, useMemo } from "react";
 import {
   type TomlToken,
   type TomlTokenKind,
@@ -66,9 +66,13 @@ function highlight(source: string, language: CodeLanguage): ReactNode[] {
   return painted;
 }
 
-/** The one type scale for code: the class every code surface shares so an editor and a read-only block set alike. */
+/**
+ * The one type scale for code: the class every code surface shares so an
+ * editor and a read-only block set alike. A phone sets it at 16px so focusing
+ * the textarea does not zoom the page, and the painted copy scales with it.
+ */
 const codeText =
-  "font-mono text-[13px] leading-5 [font-feature-settings:var(--ox-font-mono-features)]";
+  "font-mono text-[13px] leading-5 max-md:text-base max-md:leading-6 [font-feature-settings:var(--ox-font-mono-features)]";
 
 export function CodeEditor({
   value,
@@ -77,6 +81,8 @@ export function CodeEditor({
   label,
   minRows = 16,
   onCaret,
+  onKeyDown,
+  textareaRef,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -90,6 +96,13 @@ export function CodeEditor({
    * reaching into the DOM for the element it does not own.
    */
   onCaret?: (offset: number) => void;
+  /**
+   * Keys the editor binds itself (save, find, indent, comment). The textarea
+   * owns every key, so an editor with shortcuts takes them here.
+   */
+  onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  /** The textarea, for an editor that moves the selection (find, indent). */
+  textareaRef?: Ref<HTMLTextAreaElement>;
 }) {
   const painted = useMemo(() => highlight(value, language), [value, language]);
   const lines = value.split("\n").length;
@@ -114,7 +127,9 @@ export function CodeEditor({
           {"\n"}
         </pre>
         <textarea
+          ref={textareaRef}
           aria-label={label}
+          onKeyDown={onKeyDown}
           value={value}
           onChange={(event) => {
             onChange(event.target.value);

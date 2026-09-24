@@ -8,7 +8,7 @@ export const agentMcpDelete = registerCapability({
     "Soft-delete a registered external MCP server. Its tools stop registering immediately, but tool-descriptor snapshots are retained >= 365 days for replay durability before a retention job purges them. The change is audited.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "high",
   defaultEffect: "deny",

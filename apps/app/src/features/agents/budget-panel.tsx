@@ -1,6 +1,7 @@
-// The Budgets section of an agent's page (#2953): the spend ceilings the agent
-// runs under, read-only, with the basis of every figure and a link to the page
-// that sets them.
+// The ceilings above one agent (#2953), inside the Permissions tab's Budgets
+// panel: the organization and workspace spend ceilings the agent runs under,
+// read-only, with the basis of every figure and a link to the page that sets
+// them.
 //
 // This panel writes nothing, and that is the whole shape of it.
 // `get_spend_budget`'s `spendScope` is `org | workspace` and nothing narrower
@@ -26,7 +27,7 @@ import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, Table } from "@/ui/table";
-import { NotRecordedValue, Panel } from "./parts";
+import { NotRecordedValue } from "./parts";
 
 function Ceilings({ budgets }: { budgets: SpendBudgets }) {
   const t = useTranslations("agents.detail.budgets");
@@ -97,7 +98,16 @@ export function BudgetSection({
 }) {
   const t = useTranslations("agents.detail.budgets");
   return (
-    <Panel id="agent-budgets" title={t("title")} lead={t("lead")}>
+    <section
+      aria-labelledby="agent-ceilings"
+      className="flex min-w-0 flex-col gap-3 border-t border-border pt-3"
+    >
+      <div className="flex flex-col gap-0.5">
+        <h3 id="agent-ceilings" className="text-[13px] font-semibold">
+          {t("title")}
+        </h3>
+        <p className="text-xs text-muted-foreground">{t("lead")}</p>
+      </div>
       {!read.ok ? (
         <ReadFailure read={read} section={t("title")} />
       ) : read.value.length === 0 ? (
@@ -126,6 +136,6 @@ export function BudgetSection({
       <SafeLink to={spend} className={`${linkText} self-start text-sm`}>
         {t("link")}
       </SafeLink>
-    </Panel>
+    </section>
   );
 }
