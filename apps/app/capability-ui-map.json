@@ -461,7 +461,7 @@
     "get_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] \u2014 the Run page's header and its Frames tab read get_run once per render (data/live/runs.ts, features/run/run.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 the Run page's header and its Governed actions tab read get_run once per render (data/live/runs.ts, features/run/run.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-c2f283fb-3282-review"
