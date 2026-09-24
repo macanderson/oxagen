@@ -1,7 +1,8 @@
 // What Fleet computes from the rows it read (fleet.md, "Functionality"): the
 // state word a row carries, which rows a filter chip lists, the four tile
-// figures over the rows listed, and the list controls (search, facets, sort,
-// rows per page) over the same rows. Pure, so the tiles and the table read one
+// figures over the rows listed, how a row names its pull requests, and the
+// list controls (search, facets, sort) over the same rows. The page size is
+// the read's own limit, so no control here pages the rows. Pure, so the tiles and the table read one
 // computation and a header can never disagree with the rows beneath it.
 //
 // Nothing here invents a figure. A row whose cost was not recorded is left out
@@ -15,7 +16,7 @@ import {
   type Money,
   sumMoney,
 } from "@/data/contracts/money";
-import type { RunRow } from "@/data/contracts/runs";
+import type { RunPullRequest, RunRow } from "@/data/contracts/runs";
 
 /**
  * The state a row reads as. `parked` is a live run with a call parked on a
@@ -184,17 +185,40 @@ export function windowParts(windowSeconds: number): {
   return { minutes: Math.floor(total / 60), seconds: total % 60 };
 }
 
-// ── The list controls ─────────────────────────────────────────────────────
+// ── Pull requests and lines ───────────────────────────────────────────────
 
-/** Rows per page; 0 is All. */
-export const ROWS_PER_PAGE = [5, 10, 25, 50, 0] as const;
-export type RowsPerPage = (typeof ROWS_PER_PAGE)[number];
-
-/** The rows-per-page choice a select's value names; anything else is the default, 10. */
-export function rowsPerPageOf(value: string): RowsPerPage {
-  const n = Number(value);
-  return ROWS_PER_PAGE.find((per) => per === n) ?? 10;
+/**
+ * How many pull requests a row can name: the links its frames recorded, else
+ * the `pr_open` calls counted, else null when neither was read (a ledger run).
+ */
+export function pullRequestCount(run: RunRow): number | null {
+  const links = run.pullRequests?.length ?? null;
+  const opened = run.pullRequestsOpened ?? null;
+  if (links === null && opened === null) return null;
+  return Math.max(links ?? 0, opened ?? 0);
 }
+
+/** The forge a pull request URL names, by host. Self-hosted forges read null. */
+export function forgeOf(url: string): "github" | "gitlab" | null {
+  if (!URL.canParse(url)) return null;
+  const host = new URL(url).hostname;
+  if (host === "github.com") return "github";
+  if (host === "gitlab.com") return "gitlab";
+  return null;
+}
+
+/**
+ * A pull request as a person names it on its forge: `owner/repo#12` on
+ * GitHub, `group/project!12` for a GitLab merge request. The repository is
+ * left off when the frame recorded none, and the number when it recorded none.
+ */
+export function pullRequestLabel(pull: RunPullRequest): string | null {
+  if (pull.number === null) return pull.repository;
+  const mark = forgeOf(pull.url) === "gitlab" ? "!" : "#";
+  return `${pull.repository ?? ""}${mark}${String(pull.number)}`;
+}
+
+// ── The list controls ─────────────────────────────────────────────────────
 
 /** The columns a header click sorts on. */
 export type SortKey =
@@ -202,6 +226,8 @@ export type SortKey =
   | "agent"
   | "operator"
   | "status"
+  | "pullRequests"
+  | "diff"
   | "tier"
   | "replay"
   | "cost"
@@ -221,7 +247,8 @@ export type ListQuery = {
   search: string;
   facets: Facets;
   sort: Sort;
-  perPage: RowsPerPage;
+  /** Rows per page; 0 lists every row. */
+  perPage: number;
   /** 1-based. */
   page: number;
 };
@@ -264,6 +291,16 @@ function compare(
     }
     case "frames":
       return a.run.frames - b.run.frames;
+    case "pullRequests":
+      return (pullRequestCount(a.run) ?? 0) - (pullRequestCount(b.run) ?? 0);
+    case "diff": {
+      const x = a.run.diff ?? null;
+      const y = b.run.diff ?? null;
+      return (
+        (x === null ? 0 : x.added + x.removed) -
+        (y === null ? 0 : y.added + y.removed)
+      );
+    }
     case "started":
       return Date.parse(a.run.startedAt) - Date.parse(b.run.startedAt);
     default:
@@ -273,7 +310,10 @@ function compare(
 
 /** Whether a missing value keeps its place at the end whatever the direction. */
 function nullLast(row: ListedRun, key: SortKey): boolean {
-  return key === "cost" && shownCost(row.run) === null;
+  if (key === "cost") return shownCost(row.run) === null;
+  if (key === "diff") return (row.run.diff ?? null) === null;
+  if (key === "pullRequests") return pullRequestCount(row.run) === null;
+  return false;
 }
 
 /** The distinct words a facet can pick from, sorted, over the rows given. */
@@ -346,21 +386,4 @@ export function applyList(
     from: total === 0 ? 0 : start + 1,
     to: start + shown.length,
   };
-}
-
-/**
- * The page buttons a pager draws: every page up to seven, otherwise the
- * first, the last, the current page and its neighbours, with a gap marker
- * where pages are skipped (the design's `ltPager`).
- */
-export function pagerSlots(page: number, pages: number): (number | "gap")[] {
-  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
-  const slots: (number | "gap")[] = [1];
-  const lo = Math.max(2, page - 1);
-  const hi = Math.min(pages - 1, page + 1);
-  if (lo > 2) slots.push("gap");
-  for (let p = lo; p <= hi; p += 1) slots.push(p);
-  if (hi < pages - 1) slots.push("gap");
-  slots.push(pages);
-  return slots;
 }

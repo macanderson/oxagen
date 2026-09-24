@@ -12,6 +12,7 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import type { AgentPage } from "@/data/contracts/agents";
+import type { PullRequestFilter } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import { getAuthUser } from "@/features/auth";
@@ -20,6 +21,7 @@ import { canCommandRun } from "@/shared/run-command-roles";
 import { PageHeader } from "@/ui/page-header";
 import { type FleetAgent, FleetBoard } from "./board";
 import { FleetHeaderActions } from "./header-actions";
+import { DEFAULT_FLEET_PREFS, type FleetPrefs } from "./prefs";
 import { FleetDenied, FleetEmpty, FleetError, FleetPending } from "./states";
 import { parkedRunIds } from "./view";
 
@@ -68,9 +70,11 @@ async function readFleet(
   ctx: WsCtx,
   source: DataSource,
   cursor: string | null,
+  pageSize: number,
+  pullRequests: PullRequestFilter,
 ) {
   const [runs, approvals, agents] = await Promise.all([
-    source.runs.list(ctx, { cursor }),
+    source.runs.list(ctx, { cursor, limit: pageSize, pullRequests }),
     source.approvals.pending(ctx, { runId: null }),
     readAgentRoster(ctx, source),
   ]);
@@ -83,16 +87,28 @@ export async function Fleet({
   ctx,
   source,
   cursor,
+  prefs = DEFAULT_FLEET_PREFS,
+  pullRequests = "any",
   banners,
 }: {
   ctx: WsCtx;
   source: DataSource;
   /** The runs page the URL asked for; null is the newest. */
   cursor: string | null;
+  /** The columns and page size the person saved (`prefs.ts`). */
+  prefs?: FleetPrefs;
+  /** Runs with or without pull requests, as the URL asked. */
+  pullRequests?: PullRequestFilter;
   /** The onboarding banners the page draws under the header, when the gate has any. */
   banners?: ReactNode;
 }) {
-  const { runs, approvals, agents, now } = await readFleet(ctx, source, cursor);
+  const { runs, approvals, agents, now } = await readFleet(
+    ctx,
+    source,
+    cursor,
+    prefs.pageSize,
+    pullRequests,
+  );
   const org = ctx.orgSlug;
   const ws = ctx.wsSlug;
   if (!runs.ok) {
@@ -125,7 +141,13 @@ export async function Fleet({
         );
     }
   }
-  if (runs.value.runs.length === 0 && cursor === null) {
+  // A filtered page with no match is not an empty workspace: the table stays,
+  // with its filter, and says no run matched.
+  if (
+    runs.value.runs.length === 0 &&
+    cursor === null &&
+    pullRequests === "any"
+  ) {
     return <FleetEmpty workspace={ctx.wsName} org={org} ws={ws} />;
   }
   const roster: FleetAgent[] = agents.ok
@@ -161,6 +183,11 @@ export async function Fleet({
         runs={runs.value.runs}
         nextCursor={runs.value.nextCursor}
         cursor={cursor}
+        prefs={prefs}
+        pullRequests={pullRequests}
+        pullRequestsUnread={
+          runs.value.warnings?.includes("pull_requests_unread") === true
+        }
         approvals={approvals}
         agentTotal={agents.ok ? agents.value.totals.identities : null}
         now={now}

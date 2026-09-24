@@ -8,15 +8,16 @@ import {
   applyList,
   chipRows,
   facetValues,
+  forgeOf,
   type ListQuery,
   listRuns,
   liveCount,
   oldestApproval,
-  pagerSlots,
   parkedRunIds,
+  pullRequestCount,
+  pullRequestLabel,
   type RowWords,
   rowState,
-  rowsPerPageOf,
   shownCost,
   spendShown,
   windowParts,
@@ -442,31 +443,6 @@ describe("the list controls", () => {
       applyList(rows, words, { ...base, search: "nothing like this" }),
     ).toMatchObject({ rows: [], total: 0, from: 0, to: 0, pages: 1 });
   });
-
-  it("draws every page up to seven and elides past that", () => {
-    expect(pagerSlots(1, 3)).toEqual([1, 2, 3]);
-    expect(pagerSlots(1, 28)).toEqual([1, 2, "gap", 28]);
-    expect(pagerSlots(14, 28)).toEqual([1, "gap", 13, 14, 15, "gap", 28]);
-  });
-
-  it("draws no gap where the neighbours already reach the first or last page", () => {
-    expect(pagerSlots(3, 8)).toEqual([1, 2, 3, 4, "gap", 8]);
-    expect(pagerSlots(6, 8)).toEqual([1, "gap", 5, 6, 7, 8]);
-    expect(pagerSlots(8, 8)).toEqual([1, "gap", 7, 8]);
-  });
-});
-
-describe("rowsPerPageOf", () => {
-  it("reads each offered choice, All included", () => {
-    expect(rowsPerPageOf("5")).toBe(5);
-    expect(rowsPerPageOf("50")).toBe(50);
-    expect(rowsPerPageOf("0")).toBe(0);
-  });
-
-  it("falls back to 10 for a value the select does not offer (negative)", () => {
-    expect(rowsPerPageOf("7")).toBe(10);
-    expect(rowsPerPageOf("all")).toBe(10);
-  });
 });
 
 describe("windowParts", () => {
@@ -478,5 +454,64 @@ describe("windowParts", () => {
 
   it("never reads a negative window (negative)", () => {
     expect(windowParts(-5)).toEqual({ minutes: 0, seconds: 0 });
+  });
+});
+
+describe("how a row names its pull requests", () => {
+  const pull = (
+    url: string,
+    number: number | null,
+    repository: string | null,
+  ) => ({
+    url,
+    number,
+    repository,
+    state: null,
+  });
+
+  it("names the forge by host, and a self-hosted one as none", () => {
+    expect(forgeOf("https://github.com/a/b/pull/1")).toBe("github");
+    expect(forgeOf("https://gitlab.com/g/p/-/merge_requests/2")).toBe("gitlab");
+    expect(forgeOf("https://git.acme.example/a/b/pull/1")).toBeNull();
+    expect(forgeOf("not a url")).toBeNull();
+  });
+
+  it("writes owner/repo#N on GitHub and group/project!N on GitLab", () => {
+    expect(
+      pullRequestLabel(
+        pull("https://github.com/acme/api/pull/42", 42, "acme/api"),
+      ),
+    ).toBe("acme/api#42");
+    expect(
+      pullRequestLabel(
+        pull("https://gitlab.com/acme/web/-/merge_requests/9", 9, "acme/web"),
+      ),
+    ).toBe("acme/web!9");
+  });
+
+  it("leaves out what the frame did not record (negative)", () => {
+    expect(
+      pullRequestLabel(pull("https://github.com/acme/api/pull/42", 42, null)),
+    ).toBe("#42");
+    expect(
+      pullRequestLabel(
+        pull("https://github.com/acme/api/pull/42", null, "acme/api"),
+      ),
+    ).toBe("acme/api");
+    expect(
+      pullRequestLabel(pull("https://github.com/acme/api/pull/42", null, null)),
+    ).toBeNull();
+  });
+
+  it("counts the links, or the opened calls when more were counted, and nothing it did not read", () => {
+    const link = pull("https://github.com/a/b/pull/1", 1, "a/b");
+    expect(
+      pullRequestCount(runRow({ pullRequests: [link], pullRequestsOpened: 0 })),
+    ).toBe(1);
+    expect(
+      pullRequestCount(runRow({ pullRequests: [], pullRequestsOpened: 3 })),
+    ).toBe(3);
+    expect(pullRequestCount(runRow({ pullRequests: [] }))).toBe(0);
+    expect(pullRequestCount(runRow({}))).toBeNull();
   });
 });
