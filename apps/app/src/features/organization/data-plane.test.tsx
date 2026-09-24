@@ -263,7 +263,7 @@ describe("Retention and Tenant isolation", () => {
   it("states the five isolation guarantees and names every workspace scoped", async () => {
     await renderPlane();
     const isolation = screen.getByRole("region", { name: "Tenant isolation" });
-    expect(isolation).toHaveTextContent("postgres · acme");
+    expect(isolation).toHaveTextContent("postgres for acme");
     for (const row of [
       "Rows",
       "Workspace scoping",

@@ -340,7 +340,7 @@
       "emptyFiltered": "Every key in this workspace has been revoked or has expired. Choose All to see {ended, plural, one {it} other {them}}.",
       "title": "API keys",
       "caption": "each key acts as the person who created it",
-      "badge": "postgres · iam + vault",
+      "badge": "postgres iam and vault",
       "note": "A key is shown once, at creation, and never again. Until keys carry grants of their own, a key acts as the person who created it, in its workspace. Revoking a key ends its access at the next call.",
       "masked": "{prefix}…",
       "state": {
@@ -388,7 +388,7 @@
       },
       "noPermissions": "No permissions",
       "empty": "This organization has no roles.",
-      "badge": "postgres · iam",
+      "badge": "postgres iam",
       "heldBy": {
         "people": "{count, plural, one {# person} other {# people}}",
         "agents": "{count, plural, one {# agent} other {# agents}}",
@@ -995,7 +995,7 @@
       },
       "isolation": {
         "title": "Tenant isolation",
-        "badge": "postgres · {org}",
+        "badge": "postgres for {org}",
         "rows": "Rows",
         "workspaceScoping": "Workspace scoping",
         "crossTenant": "Cross-tenant reads",

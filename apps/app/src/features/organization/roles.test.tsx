@@ -101,7 +101,7 @@ describe("the Roles panel", () => {
   it("carries the store badge, the gold Create role and the three filters", async () => {
     await renderRoles();
     const panel = screen.getByRole("region", { name: "Roles" });
-    expect(within(panel).getByText("postgres · iam")).toBeInTheDocument();
+    expect(within(panel).getByText("postgres iam")).toBeInTheDocument();
     expect(
       within(panel).getByRole("button", { name: "Create role" }),
     ).toHaveClass("bg-button-primary-bg");

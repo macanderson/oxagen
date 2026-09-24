@@ -170,7 +170,7 @@ describe("the API keys panel", () => {
       "each key acts as the person who created it",
     );
     expect(
-      within(panel).getByText("postgres · iam + vault"),
+      within(panel).getByText("postgres iam and vault"),
     ).toBeInTheDocument();
     expect(
       within(panel).getByRole("button", { name: "Create key" }),
