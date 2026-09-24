@@ -549,16 +549,14 @@ describe("the Run page", () => {
     requireViewer.mockResolvedValue(ctx);
   });
 
-  // The spec (pages/run.md) makes the run's id the h1 and "Run" the eyebrow,
-  // so the tab title and the h1 differ here, unlike every other page.
+  // Only the run read knows the run's title, so Run draws the h1 (its own
+  // tests cover it) and the page adds no heading beside it. The tab title
+  // stays the catalog's "Run".
   async function expectRunTitle(props: RouteProps<typeof SEGMENTS>) {
     const page = await RUN();
     const metadata = await page.generateMetadata(props);
     const container = await renderPage(await page.default(props));
-    const headings = [...container.querySelectorAll("h1")];
-    expect(headings.map((h) => h.textContent)).toEqual(["arun_1"]);
-    expect(headings[0]?.className).toContain("font-mono");
-    expect(container).toHaveTextContent(title("run"));
+    expect(container.querySelectorAll("h1")).toHaveLength(0);
     expect(metadata.title).toBe(title("run"));
   }
 
