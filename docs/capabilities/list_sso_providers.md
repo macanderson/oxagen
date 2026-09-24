@@ -34,6 +34,8 @@ None. The providers are the caller's organisation's.
 | providers | One view per provider, oldest first |
 | policy.ssoRequired | Whether members other than Owners must sign in through SSO |
 | entitled | Whether the organisation's plan includes SSO. Only the Enterprise plan does |
+| scim.baseUrl | The SCIM 2.0 endpoint to enter in the identity provider (#3734) |
+| scim.token | The live SCIM token's `tokenPrefix`, `createdAt`, and `lastUsedAt`, or null. Never the token |
 
 Each provider view carries `providerId`, `displayName`, `protocol` (`oidc` or
 `saml`), `domain`, `domainVerified`, `issuer`, `groupsClaim`, and:

@@ -675,25 +675,23 @@ describe("build", () => {
     );
   });
 
-  it(
-    "builds the atlas from the real tree deterministically",
-    { timeout: 120_000 },
-    async () => {
-      const first = await build(ROOT);
-      const second = await build(ROOT);
-      expect(first.html).toBe(second.html);
-      expect(first.json).toBe(second.json);
-      expect(first.html.startsWith("<!doctype html>")).toBe(true);
-      expect(first.html).toContain("<title>Oxagen Architecture Atlas</title>");
-      expect(first.html).not.toMatch(/\b20\d\d-\d\d-\d\dT/); // no build timestamps
-      for (const f of flows) expect(first.html).toContain(`id="${f.id}"`);
-      expect(first.model.capabilities.length).toBeGreaterThan(100);
-      expect(
-        first.model.apiRoutes.filter((r) => r.capability).length /
-          first.model.apiRoutes.length,
-      ).toBeGreaterThan(0.85);
-    },
-  );
+  it("builds the atlas from the real tree deterministically", {
+    timeout: 120_000,
+  }, async () => {
+    const first = await build(ROOT);
+    const second = await build(ROOT);
+    expect(first.html).toBe(second.html);
+    expect(first.json).toBe(second.json);
+    expect(first.html.startsWith("<!doctype html>")).toBe(true);
+    expect(first.html).toContain("<title>Oxagen Architecture Atlas</title>");
+    expect(first.html).not.toMatch(/\b20\d\d-\d\d-\d\dT/); // no build timestamps
+    for (const f of flows) expect(first.html).toContain(`id="${f.id}"`);
+    expect(first.model.capabilities.length).toBeGreaterThan(100);
+    expect(
+      first.model.apiRoutes.filter((r) => r.capability).length /
+        first.model.apiRoutes.length,
+    ).toBeGreaterThan(0.85);
+  });
 
   it("the generated output is not tracked, so a moving main can never make it stale", () => {
     const ignore = readFileSync(join(ROOT, ".gitignore"), "utf8");

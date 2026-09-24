@@ -1,0 +1,71 @@
+{
+  "name": "rotate_scim_token",
+  "domain": "org",
+  "description": "Replace the organization's SCIM bearer token. The old token stops working immediately and the new one is returned once. Update the identity provider with the new token.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "token": {
+        "type": "string",
+        "description": "The bearer token. Oxagen stores only its hash, so this is the one time it can be read."
+      },
+      "baseUrl": {
+        "type": "string"
+      },
+      "view": {
+        "type": "object",
+        "properties": {
+          "tokenPrefix": {
+            "type": "string",
+            "description": "The token's first characters, to tell one token from the next"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO timestamp the token was minted"
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "tokenPrefix",
+          "createdAt",
+          "lastUsedAt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "token",
+      "baseUrl",
+      "view"
+    ],
+    "additionalProperties": false
+  }
+}

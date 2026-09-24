@@ -21,6 +21,8 @@ describe("isPublicPath", () => {
     "/reset-password",
     "/invite/tok_123",
     "/api/auth/get-session",
+    "/api/scim/v2/Users",
+    "/api/scim/v2",
     "/cli/authorize",
     "/cli/complete",
     "/github/setup",
@@ -39,6 +41,8 @@ describe("isPublicPath", () => {
     "/cli/authorizex",
     "/cli/completex",
     "/github/setupx",
+    "/api/scim/v2x",
+    "/api/scim/v1/Users",
   ])("%s is gated", (path) => {
     expect(isPublicPath(path)).toBe(false);
   });
