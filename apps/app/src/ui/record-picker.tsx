@@ -537,7 +537,11 @@ export function RecordMultiPicker({
       else move(e.key === "ArrowDown" ? 1 : -1);
     } else if (e.key === "Enter") {
       const next = open ? rowValue(highlight) : null;
-      if (next !== null) {
+      if (next !== null && next === query.trim() && values.includes(next)) {
+        // Typing a value that is already chosen asks for it, so it stays.
+        e.preventDefault();
+        setQuery("");
+      } else if (next !== null) {
         e.preventDefault();
         toggle(next);
       } else if (freeform && query.trim() !== "") {

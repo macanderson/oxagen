@@ -9227,6 +9227,7 @@ type Messages = {
       toolsHint: string;
       nothingListed: string;
       listed: string;
+      filter: string;
       selected: string;
       allPins: string;
       grantsNothingTitle: string;
