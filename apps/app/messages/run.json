@@ -903,6 +903,8 @@
       "pathRecorded": "Oxagen recorded this checkout on {machine}. Click to copy the path.",
       "withFacts": "{reading} {facts}",
       "pausedTitle": "Paused.",
+      "statusPaused": "paused",
+      "statusParked": "parked",
       "fit": {
         "fit": "Model fit",
         "wrongTier": "Wrong model tier"
@@ -929,7 +931,7 @@
       "cacheHit": "Cache hit",
       "tokensNote": "{input} in, {output} out",
       "tokensProvisional": "reported by the session, provisional until the rollup",
-      "wastedNote": "steps that did not advance the task",
+      "wastedNotRecorded": "the cost of steps that did not advance the task",
       "noRollup": "not rolled up yet",
       "oneShot": "one-shot session",
       "corrective": "{count} corrective",
@@ -937,7 +939,6 @@
       "estimate": "estimate",
       "basisNotRecorded": "basis not recorded",
       "noEnd": "no end recorded",
-      "nothingWasted": "nothing bought nothing",
       "mostly": {
         "model": "mostly in the model",
         "tool": "mostly in tool calls",

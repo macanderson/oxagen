@@ -500,6 +500,86 @@ describe("header", () => {
     expect(screen.queryByTestId("run-paused")).toBeNull();
   });
 
+  it("says parked in the header status while a call on a live run waits for approval", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [approval()], more: false }),
+    });
+    const status = screen.getByTestId("run-status");
+    // A live region, so a refresh that parks a call is heard, not only seen.
+    expect(status).toHaveAttribute("role", "status");
+    expect(status).toHaveTextContent(/^parked$/);
+    expect(status.querySelector("[data-pulse]")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("says paused over parked, and offers Resume in the banner to a viewer who may resume", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "ledger",
+            ingressPaused: true,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [approval()], more: false }),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
+    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
+    expect(screen.getByTestId("banner-resume")).toHaveTextContent("Resume run");
+    await expectNoAxe(container);
+  });
+
+  it("offers no banner Resume to a viewer the command write refuses (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            run: runRow({
+              status: "live",
+              sealedAt: null,
+              source: "ledger",
+              ingressPaused: true,
+            }),
+          }),
+        ),
+        transcript: ok(runTranscript()),
+      },
+      { viewer: viewerCtx },
+    );
+    expect(screen.getByTestId("run-paused")).toBeTruthy();
+    expect(screen.queryByTestId("banner-resume")).toBeNull();
+  });
+
+  it("reads an ended run's outcome, not parked, whatever is still parked on it (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [approval()], more: false }),
+    });
+    const status = screen.getByTestId("run-status");
+    expect(status).toHaveTextContent(/^completed$/);
+    expect(status).not.toHaveTextContent("parked");
+  });
+
+  it("reads live on a live run with nothing parked and ingress open (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [], more: false }),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^live$/);
+  });
+
   it("reads the operator id when the record holds neither a name nor a kind", async () => {
     await renderRun({
       detail: ok(
@@ -1055,6 +1135,43 @@ describe("tabs", () => {
     expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent("2");
     expect(screen.getByTestId("run-tab-parked-actions")).toBeTruthy();
     expect(screen.getByTestId("run-tab-parked-policy")).toBeTruthy();
+  });
+
+  it("names the parked marker to a screen reader and wires the open tab to its panel", async () => {
+    const { container } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        approvals: ok({ items: [approval()], more: false }),
+      },
+      { tab: "cost" },
+    );
+    expect(screen.getByTestId("run-tab-parked-actions")).toHaveTextContent(
+      "A call is parked for approval",
+    );
+    // The marker is part of each marked tab's name, so the fact is read with
+    // the tab: Governed actions and Policy, where the parked call is.
+    expect(
+      screen.getAllByRole("tab", { name: /A call is parked for approval/ }),
+    ).toHaveLength(2);
+    const open = screen.getByRole("tab", { selected: true });
+    const panel = screen.getByRole("tabpanel");
+    expect(open).toHaveAttribute("aria-controls", panel.id);
+    expect(panel).toHaveAttribute("aria-labelledby", open.id);
+    expect(panel).toHaveAttribute("data-testid", "run-tab-cost");
+    await expectNoAxe(container);
+  });
+
+  it("points no closed tab at a panel the page did not draw, and draws no marker with nothing parked (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [], more: false }),
+    });
+    for (const tab of screen.getAllByRole("tab", { selected: false }))
+      expect(tab).not.toHaveAttribute("aria-controls");
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+    expect(screen.queryByText("A call is parked for approval")).toBeNull();
   });
 
   it("marks a count read from a transcript that stopped short as a floor", async () => {
@@ -1893,11 +2010,15 @@ describe("figures", () => {
     expect(stat("prompts").getByText("one-shot session")).toBeTruthy();
     expect(stat("cost").getByText("$4.13")).toBeTruthy();
     expect(stat("cost").getByText("gateway_observed")).toBeTruthy();
-    // 29% of $4.131265 that the rollup did not count as productive.
-    expect(stat("wasted").getByText("$1.20")).toBeTruthy();
+    // The rollup's productive ratio is a share of steps, not of cost, so the
+    // Wasted figure is not recorded rather than a share of $4.13.
+    expect(stat("wasted").getByText("not recorded")).toBeTruthy();
     expect(
-      stat("wasted").getByText("steps that did not advance the task"),
+      stat("wasted").getByText(
+        "the cost of steps that did not advance the task",
+      ),
     ).toBeTruthy();
+    expect(stat("wasted").queryByText("$1.20")).toBeNull();
     expect(stat("cache").getByText("83%")).toBeTruthy();
     await expectNoAxe(container);
   });
@@ -1962,11 +2083,9 @@ describe("figures", () => {
     const cost = within(screen.getByTestId("run-stat-cost"));
     expect(cost.getByText("$2.50")).toBeTruthy();
     expect(cost.getByText("agent reported, provisional")).toBeTruthy();
-    // Nothing metered, so no share of it can be called wasted.
+    // Nothing records what the unproductive steps cost.
     expect(
-      within(screen.getByTestId("run-stat-wasted")).getByText(
-        "not rolled up yet",
-      ),
+      within(screen.getByTestId("run-stat-wasted")).getByText("not recorded"),
     ).toBeTruthy();
   });
 
@@ -1989,7 +2108,7 @@ describe("figures", () => {
     ).toBeTruthy();
   });
 
-  it("says nothing was wasted, in no warning hue, when the rollup counted every step productive", async () => {
+  it("claims no wasted figure, and no warning hue, even when the rollup counted every step productive (negative)", async () => {
     const rollup = runCost().rollup;
     if (rollup === null) throw new Error("the builder's rollup is present");
     await renderRun({
@@ -1998,8 +2117,8 @@ describe("figures", () => {
       cost: ok(runCost({ rollup: { ...rollup, productiveRatio: 1 } })),
     });
     const wasted = screen.getByTestId("run-stat-wasted");
-    expect(within(wasted).getByText("$0.00")).toBeTruthy();
-    expect(within(wasted).getByText("nothing bought nothing")).toBeTruthy();
+    expect(within(wasted).getByText("not recorded")).toBeTruthy();
+    expect(within(wasted).queryByText("$0.00")).toBeNull();
     expect(wasted.innerHTML).not.toContain("text-critical");
   });
 

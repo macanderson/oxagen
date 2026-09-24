@@ -19,7 +19,6 @@ import {
   type Cost,
   type Money,
   priceTokens,
-  shareOfMicros,
   subMoney,
   sumMoney,
 } from "@/data/contracts/money";
@@ -202,9 +201,13 @@ export type RunMetrics = {
    * row says, since a row an idle close sealed reads final until rebuilt.
    */
   costIsEstimate: boolean;
-  /** The share of the cost the rollup did not count as productive. */
-  wasted: Cost | null;
   cacheHit: number | null;
+  /**
+   * The rollup's share of steps that advanced the task. No money figure is
+   * derived from it: the contract does not say the ratio is weighted by cost,
+   * so cost × (1 − ratio) would print a guess as "wasted" spend. The Wasted
+   * figure reads not recorded until a contract carries it.
+   */
   productiveRatio: number | null;
   prompts: Prompts | null;
   wall: WallClock;
@@ -319,12 +322,6 @@ function tokenFigures(rollup: RunCostRollup): TokenFigures {
     else output += byClass[tokenClass];
   }
   return { total: input + output, input, output, byClass };
-}
-
-function wasted(cost: Cost | null, ratio: number | null): Cost | null {
-  if (cost === null || ratio === null) return null;
-  const part = shareOfMicros(cost, 1 - ratio);
-  return part === null ? null : { ...part, basis: cost.basis };
 }
 
 /** The per-turn ledger: what each turn cost, how many steps it took, and its cache hit. */
@@ -607,7 +604,6 @@ export function runMetrics({
       (rollup === null
         ? run.costIsEstimate === true
         : rollup.isEstimate === true),
-    wasted: wasted(runCost, rollup?.productiveRatio ?? null),
     cacheHit: rollup?.cacheHitRate ?? null,
     productiveRatio: rollup?.productiveRatio ?? null,
     prompts:
