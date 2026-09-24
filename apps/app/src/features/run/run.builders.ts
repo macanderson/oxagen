@@ -538,12 +538,11 @@ type RunReads = {
   /** Only read when the Governed actions tab has a frame body open; refused when absent. */
   frameBody?: Read<RunFrameBody>;
   /**
-   * The whole-run transcript is read with the page (the Prompts figure, the
-   * Policy and Context tabs and their counts); the Transcript tab reads it
-   * again only through pressed chips, and the Cost tab reads it per zoom
-   * level for the waterfall. A function answers per zoom level, which is how
-   * a Cost-tab test hands one transcript for `turns` and another for
-   * `steps`. A test that says nothing about it gets one step.
+   * The whole-run transcript at `everything`, read with the page: the
+   * figures, the Cost tab's waterfall, the Policy and Context tabs and the tab
+   * counts all derive from it. The Transcript tab reads it again only through
+   * pressed chips. A function answers per zoom level, for a test that needs
+   * to tell the reads apart. A test that says nothing about it gets one step.
    */
   transcript?:
     | Read<RunTranscript>
