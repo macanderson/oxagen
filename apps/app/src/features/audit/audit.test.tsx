@@ -230,6 +230,13 @@ async function renderAudit(
   return render(<IntlProvider>{element}</IntlProvider>);
 }
 
+/** The element as the select it must be. */
+function selectOf(element: HTMLElement): HTMLSelectElement {
+  if (!(element instanceof HTMLSelectElement))
+    throw new Error(`expected a select, found ${element.tagName}`);
+  return element;
+}
+
 /** The section a heading titles. */
 function sectionOf(heading: string): HTMLElement {
   const found = screen
@@ -509,9 +516,12 @@ describe("Events", () => {
     );
     const severity = screen.getByRole("combobox", { name: "Severity" });
     expect(severity).toBeDisabled();
-    expect(
-      [...(severity as HTMLSelectElement).options].map((o) => o.textContent),
-    ).toEqual(["All · Severity", "critical", "info", "warning"]);
+    expect([...selectOf(severity).options].map((o) => o.textContent)).toEqual([
+      "All · Severity",
+      "critical",
+      "info",
+      "warning",
+    ]);
 
     // The table's page is narrowed by the result and sized by Rows; the
     // window the tiles count is not narrowed by the result.
@@ -723,12 +733,11 @@ describe("tabs", () => {
     // sentence that says the organization has none yet.
     const gap = screen
       .getAllByTestId("audit-not-recorded")
-      .find((p) => p.textContent?.startsWith("No store lists"));
+      .find((p) => p.textContent.startsWith("No store lists"));
     const callout = screen.getByTestId("audit-exports-callout");
-    expect(gap).toBeDefined();
+    if (gap === undefined) throw new Error("no exports gap sentence");
     expect(
-      (gap as HTMLElement).compareDocumentPosition(callout) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      gap.compareDocumentPosition(callout) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(bundle).not.toHaveBeenCalled();
   });
@@ -931,9 +940,7 @@ describe("tabs", () => {
     answer({ window: recordOf([event()]) });
     await renderAudit({}, { tab: "keys" });
 
-    const keys = screen
-      .getByRole("heading", { name: "Keys" })
-      .closest("section") as HTMLElement;
+    const keys = sectionOf("Keys");
     expect(keys).toHaveTextContent("Keys are not recorded yet.");
     expect(keys).not.toHaveTextContent("kms + postgres");
   });
@@ -1012,7 +1019,7 @@ describe("states", () => {
     expect(tiles()[0]?.[1]).toBe("0");
   });
 
-  it("prints the error line's time as the design does", async () => {
+  it("prints the error line's time as the design does", () => {
     expect(traceTime(Date.parse("2026-09-11T09:16:04.123Z"))).toBe(
       "2026-09-11 09:16:04Z",
     );
@@ -1208,7 +1215,7 @@ describe("the header's gold action", () => {
     expect(within(dialog).getByLabelText("Scope")).toBeEnabled();
     // The ZIP export_data builds is the selected format; the design's three
     // formats stay listed and disabled until the signed bundle exists (#3876).
-    const format = within(dialog).getByLabelText("Format") as HTMLSelectElement;
+    const format = selectOf(within(dialog).getByLabelText("Format"));
     expect(format.value).toBe("zip");
     expect(
       [...format.options].map((option) => [option.text, option.disabled]),
