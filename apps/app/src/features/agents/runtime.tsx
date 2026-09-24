@@ -30,7 +30,7 @@ import { StubAction } from "./stub-action";
 type Host = AgentDetail["hosts"][number];
 
 /** The four rungs, weakest first (ADR-095). */
-export const TIERS: readonly EnforcementTier[] = [
+const TIERS: readonly EnforcementTier[] = [
   "observe",
   "harness",
   "gateway",

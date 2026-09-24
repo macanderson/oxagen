@@ -31,7 +31,7 @@ import { StubAction } from "./stub-action";
 type Place = { org: string; ws: string; agent: string };
 
 /** The model tier the definition file names, or null when there is no file or no tier. */
-export function modelTierOf(detail: AgentDetail): string | null {
+function modelTierOf(detail: AgentDetail): string | null {
   const source = detail.definition?.source;
   if (source === undefined) return null;
   const parsed = parseTomlSubset(source);

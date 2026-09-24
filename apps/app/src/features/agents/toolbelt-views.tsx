@@ -137,7 +137,7 @@ function matches(words: readonly string[], text: string): boolean {
   return words.every((word) => h.includes(word));
 }
 
-export const SEARCH_EXAMPLES = [
+const SEARCH_EXAMPLES = [
   "pull request",
   "context record",
   "stripe payment",

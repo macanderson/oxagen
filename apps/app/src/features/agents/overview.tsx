@@ -57,7 +57,7 @@ export type Health = {
   openIncidents: number;
 };
 
-export function healthOf(
+function healthOf(
   detail: AgentDetail,
   incidents: Read<IncidentPage>,
   lastRun: RunRow | null,

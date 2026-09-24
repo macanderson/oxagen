@@ -47,7 +47,7 @@ export function tabOf(segment: string | null): AgentTab {
 }
 
 /** The trailing 30 UTC days that end today, the window every 30-day figure on the page covers. */
-export function last30Days(now: number): DayRange {
+function last30Days(now: number): DayRange {
   const day = 24 * 60 * 60 * 1000;
   const to = new Date(now).toISOString().slice(0, 10);
   const from = new Date(now - 29 * day).toISOString().slice(0, 10);

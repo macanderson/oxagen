@@ -4,7 +4,7 @@
 // store as `data-gap`, so a reader of the DOM, and the audit, can follow the
 // element to the work that backs it. The page never prints the issue: a
 // roadmap reference is not product copy.
-export const TOOLS_GAPS = {
+const TOOLS_GAPS = {
   /** A named toolbelt and who carries it: `tools.toolbelts`, `tools.toolbelt_assignments`. */
   toolbelts: 3852,
   /** A provider's system, transport and wire apart from the MCP server row, and editing one. */

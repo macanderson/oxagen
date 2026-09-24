@@ -52,7 +52,7 @@ import { AssignRole, type RoleTarget, RevokeRole } from "./role-controls";
 type Place = { org: string; ws: string; agent: string };
 
 /** A micros budget the definition file names under `[budget]` or `budget = {…}`, in USD. */
-export function definitionBudget(
+function definitionBudget(
   detail: AgentDetail,
   key: "per_run_micros" | "per_day_micros",
 ): MoneyValue | null {

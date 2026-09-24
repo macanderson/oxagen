@@ -35,7 +35,7 @@ import { ToolDialog } from "./tool-dialog";
 import { type ToolsAt, versionLabel } from "./view";
 
 /** The eight transports a provider may take, and the five wires (spec). */
-export const PROVIDER_TRANSPORTS = [
+const PROVIDER_TRANSPORTS = [
   "mcp",
   "http",
   "graphql",
@@ -45,7 +45,7 @@ export const PROVIDER_TRANSPORTS = [
   "local",
   "rpc",
 ] as const;
-export const PROVIDER_WIRES = [
+const PROVIDER_WIRES = [
   "streamable-http",
   "https",
   "stdio",
@@ -271,7 +271,7 @@ function EditProvider({ server }: { server: McpServer }) {
 }
 
 /** The OAuth dialog (`oauth`): what authorizing would take, with its refusal rule. */
-export function OAuthDialog({ server }: { server: McpServer }) {
+function OAuthDialog({ server }: { server: McpServer }) {
   const t = useTranslations("tools.providers.oauth");
   return (
     <StubAction

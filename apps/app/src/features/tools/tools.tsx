@@ -52,7 +52,7 @@ import {
  * should confer IAM authority is #3198; when that lands, this reads
  * `ctx.wsRole` too.
  */
-export function canAdministerOrg(ctx: WsCtx): boolean {
+function canAdministerOrg(ctx: WsCtx): boolean {
   return ctx.orgRole === "owner" || ctx.orgRole === "admin";
 }
 

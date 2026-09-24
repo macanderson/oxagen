@@ -26,7 +26,7 @@ import { StubAction } from "./stub-action";
 type Manifest = SteeringDeliveries["runs"][number];
 
 /** The newest manifest a run of this agent wrote, or null. */
-export function manifestOf(
+function manifestOf(
   deliveries: SteeringDeliveries,
   agentKey: string | null,
 ): Manifest | null {

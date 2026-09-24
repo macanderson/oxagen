@@ -34,7 +34,11 @@ const TAB_ALIASES: Readonly<Record<string, ToolsTab>> = {
   autoapprovals: "policy",
 };
 
-/** A tab id as the tab it names now: a current id, an alias, or Tools. */
+/**
+ * A tab id as the tab it names now: a current id, an alias, or Tools.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function toolsTabOf(raw: string | undefined): ToolsTab {
   if (raw === undefined) return "tools";
   return TOOLS_TABS.find((tab) => tab === raw) ?? TAB_ALIASES[raw] ?? "tools";
