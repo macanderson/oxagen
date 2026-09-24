@@ -17,12 +17,17 @@
 // handler checks and refuses with `conflict`; the button is drawn disabled,
 // with the reason, wherever the row already says the recording is weaker, so a
 // person is not sent to a refusal they could have read here.
+//
+// Bisect's other run is picked by name from the workspace's runs. The picker
+// is freeform, so a run id pasted from elsewhere is still sent as typed.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { RunRow } from "@/data/contracts/runs";
+import { chooseRuns } from "@/features/shell/client";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { RecordPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { bisectRuns, forkRun } from "./actions";
 
@@ -221,17 +226,19 @@ export function BisectDialog({
             <label htmlFor={fieldId} className="text-sm font-medium">
               {t("otherLabel")}
             </label>
-            <input
+            <RecordPicker
               id={fieldId}
               name="runB"
               required
+              freeform
+              load={() => chooseRuns(org, ws)}
               value={other}
-              onChange={(event) => {
-                setOther(event.target.value);
-              }}
-              className={inputBase}
+              onChange={setOther}
+              aria-describedby={`${fieldId}-help`}
             />
-            <p className="text-xs text-muted-foreground">{t("otherHelp")}</p>
+            <p id={`${fieldId}-help`} className="text-xs text-muted-foreground">
+              {t("otherHelp")}
+            </p>
             {failure === null ? null : (
               <FormAlert testId="run-bisect-failure">{failure}</FormAlert>
             )}

@@ -8,14 +8,20 @@
 // laptop, where the enforcer is the daemon on it reading a signed bundle.
 //
 // Model lists are armed independently of the agent budget on upgraded hosts.
+//
+// Each list is picked from the models the workspace's price book and usage
+// know. The pickers are freeform, so a pattern such as claude-opus-* is kept as
+// typed, and the form still holds each list as one pattern per line.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { GatewayPolicy } from "@/data/contracts/spend";
+import { chooseModels } from "@/features/shell/client";
 import { Badge } from "@/ui/badge";
 import { Money } from "@/ui/money";
 import { inputBase } from "@/ui/control-styles";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { type OptionLoad, RecordMultiPicker } from "@/ui/record-picker";
 import { setGatewayPolicyAction } from "./actions";
 import {
   GatewayPolicyForm,
@@ -38,12 +44,21 @@ function valuesOf(policy: GatewayPolicy): GatewayPolicyFormValues {
   };
 }
 
+/** One pattern per line, as the form holds a list, split into the picker's chips. */
+function patternsOf(value: string): string[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 function ModelList({
   id,
   label,
   hint,
   value,
   error,
+  load,
   onChange,
 }: {
   id: string;
@@ -51,6 +66,7 @@ function ModelList({
   hint: string;
   value: string;
   error: string | undefined;
+  load: () => Promise<OptionLoad>;
   onChange: (value: string) => void;
 }) {
   const hintId = `${id}-hint`;
@@ -60,17 +76,18 @@ function ModelList({
       <label htmlFor={id} className="text-sm font-medium text-foreground">
         {label}
       </label>
-      <textarea
+      <RecordMultiPicker
         id={id}
         name={id}
-        rows={3}
-        value={value}
+        freeform
+        joiner={"\n"}
+        load={load}
+        value={patternsOf(value)}
         aria-describedby={[errorId, hintId].filter(Boolean).join(" ")}
         aria-invalid={error ? true : undefined}
-        onChange={(event) => {
-          onChange(event.target.value);
+        onChange={(patterns) => {
+          onChange(patterns.join("\n"));
         }}
-        className={`${inputBase} font-mono`}
       />
       {error ? (
         <p id={errorId} className="text-xs text-destructive">
@@ -146,6 +163,9 @@ export function GatewayPolicySection({
       setPending(false);
     }
   }
+
+  // Both lists offer the same models; each picker reads them on first focus.
+  const loadModels = () => chooseModels(at.org, at.ws);
 
   const message = (field: keyof GatewayFieldErrors) => {
     const key = errors[field];
@@ -254,6 +274,7 @@ export function GatewayPolicySection({
             hint={t("modelAllowHint")}
             value={values.modelAllow}
             error={message("modelAllow")}
+            load={loadModels}
             onChange={(modelAllow) => {
               setValues((prev) => ({
                 ...prev,
@@ -268,6 +289,7 @@ export function GatewayPolicySection({
             hint={t("modelDenyHint")}
             value={values.modelDeny}
             error={message("modelDeny")}
+            load={loadModels}
             onChange={(modelDeny) => {
               setValues((prev) => ({ ...prev, modelDeny }));
             }}

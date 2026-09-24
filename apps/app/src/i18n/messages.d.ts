@@ -635,9 +635,6 @@ type Messages = {
           toolsHint: string;
           denyTools: string;
           denyHint: string;
-          add: string;
-          addPlaceholder: string;
-          remove: string;
           sideEffects: string;
           read: string;
           write: string;
@@ -2527,6 +2524,7 @@ type Messages = {
       title: string;
       subtitle: string;
       label: string;
+      search: string;
       loading: string;
       empty: string;
       denied: string;
@@ -2845,11 +2843,10 @@ type Messages = {
       agents: string;
       all: string;
       none: string;
-      pick: string;
+      search: string;
       inFlight: string;
       inFlightNoTurn: string;
       idle: string;
-      idleSub: string;
       hint: string;
       noAgents: string;
       agentsUnread: string;
@@ -9539,8 +9536,6 @@ type Messages = {
       titleRequest: string;
       bodyRequest: string;
       notCarried: string;
-      agentOption: string;
-      agentsPartial: string;
       agentsUnavailable: string;
       agentsEmpty: string;
       consequenceOther: string;
@@ -10153,6 +10148,18 @@ type Messages = {
         linuxAppImage: string;
       };
       all: string;
+    };
+    picker: {
+      search: string;
+      loading: string;
+      failed: string;
+      none: string;
+      noMatch: string;
+      more: string;
+      partial: string;
+      useTyped: string;
+      remove: string;
+      failedFreeform: string;
     };
   };
 };

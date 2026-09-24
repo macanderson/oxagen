@@ -228,11 +228,14 @@ describe("Fleet reads", () => {
       "Agents · 3 of 3 selected",
     );
     expect(screen.queryByTestId("steer-unlisted")).toBeNull();
-    // arun_parked is the docs agent's run, and its call is parked.
+    // arun_parked is the docs agent's run, and its call is parked. The picker
+    // draws each agent's state on its option row, so the list has to be open.
+    const picker = screen.getByTestId("steer-agents");
+    fireEvent.focus(within(picker).getByRole("combobox"));
     expect(
       screen
-        .getByRole("checkbox", { name: "Steer acme.core.docs" })
-        .closest("label"),
+        .getAllByRole("option")
+        .find((row) => row.getAttribute("data-value") === "acme.core.docs"),
     ).toHaveTextContent("parked for approval");
   });
 

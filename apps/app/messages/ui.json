@@ -189,6 +189,18 @@
         "linuxAppImage": "AppImage"
       },
       "all": "Every version, with SHA-256 checksums"
+    },
+    "picker": {
+      "search": "Type to search",
+      "loading": "Loading…",
+      "failed": "The list could not be loaded.",
+      "none": "Nothing to choose from yet.",
+      "noMatch": "Nothing matches “{query}”.",
+      "more": "{count, plural, one {# more match} other {# more matches}}. Keep typing to narrow the list.",
+      "partial": "This list shows the first page only. Type to narrow it.",
+      "useTyped": "Use “{value}”",
+      "remove": "Remove {label}",
+      "failedFreeform": "The list could not be loaded. You can still type a value."
     }
   }
 }

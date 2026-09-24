@@ -26,6 +26,27 @@ import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
 
+// The record pickers read their lists through these server actions; each
+// answers an empty list unless a test says otherwise.
+const { choices } = vi.hoisted(() => {
+  const none = () =>
+    Promise.resolve({ ok: true, value: { options: [], partial: false } });
+  return {
+    choices: {
+      chooseAgents: vi.fn(none),
+      chooseApprovers: vi.fn(none),
+      chooseMcpServers: vi.fn(none),
+      chooseModels: vi.fn(none),
+      chooseRuns: vi.fn(none),
+      chooseSwitchTargets: vi.fn(none),
+      chooseToolPatterns: vi.fn(none),
+    },
+  };
+});
+vi.mock("@/features/shell/client", () => ({
+  ...choices,
+  openApprovals: vi.fn(),
+}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const router = vi.hoisted(() => ({

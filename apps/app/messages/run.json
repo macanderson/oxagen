@@ -802,7 +802,7 @@
         "title": "Bisect {run} against another run",
         "body": "Both recordings are read frame by frame, and each frame is reduced to its kind and the identity of what it did. The first position whose keys differ is the divergence. Bodies are not read, so this works on any recording.",
         "otherLabel": "The other run",
-        "otherHelp": "A run id from this workspace, such as arun_01k4qj9e or tse_7k2m9q.",
+        "otherHelp": "Pick a run from this workspace by name, or type its id, such as tse_7k2m9q.",
         "confirm": "Find the divergence",
         "pending": "Comparing",
         "same": "The two runs agree at every frame. {aligned} frames were compared.",
