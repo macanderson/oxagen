@@ -27,15 +27,17 @@ import { Badge, type BadgeTone } from "@/ui/badge";
 import { inputBase, mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { Measure, NamedMeasure } from "@/ui/measure";
-import { cell, numericCell, Table } from "@/ui/table";
+import { cell, headCell, numericCell } from "@/ui/table";
 import { NotBacked } from "./state";
 import {
   DEFAULT_PAGE_SIZE,
   type LedgerView,
   ledgerPage,
   MOVEMENT_STATES,
+  nextSort,
   PAGE_SIZES,
   type PageSize,
+  type SortableColumn,
   whenOf,
 } from "./view";
 
@@ -134,12 +136,18 @@ export function LedgerTable({
     page: 0,
   });
   const page = ledgerPage(draws, view);
-  const columns = [
-    { label: t("columns.when") },
+  // Call and Receipt hold no recorded value yet (#3871, #3869), so their
+  // headers do not sort; the other four sort on the value the cell prints.
+  const columns: {
+    label: string;
+    numeric?: boolean;
+    sort?: SortableColumn;
+  }[] = [
+    { label: t("columns.when"), sort: "when" },
     { label: t("columns.call") },
-    { label: t("columns.amount"), numeric: true },
-    { label: t("columns.state") },
-    { label: t("columns.external") },
+    { label: t("columns.amount"), numeric: true, sort: "amount" },
+    { label: t("columns.state"), sort: "state" },
+    { label: t("columns.external"), sort: "external" },
     { label: t("columns.receipt") },
   ];
   const set = (next: Partial<LedgerView>) => {
@@ -211,55 +219,110 @@ export function LedgerTable({
           {t("filteredEmpty")}
         </p>
       ) : (
-        <Table label={t("label")} columns={columns}>
-          {page.rows.map((row, index) => (
-            <tr
-              // A draw carries no public id and a raw uuid never reaches a
-              // view model, so the key is the row's place in a list the
-              // server ordered.
-              key={`${row.at}-${row.state}-${row.measure}-${String(page.from + index)}`}
-              data-testid="ledger-draw"
-              data-state={row.state}
-            >
-              <td className={`${cell} whitespace-nowrap`}>
-                <WhenCell
-                  row={row}
-                  asOf={asOf}
-                  current={periodKeys[row.measure] === row.periodKey}
-                />
-              </td>
-              <td className={cell}>
-                <NotBacked gap="tool-version">{t("callNotRecorded")}</NotBacked>
-              </td>
-              <td className={numericCell}>
-                {row.measure === primary ? (
-                  <Measure value={row.value} />
-                ) : (
-                  <NamedMeasure measure={row.measure} value={row.value} />
-                )}
-              </td>
-              <td className={cell}>
-                <Badge tone={TONE[row.state]}>{t(`kind.${row.state}`)}</Badge>
-              </td>
-              <td className={cell}>
-                <ExternalCell row={row} />
-              </td>
-              <td className={cell}>
-                {row.state === "reserve" ? (
-                  <span
-                    data-state="no-receipt-yet"
-                    className="text-muted-foreground"
-                  >
-                    <span aria-hidden="true">—</span>
-                    <span className="sr-only">{t("noReceiptYet")}</span>
-                  </span>
-                ) : (
-                  <NotBacked gap="G8">{t("notRecorded")}</NotBacked>
-                )}
-              </td>
-            </tr>
-          ))}
-        </Table>
+        <div className="min-w-0 overflow-x-auto">
+          <table
+            aria-label={t("label")}
+            className="w-full min-w-[560px] border-collapse text-[13px]"
+          >
+            <thead>
+              <tr className="border-b border-border">
+                {columns.map((column) => {
+                  const align =
+                    column.numeric === true ? "text-right" : "text-left";
+                  if (column.sort === undefined)
+                    return (
+                      <th
+                        key={column.label}
+                        scope="col"
+                        className={`${headCell} ${align}`}
+                      >
+                        {column.label}
+                      </th>
+                    );
+                  const key = column.sort;
+                  const state =
+                    view.sort?.column === key
+                      ? view.sort.dir === 1
+                        ? "ascending"
+                        : "descending"
+                      : "none";
+                  return (
+                    <th
+                      key={column.label}
+                      scope="col"
+                      aria-sort={state}
+                      className={`${headCell} ${align}`}
+                    >
+                      <button
+                        type="button"
+                        data-sort={state}
+                        onClick={() => {
+                          set({ sort: nextSort(view.sort, key) });
+                        }}
+                        className="inline-flex cursor-pointer select-none items-center uppercase tracking-[inherit] hover:text-muted-foreground data-[sort=ascending]:text-foreground data-[sort=descending]:text-foreground after:ml-[5px] after:text-[10px] after:text-rule after:content-['↕'] data-[sort=ascending]:after:text-accent-text data-[sort=ascending]:after:content-['↑'] data-[sort=descending]:after:text-accent-text data-[sort=descending]:after:content-['↓']"
+                      >
+                        {column.label}
+                      </button>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border [&>tr]:transition-colors [&>tr:hover]:bg-hl">
+              {page.rows.map((row, index) => (
+                <tr
+                  // A draw carries no public id and a raw uuid never reaches a
+                  // view model, so the key is the row's place in a list the
+                  // server ordered.
+                  key={`${row.at}-${row.state}-${row.measure}-${String(page.from + index)}`}
+                  data-testid="ledger-draw"
+                  data-state={row.state}
+                >
+                  <td className={`${cell} whitespace-nowrap`}>
+                    <WhenCell
+                      row={row}
+                      asOf={asOf}
+                      current={periodKeys[row.measure] === row.periodKey}
+                    />
+                  </td>
+                  <td className={cell}>
+                    <NotBacked gap="tool-version">
+                      {t("callNotRecorded")}
+                    </NotBacked>
+                  </td>
+                  <td className={numericCell}>
+                    {row.measure === primary ? (
+                      <Measure value={row.value} />
+                    ) : (
+                      <NamedMeasure measure={row.measure} value={row.value} />
+                    )}
+                  </td>
+                  <td className={cell}>
+                    <Badge tone={TONE[row.state]}>
+                      {t(`kind.${row.state}`)}
+                    </Badge>
+                  </td>
+                  <td className={cell}>
+                    <ExternalCell row={row} />
+                  </td>
+                  <td className={cell}>
+                    {row.state === "reserve" ? (
+                      <span
+                        data-state="no-receipt-yet"
+                        className="text-muted-foreground"
+                      >
+                        <span aria-hidden="true">—</span>
+                        <span className="sr-only">{t("noReceiptYet")}</span>
+                      </span>
+                    ) : (
+                      <NotBacked gap="G8">{t("notRecorded")}</NotBacked>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       <nav
         aria-label={t("pager.label")}

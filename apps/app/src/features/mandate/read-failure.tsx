@@ -3,6 +3,11 @@
 // page body and never the shell, so a reader who cannot see this mandate keeps
 // the sidebar, the breadcrumbs and the search, and can leave.
 //
+// **Decided by names what is not recorded.** The design prints the deciding
+// policy's id; a refused read carries only the permission it needed (#3841,
+// #3846), so the line says the policy is not recorded, then the rule that holds
+// either way.
+//
 // **Denied names the permission and not the person's shortcoming.** The read
 // is `get_mandate`, and `PAGE_FAILURES.mandates` names `org.billing`, the
 // finance role the design names. Request access and Open an incident have no
@@ -20,7 +25,7 @@ import { routes, type SafePath } from "@/shared/safe-path";
 import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { SafeLink } from "@/ui/navigation";
-import { StateWrap } from "./state";
+import { NotBacked, StateWrap } from "./state";
 import { StubDialog } from "./stub-dialog";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
@@ -90,7 +95,13 @@ export function MandateReadFailure({
                 <span className={mono}>{read.permission}</span>
               </dd>
               <dt className="text-dim">{t("denied.decidedBy")}</dt>
-              <dd className="m-0">{t("denied.decidedByValue")}</dd>
+              <dd className="m-0">
+                <NotBacked gap="deciding-policy">
+                  {t("denied.policyNotRecorded")}
+                </NotBacked>
+                {" · "}
+                {t("denied.denyWins")}
+              </dd>
             </dl>
           }
         >

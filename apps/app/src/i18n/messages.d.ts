@@ -2502,7 +2502,8 @@ type Messages = {
         signedIn: string;
         needed: string;
         decidedBy: string;
-        decidedByValue: string;
+        policyNotRecorded: string;
+        denyWins: string;
       };
       pending: {
         title: string;
@@ -2516,6 +2517,7 @@ type Messages = {
         incidentBody: string;
         trace: string;
       };
+      stubCancel: string;
     };
   };
   onboarding: {

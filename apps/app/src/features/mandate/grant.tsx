@@ -253,7 +253,7 @@ export function MandateGrant({
             <Counterparties mandate={mandate} />
           </Row>
           <Row label={t("tools")}>
-            <MandateScope tools={mandate.tools} />
+            <MandateScope tools={mandate.tools} inline />
           </Row>
           <Row label={t("approval")}>
             <Approval mandate={mandate} />

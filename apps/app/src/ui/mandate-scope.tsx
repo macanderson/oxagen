@@ -30,7 +30,17 @@ import { mono } from "./control-styles";
  */
 const EVERY_TOOL = "*";
 
-export function MandateScope({ tools }: { tools: MandateRow["tools"] }) {
+export function MandateScope({
+  tools,
+  inline = false,
+}: {
+  tools: MandateRow["tools"];
+  /**
+   * One line with the patterns joined by commas, as the design's Grant panel
+   * prints them, rather than one pattern to a line as a table cell does.
+   */
+  inline?: boolean;
+}) {
   const t = useTranslations("ui.mandateScope");
   if (tools.includes(EVERY_TOOL))
     return (
@@ -49,6 +59,12 @@ export function MandateScope({ tools }: { tools: MandateRow["tools"] }) {
     return (
       <span data-scope="no-tool" className="text-muted-foreground">
         {t("noTool")}
+      </span>
+    );
+  if (inline)
+    return (
+      <span data-scope="patterns" className={`${mono} break-all text-xs`}>
+        {tools.join(", ")}
       </span>
     );
   return (

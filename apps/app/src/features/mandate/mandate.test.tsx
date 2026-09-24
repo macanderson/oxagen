@@ -410,6 +410,40 @@ describe("Mandate › loaded", () => {
     expect(screen.getByText("No draw matches this search")).toBeInTheDocument();
   });
 
+  it("sorts on the four headers whose cells carry a recorded value, ascending, descending, then back", async () => {
+    const user = userEvent.setup({ delay: null });
+    const usd = (micros: string) =>
+      ({ kind: "money", money: { micros, currency: "USD" } }) as const;
+    const ledger = [
+      mandateDraw({ value: usd("30000000"), externalEffectRef: "pi_b" }),
+      mandateDraw({ value: usd("10000000"), externalEffectRef: "pi_c" }),
+      mandateDraw({ value: usd("20000000"), externalEffectRef: "pi_a" }),
+    ];
+    await renderMandate(mandateDetailRead({ draws: ledger }));
+    const table = screen.getByRole("table", { name: "Draws on this mandate" });
+    const sorts = within(table)
+      .getAllByRole("columnheader")
+      .map((h) => h.getAttribute("aria-sort"));
+    // Call and Receipt print what is not recorded, so they do not sort.
+    expect(sorts).toEqual(["none", null, "none", "none", "none", null]);
+    const refs = () =>
+      draws().map((row) => row.querySelectorAll("td")[4]?.textContent);
+    expect(refs()).toEqual(["pi_b", "pi_c", "pi_a"]);
+    const amount = within(table).getByRole("button", { name: "Amount" });
+    await user.click(amount);
+    expect(refs()).toEqual(["pi_c", "pi_a", "pi_b"]);
+    expect(amount.closest("th")).toHaveAttribute("aria-sort", "ascending");
+    await user.click(amount);
+    expect(refs()).toEqual(["pi_b", "pi_a", "pi_c"]);
+    expect(amount.closest("th")).toHaveAttribute("aria-sort", "descending");
+    await user.click(amount);
+    expect(refs()).toEqual(["pi_b", "pi_c", "pi_a"]);
+    await user.click(
+      within(table).getByRole("button", { name: "External id" }),
+    );
+    expect(refs()).toEqual(["pi_a", "pi_b", "pi_c"]);
+  });
+
   it("offers 5, 10, 25, 50 and All rows", async () => {
     const user = userEvent.setup({ delay: null });
     const ledger = Array.from({ length: 7 }, () => mandateDraw());
@@ -466,6 +500,24 @@ describe("Mandate › loaded", () => {
     expect(grant).toHaveTextContent(
       "above $100.00, always for moves_money, approvers role:Billing",
     );
+  });
+
+  it("prints the tool patterns on one line, joined as the design joins them", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        mandate: mandateRow({
+          tools: [
+            "stripe__create_payment@*",
+            "aws_billing__purchase_savings_plan@2",
+          ],
+        }),
+      }),
+    );
+    expect(
+      within(screen.getByTestId("mandate-grant")).getByText(
+        "stripe__create_payment@*, aws_billing__purchase_savings_plan@2",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("says a mandate stores no second approver rather than naming one", async () => {
@@ -683,7 +735,14 @@ describe("Mandate › access denied", () => {
     expect(within(denied).getByTestId("signed-in-as")).toHaveTextContent(
       "Marcus Bell · workspace.member · core-platform",
     );
-    expect(denied).toHaveTextContent("Deny wins over every allow.");
+    // The refusal carries no deciding policy (#3841, #3846), so the line
+    // says so before the rule that holds either way.
+    expect(denied).toHaveTextContent(
+      "Decided bypolicy not recorded · deny wins over every allow",
+    );
+    expect(
+      denied.querySelector('[data-gap="deciding-policy"]'),
+    ).toHaveTextContent("policy not recorded");
     // The header goes with the body: a refused reader is not told the id.
     expect(screen.queryByText("mnd_4f2a9c")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -694,6 +753,13 @@ describe("Mandate › access denied", () => {
     );
     const dialog = await screen.findByTestId("request-access");
     expect(dialog).toHaveTextContent(/does not record access requests/);
+    // The design's header close, with the footer's dismiss named Cancel.
+    expect(
+      within(dialog).getByRole("button", { name: "Close" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel" }),
+    ).toBeInTheDocument();
   });
 
   it("says an access request is waiting when the read parked for approval", async () => {

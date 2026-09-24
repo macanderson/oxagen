@@ -205,7 +205,8 @@
         "signedIn": "Signed in as",
         "needed": "Needed",
         "decidedBy": "Decided by",
-        "decidedByValue": "the organization's roles. Deny wins over every allow."
+        "policyNotRecorded": "policy not recorded",
+        "denyWins": "deny wins over every allow"
       },
       "pending": {
         "title": "Access to this mandate is waiting for approval",
@@ -218,7 +219,8 @@
         "incident": "Open an incident",
         "incidentBody": "Oxagen does not record incidents opened from this page yet, so nothing is filed from here. Report the answer {status} {code} and the time {at} to whoever runs your Oxagen deployment.",
         "trace": "Trace not recorded. Read at {at}."
-      }
+      },
+      "stubCancel": "Cancel"
     }
   }
 }

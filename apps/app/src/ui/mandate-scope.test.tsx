@@ -11,10 +11,10 @@ import { MandateScope } from "./mandate-scope";
 
 afterEach(cleanup);
 
-const draw = (tools: string[]) =>
+const draw = (tools: string[], inline = false) =>
   render(
     <IntlProvider>
-      <MandateScope tools={tools} />
+      <MandateScope tools={tools} inline={inline} />
     </IntlProvider>,
   );
 
@@ -57,5 +57,21 @@ describe("MandateScope", () => {
       "no-tool",
     );
     await expectNoAxe(container);
+  });
+
+  // The Grant panel prints the patterns on one line, joined as the design
+  // joins them, and still names an unrestricted mandate.
+  it("joins the patterns with commas on one line when inline", async () => {
+    const { container } = draw(["payments.read@*", "payments.list@2"], true);
+    expect(
+      screen.getByText("payments.read@*, payments.list@2"),
+    ).toHaveAttribute("data-scope", "patterns");
+    expect(container.querySelector("ul")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("names an unrestricted mandate when inline too", () => {
+    draw(["*"], true);
+    expect(screen.getByText("every tool")).toBeInTheDocument();
   });
 });

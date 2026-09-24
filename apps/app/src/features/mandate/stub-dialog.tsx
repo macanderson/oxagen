@@ -7,6 +7,7 @@
 // person can take today. A button that silently does nothing is worse than no
 // button on a page about who may spend money, and a button that reported a
 // write it did not make would be worse still.
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -27,6 +28,7 @@ export function StubDialog({
   primary?: boolean;
   testId: string;
 }) {
+  const t = useTranslations("mandate.failure");
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -43,6 +45,10 @@ export function StubDialog({
         open={open}
         onOpenChange={setOpen}
         title={title}
+        // The design's header close, with the footer's dismiss named Cancel
+        // so the dialog carries no two controls called Close.
+        headerClose
+        closeLabel={t("stubCancel")}
         testId={testId}
       >
         <p
