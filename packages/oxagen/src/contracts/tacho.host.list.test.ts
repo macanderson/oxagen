@@ -22,6 +22,8 @@ describe("tachoHostList", () => {
           agentKey: "acme.core.cc-laptop",
           hostname: "laptop",
           platform: "darwin",
+          osVersion: "15.6",
+          arch: "arm64",
           osUser: "dev",
           status: "active",
           mode: "observe",
