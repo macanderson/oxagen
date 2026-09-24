@@ -305,6 +305,7 @@ import "./contracts/run.outcomes.settings.set";
 import "./contracts/run.outputs.get";
 import "./contracts/run.proof.get";
 import "./contracts/run.recent.list";
+import "./contracts/run.seal";
 import "./contracts/run.summarize";
 import "./contracts/run.token.issue";
 import "./contracts/run.transcript.get";

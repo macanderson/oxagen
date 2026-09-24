@@ -39,6 +39,7 @@ const WORDS = {
     no_principal: "noPrincipal",
     run_not_found: "runNotFound",
     no_connection_point: "noConnectionPoint",
+    ledger_run: "ledgerRun",
     run_sealed: "runSealed",
     no_host: "noHost",
     host_revoked: "hostRevoked",

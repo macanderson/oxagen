@@ -66,18 +66,40 @@ export function idleCutoff(now: Date): Date {
   return new Date(now.getTime() - TACHO_IDLE_CLOSE_AFTER_MS);
 }
 
+/** A seal the control plane writes because the host sent no `agent_stop`. */
+export type ControlPlaneSealSource = Exclude<TachoSealSource, "agent_stop">;
+
+/** What a control-plane seal is graded from and commits to, read off the row. */
+export type SealableSession = Pick<
+  IdleSession,
+  | "lastHash"
+  | "lastEventAt"
+  | "chainVerified"
+  | "telemetryGapCount"
+  | "contentFrames"
+  | "bodyFrames"
+  | "numToolCalls"
+  | "toolBodyFrames"
+  | "enforcementTier"
+>;
+
 /**
- * The columns the close writes. The gaps and grade are the ones any seal of
- * this session would record from the same counters, plus the unobserved tail
- * a missing `agent_stop` is (`sealTachoSession`). The end is the last event
- * the control plane received, not the moment it noticed the silence; the
- * seal's own time is that moment. Tacho ingest's reopen undoes exactly these
- * columns, so a change here is a change there.
+ * The columns a seal written without the host's `agent_stop` records: the
+ * idle close (`idle_timeout`) and an operator's `seal_run` (`operator`, #4073).
+ * Both write the same columns, so one builder keeps them from drifting.
+ *
+ * The gaps and grade are the ones any seal of this session would record from
+ * the same counters, plus the unobserved tail a missing `agent_stop` is
+ * (`sealTachoSession`). The end is the last event the control plane
+ * received, not the moment it sealed; the seal's own time is that moment.
+ * Tacho ingest's reopen of an idle close undoes exactly these columns, so a
+ * change here is a change there.
  */
-export function idleCloseColumns(
-  session: IdleSession,
+export function controlPlaneSealColumns<S extends ControlPlaneSealSource>(
+  session: SealableSession,
   retentionMode: string,
   now: Date,
+  sealSource: S,
 ) {
   const seal = sealTachoSession({
     hostGaps: [],
@@ -93,7 +115,7 @@ export function idleCloseColumns(
   });
   return {
     sealedAt: now,
-    sealSource: "idle_timeout" satisfies TachoSealSource,
+    sealSource,
     outcome: "unknown",
     endedAt: session.lastEventAt,
     // The chain as recorded ends here. The host never committed to an end,
@@ -104,6 +126,15 @@ export function idleCloseColumns(
     replayGrade: seal.replayGrade,
     updatedAt: now,
   };
+}
+
+/** The columns the idle close writes: the control plane's seal, as `idle_timeout`. */
+export function idleCloseColumns(
+  session: IdleSession,
+  retentionMode: string,
+  now: Date,
+) {
+  return controlPlaneSealColumns(session, retentionMode, now, "idle_timeout");
 }
 
 /**

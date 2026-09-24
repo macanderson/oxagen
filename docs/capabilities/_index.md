@@ -478,6 +478,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_run_transcript](run.transcript.get.md) | [run.transcript.get.ts](../../packages/oxagen/src/contracts/run.transcript.get.ts) | api, mcp |
 | [list_recent_runs](run.recent.list.md) | [run.recent.list.ts](../../packages/oxagen/src/contracts/run.recent.list.ts) | api, mcp |
 | [list_runs](run.list.md) | [run.list.ts](../../packages/oxagen/src/contracts/run.list.ts) | api, mcp |
+| [seal_run](run.seal.md) | [run.seal.ts](../../packages/oxagen/src/contracts/run.seal.ts) | api, mcp |
 | [summarize_run](run.summarize.md) | [run.summarize.ts](../../packages/oxagen/src/contracts/run.summarize.ts) | api |
 
 ## Schema

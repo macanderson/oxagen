@@ -499,6 +499,7 @@ export function ExportAction({
   ws,
   runId,
   sealed,
+  closedIdle = false,
   orgRole,
   label,
   testId = "run-export",
@@ -507,6 +508,12 @@ export function ExportAction({
   ws: string;
   runId: string;
   sealed: boolean;
+  /**
+   * Oxagen closed the run for silence (ADR-159). `export_run` refuses it,
+   * because the run's next event reopens it, so the bundle waits for a final
+   * seal: the host's own, or a person's (ADR-169).
+   */
+  closedIdle?: boolean;
   orgRole: OrgRole;
   /** The button's words where they are not the header's "Export". */
   label?: string;
@@ -516,7 +523,7 @@ export function ExportAction({
   const reasonId = useId();
   const canExport = orgRole === "owner" || orgRole === "admin";
   const text = label ?? t("export.open");
-  if (sealed && canExport)
+  if (sealed && !closedIdle && canExport)
     return (
       <RecordDialog
         action="export"
@@ -530,8 +537,16 @@ export function ExportAction({
         )}
       />
     );
-  const reason = sealed ? t("export.needsRole") : t("export.needsSeal");
-  const why = sealed ? "export-no-role" : "export-live";
+  const reason = !sealed
+    ? t("export.needsSeal")
+    : closedIdle
+      ? t("export.needsFinalSeal")
+      : t("export.needsRole");
+  const why = !sealed
+    ? "export-live"
+    : closedIdle
+      ? "export-idle"
+      : "export-no-role";
   // The reason is said on the disabled button: on hover, and to assistive
   // tech as the button's description.
   return (
