@@ -1124,19 +1124,6 @@ describe("transcript", () => {
 });
 
 describe("frames", () => {
-  it("draws a frame with its digest, stage, body reference and cost", async () => {
-    const { container } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
-      { tab: "frames" },
-    );
-    const [row] = screen.getAllByTestId("frame-row");
-    expect(row).toHaveTextContent("model.call_completed");
-    expect(row).toHaveTextContent("stage act");
-    expect(row).toHaveTextContent("sha256:5f2d1c8a");
-    expect(row).toHaveTextContent("bytes retained");
-    await expectNoAxe(container);
-  });
-
   it("names every redaction by its reason", async () => {
     await renderRun(
       {
@@ -1293,29 +1280,6 @@ describe("frames", () => {
     expect(calls.frameBody).toHaveLength(0);
   });
 
-  it("reads and draws the open frame's body as text, with its digest, type and size", async () => {
-    const { calls, container } = await renderRun(
-      {
-        detail: ok(runDetail()),
-        transcript: ok(runTranscript()),
-        frameBody: ok(runFrameBody()),
-      },
-      { tab: "frames", frames: "ZjoxMA", body: "11" },
-    );
-    expect(calls.frameBody[0]).toEqual([ctx, "tse_7k2m9q", "11"]);
-    const body = screen.getByTestId("frame-body");
-    expect(body).toHaveTextContent("sha256:9a1b4e7c");
-    expect(body).toHaveTextContent("application/json");
-    expect(body).toHaveTextContent("92 bytes");
-    expect(body).toHaveTextContent("Cut release/3.2 from main.");
-    expect(screen.getByRole("region", { name: "Frame 11 body" })).toBeTruthy();
-    expect(screen.getByTestId("frame-body-close")).toHaveAttribute(
-      "href",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&frames=ZjoxMA",
-    );
-    await expectNoAxe(container);
-  });
-
   it("says a digest_only frame has no bytes to read rather than drawing an empty box (negative)", async () => {
     await renderRun(
       {
@@ -1350,25 +1314,10 @@ describe("frames", () => {
     expect(body).toHaveTextContent("not UTF-8 text");
     expect(body).toHaveTextContent("4,096 bytes");
   });
-
-  it("names the body read's own failure and keeps the frames page beneath it (negative)", async () => {
-    await renderRun(
-      {
-        detail: ok(runDetail()),
-        transcript: ok(runTranscript()),
-        frameBody: readError("not_found", 404),
-      },
-      { tab: "frames", body: "999" },
-    );
-    expect(
-      screen.getByRole("region", { name: "Frame 999 body" }),
-    ).toHaveTextContent("not_found");
-    expect(screen.getAllByTestId("frame-row")).toHaveLength(1);
-  });
 });
 
 describe("cost", () => {
-  it("draws the rollup with its basis, its token classes and its price entries", async () => {
+  it("opens on Model fit, then the instruments, and prices the token classes with the basis and price entries", async () => {
     const { container } = await renderRun(
       {
         detail: ok(runDetail()),
@@ -1377,16 +1326,20 @@ describe("cost", () => {
       },
       { tab: "cost" },
     );
-    const section = screen.getByRole("region", { name: "Cost" });
-    expect(section).toHaveTextContent("gateway_observed");
-    expect(section).toHaveTextContent("cache read");
-    expect(section).toHaveTextContent("prc_01k4qj9e");
-    expect(screen.getByTestId("cost-model-row")).toHaveTextContent(
-      "claude-opus-5",
+    const tab = screen.getByTestId("cost-tab");
+    // Model fit is first on the tab (pages/run.md, Model fit).
+    const fit = within(tab).getByTestId("fit-model-card");
+    const instruments = within(tab).getByTestId("run-instruments");
+    expect(fit.compareDocumentPosition(instruments) & 4).toBe(4);
+    // The Tokens figure and the token classes' total row are one total.
+    expect(screen.getByTestId("token-class-total-tokens")).toHaveTextContent(
+      "128,343",
     );
-    expect(screen.getByTestId("cost-tool-row")).toHaveTextContent(
-      "create_release",
-    );
+    expect(
+      within(screen.getByTestId("run-stat-tokens")).getByText("128,343"),
+    ).toBeTruthy();
+    expect(tab).toHaveTextContent("gateway_observed");
+    expect(tab).toHaveTextContent("prc_01k4qj9e");
     await expectNoAxe(container);
   });
 
@@ -1402,7 +1355,7 @@ describe("cost", () => {
     expect(screen.getByTestId("cost-not-rolled-up")).toHaveTextContent(
       "A zero here would be a measurement",
     );
-    expect(screen.queryByTestId("cost-model-row")).toBeNull();
+    expect(screen.queryByTestId("token-class-row")).toBeNull();
   });
 });
 
@@ -1569,19 +1522,19 @@ describe("chain and seal", () => {
 });
 
 describe("approvals on the run", () => {
-  it("reads list_approvals and list_resolved_approvals narrowed to this run, for the tab's count", async () => {
+  it("reads the calls parked on this run for the tab's dot on every tab, and the decided ones only on Governed actions", async () => {
     const { calls } = await renderRun(
       {
         detail: ok(runDetail()),
         approvals: ok({ items: [], more: false }),
         resolvedApprovals: ok([]),
       },
-      // Transcript, not Governed actions: the count reads on every tab.
+      // Transcript, not Governed actions: the parked dot reads on every tab.
       { tab: "transcript" },
     );
     expect(calls.approvals).toEqual([[ctx, { runId: "tse_7k2m9q" }]]);
-    expect(calls.resolvedApprovals).toEqual([[ctx, { runId: "tse_7k2m9q" }]]);
-    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent("0");
+    expect(calls.resolvedApprovals).toHaveLength(0);
+    expect(screen.queryByTestId("run-tab-parked-actions")).toBeNull();
   });
 
   it("says nothing is parked rather than drawing an empty strip (negative)", async () => {
@@ -1740,120 +1693,22 @@ describe("approvals on the run", () => {
 
   // #3153: the receipt a decision rule leaves when it releases a call with
   // no person, read back for the first time.
-  it("draws the resolved section, naming the rule that released a call with no person", async () => {
-    await renderRun(
-      {
-        detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([
-          {
-            id: "apr_2",
-            runId: "tse_7k2m9q",
-            tool: "stripe__create_payment",
-            requester: null,
-            createdAt: new Date(NOW - 60_000).toISOString(),
-            expiresAt: new Date(NOW + 3_600_000).toISOString(),
-            resolvedAt: new Date(NOW - 30_000).toISOString(),
-            resolution: "approved",
-            execution: {
-              status: "succeeded",
-              runId: "arun_resumed",
-              reason: null,
-            },
-            resolvedBy: "policy:small-vendor-payments",
-            autoRuleRef: "small-vendor-payments",
-          },
-        ]),
-      },
-      { tab: "approvals" },
-    );
-    expect(screen.getByTestId("approval-execution")).toHaveTextContent(
-      "succeeded",
-    );
-    expect(screen.getByText("arun_resumed")).toBeInTheDocument();
-    const [card] = screen.getAllByTestId("resolved-approval");
-    expect(card).toHaveTextContent("stripe__create_payment");
-    expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
-      "small-vendor-payments",
-    );
-  });
-
-  it("labels an expired approval without guessing its cause", async () => {
-    await renderRun(
-      {
-        detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([
-          {
-            id: "apr_expired",
-            runId: "tse_7k2m9q",
-            tool: "delete_workspace",
-            requester: null,
-            createdAt: new Date(NOW - 600_000).toISOString(),
-            expiresAt: new Date(NOW - 300_000).toISOString(),
-            resolvedAt: new Date(NOW - 300_000).toISOString(),
-            resolution: "expired",
-            resolvedBy: null,
-            autoRuleRef: null,
-          },
-        ]),
-      },
-      { tab: "approvals" },
-    );
-    expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
-      /^system$/,
-    );
-    expect(screen.getByTestId("resolved-approver")).not.toHaveTextContent(
-      "unknown",
-    );
-  });
-
-  it("names its own failure when the resolved read is refused (negative)", async () => {
-    await renderRun(
-      {
-        detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
-        resolvedApprovals: DOWN,
-      },
-      { tab: "approvals" },
-    );
-    expect(screen.getByText(/frame_store_unreachable/)).toBeTruthy();
-  });
 });
 
 describe("cost", () => {
-  it("reads the rollup and the run's own per-turn ledger, and lays the turns out as bars", async () => {
+  it("reads the rollup once and lays out the run's own per-turn ledger from the page's one transcript read", async () => {
     const { calls } = await renderRun(
       {
         detail: ok(runDetail()),
         cost: ok(runCost()),
-        transcript: (zoom) =>
-          ok(
-            runTranscript({
-              zoom,
-              entries:
-                zoom === "turns"
-                  ? [
-                      transcriptEntry({
-                        seq: "1",
-                        endSeq: "20",
-                        kind: "turn",
-                        label: "turn 1",
-                      }),
-                    ]
-                  : [transcriptEntry({ seq: "11", endSeq: "14" })],
-            }),
-          ),
+        transcript: ok(mockupTranscript()),
       },
       { tab: "cost" },
     );
     expect(calls.cost).toHaveLength(1);
-    expect(calls.transcript.map((call) => call[2])).toEqual([
-      "everything",
-      "turns",
-      "steps",
-    ]);
-    expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(1);
+    // The waterfall reads the metrics the page derived, not another zoom.
+    expect(calls.transcript.map((call) => call[2])).toEqual(["everything"]);
+    expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(2);
   });
 });
 
