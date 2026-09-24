@@ -86,6 +86,13 @@ interface SightingAttrs {
 /** What a row no ledger judges takes part in: nothing. */
 const NO_SIGHTING: SightingAttrs = { attrs: {}, commit: () => {} };
 
+/**
+ * The attr a transcript `user` record carries when its text is the open
+ * turn's prompt, which the turn's `turn_start` already sealed as a body. Its
+ * value names the frame that holds the text.
+ */
+export const PROMPT_DUPLICATE_OF_ATTR = "oxagen.prompt_duplicate_of";
+
 export interface RecorderOptions {
   context: ClaudeCodeContext;
   /** The harness's own session id (Claude Code's UUID). */
@@ -136,6 +143,8 @@ export interface RecorderState {
   turnSeq: number;
   turnOpen: boolean;
   promptId?: string;
+  /** The latest turn's `prompt_digest`; see `SessionRecorder.promptDigest`. */
+  promptDigest?: string;
   started: boolean;
   stopped: boolean;
   context: Context;
@@ -189,6 +198,7 @@ export interface ChainMark {
   turnSeq: number;
   turnOpen: boolean;
   promptId: string | undefined;
+  promptDigest: string | undefined;
   started: boolean;
   stopped: boolean;
   /** The open turn's reply at mark time; see `RecorderState.turnReply`. */
@@ -356,6 +366,15 @@ export class SessionRecorder {
   private turnOpen = false;
   private promptId: string | undefined;
   /**
+   * The `prompt_digest` of the latest `turn_start`, until the transcript's
+   * copy of that prompt arrives. Claude Code reports each prompt
+   * twice: the `UserPromptSubmit` hook, sealed as `turn_start` with the text
+   * as its body, and the `user` record it writes to the transcript. The
+   * transcript copy matching this digest seals its facts without the text, so
+   * the WAL holds one copy of the prompt and the run page draws it once.
+   */
+  private promptDigest: string | undefined;
+  /**
    * The agent's last message in the open turn, as a harness that reports it
    * separately from the turn's end handed it over (Cursor's
    * `afterAgentResponse`). The turn's `turn_end` carries it when the stop
@@ -417,6 +436,7 @@ export class SessionRecorder {
     this.turnSeq = state.turnSeq;
     this.turnOpen = state.turnOpen;
     this.promptId = state.promptId;
+    this.promptDigest = state.promptDigest;
     this.started = state.started;
     this.stopped = state.stopped;
     // Clamped on restore too, not only on the way in: a state file a
@@ -500,6 +520,9 @@ export class SessionRecorder {
       turnSeq: this.turnSeq,
       turnOpen: this.turnOpen,
       ...(this.promptId !== undefined ? { promptId: this.promptId } : {}),
+      ...(this.promptDigest !== undefined
+        ? { promptDigest: this.promptDigest }
+        : {}),
       started: this.started,
       stopped: this.stopped,
       context: { ...this.context },
@@ -549,6 +572,7 @@ export class SessionRecorder {
       turnSeq: this.turnSeq,
       turnOpen: this.turnOpen,
       promptId: this.promptId,
+      promptDigest: this.promptDigest,
       started: this.started,
       stopped: this.stopped,
       turnReply: this.turnReply,
@@ -604,6 +628,7 @@ export class SessionRecorder {
     this.turnSeq = mark.turnSeq;
     this.turnOpen = mark.turnOpen;
     this.promptId = mark.promptId;
+    this.promptDigest = mark.promptDigest;
     this.turnReply = mark.turnReply;
     this.started = mark.started;
     this.stopped = mark.stopped;
@@ -1182,6 +1207,10 @@ export class SessionRecorder {
       this.turnSeq += 1;
       this.turnOpen = true;
       this.promptId = draft.turn?.prompt_id;
+      this.promptDigest =
+        typeof body["prompt_digest"] === "string"
+          ? body["prompt_digest"]
+          : undefined;
     }
     if (
       draft.kind === "oxagen:message" &&
@@ -1541,12 +1570,20 @@ export class SessionRecorder {
         body = withoutUsage(body);
         duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
       }
+      let content = draft.content;
+      if (this.isSealedPrompt(draft.kind, body)) {
+        // The turn's `turn_start` holds this text already. The record's own
+        // facts (its uuid, source and origin) still belong on the chain.
+        content = undefined;
+        duplicate = { ...duplicate, [PROMPT_DUPLICATE_OF_ATTR]: "turn_start" };
+        this.promptDigest = undefined;
+      }
       out.push(
         this.seal(draft.kind, body, {
           ts: draft.ts,
           source: "transcript",
           attrs: { ...draft.attrs, ...duplicate },
-          ...(draft.content !== undefined ? { content: draft.content } : {}),
+          ...(content !== undefined ? { content } : {}),
           raw_source_digest: draft.raw_source_digest,
           turn: draft.turn ?? {},
         }),
@@ -1554,6 +1591,22 @@ export class SessionRecorder {
       sighting.commit();
     }
     return out;
+  }
+
+  /**
+   * A transcript `user` record whose text the latest `turn_start` holds. The
+   * turn may already be closed: the tailer can read the record after a short
+   * turn's `Stop`, and it is the same prompt either way.
+   */
+  private isSealedPrompt(
+    kind: TachoKind,
+    body: Record<string, unknown>,
+  ): boolean {
+    return (
+      kind === "oxagen:message" &&
+      this.promptDigest !== undefined &&
+      body["prompt_digest"] === this.promptDigest
+    );
   }
 
   /** Ingest one record of the `-p` JSON stream (`system.init`, `result`, ...). */
