@@ -194,7 +194,8 @@ export async function InvitationBody({
                 {t("decline")}
               </button>
             </div>
-          ) : decision.kind === "sign-in" ? (
+          ) : (
+            // decision.kind === "sign-in", the one kind left.
             <div className="flex flex-col gap-3">
               <p className="text-[13px] text-muted-foreground">
                 {t.rich("signInLead", {
@@ -211,7 +212,7 @@ export async function InvitationBody({
                 </SafeLink>
               </div>
             </div>
-          ) : null}
+          )}
         </AuthPanel>
       </section>
       {signedInAs !== null ? (

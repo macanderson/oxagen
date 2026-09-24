@@ -152,7 +152,7 @@ describe("acceptInvitation and declineInvitation", () => {
     name: record.orgName,
   };
   const ws = (slug: string, role: string | null) => ({
-    id: `0192f1c4-0000-7000-8000-0000000000${slug.length}0`,
+    id: `0192f1c4-0000-7000-8000-0000000000${String(slug.length)}0`,
     publicId: `ws_${slug}`,
     slug,
     namespace: slug,
