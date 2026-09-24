@@ -44,6 +44,18 @@ const { RemoveRateDialog } = await import("./remove-rate-dialog");
 
 const at = { org: "acme", ws: "core-platform" };
 
+function WithMessages({ children }: { children: ReactNode }) {
+  return (
+    <NextIntlClientProvider
+      locale="en"
+      messages={{ ...spend, ...ui }}
+      timeZone="UTC"
+    >
+      {children}
+    </NextIntlClientProvider>
+  );
+}
+
 function renderWithIntl(node: ReactNode) {
   return render(
     <NextIntlClientProvider
@@ -451,15 +463,7 @@ describe("Remove a negotiated rate", () => {
 describe("price refusal wording", () => {
   it("says each refusal the price book can give in its own words", () => {
     const { result } = renderHook(usePriceFailureText, {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <NextIntlClientProvider
-          locale="en"
-          messages={{ ...spend, ...ui }}
-          timeZone="UTC"
-        >
-          {children}
-        </NextIntlClientProvider>
-      ),
+      wrapper: WithMessages,
     });
     const text = result.current;
     expect(text({ ok: false, reason: "denied", code: "no_principal" })).toBe(
