@@ -251,7 +251,8 @@ describe("tenant policy manifest", () => {
     // manifest because it carries org_id, not because anything enforces it.
     // 120 includes cost centers, SSO group roles, and contained launch receipts.
     // 123 adds the SCIM token, group and group-member tables (#3734).
-    expect(POLICY_MANIFEST.length).toBe(123);
+    // 125 adds billing.gau_ledger and billing.prepaid_orders (ADR-165).
+    expect(POLICY_MANIFEST.length).toBe(125);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

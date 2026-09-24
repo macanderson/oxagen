@@ -1,0 +1,1454 @@
+{
+  "name": "get_billing_statement",
+  "domain": "billing",
+  "description": "Get the organization's billing statement for a week, month, quarter, year or custom period longer than 48 hours: governed action units by source, workspace, agent, operator, capability and tool, and by day; the month buckets; settlements, reversals, prepaid orders and invoices; usage credits from opening to closing balance; model usage reported at zero; and the reconciliation checks the figures satisfy.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "period": {
+        "type": "string",
+        "enum": [
+          "week",
+          "month",
+          "quarter",
+          "year",
+          "custom"
+        ]
+      },
+      "anchor": {
+        "type": "string"
+      },
+      "from": {
+        "type": "string"
+      },
+      "to": {
+        "type": "string"
+      },
+      "top": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 25
+      }
+    },
+    "required": [
+      "period"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "version": {
+        "const": 1
+      },
+      "reference": {
+        "type": "string"
+      },
+      "generatedAt": {
+        "type": "string"
+      },
+      "provisional": {
+        "type": "boolean"
+      },
+      "org": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ],
+        "additionalProperties": false
+      },
+      "period": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "week",
+              "month",
+              "quarter",
+              "year",
+              "custom"
+            ]
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "lastDay": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "start",
+          "end",
+          "lastDay",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "terms": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "negotiated",
+              "published_tier"
+            ]
+          },
+          "tier": {
+            "type": "string"
+          },
+          "agreementRef": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "ratePerGauMicros": {
+            "type": "string"
+          },
+          "blockSizeGau": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "includedGauPerMonth": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "asOf": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "tier",
+          "agreementRef",
+          "currency",
+          "ratePerGauMicros",
+          "blockSizeGau",
+          "includedGauPerMonth",
+          "asOf"
+        ],
+        "additionalProperties": false
+      },
+      "agreements": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "agreementRef": {
+              "type": "string"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "ratePerGauMicros": {
+              "type": "string"
+            },
+            "includedGauPerMonth": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "blockSizeGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "effectiveFrom": {
+              "type": "string"
+            },
+            "effectiveTo": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "agreementRef",
+            "currency",
+            "ratePerGauMicros",
+            "includedGauPerMonth",
+            "blockSizeGau",
+            "effectiveFrom",
+            "effectiveTo"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "governedActions": {
+        "type": "object",
+        "properties": {
+          "totalUnits": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalActions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bySource": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "kernel",
+                    "tacho",
+                    "external_tool"
+                  ]
+                },
+                "units": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "actions": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "source",
+                "units",
+                "actions"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "byWorkspace": {
+            "type": "object",
+            "properties": {
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "units": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "actions": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "units",
+                    "actions"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "other": {
+                "type": "object",
+                "properties": {
+                  "groups": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "units": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "actions": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "groups",
+                  "units",
+                  "actions"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "rows",
+              "other"
+            ],
+            "additionalProperties": false
+          },
+          "byAgent": {
+            "type": "object",
+            "properties": {
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "units": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "actions": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "units",
+                    "actions"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "other": {
+                "type": "object",
+                "properties": {
+                  "groups": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "units": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "actions": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "groups",
+                  "units",
+                  "actions"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "rows",
+              "other"
+            ],
+            "additionalProperties": false
+          },
+          "byOperator": {
+            "type": "object",
+            "properties": {
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "units": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "actions": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "units",
+                    "actions"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "other": {
+                "type": "object",
+                "properties": {
+                  "groups": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "units": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "actions": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "groups",
+                  "units",
+                  "actions"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "rows",
+              "other"
+            ],
+            "additionalProperties": false
+          },
+          "bySubject": {
+            "type": "object",
+            "properties": {
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "capability": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "toolName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "mcpServer": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "units": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "actions": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "capability",
+                    "toolName",
+                    "mcpServer",
+                    "units",
+                    "actions"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "other": {
+                "type": "object",
+                "properties": {
+                  "groups": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "units": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "actions": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "groups",
+                  "units",
+                  "actions"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "rows",
+              "other"
+            ],
+            "additionalProperties": false
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "units": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "actions": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "date",
+                "units",
+                "actions"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "totalUnits",
+          "totalActions",
+          "bySource",
+          "byWorkspace",
+          "byAgent",
+          "byOperator",
+          "bySubject",
+          "daily"
+        ],
+        "additionalProperties": false
+      },
+      "buckets": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "periodStart": {
+              "type": "string"
+            },
+            "periodEnd": {
+              "type": "string"
+            },
+            "includedGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "purchasedGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "carriedGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "usedGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "overageInvoicedGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "remainingGau": {
+              "type": "integer"
+            },
+            "overageGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "closedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "unitsInPeriod": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ledgerUnits": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reconciliation": {
+              "type": "string",
+              "enum": [
+                "matched",
+                "unitemised",
+                "mismatch"
+              ]
+            }
+          },
+          "required": [
+            "periodStart",
+            "periodEnd",
+            "includedGau",
+            "purchasedGau",
+            "carriedGau",
+            "usedGau",
+            "overageInvoicedGau",
+            "remainingGau",
+            "overageGau",
+            "closedAt",
+            "unitsInPeriod",
+            "ledgerUnits",
+            "reconciliation"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "settlements": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "checkout",
+                "auto_topup",
+                "interim_invoice",
+                "period_close"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "open",
+                "paid",
+                "failed"
+              ]
+            },
+            "quantityGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ratePerGauMicros": {
+              "type": "string"
+            },
+            "subtotalMicros": {
+              "type": "string"
+            },
+            "chargedMicros": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "currency": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "settledAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "invoice": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "number": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "hostedInvoiceUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "number",
+                    "status",
+                    "hostedInvoiceUrl"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "status",
+            "quantityGau",
+            "ratePerGauMicros",
+            "subtotalMicros",
+            "chargedMicros",
+            "currency",
+            "createdAt",
+            "settledAt",
+            "invoice"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "reversals": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "refund",
+                "dispute"
+              ]
+            },
+            "settlementId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "requestedGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reversedGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unrecoveredGau": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "amountMicros": {
+              "type": "string"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "settlementId",
+            "requestedGau",
+            "reversedGau",
+            "unrecoveredGau",
+            "amountMicros",
+            "currency",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "prepaidOrders": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "open",
+                "paid",
+                "void",
+                "uncollectible"
+              ]
+            },
+            "agreementRef": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "poNumber": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "currency": {
+              "type": "string"
+            },
+            "licenceMicros": {
+              "type": "string"
+            },
+            "licencePeriodStart": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "licencePeriodEnd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "gauQuantity": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ratePerGauMicros": {
+              "type": "string"
+            },
+            "gauMicros": {
+              "type": "string"
+            },
+            "creditMicros": {
+              "type": "string"
+            },
+            "totalMicros": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "paidAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "invoice": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "number": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "hostedInvoiceUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "number",
+                    "status",
+                    "hostedInvoiceUrl"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "status",
+            "agreementRef",
+            "poNumber",
+            "currency",
+            "licenceMicros",
+            "licencePeriodStart",
+            "licencePeriodEnd",
+            "gauQuantity",
+            "ratePerGauMicros",
+            "gauMicros",
+            "creditMicros",
+            "totalMicros",
+            "createdAt",
+            "paidAt",
+            "invoice"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "invoices": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "publicId": {
+              "type": "string"
+            },
+            "number": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "open",
+                "paid",
+                "uncollectible",
+                "void"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "subscription",
+                "gau_purchase",
+                "gau_auto_topup",
+                "gau_interim",
+                "gau_period_close",
+                "prepaid_order"
+              ]
+            },
+            "amountDueMicros": {
+              "type": "string"
+            },
+            "amountPaidMicros": {
+              "type": "string"
+            },
+            "amountRemainingMicros": {
+              "type": "string"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "periodStart": {
+              "type": "string"
+            },
+            "periodEnd": {
+              "type": "string"
+            },
+            "issuedAt": {
+              "type": "string"
+            },
+            "dueAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "paidAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "hostedInvoiceUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "invoicePdfUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "publicId",
+            "number",
+            "status",
+            "kind",
+            "amountDueMicros",
+            "amountPaidMicros",
+            "amountRemainingMicros",
+            "currency",
+            "periodStart",
+            "periodEnd",
+            "issuedAt",
+            "dueAt",
+            "paidAt",
+            "hostedInvoiceUrl",
+            "invoicePdfUrl"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "invoiceTotals": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "currency": {
+              "type": "string"
+            },
+            "invoices": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dueMicros": {
+              "type": "string"
+            },
+            "paidMicros": {
+              "type": "string"
+            },
+            "remainingMicros": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "currency",
+            "invoices",
+            "dueMicros",
+            "paidMicros",
+            "remainingMicros"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "usageCredits": {
+        "type": "object",
+        "properties": {
+          "openingCredits": {
+            "type": "string"
+          },
+          "additions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "credits": {
+                  "type": "string"
+                },
+                "entries": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "reason",
+                "credits",
+                "entries"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "deductions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "credits": {
+                  "type": "string"
+                },
+                "entries": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "reason",
+                "credits",
+                "entries"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "closingCredits": {
+            "type": "string"
+          },
+          "assistantCredits": {
+            "type": "string"
+          },
+          "assistantByOperator": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "credits": {
+                  "type": "string"
+                },
+                "entries": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "credits",
+                "entries"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "assistantUnattributedCredits": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "openingCredits",
+          "additions",
+          "deductions",
+          "closingCredits",
+          "assistantCredits",
+          "assistantByOperator",
+          "assistantUnattributedCredits"
+        ],
+        "additionalProperties": false
+      },
+      "modelUsage": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "model": {
+                  "type": "string"
+                },
+                "calls": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "inputTokens": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "outputTokens": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reportedCostMicros": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "currency": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "provider",
+                "model",
+                "calls",
+                "inputTokens",
+                "outputTokens",
+                "reportedCostMicros",
+                "currency"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "other": {
+            "type": "object",
+            "properties": {
+              "groups": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "calls": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "inputTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "outputTokens": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "groups",
+              "calls",
+              "inputTokens",
+              "outputTokens"
+            ],
+            "additionalProperties": false
+          },
+          "billedMicros": {
+            "const": "0"
+          }
+        },
+        "required": [
+          "rows",
+          "other",
+          "billedMicros"
+        ],
+        "additionalProperties": false
+      },
+      "reconciliation": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "statement": {
+              "type": "string"
+            },
+            "holds": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "statement",
+            "holds"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "version",
+      "reference",
+      "generatedAt",
+      "provisional",
+      "org",
+      "period",
+      "terms",
+      "agreements",
+      "governedActions",
+      "buckets",
+      "settlements",
+      "reversals",
+      "prepaidOrders",
+      "invoices",
+      "invoiceTotals",
+      "usageCredits",
+      "modelUsage",
+      "reconciliation"
+    ],
+    "additionalProperties": false
+  }
+}

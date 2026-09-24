@@ -44,9 +44,7 @@ function clientValueImports(
     if (target?.kind !== "module") continue;
     if (directiveOfModule(target.path) !== "use client") continue;
     for (const name of edge.names.filter(isCalledValue)) {
-      out.push(
-        `${source.file}:${String(edge.line)} ${edge.specifier} ${name}`,
-      );
+      out.push(`${source.file}:${String(edge.line)} ${edge.specifier} ${name}`);
     }
   }
   return out;
@@ -76,9 +74,7 @@ describe("client values stay on the client", () => {
   it("refuses a server module calling a function a client module exports", () => {
     expect(
       judge('import { AgentKeyPrefix, keyPrefixOf } from "./key-prefix";'),
-    ).toEqual([
-      "src/features/agents/agents.tsx:1 ./key-prefix keyPrefixOf",
-    ]);
+    ).toEqual(["src/features/agents/agents.tsx:1 ./key-prefix keyPrefixOf"]);
   });
 
   it("allows components, types and the client module's own client importers", () => {
@@ -90,9 +86,7 @@ describe("client values stay on the client", () => {
     expect(
       judge('"use client";\nimport { useAgentKeyPrefix } from "./key-prefix";'),
     ).toEqual([]);
-    expect(judge('import { keyPrefixOf } from "./key-prefix-of";')).toEqual(
-      [],
-    );
+    expect(judge('import { keyPrefixOf } from "./key-prefix-of";')).toEqual([]);
   });
 
   it(
@@ -100,7 +94,9 @@ describe("client values stay on the client", () => {
     () => {
       const found = productionFiles()
         .filter((file) => file.startsWith("src/"))
-        .flatMap((file) => clientValueImports(readSource(file), directiveOnDisk));
+        .flatMap((file) =>
+          clientValueImports(readSource(file), directiveOnDisk),
+        );
       expect(found).toEqual([]);
     },
     WHOLE_TREE_TIMEOUT_MS,

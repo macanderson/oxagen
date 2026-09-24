@@ -74,7 +74,14 @@ function fakeInvoke(opts: { outcome?: KernelSecurityEvent["outcome"] } = {}) {
       calls.push({ name, input, ctx, emitterRegistered: emitter !== null });
       emitter?.(kernelEvent(ctx, outcome));
       if (outcome !== "allow") throw new Error("authz_denied");
-      return input;
+      // The stored row after the call: what the input set, over the column
+      // defaults for what it left alone.
+      return {
+        approvedForInvoiceBilling: false,
+        invoiceGauMax: 100_000,
+        assistantSpendCapCents: 2_000,
+        ...(input as Record<string, unknown>),
+      };
     },
   );
   return {
@@ -176,8 +183,42 @@ describe("parseFlags", () => {
     ],
     [["--org", "acme", "--invoice-gau-max", "1"], /--invoice-billing/],
     [["--org", "acme", "--invoice-billing", "on"], /--invoice-gau-max/],
+    [["--org", "acme"], /nothing to set/],
   ])("refuses a missing flag: %j", (argv, message) => {
     expect(() => parseFlags(argv)).toThrow(message);
+  });
+
+  it("reads the assistant cap in dollars, alone or beside the mode", () => {
+    expect(
+      parseFlags(["--org", "acme", "--assistant-cap-usd", "6000"]),
+    ).toEqual({
+      orgSlug: "acme",
+      assistantSpendCapCents: 600_000,
+    });
+    expect(
+      parseFlags(["--org", "acme", "--assistant-cap-usd", "12.50"]),
+    ).toEqual({
+      orgSlug: "acme",
+      assistantSpendCapCents: 1_250,
+    });
+    expect(
+      parseFlags([
+        "--org",
+        "acme",
+        "--invoice-billing",
+        "on",
+        "--invoice-gau-max",
+        "250000",
+        "--assistant-cap-usd",
+        "none",
+      ]),
+    ).toEqual({ ...flags, assistantSpendCapCents: null });
+  });
+
+  it.each(["-5", "1.005", "lots"])("refuses an assistant cap of %s", (raw) => {
+    expect(() =>
+      parseFlags(["--org", "acme", "--assistant-cap-usd", raw]),
+    ).toThrow(/--assistant-cap-usd/);
   });
 
   it("refuses a value that is not on or off", () => {
@@ -250,6 +291,36 @@ describe("runBillingTerms", () => {
       orgId: ORG_ID,
       approvedForInvoiceBilling: true,
       invoiceGauMax: 250_000,
+      assistantSpendCapCents: 2_000,
+    });
+  });
+
+  it("sends only the cap when the run sets only the cap", async () => {
+    const kernel = fakeInvoke();
+
+    const stored = await runBillingTerms(
+      { orgSlug: "acme", assistantSpendCapCents: 600_000 },
+      depsOf(kernel),
+    );
+
+    expect(callAt(kernel, 0).input).toEqual({
+      orgId: ORG_ID,
+      assistantSpendCapCents: 600_000,
+    });
+    expect(stored.assistantSpendCapCents).toBe(600_000);
+  });
+
+  it("sends a removed cap as null beside the mode", async () => {
+    const kernel = fakeInvoke();
+    await runBillingTerms(
+      { ...flags, assistantSpendCapCents: null },
+      depsOf(kernel),
+    );
+    expect(callAt(kernel, 0).input).toEqual({
+      orgId: ORG_ID,
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+      assistantSpendCapCents: null,
     });
   });
 

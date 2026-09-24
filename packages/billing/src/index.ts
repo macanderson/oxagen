@@ -43,8 +43,30 @@ export {
   type GauSubscriptionPeriod,
 } from "./contract-terms";
 export * from "./gau-bucket";
+export * from "./gau-ledger";
 export * from "./gau-reversals";
 export * from "./gau-settlements";
+export * from "./negotiated-terms";
+export * from "./prepaid-orders";
+// Billing statements (ADR-165): get_billing_statement, export_billing_statement
+// and `pnpm billing:statement`.
+export {
+  resolveStatementPeriod,
+  statementReference,
+  StatementPeriodError,
+  type StatementPeriodInput,
+  type ResolvedStatementPeriod,
+  type StatementLineItem,
+} from "./statements";
+export {
+  buildBillingStatement,
+  readStatementLineItems,
+} from "./statement-reads";
+export {
+  renderLineItemsCsv,
+  renderStatementCsv,
+  renderStatementHtml,
+} from "./statement-render";
 export * from "./plan-allowance";
 export * from "./metering";
 export * from "./tier";

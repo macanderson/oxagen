@@ -10,6 +10,7 @@
 import Stripe from "stripe";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
+import { providerPeriodSeconds } from "./invoice-copy";
 import type {
   BillingCreditPackLineItem,
   BillingCheckoutDynamicCreditInput,
@@ -31,6 +32,10 @@ import type {
   BillingOffSessionChargeInput,
   BillingOffSessionChargeResult,
   BillingPaymentMethod,
+  BillingPrepaidInvoiceInput,
+  BillingPrepaidInvoiceRef,
+  BillingPrepaidInvoiceState,
+  BillingPrepaidOrderRef,
   BillingPlanPreviewInput,
   BillingProrationPreview,
   BillingProvider,
@@ -633,8 +638,42 @@ function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
     billingReason: invoice.billing_reason ?? null,
     gauSettlementId:
       (invoice.metadata?.gau_settlement_id as string | undefined) ?? null,
+    prepaidOrder: prepaidOrderOf(invoice.metadata),
     lineItems,
   };
+}
+
+/**
+ * The prepaid order an invoice bills, from the metadata createPrepaidInvoice
+ * wrote: `oxagen_kind: "prepaid_order"`, `prepaid_order_id`, and optionally
+ * `assistant_spend_cap_cents` (`none` or digits). Null for any other invoice.
+ * A prepaid invoice whose cap value is neither is read as `unchanged` and
+ * logged: a grant that guessed a cap would set a figure nobody chose.
+ */
+function prepaidOrderOf(
+  metadata: Stripe.Metadata | null | undefined,
+): BillingPrepaidOrderRef | null {
+  if (metadata?.oxagen_kind !== "prepaid_order") return null;
+  const orderId = metadata.prepaid_order_id;
+  if (!orderId) return null;
+  const cap = metadata.assistant_spend_cap_cents;
+  if (cap === undefined || cap === "") {
+    return { orderId, assistantSpendCap: { kind: "unchanged" } };
+  }
+  if (cap === "none") {
+    return { orderId, assistantSpendCap: { kind: "set", capCents: null } };
+  }
+  if (/^\d+$/.test(cap) && Number.isSafeInteger(Number(cap))) {
+    return {
+      orderId,
+      assistantSpendCap: { kind: "set", capCents: Number(cap) },
+    };
+  }
+  logger.error(
+    { orderId, assistantSpendCapCents: cap },
+    "billing: prepaid invoice carries an unreadable assistant cap; leaving the cap unchanged",
+  );
+  return { orderId, assistantSpendCap: { kind: "unchanged" } };
 }
 
 /**
@@ -1233,10 +1272,98 @@ export class StripeProvider implements BillingProvider {
         unit_amount_decimal: microsToCentsDecimal(input.ratePerGauMicros),
         currency: input.currency,
         description: input.description,
+        period: providerPeriodSeconds(input.period),
       },
       { idempotencyKey: `${input.settlementId}:item` },
     );
     return { invoiceId: invoice.id };
+  }
+
+  async createPrepaidInvoice(
+    input: BillingPrepaidInvoiceInput,
+  ): Promise<{ invoiceId: string }> {
+    const stripe = this.client();
+    // auto_advance false: the draft is sent only by sendPrepaidInvoice, after
+    // its subtotal is checked against the order. send_invoice: an enterprise
+    // pays by bank transfer or on the hosted page, never from a saved card.
+    const invoice = await stripe.invoices.create(
+      {
+        customer: input.customerId,
+        auto_advance: false,
+        collection_method: "send_invoice",
+        days_until_due: input.daysUntilDue,
+        currency: input.currency,
+        pending_invoice_items_behavior: "exclude",
+        ...(input.customFields.length > 0
+          ? { custom_fields: input.customFields }
+          : {}),
+        ...(input.memo ? { description: input.memo } : {}),
+        footer: input.footer,
+        metadata: {
+          ...input.metadata,
+          org_id: input.orgId,
+          oxagen_kind: "prepaid_order",
+          prepaid_order_id: input.orderId,
+        },
+      },
+      { idempotencyKey: `${input.orderId}:invoice` },
+    );
+    for (const line of input.lines) {
+      await stripe.invoiceItems.create(
+        {
+          customer: input.customerId,
+          invoice: invoice.id,
+          quantity: line.quantity,
+          unit_amount_decimal: line.unitAmountDecimal,
+          currency: input.currency,
+          description: line.description,
+          ...(line.period
+            ? { period: providerPeriodSeconds(line.period) }
+            : {}),
+          metadata: { prepaid_order_id: input.orderId, line: line.key },
+        },
+        { idempotencyKey: `${input.orderId}:item:${line.key}` },
+      );
+    }
+    return { invoiceId: invoice.id };
+  }
+
+  async sendPrepaidInvoice(
+    ref: BillingPrepaidInvoiceRef,
+  ): Promise<BillingPrepaidInvoiceState> {
+    const stripe = this.client();
+    let invoice = await stripe.invoices.retrieve(ref.invoiceId);
+    if (invoice.status === "draft") {
+      if (invoice.subtotal !== ref.expectedSubtotalCents) {
+        throw new Error(
+          `billing: prepaid invoice ${ref.invoiceId} subtotals ${invoice.subtotal}, the order ${ref.expectedSubtotalCents}; not sent`,
+        );
+      }
+      // Sending a draft finalizes it and emails it in one request
+      // (https://docs.stripe.com/api/invoices/send). Keyed on the order, so a
+      // retry inside the idempotency window sends one email.
+      invoice = await stripe.invoices.sendInvoice(
+        ref.invoiceId,
+        {},
+        { idempotencyKey: `${ref.orderId}:send` },
+      );
+    }
+    if (invoice.status !== "open" && invoice.status !== "paid") {
+      throw new Error(
+        `billing: prepaid invoice ${ref.invoiceId} is ${invoice.status}, neither open nor paid`,
+      );
+    }
+    return {
+      status: invoice.status,
+      number: invoice.number ?? null,
+      hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+      invoicePdfUrl: invoice.invoice_pdf ?? null,
+      amountDueCents: invoice.amount_due,
+      assistantSpendCap: prepaidOrderOf(invoice.metadata)
+        ?.assistantSpendCap ?? {
+        kind: "unchanged",
+      },
+    };
   }
 
   async finalizeAndPayGauInvoice(

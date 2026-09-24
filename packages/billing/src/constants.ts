@@ -12,6 +12,11 @@ export const CREDIT_REASONS = {
   GRANT_CREDIT_PACK: "grant_credit_pack",
   GRANT_AUTO_RELOAD: "grant_auto_reload",
   GRANT_MANUAL: "grant_manual",
+  // Usage credits an enterprise paid for in advance on a prepaid order's
+  // invoice (billing.prepaid_orders, prepaid-orders.ts). Referenced by
+  // (reference_type 'prepaid_order', reference_id = the order id), so the
+  // grant_% unique index grants each order's credits once.
+  GRANT_PREPAID_INVOICE: "grant_prepaid_invoice",
   // ADR-052: `consume_execution` and `consume_tool_call` survive and take on
   // the governed-action meter. `consume_execution` is what the kernel's usage
   // recorder debits under.

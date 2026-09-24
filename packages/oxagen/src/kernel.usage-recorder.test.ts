@@ -22,10 +22,15 @@ import {
   clearHandlersForTests,
   clearSecurityEventEmitter,
   clearUsageRecorder,
+  governedActionIdempotencyKey,
   governedActionUnits,
   invoke,
   registerHandler,
   runOutsideGovernedAction,
+  runWithinEnclosingAction,
+  setBillingAdmissionGate,
+  setBudgetAdmissionGate,
+  clearBudgetAdmissionGate,
   setUsageRecorder,
   type GovernedActionRecord,
 } from "./kernel";
@@ -129,6 +134,121 @@ describe("kernel governed-action usage recorder", () => {
 
     // A fabricated id would group a charge under a run that did not happen.
     expect(recorded[0]?.runId).toBeNull();
+  });
+
+  // ── ADR-165: the ledger's attribution and dedup key ──────────────────────
+
+  it("attributes an action to the operator who signed in, with no agent, when a person acts", async () => {
+    defineCap({ name: "accrual_person" });
+    registerHandler("accrual_person", async () => async () => ({ ok: true }));
+
+    await invoke("accrual_person", {}, ctx, { surface: "api" });
+
+    expect(recorded[0]?.operatorUserId).toBe("u");
+    expect(recorded[0]?.agentId).toBeNull();
+    expect(recorded[0]?.toolCallId).toBeNull();
+  });
+
+  it("keys a tool call on its run and tool-call id, so a retried tool call carries the same key", async () => {
+    defineCap({ name: "accrual_tool" });
+    registerHandler("accrual_tool", async () => async () => ({ ok: true }));
+    const toolCtx = { ...ctx, toolCallId: "call_9" } as CapabilityContext;
+
+    await invoke("accrual_tool", {}, toolCtx, {
+      surface: "api",
+      runId: "arun_3",
+    });
+    await invoke("accrual_tool", {}, toolCtx, {
+      surface: "api",
+      runId: "arun_3",
+    });
+
+    expect(recorded[0]?.idempotencyKey).toBe("kernel:tool:arun_3:call_9");
+    expect(recorded[1]?.idempotencyKey).toBe(recorded[0]?.idempotencyKey);
+    expect(recorded[0]?.toolCallId).toBe("call_9");
+    // The run the call landed in is the run the ledger groups it under.
+    expect(recorded[0]?.runId).toBe("arun_3");
+  });
+
+  it("gives two invocations with no stable name two different keys, so neither is dropped", async () => {
+    defineCap({ name: "accrual_plain" });
+    registerHandler("accrual_plain", async () => async () => ({ ok: true }));
+
+    await invoke("accrual_plain", {}, ctx, { surface: "api" });
+    await invoke("accrual_plain", {}, ctx, { surface: "api" });
+
+    expect(recorded[0]?.idempotencyKey).toMatch(/^kernel:inv:/);
+    expect(recorded[1]?.idempotencyKey).not.toBe(recorded[0]?.idempotencyKey);
+  });
+
+  it("keys a lifecycle execution on its own idempotency key", () => {
+    expect(
+      governedActionIdempotencyKey(
+        "sync_repo",
+        { messageId: null },
+        {
+          execution: {
+            kind: "lifecycle",
+            event: "run.completed",
+            invocationId: "inv-1",
+            depth: 0,
+            idempotencyKey: "life-1",
+          } as never,
+        },
+      ),
+    ).toBe("kernel:lifecycle:sync_repo:life-1");
+  });
+
+  // ── runWithinEnclosingAction: steps that are part of a turn ─────────────
+
+  it("an invoke inside runWithinEnclosingAction is nested: it records nothing and skips the GAU gate", async () => {
+    defineCap({ name: "accrual_step", scoped: true });
+    registerHandler("accrual_step", async () => async () => ({ ok: true }));
+    const gate = vi.fn(async () => {
+      throw new Error("gau_exhausted");
+    });
+    setBillingAdmissionGate(gate);
+
+    await runOutsideGovernedAction(() =>
+      runWithinEnclosingAction(() =>
+        invoke("accrual_step", {}, ctx, { surface: "api" }),
+      ),
+    );
+
+    expect(gate).not.toHaveBeenCalled();
+    expect(recorder).not.toHaveBeenCalled();
+  });
+
+  it("the GAU gate still refuses a top-level invoke, which is the one that would bill", async () => {
+    defineCap({ name: "accrual_top", scoped: true });
+    registerHandler("accrual_top", async () => async () => ({ ok: true }));
+    setBillingAdmissionGate(async () => {
+      throw new Error("gau_exhausted");
+    });
+
+    await expect(
+      invoke("accrual_top", {}, ctx, { surface: "api" }),
+    ).rejects.toThrow("gau_exhausted");
+    expect(recorder).not.toHaveBeenCalled();
+  });
+
+  it("a nested invoke still meets the budget gate", async () => {
+    defineCap({ name: "accrual_budget", scoped: true });
+    registerHandler("accrual_budget", async () => async () => ({ ok: true }));
+    const budget = vi.fn(async () => {
+      throw Object.assign(new Error("budget_exceeded"), {
+        code: "budget_exceeded",
+      });
+    });
+    setBudgetAdmissionGate(budget);
+
+    await expect(
+      runWithinEnclosingAction(() =>
+        invoke("accrual_budget", {}, ctx, { surface: "api" }),
+      ),
+    ).rejects.toThrow();
+    expect(budget).toHaveBeenCalledTimes(1);
+    clearBudgetAdmissionGate();
   });
 
   // ── Exclusion 1: nesting. The one that protects the invoice. ──────────────

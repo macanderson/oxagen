@@ -1,5 +1,5 @@
 {
-  "generatedCount": 377,
+  "generatedCount": 382,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -383,6 +383,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "create_prepaid_invoice",
+      "domain": "billing",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -832,6 +840,18 @@
       "consumes": []
     },
     {
+      "name": "export_billing_statement",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "export_conversation",
       "domain": "conversation",
       "surfaces": [
@@ -1006,6 +1026,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_billing_statement",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -2456,6 +2488,17 @@
       "consumes": []
     },
     {
+      "name": "list_prepaid_orders",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_price_entries",
       "domain": "cost",
       "surfaces": [
@@ -3536,6 +3579,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_contract_terms",
+      "domain": "billing",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []

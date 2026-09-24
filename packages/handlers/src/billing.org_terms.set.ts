@@ -25,6 +25,12 @@
 // invoice-billed with legitimate invoices and a re-run of the script finds
 // nothing left to claim. Turning
 // invoice billing on writes no settlement: purchased units stay usable as carry.
+//
+// The same call sets the org's monthly cap on platform-paid assistant tokens
+// (ADR-053 §3) when the input carries `assistantSpendCapCents`. The mode's two
+// fields are set together or not at all (the contract refuses one without the
+// other), so a cap-only call leaves the mode alone and closes no accrual. The
+// output is the three terms as they stand after the call.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
@@ -33,7 +39,9 @@ import {
 } from "@oxagen/oxagen/contracts/billing.org_terms.set";
 import {
   closeInvoiceAccrual,
+  readAssistantSpendCap,
   readOrgBillingSettings,
+  setAssistantSpendCap,
   setOrgBillingTerms,
   type OrgBillingTerms,
   type OrgGauBillingSettings,
@@ -51,10 +59,19 @@ export type OrgBillingTermsDeps = {
   /** The org's billing mode before this call. */
   current: (
     orgId: string,
-  ) => Promise<Pick<OrgGauBillingSettings, "approvedForInvoiceBilling">>;
+  ) => Promise<
+    Pick<OrgGauBillingSettings, "approvedForInvoiceBilling" | "invoiceGauMax">
+  >;
   write: OrgBillingTermsWriter;
   /** Invoice the uninvoiced overage of every ended, unclosed month and of the current bucket. */
   closeAccrual: (orgId: string) => Promise<unknown>;
+  /** The org's assistant spend cap; null is no cap. */
+  readAssistantSpendCap: (orgId: string) => Promise<number | null>;
+  /** Store the org's assistant spend cap and return what was stored. */
+  writeAssistantSpendCap: (
+    orgId: string,
+    capCents: number | null,
+  ) => Promise<number | null>;
 };
 
 export function createBillingOrgTermsSetHandler(
@@ -62,15 +79,39 @@ export function createBillingOrgTermsSetHandler(
 ): CapabilityHandler<typeof billingOrgTermsSet> {
   return async (input, ctx): Promise<BillingOrgTermsSetOutput> => {
     const before = await deps.current(input.orgId);
-    if (before.approvedForInvoiceBilling && !input.approvedForInvoiceBilling) {
-      await deps.closeAccrual(input.orgId);
+    let terms: OrgBillingTerms = {
+      orgId: input.orgId,
+      approvedForInvoiceBilling: before.approvedForInvoiceBilling,
+      invoiceGauMax: before.invoiceGauMax,
+    };
+    if (
+      input.approvedForInvoiceBilling !== undefined &&
+      input.invoiceGauMax !== undefined
+    ) {
+      if (
+        before.approvedForInvoiceBilling &&
+        !input.approvedForInvoiceBilling
+      ) {
+        await deps.closeAccrual(input.orgId);
+      }
+      terms = await deps.write({
+        orgId: input.orgId,
+        approvedForInvoiceBilling: input.approvedForInvoiceBilling,
+        invoiceGauMax: input.invoiceGauMax,
+      });
     }
 
-    const stored = await deps.write({
-      orgId: input.orgId,
-      approvedForInvoiceBilling: input.approvedForInvoiceBilling,
-      invoiceGauMax: input.invoiceGauMax,
-    });
+    const assistantSpendCapCents =
+      input.assistantSpendCapCents !== undefined
+        ? await deps.writeAssistantSpendCap(
+            input.orgId,
+            input.assistantSpendCapCents,
+          )
+        : await deps.readAssistantSpendCap(input.orgId);
+    const stored: BillingOrgTermsSetOutput = {
+      ...terms,
+      assistantSpendCapCents,
+    };
 
     // ── Audit ─────────────────────────────────────────────────────────────
     // SOC 2 CC6.3: this is the commercial arrangement an organisation is
@@ -101,6 +142,7 @@ export function createBillingOrgTermsSetHandler(
         orgId: stored.orgId,
         approvedForInvoiceBilling: stored.approvedForInvoiceBilling,
         invoiceGauMax: stored.invoiceGauMax,
+        assistantSpendCapCents: stored.assistantSpendCapCents,
         requestId: ctx.requestId,
       },
       "billing.org_terms.set: org billing terms updated",
@@ -114,4 +156,6 @@ export const billingOrgTermsSetHandler = createBillingOrgTermsSetHandler({
   current: (orgId) => readOrgBillingSettings(orgId, { system: true }),
   write: setOrgBillingTerms,
   closeAccrual: (orgId) => closeInvoiceAccrual(orgId),
+  readAssistantSpendCap,
+  writeAssistantSpendCap: setAssistantSpendCap,
 });
