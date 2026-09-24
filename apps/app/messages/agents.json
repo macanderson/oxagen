@@ -96,7 +96,9 @@
         "tamperWhy": "{count, plural, one {# open incident} other {# open incidents}}",
         "notEnrolledWhy": "no hook is installed, so its runs are recorded only",
         "observeWhy": "enrolled, and nothing is delivered or refused yet",
-        "healthyWhy": "enrolled, and its latest wrapped session recorded the {tier} tier"
+        "healthyWhy": "enrolled, and its latest wrapped session recorded the {tier} tier",
+        "retiredWhy": "retired, so its credential and hosts are revoked and no hook is installed",
+        "suspendedWhy": "suspended, so every call is refused and there is no health verdict"
       },
       "controls": {
         "search": "Search this list",
@@ -635,6 +637,8 @@
         "ends": "Ends",
         "endsValue": "{roles, plural, one {# role} other {# roles}}, {mandates, plural, one {# mandate} other {# mandates}}, {hosts, plural, =0 {no host enrollment} one {the host enrollment} other {# host enrollments}}",
         "endsUnknown": "its roles, mandates and host enrollment",
+        "inFlight": "In flight",
+        "inFlightUnrecorded": "live runs not counted yet, and deregistering does not cancel them",
         "understand": "I understand this cannot be undone",
         "understandHint": "Re-registering creates a new principal.",
         "confirm": "Deregister",

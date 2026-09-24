@@ -154,6 +154,8 @@ type Messages = {
         notEnrolledWhy: string;
         observeWhy: string;
         healthyWhy: string;
+        retiredWhy: string;
+        suspendedWhy: string;
       };
       controls: {
         search: string;
@@ -692,6 +694,8 @@ type Messages = {
         ends: string;
         endsValue: string;
         endsUnknown: string;
+        inFlight: string;
+        inFlightUnrecorded: string;
         understand: string;
         understandHint: string;
         confirm: string;
