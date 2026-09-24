@@ -526,6 +526,13 @@ describe("Runtimes, not loaded", () => {
     );
     const dialog = await screen.findByTestId("runtimes-cli-dialog");
     expect(dialog).toHaveTextContent("oxagen agent enroll");
+    // The command needs the CLI on the host, and the app is what installs it.
+    expect(
+      within(dialog).getByRole("link", { name: "Intel (.dmg)" }),
+    ).toHaveAttribute(
+      "href",
+      "https://downloads.oxagen.sh/latest/Oxagen_x64.dmg",
+    );
     expect(dialog).toHaveTextContent(
       "Nothing on this page installs a hook. Enrollment runs on the host itself.",
     );

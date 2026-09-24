@@ -790,7 +790,19 @@
       "entry": "/[org]/[ws]/runs/[run]?tab=actions \u2014 an approval frame's detail on the Governed actions tab reads list_resolved_approvals narrowed to the run and says who decided the call and when, or the rule that released a call with no person (features/run/actions-tab.tsx, features/run/parked-calls.tsx, data/live/approvals.ts)",
       "proof": "apps/app/src/features/run/actions-tab.test.tsx",
       "verifiedAt": "2026-09-24",
-      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn",
+
+      "also": [
+        {
+          "route": "/[org]",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "every page: the approvals drawer lists today's resolutions under \"N resolved today\" from list_resolved_approvals since the start of the viewer's day, per workspace (features/shell/approvals-drawer.tsx, features/shell/source.ts, data/live/approvals.ts)",
+          "testid": "resolved-row",
+          "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+        }
+      ]
     },
     "list_runs": {
       "route": "/[org]/[ws]",
@@ -1029,7 +1041,19 @@
       "testid": "decide",
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
       "verifiedAt": "2026-09-24",
-      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn",
+
+      "also": [
+        {
+          "route": "/[org]",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "every page: the top bar's Approvals button opens the #apdrawer drawer, and a row opens the same card and Decide dialog Fleet draws, over the same kernel seam (features/shell/approvals-drawer.tsx, features/shell/shell-chrome.tsx, features/fleet/approvals-panel.tsx)",
+          "testid": "approvals-button",
+          "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+        }
+      ]
     },
     "retire_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
@@ -1133,6 +1157,15 @@
       "proof": "apps/app/src/features/organization/key-row.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "search_tools": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: \u2318K (or the top bar's Search or run an action) reads search_tools for the query through features/shell/command-actions.ts and lists its runs, agents, approvals and belt tools in the menu's groups (features/shell/command-menu.tsx, features/shell/commands.ts)",
+      "testid": "command-menu",
+      "proof": "apps/app/src/features/shell/shell-client.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
     },
     "send_workspace_invite": {
       "route": "/[org]",
@@ -1404,6 +1437,33 @@
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "get_nav_counts": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: the workspace layout reads get_nav_counts (open steering proposals, open severity-10 incidents) for the workspace in the URL and the chrome draws the sidebar's Steering and Audit counts, or \"?\" when the read gave no figure, and the phone's More count from it (features/shell/workspace-activity.tsx, features/shell/activity-store.ts, features/shell/sidebar.tsx, data/live/shell.ts)",
+      "testid": "shell-workspace",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+    },
+    "list_notifications": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: the top bar's bell reads list_notifications for the workspace in the URL and the notifications dialog lists the viewer's newest rows with the unread dot (features/shell/workspace-activity.tsx, features/shell/notifications-dialog.tsx, data/live/shell.ts, data/live/mappers/shell.ts)",
+      "testid": "notification",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+    },
+    "mark_notification": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: Mark all read in the notifications dialog invokes mark_notification once per listed row through the kernel seam (features/shell/notification-actions.ts, features/shell/notifications-dialog.tsx)",
+      "testid": "mark-all-read",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
     },
     "get_run_work": {
       "route": "/[org]/[ws]/runs/[run]",

@@ -590,6 +590,15 @@ describe("Runtime", () => {
     expect(
       within(empty).getByRole("button", { name: "Show the CLI path" }),
     ).toBeVisible();
+    // Enrolling needs the CLI on the host, and the app is what installs it.
+    expect(
+      within(screen.getByTestId("agent-runtime-tab")).getByRole("link", {
+        name: ".deb (Debian, Ubuntu)",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "https://downloads.oxagen.sh/latest/Oxagen_amd64.deb",
+    );
   });
 });
 

@@ -9,11 +9,16 @@ const router = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
+const { DESKTOP_DOWNLOADS, DESKTOP_DOWNLOADS_PAGE } = await import(
+  "@/shared/desktop-downloads"
+);
 const { parseGitHubUrl } = await import("@/shared/github-url");
 const { parseHostedInvoiceUrl } = await import("@/shared/invoice-url");
 const { parsePullRequestUrl } = await import("@/shared/pull-request-url");
 const { routes } = await import("@/shared/safe-path");
 const {
+  DesktopDownloadsPageLink,
+  DesktopInstallerLink,
   GitHubLink,
   HostedInvoiceLink,
   PullRequestLink,
@@ -100,6 +105,32 @@ describe("GitHubLink", () => {
     render(<GitHubLink to={url}>install</GitHubLink>);
     const link = screen.getByRole("link", { name: "install" });
     expect(link).toHaveAttribute("href", url);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+});
+
+describe("DesktopInstallerLink", () => {
+  it("downloads the installer in place, with no new tab", () => {
+    const url = DESKTOP_DOWNLOADS[0]?.installers[0]?.url;
+    if (url === undefined) throw new Error("no installer in the table");
+    render(<DesktopInstallerLink to={url}>installer</DesktopInstallerLink>);
+    const link = screen.getByRole("link", { name: "installer" });
+    expect(link).toHaveAttribute("href", url);
+    expect(link).not.toHaveAttribute("target");
+    expect(link).not.toHaveAttribute("download");
+  });
+});
+
+describe("DesktopDownloadsPageLink", () => {
+  it("opens the downloads page in a new tab without an opener", () => {
+    render(
+      <DesktopDownloadsPageLink to={DESKTOP_DOWNLOADS_PAGE}>
+        every version
+      </DesktopDownloadsPageLink>,
+    );
+    const link = screen.getByRole("link", { name: "every version" });
+    expect(link).toHaveAttribute("href", "https://downloads.oxagen.sh/");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });

@@ -267,8 +267,10 @@ function operatorBlockLocal(host: HostFile): string | undefined {
  *
  * `SessionStart` and `UserPromptSubmit` carry no tool identity to evaluate at
  * all; `Stop`, `PostToolUse`, `PostToolUseFailure`, `Notification` and
- * `PermissionDenied` are record-only or non-blocking (the `default` branch
- * below). Of the three tool-bearing events, only `ask` and `no_rule`
+ * `PermissionDenied` refuse nothing (the `default` branch below). The daemon
+ * answers `Stop` and the two post-tool events with the operator's queued
+ * steers and a resume's continuation; with the daemon down, those stay
+ * queued for the next boundary it answers. Of the three tool-bearing events, only `ask` and `no_rule`
  * outcomes fail open, and even then to the harness's OWN permission prompt, a
  * channel that needs no daemon, not to a silent allow. A `deny` outcome on
  * any of the three fails CLOSED; see `evaluateToolPermission`.

@@ -7,13 +7,15 @@ export const SCIM_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 export const SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 export const SCIM_LIST_SCHEMA =
   "urn:ietf:params:scim:api:messages:2.0:ListResponse";
-export const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
+export const SCIM_PATCH_SCHEMA =
+  "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 export const SCIM_ERROR_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:Error";
 export const SCIM_SPC_SCHEMA =
   "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig";
 export const SCIM_RESOURCE_TYPE_SCHEMA =
   "urn:ietf:params:scim:schemas:core:2.0:ResourceType";
-export const SCIM_SCHEMA_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Schema";
+export const SCIM_SCHEMA_SCHEMA =
+  "urn:ietf:params:scim:schemas:core:2.0:Schema";
 
 /** The largest page a list answers, and the default when none is asked for. */
 export const SCIM_MAX_RESULTS = 200;
@@ -86,7 +88,9 @@ export function pageOf(query: Record<string, string>): {
     // Clamped to a 32-bit offset, so a huge startIndex answers an empty page
     // rather than overflowing the query's OFFSET.
     startIndex:
-      Number.isFinite(start) && start >= 1 ? Math.min(start, MAX_START_INDEX) : 1,
+      Number.isFinite(start) && start >= 1
+        ? Math.min(start, MAX_START_INDEX)
+        : 1,
     count: Number.isFinite(count)
       ? Math.min(Math.max(count, 0), SCIM_MAX_RESULTS)
       : SCIM_DEFAULT_COUNT,
@@ -159,10 +163,15 @@ export interface PatchOperation {
  */
 export function readPatch(body: unknown): PatchOperation[] {
   if (typeof body !== "object" || body === null) {
-    throw new ScimError(400, "The PATCH body must be a PatchOp", "invalidSyntax");
+    throw new ScimError(
+      400,
+      "The PATCH body must be a PatchOp",
+      "invalidSyntax",
+    );
   }
-  const operations = (body as { Operations?: unknown; operations?: unknown })
-    .Operations ?? (body as { operations?: unknown }).operations;
+  const operations =
+    (body as { Operations?: unknown; operations?: unknown }).Operations ??
+    (body as { operations?: unknown }).operations;
   if (!Array.isArray(operations)) {
     throw new ScimError(
       400,
@@ -172,7 +181,11 @@ export function readPatch(body: unknown): PatchOperation[] {
   }
   return operations.map((raw) => {
     if (typeof raw !== "object" || raw === null) {
-      throw new ScimError(400, "Each operation must be an object", "invalidSyntax");
+      throw new ScimError(
+        400,
+        "Each operation must be an object",
+        "invalidSyntax",
+      );
     }
     const { op, path, value } = raw as {
       op?: unknown;
@@ -235,7 +248,9 @@ export function isScimId(value: string): boolean {
   return UUID_RE.test(value);
 }
 
-export function serviceProviderConfig(baseUrl: string): Record<string, unknown> {
+export function serviceProviderConfig(
+  baseUrl: string,
+): Record<string, unknown> {
   return {
     schemas: [SCIM_SPC_SCHEMA],
     documentationUri: "https://docs.oxagen.sh/governance/sso",
@@ -269,7 +284,10 @@ export function resourceTypes(baseUrl: string): Record<string, unknown>[] {
       name: "User",
       endpoint: "/Users",
       schema: SCIM_USER_SCHEMA,
-      meta: { resourceType: "ResourceType", location: `${baseUrl}/ResourceTypes/User` },
+      meta: {
+        resourceType: "ResourceType",
+        location: `${baseUrl}/ResourceTypes/User`,
+      },
     },
     {
       schemas: [SCIM_RESOURCE_TYPE_SCHEMA],
@@ -277,7 +295,10 @@ export function resourceTypes(baseUrl: string): Record<string, unknown>[] {
       name: "Group",
       endpoint: "/Groups",
       schema: SCIM_GROUP_SCHEMA,
-      meta: { resourceType: "ResourceType", location: `${baseUrl}/ResourceTypes/Group` },
+      meta: {
+        resourceType: "ResourceType",
+        location: `${baseUrl}/ResourceTypes/Group`,
+      },
     },
   ];
 }
@@ -328,7 +349,10 @@ export function schemas(baseUrl: string): Record<string, unknown>[] {
         },
         attr("active", "boolean"),
       ],
-      meta: { resourceType: "Schema", location: `${baseUrl}/Schemas/${SCIM_USER_SCHEMA}` },
+      meta: {
+        resourceType: "Schema",
+        location: `${baseUrl}/Schemas/${SCIM_USER_SCHEMA}`,
+      },
     },
     {
       schemas: [SCIM_SCHEMA_SCHEMA],
@@ -347,7 +371,10 @@ export function schemas(baseUrl: string): Record<string, unknown>[] {
           ],
         },
       ],
-      meta: { resourceType: "Schema", location: `${baseUrl}/Schemas/${SCIM_GROUP_SCHEMA}` },
+      meta: {
+        resourceType: "Schema",
+        location: `${baseUrl}/Schemas/${SCIM_GROUP_SCHEMA}`,
+      },
     },
   ];
 }

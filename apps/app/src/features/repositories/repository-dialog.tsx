@@ -218,7 +218,11 @@ function Body({
         <FormAlert testId="repository-dialog-failure">{failure}</FormAlert>
       )}
       {linked === null ? null : (
-        <p role="status" data-testid="repository-dialog-linked" className="text-[13px]">
+        <p
+          role="status"
+          data-testid="repository-dialog-linked"
+          className="text-[13px]"
+        >
           {linked}
         </p>
       )}
@@ -426,9 +430,7 @@ function ProductionBranchForm({
           data-testid="repository-dialog-branch-moved"
           className="mt-3 flex flex-col gap-2 rounded-md border border-border p-3"
         >
-          <p className={prose}>
-            {t("moved", { github: suggestion, current })}
-          </p>
+          <p className={prose}>{t("moved", { github: suggestion, current })}</p>
           <div>
             <button
               type="button"

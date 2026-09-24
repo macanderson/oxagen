@@ -38,13 +38,33 @@ name: Desktop
 # When a `desktop-v*` release is published, the `feed` job below copies its
 # latest.json onto `desktop-latest`.
 #
-# Publishing is tag-gated. A `desktop-v*` tag builds all four targets, then
-# the `publish` job below publishes the release, copies the installers and
-# their checksums to https://downloads.oxagen.sh/ and rewrites its page, and
-# points the updater feed at the release. Nothing after the tag is done by
-# hand: `release.yml` pushes the tag when a release PR merges, and a person
-# pushing one gets the same result. A manual run builds and uploads the
-# bundles as workflow artifacts only.
+# Two things publish, and both end on https://downloads.oxagen.sh/ (ADR-158):
+#
+#   A release. A `desktop-v*` tag builds all four targets, then the `publish`
+#   job copies the installers and their checksums to the downloads host,
+#   publishes the GitHub release, and points the updater feed at it.
+#   `release.yml` pushes the tag when a release PR merges; a person pushing
+#   one gets the same result.
+#
+#   A production deploy. `publish-installers` in pipeline.yml dispatches this
+#   workflow with `publish: true` and the deployed commit once every
+#   `deploy-node` leg has shipped. The `plan` job numbers it as a build of the
+#   next patch, `X.Y.(Z+1)-N` for the Nth commit after release X.Y.Z
+#   (tools/scripts/desktop-build-version.ts), the build legs stamp that
+#   version into the checkout, and `publish` uploads the installers under
+#   `desktop/<version>/`. A build has no tag, no GitHub release and no update
+#   feed entry: installed apps still update on releases only. The release
+#   commit itself is skipped here, because its tag publishes it.
+#
+# Either way, `publish-downloads.mjs` moves the version-free `latest/` links,
+# `latest.json` and the page only when the version is the newest the host has
+# seen, so a release and a deploy build finishing out of order cannot take the
+# links backwards. The web app's enrollment screens and the docs link
+# `latest/`.
+#
+# A manual run without `publish` builds and uploads the bundles as workflow
+# artifacts only. `preview` does the same with the version a deploy would
+# give the commit, so a branch can prove every bundler takes it.
 
 on:
   push:
@@ -53,14 +73,109 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the build to downloads.oxagen.sh, as a production deploy does"
+        type: boolean
+        default: false
+      sha:
+        description: "Commit on main to build (default: the head of the ref this runs on)"
+        type: string
+        default: ""
+      preview:
+        description: "Number and stamp the commit as a deploy build, publish nothing (checks a branch's bundles)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+# Deploy builds share one group without cancelling: one builds, the newest
+# waits, and a newer deploy replaces a waiting one, so a burst of merges ends
+# with the tip built rather than every commit or none (the #2730 lesson).
+# Every other run, a release tag above all, gets a group of its own and can
+# never be evicted by a deploy.
+concurrency:
+  group: >-
+    desktop-${{
+      github.event_name == 'workflow_dispatch' && inputs.publish
+        && 'deploy' || github.run_id
+    }}
+  cancel-in-progress: false
+
 jobs:
+  # What this run builds and whether it publishes: a release from its tag, a
+  # build of main from a deploy's dispatch, or artifacts only.
+  plan:
+    name: Plan the build
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      version: ${{ steps.plan.outputs.version }}
+      channel: ${{ steps.plan.outputs.channel }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          fetch-depth: 0
+
+      # A deploy build publishes to the host every customer downloads from,
+      # so it builds only what main carries.
+      - name: The commit is on main
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$(git rev-parse HEAD) is not on main; a deploy build publishes only what main carries"
+            exit 1
+          fi
+
+      - uses: ./.github/actions/pnpm-install
+        if: github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.preview)
+
+      - name: Choose the version
+        id: plan
+        env:
+          PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+          PREVIEW: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish && inputs.preview }}
+        run: |
+          set -euo pipefail
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/desktop-v* ]]; then
+            {
+              echo "version=${GITHUB_REF_NAME#desktop-v}"
+              echo "channel=release"
+              echo "publish=true"
+            } >> "$GITHUB_OUTPUT"
+          elif [ "$PUBLISH" = "true" ] || [ "$PREVIEW" = "true" ]; then
+            pnpm exec tsx tools/scripts/desktop-build-version.ts plan | tee plan.txt
+            version="$(sed -n 's/^version=//p' plan.txt)"
+            if [ -z "$version" ]; then
+              echo "::notice::this is a release commit; its desktop-v tag publishes the installers"
+              echo "channel=skip" >> "$GITHUB_OUTPUT"
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+            else
+              {
+                echo "version=$version"
+                echo "channel=build"
+                echo "publish=$PUBLISH"
+              } >> "$GITHUB_OUTPUT"
+            fi
+          else
+            {
+              echo "version=$(node -p "require('./package.json').version")"
+              echo "channel=artifacts"
+              echo "publish=false"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: ${{ matrix.name }}
-    if: github.event_name != 'release'
+    needs: plan
+    if: needs.plan.outputs.channel != 'skip'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -90,8 +205,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
 
       - uses: ./.github/actions/pnpm-install
+
+      # A deploy build carries its own version in every manifest of this
+      # checkout (never committed), so the installers, the app's About and
+      # both sidecars all name the same build.
+      - name: Stamp the build version
+        if: needs.plan.outputs.channel == 'build'
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: pnpm exec tsx tools/scripts/desktop-build-version.ts stamp "$VERSION"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -251,17 +378,18 @@ jobs:
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/nsis/*.exe
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/**/*.sig
 
-  # Everything that happens after a tagged build, in the order a reader of
+  # Everything that happens after a published build, in the order a reader of
   # downloads.oxagen.sh would want: the files land under their immutable
-  # version prefix, the page moves to the new version, then the GitHub release
-  # opens with the notes and the feed follows. The job assumes the platform
-  # deploy role through OIDC, which the `production` environment scopes;
-  # `desktop-v*` tags are allowed to deploy to it, and
-  # infra/stacks-new/ci-deploy/roles.tf grants the role the downloads bucket.
+  # version prefix, `latest/` and the page move to the new version, then, for
+  # a release only, the GitHub release opens with the notes and the feed
+  # follows. The job assumes the platform deploy role through OIDC, which the
+  # `production` environment scopes; `desktop-v*` tags and main are allowed
+  # to deploy to it, and infra/stacks-new/ci-deploy/roles.tf grants the role
+  # the downloads bucket.
   publish:
-    name: Publish the release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    name: Publish the installers
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -270,6 +398,14 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+
+      # publish-downloads.mjs imports src/downloads.ts through Node's type
+      # stripping (>= 22.18), so the runner image's own node is not enough.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .node-version
 
       - uses: actions/download-artifact@v4
         with:
@@ -291,23 +427,26 @@ jobs:
       # stripping.
       - name: Publish the installers and the page to downloads.oxagen.sh
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          node apps/desktop/scripts/publish-downloads.mjs --dir installers --version "${VERSION#desktop-v}" --resume
+          node apps/desktop/scripts/publish-downloads.mjs --dir installers --version "$VERSION" --resume
 
-      - name: Confirm the page serves this version
+      # The checksums are served, and `latest.json` names this version or a
+      # newer one: a release and a deploy build can finish in either order,
+      # and the older one leaves the links where they are.
+      - name: Confirm the host serves this version
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          v="${VERSION#desktop-v}"
+          curl -fsS -o /dev/null "https://downloads.oxagen.sh/desktop/$VERSION/SHA256SUMS.txt"
           for i in 1 2 3 4 5 6; do
-            if curl -fsSL "https://downloads.oxagen.sh/?t=$i" | grep -q "Version <code>$v</code>"; then
-              echo "downloads.oxagen.sh serves $v"
+            if curl -fsS "https://downloads.oxagen.sh/latest.json" -o latest.json &&
+              node apps/desktop/scripts/check-latest.mjs latest.json "$VERSION"; then
               exit 0
             fi
             sleep 20
           done
-          echo "::error::downloads.oxagen.sh does not serve $v two minutes after the invalidation"
+          echo "::error::downloads.oxagen.sh/latest.json does not name $VERSION or newer two minutes after the invalidation"
           exit 1
 
       # tauri-action left the release as a draft so nothing links to bundles
@@ -317,6 +456,7 @@ jobs:
       # `v*` release as the repository's latest; the updater reads
       # `desktop-latest`, not `/releases/latest`.
       - name: Publish the GitHub release
+        if: needs.plan.outputs.channel == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
@@ -335,6 +475,7 @@ jobs:
       # A release published with the workflow's own token raises no `release`
       # event, so the feed job below does not run for it; move the feed here.
       - name: Point the update feed at this release
+        if: needs.plan.outputs.channel == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}

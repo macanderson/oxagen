@@ -10,6 +10,9 @@
 export { Fleet } from "./fleet";
 export { FleetLoading } from "./loading";
 export { ApprovalsPanel } from "./approvals-panel";
+// The approvals drawer draws one card alone, with no panel heading around it,
+// so the drawer keeps one "Approvals" heading and the card its full width.
+export { ApprovalCardAlone } from "./approvals-panel";
 // The Run page's not-loaded states offer the same Try again, Open an
 // incident and Request access as Fleet's, so both read one set of dialogs.
 export { OpenIncident, RequestAccess, TryAgain } from "./state-actions";

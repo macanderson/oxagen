@@ -5,6 +5,7 @@
 // Nothing here enrolls a host or writes a hook (runtimes.md: enrollment is an
 // installer, run on the host itself). Enroll a runtime is a link to the
 // Register an agent flow, whose wrap step shows the command; Show the CLI path
+// links the Oxagen app's installers, which put the CLI on the host's PATH, and
 // prints the command. Three controls the design draws have no capability behind
 // them: Request access, Open an incident and Run a smoke session. Each opens a
 // dialog that says what the product would do and that nothing records it yet,
@@ -20,6 +21,7 @@ import {
   linkText,
   mono,
 } from "@/ui/control-styles";
+import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -92,7 +94,7 @@ function DialogButton({
   );
 }
 
-/** Show the CLI path: the command a person runs on the host. */
+/** Show the CLI path: the app that installs the CLI, then the command a person runs on the host. */
 export function CliPath() {
   const t = useTranslations("runtimes");
   return (
@@ -101,6 +103,7 @@ export function CliPath() {
       title={t("cli.title")}
       testId="runtimes-cli"
     >
+      <DesktopDownloads />
       <p>{t("cli.body")}</p>
       <pre className={`${mono} rounded-md bg-muted px-3 py-2`}>
         {t("cli.command")}

@@ -1,24 +1,48 @@
 "use client";
-// The ⌘K command menu (mockup `cmdMenu()`): a combobox over the static routes
-// and, inside a workspace, Create (the chooser and each wizard). Arrow keys
-// move, Enter opens, Esc closes. On a phone it rises from the bottom edge as a
-// sheet (src/ui/phone.css).
+// The ⌘K command menu (mockup `cmdMenu()`, audit-prompt check 6): a combobox
+// over every page and action in the mockup's groups, and, inside a workspace,
+// what `search_tools` answers for the query (runs, agents, approvals and the
+// tools on the belt). The search is a governed read through the kernel, and
+// the footer says so. Arrow keys move, Enter opens, ⌘1 to ⌘5 open the five
+// pages that carry them, Esc closes. On a phone it rises from the bottom edge
+// as a sheet (src/ui/phone.css).
+//
+// Two strings differ from the mock's `shell.json` on purpose, and the audit
+// (audit-prompt check 6) reads them against this note. The placeholder is
+// "Search runs, agents, tools, records, or run an action": the mock joins the
+// last clause with an em dash, which the house prose rules forbid
+// (clear-prose rule 1), so a comma takes its place. The footer says a search
+// is "recorded in the audit record" where the mock says "recorded as a
+// frame": `search_tools` here is a kernel read the audit log records, and no
+// run is open to hold a frame until the assistant records its turns as runs
+// (#2968), so "frame" would claim a record that does not exist.
 import { Dialog } from "@base-ui/react/dialog";
 import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { searchCommands } from "./command-actions";
 import {
-  buildCommands,
   type Command,
+  type CommandGroup,
+  TOOL_ROW_GAP,
+  buildCommands,
   filterCommands,
+  fromSearchRows,
   moveHighlight,
+  orderCommands,
+  shortcutCommand,
 } from "./commands";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 import { useSidebarSections } from "./sidebar";
+import { openAssistantDraft } from "@/shared/assistant-draft";
+import { openApprovals } from "@/shared/approvals-drawer";
 import { openCreate } from "@/shared/create";
 import { useNavigate } from "@/ui/navigation";
 import { SheetHandle } from "@/ui/sheet-dialog";
+
+/** How long typing rests before the query goes to `search_tools`. */
+const SEARCH_DEBOUNCE_MS = 150;
 
 export function CommandMenu({ data }: { data: ShellData }) {
   const { commandOpen, setCommandOpen } = useShellState();
@@ -40,6 +64,47 @@ export function CommandMenu({ data }: { data: ShellData }) {
   );
 }
 
+type Remote =
+  | { state: "idle" }
+  | { state: "ok"; query: string; commands: Command[] }
+  | { state: "failed" };
+
+/**
+ * What `search_tools` answered for the query, a moment after typing rests.
+ * An answer for an older query is dropped, so a slow read never overwrites a
+ * newer one.
+ */
+function useSearch(org: string, ws: string | null, query: string): Remote {
+  const [remote, setRemote] = useState<Remote>({ state: "idle" });
+  useEffect(() => {
+    if (ws === null) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      searchCommands(org, ws, query)
+        .then((result) => {
+          if (!live) return;
+          setRemote(
+            result.ok
+              ? {
+                  state: "ok",
+                  query,
+                  commands: fromSearchRows(result.value.rows, { org, ws }),
+                }
+              : { state: "failed" },
+          );
+        })
+        .catch(() => {
+          if (live) setRemote({ state: "failed" });
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [org, ws, query]);
+  return ws === null ? { state: "idle" } : remote;
+}
+
 function CommandPalette({
   data,
   onClose,
@@ -49,6 +114,7 @@ function CommandPalette({
 }) {
   const t = useTranslations("shell");
   const navigate = useNavigate();
+  const { setAssistantOpen } = useShellState();
   const { ws } = useSidebarSections(data);
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
@@ -56,25 +122,44 @@ function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const optionId = (c: Command) =>
     `${listId}-${c.id.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+  const org = data.org.slug;
+  // The groups that carry a note beside the label (mockup `grp(label, note)`),
+  // each key spelled out so the catalog check can follow it.
+  const notes: Partial<Record<CommandGroup, string>> = {
+    assistant: t("commands.groups.assistant.note"),
+    create: t("commands.groups.create.note"),
+    actions: t("commands.groups.actions.note"),
+    tools: t("commands.groups.tools.note"),
+  };
 
   const commands = useMemo(
     () =>
       buildCommands(
-        { org: data.org.slug, ws },
+        { org, ws },
         {
           nav: (key) => t(`nav.${key}`),
           create: (kind) => t(`commands.create.${kind ?? "any"}`),
+          text: (key) => t(`commands.${key}`),
         },
       ),
-    [data.org.slug, ws, t],
+    [org, ws, t],
   );
-  const ordered = filterCommands(commands, query);
+  const remote = useSearch(org, ws, query);
+  const ordered = orderCommands([
+    ...filterCommands(commands, query),
+    ...(remote.state === "ok" && remote.query === query ? remote.commands : []),
+  ]);
   const active = ordered[highlight] ?? null;
 
   const open = (c: Command) => {
+    if ("gap" in c) return;
     onClose();
     if ("href" in c) navigate.push(c.href);
-    else openCreate(c.create);
+    else if ("create" in c) openCreate(c.create);
+    else if ("approvals" in c) openApprovals();
+    else if (c.assistant !== null && ws !== null)
+      openAssistantDraft({ org, ws, content: c.assistant });
+    else setAssistantOpen(true);
   };
 
   return (
@@ -95,7 +180,7 @@ function CommandPalette({
           aria-controls={ordered.length > 0 ? listId : undefined}
           aria-autocomplete="list"
           aria-activedescendant={active === null ? undefined : optionId(active)}
-          aria-label={t("commands.input")}
+          aria-label={t("commands.title")}
           placeholder={t("commands.input")}
           value={query}
           onChange={(e) => {
@@ -103,7 +188,20 @@ function CommandPalette({
             setHighlight(0);
           }}
           onKeyDown={(e) => {
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            const digit = Number(e.key);
+            if (
+              (e.metaKey || e.ctrlKey) &&
+              !e.altKey &&
+              !e.shiftKey &&
+              digit >= 1 &&
+              digit <= 5
+            ) {
+              const target = shortcutCommand(commands, digit);
+              if (target !== null) {
+                e.preventDefault();
+                open(target);
+              }
+            } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
               e.preventDefault();
               setHighlight((i) =>
                 moveHighlight(
@@ -134,32 +232,90 @@ function CommandPalette({
           aria-label={t("commands.title")}
           className="min-h-0 flex-1 overflow-y-auto p-2"
         >
-          {ordered.map((c, i) => {
-            const selected = active?.id === c.id;
-            return (
+          {groupsOf(ordered).map(({ group, items }) => (
+            <div
+              key={group}
+              role="group"
+              aria-labelledby={`${listId}-g-${group}`}
+              data-group={group}
+            >
               <div
-                key={c.id}
-                id={optionId(c)}
-                role="option"
-                aria-selected={selected}
-                data-command={c.id}
-                tabIndex={-1}
-                onMouseMove={() => {
-                  if (i !== highlight) setHighlight(i);
-                }}
-                onClick={() => {
-                  open(c);
-                }}
-                className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm ${
-                  selected ? "bg-accent text-accent-foreground" : ""
-                }`}
+                id={`${listId}-g-${group}`}
+                className="flex items-baseline gap-2 px-3 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-muted-foreground"
               >
-                <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                <span>{t(`commands.groups.${group}.label`)}</span>
+                {notes[group] === undefined ? null : (
+                  <span className="font-normal normal-case tracking-normal">
+                    {notes[group]}
+                  </span>
+                )}
               </div>
-            );
-          })}
+              {items.map((c) => {
+                const i = ordered.indexOf(c);
+                const selected = active?.id === c.id;
+                const disabled = "gap" in c;
+                return (
+                  <div
+                    key={c.id}
+                    id={optionId(c)}
+                    role="option"
+                    aria-selected={selected}
+                    aria-disabled={disabled ? true : undefined}
+                    data-command={c.id}
+                    data-gap={disabled ? c.gap : undefined}
+                    tabIndex={-1}
+                    onMouseMove={() => {
+                      if (i !== highlight) setHighlight(i);
+                    }}
+                    onClick={() => {
+                      open(c);
+                    }}
+                    className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm ${
+                      disabled
+                        ? "cursor-default text-muted-foreground"
+                        : "cursor-pointer"
+                    } ${selected ? "bg-accent text-accent-foreground" : ""}`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{c.label}</span>
+                      {c.detail === undefined ? null : (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {c.detail}
+                        </span>
+                      )}
+                    </span>
+                    {"shortcut" in c && c.shortcut !== undefined ? (
+                      <kbd className="flex-none font-mono text-[11px] text-muted-foreground">
+                        {t("commands.shortcut", { n: c.shortcut })}
+                      </kbd>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {group === "tools" ? (
+                // A tool row has a name and a description; the chips the
+                // design draws have no field to read (#3969).
+                <p
+                  data-testid="command-tools-not-backed"
+                  data-gap={TOOL_ROW_GAP}
+                  className="px-3 pb-1 pt-0.5 text-xs text-muted-foreground"
+                >
+                  {t("commands.search.toolsNotBacked")}
+                </p>
+              ) : null}
+            </div>
+          ))}
         </div>
       )}
+      {remote.state === "failed" ? (
+        <p
+          role="status"
+          data-testid="command-search-failed"
+          className="border-t border-border px-4 py-2 text-xs text-muted-foreground"
+        >
+          {t("commands.search.failed")}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
         <span>
           <kbd className="font-mono">↑↓</kbd> {t("commands.footer.move")}
@@ -171,7 +327,27 @@ function CommandPalette({
           <kbd className="font-mono">{t("commands.footer.escape")}</kbd>{" "}
           {t("commands.footer.close")}
         </span>
+        <span data-testid="command-footer-note" className="ml-auto">
+          {ws === null
+            ? t("commands.footer.orgOnly")
+            : t.rich("commands.footer.governed", {
+                code: (chunks) => <span className="font-mono">{chunks}</span>,
+              })}
+        </span>
       </div>
     </Dialog.Popup>
   );
+}
+
+/** The ordered entries cut into their groups, each group once, in order. */
+function groupsOf(
+  ordered: readonly Command[],
+): { group: CommandGroup; items: Command[] }[] {
+  const out: { group: CommandGroup; items: Command[] }[] = [];
+  for (const c of ordered) {
+    const last = out.at(-1);
+    if (last?.group === c.group) last.items.push(c);
+    else out.push({ group: c.group, items: [c] });
+  }
+  return out;
 }
