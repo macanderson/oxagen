@@ -214,12 +214,35 @@ describe("organization.create capability", () => {
     expect(organizationCreate.scoped).toBe(false);
   });
 
-  it("takes no namespace: it is derived server-side", () => {
-    const parsed = organizationCreate.input.parse({
-      name: "Acme",
-      slug: "acme",
-      namespace: "acme",
+  describe("namespace", () => {
+    it("is optional: left off, the handler derives one from the slug", () => {
+      const parsed = organizationCreate.input.parse({
+        name: "Acme",
+        slug: "acme",
+      });
+      expect(parsed.namespace).toBeUndefined();
     });
-    expect(parsed).not.toHaveProperty("namespace");
+
+    it("keeps the namespace the operator chose, verbatim", () => {
+      const parsed = organizationCreate.input.parse({
+        name: "Acme",
+        slug: "acme",
+        namespace: "aintel",
+      });
+      expect(parsed.namespace).toBe("aintel");
+    });
+
+    it.each(["a", "toolong", "a-intel", "ACME", "ac me"])(
+      "rejects %j, which the organizations_namespace_check column refuses",
+      (namespace) => {
+        expect(() =>
+          organizationCreate.input.parse({
+            name: "Acme",
+            slug: "acme",
+            namespace,
+          }),
+        ).toThrow();
+      },
+    );
   });
 });
