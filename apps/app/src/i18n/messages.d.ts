@@ -5224,6 +5224,7 @@ type Messages = {
       spend: string;
       toolCalls: string;
       noSpend: string;
+      spendProvisional: string;
       callCount: string;
     };
     workCi: {

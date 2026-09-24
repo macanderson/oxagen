@@ -151,8 +151,27 @@ const RunCostRollup = z.object({
 });
 export type RunCostRollup = z.infer<typeof RunCostRollup>;
 
-/** `get_run_cost`: null until the rollup has rebuilt the run after its seal. */
-export const RunCost = z.object({ rollup: RunCostRollup.nullable() });
+/**
+ * The per-model figures ingest keeps for a wrapped run before the rollup
+ * reaches it. Priced from the calls' reported cost, so the page labels them
+ * provisional.
+ */
+const RunCostProvisional = z.object({
+  byModel: z.array(RunCostByModel.omit({ tokens: true })),
+  toolCalls: Count,
+  /** The run's last recorded event, which these figures include. */
+  asOf: z.iso.datetime({ offset: true }),
+});
+export type RunCostProvisional = z.infer<typeof RunCostProvisional>;
+
+/**
+ * `get_run_cost`: `rollup` is null until the rollup has rebuilt the run after
+ * its seal; `provisional` fills that gap for a wrapped run.
+ */
+export const RunCost = z.object({
+  rollup: RunCostRollup.nullable(),
+  provisional: RunCostProvisional.nullable().optional(),
+});
 export type RunCost = z.infer<typeof RunCost>;
 
 export const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;

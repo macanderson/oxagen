@@ -2074,6 +2074,53 @@ describe("the work", () => {
       screen.getByText("No cost rollup yet. It is built after the run seals."),
     ).toBeTruthy();
   });
+
+  it("draws a live run's provisional spend by model before the rollup exists, and labels it", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      cost: ok(
+        runCost({
+          rollup: null,
+          provisional: {
+            byModel: [
+              {
+                model: "claude-sonnet-5",
+                provider: "anthropic",
+                calls: 3,
+                cost: {
+                  micros: "2500000",
+                  currency: "USD",
+                  basis: "client_attested",
+                },
+              },
+            ],
+            toolCalls: 6,
+            asOf: "2026-09-23T10:00:00.000Z",
+          },
+        }),
+      ),
+    });
+    const spend = within(screen.getByTestId("run-spend"));
+    expect(spend.getByText("claude-sonnet-5")).toBeTruthy();
+    expect(spend.getByText("3 calls")).toBeTruthy();
+    expect(spend.getByText("$2.50")).toBeTruthy();
+    expect(screen.getByTestId("run-spend-provisional").textContent).toBe(
+      "Provisional until the rollup. Priced from the cost each call reported.",
+    );
+    expect(
+      screen.queryByText("No cost rollup yet. It is built after the run seals."),
+    ).toBeNull();
+  });
+
+  it("draws no provisional label once the rollup exists (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-spend")).toBeTruthy();
+    expect(screen.queryByTestId("run-spend-provisional")).toBeNull();
+  });
 });
 
 describe("issues", () => {

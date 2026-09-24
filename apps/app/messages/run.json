@@ -632,6 +632,7 @@
       "spend": "Spend by area",
       "toolCalls": "Tool calls",
       "noSpend": "No cost rollup yet. It is built after the run seals.",
+      "spendProvisional": "Provisional until the rollup. Priced from the cost each call reported.",
       "callCount": "{count, plural, one {# call} other {# calls}}"
     },
     "workCi": {
