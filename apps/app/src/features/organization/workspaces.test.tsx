@@ -88,7 +88,7 @@ describe("Workspaces", () => {
       "Agents",
       "Owner",
       "Governance",
-      "Actions",
+      "",
     ]);
     expect(panel).toHaveTextContent(
       "Changing which repository is main is an org-owner action with approval, recorded as a security event.",
@@ -105,11 +105,13 @@ describe("Workspaces", () => {
     for (const index of [1, 2, 3, 4, 5]) {
       expect(cells[index]).toHaveTextContent("not recorded");
     }
-    expect(cells[6]).toHaveTextContent("mode not recorded");
+    // The governance cell names the issues that would back it.
+    expect(cells[6]).toHaveTextContent("mode not recorded (#3907)");
+    expect(cells[6]).toHaveTextContent("retention not recorded (#3933)");
     expect(cells[6]).toHaveTextContent("ns core");
     expect(
       cells[6]?.querySelector('[data-governance="not-recorded"]'),
-    ).not.toBeNull();
+    ).toHaveAttribute("data-issue", "3907");
   });
 
   it("opens a workspace the viewer belongs to, and offers Edit and Archive on a live one", async () => {

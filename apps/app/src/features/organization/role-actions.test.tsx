@@ -24,6 +24,7 @@ vi.mock("./actions", () => ({ createRole, deleteRole, setRolePermissions }));
 
 const { permissionEntry, roleRow } = await import("./organization.builders");
 const { DeleteRole, RoleEditor } = await import("./role-actions");
+const { Receipts } = await import("./receipt");
 
 const catalog = [
   permissionEntry(),
@@ -166,6 +167,14 @@ describe("RoleEditor: edit", () => {
       "budget.set",
     ]);
     expect(router.replace).toHaveBeenCalledWith("/acme/roles");
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "was saved. Each holder's permission changes at their next call. Recorded in the audit record.",
+    );
   });
 
   it("names a ceiling refusal and changes nothing (negative)", async () => {
@@ -261,6 +270,14 @@ describe("DeleteRole", () => {
     );
     expect(deleteRole).toHaveBeenCalledWith("acme", free.id);
     expect(router.replace).toHaveBeenCalledWith("/acme/roles");
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "agent.release was deleted. Its definition and grants stay in the audit record.",
+    );
   });
 
   it("names a refusal and deletes nothing (negative)", async () => {

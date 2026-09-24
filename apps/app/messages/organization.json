@@ -351,7 +351,7 @@
         "label": "Which keys",
         "active": "Active",
         "all": "All",
-        "allWithCount": "All ({revoked} revoked)"
+        "allWithCount": "All ({ended} ended)"
       },
       "pager": {
         "label": "Pages of API keys",
@@ -359,7 +359,7 @@
         "previous": "Previous",
         "next": "Next"
       },
-      "emptyFiltered": "Every key in this workspace has been revoked. Choose All to see {revoked, plural, one {it} other {them}}.",
+      "emptyFiltered": "Every key in this workspace has been revoked or has expired. Choose All to see {ended, plural, one {it} other {them}}.",
       "title": "API keys",
       "caption": "each key acts as the person who created it",
       "badge": "postgres · iam + vault",
@@ -823,7 +823,7 @@
       "title": "IdP group mappings",
       "lead": "Map each identity provider group to an organization role. A group with no row grants nothing. A person whose groups match no row loses their organization role at their next SSO sign-in. When a person's groups match more than one row, the highest role wins.",
       "noProviders": "No identity provider yet.",
-      "openSso": "Add one on the Single sign-on tab.",
+      "openSso": "Add one on the Single sign-on page.",
       "provider": "{name} ({domain})",
       "tableLabel": "Group mappings for {name}",
       "empty": "No mappings. Nobody gets a role through this provider.",

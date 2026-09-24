@@ -1,22 +1,20 @@
 // Which slice of a workspace's API keys a request asks for: the workspace, the
-// filter, and the page. All three are query values on the one route
-// (ARCHITECTURE.md §1.2), so a filtered page survives a reload and a shared
-// link, and a value the page does not understand falls back to the default
-// rather than failing the page.
+// filter, the page size and the page. All four are query values on the one
+// route (ARCHITECTURE.md §1.2), so a filtered page survives a reload and a
+// shared link, and a value the page does not understand falls back to the
+// default rather than failing the page.
 //
-// The default hides revoked keys. A revoked key authenticates nothing —
-// `resolveApiKey` never sees the row again — so it is a record of a key, not a
-// key, and leaving it on the roster pushes the unrevoked ones below it. It
-// is still reachable: `show=all` is one link away and the revoked rows come
-// back with their revocation dates, which is how a person answers "was this
-// one ever revoked, and when".
+// The default, Active, shows the keys that still authenticate: not revoked,
+// and not past their expiry at the instant the roster was read. A revoked or
+// expired key is a record of a key, not a key, and leaving it on the roster
+// pushes the live ones below it. It is still reachable: `show=all` is one
+// link away and brings the ended rows back with their dates.
 //
-// The filter is judged on `revokedAt` alone, never on the clock. An expired key
-// stays on the default roster: expiry is a state the row's own clock can cross
-// while the page is open (`key-row.tsx`), and a filter that moved a row out
-// from under a reader as a second ticked over would be a filter that lies. A
-// revocation is recorded and cannot un-happen, so filtering on it gives the
-// same roster on the server and on every later render of it.
+// Expiry is judged at the read instant, the one clock the server render and
+// every later render of it share, never at the ticking clock a row keeps
+// (`key-row.tsx`). So no row leaves the table while a reader looks at it: a key
+// that expires while the page is open stays listed, its own badge turns to
+// expired, and the next read files it under All.
 import type { ApiKey } from "@/data/contracts/org";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
@@ -29,7 +27,7 @@ export const API_KEYS_PAGE = 10;
 /** The Rows choices the design's lists offer; 0 is All. */
 export const API_KEYS_ROWS = [5, 10, 25, 50, 0] as const;
 
-/** `active` hides revoked keys (the default); `all` shows them. */
+/** `active` hides revoked and expired keys (the default); `all` shows them. */
 export const API_KEYS_SHOW = ["active", "all"] as const;
 export type ApiKeysShow = (typeof API_KEYS_SHOW)[number];
 
@@ -104,12 +102,21 @@ export function apiKeysLink(
   });
 }
 
-/** The keys this filter keeps, in the order the read returned them. */
+/** Whether a key still authenticates at `now`: not revoked and not past its expiry. */
+function isActive(key: ApiKey, now: number): boolean {
+  return (
+    key.revokedAt === null &&
+    (key.expiresAt === null || Date.parse(key.expiresAt) > now)
+  );
+}
+
+/** The keys this filter keeps at the read instant `now`, in the order the read returned them. */
 export function filterKeys(
   keys: readonly ApiKey[],
   show: ApiKeysShow,
+  now: number,
 ): readonly ApiKey[] {
-  return show === "all" ? keys : keys.filter((key) => key.revokedAt === null);
+  return show === "all" ? keys : keys.filter((key) => isActive(key, now));
 }
 
 export type ApiKeysPage = {

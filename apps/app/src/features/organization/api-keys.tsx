@@ -21,8 +21,8 @@
 //
 // `list_api_keys` answers the workspace's whole roster, revoked rows included,
 // with no filter and no page of its own. The cut is made here: the page opens
-// on the keys that have not been revoked, hides the revoked ones behind one
-// link, and shows ten rows at a time, or the 5, 25, 50 or All the Rows select
+// on the active keys, hides the revoked and expired ones behind one link, and
+// shows ten rows at a time, or the 5, 25, 50 or All the Rows select
 // picks, under a numbered pager. All three are query values on this one route
 // (`api-keys-view.ts`), so a filtered page survives a reload and a shared link.
 import { useLocale, useTranslations } from "next-intl";
@@ -396,7 +396,7 @@ function Keys({
    */
   archived: boolean;
   now: number;
-  /** Whether the revoked keys are on the roster; they are not, by default. */
+  /** Whether the revoked and expired keys are on the roster; they are not, by default. */
   show: ApiKeysShow;
   /** Rows per page; 0 is All. */
   rows: number;
@@ -408,12 +408,12 @@ function Keys({
   archivedNote: ReactNode;
 }) {
   const t = useTranslations("organization.apiKeys");
-  const kept = filterKeys(keys, show);
+  const kept = filterKeys(keys, show, now);
   const page = pageOfKeys(kept, offset, rows);
   // How many rows the default filter is holding back. It names the link that
   // brings them, so "show the revoked ones" is never a guess about whether
   // there are any.
-  const revoked = keys.length - filterKeys(keys, "active").length;
+  const ended = keys.length - filterKeys(keys, "active", now).length;
   // Every id the server just listed, not just this page's: the client island
   // drops a shown secret the moment its key appears here, and a key minted
   // while the roster was filtered or paged past the first is somewhere in this
@@ -453,7 +453,7 @@ function Keys({
             ws={ws}
             show={show}
             rows={rows}
-            revoked={revoked}
+            ended={ended}
           />
           {/* A new page size starts again from the first page: page four of
               ten rows is not page four of fifty. */}
@@ -471,12 +471,12 @@ function Keys({
         <p
           className={`${emptyLine} ${panelBody}`}
           data-state={
-            show === "all" || revoked === 0 ? "empty" : "empty-filtered"
+            show === "all" || ended === 0 ? "empty" : "empty-filtered"
           }
         >
-          {show === "all" || revoked === 0
+          {show === "all" || ended === 0
             ? t("empty")
-            : t("emptyFiltered", { revoked })}
+            : t("emptyFiltered", { ended })}
         </p>
       ) : (
         <>
@@ -532,15 +532,15 @@ function RevokedFilter({
   ws,
   show,
   rows,
-  revoked,
+  ended,
 }: {
   org: string;
   ws: string;
   show: ApiKeysShow;
   /** The page size in force, which a filter change keeps. */
   rows: number;
-  /** How many revoked keys the roster holds, for the label. */
-  revoked: number;
+  /** How many revoked or expired keys the roster holds, for the label. */
+  ended: number;
 }) {
   const t = useTranslations("organization.apiKeys.filter");
   return (
@@ -554,8 +554,8 @@ function RevokedFilter({
           aria-current={show === option ? "page" : undefined}
           className="inline-flex min-h-9 max-md:min-h-11 items-center rounded-md border border-transparent px-3 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-[current=page]:border-border aria-[current=page]:text-foreground"
         >
-          {option === "all" && revoked > 0
-            ? t("allWithCount", { revoked })
+          {option === "all" && ended > 0
+            ? t("allWithCount", { ended })
             : t(option)}
         </SafeLink>
       ))}

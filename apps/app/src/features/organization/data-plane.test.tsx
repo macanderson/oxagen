@@ -75,10 +75,19 @@ describe("the segmented control", () => {
       "Air-gapped mode",
       "Licence",
       "Next bundle",
-      "Outbound connections",
     ]) {
       expect(plane()).toHaveTextContent(fact);
     }
+    // Outbound connections is a table of its own, as the design draws it.
+    const outbound = within(plane()).getByRole("table", {
+      name: "Outbound connections in use",
+    });
+    expect(
+      within(outbound)
+        .getAllByRole("columnheader")
+        .map((th) => th.textContent),
+    ).toEqual(["Destination", "Why", "State"]);
+    expect(outbound).toHaveTextContent("not recorded");
   });
 });
 
@@ -118,8 +127,14 @@ describe("the mode's facts", () => {
       ),
     );
     const shown = document.querySelector<HTMLElement>("[data-plane-shown]");
-    expect(shown).toHaveTextContent("db.acme.internal");
-    expect(shown).toHaveTextContent("acme_tenant · schema 20260920");
+    expect(shown).toHaveTextContent("Tenant data in Postgres");
+    expect(shown).toHaveTextContent(
+      "db.acme.internal / acme_tenant · schema 20260920",
+    );
+    expect(shown).toHaveTextContent(
+      "Identity and billing in Postgresstay on the shared plane by design",
+    );
+    expect(shown).not.toHaveTextContent("Postgres host");
     expect(
       within(modes()).getByRole("button", { name: "Dedicated · current" }),
     ).toHaveAttribute("aria-pressed", "true");

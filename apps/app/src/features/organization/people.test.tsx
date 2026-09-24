@@ -137,8 +137,15 @@ describe("People", () => {
       "Two-factor",
       "Last seen",
       "Status",
-      "Actions",
+      // The row actions column has an empty header, as the design draws it,
+      // and names itself to assistive tech.
+      "",
     ]);
+    expect(
+      within(within(panel).getByRole("table", { name: "People" }))
+        .getAllByRole("columnheader")
+        .at(-1),
+    ).toHaveAccessibleName("Actions");
     expect(within(panel).getByLabelText("Status")).toBeInTheDocument();
     // The design's Two-factor filter is drawn, and disabled with the reason,
     // because no contract records a member's method to filter on.
@@ -193,6 +200,27 @@ describe("People", () => {
     expect(dialog).toHaveTextContent("not recorded");
   });
 
+  it("draws the member dialog's Role per workspace, Agents they operate and Mandates, not recorded (#3932)", async () => {
+    await renderPeople();
+    const row = rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a");
+    await userEvent.click(within(row).getByRole("button", { name: "Open" }));
+    const dialog = screen.getByTestId("member-usr_7k2m9q4x8r1t5v3w6y0z2a");
+    expect(
+      within(dialog)
+        .getAllByRole("heading", { level: 3 })
+        .map((h) => h.textContent),
+    ).toEqual(["Role per workspace", "Agents they operate", "Mandates"]);
+    expect(
+      within(dialog).getByRole("table", { name: "Role per workspace" }),
+    ).toHaveTextContent("not recorded");
+    expect(dialog.querySelector("[data-member-agents]")).toHaveTextContent(
+      "not recorded",
+    );
+    expect(dialog).toHaveTextContent("Granted");
+    expect(dialog).toHaveTextContent("Held by their agents");
+    await expectNoAxe(dialog);
+  });
+
   it("counts Roles in use from the People table, with each role's description", async () => {
     await renderPeople();
     const panel = screen.getByRole("region", { name: "Roles in use" });
@@ -213,7 +241,7 @@ describe("People", () => {
     expect(
       screen.getByText("This organization has no members."),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("table", { name: "People" })).toBeNull();
+    expect(document.querySelectorAll("[data-row]")).toHaveLength(0);
   });
 });
 
@@ -236,14 +264,7 @@ describe("Invitations", () => {
       headers(
         within(panel).getByRole("table", { name: "Pending invitations" }),
       ),
-    ).toEqual([
-      "Email",
-      "Role offered",
-      "Invited by",
-      "Sent",
-      "Expires",
-      "Actions",
-    ]);
+    ).toEqual(["Email", "Role offered", "Invited by", "Sent", "Expires", ""]);
   });
 
   it("prints each invitation with Invited by not recorded, and Resend and Revoke", async () => {

@@ -164,13 +164,16 @@ describe("loaded", () => {
         "Model funding and routes",
         "Data plane",
         "API keys",
-        "Cost centers",
-        "Single sign-on",
       ]);
       expect(tabs[0]).toHaveAttribute("aria-current", "page");
       expect(tabs[2]).toHaveAttribute("href", "/acme?tab=invitations");
       expect(tabs[5]).toHaveAttribute("href", "/acme?tab=dataPlane");
       expect(screen.getByTestId("tab-body")).toBeInTheDocument();
+      // A write's receipt lands in the frame's live region, whichever tab made it.
+      expect(screen.getByTestId("organization-receipts")).toHaveAttribute(
+        "aria-live",
+        "polite",
+      );
       expect(body).toHaveBeenCalledWith({
         members: roster,
         roles: loaded.roles.ok ? loaded.roles.value : null,

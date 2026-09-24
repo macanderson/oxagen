@@ -11,6 +11,7 @@
 // not. With no workspace the viewer may enter, the section says so and reads
 // nothing.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiKey, Workspace, WorkspaceList } from "@/data/contracts/org";
@@ -25,8 +26,11 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+const { router } = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+}));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => router,
 }));
 vi.mock("./api-key-actions", () => ({
   createApiKey: vi.fn(),
@@ -192,7 +196,7 @@ describe("the API keys panel", () => {
       "Last used",
       "Actions 30d",
       "Expires",
-      "Actions",
+      "",
     ]);
   });
 
@@ -334,31 +338,35 @@ const rowIds = () =>
     row.getAttribute("data-api-key"),
   );
 
-describe("the revoked keys the page hides", () => {
-  it("opens on the unrevoked keys, with no revoked row on the table", async () => {
-    // A revoked key authenticates nothing — resolveApiKey never sees the row
-    // again — so it is a record of a key, not a key, and it does not push the
-    // unrevoked ones below it. An expired key is not revoked and stays.
+describe("the ended keys the page hides", () => {
+  it("opens on the active keys, with no revoked or expired row on the table", async () => {
+    // A revoked or expired key authenticates nothing, so it is a record of a
+    // key, not a key, and it does not push the active ones below it.
     await renderApiKeys(readOk([live, expired, revoked]));
-    expect(rowIds()).toEqual([live.id, expired.id]);
+    expect(rowIds()).toEqual([live.id]);
     expect(keysTable()).not.toHaveTextContent("Laptop");
   });
 
-  it("keeps an expired key on the default roster, because its state is a clock away and not a record", async () => {
-    // Expiry is crossed by the row's own running clock (`key-row.tsx`). A
-    // filter on it would move a row out from under a reader as a second ticked
-    // over; revocation is recorded and cannot un-happen.
+  it("files a key that expired before the read under All, judged at the read instant", async () => {
+    // Expiry is judged at the instant the roster was read, the clock the
+    // server render shares with every later render, so no row leaves the
+    // table while it is open.
     await renderApiKeys(readOk([expired]));
-    expect(rowIds()).toEqual([expired.id]);
+    expect(
+      document.querySelector("[data-state=empty-filtered]"),
+    ).toHaveTextContent(
+      "Every key in this workspace has been revoked or has expired. Choose All to see it.",
+    );
+    expect(parseApiKeysView({}).show).toBe("active");
   });
 
   it("marks Active as the current filter and offers All, counting what it holds back", async () => {
     const view = await renderApiKeys(readOk([live, revoked]));
     const active = within(filterNav()).getByRole("link", {
-      name: "Not revoked",
+      name: "Active",
     });
     const all = within(filterNav()).getByRole("link", {
-      name: "All (1 revoked)",
+      name: "All (1 ended)",
     });
     expect(active).toHaveAttribute("aria-current", "page");
     expect(active).toHaveAttribute(
@@ -384,27 +392,33 @@ describe("the revoked keys the page hides", () => {
     await renderApiKeys(readOk([live, revoked]), "owner", ALL);
     expect(rowIds()).toEqual([live.id, revoked.id]);
     expect(
-      within(filterNav()).getByRole("link", { name: "All (1 revoked)" }),
+      within(filterNav()).getByRole("link", { name: "All (1 ended)" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
       within(rowFor(revoked)).getByText("revoked").closest("[data-status]"),
     ).toHaveAttribute("data-status", "revoked");
   });
 
-  it("names the filter for the predicate it has, not for a state it cannot see (negative)", async () => {
-    // `filterKeys` keeps a row on `revokedAt` alone, so an expired key stays.
-    // A filter called "Active" over a row whose own status chip reads
-    // "expired" is the page contradicting itself in two places at once.
+  it("names the filter Active and lists no row whose badge says otherwise (negative)", async () => {
+    // A filter called Active over a row whose own status reads expired would
+    // be the page contradicting itself, so Active keeps only live keys.
     await renderApiKeys(readOk([live, expired, revoked]));
     expect(
-      within(filterNav()).queryByRole("link", { name: "Active" }),
-    ).toBeNull();
-    expect(
-      within(filterNav()).getByRole("link", { name: "Not revoked" }),
+      within(filterNav()).getByRole("link", { name: "Active" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
-      within(rowFor(expired)).getByText("expired").closest("[data-status]"),
-    ).toHaveAttribute("data-status", "expired");
+      within(filterNav()).queryByRole("link", { name: "Not revoked" }),
+    ).toBeNull();
+    expect(keysTable().querySelector('[data-status="expired"]')).toBeNull();
+    expect(keysTable().querySelector('[data-status="revoked"]')).toBeNull();
+  });
+
+  it("gives the filter links a 44px target on a phone", async () => {
+    await renderApiKeys(readOk([live, revoked]));
+    for (const link of within(filterNav()).getAllByRole("link")) {
+      expect(link).toHaveAttribute("data-touch-target");
+      expect(link.className).toContain("max-md:min-h-11");
+    }
   });
 
   it("falls back to the active keys for a filter it does not understand (negative)", () => {
@@ -455,12 +469,48 @@ describe("empty", () => {
 });
 
 describe("paging a roster larger than a page", () => {
-  it("shows no pager while one page holds the whole roster (negative)", async () => {
+  it("shows the range and one page, with no Previous or Next, while one page holds the roster (negative)", async () => {
     await renderApiKeys(readOk(manyKeys(API_KEYS_PAGE)));
     expect(rowIds()).toHaveLength(API_KEYS_PAGE);
+    expect(pagerNav()).toHaveTextContent(`1–${PAGE} of ${PAGE}`);
     expect(
-      screen.queryByRole("navigation", { name: "Pages of API keys" }),
-    ).toBeNull();
+      within(pagerNav())
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["1"]);
+  });
+
+  it("offers the design's Rows choices and carries the choice in the URL", async () => {
+    await renderApiKeys(readOk(manyKeys(API_KEYS_PAGE + 5)));
+    const rowsSelect = screen.getByLabelText("Rows");
+    expect(
+      within(rowsSelect)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["5", "10", "25", "50", "All"]);
+    await userEvent.selectOptions(rowsSelect, "25");
+    expect(router.push).toHaveBeenCalledWith(
+      "/acme/api-keys?workspace=core-platform&rows=25",
+    );
+  });
+
+  it("shows every key on one page when Rows is All", async () => {
+    const keys = manyKeys(API_KEYS_PAGE + 5);
+    await renderApiKeys(readOk(keys), "owner", { ...ACTIVE, rows: 0 });
+    expect(rowIds()).toHaveLength(keys.length);
+    expect(parseApiKeysView({ rows: "all" }).rows).toBe(0);
+    expect(parseApiKeysView({ rows: "7" }).rows).toBe(API_KEYS_PAGE);
+  });
+
+  it("numbers the pages and marks the current one", async () => {
+    await renderApiKeys(readOk(manyKeys(API_KEYS_PAGE + 5)));
+    const one = within(pagerNav()).getByRole("link", { name: "1" });
+    const two = within(pagerNav()).getByRole("link", { name: "2" });
+    expect(one).toHaveAttribute("aria-current", "page");
+    expect(two).toHaveAttribute(
+      "href",
+      `/acme/api-keys?workspace=core-platform&offset=${PAGE}`,
+    );
   });
 
   // 20 seconds, not the 5-second default. This is the only test in the file
@@ -516,9 +566,8 @@ describe("paging a roster larger than a page", () => {
     const keys = [...manyRevoked(API_KEYS_PAGE), ...manyKeys(5)];
     await renderApiKeys(readOk(keys));
     expect(rowIds()).toHaveLength(5);
-    expect(
-      screen.queryByRole("navigation", { name: "Pages of API keys" }),
-    ).toBeNull();
+    expect(pagerNav()).toHaveTextContent("1–5 of 5");
+    expect(within(pagerNav()).queryByRole("link", { name: "Next" })).toBeNull();
   });
 
   it("clamps an offset past the end onto the last page that exists (negative)", async () => {

@@ -34,6 +34,7 @@ vi.mock("./api-key-actions", () => ({
 }));
 
 const { CreateKeyDialog, KeyRowActions } = await import("./create-key-dialog");
+const { Receipts } = await import("./receipt");
 
 /**
  * The view the row was read on: the third page of the revoked-keys-included
@@ -454,6 +455,15 @@ describe("revoke", () => {
     expect(router.replace).toHaveBeenCalledWith(HERE);
     expect(router.refresh).toHaveBeenCalledOnce();
     expect(screen.queryByTestId("api-key-secret")).toBeNull();
+    // The revoke leaves its receipt for the page it reloads.
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "CI runner was revoked. Its access ends at the next call. Recorded in the audit record.",
+    );
   });
 
   it("names a key that was already revoked and reloads nothing (negative)", async () => {

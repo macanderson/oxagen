@@ -200,7 +200,39 @@ describe("the Roles panel", () => {
     expect(
       screen.getByText("This organization has no roles."),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("table", { name: "Roles" })).toBeNull();
+    expect(document.querySelectorAll("[data-row]")).toHaveLength(0);
+  });
+
+  it("lists each creator and date in the Origin filter, then built-in", async () => {
+    await renderRoles();
+    const origin = screen.getByLabelText("Origin");
+    const options = within(origin)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(options[0]).toBe("All · Origin");
+    expect(options).toContain("Priya Natarajan · Aug 30, 2026");
+    expect(options.at(-1)).toBe("built-in");
+    expect(options).not.toContain("custom");
+  });
+
+  it("narrows the roles to one creator's", async () => {
+    await renderRoles();
+    await userEvent.selectOptions(
+      screen.getByLabelText("Origin"),
+      "Priya Natarajan · Aug 30, 2026",
+    );
+    expect(rowOf("rol_7k2m9q4x8r1t5v3w6y0z2a")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-row="rol_9z8y7x6w5v4t3s2r1q0p9n"]'),
+    ).toBeNull();
+  });
+
+  it("links the Single sign-on page from the IdP group mappings", async () => {
+    await renderRoles();
+    expect(screen.getByTestId("sso-settings-link")).toHaveAttribute(
+      "href",
+      "/acme/sso",
+    );
   });
 });
 
@@ -235,7 +267,7 @@ describe("IdP group mappings", () => {
     const section = screen.getByRole("region", { name: "IdP group mappings" });
     expect(
       within(section).getByRole("link", {
-        name: "Add one on the Single sign-on tab.",
+        name: "Add one on the Single sign-on page.",
       }),
     ).toHaveAttribute("href", "/acme/sso");
   });

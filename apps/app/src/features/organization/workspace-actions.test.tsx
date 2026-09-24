@@ -24,6 +24,7 @@ vi.mock("./actions", () => ({
 }));
 
 const { workspaceRow } = await import("./organization.builders");
+const { Receipts } = await import("./receipt");
 const { ArchiveWorkspace, CreateWorkspace, EditWorkspace } = await import(
   "./workspace-actions"
 );
@@ -79,6 +80,15 @@ describe("CreateWorkspace", () => {
       mainRepo: "acme/research",
     });
     expect(router.replace).toHaveBeenCalledWith("/acme/research");
+    // The write leaves its receipt in the Organization frame's live region.
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "The workspace was created. Recorded in the audit record.",
+    );
   });
 
   // The person names a repository and nothing else: the hint says the
@@ -120,7 +130,7 @@ describe("CreateWorkspace", () => {
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual([
-      "Leave unchanged (the mode in force is not read here)",
+      "Leave unchanged",
       "solo: Any workspace member merges, the author included.",
       "team: An org Owner or Admin, or a workspace Owner, other than the author merges.",
       "regulated: An org Owner or Admin other than the author merges, recorded as the accountable approver.",
@@ -128,6 +138,11 @@ describe("CreateWorkspace", () => {
     expect(within(dialog).getByLabelText("Retention mode")).toHaveValue(
       "not recorded",
     );
+    // The design asks for a namespace; create_workspace derives it from the
+    // slug, so the field is read-only and says so.
+    const namespace = within(dialog).getByLabelText("Namespace");
+    expect(namespace).toBeDisabled();
+    expect(namespace).toHaveAccessibleDescription(/Derived from the slug/);
   });
 
   it.each([
