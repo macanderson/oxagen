@@ -138,7 +138,11 @@ export function enrichmentFailureReason(error: unknown): string {
   if (text === "Run enrichment was disabled") return "disabled";
   if (text === "Stella returned no run account") return "empty_account";
   if (name === "ZodError" || name === "SyntaxError") return "invalid_account";
-  if (name === "TimeoutError" || name === "AbortError" || /timed? ?out/iu.test(text))
+  if (
+    name === "TimeoutError" ||
+    name === "AbortError" ||
+    /timed? ?out/iu.test(text)
+  )
     return "timeout";
   if (
     /free tier|does not have access|unauthori[sz]ed|forbidden|insufficient|quota|\b40[123]\b/iu.test(

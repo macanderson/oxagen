@@ -3,6 +3,7 @@ import {
   evaluatePreToolUse,
   globToRegex,
   parseRule,
+  pollEtag,
   ruleMatches,
   verifyBundle,
 } from "./bundle";
@@ -228,14 +229,48 @@ describe("PreToolUse evaluation", () => {
     ).toBe("session_paused");
   });
 
-  it("fails closed on an unverified bundle in enforce mode and allows in observe", () => {
+  it("on an unverified bundle allows read-only tools and denies the rest", () => {
     expect(
-      evaluatePreToolUse({ ...base, toolName: "Read", bundleVerified: false }),
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Bash",
+        toolInput: { command: "rm -rf x" },
+        bundleVerified: false,
+      }),
     ).toMatchObject({
       decision: "deny",
       reason_code: "bundle_unverified",
+      read_only: false,
     });
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Read",
+        toolInput: { file_path: "/repo/a" },
+        bundleVerified: false,
+      }),
+    ).toMatchObject({
+      decision: "allow",
+      evaluated: "defer",
+      reason_code: "bundle_unverified",
+      read_only: true,
+    });
+  });
+
+  it("does not believe the mode an unverified bundle claims", () => {
+    // The defect this covers (#3944): an unverified bundle claiming observe
+    // mode answered allow for every tool, so editing `mode` in host.json was
+    // enough to switch enforcement off.
     const observe = signer.sign(unsignedBundle({ mode: "observe" }));
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        bundle: observe,
+        toolName: "Bash",
+        toolInput: { command: "git push origin main" },
+        bundleVerified: false,
+      }),
+    ).toMatchObject({ decision: "deny", reason_code: "bundle_unverified" });
     expect(
       evaluatePreToolUse({
         ...base,
@@ -243,9 +278,31 @@ describe("PreToolUse evaluation", () => {
         toolName: "Read",
         bundleVerified: false,
       }),
+    ).toMatchObject({ decision: "allow", evaluated: "defer" });
+  });
+
+  it("does not believe the tool declarations an unverified bundle carries", () => {
+    // Declaring Bash read-only in an unsigned file must not walk it past the
+    // unverified check, the staleness check or anything after them.
+    const forged = signer.sign(
+      unsignedBundle({
+        mode: "observe",
+        tools: { Bash: { risk_grade: "low", read_only: true } },
+      }),
+    );
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        bundle: forged,
+        toolName: "Bash",
+        toolInput: { command: "make" },
+        bundleVerified: false,
+      }),
     ).toMatchObject({
-      decision: "allow",
-      evaluated: "defer",
+      decision: "deny",
+      reason_code: "bundle_unverified",
+      read_only: false,
+      risk_grade: "medium",
     });
   });
 
@@ -357,7 +414,44 @@ describe("PreToolUse evaluation", () => {
     });
   });
 
-  it("applies deny, then allow, then ask, then falls through", () => {
+  it("checks ask rules before allow rules, as Claude Code does", () => {
+    // The defect this covers (#3944): allow was checked before ask, so a
+    // broad allow such as `Bash(*)` silenced every narrower ask rule. Claude
+    // Code's own precedence is deny, then ask, then allow.
+    const layered = signer.sign(
+      unsignedBundle({
+        permissions: {
+          allow: ["Bash(*)"],
+          deny: ["Bash(git push --force*)"],
+          ask: ["Bash(git push*)"],
+        },
+      }),
+    );
+    const run = (command: string) =>
+      evaluatePreToolUse({
+        ...base,
+        bundle: layered,
+        toolName: "Bash",
+        toolInput: { command },
+      });
+    expect(run("git push origin main")).toMatchObject({
+      decision: "ask",
+      rule: "Bash(git push*)",
+      reason_code: "rule_ask",
+    });
+    expect(run("git push --force origin main")).toMatchObject({
+      decision: "deny",
+      rule: "Bash(git push --force*)",
+      reason_code: "rule_deny",
+    });
+    expect(run("make")).toMatchObject({
+      decision: "allow",
+      rule: "Bash(*)",
+      reason_code: "rule_allow",
+    });
+  });
+
+  it("applies deny, then ask, then allow, then falls through", () => {
     expect(
       evaluatePreToolUse({
         ...base,
@@ -509,18 +603,19 @@ describe("PreToolUse evaluation for a mandate that requires the contained tier (
   });
 
   it("reports an unverified bundle as unverified first", () => {
-    // Enforce: the unverified bundle already fails closed, and the reason
-    // says why rather than naming a requirement nobody could verify.
+    // A mutating tool on an unverified bundle already fails closed, and the
+    // reason says why rather than naming a requirement nobody could verify.
     expect(
       evaluatePreToolUse({
         ...base,
-        toolName: "Read",
+        toolName: "Bash",
+        toolInput: { command: "make" },
         bundleVerified: false,
         containmentUnmet: true,
       }),
     ).toMatchObject({ decision: "deny", reason_code: "bundle_unverified" });
-    // Observe: an unverified bundle allows, and an unverifiable containment
-    // requirement does not turn that into a deny.
+    // A read-only tool on an unverified bundle is allowed, and an
+    // unverifiable containment requirement does not turn that into a deny.
     const observe = signer.sign(
       unsignedBundle({ mode: "observe", containment: { required: true } }),
     );
@@ -663,5 +758,49 @@ describe("a rule written for Bash reaches Cursor's Shell", () => {
         toolInput: { command: "git status" },
       }),
     ).toMatchObject({ risk_grade: "high", read_only: false });
+  });
+});
+
+describe("poll etag", () => {
+  // The defect this covers (#3944): an unchanged mandate answers
+  // `not_modified` for as long as the host sends its etag, so the signed copy
+  // on disk never renews. The daemon's confirmation lives in memory, so after
+  // a restart, or for the hook while the daemon is down, a quiet mandate read
+  // as stale a day after its last edit and every mutating tool was denied.
+  const signer = bundleSigner();
+  const day = signer.sign(
+    unsignedBundle({
+      issued_at: "2026-09-10T00:00:00.000Z",
+      expires_at: "2026-09-11T00:00:00.000Z",
+    }),
+  );
+
+  it("sends the etag while the signed copy is in the first half of its window", () => {
+    expect(
+      pollEtag(day, Date.parse("2026-09-10T00:00:00.000Z")),
+    ).toBe("etag-3");
+    expect(
+      pollEtag(day, Date.parse("2026-09-10T11:59:59.999Z")),
+    ).toBe("etag-3");
+  });
+
+  it("drops the etag past half the window, so the mandate comes back re-signed", () => {
+    expect(
+      pollEtag(day, Date.parse("2026-09-10T12:00:00.000Z")),
+    ).toBeUndefined();
+    expect(
+      pollEtag(day, Date.parse("2026-09-12T00:00:00.000Z")),
+    ).toBeUndefined();
+  });
+
+  it("asks for a fresh copy when the timestamps describe no window", () => {
+    const broken = signer.sign(
+      unsignedBundle({
+        issued_at: "2026-09-11T00:00:00.000Z",
+        expires_at: "2026-09-10T00:00:00.000Z",
+      }),
+    );
+    expect(pollEtag(broken, NOW)).toBeUndefined();
+    expect(pollEtag({ ...day, issued_at: "not a date" }, NOW)).toBeUndefined();
   });
 });

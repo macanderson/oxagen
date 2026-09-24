@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canaryIsVisible,
   CANARY_EVENT_NAME,
+  canaryQueryUrl,
   checkKeyPosture,
+  unseenCanaryComplaint,
 } from "./inngest-verify";
 
 describe("canaryIsVisible", () => {
@@ -53,6 +55,39 @@ describe("canaryIsVisible", () => {
 
   it("is false for an empty environment", () => {
     expect(canaryIsVisible([], "01CANARY")).toBe(false);
+  });
+});
+
+describe("canaryQueryUrl", () => {
+  // Unfiltered, the endpoint returns the newest events of every name, and a
+  // busy production environment pushes the canary out of that page between
+  // polls. The deploy of 08ed1170e failed that way with keys that had passed
+  // 23 minutes earlier.
+  it("asks only for canaries, received since shortly before this one was sent", () => {
+    const url = new URL(canaryQueryUrl(new Date("2026-09-24T15:35:05.000Z")));
+    expect(url.origin + url.pathname).toBe("https://api.inngest.com/v1/events");
+    expect(url.searchParams.get("name")).toBe(CANARY_EVENT_NAME);
+    expect(url.searchParams.get("received_after")).toBe(
+      "2026-09-24T15:30:05.000Z",
+    );
+    expect(url.searchParams.get("limit")).toBe("100");
+  });
+});
+
+describe("unseenCanaryComplaint", () => {
+  it("reports a key mismatch when the API answered and the canary never appeared", () => {
+    const message = unseenCanaryComplaint("01CANARY", null, true);
+    expect(message).toContain("01CANARY");
+    expect(message).toContain("belong to different Inngest environments");
+  });
+
+  // Every query failing says nothing about the keys. Calling it a mismatch
+  // would send someone to rotate a pair that works.
+  it("does not blame the keys when no query was answered", () => {
+    const message = unseenCanaryComplaint("01CANARY", 503, false);
+    expect(message).toContain("last status 503");
+    expect(message).toContain("whether the keys agree is unknown");
+    expect(message).not.toContain("different Inngest environments");
   });
 });
 

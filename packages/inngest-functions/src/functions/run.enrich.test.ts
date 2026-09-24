@@ -347,7 +347,11 @@ describe("a failed enrichment", () => {
     state.handlers.get("failure")!({
       event: {
         name: "inngest/function.failed",
-        data: { function_id: "oxagen-runner-run.enrich", error, event: { data: eventData } },
+        data: {
+          function_id: "oxagen-runner-run.enrich",
+          error,
+          event: { data: eventData },
+        },
       },
       step: { run: (_name: string, fn: () => unknown) => fn() },
     });
@@ -398,15 +402,105 @@ describe("which runs the sweep queues", () => {
   const now = new Date("2026-09-24T12:00:00Z");
   const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000);
   it.each([
-    ["never observed", { observedAt: null, revision: null, error: null, changed: true, digest: null }, true],
-    ["observed with no revision", { observedAt: minutesAgo(1), revision: null, error: null, changed: true, digest: "d" }, true],
-    ["unchanged since its account", { observedAt: minutesAgo(1), revision: "r", error: null, changed: false, digest: "d" }, false],
-    ["changed since its account", { observedAt: minutesAgo(1), revision: "r", error: null, changed: true, digest: "d" }, true],
-    ["partial and five minutes old", { observedAt: minutesAgo(6), revision: "r", error: null, changed: false, digest: "partial:d" }, true],
-    ["partial and fresh", { observedAt: minutesAgo(1), revision: "r", error: null, changed: false, digest: "partial:d" }, false],
-    ["failed a minute ago", { observedAt: minutesAgo(1), revision: "r", error: "model_refused", changed: false, digest: null }, false],
-    ["failed, then got new frames", { observedAt: minutesAgo(1), revision: "r", error: "model_refused", changed: true, digest: null }, true],
-    ["failed half an hour ago", { observedAt: minutesAgo(31), revision: "r", error: "model_refused", changed: false, digest: null }, true],
+    [
+      "never observed",
+      {
+        observedAt: null,
+        revision: null,
+        error: null,
+        changed: true,
+        digest: null,
+      },
+      true,
+    ],
+    [
+      "observed with no revision",
+      {
+        observedAt: minutesAgo(1),
+        revision: null,
+        error: null,
+        changed: true,
+        digest: "d",
+      },
+      true,
+    ],
+    [
+      "unchanged since its account",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: null,
+        changed: false,
+        digest: "d",
+      },
+      false,
+    ],
+    [
+      "changed since its account",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: null,
+        changed: true,
+        digest: "d",
+      },
+      true,
+    ],
+    [
+      "partial and five minutes old",
+      {
+        observedAt: minutesAgo(6),
+        revision: "r",
+        error: null,
+        changed: false,
+        digest: "partial:d",
+      },
+      true,
+    ],
+    [
+      "partial and fresh",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: null,
+        changed: false,
+        digest: "partial:d",
+      },
+      false,
+    ],
+    [
+      "failed a minute ago",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: "model_refused",
+        changed: false,
+        digest: null,
+      },
+      false,
+    ],
+    [
+      "failed, then got new frames",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: "model_refused",
+        changed: true,
+        digest: null,
+      },
+      true,
+    ],
+    [
+      "failed half an hour ago",
+      {
+        observedAt: minutesAgo(31),
+        revision: "r",
+        error: "model_refused",
+        changed: false,
+        digest: null,
+      },
+      true,
+    ],
   ] as const)("%s: due is %s", async (_label, row, due) => {
     const { dueForEnrichment } = await import("./run.enrich");
     const { schema } = await import("@oxagen/database");
@@ -443,20 +537,43 @@ function evaluateDue(
       ),
       JSON.stringify(row.changed),
     )
-    .replace(new RegExp(`${escapeRegExp(col("summary_observed_at"))} is null`, "gu"), JSON.stringify(row.observedAt === null))
-    .replace(new RegExp(`${escapeRegExp(col("summary_observed_revision"))} is null`, "gu"), JSON.stringify(row.revision === null))
-    .replace(new RegExp(`${escapeRegExp(col("summary_error"))} is null`, "gu"), JSON.stringify(row.error === null))
-    .replace(new RegExp(`${escapeRegExp(col("summary_error"))} is not null`, "gu"), JSON.stringify(row.error !== null))
     .replace(
-      new RegExp(`${escapeRegExp(col("summary_input_digest"))} like \\$(\\d+)`, "gu"),
+      new RegExp(`${escapeRegExp(col("summary_observed_at"))} is null`, "gu"),
+      JSON.stringify(row.observedAt === null),
+    )
+    .replace(
+      new RegExp(
+        `${escapeRegExp(col("summary_observed_revision"))} is null`,
+        "gu",
+      ),
+      JSON.stringify(row.revision === null),
+    )
+    .replace(
+      new RegExp(`${escapeRegExp(col("summary_error"))} is null`, "gu"),
+      JSON.stringify(row.error === null),
+    )
+    .replace(
+      new RegExp(`${escapeRegExp(col("summary_error"))} is not null`, "gu"),
+      JSON.stringify(row.error !== null),
+    )
+    .replace(
+      new RegExp(
+        `${escapeRegExp(col("summary_input_digest"))} like \\$(\\d+)`,
+        "gu",
+      ),
       (_m, i: string) =>
         JSON.stringify(
           row.digest !== null &&
-            row.digest.startsWith(String(params[Number(i) - 1]).replace(/%$/u, "")),
+            row.digest.startsWith(
+              String(params[Number(i) - 1]).replace(/%$/u, ""),
+            ),
         ),
     )
     .replace(
-      new RegExp(`${escapeRegExp(col("summary_observed_at"))} < \\$(\\d+)`, "gu"),
+      new RegExp(
+        `${escapeRegExp(col("summary_observed_at"))} < \\$(\\d+)`,
+        "gu",
+      ),
       (_m, i: string) =>
         JSON.stringify(
           row.observedAt !== null &&

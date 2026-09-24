@@ -1536,30 +1536,29 @@ export function createRunListHandler(
       ? await deps.readEnrichmentEnabled(scope)
       : true;
     return {
-      runs: merged.items
-        .map((item) => {
-          const run =
-            item.kind === "ledger"
-              ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
-              : toTachoRunItem(item.row, costs.get(item.id));
-          return {
-            ...run,
-            enrichmentEnabled: enabled,
-            ...(enabled
-              ? {}
-              : {
-                  // Turning automatic accounts off hides what Oxagen wrote,
-                  // not the title the harness gave the session.
-                  name:
-                    item.kind === "tacho"
-                      ? (item.row.session.harnessTitle ?? null)
-                      : null,
-                  summary: null,
-                  canSummarize: false,
-                  enrichmentError: undefined,
-                }),
-          };
-        }),
+      runs: merged.items.map((item) => {
+        const run =
+          item.kind === "ledger"
+            ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
+            : toTachoRunItem(item.row, costs.get(item.id));
+        return {
+          ...run,
+          enrichmentEnabled: enabled,
+          ...(enabled
+            ? {}
+            : {
+                // Turning automatic accounts off hides what Oxagen wrote,
+                // not the title the harness gave the session.
+                name:
+                  item.kind === "tacho"
+                    ? (item.row.session.harnessTitle ?? null)
+                    : null,
+                summary: null,
+                canSummarize: false,
+                enrichmentError: undefined,
+              }),
+        };
+      }),
       nextCursor: merged.nextCursor,
     };
   };

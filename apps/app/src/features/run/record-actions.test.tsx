@@ -24,7 +24,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
 
-const { RecordActions } = await import("./record-actions");
+const { ExportAction, SummarizeAction } = await import("./record-actions");
 
 // The dialog's poll timing, mirrored from record-actions.tsx: the first read
 // at 2s, each wait 1.5 times the last, and reading stops after 120s.
@@ -81,13 +81,11 @@ async function queueExport() {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   const view = render(
     <IntlProvider>
-      <RecordActions
+      <ExportAction
         org="acme"
         ws="core-platform"
         runId={RUN}
         sealed
-        hasSummary
-        summarizable
         orgRole="owner"
       />
     </IntlProvider>,
@@ -253,5 +251,240 @@ describe("export status", () => {
     view.unmount();
     await advance(EXPORT_POLL_BUDGET_MS);
     expect(readRunExport).not.toHaveBeenCalled();
+  });
+
+  it("schedules no further read when one lands after the dialog is gone", async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    readRunExport.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    readRunExport.mockResolvedValue(exportAt("queued"));
+    const { view } = await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    expect(readRunExport).toHaveBeenCalledTimes(1);
+    view.unmount();
+    // A queued answer would schedule the next read if the dialog still followed it.
+    await act(async () => {
+      answer(exportAt("queued"));
+      await Promise.resolve();
+    });
+    await advance(EXPORT_POLL_BUDGET_MS);
+    expect(readRunExport).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads a ready bundle whose job kept no size, digest or link as not recorded, and offers no download (negative)", async () => {
+    readRunExport.mockResolvedValue(exportAt("ready"));
+    await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    const ready = screen.getByTestId("export-ready");
+    expect(screen.getByTestId("export-size")).toHaveTextContent("Not recorded");
+    expect(screen.queryByTestId("export-digest")).toBeNull();
+    expect(screen.queryByTestId("export-download")).toBeNull();
+    expect(ready).not.toHaveTextContent("Link expires");
+    // The command still names the bundle a person would download.
+    expect(screen.getByTestId("export-verify-command")).toHaveTextContent(
+      `oxagen verify ${RUN}-${EXPORT}.zip`,
+    );
+  });
+
+  it("copies the whole digest, and says the browser refused when the clipboard does (negative)", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    readRunExport.mockResolvedValue(READY);
+    const { user } = await queueExport();
+    // After user-event's setup, which puts its own clipboard stub in place.
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    try {
+      await advance(EXPORT_POLL_FIRST_MS);
+      await user.click(screen.getByRole("button", { name: "Copy" }));
+      await advance(0);
+      expect(writeText).toHaveBeenCalledWith(DIGEST);
+      expect(screen.getByRole("button", { name: "Copied" })).toBeTruthy();
+      writeText.mockImplementationOnce(() =>
+        Promise.reject(new Error("NotAllowedError")),
+      );
+      await user.click(screen.getByRole("button", { name: "Copied" }));
+      await advance(0);
+      expect(
+        screen.getByText(
+          "This browser refused the clipboard. Select the digest and copy it.",
+        ),
+      ).toBeTruthy();
+      // The button never claims a copy that failed.
+      expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
+    } finally {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("says the export failed without inventing a cause when the job recorded none (negative)", async () => {
+    readRunExport.mockResolvedValue(exportAt("failed"));
+    await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    expect(screen.getByTestId("export-failed")).toHaveTextContent(
+      "The export failed, and the job recorded no error.",
+    );
+  });
+
+  it.each<[string, Record<string, unknown>, string]>([
+    [
+      "a denied read",
+      { ok: false, reason: "denied", code: "run.export.read" },
+      "Reading an export needs an organization Owner or Admin role.",
+    ],
+    [
+      "a read parked for approval",
+      { ok: false, reason: "pending_approval", accessRequestId: "areq_1" },
+      "Oxagen answered pending_approval when asked for this export.",
+    ],
+  ])(
+    "names %s and offers no Check again, since another read would answer the same (negative)",
+    async (_, refusal, words) => {
+      readRunExport.mockResolvedValue(refusal);
+      await queueExport();
+      await advance(EXPORT_POLL_FIRST_MS);
+      expect(screen.getByTestId("export-read-failure")).toHaveTextContent(
+        words,
+      );
+      expect(screen.queryByTestId("export-check-again")).toBeNull();
+      const reads = readRunExport.mock.calls.length;
+      await advance(60_000);
+      expect(readRunExport).toHaveBeenCalledTimes(reads);
+    },
+  );
+
+  it("treats a read that throws as one the control plane could not serve, and offers Check again (negative)", async () => {
+    readRunExport.mockRejectedValue(new Error("network"));
+    await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    expect(screen.getByTestId("export-read-failure")).toHaveTextContent(
+      "Oxagen answered read_failed when asked for this export.",
+    );
+    expect(screen.getByTestId("export-check-again")).toBeTruthy();
+  });
+});
+
+describe("the record dialog", () => {
+  it("closes on Re-read, refreshes the route, and opens again on the form rather than the old receipt", async () => {
+    readRunExport.mockResolvedValue(exportAt("queued"));
+    const { user } = await queueExport();
+    expect(screen.getByTestId("queued-receipt")).toHaveTextContent(EXPORT);
+    await user.click(screen.getByRole("button", { name: "Re-read the run" }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("run-export-dialog")).toBeNull();
+    await user.click(screen.getByTestId("run-export"));
+    expect(screen.queryByTestId("queued-receipt")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Queue the bundle" }),
+    ).toBeTruthy();
+  });
+
+  it("sends one write while the first is in flight, however often the button is pressed", async () => {
+    exportRun.mockReturnValue(new Promise(() => undefined));
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(
+      <IntlProvider>
+        <ExportAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          orgRole="admin"
+        />
+      </IntlProvider>,
+    );
+    await user.click(screen.getByTestId("run-export"));
+    await user.click(screen.getByRole("button", { name: "Queue the bundle" }));
+    // The pending button is aria-disabled, not disabled, so this click submits.
+    await user.click(screen.getByRole("button", { name: "Queueing" }));
+    expect(exportRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("says the write went unanswered when the action itself throws (negative)", async () => {
+    exportRun.mockRejectedValue(new Error("network"));
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(
+      <IntlProvider>
+        <ExportAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          orgRole="owner"
+        />
+      </IntlProvider>,
+    );
+    await user.click(screen.getByTestId("run-export"));
+    await user.click(screen.getByRole("button", { name: "Queue the bundle" }));
+    expect(await screen.findByTestId("run-export-failure")).toBeTruthy();
+    expect(screen.queryByTestId("queued-receipt")).toBeNull();
+  });
+});
+
+describe("SummarizeAction", () => {
+  it("draws Summarize disabled for a recording that kept no bodies, and says why (negative)", () => {
+    render(
+      <IntlProvider>
+        <SummarizeAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          hasSummary={false}
+          summarizable={false}
+          orgRole="owner"
+        />
+      </IntlProvider>,
+    );
+    const button = screen.getByTestId("run-summarize");
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("data-reason", "summarize-no-bodies");
+    expect(button.getAttribute("title")).toContain(
+      "kept digests and no bodies",
+    );
+  });
+
+  it("offers nothing on a live run, whose summary the sweep writes as it records (negative)", () => {
+    const { container } = render(
+      <IntlProvider>
+        <SummarizeAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed={false}
+          hasSummary={false}
+          summarizable
+          orgRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("queues a summary and prints the run it was queued for", async () => {
+    summarizeRun.mockResolvedValue({ ok: true, value: { runId: RUN } });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(
+      <IntlProvider>
+        <SummarizeAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          hasSummary
+          summarizable
+          orgRole="member"
+        />
+      </IntlProvider>,
+    );
+    await user.click(screen.getByTestId("run-resummarize"));
+    await user.click(screen.getByRole("button", { name: "Queue the summary" }));
+    expect(summarizeRun).toHaveBeenCalledWith("acme", "core-platform", RUN);
+    expect(await screen.findByTestId("queued-receipt")).toHaveTextContent(RUN);
   });
 });
