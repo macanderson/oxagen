@@ -9,17 +9,25 @@
 // saying what it would do and what is missing, rather than a button that does
 // nothing. The trace line prints what the read recorded, the code and the
 // instant it failed, because the kernel seam carries no trace id to the page.
+//
+// Each state is the shared `StateWrap`, the design's `.state-wrap`: a glyph
+// tile, a heading, one paragraph and the actions, with no panel around them.
 import { useTranslations } from "next-intl";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
 import {
   buttonPrimary,
   buttonSecondary,
+  kvTerm,
+  kvValue,
   mono,
   panel,
+  panelBody,
+  panelHeader,
+  statStrip,
 } from "@/ui/control-styles";
-import { OutcomePanel } from "@/ui/form-feedback";
 import { SafeLink } from "@/ui/navigation";
+import { StateWrap, stateFacts, stateTrace } from "@/ui/state-wrap";
 import { StubAction } from "./stub-action";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
@@ -59,8 +67,8 @@ export function AgentPageFailure({
         workspace: viewer.wsSlug,
       });
       return (
-        <OutcomePanel
-          tone="deny"
+        <StateWrap
+          tone="denied"
           testId={`${subject}-denied`}
           title={s(`${subject}.denied`)}
           actions={
@@ -77,36 +85,35 @@ export function AgentPageFailure({
               </SafeLink>
             </>
           }
-        >
-          <span className="flex flex-col gap-4">
-            <span>
-              {s("denied.body", {
-                org: viewer.orgName,
-                permission: needed,
-              })}
-            </span>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left text-xs">
-              <dt className="text-dim">{s("signedInAs")}</dt>
-              <dd>
+          after={
+            <dl className={stateFacts}>
+              <dt className={kvTerm}>{s("signedInAs")}</dt>
+              <dd className={kvValue}>
                 {s("signedInValue", {
                   orgRole: viewer.orgRole,
                   wsRole: viewer.wsRole,
                   workspace: viewer.wsSlug,
                 })}
               </dd>
-              <dt className="text-dim">{s("neededLabel")}</dt>
-              <dd className={mono}>{needed}</dd>
-              <dt className="text-dim">{s("decidedBy")}</dt>
-              <dd>{s("decidedByValue")}</dd>
+              <dt className={kvTerm}>{s("neededLabel")}</dt>
+              <dd className={`${kvValue} ${mono}`}>{needed}</dd>
+              <dt className={kvTerm}>{s("decidedBy")}</dt>
+              <dd className={kvValue}>{s("decidedByValue")}</dd>
             </dl>
-          </span>
-        </OutcomePanel>
+          }
+        >
+          {s("denied.body", {
+            org: viewer.orgName,
+            permission: needed,
+          })}
+        </StateWrap>
       );
     }
     case "pending_approval":
       return (
-        <OutcomePanel
+        <StateWrap
           tone="neutral"
+          glyph="lock"
           testId={`${subject}-pending`}
           title={s("pending.title")}
           actions={
@@ -116,12 +123,12 @@ export function AgentPageFailure({
           }
         >
           {s("pending.body", { request: read.accessRequestId })}
-        </OutcomePanel>
+        </StateWrap>
       );
     case "error":
       return (
-        <OutcomePanel
-          tone="neutral"
+        <StateWrap
+          tone="failed"
           testId={`${subject}-error`}
           title={s(`${subject}.error`)}
           actions={
@@ -140,21 +147,19 @@ export function AgentPageFailure({
               />
             </>
           }
-        >
-          <span className="flex flex-col gap-3">
-            <span>
-              {s("error.body", {
-                code: `${String(read.status)} ${read.code}`,
-              })}
-            </span>
-            <span className={`${mono} text-xs`} data-testid="state-trace">
+          after={
+            <p className={stateTrace} data-testid="state-trace">
               {s("error.trace", {
                 code: `${String(read.status)} ${read.code}`,
                 at: readAt,
               })}
-            </span>
-          </span>
-        </OutcomePanel>
+            </p>
+          }
+        >
+          {s("error.body", {
+            code: `${String(read.status)} ${read.code}`,
+          })}
+        </StateWrap>
       );
   }
 }
@@ -163,7 +168,7 @@ export function AgentPageFailure({
 export function AgentNeverRan({ fleet }: { fleet: SafePath }) {
   const t = useTranslations("agents.states");
   return (
-    <OutcomePanel
+    <StateWrap
       tone="neutral"
       testId="agent-empty"
       title={t("empty.title")}
@@ -174,16 +179,14 @@ export function AgentNeverRan({ fleet }: { fleet: SafePath }) {
       }
     >
       {t("empty.body")}
-    </OutcomePanel>
+    </StateWrap>
   );
 }
 
-const bar = "block animate-pulse rounded bg-muted motion-reduce:animate-none";
-
 /**
  * The loading state: the shell stays, and the body is four tile blocks and a
- * panel of seven rows (spec, States), so no figure flashes as a zero before
- * the reads land. The frame keeps the page's container classes but is not
+ * panel of seven rows (spec, States), each bone the design's `.sk` shimmer,
+ * so no figure flashes as a zero before the reads land. The frame keeps the page's container classes but is not
  * `main#main`: while the page streams in, the document holds this fallback
  * and the hidden page together, and only the page may own the landmark, or
  * the skip link gets two targets and page-load's strict locator fails
@@ -200,21 +203,26 @@ export function AgentLoading() {
         className="flex flex-col gap-4"
       >
         <span className="sr-only">{t("loading")}</span>
-        <div
-          aria-hidden="true"
-          className="grid grid-cols-2 gap-3.5 md:grid-cols-4"
-        >
+        <div aria-hidden="true" className={statStrip}>
           {[0, 1, 2, 3].map((tile) => (
-            <span key={tile} className={`${bar} h-16 rounded-xl`} />
+            <span
+              key={tile}
+              data-skeleton-tile=""
+              className="skeleton h-16 rounded-[11px]"
+            />
           ))}
         </div>
         <div aria-hidden="true" className={`${panel} flex flex-col`}>
-          <div className="border-b border-border px-4 py-3">
-            <span className={`${bar} h-4 w-44`} />
+          <div className={panelHeader}>
+            <span className="skeleton h-[22px] w-[180px] max-w-full rounded-[7px]" />
           </div>
-          <div className="flex flex-col gap-2 px-4 py-3.5">
+          <div className={`${panelBody} flex flex-col gap-2`}>
             {[0, 1, 2, 3, 4, 5, 6].map((row) => (
-              <span key={row} className={`${bar} h-8 w-full`} />
+              <span
+                key={row}
+                data-skeleton-row=""
+                className="skeleton h-[38px] rounded-[9px]"
+              />
             ))}
           </div>
         </div>

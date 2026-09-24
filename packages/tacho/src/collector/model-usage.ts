@@ -22,6 +22,12 @@
  *     asked with `stream_options.include_usage`. A stream without it reports
  *     no usage at all, and the frame says so rather than guessing.
  *
+ * A stream can also stop before the event that closes its count: the caller
+ * left, the operator interrupted it, or the connection reset. The meter
+ * counts the bytes of text the content deltas carried, without parsing them,
+ * so `estimateCutUsage` can complete such a count by estimate. A vendor
+ * error that ends a stream after its `200` is kept as `streamError`.
+ *
  * Token classes are normalised to the envelope's columns, which follow
  * Anthropic's convention: `input_tokens` is the uncached input, and cache
  * reads and cache writes are counted beside it. OpenAI reports an inclusive
@@ -57,6 +63,12 @@ export interface ObservedUsage {
   cacheCreation5mTokens?: number;
   cacheCreation1hTokens?: number;
   thinkingTokens?: number;
+  /**
+   * The error a stream ended on after its `200`: Anthropic's `event: error`,
+   * a Responses `error` event, or `response.failed`. The vendor's own error
+   * type or code, reduced to a short slug.
+   */
+  streamError?: string;
 }
 
 /** Whether a usage block said anything about tokens at all. */
@@ -144,30 +156,53 @@ function foldOpenAiUsage(into: ObservedUsage, usage: Json): void {
   assign(into, "thinkingTokens", count(outputDetails?.["reasoning_tokens"]));
 }
 
-/** Read one parsed document or stream event into the running count. */
+/** A vendor's error type or code as a short slug for `api_error_class`. */
+function errorKind(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0
+    ? value.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 64)
+    : undefined;
+}
+
+/** The Responses stream events that end a response, each with its usage. */
+const RESPONSES_ENDINGS = new Set([
+  "response.completed",
+  "response.incomplete",
+  "response.failed",
+]);
+
+/**
+ * Read one parsed document or stream event into the running count. Returns
+ * whether it ended the response: it carried the vendor's closing count, or
+ * it was the error the vendor ended the stream on instead. A stream that
+ * stops before one was cut short (`UsageMeter.cutShort`).
+ */
 export function foldUsageDocument(
   into: ObservedUsage,
   api: ModelApi,
   doc: unknown,
-): void {
+): boolean {
   const root = obj(doc);
-  if (root === undefined) return;
+  if (root === undefined) return false;
   if (api === "anthropic.messages") {
     const type = root["type"];
+    if (type === "error") {
+      into.streamError = errorKind(obj(root["error"])?.["type"]) ?? "error";
+      return true;
+    }
     if (type === "message_start") {
       const message = obj(root["message"]);
-      if (message === undefined) return;
+      if (message === undefined) return false;
       assign(into, "model", text(message["model"]));
       assign(into, "responseId", text(message["id"]));
       const usage = obj(message["usage"]);
       if (usage !== undefined) foldAnthropicUsage(into, usage);
-      return;
+      return false;
     }
     if (type === "message_delta") {
       const usage = obj(root["usage"]);
       if (usage !== undefined) foldAnthropicUsage(into, usage);
       assign(into, "stopReason", text(obj(root["delta"])?.["stop_reason"]));
-      return;
+      return true;
     }
     if (type === "message" || type === undefined) {
       assign(into, "model", text(root["model"]));
@@ -175,29 +210,49 @@ export function foldUsageDocument(
       assign(into, "stopReason", text(root["stop_reason"]));
       const usage = obj(root["usage"]);
       if (usage !== undefined) foldAnthropicUsage(into, usage);
+      return true;
     }
-    return;
+    return false;
   }
   if (api === "openai.responses") {
+    const type = root["type"];
+    if (type === "error") {
+      const error = obj(root["error"]);
+      into.streamError =
+        errorKind(root["code"]) ??
+        errorKind(error?.["code"]) ??
+        errorKind(error?.["type"]) ??
+        "error";
+      return true;
+    }
     // Streamed endings wrap the response. The unstreamed document is it.
+    // Status, model and id are read whether or not a usage block came with
+    // them: `response.failed` ends a stream with `usage: null`, and its
+    // status is the only thing that says the call failed.
     const response = obj(root["response"]) ?? root;
-    const usage = obj(response["usage"]);
-    if (usage === undefined) return;
-    foldOpenAiUsage(into, usage);
     assign(into, "model", text(response["model"]));
     assign(into, "responseId", text(response["id"]));
     assign(into, "stopReason", text(response["status"]));
     assign(into, "serviceTier", text(response["service_tier"]));
-    return;
+    if (type === "response.failed")
+      into.streamError =
+        errorKind(obj(response["error"])?.["code"]) ?? "response_failed";
+    const usage = obj(response["usage"]);
+    if (usage !== undefined) foldOpenAiUsage(into, usage);
+    return typeof type === "string"
+      ? RESPONSES_ENDINGS.has(type)
+      : usage !== undefined;
   }
   if (api === "openai.chat") {
     const usage = obj(root["usage"]);
-    if (usage === undefined) return;
+    if (usage === undefined) return false;
     foldOpenAiUsage(into, usage);
     assign(into, "model", text(root["model"]));
     assign(into, "responseId", text(root["id"]));
     assign(into, "serviceTier", text(root["service_tier"]));
+    return true;
   }
+  return false;
 }
 
 /**
@@ -213,6 +268,67 @@ const MAX_LINE_BYTES = 16 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 16 * 1024 * 1024;
 
 const USAGE_MARKER = Buffer.from('"usage"');
+/** The two stream events that end a response in an error, not a count. */
+const ERROR_MARKERS = [
+  Buffer.from('"type":"error"'),
+  Buffer.from('"response.failed"'),
+];
+const DATA_PREFIX = Buffer.from("data:");
+const DONE_MARKER = Buffer.from("[DONE]");
+
+/**
+ * Where each API's content deltas carry their text. The meter measures that
+ * text and does not parse it, so a stream cut before its count still says
+ * roughly how much it had carried.
+ */
+const DELTA_MARKERS: Record<ModelApi, readonly Buffer[]> = {
+  "anthropic.messages": ['"text":"', '"partial_json":"', '"thinking":"'].map(
+    (marker) => Buffer.from(marker),
+  ),
+  "openai.responses": [Buffer.from('"delta":"')],
+  "openai.chat": ['"content":"', '"arguments":"'].map((marker) =>
+    Buffer.from(marker),
+  ),
+  other: [],
+};
+
+/** The bytes of the JSON string that starts at `from`, up to its closing quote. */
+function stringBytes(line: Buffer, from: number): number {
+  for (let at = from; at < line.length; at += 1) {
+    const byte = line[at];
+    if (byte === 0x5c /* \ */) at += 1;
+    else if (byte === 0x22 /* " */) return at - from;
+  }
+  return line.length - from;
+}
+
+/** Output bytes per token, for a stream cut before the vendor counted it. */
+const BYTES_PER_TOKEN = 4;
+
+/**
+ * The usage of a stream that was cut short, completed by estimate. The
+ * output is at least the text the stream carried, at four bytes a token,
+ * because the count a vendor opens with (Anthropic's `output_tokens: 1`) says
+ * nothing about what followed it. The input is estimated from the request's
+ * decoded bytes only when the vendor said nothing about tokens at all, which
+ * is every cut OpenAI stream.
+ */
+export function estimateCutUsage(
+  usage: ObservedUsage,
+  contentBytes: number,
+  requestBytes: number,
+): ObservedUsage {
+  return {
+    ...usage,
+    outputTokens: Math.max(
+      usage.outputTokens ?? 0,
+      Math.ceil(contentBytes / BYTES_PER_TOKEN),
+    ),
+    ...(hasTokenCounts(usage)
+      ? {}
+      : { inputTokens: Math.ceil(requestBytes / BYTES_PER_TOKEN) }),
+  };
+}
 
 /**
  * Reads usage out of a response as its bytes go by. `write` is called with
@@ -230,6 +346,8 @@ export class UsageMeter {
   private document: Buffer[] = [];
   private documentBytes = 0;
   private documentOverflow = false;
+  private ended = false;
+  private deltaBytes = 0;
 
   constructor(api: ModelApi, contentType: string | undefined) {
     this.api = api;
@@ -251,6 +369,21 @@ export class UsageMeter {
 
   get isStreaming(): boolean {
     return this.streaming;
+  }
+
+  /**
+   * Whether a stream stopped before its ending: the event carrying the
+   * vendor's closing count, the error that replaced it, or a chat stream's
+   * `[DONE]`. Its usage then undercounts, and `estimateCutUsage` completes it
+   * from `contentBytes`. Read it after `end`.
+   */
+  get cutShort(): boolean {
+    return this.api !== "other" && this.streaming && !this.ended;
+  }
+
+  /** The text the stream's content deltas carried, in bytes as sent. */
+  get contentBytes(): number {
+    return this.deltaBytes;
   }
 
   write(chunk: Buffer): void {
@@ -299,17 +432,32 @@ export class UsageMeter {
     this.lineBytes = 0;
     this.lineOverflow = false;
     if (overflow || line === undefined) return;
-    // Only a `data:` line that mentions usage is parsed at all. Content deltas
-    // are the bulk of a stream and none of them is read past this check.
+    // Only a `data:` line that mentions usage or an error is parsed at all.
+    // Content deltas are the bulk of a stream and none of them is parsed:
+    // the text they carry is measured where it starts, and nothing more.
     if (line.length < 6 || line[0] !== 0x64 /* d */) return;
-    if (!line.subarray(0, 5).equals(Buffer.from("data:"))) return;
-    if (line.indexOf(USAGE_MARKER) === -1) return;
+    if (!line.subarray(0, 5).equals(DATA_PREFIX)) return;
+    for (const marker of DELTA_MARKERS[this.api]) {
+      const at = line.indexOf(marker);
+      if (at !== -1) this.deltaBytes += stringBytes(line, at + marker.length);
+    }
+    if (
+      line.indexOf(USAGE_MARKER) === -1 &&
+      !ERROR_MARKERS.some((marker) => line.indexOf(marker) !== -1)
+    ) {
+      if (line.length <= 16 && line.indexOf(DONE_MARKER) !== -1)
+        this.ended = true;
+      return;
+    }
     try {
-      foldUsageDocument(
-        this.usage,
-        this.api,
-        JSON.parse(line.subarray(5).toString("utf8")),
-      );
+      if (
+        foldUsageDocument(
+          this.usage,
+          this.api,
+          JSON.parse(line.subarray(5).toString("utf8")),
+        )
+      )
+        this.ended = true;
     } catch {
       // A line that is not JSON says nothing about usage.
     }

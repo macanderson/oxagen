@@ -56,6 +56,7 @@ import {
   applyControlFacts,
   currentEnrollment,
   type HostFile,
+  hostStatusInForce,
   readHostFile,
   mcpEndpointFor,
   modelProxyPortFor,
@@ -114,10 +115,20 @@ import {
 import { exportSession, type ExportFormat } from "./exporters";
 import {
   handleHookEvent,
+  hookLedgerKey,
   type HookReplay,
   type PolicyView,
 } from "./hook-handler";
-import { applyCommands } from "./inbox";
+import {
+  appendHookIdJournal,
+  clearHookIdJournal,
+  hookIdJournalEntry,
+  restoreHookIdJournal,
+} from "./hook-id-journal";
+import {
+  applyCommands as applyDeliveredCommands,
+  HandledCommands,
+} from "./inbox";
 import {
   createMcpGateway,
   type GatewayAttribution,
@@ -137,7 +148,10 @@ import {
 } from "./model-routes";
 import {
   forgetHookId,
+  HOOK_ID_REPLAY_WINDOW_MS,
   parseRegistryState,
+  pruneHookIds,
+  rememberBaseline,
   sessionMapKey,
   type SessionRecord,
   type RegistryState,
@@ -520,6 +534,7 @@ async function initializeDaemon(
       : {
           seq: head.seq + 1,
           prevHash: head.hash as RecorderState["cursor"]["prevHash"],
+          stopped: head.kind === "agent_stop",
         };
   };
   const registry = new SessionRegistry({
@@ -540,6 +555,15 @@ async function initializeDaemon(
       reconcileRestoredCursor(session.recorder, wal, log);
     registry.restore(persisted);
   }
+  // The hooks recorded after that state file was written. Read after the
+  // restore, which created the records they name. `stateDirty` is set below,
+  // once it exists, so the first tick writes them into the state file and
+  // the journal can go.
+  const journaledHookIds = restoreHookIdJournal(
+    paths.hookIdJournal,
+    registry,
+    (uuid) => wal.lastEvent(uuid)?.seq,
+  );
 
   // The daemon's own chain: host-level incidents, commands, and checkpoints
   // land here so every event the host emits belongs to a verifiable session.
@@ -573,7 +597,11 @@ async function initializeDaemon(
     }
   }
 
-  let bundleVerified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
+  let bundleVerified = verifyBundle(
+    host.bundle,
+    host.bundle_public_key_pem,
+    host.host_enrollment_id,
+  ).ok;
   /**
    * When the control plane last confirmed the cached mandate, as epoch ms.
    *
@@ -650,9 +678,17 @@ async function initializeDaemon(
   // 30/min `tacho-host` budget in 30 s, and took 429s until the window turned
   // over, every minute, for as long as the host was idle (2026-09-23).
   let lastCommandPollAt: number | undefined;
-  let stateDirty = false;
+  let stateDirty = journaledHookIds > 0;
   let stopped = false;
   const pendingAcks: CommandAcknowledgement[] = [];
+  // The control plane delivers a `sent` command again until its
+  // acknowledgement lands. Every delivery goes through this daemon's record
+  // of the commands it already answered, so a steer is queued once and a kill
+  // signalled once however often it arrives. In memory only: `daemon.json` is
+  // the registry's state and has no place for it.
+  const handledCommands = new HandledCommands();
+  const applyCommands: typeof applyDeliveredCommands = (commands, deps) =>
+    applyDeliveredCommands(commands, { ...deps, handled: handledCommands });
   const serial = new Serial();
 
   // Exponential backoff for the command poll, the same 2s→60s shape the
@@ -714,6 +750,10 @@ async function initializeDaemon(
       paths.daemonState,
       JSON.stringify(registry.state()),
     );
+    // The state file now holds every ledger entry the journal did. A crash
+    // between the write and this removal restores those entries twice,
+    // which is harmless: remembering a key the ledger holds is a no-op.
+    clearHookIdJournal(paths.hookIdJournal);
     stateDirty = false;
   }
 
@@ -895,7 +935,7 @@ async function initializeDaemon(
       bundle: current.bundle,
       verified: bundleVerified,
       mandateConfirmedAt,
-      hostStatus: current.host_status,
+      hostStatus: hostStatusInForce(current, bundleVerified),
       denyGeneration: current.deny_generation,
       controlReachable:
         lastControlAt !== undefined &&
@@ -1143,6 +1183,7 @@ async function initializeDaemon(
       const verification = verifyBundle(
         response.bundle,
         host.bundle_public_key_pem,
+        host.host_enrollment_id,
       );
       if (!verification.ok) {
         log(
@@ -1228,7 +1269,9 @@ async function initializeDaemon(
         (result) => ({ events: result.events }),
       );
       pendingAcks.push(...result.acknowledgements);
-      interruptModelCalls(control.commands);
+      // Only the commands that took effect: an expired or refused kill must
+      // not cut a session's model calls.
+      interruptModelCalls(result.applied);
     }
   }
 
@@ -1348,6 +1391,9 @@ async function initializeDaemon(
   // --- end transcript tailer ---------------------------------------------
 
   async function sendAcks(): Promise<void> {
+    // A message whose session sealed before a boundary reached it is
+    // `expired`; left unsent, the operator reads it as still on its way.
+    pendingAcks.push(...registry.takeExpiredOnSeal());
     const lastEnvelopeAt = Math.max(
       lastIngestAt ?? -Infinity,
       lastCommandPollAt ?? -Infinity,
@@ -1797,14 +1843,8 @@ async function initializeDaemon(
       if (due) lastReconcileAt.set(harnessSessionId, at);
       // Every read runs at the worktree root, so an edit in a subdirectory and
       // one at the top describe the same checkout, and the baseline is
-      // retaken only when the work moves to another root.
+      // switched only when the work moves to another root.
       const cwd = (await readGitRoot(execAsync, dir)) ?? dir;
-      if (session.baselineRoot === undefined && session.baselineCommit)
-        session.baselineRoot = cwd;
-      if (session.baselineRoot !== undefined && session.baselineRoot !== cwd) {
-        delete session.baselineCommit;
-        delete session.baselineRoot;
-      }
       const facts = await gitFactsFor(cwd, want.force);
       // Undefined means `rev-parse HEAD` did not answer, which covers a
       // directory that is not a repository AND a repository whose first
@@ -1815,13 +1855,14 @@ async function initializeDaemon(
       // seals no frame. There is simply no git context to note for either.
       // The first read that answers in this worktree fixes the session's
       // baseline. Later reads measure from it rather than from a `HEAD`
-      // that the session's own commits keep moving. `ensure` clears the
-      // baseline when `cwd` changes, so a move to another repository
-      // captures that tree's HEAD instead of diffing against the old one.
-      if (facts !== undefined && session.baselineCommit === undefined) {
-        session.baselineCommit = facts.head_sha;
-        session.baselineRoot = cwd;
-      }
+      // that the session's own commits keep moving. The baseline is held
+      // per repository root: `rememberBaseline` puts back the one the
+      // session holds for this root, so a `cd` inside one repository keeps
+      // it and a move to another root captures that tree's HEAD, or finds
+      // the one taken there before. A root with no baseline and no HEAD
+      // leaves none in force, so this read never diffs against a commit in
+      // another repository.
+      rememberBaseline(session, cwd, facts?.head_sha);
       if (facts === undefined && !due) continue;
       found.push({
         session,
@@ -2134,6 +2175,10 @@ async function initializeDaemon(
           }),
       );
       state.agents = [];
+      // The host's tombstones are not this session's: carried here, every
+      // pending terminal held the whole list, and a restore put back ones
+      // spent since.
+      state.tombstones = [];
       const retention = retentionInForce();
       pending.terminal = {
         events: outcome.events,
@@ -2172,16 +2217,44 @@ async function initializeDaemon(
       } catch (error) {
         rollbackEveryChain(marks);
         // The chain rollback does not reach the hook-id ledger, which lives
-        // on the session record. Left in place, the id would make the
+        // on the session record. Left in place, the key would make the
         // client's spool replay of this same hook look like a repeat, and
         // the hook would be lost.
-        if (envelope.hook_id !== undefined && outcome.record !== undefined) {
-          forgetHookId(outcome.record, envelope.hook_id);
+        if (outcome.hookKey !== undefined && outcome.record !== undefined) {
+          forgetHookId(outcome.record, outcome.hookKey);
         }
         throw error;
       }
+      if (outcome.hookKey !== undefined && outcome.record !== undefined) {
+        journalHookKey(outcome.record, outcome.hookKey, outcome.events);
+      }
     }
     return outcome.response;
+  }
+
+  /**
+   * Journal a ledger key whose hook just reached the WAL, so a crash before
+   * the next state write does not forget it (see `hook-id-journal.ts`). A
+   * failed append is logged, not thrown: the hook is recorded, and failing
+   * it would send the client a failure it answers by spooling the same hook.
+   */
+  function journalHookKey(
+    session: SessionRecord,
+    key: string,
+    events: readonly TachoEvent[],
+  ): void {
+    const at = session.hookIds.get(key);
+    if (at === undefined) return;
+    try {
+      appendHookIdJournal(
+        paths.hookIdJournal,
+        hookIdJournalEntry(session.recorder.sessionUuid, key, at, events),
+      );
+    } catch (error) {
+      log(
+        `hook-id journal append failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**
@@ -2197,10 +2270,10 @@ async function initializeDaemon(
    * whose event can never reach the chain would outlive every sweep that
    * enforces the retention mandate.
    *
-   * The hook id is forgotten for the same reason `recordHookOutcome`
-   * forgets it after a failed write. The route that computed this terminal
-   * remembered it, and the end sealed again from this envelope would
-   * otherwise be dropped as a repeat.
+   * The hook's ledger key is forgotten for the same reason
+   * `recordHookOutcome` forgets it after a failed write. The route that
+   * computed this terminal remembered it, and the end sealed again from this
+   * envelope would otherwise be dropped as a repeat.
    */
   function setAsideConflictingTerminal(
     uuid: string,
@@ -2225,8 +2298,12 @@ async function initializeDaemon(
     const session = registry.byUuid(uuid);
     if (session !== undefined) {
       session.recorder.continueFromDisk();
-      if (pending.hook_id !== undefined)
-        forgetHookId(session, pending.hook_id);
+      const key = hookLedgerKey(
+        pending.payload,
+        session.harness,
+        pending.hook_id,
+      );
+      if (key !== undefined) forgetHookId(session, key);
     }
     log(
       `session end for ${uuid} conflicts with the WAL at ${conflict.sessionUuid}:${conflict.seq}; its sealed terminal is in quarantine/${name}, and the end is sealed again on the chain the WAL holds`,
@@ -2284,6 +2361,13 @@ async function initializeDaemon(
   const SPOOL_DRAIN_LIMIT = 200;
 
   /**
+   * The longest gap between two tick drains that still reads as one
+   * unbroken clock. The tick runs every second, so a longer gap is a sleep,
+   * a stall, or a clock change (see `watchLedgerClock`).
+   */
+  const LEDGER_CLOCK_BREAK_MS = 60_000;
+
+  /**
    * Whether a spool file will never process, on this attempt or any later
    * one: malformed JSON, the wrong schema envelope, or a payload the hook
    * schema refuses. Anything else (a WAL write that failed, a disk that is
@@ -2328,12 +2412,16 @@ async function initializeDaemon(
   const outageGapped = new Set<string>();
 
   /** Replay what `tacho-hook` spooled while the daemon was down, in order. */
-  async function drainSpool(): Promise<number> {
-    const files = readdirSync(paths.spool)
+  async function drainSpool(listedAt?: number): Promise<number> {
+    if (listedAt !== undefined) watchLedgerClock(listedAt);
+    const listed = readdirSync(paths.spool)
       .filter((name) => name.endsWith(".json"))
-      .sort()
-      .slice(0, SPOOL_DRAIN_LIMIT);
-    if (files.length === 0) return 0;
+      .sort();
+    const files = listed.slice(0, SPOOL_DRAIN_LIMIT);
+    if (files.length === 0) {
+      if (listedAt !== undefined) pruneHookLedgers(listedAt);
+      return 0;
+    }
     const gapped = new Map<string, string>();
     // Unlinked only once every file this call touches is durably recorded
     // (or durably set aside): unlinking as each file lands, as this used to,
@@ -2342,6 +2430,7 @@ async function initializeDaemon(
     // to recover it.
     const succeeded: string[] = [];
     let processed = 0;
+    let interrupted = false;
     for (const name of files) {
       const path = join(paths.spool, name);
       let file: SpoolFile;
@@ -2386,6 +2475,7 @@ async function initializeDaemon(
         log(
           `spool drain stopped at ${name}: ${error instanceof Error ? error.message : String(error)}`,
         );
+        interrupted = true;
         break;
       }
     }
@@ -2422,7 +2512,53 @@ async function initializeDaemon(
     // that used to lose nothing for one that loses the payload outright.
     wal.flush();
     for (const path of succeeded) unlinkSync(path);
+    if (
+      listedAt !== undefined &&
+      !interrupted &&
+      files.length === listed.length
+    ) {
+      pruneHookLedgers(listedAt);
+    }
     return processed;
+  }
+
+  // When the tick's drain last listed the spool, and the time before which
+  // no ledger key may be pruned. See `watchLedgerClock`.
+  let ledgerClockAt: number | undefined;
+  let ledgerPruneHeldUntil = Number.NEGATIVE_INFINITY;
+
+  /**
+   * Hold ledger pruning for a full replay window after any break in the
+   * tick's clock: the first tick after a start, a gap over a minute between
+   * two ticks, or a clock that ran backwards. A laptop that slept with a
+   * hook in flight wakes with its wall clock hours ahead while the client's
+   * own timer has barely moved, so that client can still spool its hook up
+   * to a full window after the wake, whatever the wall clock says.
+   */
+  function watchLedgerClock(listedAt: number): void {
+    const gap =
+      ledgerClockAt === undefined
+        ? Number.POSITIVE_INFINITY
+        : listedAt - ledgerClockAt;
+    ledgerClockAt = listedAt;
+    if (gap < 0 || gap > LEDGER_CLOCK_BREAK_MS) {
+      ledgerPruneHeldUntil = listedAt + HOOK_ID_REPLAY_WINDOW_MS;
+    }
+  }
+
+  /**
+   * Drop every ledger key recorded more than `HOOK_ID_REPLAY_WINDOW_MS`
+   * before a spool listing that the drain then cleared. Any replay of an
+   * older key was already a file when the spool was listed, so this drain
+   * handled it, and no client can still write one.
+   */
+  function pruneHookLedgers(listedAt: number): void {
+    if (listedAt < ledgerPruneHeldUntil) return;
+    let removed = 0;
+    for (const session of registry.list()) {
+      removed += pruneHookIds(session, listedAt - HOOK_ID_REPLAY_WINDOW_MS);
+    }
+    if (removed > 0) stateDirty = true;
   }
 
   /**
@@ -2628,7 +2764,10 @@ async function initializeDaemon(
     registry,
     hostRecorder: () => hostRecorder,
     record,
-    policy: () => ({ bundle: host.bundle, hostStatus: host.host_status }),
+    policy: () => ({
+      bundle: host.bundle,
+      hostStatus: hostStatusInForce(host, bundleVerified),
+    }),
     upstreams: () => ({
       ...DEFAULT_MODEL_UPSTREAMS,
       ...displacedUpstreams,
@@ -2882,6 +3021,15 @@ async function initializeDaemon(
           const { record: session, created } = registry.ensure(sessionId, {
             ambient: true,
           });
+          // Its terminal is sealed but not yet in the WAL. A frame sealed now
+          // takes the seq after it and reaches the WAL first, so the records
+          // are dropped; a sealed chain takes them, marked after the stop.
+          if (session.pendingTerminal === true) {
+            log(
+              `OTel records for session ${sessionId} dropped: its end is not yet written`,
+            );
+            continue;
+          }
           if (created)
             log(
               `session ${sessionId} first seen through OTel; no hook stream yet`,
@@ -3233,7 +3381,7 @@ async function initializeDaemon(
     await stage("spool, transcripts, sweep, checkpoint", () =>
       serial.run(async () => {
         const t = now();
-        await drainSpool();
+        await drainSpool(t);
         // transcript tailer: bounded per file per tick, asynchronous reads
         await transcriptTailer.tick();
         if (t - lastSweep >= timers.sweepMs) {

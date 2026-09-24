@@ -210,13 +210,10 @@ describe("the shell on /{org}/{ws}", () => {
     expect(launcher).toBeInTheDocument();
     // What it opens is a dialog, and it says so before it is pressed.
     expect(launcher).toHaveAttribute("aria-haspopup", "dialog");
-    // The launcher is branded Stella (#3973), and under the label the model
-    // and engine state, which the chrome does not read: the line says so
-    // rather than naming a model.
-    expect(launcher).toHaveTextContent("Ask Stella");
-    expect(
-      within(launcher).getByTestId("assistant-launcher-not-backed"),
-    ).toHaveAttribute("data-gap", "#2968");
+    // The launcher names stella in the lowercase wordmark (#4087), with the
+    // agent's description on the line under it.
+    expect(launcher).toHaveTextContent("Ask stella*oxagen’s in-app AI agent");
+    expect(launcher.textContent).not.toMatch(/Stella/);
     expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
     // The bell and the approvals button sit in the top bar (fleet.md
     // "Shell"); the assistant has no top bar button, only the launcher.

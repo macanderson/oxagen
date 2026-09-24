@@ -347,6 +347,10 @@ describe("the drawer", () => {
     expect(button()).toHaveAttribute("aria-pressed", "true");
     const aside = screen.getByRole("complementary", { name: "Approvals" });
     expect(aside).toBe(drawer());
+    // `.apd { background: var(--panel) }`: the drawer stays on the panel
+    // while the page body behind it is on the ink.
+    expect(aside).toHaveClass("bg-app-raised-bg");
+    expect(aside).not.toHaveClass("bg-app-panel-bg");
     expect(
       within(aside).getByRole("heading", { level: 3, name: "Approvals" }),
     ).toBeInTheDocument();

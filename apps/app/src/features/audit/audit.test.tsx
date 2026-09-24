@@ -118,6 +118,7 @@ const source: DataSource = {
     get: refuse,
     frameBody: refuse,
     cost: refuse,
+    turns: refuse,
     transcript: refuse,
     chain: refuse,
     outputs: refuse,
@@ -1493,6 +1494,25 @@ describe("states", () => {
     expect(strip?.children).toHaveLength(4);
     expect(rows?.children).toHaveLength(8);
     expect(skeleton).not.toHaveTextContent(/\d/);
+    // Every bone is the design's shimmer, as on every other page, and none pulses.
+    expect(skeleton.querySelectorAll(".skeleton")).toHaveLength(12);
+    expect(skeleton.querySelector(".animate-pulse")).toBeNull();
+  });
+
+  it("draws the denied state's lock in the denied tone, not the failed one", async () => {
+    events.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      permission: PAGE_FAILURES.audit.permission,
+    });
+    await renderAudit({}, { viewer: memberCtx });
+
+    const icon = screen
+      .getByTestId("audit-denied")
+      .querySelector("[data-state-icon]");
+    expect(icon).toHaveAttribute("data-state-icon", "denied");
+    expect(icon).toHaveClass("border-warning/40", "text-warning");
+    expect(icon?.className).not.toMatch(/destructive|error/);
   });
 });
 

@@ -61,6 +61,7 @@ import {
   type FeedRow,
   type Frames,
   type FrameRef,
+  mergeEntries,
 } from "./transcript-model";
 import { useRunStream } from "./use-run-stream";
 
@@ -1575,7 +1576,9 @@ export function TranscriptView({
           // one follow-up via pendingReadRef / the finally block.
           continue;
         }
-        const next: Frames = [...heldRef.current, ...pageEntries];
+        // A page can send again an entry the view holds, grown since it was
+        // sent; it replaces its row rather than drawing the step twice.
+        const next: Frames = mergeEntries(heldRef.current, pageEntries);
         heldRef.current = next;
         setEntries(next);
         // Full page with a resume cursor means more history is waiting.

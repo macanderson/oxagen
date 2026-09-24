@@ -17,6 +17,7 @@ import {
   type RowWords,
   rowState,
   rowsPerPageOf,
+  shownCost,
   spendShown,
   windowParts,
 } from "./view";
@@ -157,6 +158,43 @@ describe("tile figures", () => {
     expect(spend.estimated).toBe(1);
     expect(spend.total).toMatchObject({ micros: "3000000", currency: "USD" });
     expect(spend.unpriced).toBe(1);
+  });
+
+  // Until a rollup lands, the Run page shows the agent's reported cost as an
+  // estimate, and so does the row, so the tile adds the figure the row shows.
+  it("sums the agent's reported cost where no rollup is recorded yet, as an estimate", () => {
+    const spend = spendShown(
+      listRuns(
+        [
+          runRow({
+            id: "tse_reported",
+            source: "tacho",
+            status: "sealed",
+            cost: null,
+            reportedCost: usd("1250000", "client_attested"),
+          }),
+          runRow({ id: "arun_done", cost: usd("2000000") }),
+          runRow({ id: "arun_none", cost: null }),
+        ],
+        new Set(),
+      ),
+    );
+    expect(spend.total).toMatchObject({ micros: "3250000", currency: "USD" });
+    expect(spend.bases).toEqual(["client_attested", "gateway_observed"]);
+    expect(spend.estimated).toBe(1);
+    expect(spend.unpriced).toBe(1);
+  });
+
+  it("shows the rollup's figure over the agent's report (negative)", () => {
+    expect(
+      shownCost(
+        runRow({
+          cost: usd("2000000"),
+          reportedCost: usd("1250000", "client_attested"),
+        }),
+      ),
+    ).toEqual({ value: usd("2000000"), reported: false, estimate: false });
+    expect(shownCost(runRow({ cost: null, reportedCost: null }))).toBeNull();
   });
 
   it("finds the oldest pending approval and its window", () => {
@@ -369,6 +407,27 @@ describe("the list controls", () => {
         sort: { key: "cost", dir: -1 },
       }).rows,
     ).toEqual([1, 0, 2]);
+  });
+
+  it("sorts a reported cost among the priced rows, where its figure falls", () => {
+    const reported = listRuns(
+      [
+        runRow({ id: "arun_a", cost: null }),
+        runRow({ id: "arun_b", cost: usd("1000000") }),
+        runRow({
+          id: "tse_c",
+          cost: null,
+          reportedCost: usd("3000000", "client_attested"),
+        }),
+      ],
+      new Set(),
+    );
+    expect(
+      applyList(reported, words.slice(0, 3), {
+        ...base,
+        sort: { key: "cost", dir: -1 },
+      }).rows,
+    ).toEqual([2, 1, 0]);
   });
 
   it("lists no row it was given no words for (negative)", () => {

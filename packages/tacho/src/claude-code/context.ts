@@ -9,6 +9,12 @@ import type { TachoEvent } from "../envelope";
 export type AgentIdentity = TachoEvent["agent"];
 export type HostFacts = NonNullable<TachoEvent["host"]>;
 
+/** Where a chain on this host's disk ends. */
+export interface ChainTail extends ChainCursor {
+  /** Whether the last event on disk is the chain's `agent_stop`. */
+  stopped: boolean;
+}
+
 export interface ClaudeCodeContext {
   agent: AgentIdentity;
   /** Host facts the collector observed (digests already applied). */
@@ -24,7 +30,7 @@ export interface ClaudeCodeContext {
    * continues on disk rather than restarting at seq 0 over events it
    * already wrote.
    */
-  chainTail?: (sessionUuid: string) => ChainCursor | undefined;
+  chainTail?: (sessionUuid: string) => ChainTail | undefined;
 }
 
 /**

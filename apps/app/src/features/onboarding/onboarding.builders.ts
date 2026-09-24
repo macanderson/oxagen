@@ -178,6 +178,7 @@ export function onboardingSource(reads: Reads): {
       },
       frameBody: refuse("runs.frameBody"),
       cost: refuse("runs.cost"),
+      turns: refuse("runs.turns"),
       transcript: refuse("runs.transcript"),
       chain: (...args: Parameters<DataSource["runs"]["chain"]>) => {
         calls.chain.push(args);

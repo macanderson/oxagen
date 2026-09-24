@@ -37,6 +37,7 @@ import {
   sql,
   type AnyColumn,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import {
   dailyTotalsFromRuns,
   rollupRun,
@@ -336,6 +337,7 @@ export interface RunRollupDeps {
   loadRunSource: (publicId: string) => Promise<RunSource | null>;
   readModelCalls: (args: {
     orgId: string;
+    workspaceId: string;
     run: FrameRunRef;
   }) => Promise<ModelCallFrame[]>;
   readToolCalls: (source: RunSource) => Promise<ToolCallFrame[]>;
@@ -646,6 +648,7 @@ const productionRunRollupDeps: RunRollupDeps = {
         })
       : readTachoToolCallFrames({
           orgId: source.meta.orgId,
+          workspaceId: source.meta.workspaceId,
           rootSessionUuid: source.frames.rootSessionUuid,
         }),
   loadPriceBook,
@@ -675,7 +678,11 @@ export async function rebuildRunTotals(
   };
   const [modelCalls, toolCalls, book, carried, verdict, workerId] =
     await Promise.all([
-      deps.readModelCalls({ orgId: source.meta.orgId, run: source.frames }),
+      deps.readModelCalls({
+        orgId: source.meta.orgId,
+        workspaceId: source.meta.workspaceId,
+        run: source.frames,
+      }),
       deps.readToolCalls(source),
       deps.loadPriceBook({ orgId: source.meta.orgId }),
       deps.readCarried(publicId),
@@ -821,6 +828,15 @@ export async function rebuildDailyTotals(
  * `cost.run-progress` writes (#3980), whose `rolled_up_at` can postdate a
  * seal the control plane's idle close dates later than the run's last frame.
  * Root tacho sessions and V2 ledger runs, oldest seal first, at most `limit`.
+ *
+ * A tacho run is also listed when a batch landed on its tree after the row was
+ * written. A subagent can ship frames after the root seals, and
+ * `cost.run-progress` rolls them up only if that batch's best-effort event
+ * reached it; without this a lost one leaves those frames out of
+ * `cost.run_totals` for good. `last_event_at` is the server's clock at the
+ * last batch that landed on a session, and every session of the run names the
+ * root in `root_session_uuid` (the root names itself), in the root's
+ * workspace.
  */
 export async function listRunsAwaitingRollup(args: {
   limit: number;
@@ -829,6 +845,13 @@ export async function listRunsAwaitingRollup(args: {
   // design and returns only their public ids; each rebuild then loads the
   // run's own orgId and workspaceId and is filtered by them.
   return withSystemDb(async (tx) => {
+    const tree = alias(sessions, "tree");
+    const treeLastEventAt = sql`(
+      SELECT max(${tree.lastEventAt}) FROM ${sessions} AS ${tree}
+      WHERE ${tree.rootSessionUuid} = ${sessions.sessionUuid}
+        AND ${tree.orgId} = ${sessions.orgId}
+        AND ${tree.workspaceId} = ${sessions.workspaceId}
+    )`;
     const tacho = await tx
       .select({ publicId: sessions.publicId, sealedAt: sessions.sealedAt })
       .from(sessions)
@@ -841,6 +864,8 @@ export async function listRunsAwaitingRollup(args: {
             isNull(totals.id),
             sql`${totals.rolledUpAt} < ${sessions.sealedAt}`,
             isNull(totals.sealedAt),
+            sql`${totals.rolledUpAt} < ${sessions.lastEventAt}`,
+            sql`${totals.rolledUpAt} < ${treeLastEventAt}`,
           ),
         ),
       )

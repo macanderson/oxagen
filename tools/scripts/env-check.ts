@@ -103,6 +103,13 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "APPDATA",
   "LOCALAPPDATA",
   "PROGRAMFILES",
+  // Windows' command interpreter, which tacho spawns a `.cmd` shim through
+  // (packages/tacho/src/host/codex-app-server.ts).
+  "COMSPEC",
+  // Set by `sudo` to the invoking user; `tacho enroll` names that user in
+  // the `sudo -u` command its refusal to run as root suggests
+  // (packages/tacho/src/cli/enroll.ts).
+  "SUDO_USER",
   // libpq's own variables: psql and atlas read them directly, so a value here
   // configures those tools rather than any Oxagen service.
   "PGHOST",

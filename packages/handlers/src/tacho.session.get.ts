@@ -34,20 +34,35 @@ export const tachoSessionGetHandler: CapabilityHandler<
     // probe concurrently, and they answer from one per-process cache anyway.
     const childColumns = await sessionReadColumns(tx);
     const fileColumns = await sessionFileReadColumns(tx);
+    // Every read names the caller's org and workspace as well as the session,
+    // as the session read above does: a local stack runs with the RLS bypass
+    // on, and RLS alone is not the fence there.
     const [children, models, files, commands, incidents, checkpoints] =
       await Promise.all([
         tx.query.tachoSessions.findMany({
-          where: eq(schema.tachoSessions.parentSessionUuid, row.sessionUuid),
+          where: and(
+            eq(schema.tachoSessions.parentSessionUuid, row.sessionUuid),
+            eq(schema.tachoSessions.orgId, ctx.orgId),
+            eq(schema.tachoSessions.workspaceId, ctx.workspaceId),
+          ),
           orderBy: [asc(schema.tachoSessions.startedAt)],
           limit: 500,
           columns: childColumns,
         }),
         tx.query.tachoSessionModels.findMany({
-          where: eq(schema.tachoSessionModels.sessionId, row.id),
+          where: and(
+            eq(schema.tachoSessionModels.sessionId, row.id),
+            eq(schema.tachoSessionModels.orgId, ctx.orgId),
+            eq(schema.tachoSessionModels.workspaceId, ctx.workspaceId),
+          ),
           limit: 64,
         }),
         tx.query.tachoSessionFiles.findMany({
-          where: eq(schema.tachoSessionFiles.sessionId, row.id),
+          where: and(
+            eq(schema.tachoSessionFiles.sessionId, row.id),
+            eq(schema.tachoSessionFiles.orgId, ctx.orgId),
+            eq(schema.tachoSessionFiles.workspaceId, ctx.workspaceId),
+          ),
           orderBy: [asc(schema.tachoSessionFiles.firstSeq)],
           limit: 1000,
           // A relational read selects every column the schema declares, so this
@@ -59,19 +74,33 @@ export const tachoSessionGetHandler: CapabilityHandler<
           columns: fileColumns,
         }),
         tx.query.tachoSessionCommands.findMany({
-          where: eq(schema.tachoSessionCommands.sessionId, row.id),
+          where: and(
+            eq(schema.tachoSessionCommands.sessionId, row.id),
+            eq(schema.tachoSessionCommands.orgId, ctx.orgId),
+            eq(schema.tachoSessionCommands.workspaceId, ctx.workspaceId),
+          ),
           orderBy: [asc(schema.tachoSessionCommands.seq)],
           limit: 1000,
         }),
         tx.query.tachoIncidents.findMany({
-          where: eq(schema.tachoIncidents.sessionId, row.id),
+          where: and(
+            eq(schema.tachoIncidents.sessionId, row.id),
+            eq(schema.tachoIncidents.orgId, ctx.orgId),
+            eq(schema.tachoIncidents.workspaceId, ctx.workspaceId),
+          ),
           orderBy: [desc(schema.tachoIncidents.detectedAt)],
           limit: 500,
         }),
         tx
           .select({ value: count() })
           .from(schema.tachoCheckpoints)
-          .where(eq(schema.tachoCheckpoints.sessionId, row.id)),
+          .where(
+            and(
+              eq(schema.tachoCheckpoints.sessionId, row.id),
+              eq(schema.tachoCheckpoints.orgId, ctx.orgId),
+              eq(schema.tachoCheckpoints.workspaceId, ctx.workspaceId),
+            ),
+          ),
       ]);
     const hosts = await hostPublicIds(tx, [row, ...children]);
     const hostPublicId = row.hostId ? (hosts.get(row.hostId) ?? null) : null;

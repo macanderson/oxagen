@@ -47,6 +47,9 @@ export const RETENTION_CLASS_BY_KIND: Readonly<
   llm_call: "model_call",
   "oxagen:message": "model_call",
   "oxagen:compaction": "model_call",
+  // The session title the harness generated or the person typed. It is the
+  // only notification that carries content.
+  "oxagen:notification": "model_call",
   subagent_stop: "model_call",
   // What a tool was handed and what it returned. `tool_requested` carries
   // the arguments as the agent proposed them, which is the only record of

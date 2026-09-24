@@ -186,7 +186,7 @@ describe("automatic run enrichment", () => {
   it("writes a generated account, then avoids charging for the identical input", async () => {
     expect(await run()).toMatchObject({ status: "generated" });
     expect(state.writes.at(-1)).toMatchObject({
-      name: "Repair authentication · tse_12345678",
+      name: "Repair authentication (tse_12345678)",
       summaryModel: "fast-test",
     });
     expect(await run()).toMatchObject({ status: "unchanged" });
@@ -207,16 +207,16 @@ describe("automatic run enrichment", () => {
     await expect(run()).rejects.toThrow("credit gate refused");
     // The one write is the prompt's title; no summary, model or digest lands.
     expect(state.writes).toEqual([
-      { name: "Please repair authentication · fix/auth-redirect" },
+      { name: "Please repair authentication on fix/auth-redirect" },
     ]);
   });
   it("names the run for its first prompt, then replaces that with the model's name", async () => {
     expect(await run()).toMatchObject({ status: "generated" });
     expect(state.writes[0]).toEqual({
-      name: "Please repair authentication · fix/auth-redirect",
+      name: "Please repair authentication on fix/auth-redirect",
     });
     expect(state.writes.at(-1)).toMatchObject({
-      name: "Repair authentication · tse_12345678",
+      name: "Repair authentication (tse_12345678)",
       summaryError: null,
     });
   });
@@ -501,6 +501,92 @@ describe("which runs the sweep queues", () => {
       },
       true,
     ],
+    [
+      "live and never observed",
+      {
+        observedAt: null,
+        revision: null,
+        error: null,
+        changed: true,
+        digest: null,
+        live: true,
+        named: false,
+      },
+      true,
+    ],
+    [
+      "live and still unnamed",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: null,
+        changed: true,
+        digest: null,
+        live: true,
+        named: false,
+      },
+      true,
+    ],
+    [
+      "live and changed a minute after its account",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: null,
+        changed: true,
+        digest: "d",
+        live: true,
+      },
+      false,
+    ],
+    [
+      "live and changed half an hour after its account",
+      {
+        observedAt: minutesAgo(31),
+        revision: "r",
+        error: null,
+        changed: true,
+        digest: "d",
+        live: true,
+      },
+      true,
+    ],
+    [
+      "live and unchanged half an hour after its account",
+      {
+        observedAt: minutesAgo(31),
+        revision: "r",
+        error: null,
+        changed: false,
+        digest: "d",
+        live: true,
+      },
+      false,
+    ],
+    [
+      "live, failed a minute ago, then got new frames",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: "model_refused",
+        changed: true,
+        digest: null,
+        live: true,
+      },
+      false,
+    ],
+    [
+      "live and failed half an hour ago",
+      {
+        observedAt: minutesAgo(31),
+        revision: "r",
+        error: "model_refused",
+        changed: true,
+        digest: null,
+        live: true,
+      },
+      true,
+    ],
   ] as const)("%s: due is %s", async (_label, row, due) => {
     const { dueForEnrichment } = await import("./run.enrich");
     const { schema } = await import("@oxagen/database");
@@ -515,7 +601,8 @@ describe("which runs the sweep queues", () => {
 /**
  * Evaluate the compiled due predicate against one row. It substitutes each
  * column with the row's value and each parameter with its bound value, then
- * reads the result as a JavaScript boolean expression.
+ * reads the result as a JavaScript boolean expression. A row is an ended,
+ * named run unless it says otherwise.
  */
 function evaluateDue(
   text: string,
@@ -526,6 +613,8 @@ function evaluateDue(
     error: string | null;
     changed: boolean;
     digest: string | null;
+    live?: boolean;
+    named?: boolean;
   },
 ): boolean {
   const col = (name: string) => `"tacho"."sessions"."${name}"`;
@@ -555,6 +644,18 @@ function evaluateDue(
     .replace(
       new RegExp(`${escapeRegExp(col("summary_error"))} is not null`, "gu"),
       JSON.stringify(row.error !== null),
+    )
+    .replace(
+      new RegExp(`${escapeRegExp(col("name"))} is null`, "gu"),
+      JSON.stringify(row.named === false),
+    )
+    .replace(
+      new RegExp(`${escapeRegExp(col("outcome"))} <> \\$(\\d+)`, "gu"),
+      (_m, i: string) =>
+        JSON.stringify(
+          (row.live === true ? "running" : "completed") !==
+            params[Number(i) - 1],
+        ),
     )
     .replace(
       new RegExp(

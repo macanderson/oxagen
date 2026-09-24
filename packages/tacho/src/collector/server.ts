@@ -142,6 +142,24 @@ function authorized(req: IncomingMessage, token: string): boolean {
   return diff === 0;
 }
 
+/**
+ * A harness session id or a chain uuid, as `/sessions/<id>/export` names it.
+ * The daemon reads `<wal>/<id>.ndjson` for an id it does not know, so the
+ * decoded id is held to the characters real ids use: an encoded `/` or `\`
+ * would otherwise walk out of the WAL directory.
+ */
+const SESSION_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/;
+
+function exportKey(segment: string): string | undefined {
+  let key: string;
+  try {
+    key = decodeURIComponent(segment);
+  } catch {
+    return undefined;
+  }
+  return SESSION_KEY.test(key) ? key : undefined;
+}
+
 export interface RequestHandlerOptions {
   /**
    * The loopback port this handler answers on. Set for the TCP listener,
@@ -161,7 +179,16 @@ export function createRequestHandler(
 ): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
     void (async () => {
-      const url = new URL(req.url ?? "/", "http://tachod.local");
+      // `new URL` throws on a request target Node's parser accepted, such as
+      // `http://x:99999/`. Thrown here it was an unhandled rejection, and any
+      // local process could stop the daemon without the bearer.
+      let url: URL;
+      try {
+        url = new URL(req.url ?? "/", "http://tachod.local");
+      } catch {
+        send(res, 400, { error: "invalid request target" });
+        return;
+      }
       if (options.guardPort !== undefined) {
         const verdict = guardLoopbackRequest(
           {
@@ -214,10 +241,12 @@ export function createRequestHandler(
         if (req.method === "GET" && exportMatch !== null) {
           const format = (url.searchParams.get("format") ??
             "tacho") as ExportFormat;
-          const text = api.exportSession(
-            decodeURIComponent(exportMatch[1] as string),
-            format,
-          );
+          const key = exportKey(exportMatch[1] as string);
+          if (key === undefined) {
+            send(res, 400, { error: "invalid session id" });
+            return;
+          }
+          const text = api.exportSession(key, format);
           if (text === undefined) send(res, 404, { error: "unknown session" });
           else send(res, 200, text);
           return;
@@ -346,7 +375,14 @@ export function createRequestHandler(
           error: error instanceof Error ? error.message : String(error),
         });
       }
-    })();
+    })().catch((error: unknown) => {
+      // Nothing a request does may take the daemon down with it.
+      log(
+        `request ${req.method ?? "?"} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      if (!res.headersSent) send(res, 500, { error: "request failed" });
+      else res.destroy();
+    });
   };
 }
 

@@ -365,7 +365,8 @@ export async function Tools({
  */
 export function ToolsLoading() {
   const t = useTranslations("tools");
-  const block = "animate-pulse rounded-md bg-muted motion-reduce:animate-none";
+  // The design's `.sk` shimmer (globals.css), the one every skeleton draws.
+  const block = "skeleton rounded-md";
   return (
     <div
       data-state="loading"

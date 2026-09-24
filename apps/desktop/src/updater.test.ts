@@ -145,6 +145,12 @@ describe("checkForUpdate", () => {
     expect(r.update).toBe(handle);
   });
 
+  it("bounds the check, so a feed that never answers fails instead of spinning", async () => {
+    check.mockResolvedValue(null);
+    await checkForUpdate("2.1.1");
+    expect(check).toHaveBeenCalledWith({ timeout: 30_000 });
+  });
+
   it("rejects when the feed does, so the caller can show the error", async () => {
     check.mockRejectedValue(new Error("Could not fetch a valid release JSON"));
     await expect(checkForUpdate("2.1.1")).rejects.toThrow(/release JSON/);

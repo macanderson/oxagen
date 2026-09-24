@@ -276,6 +276,7 @@ export class TranscriptTailer {
    * The cursor for this session under its agent-qualified key.
    */
   private cursorFor(session: TailedSession, path: string): Cursor {
+    this.reopenIfResumed(session);
     const key = this.cursorKey(session);
     const existing = this.cursors.get(key) ?? this.adoptLegacy(session, key);
     // A drained cursor is final whatever path the session reports now.
@@ -294,10 +295,47 @@ export class TranscriptTailer {
   }
 
   /**
+   * A resume reopens a sealed session, and its cursor with it: the
+   * transcript is read again from where the cursor stopped. Left drained,
+   * every model call the resumed session made was lost. A cursor still in
+   * its quiet grace kept the sealed session's `sealedQuietSinceMs`, and the
+   * next seal drained it with no grace at all. Only the read position
+   * carries over, nothing the sealed session left on the cursor.
+   * A drained cursor that never read its file (the one `tick` makes for a
+   * sealed session it holds none for) does not know where the recorded part
+   * ends, so it stays final rather than feed the whole transcript a second
+   * time.
+   */
+  private reopenIfResumed(session: TailedSession): void {
+    if (session.sealed) return;
+    const key = this.cursorKey(session);
+    const cursor = this.cursors.get(key) ?? this.adoptLegacy(session, key);
+    if (cursor === undefined) return;
+    const reopens =
+      cursor.drained === true
+        ? cursor.ino !== undefined
+        : cursor.sealedQuietSinceMs !== undefined;
+    if (!reopens) return;
+    this.cursors.set(key, {
+      path: cursor.path,
+      offset: cursor.offset,
+      ...(cursor.ino !== undefined ? { ino: cursor.ino } : {}),
+      ...(cursor.head !== undefined ? { head: cursor.head } : {}),
+      subagents: cursor.subagents,
+      // Lines already passed that no gap names yet: still owed to the chain.
+      ...(cursor.refused !== undefined ? { refused: cursor.refused } : {}),
+    });
+    this.dirty = true;
+  }
+
+  /**
    * Advance every live cursor by at most the budget, and drop the cursors of
-   * sessions that left the registry. A drained cursor is kept until then.
+   * sessions that left the registry. A drained cursor is kept until then,
+   * and reopened when its session is.
    */
   async tick(): Promise<void> {
+    for (const session of this.options.sessions())
+      this.reopenIfResumed(session);
     const live = new Set<string>();
     for (const session of this.options.sessions()) {
       const key = this.cursorKey(session);

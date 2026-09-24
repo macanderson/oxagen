@@ -324,7 +324,12 @@ describe("a chain reopened over its own WAL", () => {
       await first.stop();
       handles.splice(0);
       // Spooled while no daemon ran.
-      spool(paths, "01-down", 2_000, hook("UserPromptSubmit", { prompt: "a" }).payload);
+      spool(
+        paths,
+        "01-down",
+        2_000,
+        hook("UserPromptSubmit", { prompt: "a" }).payload,
+      );
       spool(paths, "02-down", 3_000, hook("Stop").payload);
 
       const second = await boot(paths, () => 5_000);

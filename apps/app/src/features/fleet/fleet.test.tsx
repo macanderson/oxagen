@@ -361,6 +361,55 @@ describe("summary tiles", () => {
     );
   });
 
+  // With no rollup yet, the Run page shows what the agent reported, and so
+  // does the row, as an estimate. The tile adds the figure the row shows.
+  it("shows the agent's reported cost where no rollup is recorded yet, in its cell and in Spend shown", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          id: "tse_reported",
+          source: "tacho",
+          status: "sealed",
+          cost: null,
+          reportedCost: usd("1250000", "client_attested"),
+        }),
+        runRow({ id: "arun_done", cost: usd("2870000") }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(row("tse_reported")).toHaveTextContent("$1.25estimate");
+    expect(
+      within(row("tse_reported")).getByTestId("row-cost-reported"),
+    ).toHaveTextContent("estimate");
+    expect(tile("Spend shown")).toHaveTextContent("$4.12");
+    expect(screen.getByTestId("spend-basis")).toHaveTextContent(
+      "client_attested + gateway_observed · USD · includes 1 estimate",
+    );
+    expect(screen.getByTestId("spend-basis")).not.toHaveTextContent(
+      "no cost recorded",
+    );
+  });
+
+  it("shows the rolled-up cost over the reported one (negative)", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          id: "tse_rolled",
+          source: "tacho",
+          status: "sealed",
+          cost: usd("4130000"),
+          reportedCost: usd("1250000", "client_attested"),
+        }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(row("tse_rolled")).toHaveTextContent("$4.13gateway_observed");
+    expect(
+      within(row("tse_rolled")).queryByTestId("row-cost-reported"),
+    ).toBeNull();
+    expect(tile("Spend shown")).toHaveTextContent("$4.13");
+  });
+
   it("opens the approvals drawer from the waiting tile, with the oldest wait off the live clock", async () => {
     const opened = vi.fn();
     window.addEventListener("oxagen:open-approvals", opened);
@@ -809,7 +858,7 @@ describe("not-loaded states", () => {
       }),
     ).toBeInTheDocument();
     expect(empty).toHaveTextContent(
-      "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call — you do not create runs here, agents do.",
+      "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call. You do not create runs here. Agents do.",
     );
     expect(
       within(empty).getByRole("link", { name: "Register Agent" }),
@@ -844,8 +893,13 @@ describe("not-loaded states", () => {
       /^trace and region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
-    // The design's errorState glyph: a circle with an exclamation mark.
-    expect(error.querySelector("svg.lucide-circle-alert")).not.toBeNull();
+    // The design's errorState glyph: a circle with an exclamation mark, in
+    // the failed tone alone.
+    const glyph = error.querySelector("[data-state-icon]");
+    expect(glyph).toHaveAttribute("data-state-icon", "failed");
+    expect(glyph?.querySelector("circle")).not.toBeNull();
+    expect(glyph).toHaveClass("border-error/40");
+    expect(glyph).not.toHaveClass("border-border");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(refresh).toHaveBeenCalledOnce();

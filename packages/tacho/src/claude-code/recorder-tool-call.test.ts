@@ -167,7 +167,7 @@ describe("a tool call reported by every source", () => {
     expect(toolCalls(chain)).toHaveLength(1);
   });
 
-  it("routes a subagent's call to its own chain", () => {
+  it("routes a subagent's call to its own chain and counts it once", () => {
     const chain = recorder();
     chain.ingestHook(
       {
@@ -187,6 +187,9 @@ describe("a tool call reported by every source", () => {
       {},
       at,
     );
+    // Claude Code's OTel record of the child's call carries no `agent_id`,
+    // and the one ledger of the session family already knows the call.
+    chain.ingestOtlp(otelToolResult("toolu_01child"));
     expect(toolCalls(chain)).toHaveLength(1);
     const child = [...chain.openChildren.values()][0];
     expect(child).toBeDefined();

@@ -101,6 +101,7 @@ import { repositoryInstallationAttach } from "./repository.installation.attach";
 import { repositoryGitlabAttach } from "./repository.gitlab.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
+import { runTurnsGet } from "./run.turns.get";
 import { runWorkGet } from "./run.work.get";
 import { runOutputsGet } from "./run.outputs.get";
 import { runTokenIssue } from "./run.token.issue";
@@ -747,6 +748,7 @@ export {
   userPreferencesSet,
   userProfileUpdate,
   runCostGet,
+  runTurnsGet,
   runOutputsGet,
   runWorkGet,
   runProofGet,
@@ -1143,6 +1145,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   userPreferencesSet,
   userProfileUpdate,
   runCostGet,
+  runTurnsGet,
   runOutputsGet,
   runWorkGet,
   runProofGet,

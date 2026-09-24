@@ -1,4 +1,5 @@
-// get_run, get_run_cost and get_run_transcript to the Run page's view models
+// get_run, get_run_cost, get_run_turns and get_run_transcript to the Run
+// page's view models
 // (ARCHITECTURE.md §3.4). Typed from each contract's `_output`, so a field the
 // contract may omit cannot land in a required view field.
 //
@@ -10,6 +11,7 @@ import type { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.ge
 import type { runGet } from "@oxagen/oxagen/contracts/run.get";
 import type { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import type { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import type { z } from "zod";
 import { Cost, moneyFromMicros } from "@/data/contracts/money";
 import type {
@@ -19,6 +21,7 @@ import type {
   RunFrameBody,
   RunOutputs,
   RunTranscript,
+  RunTurns,
 } from "@/data/contracts/run";
 import type { ContractOutput } from "@/server/kernel";
 import { toRunRow } from "./runs";
@@ -29,6 +32,7 @@ type RunTranscriptOutput = ContractOutput<typeof runTranscriptGet>;
 type RunFrameBodyOutput = ContractOutput<typeof runFrameBodyGet>;
 type RunChainOutput = ContractOutput<typeof runChainGet>;
 type RunOutputsOutput = ContractOutput<typeof runOutputsGet>;
+type RunTurnsOutput = ContractOutput<typeof runTurnsGet>;
 
 /** The contract's own cost shape: its `basis` is the closed set the view also keys on. */
 type ContractCost = NonNullable<RunGetOutput["run"]["cost"]>;
@@ -320,6 +324,27 @@ export function toRunTranscript(
  * the ladder are carried across as recorded: the tab's job is to state what
  * the read found, not to reconcile it.
  */
+/** `get_run_turns`: each turn with its cost and its cost so far, each keeping its basis. */
+export function toRunTurns(out: RunTurnsOutput): z.input<typeof RunTurns> {
+  return {
+    turns: out.turns.map((turn) => ({
+      turn: turn.turn,
+      seq: turn.seq,
+      at: turn.at,
+      frames: turn.frames,
+      modelSteps: turn.modelSteps,
+      toolSteps: turn.toolSteps,
+      cost: toCost(turn.cost),
+      cumulativeCost: toCost(turn.cumulativeCost),
+      tokens: {
+        inputUncached: turn.tokens.inputUncached,
+        cacheRead: turn.tokens.cacheRead,
+      },
+    })),
+    complete: out.complete,
+  };
+}
+
 export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
   return {
     hashRule: out.hashRule,

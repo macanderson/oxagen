@@ -7,14 +7,22 @@
 // and Open an incident. Each opens the dialog the design names, which says
 // what it would do and that nothing records it yet (#3820, #3847). A control
 // that silently did nothing would be worse on a page about who may call what.
-import { Box, CircleAlert, Lock } from "lucide-react";
+//
+// Each is the shared `StateWrap`, the design's `.state-wrap`: a glyph tile, a
+// heading, one paragraph and the actions, with no panel around them.
 import { useTranslations } from "next-intl";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
-import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
-import { OutcomePanel } from "@/ui/form-feedback";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  kvTerm,
+  kvValue,
+  mono,
+} from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { StateWrap, stateCode, stateFacts } from "@/ui/state-wrap";
 import { AddConnection } from "./add-connection";
 import { ImportProvider } from "./import-provider";
 import { StubAction, StubField } from "./stub-action";
@@ -33,11 +41,10 @@ export function ToolsEmpty({
 }) {
   const t = useTranslations("tools.empty");
   return (
-    <OutcomePanel
+    <StateWrap
       tone="neutral"
       testId="tools-empty"
       title={t("title")}
-      icon={<Box aria-hidden className="size-5" />}
       actions={
         canImport ? (
           <>
@@ -48,9 +55,9 @@ export function ToolsEmpty({
       }
     >
       {t.rich("body", {
-        code: (chunks) => <span className={mono}>{chunks}</span>,
+        code: (chunks) => <code className={stateCode}>{chunks}</code>,
       })}
-    </OutcomePanel>
+    </StateWrap>
   );
 }
 
@@ -71,11 +78,10 @@ export function ToolsPageFailure({
   switch (read.reason) {
     case "denied":
       return (
-        <OutcomePanel
-          tone="deny"
+        <StateWrap
+          tone="denied"
           testId="tools-denied"
           title={t("denied.title")}
-          icon={<Lock aria-hidden className="size-5" />}
           actions={
             <>
               <StubAction
@@ -105,55 +111,53 @@ export function ToolsPageFailure({
               </SafeLink>
             </>
           }
-        >
-          <span className="flex flex-col gap-4">
-            <span>
-              {t.rich("denied.body", {
-                org: ctx.orgName,
-                permission: read.permission,
-                workspace: ctx.wsSlug,
-                b: (chunks) => (
-                  <b className="font-semibold text-foreground">{chunks}</b>
-                ),
-                code: (chunks) => <span className={mono}>{chunks}</span>,
-              })}
-            </span>
-            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-left text-[13px]">
-              <dt className="text-muted-foreground">{t("denied.signedIn")}</dt>
-              <dd className="text-foreground">
+          after={
+            <dl className={stateFacts}>
+              <dt className={kvTerm}>{t("denied.signedIn")}</dt>
+              <dd className={kvValue}>
                 {roles(ctx.orgRole)} ·{" "}
                 <span className={mono}>{ctx.wsSlug}</span>
               </dd>
-              <dt className="text-muted-foreground">{t("denied.needed")}</dt>
-              <dd className={`${mono} text-foreground`}>
+              <dt className={kvTerm}>{t("denied.needed")}</dt>
+              <dd className={`${kvValue} ${mono}`}>
                 {t("denied.neededValue", {
                   permission: read.permission,
                   workspace: ctx.wsSlug,
                 })}
               </dd>
-              <dt className="text-muted-foreground">{t("denied.decidedBy")}</dt>
-              <dd className="text-foreground">{t("denied.decidedByValue")}</dd>
+              <dt className={kvTerm}>{t("denied.decidedBy")}</dt>
+              <dd className={kvValue}>{t("denied.decidedByValue")}</dd>
             </dl>
-          </span>
-        </OutcomePanel>
+          }
+        >
+          {t.rich("denied.body", {
+            org: ctx.orgName,
+            permission: read.permission,
+            workspace: ctx.wsSlug,
+            b: (chunks) => (
+              <b className="font-semibold text-foreground">{chunks}</b>
+            ),
+            code: (chunks) => <code className={stateCode}>{chunks}</code>,
+          })}
+        </StateWrap>
       );
     case "pending_approval":
       return (
-        <OutcomePanel
+        <StateWrap
           tone="neutral"
+          glyph="lock"
           testId="tools-pending"
           title={t("pending.title")}
         >
           {t("pending.body", { request: read.accessRequestId })}
-        </OutcomePanel>
+        </StateWrap>
       );
     case "error":
       return (
-        <OutcomePanel
-          tone="deny"
+        <StateWrap
+          tone="failed"
           testId="tools-error"
           title={t("error.title")}
-          icon={<CircleAlert aria-hidden className="size-5" />}
           actions={
             <>
               <SafeLink to={toolsLink(at, { tab })} className={buttonPrimary}>
@@ -190,9 +194,9 @@ export function ToolsPageFailure({
           {t.rich("error.body", {
             status: String(read.status),
             code: read.code,
-            mono: (chunks) => <span className={mono}>{chunks}</span>,
+            mono: (chunks) => <code className={stateCode}>{chunks}</code>,
           })}
-        </OutcomePanel>
+        </StateWrap>
       );
   }
 }

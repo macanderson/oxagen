@@ -84,6 +84,15 @@ function agent(
   };
 }
 
+/** `tacho status` saying every wrapped harness's hooks are all in place. */
+const HOOKS_IN = {
+  enrolled: true,
+  hooks: { complete: true, present: ["PreToolUse"], missing: [] },
+  codexHooks: { complete: true, present: ["PreToolUse"], missing: [] },
+  cursorHooks: { complete: true, present: ["preToolUse"], missing: [] },
+  stellaHooks: { complete: true, present: ["pre_tool"], missing: [] },
+} satisfies TachoStatus;
+
 describe("computeAgentRows: not wrapped", () => {
   it("marks a never-seen, unenrolled harness not_wrapped", () => {
     const s = state({ host: null, daemon: null });
@@ -188,7 +197,7 @@ describe("computeAgentRows: hook presence", () => {
     const codex = rows.find((r) => r.key === "codex")!;
     const stella = rows.find((r) => r.key === "stella")!;
     expect(codex.details).toEqual(["Codex 0.9.0", "hooks complete"]);
-    expect(stella.details).toEqual(["Stella 1.0.0", "hooks complete"]);
+    expect(stella.details).toEqual(["stella 1.0.0", "hooks complete"]);
   });
 
   it("says how each harness gets its model credential (ADR-143)", () => {
@@ -366,10 +375,51 @@ describe("computeAgentRows: healthy and idle", () => {
         agents: [agent({ last_seen_at: "2026-09-15T11:57:00Z" })],
       },
     });
-    const rows = computeAgentRows(s, null, NOW);
+    const rows = computeAgentRows(s, HOOKS_IN, NOW);
     const cc = rows.find((r) => r.key === "claude-code")!;
     expect(cc.health).toBe("healthy");
     expect(cc.summary).toBe("last run 3m ago · delivered to Oxagen");
+  });
+
+  it("is unknown, not healthy, while tacho status has not said the hooks are there", () => {
+    const s = state({
+      daemon: {
+        uptime_s: 1,
+        spool_depth: 0,
+        last_ingest_at: "2026-09-15T11:59:00Z",
+        agents: [agent({ last_seen_at: "2026-09-15T11:57:00Z" })],
+      },
+    });
+    // No status at all: it failed, or has not answered yet.
+    const cc = computeAgentRows(s, null, NOW).find(
+      (r) => r.key === "claude-code",
+    )!;
+    expect(cc.health).toBe("unknown");
+    expect(cc.summary).toBe("hooks unknown; last run 3m ago");
+    expect(HEALTH_LABEL[cc.health]).toBe("Unknown");
+    // A status that left this harness's hooks out says no more.
+    const codex = computeAgentRows(
+      state({
+        host: host({ harnesses: ["codex"] }),
+        daemon: {
+          uptime_s: 1,
+          spool_depth: 0,
+          last_ingest_at: "2026-09-15T11:59:00Z",
+          agents: [
+            agent({
+              key: "codex",
+              runtime: "codex",
+              harness: "codex",
+              label: "Codex",
+              last_seen_at: "2026-09-15T11:57:00Z",
+            }),
+          ],
+        },
+      }),
+      { enrolled: true, hooks: HOOKS_IN.hooks },
+      NOW,
+    ).find((r) => r.key === "codex")!;
+    expect(codex.health).toBe("unknown");
   });
 
   it("is healthy on a drained spool with no error even if last_ingest_at is stale", () => {
@@ -382,7 +432,7 @@ describe("computeAgentRows: healthy and idle", () => {
         agents: [agent({ last_seen_at: "2026-09-15T11:57:00Z" })],
       },
     });
-    const rows = computeAgentRows(s, null, NOW);
+    const rows = computeAgentRows(s, HOOKS_IN, NOW);
     expect(rows.find((r) => r.key === "claude-code")!.health).toBe("healthy");
   });
 
@@ -552,9 +602,13 @@ describe("summarizeAgents", () => {
         ],
       },
     });
-    const rows = computeAgentRows(s, null, NOW);
+    const rows = computeAgentRows(s, HOOKS_IN, NOW);
     // codex and stella wrapped but never seen: idle. claude-code: healthy.
     expect(summarizeAgents(rows)).toBe("3 agents wrapped · 1 healthy · 2 idle");
+    // With no status, the one that ran is unknown rather than healthy.
+    expect(summarizeAgents(computeAgentRows(s, null, NOW))).toBe(
+      "3 agents wrapped · 1 unknown · 2 idle",
+    );
   });
 
   it("uses singular phrasing for exactly one wrapped agent", () => {
@@ -675,7 +729,7 @@ describe("computeAgentRows: connected apps", () => {
           spool_depth: 0,
           connected: [
             {
-              client: "claude-desktop",
+              client: "claude-ai",
               enforcement_tier: "gateway",
               calls: 4,
               refused: 0,
@@ -699,7 +753,7 @@ describe("computeAgentRows: connected apps", () => {
           spool_depth: 0,
           connected: [
             {
-              client: "claude-desktop",
+              client: "claude-ai",
               enforcement_tier: "gateway",
               calls: 9,
               refused: 3,
@@ -713,6 +767,62 @@ describe("computeAgentRows: connected apps", () => {
     // A refused call is the mandate being enforced. Nothing to clear.
     expect(row.health).toBe("healthy");
     expect(row.details).toContain("3 refused by its mandate");
+  });
+
+  it("credits only Claude Desktop's own client name, not any client with claude in it", () => {
+    const call = (client: string) => ({
+      client,
+      enforcement_tier: "gateway" as const,
+      calls: 5,
+      refused: 0,
+      last_seen_at: "2026-09-15T11:58:00Z",
+    });
+    const others = connectedOf(
+      state({
+        host: host({ harnesses: ["claude-desktop"] }),
+        daemon: {
+          spool_depth: 0,
+          connected: [call("claude-code"), call("my-claude-bot")],
+        },
+      }),
+      presence(),
+    );
+    expect(others.health).toBe("idle");
+    expect(others.details).toEqual([]);
+    const desktop = connectedOf(
+      state({
+        host: host({ harnesses: ["claude-desktop"] }),
+        daemon: {
+          spool_depth: 0,
+          connected: [call("claude-code"), call("claude-ai")],
+        },
+      }),
+      presence(),
+    );
+    expect(desktop.health).toBe("healthy");
+  });
+
+  it("is unknown, not healthy, while tacho status has not said the entry is there", () => {
+    const row = connectedOf(
+      state({
+        host: host({ harnesses: ["claude-desktop"] }),
+        daemon: {
+          spool_depth: 0,
+          connected: [
+            {
+              client: "claude-ai",
+              enforcement_tier: "gateway",
+              calls: 4,
+              refused: 0,
+              last_seen_at: "2026-09-15T11:58:00Z",
+            },
+          ],
+        },
+      }),
+      null,
+    );
+    expect(row.health).toBe("unknown");
+    expect(row.summary).toBe("entry unknown; last tool call 2m ago");
   });
 
   it("shows how much of the app Oxagen cannot see", () => {

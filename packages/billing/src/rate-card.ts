@@ -347,6 +347,19 @@ export const RATE_CARD: RateCardEntry[] = [
       cacheWritePer1M: 1.75,
     },
   },
+  // Codex's current model, at OpenAI's list price (developers.openai.com,
+  // 2026-09-23), so the CLI's estimate matches what billing charges.
+  {
+    family: "gpt-5.3-codex",
+    label: "GPT-5.3 Codex",
+    vendor: "openai",
+    rate: {
+      inputPer1M: 1.75,
+      outputPer1M: 14.0,
+      cachedInputPer1M: 0.175,
+      cacheWritePer1M: 1.75,
+    },
+  },
   {
     family: "gpt-5-mini",
     label: "GPT-5 mini",

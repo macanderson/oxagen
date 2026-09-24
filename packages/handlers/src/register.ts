@@ -1349,6 +1349,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./run.cost")).runCostHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_turns",
+    async () =>
+      (await import("./run.turns.get"))
+        .runTurnsGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_run_work",
     async () =>
       (await import("./run.work.get")).runWorkGetHandler as CapabilityHandlerFn,
