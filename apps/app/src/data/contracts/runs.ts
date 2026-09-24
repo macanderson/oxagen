@@ -197,6 +197,8 @@ export const RunRow = z.object({
   taskRef: z.string().nullable(),
   /** The generated name; null until `summarize_run` wrote one. */
   enrichmentEnabled: z.boolean().optional(),
+  /** Why the last automatic name and summary failed; absent once one exists. */
+  enrichmentError: z.string().optional(),
   name: z.string().min(1).nullable(),
   summary: RunSummary.nullable(),
   replayGrade: ReplayGrade.nullable(),

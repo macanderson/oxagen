@@ -218,6 +218,7 @@ const ledgerColumns = {
     summary: runs.summary,
     summaryGeneratedAt: runs.summaryGeneratedAt,
     summaryModel: runs.summaryModel,
+    summaryError: runs.summaryError,
   },
   identity: {
     orgNamespace: schema.organizations.namespace,
@@ -517,6 +518,7 @@ const tachoColumns = {
     summary: sessions.summary,
     summaryGeneratedAt: sessions.summaryGeneratedAt,
     summaryModel: sessions.summaryModel,
+    summaryError: sessions.summaryError,
     // `to_jsonb` takes a row, addressed by the FROM-clause's own
     // correlation name for this table, which is just its bare name and
     // never schema-qualified even though every column reference above is.
@@ -611,6 +613,8 @@ type GeneratedSummaryColumns = {
   summary: string | null;
   summaryGeneratedAt: Date | null;
   summaryModel: string | null;
+  /** Why the last automatic account failed, as a short reason code. */
+  summaryError?: string | null;
 };
 
 type LedgerRunCore = GeneratedSummaryColumns & {
@@ -865,6 +869,15 @@ function generatedSummary(
   };
 }
 
+/** The failure reason, carried only while the run has no account to show. */
+function enrichmentError(
+  columns: GeneratedSummaryColumns,
+): Pick<RunItem, "enrichmentError"> {
+  return columns.summaryError && generatedSummary(columns) === null
+    ? { enrichmentError: columns.summaryError }
+    : {};
+}
+
 /** Integer micro-units as the wire's decimal string; refuses a float or NaN. */
 export function microsString(micros: number): string {
   if (!Number.isSafeInteger(micros))
@@ -977,6 +990,7 @@ export function toLedgerRunItem(
     machine: null,
     name: run.name,
     summary: generatedSummary(run),
+    ...enrichmentError(run),
   };
 }
 
@@ -1084,6 +1098,7 @@ export function toTachoRunItem(
     // derived title until then. A run always has something to be called.
     name: session.name ?? session.title ?? null,
     summary: generatedSummary(session),
+    ...enrichmentError(session),
   };
 }
 
@@ -1346,7 +1361,12 @@ export function createRunListHandler(
           enrichmentEnabled: enabled,
           ...(enabled
             ? {}
-            : { name: null, summary: null, canSummarize: false }),
+            : {
+                name: null,
+                summary: null,
+                canSummarize: false,
+                enrichmentError: undefined,
+              }),
         })),
       nextCursor: merged.nextCursor,
     };

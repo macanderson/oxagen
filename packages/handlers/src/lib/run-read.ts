@@ -116,7 +116,14 @@ export async function resolveRun(
   run.item = {
     ...run.item,
     enrichmentEnabled: enabled,
-    ...(enabled ? {} : { name: null, summary: null, canSummarize: false }),
+    ...(enabled
+      ? {}
+      : {
+          name: null,
+          summary: null,
+          canSummarize: false,
+          enrichmentError: undefined,
+        }),
   };
   const witnessFor = await deps.readWitnessFor(scope, publicId);
   if (witnessFor !== null && ctx.apiKeyId !== null) throw runNotFound();
