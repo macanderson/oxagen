@@ -6,7 +6,13 @@
 // detach and reloads the agent's page once it has. A refusal is named in the
 // dialog and nothing navigates, which is what a person who lacks the
 // organization role sees.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -458,5 +464,73 @@ describe("RevokeRole", () => {
       await within(dialog).findByTestId("revoke-role-Agent Operator-failure"),
     ).toHaveTextContent("Your organization role does not allow this change.");
     expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("Role writes while a dialog is open", () => {
+  it("reads the catalogue once, however often the dialog is opened, and the held roles each time", async () => {
+    renderAssign();
+    let dialog = await openAssign();
+    await within(dialog).findByLabelText("Role");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /^(Close|Cancel)$/ }),
+    );
+    dialog = await openAssign();
+    await within(dialog).findByLabelText("Role");
+    expect(readAssignableRoles).toHaveBeenCalledTimes(1);
+    expect(readAgentRoleNames).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends one assign however often the form is submitted while it is pending (negative)", async () => {
+    assignAgentRole.mockReturnValue(new Promise(() => undefined));
+    renderAssign();
+    const dialog = await openAssign();
+    await within(dialog).findByLabelText("Role");
+    const form = dialog.querySelector("form");
+    if (form === null) throw new Error("assign form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(assignAgentRole).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends one revoke however often the form is submitted while it is pending (negative)", async () => {
+    revokeAgentRole.mockReturnValue(new Promise(() => undefined));
+    renderRevoke();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Revoke Agent Operator" }),
+    );
+    const form = screen
+      .getByTestId("revoke-role-Agent Operator")
+      .querySelector("form");
+    if (form === null) throw new Error("revoke form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(revokeAgentRole).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgets a refused revoke when its dialog is closed and opened again", async () => {
+    revokeAgentRole.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    renderRevoke();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Revoke Agent Operator" }),
+    );
+    const dialog = screen.getByTestId("revoke-role-Agent Operator");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Revoke" }),
+    );
+    await screen.findByTestId("revoke-role-Agent Operator-failure");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /^(Close|Cancel)$/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Revoke Agent Operator" }),
+    );
+    expect(
+      screen.queryByTestId("revoke-role-Agent Operator-failure"),
+    ).toBeNull();
   });
 });

@@ -35,7 +35,7 @@ and takes the documented fallback at read time, but nothing a `get_mandate` or
 
 ## App surface
 
-The Mandates ledger on the Tools page, `/{org}/{ws}/tools?tab=mandates`.
+The mandates ledger on the Tools page's Policy tab, `/{org}/{ws}/tools/policy`.
 **Grant a mandate** in the ledger header opens a blank grant with an agent
 picker. **Grant** on a requested row opens the same dialog on that draft and
 sends its id as `requestId`. Both controls are drawn for an org Owner, Admin,
