@@ -121,9 +121,7 @@ export function IssuesList({
                     </GitHubLink>
                   )}
                 </td>
-                <td className={cell}>
-                  {t("closedBy", { number: issue.pr })}
-                </td>
+                <td className={cell}>{t("closedBy", { number: issue.pr })}</td>
               </tr>
             );
           })}

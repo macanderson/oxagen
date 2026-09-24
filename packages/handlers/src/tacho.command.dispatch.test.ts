@@ -255,41 +255,55 @@ describe("resolveDeliveryMode", () => {
 
   it("records next_step and interrupt as turn_boundary on a host with no step carrier", () => {
     for (const tier of ["harness", "gateway", "contained", "observe"]) {
-      expect(resolveDeliveryMode("next_step", tier, [], "claude-code")).toEqual({
-        deliveryMode: "turn_boundary",
-        degradedReason: "no_step_carrier",
-      });
-      expect(resolveDeliveryMode("interrupt", tier, [], "claude-code")).toEqual({
-        deliveryMode: "turn_boundary",
-        degradedReason: "no_step_carrier",
-      });
+      expect(resolveDeliveryMode("next_step", tier, [], "claude-code")).toEqual(
+        {
+          deliveryMode: "turn_boundary",
+          degradedReason: "no_step_carrier",
+        },
+      );
+      expect(resolveDeliveryMode("interrupt", tier, [], "claude-code")).toEqual(
+        {
+          deliveryMode: "turn_boundary",
+          degradedReason: "no_step_carrier",
+        },
+      );
     }
   });
 
   it("carries turn_boundary on every host", () => {
-    expect(resolveDeliveryMode("turn_boundary", "observe", [], "claude-code")).toEqual({
+    expect(
+      resolveDeliveryMode("turn_boundary", "observe", [], "claude-code"),
+    ).toEqual({
       deliveryMode: "turn_boundary",
       degradedReason: null,
     });
   });
 
   it("carries next_step where the host advertises a step carrier", () => {
-    expect(resolveDeliveryMode("next_step", "harness", carrier, "claude-code")).toEqual({
+    expect(
+      resolveDeliveryMode("next_step", "harness", carrier, "claude-code"),
+    ).toEqual({
       deliveryMode: "next_step",
       degradedReason: null,
     });
   });
 
   it("delivers interrupt only where the model proxy can cut the call", () => {
-    expect(resolveDeliveryMode("interrupt", "contained", carrier, "claude-code")).toEqual({
+    expect(
+      resolveDeliveryMode("interrupt", "contained", carrier, "claude-code"),
+    ).toEqual({
       deliveryMode: "interrupt",
       degradedReason: null,
     });
-    expect(resolveDeliveryMode("interrupt", "gateway", carrier, "claude-code")).toEqual({
+    expect(
+      resolveDeliveryMode("interrupt", "gateway", carrier, "claude-code"),
+    ).toEqual({
       deliveryMode: "interrupt",
       degradedReason: null,
     });
-    expect(resolveDeliveryMode("interrupt", "harness", carrier, "claude-code")).toEqual({
+    expect(
+      resolveDeliveryMode("interrupt", "harness", carrier, "claude-code"),
+    ).toEqual({
       deliveryMode: "next_step",
       degradedReason: "harness_tier",
     });
@@ -302,7 +316,9 @@ describe("resolveDeliveryMode by runtime", () => {
   const carrier = [BUNDLE_FEATURE_STEER_NEXT_STEP];
 
   it("carries next_step for Codex as for Claude Code", () => {
-    expect(resolveDeliveryMode("next_step", "harness", carrier, "codex")).toEqual({
+    expect(
+      resolveDeliveryMode("next_step", "harness", carrier, "codex"),
+    ).toEqual({
       deliveryMode: "next_step",
       degradedReason: null,
     });
@@ -547,7 +563,10 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
         bundleFeatures: [],
       },
     ],
-    ["host_offline", { status: "active", lastSeenAt: null, bundleFeatures: [] }],
+    [
+      "host_offline",
+      { status: "active", lastSeenAt: null, bundleFeatures: [] },
+    ],
   ] as const)("a run whose host cannot carry it: %s", async (reason, host) => {
     const store = new MemoryStore([session({ host })]);
     await expect(

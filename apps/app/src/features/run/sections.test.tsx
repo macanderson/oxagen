@@ -19,7 +19,9 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-const { ContextSection, IssuesList, PolicySection } = await import("./sections");
+const { ContextSection, IssuesList, PolicySection } = await import(
+  "./sections"
+);
 
 afterEach(cleanup);
 
@@ -372,9 +374,7 @@ describe("IssuesList", () => {
       </IntlProvider>,
     );
     expect(screen.queryByRole("table")).toBeNull();
-    expect(
-      screen.getByText(/GitHub did not return the issues/),
-    ).not.toBeNull();
+    expect(screen.getByText(/GitHub did not return the issues/)).not.toBeNull();
     expect(screen.queryByText(/no pull request it opened/)).toBeNull();
   });
 

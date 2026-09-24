@@ -109,6 +109,8 @@ export interface TachoFrameRow {
   ttftMs?: number | null;
   /** The provider call's wall time; null when it was not timed. */
   apiDurationMs?: number | null;
+  /** The reasoning effort the harness ran a model call at; empty when unrecorded. */
+  effort?: string;
   /**
    * The chain the frame was recorded on, and where that chain sits in the
    * run. Set only by {@link selectTachoSubagentEvents}, which reads frames
@@ -150,6 +152,7 @@ interface RawTachoFrameRow {
   turn_seq: string | number | null;
   ttft_ms: string | number | null;
   api_duration_ms: string | number | null;
+  effort?: string;
 }
 
 interface RawTachoChainFrameRow extends RawTachoFrameRow {
@@ -166,7 +169,7 @@ interface RawTachoChainFrameRow extends RawTachoFrameRow {
 const FRAME_COLUMNS = `
         seq, toString(ts) AS ts, event_id, kind, prev_hash, hash, content_digest, bytes_ref,
         redactions, body, source, fidelity, attrs, tool_name, tool_status, tool_use_id, model, provider,
-        policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms`;
+        policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms, effort`;
 
 /**
  * A wrapped session's frames past `afterSeq`, in sequence order. The table is
@@ -242,6 +245,8 @@ function frameRowOf(r: RawTachoFrameRow): TachoFrameRow {
     // no clock, so a reassembly's time to first token comes from here.
     ttftMs: nullableCount(r.ttft_ms),
     apiDurationMs: nullableCount(r.api_duration_ms),
+    // The reasoning effort the harness ran the call at; empty when unrecorded.
+    effort: r.effort ?? "",
   };
 }
 
