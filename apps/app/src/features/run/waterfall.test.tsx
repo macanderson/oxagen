@@ -265,7 +265,9 @@ describe("WaterfallPanel", () => {
     const svg = screen.getByRole("img", {
       name: "Cost by turn over the first 2 turns, accumulating to $1.20",
     });
-    expect(svg).toHaveTextContent("first 2 turns");
+    // The chart's end label has little room, so it says the sum is partial;
+    // the chart's name and the total row say which turns it covers.
+    expect(svg).toHaveTextContent(/partial$/);
     expect(svg).not.toHaveTextContent(/total$/);
     expect(screen.getByTestId("waterfall-caption")).toHaveTextContent(
       "The dashed line is cost accumulating to $1.20 over the first 2 turns, not the whole run.",

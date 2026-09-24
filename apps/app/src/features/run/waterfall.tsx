@@ -17,9 +17,10 @@
 // the turn a Spend finding points at), so the Pinned column says that in
 // every row rather than drawing a pin.
 //
-// When the read stops short of the run's last turn (`complete` false), every
-// place that names the sum names the turns it covers: the chart's end label,
-// its accessible name, the caption and the total row. The sum of the first
+// When the read stops short of the run's last turn (`complete` false), no
+// label calls the sum the total. The chart's accessible name, the caption and
+// the total row name the turns it covers, and the chart's end label, which
+// has room for one short word, says "partial". The sum of the first
 // turns is not the run's total, and a label that says "total" beside it would
 // be a figure a FinOps reader acts on as if it were (#3370, from #3415).
 import { useLocale, useTranslations } from "next-intl";
@@ -249,7 +250,7 @@ function Chart({
         fontSize={10}
         className="fill-dim"
       >
-        {complete ? t("total") : t("totalCut", { count: n })}
+        {complete ? t("total") : t("partial")}
       </text>
     </svg>
   );

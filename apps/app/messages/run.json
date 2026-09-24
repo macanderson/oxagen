@@ -797,6 +797,7 @@
       "caption": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total}. Finding pins are not recorded yet.",
       "captionCut": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total} over the first {count, plural, one {# turn} other {# turns}}, not the whole run. Finding pins are not recorded yet.",
       "totalCut": "first {count, plural, one {# turn} other {# turns}}",
+      "partial": "partial",
       "tableLabel": "Cost by turn",
       "columns": {
         "turn": "Turn",
