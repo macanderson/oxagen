@@ -114,6 +114,8 @@ const FAILURES = {
   governance_unreadable: "governanceUnreadable",
   workspace_repository_missing: "repositoryMissing",
   github_refused: "githubRefused",
+  gitlab_refused: "gitlabRefused",
+  gitlab_credential_rejected: "gitlabCredentialRejected",
   base_moved: "baseMoved",
   head_moved: "proposalMoved",
   already_merged: "proposalMoved",

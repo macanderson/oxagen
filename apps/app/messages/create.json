@@ -212,6 +212,8 @@
         "orgRoleRequired": "Opening a skill pull request needs Owner or Admin on the organization.",
         "noRepository": "This workspace has no main repository yet. Bind one in Workspace settings.",
         "githubRefused": "GitHub refused the write. Check the GitHub App’s access to the repository and try again.",
+        "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
+        "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",
         "unanswered": "Oxagen did not answer. Nothing was written. Try again.",
         "refused": "The pull request was refused ({code}). Nothing was written.",
         "invalid": "The {field} value is not one propose_skill accepts. Nothing was written.",

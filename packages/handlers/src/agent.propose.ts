@@ -52,10 +52,8 @@ import {
   capabilityToolsOf,
   toolsBeyondCeiling,
 } from "./agent.definition.commit";
-import {
-  createSteeringGitHub,
-  type SteeringGitHub,
-} from "./context.steering.github";
+import { type SteeringGitHub } from "./context.steering.github";
+import { createSteeringHost } from "./context.steering.host";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { sha256Hex } from "./registry-digest";
 
@@ -355,11 +353,11 @@ export function createProposeAgentHandler(
   };
 }
 
-// Built once: the GitHub seam keys its clients by the repository handle each
+// Built once: each host seam keys its clients by the repository handle each
 // call resolves, so one instance serves every workspace. The initializer is
 // the factory call, which is what the INV-29 role-check test reads.
 export const proposeAgentHandler: CapabilityHandler<typeof agentPropose> =
   createProposeAgentHandler({
-    github: createSteeringGitHub(),
+    github: createSteeringHost(),
     facts: readAgentProposalFacts,
   });

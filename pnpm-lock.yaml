@@ -1382,6 +1382,18 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.8)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
 
+  packages/gitlab:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0)
+
   packages/glob:
     devDependencies:
       '@types/node':
@@ -1426,6 +1438,9 @@ importers:
       '@oxagen/github':
         specifier: workspace:*
         version: link:../github
+      '@oxagen/gitlab':
+        specifier: workspace:*
+        version: link:../gitlab
       '@oxagen/iam':
         specifier: workspace:*
         version: link:../iam
@@ -2255,6 +2270,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@oxagen/gitlab':
+        specifier: workspace:*
+        version: link:../../packages/gitlab
       '@oxagen/handlers':
         specifier: workspace:*
         version: link:../../packages/handlers

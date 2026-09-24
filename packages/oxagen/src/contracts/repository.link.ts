@@ -39,7 +39,11 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { repositoryMainBind } from "./repository.main.bind";
+import {
+  githubOwnerSchema,
+  githubRepositoryNameSchema,
+  repositoryMainBind,
+} from "./repository.main.bind";
 
 export const repositoryLink = registerCapability({
   name: "link_repository",
@@ -61,8 +65,8 @@ export const repositoryLink = registerCapability({
   input: z
     .object({
       provider: z.literal("github").default("github"),
-      owner: repositoryMainBind.input.shape.owner,
-      name: repositoryMainBind.input.shape.name,
+      owner: githubOwnerSchema,
+      name: githubRepositoryNameSchema,
     })
     .strict(),
   output: z

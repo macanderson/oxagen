@@ -62,3 +62,4 @@ Idempotent: an init pull request already open for the repository is answered as 
 | `conflict` | `production_branch_is_init_branch` | the production branch is `oxagen/init`, so the push would land on it |
 | `conflict` | `oxagen_tree_exists` | the repository already has `.oxagen/`; change it with an ordinary pull request |
 | `conflict` | `github_refused` | GitHub refused a push or the pull request, with GitHub's own message |
+| `conflict` | `repository_host_unsupported` | the main repository is a GitLab project; this capability reads and writes through a GitHub App installation and has no GitLab implementation yet (#3762) |

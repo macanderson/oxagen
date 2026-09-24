@@ -22,6 +22,8 @@ const WORDS = {
     workspace_repository_missing: "repositoryMissing",
     governance_unreadable: "governanceUnreadable",
     github_refused: "githubRefused",
+    gitlab_refused: "gitlabRefused",
+    gitlab_credential_rejected: "gitlabCredentialRejected",
   },
 } as const;
 

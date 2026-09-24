@@ -66,6 +66,15 @@ export function useRepositoriesFailure(): (
             return t("authorityDeclared");
           case "github_refused":
             return t("githubRefused");
+          // A GitLab main project (#3762).
+          case "gitlab_refused":
+            return t("gitlabRefused");
+          case "gitlab_credential_rejected":
+            return t("gitlabCredentialRejected");
+          case "gitlab_not_connected":
+            return t("gitlabNotConnected");
+          case "repository_host_unsupported":
+            return t("repositoryHostUnsupported");
           default:
             return t("refused", { code: failure.code });
         }
