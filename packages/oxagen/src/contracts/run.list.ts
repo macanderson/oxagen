@@ -249,6 +249,15 @@ export const runItemSchema = z
      * two. Never a name derived from an email address, and never an email.
      */
     operatorName: z.string().nullable(),
+    /**
+     * How the record came to name `operatorId`. `initiator` is the principal
+     * the run itself was admitted for. `host_enroller` is the person who
+     * enrolled the machine a wrapped session ran on: a wrapped session carries
+     * no principal Oxagen can map to an org member, so the enroller is the
+     * nearest recorded fact, and a caller labels it "enrolled by" rather than
+     * as the person at the keyboard. Null when no operator was recorded.
+     */
+    operatorAttribution: z.enum(["initiator", "host_enroller"]).nullable(),
     status: runStatusSchema,
     outcome: runOutcomeSchema,
     /**
@@ -263,12 +272,27 @@ export const runItemSchema = z
     /** Null until the rollup has priced the run's frames after its seal. */
     cost: runCostSchema.nullable(),
     reportedCost: runCostSchema.nullable().optional(),
-    /** The goal a ledger run was admitted for; tacho records none. */
+    /**
+     * The goal a ledger run was admitted for. Null for a wrapped session: no
+     * dispatch record names its task, and a task is never inferred from a
+     * branch name or model output. The issues a session's pull requests close
+     * are read by `get_run_work`.
+     */
     taskRef: z.string().nullable(),
     /** RFC 3339. */
     startedAt: z.string().datetime(),
-    /** RFC 3339; null while the run is live or no seal was recorded. */
+    /**
+     * RFC 3339; when the server recorded the seal. Null while the run is live
+     * or no seal was recorded. This is receipt time, which trails the stop by
+     * however long the host took to ship it; a wall clock reads `endedAt`.
+     */
     sealedAt: z.string().datetime().nullable(),
+    /**
+     * RFC 3339; when the run stopped, by the recorder's own clock: the stop
+     * event's timestamp for a wrapped session, the seal for a ledger run.
+     * Null while the run is live or no stop was recorded.
+     */
+    endedAt: z.string().datetime().nullable(),
     /**
      * The grade the seal recorded; null while the run is live or its seal
      * predates the recorder. Never computed on read.

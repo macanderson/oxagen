@@ -27,6 +27,7 @@ import {
   mono,
   panel,
 } from "@/ui/control-styles";
+import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { SafeLink, useNavigate } from "@/ui/navigation";
@@ -256,6 +257,9 @@ function Download({
       >
         {t("notPublished")}
       </p>
+      {/* Step one on the machine: install the app, which puts the CLIs the
+          enroll command runs on PATH. The token and its command come after. */}
+      <DesktopDownloads />
       <TokenBox
         org={org}
         ws={ws}

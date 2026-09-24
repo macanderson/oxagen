@@ -102,6 +102,20 @@
                 }
               ]
             },
+            "operatorAttribution": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "initiator",
+                    "host_enroller"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "status": {
               "type": "string",
               "enum": [
@@ -220,6 +234,16 @@
               "type": "string"
             },
             "sealedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "endedAt": {
               "anyOf": [
                 {
                   "type": "string"
@@ -621,6 +645,7 @@
             "operatorId",
             "operatorKind",
             "operatorName",
+            "operatorAttribution",
             "status",
             "outcome",
             "turns",
@@ -630,6 +655,7 @@
             "taskRef",
             "startedAt",
             "sealedAt",
+            "endedAt",
             "replayGrade",
             "verdict",
             "enforcementTier",

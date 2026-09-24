@@ -124,7 +124,17 @@ export const ResolvedApprovalItem = z.object({
   id: PublicId,
   runId: PublicId.nullable(),
   tool: z.string().min(1),
+  /**
+   * The chain's agent hop, as `list_resolved_approvals` records it; null until
+   * the gateway records one. Optional so a surface that never reads it (the
+   * Run page's list) is not made to carry it.
+   */
+  agentKey: z.string().min(1).nullable().optional(),
   requester: PublicId.nullable(),
+  /** The first rule that parked the call (`approval_requests.rule_ids`); null on a chat-gate row. */
+  rule: z.string().min(1).nullable().optional(),
+  /** The mandate the call drew on (`mnd_…`); null on a chat-gate row. */
+  mandateId: PublicId.nullable().optional(),
   createdAt: z.iso.datetime({ offset: true }),
   expiresAt: z.iso.datetime({ offset: true }),
   resolvedAt: z.iso.datetime({ offset: true }),

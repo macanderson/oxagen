@@ -47,7 +47,14 @@ describe("ViewerClock zone seed", () => {
       .mockResolvedValue(readOk({ timeZone: "Asia/Tokyo" }));
     await ViewerClock({
       ctx,
-      source: { shell: { context: vi.fn(), preferences } },
+      source: {
+        shell: {
+          context: vi.fn(),
+          preferences,
+          counts: vi.fn(),
+          notifications: vi.fn(),
+        },
+      },
       children: null,
     });
     expect(setViewerTimeZone).toHaveBeenCalledWith("Asia/Tokyo");
@@ -59,7 +66,14 @@ describe("ViewerClock zone seed", () => {
       .mockResolvedValue(readError("control_plane_unavailable", 503));
     await ViewerClock({
       ctx,
-      source: { shell: { context: vi.fn(), preferences } },
+      source: {
+        shell: {
+          context: vi.fn(),
+          preferences,
+          counts: vi.fn(),
+          notifications: vi.fn(),
+        },
+      },
       children: null,
     });
     expect(setViewerTimeZone).toHaveBeenCalledWith(DEFAULT_TIME_ZONE);

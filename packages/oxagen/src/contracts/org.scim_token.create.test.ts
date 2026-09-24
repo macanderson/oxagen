@@ -33,7 +33,11 @@ describe("create_scim_token output", () => {
     const out = {
       token: "oxscim_abc",
       baseUrl: "https://app.oxagen.sh/api/scim/v2",
-      view: { tokenPrefix: "oxscim_abc", createdAt: "2026-09-23T10:00:00.000Z", lastUsedAt: null },
+      view: {
+        tokenPrefix: "oxscim_abc",
+        createdAt: "2026-09-23T10:00:00.000Z",
+        lastUsedAt: null,
+      },
     };
     expect(orgScimTokenCreate.output.parse(out)).toEqual(out);
   });

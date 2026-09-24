@@ -177,6 +177,16 @@ describe("EnrollHost", () => {
     renderEnroll();
     const dialog = await open("Show the CLI path", "enroll-host-dialog");
     expect(dialog).toHaveTextContent("Enroll a host under Release bot");
+    // The machine needs the app, which puts the CLI on PATH, before the command runs.
+    expect(
+      within(dialog).getByRole("region", { name: "Install the Oxagen app" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("link", { name: "Installer (.msi)" }),
+    ).toHaveAttribute(
+      "href",
+      "https://downloads.oxagen.sh/latest/Oxagen_x64_en-US.msi",
+    );
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Mint a token" }),
     );

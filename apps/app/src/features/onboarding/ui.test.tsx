@@ -361,6 +361,20 @@ describe("the wrap step", () => {
       },
     });
     renderWrap("claude-code");
+    // Step one is installing the app, which puts the CLI the command runs on
+    // PATH, so its links come before the token control.
+    const downloads = screen.getByTestId("desktop-downloads");
+    expect(
+      screen.getByRole("link", { name: "Apple silicon (.dmg)" }),
+    ).toHaveAttribute(
+      "href",
+      "https://downloads.oxagen.sh/latest/Oxagen_aarch64.dmg",
+    );
+    expect(
+      downloads.compareDocumentPosition(
+        screen.getByRole("button", { name: "Issue the token" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Issue the token" }));
     expect(issueEnrollmentToken).toHaveBeenCalledWith(
       ORG,

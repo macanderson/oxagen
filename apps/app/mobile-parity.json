@@ -24,6 +24,12 @@
       "match": "ml-auto hidden rounded border border-border bg-hl px-[5px] font-mono text-[10.5px] text-dim sm:inline",
       "kind": "reflow",
       "equivalent": "The Cmd+K hint inside the command-menu button. It is aria-hidden decoration for a keyboard that a phone does not have; the button it sits in is always tappable, so the capability is unaffected."
+    },
+    {
+      "file": "apps/app/src/features/shell/topbar.tsx",
+      "match": "hidden text-muted-foreground md:block",
+      "kind": "reflow",
+      "equivalent": "The slash between breadcrumbs. A phone's top bar shows only the current crumb (rev1 fleet.md \"Mobile\"), so the separators and the parent crumbs reflow out; every parent page stays one tap away in the thumb bar, the More sheet and the navigation drawer."
     }
   ]
 }

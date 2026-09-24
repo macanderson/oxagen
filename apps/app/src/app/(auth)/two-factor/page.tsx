@@ -13,7 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // Public: after the password step the person holds only Better Auth's short-lived
-// two-factor cookie, not a session (src/proxy.ts PUBLIC_PATHS).
+// two-factor cookie, not a session (src/proxy.ts PUBLIC_PATHS). The proxy sends
+// a visitor holding neither to /login before this page renders.
 export default function TwoFactorPage(props: PageProps<"/two-factor">) {
   return (
     <Suspense fallback={<AuthSkeleton />}>

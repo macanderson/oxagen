@@ -57,6 +57,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Draw under the notch and the home indicator so the shell's
+  // env(safe-area-inset-*) paddings (topbar, nav drawer, thumb bar, sheets)
+  // take effect; without it every inset resolves to 0.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#09090B" },
     { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },

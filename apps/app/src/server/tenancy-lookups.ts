@@ -11,9 +11,11 @@
 // org.org_users, org.invitations, workspace.workspaces,
 // workspace.workspace_slug_history, workspace.workspace_users, auth.users
 // (columns id, two_factor_enabled, and display_name for an inviter), security.org_security_policy,
-// auth.sso_providers (provider_id, keyed by organization_id).
+// auth.sso_providers (provider_id, keyed by organization_id), and
+// billing.plans (slug and included_gau_per_month: the Free plan's published
+// allowance, which the sign-up page states to a visitor with no session).
 import "server-only";
-import { canAccessSSO, resolveOrgTier } from "@oxagen/billing";
+import { canAccessSSO, FREE_PLAN_SLUG, resolveOrgTier } from "@oxagen/billing";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import type { MfaPolicy } from "./mfa-gate";
@@ -98,6 +100,12 @@ export type SystemLookups = {
   readonly invitationByToken: (
     token: string,
   ) => Promise<InvitationRecord | null>;
+  /**
+   * The governed actions the Free plan includes each month, the plan a new
+   * organization starts on (`billing.plans`, `included_gau_per_month`), or
+   * null when the plan row is not seeded.
+   */
+  readonly freePlanIncludedGau: () => Promise<number | null>;
 };
 
 function toOrg(row: typeof schema.organizations.$inferSelect): OrgRecord {
@@ -395,5 +403,18 @@ export const systemLookups: SystemLookups = {
       inviterName: inviter.name,
       inviterRole: inviter.role,
     };
+  },
+
+  async freePlanIncludedGau() {
+    // tenancy: global read of billing.plans, the published plan terms, which
+    // carry no org_id. The query is filtered by the Free plan's slug alone.
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ included: schema.plans.includedGauPerMonth })
+        .from(schema.plans)
+        .where(eq(schema.plans.slug, FREE_PLAN_SLUG))
+        .limit(1),
+    );
+    return rows[0]?.included ?? null;
   },
 };
