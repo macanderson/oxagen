@@ -609,7 +609,13 @@ export function AssistantFlyout() {
   // width wider than this screen reads as the limit.
   const [widest, setWidest] = useState<number | null>(null);
   const shownWidth = widest === null ? width : Math.min(width, widest);
-  const dragRef = useRef<{ left: number; widest: number } | null>(null);
+  // The pointer that grabbed the edge. Events from any other pointer, such as
+  // a second finger on a touchscreen, are ignored until that one lets go.
+  const dragRef = useRef<{
+    pointerId: number;
+    left: number;
+    widest: number;
+  } | null>(null);
 
   function measureWidest(): number {
     const left = panelRef.current?.getBoundingClientRect().left ?? 0;
@@ -997,30 +1003,34 @@ export function AssistantFlyout() {
           keepWidth(next);
         }}
         onPointerDown={(e) => {
-          if (e.button !== 0) return;
+          if (e.button !== 0 || dragRef.current !== null) return;
           e.preventDefault();
           // Guarded because pointer capture is a browser affordance jsdom
           // does not implement.
           if (typeof e.currentTarget.setPointerCapture === "function")
             e.currentTarget.setPointerCapture(e.pointerId);
           const left = panelRef.current?.getBoundingClientRect().left ?? 0;
-          dragRef.current = { left, widest: measureWidest() };
+          dragRef.current = {
+            pointerId: e.pointerId,
+            left,
+            widest: measureWidest(),
+          };
         }}
         onPointerMove={(e) => {
           const drag = dragRef.current;
-          if (drag === null) return;
+          if (drag?.pointerId !== e.pointerId) return;
           setChosenWidth(
             clampAssistantWidth(e.clientX - drag.left, drag.widest),
           );
         }}
         onPointerUp={(e) => {
           const drag = dragRef.current;
-          if (drag === null) return;
+          if (drag?.pointerId !== e.pointerId) return;
           dragRef.current = null;
           keepWidth(clampAssistantWidth(e.clientX - drag.left, drag.widest));
         }}
-        onPointerCancel={() => {
-          if (dragRef.current === null) return;
+        onPointerCancel={(e) => {
+          if (dragRef.current?.pointerId !== e.pointerId) return;
           dragRef.current = null;
           keepWidth(shownWidth);
         }}
