@@ -843,14 +843,13 @@ async function routeHook(
         (draft) => draft.kind === "tool_requested",
       );
       const toolBody = toolDraft?.body ?? {};
+      const spawnToolUseId = toolBody["tool_use_id"];
       // Sealed on the chain the tool request lands on: a subagent's call
       // is recorded on the subagent chain, and so is its decision.
       events.push(
         ...record.recorder.sealCollectorEventOn(
-          toolDrafts[0]?.subagent,
-          typeof toolDrafts[0]?.body["tool_use_id"] === "string"
-            ? toolDrafts[0].body["tool_use_id"]
-            : undefined,
+          toolDraft?.subagent,
+          typeof spawnToolUseId === "string" ? spawnToolUseId : undefined,
           "policy_decision",
           { ...toolBody, ...facts },
           { hook_event_name: "PreToolUse", attrs },
