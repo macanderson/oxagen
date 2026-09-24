@@ -478,9 +478,11 @@ describe("header", () => {
     expect(screen.getByTestId("run-operator-name")).toHaveTextContent(
       /^prn_unknown_kind$/,
     );
-    expect(screen.getByTestId("run-operator")).not.toHaveTextContent(
-      "not recorded",
-    );
+    // The id is the label: the operator never reads "not recorded". Only
+    // the role beside it does, because the run record carries none (#3999).
+    expect(
+      within(screen.getByTestId("run-operator")).queryByText("not recorded"),
+    ).toBeNull();
   });
 
   it("names the operator on the started line with its hover card", async () => {
@@ -613,6 +615,53 @@ describe("header figures and denied viewer", () => {
       }),
     });
     expect(screen.getByTestId("run-status-word")).toHaveTextContent("parked");
+  });
+
+  it("prints sealed or halted for an ended run, with the recorded outcome as its tooltip", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ status: "sealed", outcome: "completed" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const word = screen.getByTestId("run-status-word");
+    // The lifecycle word, never the outcome as a done badge.
+    expect(word).toHaveTextContent(/^sealed/);
+    expect(word).toHaveAttribute("title", "Recorded outcome: completed");
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ status: "halted", outcome: "cancelled" }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-status-word")).toHaveTextContent(/^halted/);
+    expect(screen.getByTestId("run-status-word")).toHaveAttribute(
+      "title",
+      "Recorded outcome: cancelled",
+    );
+  });
+
+  it("names the operator's workspace and says the run records no operator role", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    const line = screen.getByTestId("run-operator-role");
+    expect(line).toHaveTextContent(
+      "operator · role not recorded · core-platform",
+    );
+    expect(line.querySelector("[data-gap='operator-role']")).toHaveAttribute(
+      "title",
+      expect.stringContaining("#3999"),
+    );
+    // The generated-by line prints the recorded model and time, and no
+    // claim the summary record does not hold.
+    expect(screen.getByTestId("run-summary")).not.toHaveTextContent(
+      "light tier",
+    );
   });
 
   it("names the signed-in person on the denied state's Signed in as line", async () => {
@@ -1065,9 +1114,20 @@ describe("transcript", () => {
       .map((half) => half.getAttribute("data-half"));
     expect(halves).toContain("Sent");
     expect(halves).toContain("Returned");
+    // Each decision is a ⚖ chip that opens Oxagen's own frame for it on
+    // Governed actions.
     const decisions = screen.getAllByTestId("entry-decision");
-    expect(decisions[0]).toHaveTextContent("Decision: allow, at frame 6");
-    expect(decisions[1]).toHaveTextContent("Decision: deny, at frame 12");
+    expect(decisions[0]).toHaveAccessibleName("Decision: allow, at frame 6");
+    expect(decisions[0]).toHaveTextContent("⚖");
+    expect(decisions[0]).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=6",
+    );
+    expect(decisions[1]).toHaveAccessibleName("Decision: deny, at frame 12");
+    expect(decisions[1]).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=12",
+    );
   });
 
   it("links a cut body to its frame's whole body on the Frames tab", async () => {
@@ -1312,6 +1372,9 @@ describe("frames", () => {
     expect(screen.getByTestId("player-timeline")).toHaveTextContent(
       "Turn 2 · after steer",
     );
+    // The steer carries its own mark on the Timeline; nothing is parked.
+    expect(screen.getByTestId("player-mark-steer")).toHaveTextContent("steer");
+    expect(screen.queryByTestId("player-mark-parked")).toBeNull();
     expect(screen.getByTestId("player-legend")).toHaveTextContent(
       "model calls1",
     );
@@ -1321,6 +1384,68 @@ describe("frames", () => {
     expect(screen.getByTestId("player-cost")).toHaveTextContent(
       "gateway_observed",
     );
+  });
+
+  it("opens on the parked frame, marks it, and prints the waiting approval with no tier badge", async () => {
+    const { container } = await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            frames: {
+              frames: [
+                runFrame({ cursor: "a", seq: "1", type: "agent_start" }),
+                runFrame({
+                  cursor: "b",
+                  seq: "2",
+                  type: "tool.approval_recorded",
+                  stage: "tool",
+                  cost: null,
+                }),
+                runFrame({ cursor: "c", seq: "3", type: "tool_call" }),
+              ],
+              cursor: null,
+              more: false,
+            },
+          }),
+        ),
+        transcript: ok(runTranscript()),
+        approvals: ok({
+          items: [
+            {
+              id: "apr_1",
+              runId: "tse_7k2m9q",
+              tool: "create_release",
+              agentKey: "acme.core.release-bot",
+              requester: "usr_marcusbell",
+              mandateId: null,
+              rule: "mandate:mnd_1:human_above:amount",
+              autoEligibility: null,
+              createdAt: new Date(NOW - 90_000).toISOString(),
+              expiresAt: new Date(NOW + 3_600_000).toISOString(),
+            },
+          ],
+          more: false,
+        }),
+      },
+      { tab: "actions" },
+    );
+    const frame = screen.getByTestId("player-frame");
+    expect(frame).toHaveTextContent("Frame 2 · tool.approval_recorded");
+    expect(screen.getByTestId("player-mark-parked")).toHaveTextContent(
+      "parked · approval",
+    );
+    const approval = within(screen.getByTestId("player-approval"));
+    expect(approval.getByText("apr_1")).toBeTruthy();
+    expect(approval.getByText("create_release")).toBeTruthy();
+    expect(approval.getByText("mandate:mnd_1:human_above:amount")).toBeTruthy();
+    expect(approval.getByText("1:30")).toBeTruthy();
+    // A frame records no tier of its own, so its card prints none.
+    expect(within(frame).queryByText("gateway")).toBeNull();
+    // The Timeline's tally sits beside its heading, not inside it.
+    expect(
+      screen.getAllByRole("heading", { name: "Timeline", level: 3 }),
+    ).toHaveLength(2);
+    await expectNoAxe(container);
   });
 
   it("names every redaction by its reason", async () => {
@@ -2151,16 +2276,20 @@ describe("figures", () => {
     expect(stats.getByText("$4.13")).toBeTruthy();
     // The cost's caption is its basis and nothing stronger.
     expect(stats.getByText("gateway_observed")).toBeTruthy();
-    // 29% of $4.131265 that the rollup did not count as productive.
-    expect(stats.getByText("$1.20")).toBeTruthy();
-    expect(stats.getByText("unproductive steps")).toBeTruthy();
+    // No store prices the corrective turns yet (G3, #3892), so Wasted says
+    // not recorded rather than showing a different measure under its label.
+    expect(stats.queryByText("$1.20")).toBeNull();
+    const wasted = stats.getByTestId("run-wasted");
+    expect(wasted).toHaveTextContent("not recorded");
+    expect(wasted).toHaveAttribute("data-gap", "G3");
+    expect(stats.getByText("cause not recorded (G3)")).toBeTruthy();
     expect(stats.getByText("83%")).toBeTruthy();
     expect(stats.getByText("saving not recorded")).toBeTruthy();
     expect(stats.getByText("split not recorded")).toBeTruthy();
     await expectNoAxe(container);
   });
 
-  it("counts every prompt after the first as corrective, and captions Wasted by what it measures", async () => {
+  it("counts every prompt after the first as corrective, and Wasted repeats the same count", async () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(
@@ -2176,10 +2305,9 @@ describe("figures", () => {
     const stats = within(screen.getByTestId("run-stats"));
     expect(stats.getByText("3")).toHaveClass("text-info");
     expect(stats.getByText("2 corrective")).toBeTruthy();
-    // Wasted is the rollup's unproductive share, not a count of prompts, so
-    // its caption names what it measures and never the Prompts count.
-    expect(stats.queryByText("2 corrective prompts")).toBeNull();
-    expect(stats.getByText("unproductive steps")).toBeTruthy();
+    // The Prompts box and the Wasted line read the same corrective count.
+    expect(stats.getByText("2 corrective prompts")).toBeTruthy();
+    expect(stats.getByTestId("run-wasted")).toHaveTextContent("not recorded");
   });
 
   it("marks a prompt count from a transcript that stopped short as a floor (negative)", async () => {
@@ -2262,6 +2390,11 @@ describe("the work", () => {
     );
     expect(spend.getByTestId("run-dearest-tools")).toHaveTextContent(
       "create_release3 calls",
+    );
+    // The spec's heading, with the order it can carry said under it.
+    expect(spend.getByText("Dearest tools")).toBeTruthy();
+    expect(spend.getByTestId("run-dearest-order")).toHaveTextContent(
+      "Ranked by calls",
     );
     expect(
       spend.getByRole("link", { name: "All 1 tools on Cost" }),
@@ -2433,6 +2566,14 @@ describe("policy and context", () => {
     );
     expect(context.getByText("engram recall")).toBeTruthy();
     expect(context.queryByText("Bash")).toBeNull();
+    // Tok, Score and Cited say why they are empty (G10).
+    expect(context.getByTestId("run-context-frames-gap")).toHaveTextContent(
+      "G10, #3894",
+    );
+    // Retrieval stats name all six fields it cannot fill.
+    const stats = screen.getByRole("region", { name: "Retrieval stats" });
+    expect(stats).toHaveTextContent("headroom left");
+    expect(stats).toHaveTextContent("the composition digest");
     // The window itself needs USED_CONTEXT edges (G10), and says so.
     expect(screen.getByText("No window on record")).toBeTruthy();
     // Walk the window waits on the same edges, and says so.
@@ -2510,10 +2651,115 @@ describe("policy and context", () => {
     const cut = panel.getByTestId("run-manifest-cut");
     expect(cut).toHaveTextContent("ctx.release.old-format");
     expect(cut).toHaveTextContent("it did not fit the token budget");
-    expect(panel.getByText(/bundle v7 · frame 2/)).toBeTruthy();
+    // The included must record sits in the stable prefix, and the footer
+    // says no context.assembled frame was recorded on this run.
+    expect(panel.getByTestId("run-manifest-prefix")).toHaveTextContent(
+      "stable prefix",
+    );
+    expect(panel.queryByTestId("run-manifest-more-cut")).toBeNull();
+    expect(panel.getByTestId("run-manifest-footer")).toHaveTextContent(
+      "bundle v7 · manifest frame 2 · no context.assembled frame recorded",
+    );
     // Steering has no Preview to open yet (#3879), so the control says so.
     expect(panel.getByTestId("run-manifest-preview")).toBeDisabled();
     await expectNoAxe(container);
+  });
+
+  it("draws the manifest as a spine: gate notices, stable prefix, volatile ranks, cuts and N more cut", async () => {
+    const manifest = transcriptEntry({
+      seq: "2",
+      endSeq: "2",
+      kind: "frame",
+      type: "steering.manifest",
+      label: "steering.manifest",
+      kinds: [],
+    });
+    const assembled = transcriptEntry({
+      seq: "3",
+      endSeq: "3",
+      kind: "frame",
+      type: "context.assembled",
+      label: "context.assembled",
+      kinds: [],
+    });
+    const item = (
+      id: string,
+      kind: string,
+      force: string,
+      outcome: "included" | "cut",
+    ) => ({
+      id,
+      kind,
+      force,
+      recorded_at: "2026-09-20T00:00:00Z",
+      tokens: 30,
+      outcome,
+      ...(outcome === "cut" ? { reason: "budget" } : {}),
+    });
+    const body = JSON.stringify({
+      schema: "oxagen.steering.manifest/1",
+      budget_tokens: 2000,
+      spent_tokens: 120,
+      included: 4,
+      cut: 5,
+      text_digest: null,
+      items: [
+        item("gate.never-merge", "policy", "must", "included"),
+        item("ctx.release.semver", "record", "must", "included"),
+        item("ctx.release.milestone", "record", "info", "included"),
+        item("ctx.platform.changelog", "record", "may", "included"),
+        item("cut.a", "skill", "info", "cut"),
+        item("cut.b", "skill", "info", "cut"),
+        item("cut.c", "skill", "info", "cut"),
+        item("cut.d", "skill", "info", "cut"),
+        item("cut.e", "skill", "info", "cut"),
+      ],
+      bundle_version: 41,
+      bundle_etag: "etag-41",
+    });
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ entries: [manifest, assembled] })),
+        frameBody: ok(runFrameBody({ seq: "2", text: body })),
+      },
+      { tab: "context" },
+    );
+    const panel = within(
+      screen.getByRole("region", { name: "Manifest frame" }),
+    );
+    expect(panel.getByTestId("run-manifest-gate")).toHaveTextContent(
+      "gate.never-merge",
+    );
+    expect(panel.getByTestId("run-manifest-gate")).toHaveTextContent(
+      "gate notice",
+    );
+    expect(panel.getByTestId("run-manifest-prefix")).toHaveTextContent(
+      "ctx.release.semver",
+    );
+    const volatile = panel.getAllByTestId("run-manifest-volatile");
+    expect(volatile[0]).toHaveTextContent("volatile · rank 1");
+    expect(volatile[1]).toHaveTextContent("volatile · rank 2");
+    // The order is gates, prefix, volatile, then cuts.
+    const order = panel
+      .getByTestId("run-manifest")
+      .querySelectorAll("li[data-testid]");
+    expect([...order].map((li) => li.getAttribute("data-testid"))).toEqual([
+      "run-manifest-gate",
+      "run-manifest-prefix",
+      "run-manifest-volatile",
+      "run-manifest-volatile",
+      "run-manifest-cut",
+      "run-manifest-cut",
+      "run-manifest-cut",
+      "run-manifest-more-cut",
+    ]);
+    expect(panel.getByTestId("run-manifest-more-cut")).toHaveTextContent(
+      "2 more cut",
+    );
+    expect(panel.getByTestId("run-manifest-footer")).toHaveTextContent(
+      "assembled at frame 3 (context.assembled)",
+    );
   });
 
   it("reads no frame body on Context when the run sealed no manifest (negative)", async () => {

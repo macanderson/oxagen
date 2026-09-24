@@ -10,7 +10,13 @@
 //    name.
 // 3. A gate sits where it stopped the run, with the held call under it.
 // 4. Missing output evidence is stated without claiming no work happened.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -216,11 +222,15 @@ describe("the spine", () => {
       "would:push_to_remote",
     ]);
     expect(screen.getByTestId("run-outputs-tally")).toHaveTextContent("1 gate");
-    expect(
-      screen
-        .getByRole("link", { name: "Review the approval" })
-        .getAttribute("href"),
-    ).toBe("/acme/core-platform/runs/tse_7k2m9q?tab=actions");
+    // The record gives a gate no frame, so Review the approval opens the
+    // shell's approvals drawer, where the parked call is decided.
+    const opened = vi.fn();
+    window.addEventListener("oxagen:open-approvals", opened);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review the approval" }),
+    );
+    window.removeEventListener("oxagen:open-approvals", opened);
+    expect(opened).toHaveBeenCalledTimes(1);
     // A gate the record gave no frame carries no frame chip, rather than one
     // pointing at a frame it was not recorded on.
     const gate = screen

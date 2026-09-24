@@ -304,6 +304,14 @@ describe("Waterfall", () => {
     expect(screen.getByTestId("waterfall-total")).toHaveTextContent(
       "of $4.00 recorded",
     );
+    // No store keys a finding to a turn (#4001): Pinned says not recorded,
+    // never "none", and the total carries its basis.
+    const pinned = within(rows[0] as HTMLElement).getByText("not recorded", {
+      selector: "td[data-gap='finding-pins']",
+    });
+    expect(pinned).toHaveAttribute("title", expect.stringContaining("#4001"));
+    expect(screen.queryByText("none")).toBeNull();
+    expect(screen.getByTestId("waterfall-total-basis")).toBeInTheDocument();
   });
 
   it("passes an axe check on the loaded render", async () => {

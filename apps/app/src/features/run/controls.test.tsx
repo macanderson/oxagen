@@ -270,6 +270,43 @@ describe("run controls", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
+  it("reads Pausing… on a disabled control once the pause is queued, until the record says paused", async () => {
+    haltRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_1"] } });
+    const user = userEvent.setup();
+    const { rerender } = renderControls();
+    await user.click(screen.getByTestId("run-pause"));
+    await user.click(screen.getByRole("button", { name: "Queue the pause" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("queued-command")).toBeTruthy();
+    });
+    await user.click(screen.getByRole("button", { name: "Re-read the run" }));
+    // The record has not flipped: the control shows the transition, disabled.
+    const pausing = screen.getByTestId("run-pause");
+    expect(pausing).toBeDisabled();
+    expect(pausing).toHaveTextContent("Pausing…");
+    // Steer and Cancel stay live while the pause is in flight.
+    expect(screen.getByTestId("run-steer")).toBeEnabled();
+    // The next read says paused: Resume run takes its place.
+    rerender(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          status="live"
+          source="tacho"
+          enforcementTier="harness"
+          ingressPaused
+          orgRole="member"
+          wsRole="member"
+        />
+      </IntlProvider>,
+    );
+    const resume = screen.getByTestId("run-resume");
+    expect(resume).toBeEnabled();
+    expect(resume).toHaveTextContent("Resume run");
+  });
+
   it("shows the durable ingress fence and disables repeat cancellation", () => {
     render(
       <IntlProvider>

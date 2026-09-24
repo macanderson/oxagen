@@ -233,7 +233,7 @@ describe("a run held on an interjection", () => {
     expect(within(pane).getAllByTestId("interjection-frame")).toHaveLength(3);
     const pending = within(pane).getAllByTestId("interjection-frame-pending");
     expect(pending.map((row) => row.textContent)).toEqual([
-      "control.answer pending",
+      "control.answer Marcus answered · pending",
       "skills.resolved waits on the answer",
       "context.assembled waits on the answer",
       "model.request the first model call of the run has not happened",
