@@ -776,12 +776,12 @@ describe("poll etag", () => {
   );
 
   it("sends the etag while the signed copy is in the first half of its window", () => {
-    expect(
-      pollEtag(day, Date.parse("2026-09-10T00:00:00.000Z")),
-    ).toBe("etag-3");
-    expect(
-      pollEtag(day, Date.parse("2026-09-10T11:59:59.999Z")),
-    ).toBe("etag-3");
+    expect(pollEtag(day, Date.parse("2026-09-10T00:00:00.000Z"))).toBe(
+      "etag-3",
+    );
+    expect(pollEtag(day, Date.parse("2026-09-10T11:59:59.999Z"))).toBe(
+      "etag-3",
+    );
   });
 
   it("drops the etag past half the window, so the mandate comes back re-signed", () => {

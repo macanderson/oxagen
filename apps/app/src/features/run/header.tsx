@@ -582,6 +582,35 @@ function AgentLine({
   );
 }
 
+/**
+ * The run's state word. A live run that is paused, or has a call parked for
+ * approval, says which, because "live" and a pulsing dot read as a run that
+ * is moving when it is waiting on a person. Paused wins over parked: a paused
+ * run takes no step whatever its calls are waiting on.
+ *
+ * The word sits in a polite live region, so when a refresh of the page parks
+ * a call or pauses the run, a screen reader hears the new word.
+ */
+function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
+  const t = useTranslations("run.header");
+  const live = run.status === "live";
+  return (
+    <span role="status" data-testid="run-status" className="inline-flex">
+      {live && run.ingressPaused === true ? (
+        <Badge tone="approval" data-status="paused">
+          {t("statusPaused")}
+        </Badge>
+      ) : live && parked ? (
+        <Badge tone="approval" data-status="parked">
+          {t("statusParked")}
+        </Badge>
+      ) : (
+        <StatusBadge status={run.status} outcome={run.outcome} />
+      )}
+    </span>
+  );
+}
+
 /** "Paused" or "Paused at …": the banner under the header while ingress is held. */
 function PauseBanner({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
@@ -607,6 +636,7 @@ export function RunHeader({
   orgRole,
   wsRole,
   place,
+  parked = false,
 }: {
   run: RunRow;
   /** `get_agent` for the run's agent; null when the run names no agent. */
@@ -627,6 +657,8 @@ export function RunHeader({
   orgRole: OrgRole;
   wsRole: WsRole;
   place: Place;
+  /** A call on this run is parked for approval. */
+  parked?: boolean;
 }) {
   const t = useTranslations("run");
   const fit = runFit(run, metrics);
@@ -653,7 +685,7 @@ export function RunHeader({
               notRecorded={t("notRecorded")}
               sub={<AgentLine run={run} agent={agent} roster={roster} />}
             />
-            <StatusBadge status={run.status} outcome={run.outcome} />
+            <RunStatusWord run={run} parked={parked} />
             <EnforcementTierBadge
               tier={run.enforcementTier}
               testId="run-tier"

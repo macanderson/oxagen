@@ -236,6 +236,93 @@ describe("ChangeLimits on a per-call-only bound", () => {
   });
 });
 
+// A mandate whose only limit is money used to open this dialog blank, because
+// the form could not scale a figure. The action now reads the stored kind before
+// it scales (actions.ts, ADR-108), so the dialog opens on the money limit in its
+// own currency, each figure a plain decimal a person can type back.
+describe("ChangeLimits on a money limit", () => {
+  // `amount`: $250 a call and $2,000 a month, held as micros, plus a calls cap.
+  const moneyOnly = mandateRow({
+    authority: [
+      mandateAuthority({
+        perCall: {
+          kind: "money",
+          money: { micros: "250000000", currency: "USD" },
+        },
+        perPeriod: {
+          kind: "money",
+          money: { micros: "2000500000", currency: "USD" },
+        },
+      }),
+      callsAuthority(),
+    ],
+  });
+  const MONEY = {
+    measure: "amount",
+    unit: "USD",
+    perCall: "250",
+    perPeriod: "2000.5",
+    period: "monthly",
+    callsPerDay: "50",
+  };
+
+  it("opens on the amount in its currency, each figure a decimal rather than micros", async () => {
+    draw(moneyOnly);
+    await open();
+    const form = dialog();
+    expect(within(form).getByLabelText("Measure")).toHaveValue("amount");
+    expect(within(form).getByLabelText("Unit")).toHaveValue("USD");
+    expect(within(form).getByLabelText("Per call")).toHaveValue("250");
+    expect(within(form).getByLabelText("Per period")).toHaveValue("2000.5");
+    expect(within(form).getByLabelText("Per period")).not.toHaveValue(
+      "2000500000",
+    );
+    expect(within(form).getByLabelText("Per call")).toHaveAttribute(
+      "inputmode",
+      "decimal",
+    );
+    await expectNoAxe(document.body);
+  });
+
+  it("sends the amount typed as typed, with the decimal prefill as its baseline", async () => {
+    draw(moneyOnly);
+    const user = await open();
+    const form = dialog();
+    await user.clear(within(form).getByLabelText("Per period"));
+    await user.type(within(form).getByLabelText("Per period"), "1500.25");
+    await confirm(user);
+    // The dialog sends strings and no kind. Scaling happens on the server,
+    // against the kind the record holds.
+    expect(changeMandateLimits).toHaveBeenCalledWith("acme", "core-platform", {
+      mandateId: moneyOnly.id,
+      ...MONEY,
+      perPeriod: "1500.25",
+      validTo: "",
+      baseline: MONEY,
+    });
+  });
+
+  it("opens on the counted measure when the mandate holds both (negative)", async () => {
+    draw(
+      mandateRow({
+        authority: [
+          mandateAuthority(),
+          mandateAuthority({
+            measure: "rows",
+            perCall: { kind: "count", count: "50", unit: "rows" },
+            perPeriod: { kind: "count", count: "1000", unit: "rows" },
+          }),
+        ],
+      }),
+    );
+    await open();
+    const form = dialog();
+    expect(within(form).getByLabelText("Measure")).toHaveValue("rows");
+    expect(within(form).getByLabelText("Unit")).toHaveValue("rows");
+    expect(within(form).getByLabelText("Per period")).toHaveValue("1000");
+  });
+});
+
 // `revoke_mandate` takes a draft as well as an active mandate, because declining
 // a request is the revocation of a mandate that never took effect. This component
 // is the app's only caller of it, so a draft the header refuses to act on is a

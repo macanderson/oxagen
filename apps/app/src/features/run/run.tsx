@@ -27,7 +27,14 @@ import { ContextTab, entriesOf, IssuesTab, PolicyTab } from "./sections";
 import { RunDenied, RunEmpty, RunError, RunPending } from "./states";
 import { StatRow, SummaryPanel } from "./stats";
 import type { RunTabProps } from "./tab-props";
-import { RunTabs, type Tab, type TabFigure, tabOf } from "./tabs";
+import {
+  RUN_TAB_PANEL,
+  RunTabs,
+  runTabId,
+  type Tab,
+  type TabFigure,
+  tabOf,
+} from "./tabs";
 import { parseKinds, TranscriptTab } from "./transcript";
 import { buildFeed } from "./transcript-model";
 import { readWholeTranscript } from "./whole-transcript";
@@ -278,6 +285,7 @@ export async function Run({
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         place={place}
+        parked={parked}
       />
       <div className="grid grid-cols-1 items-start gap-3.5 min-[67.5rem]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col">
@@ -294,6 +302,9 @@ export async function Run({
           <StatRow run={run} metrics={metrics} />
           <Tabs props={props} parked={parked} selected={selected} />
           <div
+            id={RUN_TAB_PANEL}
+            role="tabpanel"
+            aria-labelledby={runTabId(selected)}
             data-testid={`run-tab-${selected}`}
             className="flex flex-col gap-3.5"
           >

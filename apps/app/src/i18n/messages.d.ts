@@ -6646,6 +6646,8 @@ type Messages = {
       pathRecorded: string;
       withFacts: string;
       pausedTitle: string;
+      statusPaused: string;
+      statusParked: string;
       fit: {
         fit: string;
         wrongTier: string;
@@ -6672,7 +6674,7 @@ type Messages = {
       cacheHit: string;
       tokensNote: string;
       tokensProvisional: string;
-      wastedNote: string;
+      wastedNotRecorded: string;
       noRollup: string;
       oneShot: string;
       corrective: string;
@@ -6680,7 +6682,6 @@ type Messages = {
       estimate: string;
       basisNotRecorded: string;
       noEnd: string;
-      nothingWasted: string;
       mostly: {
         model: string;
         tool: string;
