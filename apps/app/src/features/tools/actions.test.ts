@@ -33,6 +33,7 @@ const {
   importTools,
   readConnection,
   registerServer,
+  removeProvider,
   saveApprovalRule,
   setApprovalRuleEnabled,
   setToolClassification,
@@ -995,5 +996,35 @@ describe("registerServer", () => {
       }),
     ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("removeProvider", () => {
+  it("removes the provider through delete_mcp_server and answers that it went", async () => {
+    invoke.mockResolvedValue({ mcpServerId: "mcs_01k5s9", deleted: true });
+    expect(
+      await removeProvider("acme", "core-platform", " mcs_01k5s9 "),
+    ).toEqual({ ok: true, value: { deleted: true } });
+    expect(invoke).toHaveBeenCalledWith(
+      "delete_mcp_server",
+      { mcpServerId: "mcs_01k5s9" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("answers deleted: false for a provider that was already gone (negative)", async () => {
+    invoke.mockResolvedValue({ mcpServerId: "mcs_01k5s9", deleted: false });
+    expect(await removeProvider("acme", "core-platform", "mcs_01k5s9")).toEqual(
+      { ok: true, value: { deleted: false } },
+    );
+  });
+
+  it("passes on the handler's refusal with nothing removed (negative)", async () => {
+    // The handler asserts an org Owner or Admin itself (INV-29), so the
+    // refusal comes back from the kernel rather than from a gate here.
+    invoke.mockRejectedValue(refused("org_role_required"));
+    expect(await removeProvider("acme", "core-platform", "mcs_01k5s9")).toEqual(
+      { ok: false, reason: "denied", code: "org_role_required" },
+    );
   });
 });
