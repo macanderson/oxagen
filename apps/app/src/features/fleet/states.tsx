@@ -106,7 +106,7 @@ export function FleetEmpty({
 }
 
 /** An instant as the design prints it on the trace line: `2026-09-11 09:16:04Z`. */
-export function utcInstant(epochMs: number): string {
+function utcInstant(epochMs: number): string {
   return `${new Date(epochMs).toISOString().slice(0, 19).replace("T", " ")}Z`;
 }
 
