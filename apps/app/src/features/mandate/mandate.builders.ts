@@ -73,6 +73,8 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       freshness: refuse,
       hub: refuse,
       deliveries: refuse,
+      memories: refuse,
+      tree: refuse,
     },
     tools: {
       versions: refuse,

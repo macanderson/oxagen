@@ -5827,18 +5827,207 @@ type Messages = {
       issue: string;
       assignments: {
         what: string;
+        lead: string;
+        receivesTitle: string;
+        agentsBadge: string;
+        openLibrary: string;
+        openCompiler: string;
+        columns: {
+          agent: string;
+          repository: string;
+          delivery: string;
+          gates: string;
+          prefix: string;
+          volatile: string;
+          cut: string;
+          skills: string;
+          perRun: string;
+          action: string;
+        };
+        truncated: string;
+        panelNote: string;
+        scopeTitle: string;
+        itemsBadge: string;
+        scopeColumns: {
+          scope: string;
+          items: string;
+          reaches: string;
+        };
+        reaches: {
+          org: string;
+          workspace: string;
+          repository: string;
+          agent: string;
+        };
+        scopeWhat: string;
+        closing: string;
+        empty: {
+          title: string;
+          body: string;
+          action: string;
+        };
       };
       gates: {
         what: string;
+        textTitle: string;
+        textBody: string;
+        gateTitle: string;
+        gateBody: string;
+        noticesTitle: string;
+        closing: string;
+        tiers: string;
+        editSwitches: string;
+        outcomes: {
+          killSwitch: string;
+        };
+        kinds: {
+          killSwitch: string;
+        };
+        applies: {
+          class: string;
+          org: string;
+          workspace: string;
+          tool_server: string;
+          tool_version: string;
+          connection: string;
+          agent: string;
+          operator: string;
+        };
+        noSwitch: string;
+        columns: {
+          gate: string;
+          outcome: string;
+          applies: string;
+          notice: string;
+          cost: string;
+          edit: string;
+        };
+        truncated: string;
       };
       compiler: {
         what: string;
+        empty: {
+          title: string;
+          body: string;
+        };
+        agent: string;
+        prompt: string;
+        placeholder: string;
+        noAgent: string;
+        option: string;
+        hint: string;
+        chips: string;
+        prefixMeter: string;
+        volatileMeter: string;
+        parts: {
+          prefix: {
+            title: string;
+            tally: string;
+            sub: string;
+          };
+          volatile: {
+            title: string;
+            tally: string;
+            sub: string;
+          };
+          skills: {
+            title: string;
+            tally: string;
+            sub: string;
+          };
+        };
+        cutsTitle: string;
+        cutsBadge: string;
+        closing: string;
       };
       memory: {
-        what: string;
+        empty: {
+          title: string;
+          body: string;
+        };
+        gapTitle: string;
+        notRecorded: string;
+        tiles: {
+          memories: string;
+          memoriesNote: string;
+          sources: string;
+          sourcesNote: string;
+          recalled: string;
+          recalledNote: string;
+          byClass: string;
+          byClassNote: string;
+        };
+        lead: string;
+        forgotten: string;
+        title: string;
+        columns: {
+          memory: string;
+          class: string;
+          force: string;
+          scope: string;
+          lastRecalled: string;
+          tokens: string;
+          assembler: string;
+        };
+        open: string;
+        provenance: string;
+        tokensTitle: string;
+        tokens: string;
+        compiler: string;
+        compilerNote: string;
+        truncated: string;
+        dialog: {
+          subtitle: string;
+          forget: string;
+          promote: string;
+          class: string;
+          forceNotRecorded: string;
+          scope: string;
+          origin: string;
+          recalled: string;
+          cost: string;
+          costValue: string;
+          since: string;
+          position: string;
+        };
+        forget: {
+          title: string;
+          keep: string;
+          pending: string;
+          confirm: string;
+          body: string;
+          other: string;
+        };
       };
       ontology: {
-        what: string;
+        lead: string;
+        repository: string;
+        title: string;
+        columns: {
+          term: string;
+          kind: string;
+          definition: string;
+          force: string;
+          about: string;
+          tokens: string;
+          file: string;
+        };
+        notBacked: string;
+        index: {
+          title: string;
+          today: {
+            term: string;
+            body: string;
+          };
+          later: {
+            term: string;
+            body: string;
+          };
+          notHere: {
+            term: string;
+            body: string;
+          };
+        };
       };
       instructions: {
         what: string;
@@ -5846,6 +6035,7 @@ type Messages = {
       skillSource: {
         pending: string;
       };
+      notRecorded: string;
     };
     failure: {
       denied: string;
@@ -5895,6 +6085,71 @@ type Messages = {
         commit: string;
         path: string;
         published: string;
+      };
+      sort: string;
+      sorts: {
+        shown: string;
+        asc: string;
+        desc: string;
+      };
+      forceTitle: string;
+      effectTitle: string;
+      tokensTitle: string;
+      tokens: string;
+      compilesTitle: string;
+      compilesNotRecorded: string;
+      newTitle: string;
+      new: string;
+      published: string;
+      openLabel: string;
+      effectLineTitle: string;
+      effectNotRecorded: string;
+      truncated: string;
+      note: string;
+      disk: {
+        title: string;
+        failed: string;
+        unbound: string;
+        absent: string;
+        at: string;
+        noHead: string;
+        note: string;
+        comments: {
+          workspace: string;
+          governance: string;
+          promotions: string;
+          skills: string;
+          ontology: string;
+          proposals: string;
+          agents: string;
+        };
+      };
+      injection: {
+        title: string;
+        badge: string;
+        lead: string;
+        points: {
+          "1": {
+            head: string;
+            body: string;
+          };
+          "2": {
+            head: string;
+            body: string;
+          };
+          "3": {
+            head: string;
+            body: string;
+          };
+          "4": {
+            head: string;
+            body: string;
+          };
+          "5": {
+            head: string;
+            body: string;
+          };
+        };
       };
     };
     proposals: {

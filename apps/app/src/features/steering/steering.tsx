@@ -13,7 +13,11 @@
 // tab and shelf owns its empty copy in its own body. Each body makes only the
 // reads it shows.
 import { Suspense, type ReactNode } from "react";
-import type { ContextPr } from "@/data/contracts/steering";
+import {
+  type ContextPr,
+  type MemoryPage,
+  STEERING_READ_MAX,
+} from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import { getAuthUser } from "@/server/session";
@@ -55,6 +59,8 @@ async function Body({
   at,
   pr,
   published,
+  memories,
+  repository,
 }: {
   ctx: WsCtx;
   source: DataSource;
@@ -64,6 +70,10 @@ async function Body({
   pr: Read<ContextPr> | null;
   /** Records in force, from the hub's own read. */
   published: number;
+  /** The Memory shelf's read, made by the hub; null off that shelf. */
+  memories: MemoryPage | null;
+  /** The main repository the governance read named, or null. */
+  repository: string | null;
 }) {
   // The async bodies are awaited here rather than rendered as elements, so
   // each read runs before the hub returns and a test renders the result.
@@ -98,7 +108,6 @@ async function Body({
             source,
             at,
             kind: view.kind,
-            offset: view.offset,
           });
         case "skills":
           return (
@@ -117,9 +126,13 @@ async function Body({
             </>
           );
         case "memory":
-          return <MemoryShelf />;
+          // The hub read it; a failed read is the hub's own state and
+          // never reaches here.
+          return memories === null ? null : (
+            <MemoryShelf at={at} page={memories} />
+          );
         case "ontology":
-          return <OntologyShelf />;
+          return <OntologyShelf repository={repository} />;
         case "instructions":
           return <InstructionsShelf />;
         case "all":
@@ -207,10 +220,14 @@ export async function Steering({
   const at: SteeringAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   const readAt = instantOfRead();
   const onAll = view.tab === "library" && view.shelf === "all";
+  const onMemory = view.tab === "library" && view.shelf === "memory";
   // The All shelf reads the whole list, in the assembler's order; every other
   // view needs only the count. The selected Context PR is read here, beside
   // them, because its state decides whether the header keeps the gold.
-  const [library, hub, pr, agents] = await Promise.all([
+  //
+  // The Memory shelf's read is made here too, because a workspace with no
+  // memory is that shelf's empty state, which takes the gold from the header.
+  const [library, hub, pr, agents, memories] = await Promise.all([
     onAll
       ? readLibrary(ctx, source)
       : source.steering.records(ctx, { kind: null, offset: 0 }),
@@ -220,33 +237,50 @@ export async function Steering({
       : null,
     // The Assignments count: the agents set up for steering (./agents-read.ts).
     source.agents.list(ctx, { cursor: null }),
+    onMemory
+      ? source.steering.memories(ctx, { limit: STEERING_READ_MAX })
+      : null,
   ]);
-  if (!library.ok) {
+  // A refused or failed read replaces the header and the body. The Memory
+  // shelf's read fails the same way the registry's does, because the shelf is
+  // the whole body.
+  const failure = async (
+    read: Parameters<typeof FailureAt>[0]["read"],
+  ): Promise<ReactNode> => {
     // The denied state names who is signed in; the session is memoized per
     // request, so this is no second lookup.
-    const user = library.reason === "denied" ? await getAuthUser() : null;
+    const user = read.reason === "denied" ? await getAuthUser() : null;
     return (
       <FailureAt
         ctx={ctx}
-        read={library}
+        read={read}
         view={view}
         readAt={readAt}
         viewer={user === null ? null : user.name || user.email || null}
       />
     );
-  }
+  };
+  if (!library.ok) return await failure(library);
+  if (memories !== null && !memories.ok) return await failure(memories);
   const mergeable = pr?.ok === true && pr.value.status === "checks_passed";
   const governance = hub.ok ? hub.value.governance : null;
+  const repository =
+    governance?.state === "read" ? governance.repository : null;
   const records = library.value.total;
+  const memoryPage = memories === null ? null : memories.value;
   // A tab body whose own state holds the gold, or holds none (an empty
   // state), takes it from the header (./tab-primary.ts).
-  const bodyGold = await bodyTakesHeaderGold({
-    ctx,
-    source,
-    view,
-    published: records,
-    pr,
-  });
+  // The Memory shelf's empty state is decided by the hub's own read.
+  const bodyGold =
+    memoryPage?.total === 0
+      ? "empty"
+      : await bodyTakesHeaderGold({
+          ctx,
+          source,
+          view,
+          published: records,
+          pr,
+        });
   // Records is the one shelf a read counts today; the rest print "not
   // recorded" until the steering registry reads them (./library-all.tsx).
   const shelves: ShelfCounts = {
@@ -303,15 +337,20 @@ export async function Steering({
           <ShelfRow at={at} current={view.shelf ?? "all"} counts={shelves} />
         ) : null}
         {empty ? (
-          <SteeringEmpty
-            repository={
-              governance?.state === "read" ? governance.repository : null
-            }
-          />
+          <SteeringEmpty repository={repository} />
         ) : onAll ? (
           <LibraryAll at={at} page={library.value} />
         ) : (
-          await Body({ ctx, source, view, at, pr, published: records })
+          await Body({
+            ctx,
+            source,
+            view,
+            at,
+            pr,
+            published: records,
+            memories: memoryPage,
+            repository,
+          })
         )}
       </div>
     </div>

@@ -98,6 +98,8 @@ const source: DataSource = {
     freshness: refuse,
     hub: refuse,
     deliveries: refuse,
+    memories: refuse,
+    tree: refuse,
   },
   tools: {
     versions: refuse,

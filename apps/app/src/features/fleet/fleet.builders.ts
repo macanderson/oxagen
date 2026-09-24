@@ -240,6 +240,8 @@ export function fleetSource(reads: FleetReads) {
       freshness: refuse,
       hub: refuse,
       deliveries: refuse,
+      memories: refuse,
+      tree: refuse,
     },
     tools: {
       versions: refuse,

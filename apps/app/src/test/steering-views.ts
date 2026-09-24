@@ -9,6 +9,8 @@
 // another's folder. `steeringSource` is the one stub of the seam: a second
 // stub in the second feature would be a second place for it to fall behind
 // `DataSource`. Test support only: src/test is never in a production bundle.
+import type { AgentPage } from "@/data/contracts/agents";
+import type { KillSwitchBoard } from "@/data/contracts/tools";
 import type { DataSource } from "@/data/ports";
 import type {
   ContextPr,
@@ -219,7 +221,62 @@ export type SteeringReads = {
   deliveries: Read<SteeringDeliveries>;
   memories: Read<MemoryPage>;
   tree: Read<OxagenTree>;
+  /**
+   * The agent registry, which the Assignments count, the Assignments body and
+   * the Compiler read (features/steering/agents-read.ts). Not a Steering
+   * read, so `calls` does not record it.
+   */
+  agents: Read<AgentPage>;
+  /** The kill switches the Gates tab lists; not recorded in `calls` either. */
+  killSwitches: Read<KillSwitchBoard>;
 };
+
+/** One enrolled agent, for the views that draw a row per agent set up for steering. */
+export function enrolledAgent(
+  overrides: Partial<AgentPage["agents"][number]> = {},
+): AgentPage["agents"][number] {
+  return {
+    id: "agt_01k5rr2m",
+    slug: "release-manager",
+    name: "Release manager",
+    description: null,
+    agentKey: "acme.core-platform.release-manager",
+    harness: "claude-code",
+    operatorId: null,
+    operatorName: null,
+    principalId: null,
+    credentials: 1,
+    hosts: 1,
+    host: null,
+    status: "enrolled",
+    enforcementTier: null,
+    runs30d: 12,
+    spend30d: null,
+    tokens30d: null,
+    mandates: null,
+    incidents: 0,
+    tamperIncidents: 0,
+    tamperIncidentsRecorded: 0,
+    ...overrides,
+  };
+}
+
+/** A registry page holding `agents`, with the totals counted from them. */
+export function agentPage(
+  agents: AgentPage["agents"] = [enrolledAgent()],
+): AgentPage {
+  return {
+    agents,
+    nextCursor: null,
+    totals: {
+      identities: agents.length,
+      enrolled: agents.filter((a) => a.status === "enrolled").length,
+      holdingMandate: null,
+      tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
+    },
+  };
+}
 
 /** The freshness panel's read: a bound repository, one publication, both gates off. */
 export function steeringFreshness(
@@ -263,9 +320,19 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     }),
     memories: readOk({ memories: [], total: 0 }),
     tree: readOk({ state: "unbound" }),
+    // An empty workspace is the neutral answer for tests that set neither.
+    agents: readOk(agentPage([])),
+    killSwitches: readOk({
+      denyGeneration: { org: 0, workspace: 0 },
+      switches: [],
+      truncated: false,
+    }),
     ...overrides,
   };
-  const calls: Record<keyof SteeringReads, unknown[][]> = {
+  const calls: Record<
+    Exclude<keyof SteeringReads, "agents" | "killSwitches">,
+    unknown[][]
+  > = {
     records: [],
     record: [],
     proposals: [],
@@ -289,19 +356,12 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       transcript: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {
-      // The Assignments count reads the registry (features/steering/agents-read.ts);
-      // an empty workspace is the neutral answer for tests that do not set one.
-      list: () =>
-        Promise.resolve(
-          readOk({
-            agents: [],
-            nextCursor: null,
-            totals: { identities: 0, enrolled: 0, tamperIncidents: 0 },
-          }),
-        ),
+      list: () => Promise.resolve(reads.agents),
       get: refuse,
       toolbelt: refuse,
       incidents: refuse,
@@ -309,6 +369,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -382,7 +443,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     tools: {
       versions: refuse,
       grants: refuse,
-      killSwitches: refuse,
+      killSwitches: () => Promise.resolve(reads.killSwitches),
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,

@@ -246,6 +246,8 @@ export function toolsSource(reads: ToolsReads) {
       freshness: refuse,
       hub: refuse,
       deliveries: refuse,
+      memories: refuse,
+      tree: refuse,
     },
     tools: {
       versions: answer(reads.versions, "versions"),

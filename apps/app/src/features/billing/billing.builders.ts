@@ -281,6 +281,8 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       freshness: refuse,
       hub: refuse,
       deliveries: refuse,
+      memories: refuse,
+      tree: refuse,
     },
     tools: {
       versions: refuse,

@@ -147,26 +147,216 @@
       "notBacked": "Not recorded yet: {what}",
       "issue": "Tracked in #{number}",
       "assignments": {
-        "what": "which agent receives which item, per agent, with its delivery, gates, stable prefix, volatile selection, cuts, and skills. It needs the assembler's registry port (Phase 1)."
+        "what": "which agent receives which item, per agent, with its delivery, gates, stable prefix, volatile selection, cuts, and skills. It needs the assembler's registry port (Phase 1).",
+        "lead": "Nobody assigns a record to an agent. An item reaches an agent when its scope matches the run, and it is delivered when a hook is installed on the runtime. An agent on the <code>observe</code> tier is still assembled for, and receives nothing.",
+        "receivesTitle": "What each agent receives",
+        "agentsBadge": "{count, plural, one {# agent} other {# agents}}",
+        "openLibrary": "Open the library",
+        "openCompiler": "Open the compiler",
+        "columns": {
+          "agent": "Agent",
+          "repository": "Repository",
+          "delivery": "Delivery",
+          "gates": "Gates",
+          "prefix": "Stable prefix",
+          "volatile": "Volatile",
+          "cut": "Cut",
+          "skills": "Skills",
+          "perRun": "Per run",
+          "action": "Compiler"
+        },
+        "truncated": "Showing the first {read} enrolled agents. The registry holds more.",
+        "panelNote": "Each row is one assembly, for the prompt that agent is usually given. Change the prompt and the volatile selection changes with it. The gates and the stable prefix do not.",
+        "scopeTitle": "Scope",
+        "itemsBadge": "{count, plural, one {# item} other {# items}}",
+        "scopeColumns": {
+          "scope": "Scope",
+          "items": "Items",
+          "reaches": "Reaches"
+        },
+        "reaches": {
+          "org": "Every workspace in the organization.",
+          "workspace": "Every agent in this workspace.",
+          "repository": "Only an agent whose run works in that repository.",
+          "agent": "Only the agent named on the item."
+        },
+        "scopeWhat": "the scope of instructions, skills, memory, and ontology notes. Only records carry a scope today, so this panel counts records.",
+        "closing": "A repository record may narrow what a workspace record allows. It may never widen it, and the checks enforce that before a merge.",
+        "empty": {
+          "title": "No agent receives steering here",
+          "body": "Steering reaches an agent through a hook on its runtime. No agent in this workspace is enrolled, so nothing is delivered.",
+          "action": "Open Agents"
+        }
       },
       "gates": {
-        "what": "the gates that reach this workspace and the gate notice each puts back into steering. The workspace's freshness gates are below."
+        "what": "the gates that reach this workspace and the gate notice each puts back into steering. The workspace's freshness gates are below.",
+        "textTitle": "Text compilation",
+        "textBody": "Every item compiles to text the model reads. Text is advisory: it is ranked, budgeted, and may be dropped. The library is this plane.",
+        "gateTitle": "Gate compilation",
+        "gateBody": "An item with an enforcement grant also compiles to a gate. A gate is deterministic, never budgeted, and never ranked, and it answers when the index is down. This tab is that plane.",
+        "noticesTitle": "Gate notices",
+        "closing": "A gate notice is one line, so the agent does not spend turns walking into a denial. The assembler puts every notice that applies at the head of the stable prefix and never drops one. Gates are edited where they always were: decision rules and kill switches on Tools, a mandate on its own page. Nothing is edited here.",
+        "tiers": "What a gate can refuse depends on the tier. For actions routed through Oxagen, the server refuses the call. On the <code>harness</code> tier the four blocking hook events refuse a harness-native call: client-attested and fail-open.",
+        "editSwitches": "Open the kill switches tab",
+        "outcomes": {
+          "killSwitch": "kill switch"
+        },
+        "kinds": {
+          "killSwitch": "Kill switch"
+        },
+        "applies": {
+          "class": "Every call in the {ref} class",
+          "org": "Every agent in the organization",
+          "workspace": "Every agent in {workspace}",
+          "tool_server": "Calls to the tool server {ref}",
+          "tool_version": "Calls to the tool version {ref}",
+          "connection": "Calls through the connection {ref}",
+          "agent": "The agent {ref}",
+          "operator": "Every agent one operator runs"
+        },
+        "noSwitch": "No kill switch is on in this workspace.",
+        "columns": {
+          "gate": "Gate",
+          "outcome": "Outcome",
+          "applies": "Applies to",
+          "notice": "Gate notice",
+          "cost": "Notice cost",
+          "edit": "Edited on"
+        },
+        "truncated": "The kill switch read came back at its ceiling, so an older switch that is still on may be missing here. Tools lists every switch."
       },
       "compiler": {
-        "what": "one assembly for one agent and one prompt, with the manifest of what was cut and why. It needs assembleSteering behind a read contract."
+        "what": "one assembly for one agent and one prompt, with the manifest of what was cut and why. It needs assembleSteering behind a read contract.",
+        "empty": {
+          "title": "Nothing to compile yet",
+          "body": "No item is published in this workspace, so the assembler has nothing to select from. Publish a record and this tab shows what an agent would receive."
+        },
+        "agent": "Agent",
+        "prompt": "Prompt",
+        "placeholder": "Type what the operator would type",
+        "noAgent": "No agent in this workspace is set up for preview.",
+        "option": "{name} \u00b7 {harness}",
+        "hint": "The agent's tier and repository are not recorded yet. Tracked in #{issue}.",
+        "chips": "Pick a prompt",
+        "prefixMeter": "Stable prefix \u00b7 SessionStart additional context",
+        "volatileMeter": "Volatile selection \u00b7 token budget",
+        "parts": {
+          "prefix": {
+            "title": "1 \u00b7 Stable prefix",
+            "tally": "SessionStart additional context \u00b7 capped at 16 KiB",
+            "sub": "Gate notices first, then <code>must</code>, then <code>should</code>. Cached in the signed bundle, so it still arrives when the machine is offline. Never ranked."
+          },
+          "volatile": {
+            "title": "2 \u00b7 Volatile selection",
+            "tally": "UserPromptSubmit additional context \u00b7 token budget",
+            "sub": "<code>may</code> and <code>info</code> items, ranked against this prompt and packed until the budget is spent."
+          },
+          "skills": {
+            "title": "3 \u00b7 Skills",
+            "tally": "files in the checkout",
+            "sub": "Loaded by the harness's own progressive disclosure, not by the assembler. Only a skill's description line competes above."
+          }
+        },
+        "cutsTitle": "Manifest cuts",
+        "cutsBadge": "recorded on a run as a <code>steering.manifest</code> frame",
+        "closing": "Two injection points are not on this page. MCP tool results carry their own text, call by call. The model request itself is written at the proxy on the <code>gateway</code> and <code>contained</code> tiers, and the Context tab of a run shows what it carried."
       },
       "memory": {
-        "what": "the memory an agent's own runs left behind, as items of the one steering list."
+        "empty": {
+          "title": "Nothing has been recalled yet",
+          "body": "Memory is what an agent's own runs leave behind. No run in this workspace has written one, so nothing competes from here."
+        },
+        "gapTitle": "Not recorded yet. Tracked in #{issue}.",
+        "notRecorded": "not recorded",
+        "tiles": {
+          "memories": "Memories",
+          "memoriesNote": "active memories in this workspace",
+          "sources": "Sources",
+          "sourcesNote": "{people} written by a person and {others} by an agent or the system",
+          "recalled": "Recalled 30d",
+          "recalledNote": "the recall counter is not recorded yet",
+          "byClass": "By class",
+          "byClassNote": "a rule is proposed as a record instead"
+        },
+        "lead": "<b>A published must beats recalled memory.</b> Memory is what an agent's own runs left behind. It is recalled, never published, so it competes only in the volatile selection, as <code>may</code> or <code>info</code>, and it gives way wherever a published record says otherwise. To make a memory binding, promote it: a proposal, a pull request, a merge.",
+        "forgotten": "Forgot {ref}. The assembler stops selecting it. Every run that carried it is untouched.",
+        "title": "Recalled memory",
+        "columns": {
+          "memory": "Memory",
+          "class": "Class",
+          "force": "Force",
+          "scope": "Scope",
+          "lastRecalled": "Last recalled",
+          "tokens": "Token cost",
+          "assembler": "In the assembler"
+        },
+        "open": "Open {ref}",
+        "provenance": "{ref} \u00b7 {source} \u00b7 {who, select, person {a person wrote it} agent {an agent wrote it} other {the system wrote it}}",
+        "tokensTitle": "The assembler's budget unit over the line this memory is delivered as",
+        "tokens": "{count} tok",
+        "compiler": "Open the compiler",
+        "compilerNote": "Recall reaches only the in-app agent today, capped at six items.",
+        "truncated": "Showing the newest {read} of {total} memories.",
+        "dialog": {
+          "subtitle": "A memory, recalled and never published",
+          "forget": "Forget",
+          "promote": "Promote to a record",
+          "class": "Class",
+          "forceNotRecorded": "force not recorded",
+          "scope": "Scope",
+          "origin": "Where it came from",
+          "recalled": "Recalled",
+          "cost": "Cost",
+          "costValue": "{count} tokens every time it is selected",
+          "since": "In force since",
+          "position": "Where it sits against the published records is not recorded yet. Tracked in #{issue}."
+        },
+        "forget": {
+          "title": "Forget this memory?",
+          "keep": "Keep it",
+          "pending": "Forgetting\u2026",
+          "confirm": "Forget it",
+          "body": "The assembler stops selecting it, and every agent in scope stops being told it. The runs it was folded from are untouched: every frame stays, and every run that carried it keeps naming the hash it carried.",
+          "other": "Promote is the other answer. If the memory is right, a record makes it binding instead of leaving it to compete."
+        }
       },
       "ontology": {
-        "what": "the ontology notes under .oxagen/ontology/, as items of the one steering list."
+        "lead": "An ontology note defines one entity or one term the way this workspace uses it. It compiles to text like any other item, enters the volatile selection as <code>info</code>, and grants nothing. A note is a file somebody wrote and somebody merged, under <code>.oxagen/ontology/</code> on {repository}, so writing, changing, and retiring one each open a pull request.",
+        "repository": "the main repository",
+        "title": "Definitions",
+        "columns": {
+          "term": "Term",
+          "kind": "Kind",
+          "definition": "Definition",
+          "force": "Force",
+          "about": "About",
+          "tokens": "Token cost",
+          "file": "File"
+        },
+        "notBacked": "Not recorded yet: the notes under <code>.oxagen/ontology/</code>. No read indexes them, so this table draws no rows. Tracked in #{issue}.",
+        "index": {
+          "title": "Index",
+          "today": {
+            "term": "Today",
+            "body": "A note is a file under <code>.oxagen/ontology/</code>, published by a merge. The Postgres registry is its index, as it is for records."
+          },
+          "later": {
+            "term": "Later",
+            "body": "Phase 3 adds the notes to the graph, so a note links the repositories, records, and skills it is about. Delivery never waits for the graph."
+          },
+          "notHere": {
+            "term": "Not here",
+            "body": "Entity extraction and data ingestion. The scope review of 2026-09-14 cut them, and this shelf does not bring them back."
+          }
+        }
       },
       "instructions": {
         "what": "the workspace instructions, as items of the one steering list."
       },
       "skillSource": {
         "pending": "The source of <code>{skill}</code> opens here when the skill source page ships. The catalog below lists the skill."
-      }
+      },
+      "notRecorded": "not recorded"
     },
     "failure": {
       "denied": "You cannot see {section} in this workspace. The roles you hold do not include {permission}. An owner can grant it.",
@@ -216,6 +406,71 @@
         "commit": "Merge commit",
         "path": "File",
         "published": "Published"
+      },
+      "sort": "Sort",
+      "sorts": {
+        "shown": "Shown order",
+        "asc": "Statement A\u2013Z",
+        "desc": "Statement Z\u2013A"
+      },
+      "forceTitle": "Steering force",
+      "effectTitle": "Constraint effect",
+      "tokensTitle": "What the record costs in the assembler: the tokens of the line the signed bundle carries for it",
+      "tokens": "{count} tok",
+      "compilesTitle": "Whether this record also compiles to a gate is not recorded yet. Tracked in #{issue}.",
+      "compilesNotRecorded": "compilation not recorded",
+      "newTitle": "The last merge published this record",
+      "new": "new \u00b7 bundle v{version}",
+      "published": "published",
+      "openLabel": "Open {lineage}",
+      "effectLineTitle": "Rendered, cited, and violated counts are not recorded yet. Tracked in #{issue}.",
+      "effectNotRecorded": "effect not recorded",
+      "truncated": "Showing the first {read} of {total} records in force.",
+      "note": "Every record compiles to text. A record with an enforcement grant also compiles to a gate, which is listed on Gates with the notice it puts back into steering. A record can never grant authority: the checks enforce <code>{effects}</code>, and a repository record may narrow what a workspace record allows, never widen it.",
+      "disk": {
+        "title": "On disk",
+        "failed": "The .oxagen/ tree could not be read: {code}.",
+        "unbound": "No main repository is bound to this workspace, so there is no .oxagen/ tree to read.",
+        "absent": "{branch} on {repository} has no <code>.oxagen/</code> directory.",
+        "at": "{repository} @ {branch} \u00b7 {head}",
+        "noHead": "no head commit",
+        "note": "Stella symlinks into this directory rather than copying it, so its loader and its CI validation work unchanged on the same files with no second copy that could drift. Oxagen reads <code>.oxagen/</code> and nothing else.",
+        "comments": {
+          "workspace": "linked repos, providers, budgets",
+          "governance": "{mode, select, absent {no mode declared} invalid {mode unreadable} other {mode = {mode}}}",
+          "promotions": "hash-chained ledger (regulated mode)",
+          "skills": "governed files, delivered by sync",
+          "ontology": "entity and term definitions",
+          "proposals": "candidates, which steer nothing",
+          "agents": "one per agent"
+        }
+      },
+      "injection": {
+        "title": "Injection points",
+        "badge": "five points",
+        "lead": "The harness owns the context window. Oxagen competes for its own slice of it, at exactly these points, and every delivery is recorded.",
+        "points": {
+          "1": {
+            "head": "SessionStart additional context",
+            "body": "The stable prefix: gate notices, then <code>must</code> and <code>should</code>. Capped at 16 KiB, cached in the signed bundle, works offline."
+          },
+          "2": {
+            "head": "UserPromptSubmit additional context",
+            "body": "The volatile selection: <code>may</code> and <code>info</code>, picked for the prompt under a token budget."
+          },
+          "3": {
+            "head": "MCP tool results",
+            "body": "What a governed tool call returns, a denial and its reason included."
+          },
+          "4": {
+            "head": "Files in the checkout",
+            "body": "Skills, delivered by sync and loaded by the harness's own progressive disclosure."
+          },
+          "5": {
+            "head": "The model request itself",
+            "body": "Written at the proxy on the <code>gateway</code> and <code>contained</code> tiers: the stable prefix and the volatile selection, counted as <code>steering_tokens</code> and <code>context_frame_tokens</code>."
+          }
+        }
       }
     },
     "proposals": {

@@ -198,9 +198,6 @@ vi.mock("@/shared/navigation", async (importOriginal) => ({
   permanentRedirectTo: (path: string) => {
     throw new Error(`REDIRECT ${path}`);
   },
-  redirectTo: (path: string) => {
-    throw new Error(`REDIRECT ${path}`);
-  },
 }));
 
 beforeEach(() => {

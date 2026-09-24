@@ -22,6 +22,7 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
+  agentPage,
   contextPr,
   PROPOSAL_ID,
   publishedRecord,
@@ -297,7 +298,8 @@ describe("the hub", () => {
   ])(
     "renders %s under its own tab with no shelf row",
     async (path, name, body) => {
-      await renderSteering(path);
+      // Assignments draws its body only for a workspace with an enrolled agent.
+      await renderSteering(path, { agents: readOk(agentPage()) });
       expect(tab(name)).toHaveAttribute("aria-selected", "true");
       expect(screen.getByTestId(body)).toBeInTheDocument();
       expect(
@@ -307,7 +309,9 @@ describe("the hub", () => {
   );
 
   it("names the agent the Compiler assembles for, and says what it waits on", async () => {
-    await renderSteering("/compiler/release-manager");
+    await renderSteering("/compiler/release-manager", {
+      agents: readOk(agentPage()),
+    });
     expect(screen.getByTestId("tab-compiler")).toHaveAttribute(
       "data-agent",
       "release-manager",
@@ -316,11 +320,12 @@ describe("the hub", () => {
     expect(gap).toHaveTextContent(
       "Not recorded yet: one assembly for one agent and one prompt",
     );
-    expect(gap).toHaveTextContent("Tracked in #3297");
-    expect(gap).toHaveAttribute("data-issue", "3297");
+    // assembleSteering behind a read contract (gaps.ts, `assembler`).
+    expect(gap).toHaveTextContent("Tracked in #3879");
+    expect(gap).toHaveAttribute("data-issue", "3879");
   });
 
-  it.each(["memory", "ontology", "instructions"])(
+  it.each(["ontology", "instructions"])(
     "names what the %s shelf waits on and draws no figure",
     async (shelf) => {
       const calls = await renderSteering(`/${shelf}`);
@@ -330,6 +335,34 @@ describe("the hub", () => {
       expect(calls.proposals).toEqual([]);
     },
   );
+
+  it("reads the memories on the Memory shelf and says nothing has been recalled, with no gold in the header", async () => {
+    const calls = await renderSteering("/memory");
+    // list_memories is backed (steering-memory.md): the hub reads it, because
+    // its empty state takes the gold from the header.
+    expect(calls.memories).toEqual([[ctx, { limit: 200 }]]);
+    expect(calls.proposals).toEqual([]);
+    expect(section("Nothing has been recalled yet")).toHaveTextContent(
+      "No run in this workspace has written one, so nothing competes from here.",
+    );
+    expect(
+      within(screen.getByTestId("hub-header")).queryByRole("button", {
+        name: "Write a context record",
+      }),
+    ).toBeNull();
+  });
+
+  it("reads memories on no other shelf (negative)", async () => {
+    const calls = await renderSteering("/records");
+    expect(calls.memories).toEqual([]);
+  });
+
+  it("names the main repository in the Ontology shelf's lead note", async () => {
+    await renderSteering("/ontology");
+    expect(screen.getByTestId("ontology-lead")).toHaveTextContent(
+      "under .oxagen/ontology/ on acme/platform",
+    );
+  });
 
   it("keeps the freshness gates on Gates and reads them there only", async () => {
     const calls = await renderSteering("/gates");
@@ -801,15 +834,16 @@ describe("states", () => {
 });
 
 describe("Records", () => {
-  it("prints each record's statement, classification, scope, lineage, version, commit, file and publication", async () => {
+  it("prints each record's statement, classification, scope, lineage, commit and publication", async () => {
     await renderSteering("/records");
     const card = within(section("Published records")).getByRole("article");
     expect(card).toHaveAttribute("data-kind", "constraint");
     expect(card).toHaveTextContent(
       "Do not re-read CHANGELOG.md after the first read in a run.",
     );
+    // The force badge carries the force alone (steering-records.md, the card).
     expect(card.querySelector('[data-term="force"]')).toHaveTextContent(
-      "force must",
+      /^must$/,
     );
     expect(
       card.querySelector('[data-term="constraint-effect"]'),
@@ -817,18 +851,25 @@ describe("Records", () => {
     expect(card.querySelector('[data-term="scope"]')).toHaveTextContent(
       "workspace",
     );
-    expect(card.querySelector('[data-fact="version"] dd')).toHaveTextContent(
-      "3",
+    // The meta line: scope, the effect line, the lineage, the commit and the
+    // publication date.
+    expect(card.querySelector('[data-term="lineage"]')).toHaveTextContent(
+      "ctx.release.no-reread-changelog",
     );
-    expect(card.querySelector('[data-fact="commit"] dd')).toHaveTextContent(
-      "4d5e6f7a8b9c",
+    expect(card.querySelector('[data-term="commit"]')).toHaveTextContent(
+      "4d5e6f7",
     );
-    expect(card.querySelector('[data-fact="path"] dd')).toHaveTextContent(
-      ".oxagen/rules/ctx.release.no-reread-changelog.toml",
+    expect(card.querySelector('[data-term="published"]')).toHaveTextContent(
+      "2026-09-12",
+    );
+    expect(card.querySelector('[data-term="state"]')).toHaveTextContent(
+      "published",
     );
     expect(
-      card.querySelector('[data-fact="published"] dd'),
-    ).not.toBeEmptyDOMElement();
+      within(card).getByRole("link", {
+        name: "Open ctx.release.no-reread-changelog",
+      }),
+    ).toBeVisible();
   });
 
   it("prints unclassified and the title for a record no Context PR wrote, with no fact it lacks", async () => {
@@ -853,92 +894,113 @@ describe("Records", () => {
     expect(card).toHaveAttribute("data-kind", "unclassified");
     expect(card).toHaveTextContent("Read CHANGELOG.md once per run");
     expect(card.querySelector('[data-term="force"]')).toBeNull();
-    expect(card.querySelector("[data-fact]")).toBeNull();
+    expect(card.querySelector('[data-term="tokens"]')).toBeNull();
+    expect(card.querySelector('[data-term="commit"]')).toBeNull();
+    expect(card.querySelector('[data-term="published"]')).toBeNull();
   });
 
-  it("links every kind, marks the one the URL asks for and reads that kind", async () => {
+  it("chips every kind with its count, presses the one the URL asks for and reads the whole list once", async () => {
     const calls = await renderSteering("/records?kind=rule");
-    // The hub counts every kind; the shelf reads the kind the URL names.
+    // The hub counts every kind; the shelf reads every record in force at the
+    // contract's bound and filters by kind in the browser.
     expect(calls.records).toEqual([
       [ctx, { kind: null, offset: 0 }],
-      [ctx, { kind: "rule", offset: 0 }],
+      [ctx, { kind: null, offset: 0, limit: 200 }],
     ]);
-    const filter = screen.getByRole("navigation", {
+    const filter = screen.getByRole("group", {
       name: "Filter records by kind",
     });
-    const links = within(filter).getAllByRole("link");
-    expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      `${BASE}/records`,
-      `${BASE}/records?kind=rule`,
-      `${BASE}/records?kind=constraint`,
-      `${BASE}/records?kind=procedure`,
-      `${BASE}/records?kind=fact`,
-      `${BASE}/records?kind=memory`,
-      `${BASE}/records?kind=preference`,
+    const chips = within(filter).getAllByRole("button");
+    expect(
+      chips.map((chip) => [
+        chip.getAttribute("href"),
+        chip.getAttribute("aria-pressed"),
+      ]),
+    ).toEqual([
+      [`${BASE}/records`, "false"],
+      [`${BASE}/records?kind=rule`, "true"],
+      [`${BASE}/records?kind=constraint`, "false"],
+      [`${BASE}/records?kind=procedure`, "false"],
+      [`${BASE}/records?kind=fact`, "false"],
+      [`${BASE}/records?kind=memory`, "false"],
+      [`${BASE}/records?kind=preference`, "false"],
     ]);
     expect(
-      links.filter((link) => link.getAttribute("aria-current") === "page"),
-    ).toEqual([within(filter).getByRole("link", { name: "rule" })]);
+      within(filter).getByRole("button", { name: /^constraint/ }),
+    ).toHaveTextContent("constraint1");
   });
 
   it("says no record of a kind is in force and keeps the filter", async () => {
-    await renderSteering("/records?kind=procedure", {
-      records: (q) =>
-        q.kind === null
-          ? readOk({ records: [publishedRecord()], total: 1 })
-          : readOk({ records: [], total: 0 }),
-    });
+    await renderSteering("/records?kind=procedure");
     const records = section("Published records");
     expect(records).toHaveTextContent(
       "No record of that kind is in force in this workspace.",
     );
     expect(
-      within(records).getByRole("navigation", {
+      within(records).getByRole("group", {
         name: "Filter records by kind",
       }),
     ).toBeInTheDocument();
   });
 
-  it("pages by fifty with the range, keeping the kind", async () => {
-    const calls = await renderSteering("/records?kind=constraint&offset=50", {
+  it("pages ten to a page with the range, keeping the kind", async () => {
+    await renderSteering("/records?kind=constraint", {
       records: readOk({
-        records: Array.from({ length: 2 }, (_, i) =>
+        records: Array.from({ length: 12 }, (_, i) =>
           publishedRecord({ id: `ctr_r${String(i)}` }),
         ),
-        total: 120,
+        total: 12,
       }),
     });
-    expect(calls.records.at(-1)).toEqual([
-      ctx,
-      { kind: "constraint", offset: 50 },
-    ]);
     const pager = screen.getByRole("navigation", { name: "Pages" });
-    expect(pager).toHaveTextContent("51 to 52 of 120");
+    expect(pager).toHaveTextContent("1–10 of 12");
     expect(
-      within(pager).getByRole("link", { name: "Previous page" }),
+      within(section("Published records")).getAllByRole("article"),
+    ).toHaveLength(10);
+    fireEvent.click(within(pager).getByRole("button", { name: "Next page" }));
+    expect(pager).toHaveTextContent("11–12 of 12");
+    expect(
+      within(section("Published records")).getAllByRole("article"),
+    ).toHaveLength(2);
+    expect(
+      within(
+        screen.getByRole("group", { name: "Filter records by kind" }),
+      ).getByRole("button", { pressed: true }),
     ).toHaveAttribute("href", `${BASE}/records?kind=constraint`);
-    expect(
-      within(pager).getByRole("link", { name: "Next page" }),
-    ).toHaveAttribute("href", `${BASE}/records?kind=constraint&offset=100`);
   });
 
-  it("shows no pager when one page holds every record (negative)", async () => {
+  it("offers no other page when one page holds every record (negative)", async () => {
     await renderSteering("/records");
-    expect(screen.queryByRole("navigation", { name: "Pages" })).toBeNull();
+    const pager = screen.getByRole("navigation", { name: "Pages" });
+    expect(pager).toHaveTextContent("1–1 of 1");
+    expect(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
   });
 });
 
 describe("Proposals", () => {
   it("reads one page of proposals and nothing else, and prints each with its state, tally, source, rationale and support", async () => {
     const calls = await renderSteering("/proposals");
+    // The hub asks for the same first page to decide whether the empty state
+    // takes the gold (tab-primary.ts); the kernel's per-request read table
+    // answers the body's ask without a second invoke (server/kernel.ts).
     expect(calls).toEqual({
       record: [],
       records: [[ctx, { kind: null, offset: 0 }]],
-      proposals: [[ctx, { offset: 0 }]],
+      proposals: [
+        [ctx, { offset: 0 }],
+        [ctx, { offset: 0 }],
+      ],
       contextPr: [],
       freshness: [],
       deliveries: [],
       hub: [[ctx]],
+      memories: [],
+      tree: [],
     });
     const card = within(section("Proposals")).getByRole("article");
     expect(card.querySelector("[data-status]")).toHaveTextContent(
@@ -1012,7 +1074,12 @@ describe("Context PRs", () => {
         total: 2,
       }),
     });
-    expect(calls.proposals).toEqual([[ctx, { offset: 0 }]]);
+    // The hub's gold check and the body ask for the same page; the kernel's
+    // per-request read table serves the second (tab-primary.ts).
+    expect(calls.proposals).toEqual([
+      [ctx, { offset: 0 }],
+      [ctx, { offset: 0 }],
+    ]);
     expect(calls.contextPr).toEqual([]);
     const table = screen.getByRole("table", { name: "Context PRs" });
     const rows = within(table).getAllByRole("row").slice(1);
@@ -1069,20 +1136,43 @@ describe("Context PRs", () => {
 });
 
 describe("Assignments, the delivery report", () => {
-  it("reads only delivery counts and distinguishes missing manifests from zero delivery", async () => {
+  // The body, delivery report included, is drawn for a workspace with an
+  // enrolled agent; with none, the tab is its empty state.
+  const agents = readOk(agentPage());
+
+  it("says no agent receives steering when none is enrolled, and reads no delivery (negative)", async () => {
     const calls = await renderSteering("/assignments");
+    expect(section("No agent receives steering here")).toHaveTextContent(
+      "No agent in this workspace is enrolled, so nothing is delivered.",
+    );
+    expect(
+      screen.queryByRole("table", { name: "Steering delivery" }),
+    ).toBeNull();
+    expect(screen.getByRole("link", { name: "Open Agents" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents",
+    );
+    expect(calls.proposals).toEqual([]);
+  });
+
+  it("reads only delivery counts and distinguishes missing manifests from zero delivery", async () => {
+    const calls = await renderSteering("/assignments", { agents });
     expect(calls.deliveries).toEqual([[ctx]]);
-    expect(calls.records).toEqual([[ctx, { kind: null, offset: 0 }]]);
+    // The hub's count, then the whole list for the Scope panel.
+    expect(calls.records).toEqual([
+      [ctx, { kind: null, offset: 0 }],
+      [ctx, { kind: null, offset: 0, limit: 200 }],
+    ]);
     expect(
       screen.getByText(/No steering manifests were recorded/),
     ).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Assignments" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    // The tab carries the enrolled count beside its name.
+    expect(tab("Assignments")).toHaveAttribute("aria-selected", "true");
+    expect(tab("Assignments")).toHaveTextContent(/^Assignments1$/);
   });
   it("renders counts per run and names records cut from the bounded sample", async () => {
     await renderSteering("/assignments", {
+      agents,
       deliveries: readOk({
         runs: [
           {
@@ -1126,11 +1216,14 @@ describe("Assignments, the delivery report", () => {
       accessRequestId: "apr_wait",
     } as const,
   ])("preserves an unsuccessful delivery read", async (read) => {
-    await renderSteering("/assignments", { deliveries: read });
+    await renderSteering("/assignments", { agents, deliveries: read });
     expect(
       document.querySelector(`[data-reason="${read.reason}"]`),
     ).toBeVisible();
-    expect(screen.queryByRole("table")).toBeNull();
+    // The agents and Scope tables stand; only the report is replaced.
+    expect(
+      screen.queryByRole("table", { name: "Steering delivery" }),
+    ).toBeNull();
   });
 });
 
