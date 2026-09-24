@@ -746,6 +746,18 @@ describe("list_runs queries name the tenant", () => {
     expect(compacted.sql).toMatch(
       /not exists \(select 1 from "agent"\."agent_run_events"/,
     );
+    // Spelled out, so the partial `(attempt_id, attempt_seq)` index serves
+    // the probe.
+    expect(compacted.sql).toMatch(
+      /"agent_run_events"\."attempt_id" = "agent"\."agent_run_attempt_seals"\."attempt_id" and "agent"\."agent_run_events"\."event_record_version" = 2\)/,
+    );
+  });
+
+  it("writes the event record version as a literal, so the partial run index matches", () => {
+    const hot = ledgerRollupQuery(db, SCOPE, [RUN]).toSQL();
+    expect(hot.sql).toMatch(/"agent_run_events"\."event_record_version" = 2/);
+    // Not a bind parameter: a generic plan cannot prove `$1 = 2`.
+    expect(hot.sql).not.toMatch(/"event_record_version" = \$\d/);
   });
 
   it("adds a compacted rollup to the hot one, frame for frame, and hides turns an encrypted call hid", () => {

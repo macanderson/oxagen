@@ -121,6 +121,7 @@ const loaded = {
     }),
   ),
   workspaces: readOk({
+    orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
     workspaces: [
       workspaceRow(),
       workspaceRow({
@@ -309,6 +310,7 @@ describe("empty", () => {
     const { body } = await renderFrame("owner", {
       ...loaded,
       workspaces: readOk({
+        orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
         workspaces: [workspaceRow({ archivedAt: "2026-01-01T00:00:00.000Z" })],
       }),
     });
