@@ -8,6 +8,7 @@ import {
   formatCount,
   formatDuration,
   formatMoney,
+  formatOneDecimal,
   formatRatio,
   formatWholeUnits,
   ratioWidth,
@@ -112,6 +113,23 @@ describe("formatClock", () => {
 
   it("reads a negative duration as 0:00 (negative)", () => {
     expect(formatClock(-30, "en-US")).toBe("0:00");
+  });
+});
+
+describe("formatOneDecimal", () => {
+  it("keeps the one decimal place a whole figure would otherwise drop", () => {
+    expect(formatOneDecimal(4, "en-US")).toBe("4.0");
+    expect(formatOneDecimal(0, "en-US")).toBe("0.0");
+  });
+
+  it("rounds a longer figure to one decimal place", () => {
+    expect(formatOneDecimal(3.46, "en-US")).toBe("3.5");
+    expect(formatOneDecimal(3.44, "en-US")).toBe("3.4");
+  });
+
+  it("groups and separates in the viewer's locale", () => {
+    expect(formatOneDecimal(1234.56, "en-US")).toBe("1,234.6");
+    expect(formatOneDecimal(1234.56, "de-DE")).toBe("1.234,6");
   });
 });
 
