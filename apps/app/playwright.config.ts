@@ -35,6 +35,10 @@ export default defineConfig({
   forbidOnly: isCI,
   retries: 0,
   failOnFlakyTests: true,
+  // The whole suite runs in under a minute. A run that has not finished in
+  // ten has hung, and failing here writes the report that says where; the
+  // workflow step's own limit would kill it with no report at all.
+  globalTimeout: isCI ? 10 * 60_000 : 0,
   workers: 1,
   reporter: isCI ? [["list"], ["html", { open: "never" }]] : [["list"]],
   use: { baseURL: appUrl, trace: "retain-on-failure" },
