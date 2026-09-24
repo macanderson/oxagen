@@ -623,7 +623,10 @@ export const workingCopies = ingestionSchema.table(
     lastEvent: text("last_event").notNull(),
     cliVersion: text("cli_version"),
     reportedById: uuid("reported_by_id"),
-    firstSeenAt: timestamp("first_seen_at", { withTimezone: true, mode: "date" })
+    firstSeenAt: timestamp("first_seen_at", {
+      withTimezone: true,
+      mode: "date",
+    })
       .notNull()
       .defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })

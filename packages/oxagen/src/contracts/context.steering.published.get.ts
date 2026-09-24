@@ -1,5 +1,5 @@
 /**
- * `pull_steering`: the published `.oxagen/` tree, with every file's text, for
+ * `get_published_steering`: the published `.oxagen/` tree, with every file's text, for
  * `oxagen pull` to write into a directory on a developer's machine.
  *
  * Steering is published by merging a Context PR onto the main repository's
@@ -19,7 +19,7 @@
  * repository), `not_found: repository_not_linked`, `conflict:
  * github_not_connected`, `not_found: repository_not_installed`, `conflict:
  * repository_host_unsupported`, and `conflict: steering_too_large` when the
- * tree holds more than `PULL_STEERING_MAX_FILES` files.
+ * tree holds more than `PUBLISHED_STEERING_MAX_FILES` files.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -27,10 +27,10 @@ import { repositoryMainBind } from "./repository.main.bind";
 import { repositoryRole } from "./repository.list";
 
 /** The most files one pull returns. A tree past this is refused, not cut. */
-export const PULL_STEERING_MAX_FILES = 500;
+export const PUBLISHED_STEERING_MAX_FILES = 500;
 
-export const steeringPull = registerCapability({
-  name: "pull_steering",
+export const publishedSteeringGet = registerCapability({
+  name: "get_published_steering",
   domain: "context",
   description:
     "Read the published .oxagen/ tree of the workspace's main repository (or a named one) at its production branch head, with every file's text, so a machine can write the steering in force.",
@@ -73,5 +73,9 @@ export const steeringPull = registerCapability({
     .strict(),
 });
 
-export type SteeringPullInput = z.output<typeof steeringPull.input>;
-export type SteeringPullOutput = z.output<typeof steeringPull.output>;
+export type PublishedSteeringGetInput = z.output<
+  typeof publishedSteeringGet.input
+>;
+export type PublishedSteeringGetOutput = z.output<
+  typeof publishedSteeringGet.output
+>;
