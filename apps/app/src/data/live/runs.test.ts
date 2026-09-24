@@ -120,6 +120,7 @@ describe("runs.list", () => {
             steps: 3,
             frames: 9,
             cost: null,
+            costIsEstimate: false,
             reportedCost: null,
             // #4018's session facts: a row that recorded none maps each to
             // null, never to a guess.
@@ -145,6 +146,7 @@ describe("runs.list", () => {
             canSummarize: false,
             startedAt: "2026-09-15T08:55:00.000Z",
             sealedAt: null,
+            sealSource: null,
             endedAt: null,
           },
         ],

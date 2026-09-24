@@ -450,7 +450,7 @@ The app's Knip configuration excluded only this retained file from unused-file r
 
 On 2026-09-23 the Run page spec (`mockups/pages/run.md` in the roadmap repository) restored the Chain and seal tab and the replay grade badge, which it marks as built. `chain.tsx`, `replay-grade.tsx` and `ChainCheckpoint` left this register then.
 
-On 2026-09-24 [ADR-159](docs/adr/ADR-159-the-run-page-draws-every-panel-of-the-mockup.md) returned Fork replay and Bisect to a sealed run's header, as the mockup draws them. `replay-actions.tsx`, `forkRun` and `bisectRuns` left this register then, and the Knip exclusion for the file was removed. Fork keeps its gate: it is offered on a ledger run graded `fork` or `retry`, and drawn disabled with the reason everywhere else.
+On 2026-09-24 [ADR-166](docs/adr/ADR-166-the-run-page-draws-every-panel-of-the-mockup.md) returned Fork replay and Bisect to a sealed run's header, as the mockup draws them. `replay-actions.tsx`, `forkRun` and `bisectRuns` left this register then, and the Knip exclusion for the file was removed. Fork keeps its gate: it is offered on a ledger run graded `fork` or `retry`, and drawn disabled with the reason everywhere else.
 
 ### Run summary implementation (ADR-153)
 

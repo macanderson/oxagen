@@ -12,11 +12,7 @@ import type { RecordKind } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { readLibrary } from "../library-read";
-import {
-  InjectionPoints,
-  OnDisk,
-  RecordsReadFailure,
-} from "../records-panels";
+import { InjectionPoints, OnDisk, RecordsReadFailure } from "../records-panels";
 import { RecordsList } from "../records-shelf";
 import type { SteeringAt } from "../view";
 

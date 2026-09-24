@@ -183,5 +183,7 @@ export async function forgetMemory(
     memoryId: ref,
     status: "RETRACTED",
   });
-  return result.ok ? { ok: true, value: { forgotten: result.value.id } } : result;
+  return result.ok
+    ? { ok: true, value: { forgotten: result.value.id } }
+    : result;
 }

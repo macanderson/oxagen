@@ -86,6 +86,10 @@ export function SpendByArea({
         cost === null ? undefined : (
           <span className="font-mono text-[11px] text-dim">
             <Money value={cost} /> · {cost.basis ?? tCost("basisNotRecorded")}
+            {/* An open run's figure grows as it records calls (#3980). */}
+            {metrics.costIsEstimate ? (
+              <span data-testid="run-spend-estimate"> · {t("estimate")}</span>
+            ) : null}
           </span>
         )
       }

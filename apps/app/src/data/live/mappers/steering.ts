@@ -202,7 +202,11 @@ export function toSteeringFreshness(
   };
 }
 
-const WRITTEN_BY = { USER: "person", AGENT: "agent", SYSTEM: "system" } as const;
+const WRITTEN_BY = {
+  USER: "person",
+  AGENT: "agent",
+  SYSTEM: "system",
+} as const;
 
 /**
  * `list_memories` to the Memory shelf's rows. Only the fields the node

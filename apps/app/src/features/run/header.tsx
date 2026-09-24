@@ -493,7 +493,8 @@ function SubagentsFromWork({
 
 /**
  * "<task title> · started <t>", then how it ended once the status says it
- * has: the recorder's end time, else the seal, which is the server's receipt
+ * has: Oxagen's close of a run silent for 12 hours, named as such, else the
+ * recorder's end time, else the seal, which is the server's receipt
  * time and can trail the run by the upload. Keyed on the status, the one
  * definition of sealed the actions and summarize_run also gate on, so a run
  * that ended with no seal instant says so rather than looking live.
@@ -512,7 +513,17 @@ function When({ run }: { run: RunRow }) {
     >
       {title === null ? null : <>{title} · </>}
       {t("started")} <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
-      {run.status === "live" ? null : run.endedAt != null ? (
+      {run.status === "live" ? null : run.sealSource === "idle_timeout" &&
+        run.sealedAt != null ? (
+        // Oxagen closed it for silence (#3980); the host never said it ended,
+        // and its next event reopens it.
+        <span data-testid="run-closed-idle">
+          {" · "}
+          {t("closedIdle")}{" "}
+          <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time> (
+          {t("closedIdleWhy")})
+        </span>
+      ) : run.endedAt != null ? (
         <span data-testid="run-ended">
           {" · "}
           {t("ended")} <time dateTime={run.endedAt}>{when(run.endedAt)}</time>

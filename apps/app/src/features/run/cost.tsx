@@ -17,6 +17,7 @@
 // transcript and the price book for the header and the stat row, and the
 // metrics hold what this tab draws from them. `run.tsx` calls `CostTab` as a
 // function, so it calls no hook itself; the sections it returns do.
+import { useTranslations } from "next-intl";
 import type { RunTabProps } from "./tab-props";
 import { classPrices, ledgerOf } from "./cost-figures";
 import { Instruments } from "./instruments";
@@ -25,6 +26,19 @@ import { SpendByArea } from "./spend-by-area";
 import { TokenClassesAndComposition } from "./token-classes";
 import { ToolCalls } from "./tool-calls";
 import { WaterfallPanel } from "./waterfall";
+
+/** The line that says an open run's figures are an estimate (#3980). */
+function CostEstimate() {
+  const t = useTranslations("run.cost");
+  return (
+    <p
+      data-testid="cost-estimate"
+      className="max-w-prose text-sm text-muted-foreground"
+    >
+      {t("estimate")}
+    </p>
+  );
+}
 
 /** The Cost tab over the page's bundle. */
 export function CostTab({
@@ -37,8 +51,12 @@ export function CostTab({
   const ledger = ledgerOf(metrics.turns ?? []);
   const prices = classPrices(metrics.priced, metrics.tokens);
   const retries = cost.ok ? (cost.value.rollup?.retries ?? null) : null;
+  // A rollup built while the run was open covers the calls recorded so far
+  // (#3980), and the tab says so above its figures.
+  const estimate = cost.ok && cost.value.rollup?.isEstimate === true;
   return (
     <div data-testid="cost-tab" className="flex flex-col gap-3.5">
+      {estimate ? <CostEstimate /> : null}
       <ModelFitPanel run={run} metrics={metrics} agent={agent} />
       <Instruments
         run={run}

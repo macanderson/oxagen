@@ -1,4 +1,4 @@
-# ADR-159: The Run page draws every panel of the mockup, and a figure the record lacks reads not recorded
+# ADR-166: The Run page draws every panel of the mockup, and a figure the record lacks reads not recorded
 
 Status: Accepted
 Date: 2026-09-24

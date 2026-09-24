@@ -188,6 +188,12 @@ export type RunMetrics = {
   priced: PricedClasses | null;
   /** The rollup's cost, else the run row's; the basis travels with it. */
   cost: Cost | null;
+  /**
+   * `cost` is a running estimate: the run is open, or the rollup was built
+   * while it was (#3980). An open run's figure is an estimate whatever its
+   * row says, since a row an idle close sealed reads final until rebuilt.
+   */
+  costIsEstimate: boolean;
   /** The share of the cost the rollup did not count as productive. */
   wasted: Cost | null;
   cacheHit: number | null;
@@ -580,6 +586,11 @@ export function runMetrics({
     reportedTokens,
     priced: rollup === null ? null : priceClasses(rollup, book),
     cost: runCost,
+    costIsEstimate:
+      run.sealedAt === null ||
+      (rollup === null
+        ? run.costIsEstimate === true
+        : rollup.isEstimate === true),
     wasted: wasted(runCost, rollup?.productiveRatio ?? null),
     cacheHit: rollup?.cacheHitRate ?? null,
     productiveRatio: rollup?.productiveRatio ?? null,

@@ -197,6 +197,9 @@
               }
             ]
           },
+          "costIsEstimate": {
+            "type": "boolean"
+          },
           "reportedCost": {
             "anyOf": [
               {
@@ -247,6 +250,20 @@
             "anyOf": [
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sealSource": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "agent_stop",
+                  "idle_timeout"
+                ]
               },
               {
                 "type": "null"

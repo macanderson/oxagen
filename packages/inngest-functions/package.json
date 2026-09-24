@@ -10,6 +10,7 @@
     "./env-check": "./src/env-check.ts",
     "./adapter": "./src/adapter.ts",
     "./events": "./src/events.ts",
+    "./tacho-idle-close": "./src/lib/tacho-idle-close.ts",
     "./client": "./src/inngest.ts"
   },
   "scripts": {

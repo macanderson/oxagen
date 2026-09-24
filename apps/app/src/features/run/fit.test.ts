@@ -20,6 +20,7 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
     tokens: null,
     priced: null,
     cost: null,
+    costIsEstimate: false,
     wasted: null,
     cacheHit: null,
     productiveRatio: null,

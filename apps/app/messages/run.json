@@ -267,7 +267,8 @@
       }
     },
     "cost": {
-      "notRolledUp": "The rollup has not rebuilt this run yet. It runs after a run seals, and until it has there is no figure to show. A zero here would be a measurement, and nothing has measured one.",
+      "notRolledUp": "The rollup has not priced this run yet. It prices a run as its calls are recorded, or once the run seals. A zero here would be a measurement, and nothing has measured one.",
+      "estimate": "Estimate. The run is still open, so these figures cover the calls recorded so far and grow as it adds more. They are final once the run seals.",
       "basisNotRecorded": "basis not recorded",
       "fit": {
         "title": "Model fit",
@@ -387,6 +388,7 @@
       },
       "area": {
         "title": "Spend by area",
+        "estimate": "estimate",
         "areas": {
           "initial": "Initial prompt",
           "followUp": "Follow-up prompts",
@@ -871,6 +873,8 @@
       "moreSubagents": "{count} more",
       "started": "started",
       "sealed": "sealed",
+      "closedIdle": "closed",
+      "closedIdleWhy": "no event for 12 hours",
       "ended": "ended",
       "sealNotRecorded": "ended with no seal recorded",
       "enrolledBy": "enrolled the host",
@@ -930,7 +934,9 @@
       "oneShot": "one-shot session",
       "corrective": "{count} corrective",
       "provisional": "agent reported, provisional",
+      "estimate": "estimate",
       "basisNotRecorded": "basis not recorded",
+      "noEnd": "no end recorded",
       "nothingWasted": "nothing bought nothing",
       "mostly": {
         "model": "mostly in the model",

@@ -2896,6 +2896,7 @@ type Messages = {
         noBasis: string;
         unbased: string;
         unpriced: string;
+        estimated: string;
         notRecorded: string;
         mixed: string;
       };
@@ -3007,6 +3008,7 @@ type Messages = {
       parked: string;
       notRecorded: string;
       basisNotRecorded: string;
+      estimate: string;
       source: {
         ledger: string;
         tacho: string;
@@ -6000,6 +6002,7 @@ type Messages = {
     };
     cost: {
       notRolledUp: string;
+      estimate: string;
       basisNotRecorded: string;
       fit: {
         title: string;
@@ -6119,6 +6122,7 @@ type Messages = {
       };
       area: {
         title: string;
+        estimate: string;
         areas: {
           initial: string;
           followUp: string;
@@ -6603,6 +6607,8 @@ type Messages = {
       moreSubagents: string;
       started: string;
       sealed: string;
+      closedIdle: string;
+      closedIdleWhy: string;
       ended: string;
       sealNotRecorded: string;
       enrolledBy: string;
@@ -6662,7 +6668,9 @@ type Messages = {
       oneShot: string;
       corrective: string;
       provisional: string;
+      estimate: string;
       basisNotRecorded: string;
+      noEnd: string;
       nothingWasted: string;
       mostly: {
         model: string;
@@ -8291,6 +8299,7 @@ type Messages = {
       observedNote: string;
       wasted: string;
       wastedShare: string;
+      estimated: string;
     };
     states: {
       loading: string;

@@ -152,6 +152,12 @@ export type RecipientSession = {
   runtime: string;
   /** `tacho.sessions.outcome`: `running` is live. */
   outcome: string;
+  /**
+   * `idle_timeout` when the control plane closed the session for silence
+   * (ADR-159). That close is not the host's word: a harness that is alive can
+   * still take a command, and its next frame reopens the session.
+   */
+  sealSource?: string | null;
   /** `tacho.sessions.enforcement_tier`: gateway, harness or observe. */
   enforcementTier: string;
   /** The session's host as its polls left it; null when it names none. */
@@ -173,6 +179,7 @@ function undeliverable(
 ): CommandBlock | null {
   return commandBlockOf({
     outcome: session.outcome,
+    sealSource: session.sealSource,
     host: session.host,
     now,
   });
@@ -452,6 +459,7 @@ const recipientColumns = {
   agentKey: sessions.agentKey,
   runtime: sessions.runtime,
   outcome: sessions.outcome,
+  sealSource: sessions.sealSource,
   enforcementTier: sessions.enforcementTier,
   hostRowId: hosts.id,
   hostStatus: hosts.status,
