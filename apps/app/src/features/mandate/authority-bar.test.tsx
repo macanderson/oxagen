@@ -15,6 +15,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { MandateAuthority } from "@/data/contracts/mandates";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { callsAuthority, mandateAuthority } from "@/test/mandate-views";
 import { AuthorityBar } from "./authority-bar";
@@ -56,10 +57,11 @@ describe("AuthorityBar › over the limit", () => {
     overLimit: true,
   });
 
-  it("fills the bar with what settled and leaves the reservation no room past the limit", () => {
-    renderBar(over, { openCalls: 1 });
+  it("fills the bar with what settled and leaves the reservation no room past the limit", async () => {
+    const { container } = renderBar(over, { openCalls: 1 });
     expect(part("settled")?.style.width).toBe("100%");
     expect(part("reserved")?.style.width).toBe("0%");
+    await expectNoAxe(container);
   });
 
   it("says the drawn figures sit past the limit, in the text and in the image's name", () => {

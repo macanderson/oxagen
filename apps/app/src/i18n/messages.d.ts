@@ -4748,7 +4748,6 @@ type Messages = {
         usage: string;
         recall: string;
         seal: string;
-        policy: string;
         errors: string;
       };
       chipsClear: string;
@@ -4814,20 +4813,10 @@ type Messages = {
     };
     frames: {
       title: string;
-      onThisPage: string;
-      columns: {
-        seq: string;
-        type: string;
-        observed: string;
-        body: string;
-        cost: string;
-      };
-      stage: string;
       fidelity: {
         full: string;
         digest_only: string;
       };
-      noContent: string;
       redacted: string;
       openBody: string;
       pager: string;
@@ -4939,7 +4928,6 @@ type Messages = {
       ledgerReason: string;
       roleReason: string;
       pause: {
-        open: string;
         title: string;
         body: string;
         confirm: string;
@@ -4949,7 +4937,6 @@ type Messages = {
         transition: string;
       };
       resume: {
-        open: string;
         title: string;
         body: string;
         confirm: string;
@@ -5295,7 +5282,6 @@ type Messages = {
       paused: string;
       copy: string;
       copyLabel: string;
-      copied: string;
       copyFailed: string;
       modelNotRecorded: string;
       noMachineOnLedger: string;
@@ -5659,7 +5645,6 @@ type Messages = {
       previousFrame: string;
       nextFrame: string;
       frameOf: string;
-      empty: string;
       basisNotRecorded: string;
       mark: {
         steer: string;

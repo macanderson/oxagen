@@ -102,7 +102,6 @@
         "usage": "usage",
         "recall": "recall",
         "seal": "seal",
-        "policy": "policy",
         "errors": "✗ errors"
       },
       "chipsClear": "all",
@@ -168,20 +167,10 @@
     },
     "frames": {
       "title": "Frames",
-      "onThisPage": "{count} on this page",
-      "columns": {
-        "seq": "Seq",
-        "type": "Event",
-        "observed": "Observed",
-        "body": "Body",
-        "cost": "Cost"
-      },
-      "stage": "stage {stage}",
       "fidelity": {
         "full": "bytes retained",
         "digest_only": "digest only"
       },
-      "noContent": "no content",
       "redacted": "removed {path}: {reason}",
       "openBody": "Open body",
       "pager": "Frame pages",
@@ -293,7 +282,6 @@
       "ledgerReason": "Pause refuses the next evidence batch. Resume reopens evidence ingress. Cancel revokes the run credentials. These controls do not stop the external process; steering needs a producer connection.",
       "roleReason": "Sending a command needs an organization Owner or Admin role, or a workspace Owner or Member role.",
       "pause": {
-        "open": "Pause",
         "title": "Pause {run}",
         "body": "The agent stops at the next boundary it reaches. Work already in flight finishes first.",
         "confirm": "Queue the pause",
@@ -303,7 +291,6 @@
         "transition": "Pausing…"
       },
       "resume": {
-        "open": "Resume",
         "title": "Resume {run}",
         "body": "The agent carries on from where it paused. Your reason reaches the model as a control frame.",
         "confirm": "Queue the resume",
@@ -649,7 +636,6 @@
       "paused": "Ingress is paused. The agent takes no new step until you resume it.",
       "copy": "Copy",
       "copyLabel": "Copy {text}",
-      "copied": "Copied",
       "copyFailed": "Copy failed. Select the text and copy it.",
       "modelNotRecorded": "model not recorded",
       "noMachineOnLedger": "The evidence ledger records no host for a run.",
@@ -1013,7 +999,6 @@
       "previousFrame": "◀ Previous",
       "nextFrame": "Next ▶",
       "frameOf": "frame {at} of {shown} shown · {total} in the run",
-      "empty": "This run has no frames on this page.",
       "basisNotRecorded": "basis not recorded",
       "mark": {
         "steer": "steer",

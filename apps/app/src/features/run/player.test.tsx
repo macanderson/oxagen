@@ -16,6 +16,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunFrame } from "@/data/contracts/run";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { FramePlayer } from "./player";
 import { NOW, runFrame } from "./run.builders";
@@ -73,8 +74,8 @@ function renderPlayer(
 const line = () => screen.getByTestId("player-cost");
 
 describe("FramePlayer › the cost by here", () => {
-  it("sums the priced frames up to the open one against the run's cost, on their basis", () => {
-    renderPlayer([
+  it("sums the priced frames up to the open one against the run's cost, on their basis", async () => {
+    const { container } = renderPlayer([
       runFrame({ seq: "1", cost: cost("1000000") }),
       runFrame({ seq: "2", cost: null }),
       runFrame({ seq: "3", cost: cost("500000") }),
@@ -84,6 +85,7 @@ describe("FramePlayer › the cost by here", () => {
     expect(screen.getByTestId("player-cost-basis")).toHaveTextContent(
       "gateway_observed",
     );
+    await expectNoAxe(container);
   });
 
   it("says no frame up to here carries a price, and prints no $0.00 (negative)", () => {
