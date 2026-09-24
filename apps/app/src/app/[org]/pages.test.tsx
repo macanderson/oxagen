@@ -53,6 +53,7 @@ const {
   Runtimes,
   workspaces,
   source,
+  cookieJar,
 } = vi.hoisted(() => {
   const workspaces = vi.fn();
   return {
@@ -114,6 +115,7 @@ const {
     Runtimes: vi.fn((_props: Record<string, unknown>) => <h1>Runtimes</h1>),
     workspaces,
     source: { org: { workspaces } },
+    cookieJar: new Map<string, string>(),
   };
 });
 // `WsCtx.is` is how the API keys section tells a workspace scope from an
@@ -140,7 +142,28 @@ vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/server/session", () => ({
   getAuthUser: () => Promise.resolve({ name: "Marcus Bell" }),
 }));
-vi.mock("@/features/fleet", () => ({ Fleet }));
+// The page parses the saved table choice with Fleet's own reader, so the stand-in
+// keeps the real one: a cookie the reader refuses must reach Fleet as defaults.
+vi.mock("@/features/fleet", async () => {
+  const prefs = await vi.importActual<Record<string, unknown>>(
+    "@/features/fleet/prefs",
+  );
+  return {
+    Fleet,
+    FLEET_PREFS_COOKIE: prefs.FLEET_PREFS_COOKIE,
+    readFleetPrefs: prefs.readFleetPrefs,
+    pullRequestFilterOf: prefs.pullRequestFilterOf,
+  };
+});
+vi.mock("next/headers", () => ({
+  cookies: () =>
+    Promise.resolve({
+      get: (name: string) => {
+        const value = cookieJar.get(name);
+        return value === undefined ? undefined : { name, value };
+      },
+    }),
+}));
 vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/runtimes", () => ({
   Runtimes,
@@ -230,6 +253,7 @@ beforeEach(() => {
   requireViewer.mockReset();
   requireViewer.mockResolvedValue({});
   workspaces.mockReset();
+  cookieJar.clear();
 });
 
 /** Every segment a page under /[org] can have; each page reads the ones in its path. */
@@ -658,10 +682,38 @@ describe("the Fleet page", () => {
       ctx,
       source,
       cursor: "c2",
+      prefs: { pageSize: 25, hidden: new Set() },
+      pullRequests: "any",
       banners: <OnboardingGate ctx={ctx} source={source} />,
     });
     expect(screen.getByTestId("onboarding-gate")).toBeInTheDocument();
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("hands Fleet the saved columns and page size from the cookie, and the pull-request filter from the URL", async () => {
+    cookieJar.set("fleet_view", "v1|50|tier~tokens~retired_column");
+    await expectPageTitle(
+      await FLEET(),
+      routeProps(SEGMENTS, { prs: "with" }),
+      title("fleet"),
+    );
+    expect(Fleet.mock.calls[0]?.[0]).toMatchObject({
+      prefs: { pageSize: 50, hidden: new Set(["tier", "tokens"]) },
+      pullRequests: "with",
+    });
+  });
+
+  it("reads a cookie it cannot parse and an unknown filter as the defaults (negative)", async () => {
+    cookieJar.set("fleet_view", "v9|7|everything");
+    await expectPageTitle(
+      await FLEET(),
+      routeProps(SEGMENTS, { prs: "maybe" }),
+      title("fleet"),
+    );
+    expect(Fleet.mock.calls[0]?.[0]).toMatchObject({
+      prefs: { pageSize: 25, hidden: new Set() },
+      pullRequests: "any",
+    });
   });
 
   it("asks Fleet for the newest runs when the URL carries no cursor", async () => {

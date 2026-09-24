@@ -15,8 +15,16 @@ oxagen init
 
 It then checks whether the workspace has a GitHub connection and offers to create one, so the knowledge graph has a source to ground on. Running `init` again reuses the existing link instead of asking again.
 
+Name the org and workspace to link without a prompt, for example in CI:
+
 ```bash
-oxagen init --no-link   # skip the linker (CI, or when the link already exists)
+oxagen init --org acme --workspace payments
+```
+
+Then write the steering your workspace has published into `.oxagen/`:
+
+```bash
+oxagen pull
 ```
 
 ## 2. Check the spend ceiling

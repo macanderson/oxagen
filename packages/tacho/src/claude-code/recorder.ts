@@ -424,6 +424,11 @@ export class SessionRecorder {
    * so it rolls back to this one. See `rollbackToBirth`.
    */
   private readonly birth: ChainMark;
+  /**
+   * Whether this recorder was opened, without restored state, on a chain the
+   * WAL already held. See `continueFromDisk`.
+   */
+  readonly bornOnDisk: boolean = false;
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -457,7 +462,42 @@ export class SessionRecorder {
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
     if (options.restore) this.restore(options.restore);
+    else this.bornOnDisk = this.continueFromDisk();
     this.birth = this.markChain();
+  }
+
+  /**
+   * Put this chain, and every subagent chain under it, directly after the
+   * last event the host's WAL holds for it, wherever the cursor stands now.
+   *
+   * The uuid is derived from the harness session id, so a recorder opened for
+   * a session the daemon lost track of names a chain that may already be on
+   * disk. `daemon.json` lags the WAL by up to a tick, and further when the
+   * tick that writes it keeps failing, so a crash can drop a session or a
+   * subagent the WAL holds hundreds of events for. Opened at genesis, every
+   * write to that chain was refused because the file already held seq 0, and
+   * a session end sealed there could never land (#4093). Answers whether any
+   * cursor moved.
+   */
+  continueFromDisk(): boolean {
+    let moved = false;
+    const tail = this.options.context.chainTail?.(this.sessionUuid);
+    if (tail !== undefined) {
+      if (
+        tail.seq !== this.cursor.seq ||
+        tail.prevHash !== this.cursor.prevHash
+      ) {
+        this.cursor = { seq: tail.seq, prevHash: tail.prevHash };
+        moved = true;
+      }
+      // A chain with events on disk has started, and whether it is closed is
+      // what its last event says, not what a lost or forked state said.
+      this.started = true;
+      this.stopped = tail.stopped;
+    }
+    for (const link of this.children.values())
+      if (link.recorder.continueFromDisk()) moved = true;
+    return moved;
   }
 
   private restore(state: RecorderState): void {
@@ -682,6 +722,11 @@ export class SessionRecorder {
    */
   rollbackToBirth(): void {
     this.rollbackChain(this.birth);
+  }
+
+  /** Where this chain stood when the recorder was built. */
+  get birthCursor(): ChainCursor {
+    return this.birth.cursor;
   }
 
   /**
@@ -931,6 +976,9 @@ export class SessionRecorder {
     });
     // A child chain opens with its own genesis, so its journal has a session_start.
     recorder.started = true;
+    // A chain the WAL already holds has its genesis on disk; this recorder
+    // only continues it.
+    if (recorder.cursor.seq > 0) return recorder;
     const genesis = recorder.seal(
       "agent_start",
       {
@@ -1009,7 +1057,11 @@ export class SessionRecorder {
     const anthropic = standard?.anthropic ?? this.anthropic;
     const context = standard?.context ?? this.context;
     const host = standard?.host ?? this.host;
-    const harnessVersion = standard?.harnessVersion ?? this.harnessVersion;
+    // OTel's `service.version` or the exec path when either has spoken, else
+    // the `version` every transcript line carries, so a session that exports
+    // no OTel still records which harness build it ran on.
+    const harnessVersion =
+      standard?.harnessVersion ?? this.harnessVersion ?? context.app_version;
     const parent = this.options.parent;
     // Redacted and digested here, before the seal, so the digest the chain
     // hash covers is the digest of the bytes that ship. A frame with bytes

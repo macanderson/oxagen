@@ -10,10 +10,12 @@ import {
   isNull,
   like,
   lt,
+  lte,
   ne,
   notInArray,
   or,
   sql,
+  type SQL,
 } from "drizzle-orm";
 import { z } from "zod";
 import { digestBytes } from "@oxagen/tacho";
@@ -29,11 +31,20 @@ import {
 import { readRunFrames, resolveRunRecord } from "../lib/run-record";
 import { logger } from "../logger";
 
-export const RUN_ENRICH_EVENT = "run/enrich";
+import { RUN_ENRICH_EVENT } from "../events";
+
+export { RUN_ENRICH_EVENT };
+
+/** How long a request waits for others to the same run before the job runs. */
+export const ENRICH_BATCH_TIMEOUT = "2s";
 const eventSchema = z.object({
   orgId: z.string().uuid(),
   workspaceId: z.string().uuid(),
   runPublicId: z.string(),
+  /** The run's `summary_observed_at` as the sweep read it. Sweep events only. */
+  observedAt: z.string().nullable().optional(),
+  /** Set when a person asked through `summarize_run`. */
+  requestedByUserId: z.string().optional(),
 });
 const narrativeSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -56,10 +67,26 @@ export function enrichableWorkspace() {
 export const FAILED_RETRY_MS = 30 * 60_000;
 
 /**
- * How often a live run that already has a name is summarized again. Every
- * ingest batch moves a live run's `updated_at`, so the revision rule alone
- * made every active run due at every five-minute sweep, and each pass reads
- * and summarizes the whole run from the start.
+ * How many runs of one organization a sweep queues from each run table. An
+ * organization's jobs run one at a time and each takes minutes, so this is
+ * about what its slot finishes between two sweeps. The provider's queue then
+ * holds a few jobs, and a run sealed now waits behind those few rather than
+ * behind the organization's whole backlog.
+ */
+export const SWEEP_RUNS_PER_ORG = 3;
+
+/**
+ * How long a sweep's event stands. A job that waited longer skips the run
+ * without writing to it, and the run stays due. Each window gives the sweep
+ * new event ids, so a run that is still among the newest due is sent again.
+ */
+export const SWEEP_EVENT_TTL_MS = 30 * 60_000;
+
+/**
+ * How often a named run that keeps changing is summarized again, live or
+ * sealed. Every ingest batch moves an active run's `updated_at`, so the
+ * revision rule alone made every active run due at every five-minute sweep,
+ * and each pass reads and summarizes the whole run from the start.
  */
 export const LIVE_ENRICHMENT_INTERVAL_MS = 30 * 60_000;
 
@@ -76,6 +103,77 @@ function sealedRun(
 }
 
 /**
+ * The order a sweep takes due runs in: ended runs before live ones, then the
+ * most recently ended first (a live run by its last change). An operator reads
+ * the run that just ended, so it goes ahead of the backlog, and the backlog is
+ * worked through, newest first, whenever no newer run is waiting. The seal
+ * time ranks a sealed session, not `updated_at`, because a sealed Claude Code
+ * session goes on receiving events and would otherwise stay at the front.
+ *
+ * The sweep used to take the oldest first, 500 at a time. Once more than 500
+ * runs were due, every newly sealed run ranked past the 500th and was never
+ * queued.
+ */
+export function enrichmentPriority(
+  table: typeof schema.tachoSessions | typeof schema.agentRuns,
+): SQL[] {
+  const ended =
+    table === schema.tachoSessions
+      ? schema.tachoSessions.sealedAt
+      : schema.agentRuns.completedAt;
+  return [
+    sql`(${sealedRun(table)}) desc`,
+    sql`coalesce(${ended}, ${table.updatedAt}) desc`,
+  ];
+}
+
+/**
+ * The runs a sweep queues from one table: the first `SWEEP_RUNS_PER_ORG` of
+ * each organization, in `enrichmentPriority` order.
+ */
+export function sweepCandidates(
+  tx: Parameters<Parameters<typeof withSystemDb>[0]>[0],
+  table: typeof schema.tachoSessions | typeof schema.agentRuns,
+  now: Date,
+) {
+  const ranked = tx
+    .select({
+      orgId: table.orgId,
+      workspaceId: table.workspaceId,
+      runPublicId: table.publicId,
+      revision: sql<string>`${table.updatedAt}::text`.as("revision"),
+      observedAt: sql<
+        string | null
+      >`${table.summaryObservedAt}::text`.as("observed_at"),
+      rank: sql<number>`row_number() over (partition by ${table.orgId} order by ${sql.join(enrichmentPriority(table), sql`, `)})`.as(
+        "rank",
+      ),
+    })
+    .from(table)
+    .innerJoin(schema.workspaces, eq(schema.workspaces.id, table.workspaceId))
+    .where(
+      and(
+        readableEnrichmentRun(table),
+        enrichableWorkspace(),
+        dueForEnrichment(table, now),
+      ),
+    )
+    .as("ranked");
+  return tx
+    .select({
+      orgId: ranked.orgId,
+      workspaceId: ranked.workspaceId,
+      runPublicId: ranked.runPublicId,
+      revision: ranked.revision,
+      observedAt: ranked.observedAt,
+    })
+    .from(ranked)
+    .where(lte(ranked.rank, SWEEP_RUNS_PER_ORG))
+    .orderBy(asc(ranked.rank))
+    .limit(500);
+}
+
+/**
  * The runs a sweep queues. A run is due when it was never observed, when its
  * row changed after the revision the last read saw, or when its last read
  * found bodies missing and five minutes have passed. The revision comparison
@@ -86,18 +184,24 @@ function sealedRun(
  * failure, or when thirty minutes have passed, so a refusing gateway is asked
  * again once it may have recovered and is not asked on every sweep.
  *
- * A live run is held to `LIVE_ENRICHMENT_INTERVAL_MS` besides: it is due only
- * while it has no name yet, or once its last enrichment is that old. Its seal
- * moves `updated_at` again, so the finished run is always summarized. The
- * first read names it for its first prompt, so a live run whose model call
- * failed waits the interval too, where every batch would otherwise make it
- * due again.
+ * A run that is live, or that changed after its last enrichment, is held to
+ * `LIVE_ENRICHMENT_INTERVAL_MS` besides: it is due only while it has no name
+ * yet, or once its last enrichment is that old. Every ingest batch moves a
+ * live run's `updated_at`, and a sealed Claude Code session that goes on
+ * receiving events after its seal moves it too, so without the hold either
+ * was read and summarized again from its start at every sweep. A seal moves
+ * `updated_at`, so the finished run is always summarized, at most one
+ * interval after its last account. An ended run that did not change is due
+ * for its own reasons: missing bodies after five minutes, a failure after
+ * thirty. The first read names a run for its first prompt, so a run whose
+ * model call failed waits the interval too.
  */
 export function dueForEnrichment(
   table: typeof schema.tachoSessions | typeof schema.agentRuns,
   now: Date,
 ) {
   const changed = sql`${table.updatedAt} IS DISTINCT FROM ${table.summaryObservedRevision}`;
+  const unchanged = sql`${table.updatedAt} IS NOT DISTINCT FROM ${table.summaryObservedRevision}`;
   return and(
     or(
       isNull(table.summaryObservedAt),
@@ -124,30 +228,38 @@ export function dueForEnrichment(
       ),
     ),
     or(
-      sealedRun(table),
       isNull(table.name),
       isNull(table.summaryObservedAt),
       lt(
         table.summaryObservedAt,
         new Date(now.getTime() - LIVE_ENRICHMENT_INTERVAL_MS),
       ),
+      and(sealedRun(table), unchanged),
     ),
   );
 }
 
 /**
- * The dedup id for one sweep event. It holds while the run's state holds, so
- * every sweep that re-selects a run whose job is still in flight sends the
- * same id and the provider drops the copy. A finished job and a failed one
- * both move `summary_observed_at`, and a new write moves `updated_at`, so
- * each gives the next sweep a fresh id.
+ * The dedup id for one sweep event. It holds while the run's state holds and
+ * the sweep window holds, so every sweep that re-selects a run whose job is
+ * still in flight sends the same id and the provider drops the copy. A
+ * finished job and a failed one both move `summary_observed_at`, and a new
+ * write moves `updated_at`, so each gives the next sweep a fresh id. So does
+ * the next window, which lets a job that went stale in the queue be sent
+ * again. A copy that reaches the job after the run was observed is skipped.
  */
 export function enrichmentEventId(row: {
   runPublicId: string;
   revision: string;
   observedAt: string | null;
+  window: number;
 }): string {
-  return `run-enrich:${row.runPublicId}:${row.revision}:${row.observedAt ?? "never"}`;
+  return `run-enrich:${row.runPublicId}:${row.revision}:${row.observedAt ?? "never"}:${row.window}`;
+}
+
+/** The sweep window a time falls in, for `enrichmentEventId`. */
+export function sweepWindow(at: Date): number {
+  return Math.floor(at.getTime() / SWEEP_EVENT_TTL_MS);
 }
 
 /** Match the root-session and V2 predicates used by get_run. */
@@ -211,6 +323,29 @@ export async function recordEnrichmentFailure(
   );
 }
 
+/**
+ * Whether a queued event still asks for work. A person's request always does.
+ * A sweep event does not once it has waited `SWEEP_EVENT_TTL_MS`: the run
+ * stays due, and a later sweep sends it again if it is still among the newest.
+ * Nor once another job observed the run after the sweep read it, which is how
+ * a copy sent in a later window is told apart from the job it duplicates.
+ * An event from before sweep events carried `observedAt` is judged by age.
+ */
+export async function sweepEventStanding(
+  data: EnrichEvent,
+  sentAt: number | undefined,
+  now: Date,
+  readObservedAt: () => Promise<string | null>,
+): Promise<"admitted" | "stale" | "superseded"> {
+  if (data.requestedByUserId !== undefined) return "admitted";
+  if (sentAt !== undefined && now.getTime() - sentAt > SWEEP_EVENT_TTL_MS)
+    return "stale";
+  if (data.observedAt === undefined) return "admitted";
+  return (await readObservedAt()) === data.observedAt
+    ? "admitted"
+    : "superseded";
+}
+
 export const [runEnrich, runEnrichOnFailure] = createFunction(
   {
     id: "run.enrich",
@@ -242,15 +377,20 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       limit: 1,
       key: "event.data.orgId",
     },
+    // The batch folds the requests one run collects in a moment (ingest's
+    // first-prompt request, an operator's `summarize_run`, a sweep) into one
+    // read. Its wait is paid by every run before its account starts, so it is
+    // kept to seconds: at thirty, a new run sat half a minute under its uuid.
     batchEvents: {
       maxSize: MAX_BATCH_SIZE,
-      timeout: "30s",
+      timeout: ENRICH_BATCH_TIMEOUT,
       key: "event.data.orgId + ':' + event.data.runPublicId",
     },
   },
   { event: RUN_ENRICH_EVENT },
   async ({ event, events, step }) => {
-    const data = eventSchema.parse((events?.at(-1) ?? event).data);
+    const latest = events?.at(-1) ?? event;
+    const data = eventSchema.parse(latest.data);
     const scope = { orgId: data.orgId, workspaceId: data.workspaceId };
     const inScope = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
     const table = runTable(data.runPublicId);
@@ -349,6 +489,28 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
             .where(where),
         ),
       );
+    }
+    const standing = await step.run("admit", () =>
+      inScope(() =>
+        sweepEventStanding(data, latest.ts, new Date(observedAt), async () => {
+          const [row] = await withTenantDb((tx) =>
+            tx
+              .select({
+                observedAt: sql<
+                  string | null
+                >`${table.summaryObservedAt}::text`,
+              })
+              .from(table)
+              .where(where)
+              .limit(1),
+          );
+          return row?.observedAt ?? null;
+        }),
+      ),
+    );
+    if (standing !== "admitted") {
+      logSkip(data, standing);
+      return { status: standing };
     }
     if (!(await enabled())) {
       await step.run("disabled", () => markObserved());
@@ -529,7 +691,11 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
   },
 );
 
-/** The sweep also covers internal ledger writers and recovers a lost ingest notification. */
+/**
+ * The only automatic path to a run's account: nothing sends `run/enrich` when
+ * a run is sealed, so every Tacho session and ledger run reaches the job
+ * through this sweep. `summarize_run` is the manual path.
+ */
 export const [runEnrichmentSweep] = createFunction(
   { id: "run.enrichment-sweep", retries: 2, concurrency: { limit: 1 } },
   { cron: "*/5 * * * *" },
@@ -538,38 +704,11 @@ export const [runEnrichmentSweep] = createFunction(
     const pending = await step.run("pending", () =>
       withSystemDb(async (tx) => {
         const now = new Date();
+        const window = sweepWindow(now);
         const rows = [];
         for (const table of [schema.tachoSessions, schema.agentRuns]) {
-          rows.push(
-            ...(await tx
-              .select({
-                orgId: table.orgId,
-                workspaceId: table.workspaceId,
-                runPublicId: table.publicId,
-                revision: sql<string>`${table.updatedAt}::text`,
-                observedAt: sql<
-                  string | null
-                >`${table.summaryObservedAt}::text`,
-              })
-              .from(table)
-              .innerJoin(
-                schema.workspaces,
-                eq(schema.workspaces.id, table.workspaceId),
-              )
-              .where(
-                and(
-                  readableEnrichmentRun(table),
-                  enrichableWorkspace(),
-                  dueForEnrichment(table, now),
-                ),
-              )
-              .orderBy(
-                asc(
-                  sql`coalesce(${table.summaryObservedAt}, ${table.updatedAt})`,
-                ),
-              )
-              .limit(500)),
-          );
+          for (const row of await sweepCandidates(tx, table, now))
+            rows.push({ ...row, window });
         }
         return rows;
       }),
@@ -577,13 +716,14 @@ export const [runEnrichmentSweep] = createFunction(
     if (pending.length)
       await step.sendEvent(
         "enrich",
-        pending.map(({ revision, observedAt, ...data }) => ({
+        pending.map(({ revision, window, ...data }) => ({
           name: RUN_ENRICH_EVENT,
           data,
           id: enrichmentEventId({
             runPublicId: data.runPublicId,
             revision,
-            observedAt,
+            observedAt: data.observedAt,
+            window,
           }),
         })),
       );

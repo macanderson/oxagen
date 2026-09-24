@@ -19,6 +19,7 @@ import type { RunSubagent, RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { parseGitHubUrl } from "@/shared/github-url";
+import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
 import { Badge } from "@/ui/badge";
@@ -27,7 +28,7 @@ import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
-import { GitHubLink } from "@/ui/navigation";
+import { GitHubLink, PullRequestLink } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyPath } from "./copy-text";
@@ -266,10 +267,12 @@ function WhereFromOutputs({
         </Chip>
       ) : (
         pulls.map((pull) => (
-          <Chip key={`${pull.seq ?? ""}${pull.name}`} code>
-            <GitPullRequest aria-hidden="true" className="size-3 flex-none" />
-            {pull.name}
-          </Chip>
+          <PullChip
+            key={`${pull.seq ?? ""}${pull.name}`}
+            url={pull.note}
+            label={recordedPullLabel(pull)}
+            state={null}
+          />
         ))
       )}
       <MachineChip run={run} machine={run.machine?.hostname ?? null} />
@@ -319,6 +322,80 @@ function ForgeChip({
 }
 
 /**
+ * A pull request's chip and its state beside it. The chip opens the pull
+ * request on GitHub or GitLab in a new tab when its URL names a page Oxagen
+ * recognises, else it is the label alone. `state` is the live state the work
+ * read took from the forge; a pull request only the frames recorded has none
+ * Oxagen can vouch for, and says "status unknown" rather than "open".
+ */
+function PullChip({
+  url,
+  label,
+  title,
+  state,
+}: {
+  url: string | null;
+  label: string;
+  title?: string;
+  state: RunWork["pullRequests"][number]["state"] | null;
+}) {
+  const t = useTranslations("run.header");
+  const target = url === null ? null : parsePullRequestUrl(url);
+  const content = (
+    <>
+      <GitPullRequest aria-hidden="true" className="size-3 flex-none" />
+      {label}
+    </>
+  );
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      {target === null ? (
+        <ForgeChip url={url} title={title} code>
+          {content}
+        </ForgeChip>
+      ) : (
+        <PullRequestLink
+          to={target}
+          title={title}
+          className={`${linkChip} font-mono text-[10.5px] font-medium`}
+        >
+          {content}
+        </PullRequestLink>
+      )}
+      <span
+        data-testid="run-pull-state"
+        data-state={state ?? "unknown"}
+        className="whitespace-nowrap text-[10.5px] text-dim"
+      >
+        {state === null ? t("pullState.unknown") : t(`pullState.${state}`)}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * A recorded pull request as a person names it: `owner/repo#12` when the
+ * spine names the repository beside a bare `#12`, else the node's own name.
+ */
+function recordedPullLabel(node: RunOutputNode): string {
+  return node.where !== null && node.name.startsWith("#")
+    ? `${node.where}${node.name}`
+    : node.name;
+}
+
+/** Does a recorded pull-request node name this pull request from the work read? */
+function samePull(
+  node: RunOutputNode,
+  pr: RunWork["pullRequests"][number],
+): boolean {
+  if (node.note !== null && node.note === pr.url) return true;
+  const repo = `${pr.repository.owner}/${pr.repository.name}`.toLowerCase();
+  return (
+    recordedPullLabel(node).toLowerCase() === `${repo}#${String(pr.number)}`
+  );
+}
+
+/**
  * The checkout (`runWhere`): the repository, the branch, one chip per pull
  * request the run pushed to, and `<machine>:<path>` as a copy button. The work
  * read records the checkout the host enrolled, so a path here is stated, never
@@ -347,6 +424,12 @@ function WhereFromWork({
       ? undefined
       : prs.find((pr) => pr.headRef === checkout.branch);
   const machine = work.value.machine?.name ?? run.machine?.hostname ?? null;
+  // A pull request the frames recorded that the work read could not read
+  // back (its repository is not connected, or it is a GitLab merge request)
+  // is still the run's: it is listed with its link and no state.
+  const recordedOnly = (pulls ?? []).filter(
+    (node) => !prs.some((pr) => samePull(node, pr)),
+  );
   return (
     <WhereRow>
       {repo === undefined ? (
@@ -374,22 +457,30 @@ function WhereFromWork({
           {checkout.branch}
         </ForgeChip>
       )}
-      {prs.length === 0 ? (
+      {prs.length === 0 && recordedOnly.length === 0 ? (
         <Chip>
           <span className="text-dim">{t("noPullRequest")}</span>
         </Chip>
       ) : (
-        prs.map((pr) => (
-          <ForgeChip
-            key={`${pr.repository.url}/${String(pr.number)}`}
-            url={pr.url}
-            title={pr.title}
-            code
-          >
-            <GitPullRequest aria-hidden="true" className="size-3 flex-none" />
-            {pr.repository.owner}/{pr.repository.name}#{pr.number}
-          </ForgeChip>
-        ))
+        <>
+          {prs.map((pr) => (
+            <PullChip
+              key={`${pr.repository.url}/${String(pr.number)}`}
+              url={pr.url}
+              title={pr.title}
+              label={`${pr.repository.owner}/${pr.repository.name}#${String(pr.number)}`}
+              state={pr.state}
+            />
+          ))}
+          {recordedOnly.map((node) => (
+            <PullChip
+              key={`${node.seq ?? ""}${node.name}`}
+              url={node.note}
+              label={recordedPullLabel(node)}
+              state={null}
+            />
+          ))}
+        </>
       )}
       {machine === null || checkout === null ? (
         <MachineChip run={run} machine={machine} />
@@ -505,8 +596,9 @@ function When({ run }: { run: RunRow }) {
   const format = useFormatter();
   const when = (at: string) =>
     format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "medium" });
-  const title =
-    (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
+  // With automatic names off, get_run already sends the harness's own title
+  // as `name` (or null), so the header takes it as sent.
+  const title = run.name ?? run.taskRef;
   return (
     <p
       data-testid="run-when"

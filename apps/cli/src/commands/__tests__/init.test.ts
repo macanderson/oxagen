@@ -19,6 +19,12 @@ vi.mock("../../lib/api.js", () => ({
 }));
 vi.mock("../../lib/config.js", () => ({ getToken: vi.fn() }));
 vi.mock("../../lib/linker.js", () => ({ resolveLinkedAccount: vi.fn() }));
+vi.mock("../../lib/working-copy.js", () => ({
+  // Outside a repository the project root is the directory itself.
+  projectRootFor: vi.fn(async (d: string) => d),
+  ensureWorkspaceLinkIgnored: vi.fn(async () => null),
+  reportWorkingCopy: vi.fn(),
+}));
 
 import {
   formatInitSummary,
@@ -35,11 +41,19 @@ import {
 import { apiGetOrThrow, apiPostOrThrow } from "../../lib/api.js";
 import { getToken } from "../../lib/config.js";
 import { resolveLinkedAccount } from "../../lib/linker.js";
+import {
+  ensureWorkspaceLinkIgnored,
+  projectRootFor,
+  reportWorkingCopy,
+} from "../../lib/working-copy.js";
 
 const mockGet = apiGetOrThrow as unknown as Mock;
 const mockPost = apiPostOrThrow as unknown as Mock;
 const mockToken = getToken as unknown as Mock;
 const mockResolve = resolveLinkedAccount as unknown as Mock;
+const mockIgnore = ensureWorkspaceLinkIgnored as unknown as Mock;
+const mockRoot = projectRootFor as unknown as Mock;
+const mockReport = reportWorkingCopy as unknown as Mock;
 
 const ACCOUNT = {
   orgId: "org_1",
@@ -52,6 +66,7 @@ const ACCOUNT = {
 
 let tmpDir: string;
 let out = "";
+let err = "";
 let stdout: typeof process.stdout.write;
 let stderr: typeof process.stderr.write;
 let isTTY: boolean | undefined;
@@ -59,13 +74,17 @@ let isTTY: boolean | undefined;
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), "oxagen-init-test-"));
   out = "";
+  err = "";
   stdout = process.stdout.write.bind(process.stdout);
   stderr = process.stderr.write.bind(process.stderr);
   process.stdout.write = ((s: string) => {
     out += s;
     return true;
   }) as typeof process.stdout.write;
-  process.stderr.write = (() => true) as typeof process.stderr.write;
+  process.stderr.write = ((s: string) => {
+    err += s;
+    return true;
+  }) as typeof process.stderr.write;
   isTTY = process.stdin.isTTY;
   // Non-interactive by default: the GitHub connect prompt must never block.
   Object.defineProperty(process.stdin, "isTTY", {
@@ -76,6 +95,15 @@ beforeEach(() => {
   mockPost.mockReset();
   mockToken.mockReset();
   mockResolve.mockReset();
+  mockIgnore.mockReset();
+  mockIgnore.mockResolvedValue(null);
+  mockRoot.mockClear();
+  mockReport.mockReset();
+  mockReport.mockResolvedValue({
+    workingCopyId: "wcp_1",
+    lastSeenAt: "2026-09-24T00:00:00.000Z",
+  });
+  process.exitCode = undefined;
 });
 
 afterEach(() => {
@@ -86,12 +114,16 @@ afterEach(() => {
     configurable: true,
   });
   rmSync(tmpDir, { recursive: true, force: true });
+  process.exitCode = undefined;
 });
 
 function makeResult(overrides: Partial<InitResult> = {}): InitResult {
   return {
+    projectRoot: tmpDir,
     workspaceLinkPath: workspaceLinkPath(tmpDir),
     workspaceLink: null,
+    gitignoreUpdated: null,
+    workingCopy: null,
     ...overrides,
   };
 }
@@ -336,5 +368,233 @@ describe("handleInit", () => {
     const parsed = JSON.parse(out) as InitResult;
     expect(parsed.workspaceLink).toBeNull();
     expect(parsed.workspaceLinkPath).toBe(workspaceLinkPath(tmpDir));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// --org / --workspace, the .gitignore line and the working-copy report
+// ---------------------------------------------------------------------------
+
+describe("runInit with --org and --workspace", () => {
+  beforeEach(() => {
+    mockToken.mockReturnValue("oxk_live_x");
+    mockGet.mockResolvedValue({ connections: [] });
+  });
+
+  it("passes both slugs to the linker and links without a terminal", async () => {
+    mockResolve.mockResolvedValue(ACCOUNT);
+    const result = await runInit({
+      cwd: tmpDir,
+      org: "acme",
+      workspace: "prod",
+    });
+    expect(mockResolve).toHaveBeenCalledWith({
+      orgSlug: "acme",
+      workspaceSlug: "prod",
+      isTTY: false,
+    });
+    expect(result.workspaceLink?.linked).toBe(true);
+    expect(readWorkspaceLink(tmpDir)?.workspaceSlug).toBe("prod");
+  });
+
+  it("reuses the link when the flags name the linked pair", async () => {
+    writeWorkspaceLink(tmpDir, {
+      ...ACCOUNT,
+      linkedAt: "2026-01-01T00:00:00Z",
+    });
+    const result = await runInit({
+      cwd: tmpDir,
+      org: "acme",
+      workspace: "prod",
+    });
+    expect(mockResolve).not.toHaveBeenCalled();
+    expect(result.workspaceLink?.relinkedFrom).toBeUndefined();
+    expect(out).toContain("Already linked");
+  });
+
+  it("relinks when the flags name another workspace, and drops the old pull base", async () => {
+    writeWorkspaceLink(tmpDir, {
+      ...ACCOUNT,
+      linkedAt: "2026-01-01T00:00:00Z",
+      repos: [{ provider: "github", fullName: "acme/old" }],
+      pull: {
+        commit: "abc1234",
+        bindingId: "rpb_1",
+        fullName: "acme/old",
+        pulledAt: "2026-01-01T00:00:00Z",
+        files: {},
+      },
+    });
+    mockResolve.mockResolvedValue({
+      ...ACCOUNT,
+      workspaceId: "ws_2",
+      workspaceSlug: "staging",
+      workspaceName: "Staging",
+    });
+
+    const result = await runInit({ cwd: tmpDir, workspace: "staging" });
+
+    // --workspace alone keeps the linked org.
+    expect(mockResolve).toHaveBeenCalledWith({
+      orgSlug: "acme",
+      workspaceSlug: "staging",
+      isTTY: false,
+    });
+    const written = readWorkspaceLink(tmpDir);
+    expect(written?.workspaceSlug).toBe("staging");
+    expect(written?.pull).toBeUndefined();
+    expect(written?.repos).toBeUndefined();
+    expect(result.workspaceLink?.relinkedFrom).toEqual({
+      orgSlug: "acme",
+      workspaceSlug: "prod",
+    });
+    expect(out).toContain("Relinked: Acme Inc / Staging (was acme / prod)");
+    expect(formatInitSummary(result)).toContain(
+      "Replaced the link to acme / prod.",
+    );
+  });
+
+  it("leaves the workspace to the picker when only a new --org is named", async () => {
+    writeWorkspaceLink(tmpDir, {
+      ...ACCOUNT,
+      linkedAt: "2026-01-01T00:00:00Z",
+    });
+    mockResolve.mockResolvedValue({ ...ACCOUNT, orgSlug: "globex" });
+    await runInit({ cwd: tmpDir, org: "globex" });
+    expect(mockResolve).toHaveBeenCalledWith({
+      orgSlug: "globex",
+      workspaceSlug: undefined,
+      isTTY: false,
+    });
+  });
+
+  it("checks GitHub in the linked workspace, not the global selection", async () => {
+    mockResolve.mockResolvedValue(ACCOUNT);
+    await runInit({ cwd: tmpDir, org: "acme", workspace: "prod" });
+    expect(mockGet).toHaveBeenCalledWith(
+      "connections",
+      { connectorId: "github" },
+      { org: "acme", ws: "prod" },
+    );
+  });
+});
+
+describe("runInit after linking", () => {
+  beforeEach(() => {
+    mockToken.mockReturnValue("oxk_live_x");
+    mockGet.mockResolvedValue({ connections: [] });
+    mockResolve.mockResolvedValue(ACCOUNT);
+  });
+
+  it("links at the project root the working-copy module names", async () => {
+    await runInit({ cwd: tmpDir });
+    expect(mockRoot).toHaveBeenCalledWith(tmpDir);
+  });
+
+  it("reports the working copy with the linked scope and the pulled commit", async () => {
+    writeWorkspaceLink(tmpDir, {
+      ...ACCOUNT,
+      linkedAt: "2026-01-01T00:00:00Z",
+      pull: {
+        commit: "abc1234",
+        bindingId: "rpb_1",
+        fullName: "acme/steering",
+        pulledAt: "2026-01-01T00:00:00Z",
+        files: {},
+      },
+    });
+    const result = await runInit({ cwd: tmpDir });
+    expect(mockReport).toHaveBeenCalledWith({
+      root: tmpDir,
+      scope: { org: "acme", ws: "prod" },
+      event: "init",
+      pulledCommit: "abc1234",
+    });
+    expect(result.workingCopy).toEqual({
+      workingCopyId: "wcp_1",
+      lastSeenAt: "2026-09-24T00:00:00.000Z",
+    });
+    expect(formatInitSummary(result)).toContain(
+      "Reported this directory to Oxagen (wcp_1).",
+    );
+  });
+
+  it("warns once on stderr and still links when the report fails", async () => {
+    mockReport.mockResolvedValue({ error: "Error 404 from working-copies" });
+    const result = await runInit({ cwd: tmpDir });
+    expect(result.workspaceLink?.linked).toBe(true);
+    expect(result.workingCopy).toEqual({
+      error: "Error 404 from working-copies",
+    });
+    expect(err).toBe(
+      "Warning: could not report this directory to Oxagen: Error 404 from working-copies\n",
+    );
+  });
+
+  it("says when it added the link to .gitignore", async () => {
+    mockIgnore.mockResolvedValue(join(tmpDir, ".gitignore"));
+    const result = await runInit({ cwd: tmpDir });
+    expect(result.gitignoreUpdated).toBe(join(tmpDir, ".gitignore"));
+    expect(formatInitSummary(result)).toContain(
+      `Added .oxagen/workspace.json to ${join(tmpDir, ".gitignore")}.`,
+    );
+  });
+
+  it("warns and continues when .gitignore cannot be written", async () => {
+    mockIgnore.mockRejectedValue(new Error("EACCES"));
+    const result = await runInit({ cwd: tmpDir });
+    expect(result.workspaceLink?.linked).toBe(true);
+    expect(err).toContain("could not add .oxagen/workspace.json to .gitignore");
+  });
+
+  it("neither touches .gitignore nor reports when linking was skipped", async () => {
+    mockToken.mockReturnValue(undefined);
+    const result = await runInit({ cwd: tmpDir });
+    expect(mockIgnore).not.toHaveBeenCalled();
+    expect(mockReport).not.toHaveBeenCalled();
+    expect(result.workingCopy).toBeNull();
+  });
+});
+
+describe("handleInit arguments", () => {
+  it("exits 2 when --org is combined with --no-link", async () => {
+    await handleInit({ cwd: tmpDir, noLink: true, org: "acme" });
+    expect(process.exitCode).toBe(2);
+    expect(err).toContain("cannot be combined with --no-link");
+  });
+
+  it("exits 2 on an empty slug", async () => {
+    await handleInit({ cwd: tmpDir, workspace: " " });
+    expect(process.exitCode).toBe(2);
+    expect(err).toContain("--workspace needs a slug.");
+  });
+
+  it("exits 1 when the named pair could not be linked", async () => {
+    mockToken.mockReturnValue("oxk_live_x");
+    mockResolve.mockRejectedValue(new Error('Organization "nope" not found'));
+    await handleInit({ cwd: tmpDir, org: "nope", workspace: "x" });
+    expect(process.exitCode).toBe(1);
+    expect(out).toContain('Organization "nope" not found');
+  });
+
+  it("keeps exit 0 for a plain init that could not link", async () => {
+    mockToken.mockReturnValue(undefined);
+    await handleInit({ cwd: tmpDir });
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("puts the working copy in --json output", async () => {
+    mockToken.mockReturnValue("oxk_live_x");
+    mockResolve.mockResolvedValue(ACCOUNT);
+    mockGet.mockResolvedValue({ connections: [] });
+    await handleInit({ cwd: tmpDir, json: true });
+    // stdout holds the JSON alone; the linker's narration went to stderr.
+    const parsed = JSON.parse(out) as InitResult;
+    expect(err).toContain("Linked: Acme Inc / Production");
+    expect(parsed.workingCopy).toEqual({
+      workingCopyId: "wcp_1",
+      lastSeenAt: "2026-09-24T00:00:00.000Z",
+    });
+    expect(parsed.projectRoot).toBe(tmpDir);
   });
 });

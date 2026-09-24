@@ -7,8 +7,8 @@ import {
   type TachoEvent,
   type UnsealedTachoEvent,
 } from "@oxagen/tacho";
-import { eq } from "drizzle-orm";
-import { rollupFiles } from "./file-facts-rollup";
+import { eq, sql } from "drizzle-orm";
+import { rollupFiles, sessionChangedFilesWhere } from "./file-facts-rollup";
 
 // CI migrates Postgres before running this production rollup against it.
 describe.skipIf(!process.env.DATABASE_URL)(
@@ -259,6 +259,49 @@ describe.skipIf(!process.env.DATABASE_URL)(
         linesAdded: 0,
         linesRemoved: 0,
       });
+    });
+
+    it("counts only this session's changed files, not another session's observations", async () => {
+      // Another session in the same workspace observed a change. Before
+      // `sessionChangedFilesWhere`, its row counted toward this session's
+      // title, because the OR bound looser than the session filter.
+      const other = crypto.randomUUID();
+      const count = () =>
+        scoped(() =>
+          withTenantDb((tx) =>
+            tx
+              .select({ count: sql<number>`count(*)::int` })
+              .from(schema.tachoSessionFiles)
+              .where(sessionChangedFilesWhere(sessionId, true)),
+          ),
+        );
+      try {
+        await scoped(() =>
+          withTenantDb((tx) =>
+            tx.insert(schema.tachoSessionFiles).values({
+              orgId: scope.orgId,
+              workspaceId: scope.workspaceId,
+              sessionId: other,
+              path: "/elsewhere/src/b.ts",
+              observedStatus: "added",
+              firstSeq: 1,
+              lastSeq: 1,
+              createdAt: now,
+              updatedAt: now,
+            }),
+          ),
+        );
+        await write([attested("/repo"), observed("/repo", ["src/c.ts"])]);
+        expect(Number((await count())[0]?.count)).toBe(2);
+      } finally {
+        await scoped(() =>
+          withTenantDb((tx) =>
+            tx
+              .delete(schema.tachoSessionFiles)
+              .where(eq(schema.tachoSessionFiles.sessionId, other)),
+          ),
+        );
+      }
     });
   },
 );

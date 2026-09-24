@@ -53,6 +53,7 @@ import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest"
 import { schema, withTenantDb } from "@oxagen/database";
 import type { TachoSealSource } from "@oxagen/database/schema";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
+import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 import {
   PROOF_OBSERVED_KIND,
   proofObservedBodySchema,
@@ -61,6 +62,7 @@ import {
   countsLlmCallSplit,
   countsLlmCallUsage,
   deriveSessionTitle,
+  fallbackRunTitle,
   retainsBody,
   TACHO_GATEWAY_TIER,
   TACHO_METERING_ATTR,
@@ -91,7 +93,10 @@ import {
   promotedTier,
 } from "./lib/tacho-containment";
 import { machineSnapshotOf } from "./lib/machine-facts";
-import { rollupFiles } from "./lib/file-facts-rollup";
+import {
+  rollupFiles,
+  sessionChangedFilesWhere,
+} from "./lib/file-facts-rollup";
 import { latestHarnessTitle } from "./lib/harness-title";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
@@ -102,7 +107,10 @@ import {
   sessionMachineSnapshotColumnReady,
 } from "./lib/tacho-gateway-columns";
 import { eventClient } from "./event-client";
-import { RUN_PROGRESSED_EVENT } from "@oxagen/inngest-functions/events";
+import {
+  RUN_ENRICH_EVENT,
+  RUN_PROGRESSED_EVENT,
+} from "@oxagen/inngest-functions/events";
 import { recordProofFrames } from "./lib/proof";
 import {
   type TachoHostRow,
@@ -313,6 +321,24 @@ export function lastRecordedContext(fresh: readonly TachoEvent[]): {
     facts.gitHeadSha = str(context.git_head_sha) ?? facts.gitHeadSha;
   }
   return facts;
+}
+
+/**
+ * The first harness version any frame in the batch carries, or null.
+ *
+ * A Claude Code session usually opens on a hook, and a hook payload has no
+ * version. The recorder learns it later, from the first OTel record or
+ * transcript line, and stamps the frames after that. Reading the genesis
+ * frame alone left `harness_version` null for the whole run.
+ */
+export function batchHarnessVersion(
+  fresh: readonly TachoEvent[],
+): string | null {
+  for (const event of fresh) {
+    const version = str(event.agent.harness_version);
+    if (version !== null) return version;
+  }
+  return null;
 }
 
 /**
@@ -902,7 +928,7 @@ function genesisRow(
     apiKeySource: anthropic.api_key_source ?? null,
     runtime: first.agent.runtime,
     harness: first.agent.harness,
-    harnessVersion: first.agent.harness_version ?? null,
+    harnessVersion: batchHarnessVersion(events),
     wrapperVersion: first.agent.wrapper_version,
     entrypoint: context.entrypoint ?? null,
     querySourceInitial: context.query_source ?? null,
@@ -1098,6 +1124,38 @@ function terminalPatch(
 // A batch whose own values Postgres refuses fails the same way on every retry,
 // so it is answered as a refused input the shipper can bisect, never as a 500
 // it retries for ever (`unstorableBatch` in ./lib/tacho-host.ts).
+const promptDecoder = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * The first prompt this batch carries for each run, by root session uuid: the
+ * retained body of the earliest `turn_start` on the run's own chain. A
+ * subagent's prompt is written by the parent agent, not the operator, so it
+ * never names the run. A body that is not UTF-8 text is skipped.
+ */
+export function firstRootPrompts(
+  events: readonly TachoEvent[],
+  bodies: readonly VerifiedBody[],
+): Map<string, string> {
+  const byEvent = new Map(bodies.map((body) => [body.eventIdIdem, body]));
+  const first = new Map<string, { seq: number; text: string }>();
+  for (const event of events) {
+    if (event.kind !== "turn_start") continue;
+    if (event.session_uuid !== event.root_session_uuid) continue;
+    const body = byEvent.get(event.event_id_idem);
+    if (body === undefined) continue;
+    const seen = first.get(event.root_session_uuid);
+    if (seen !== undefined && seen.seq <= event.seq) continue;
+    let text: string;
+    try {
+      text = promptDecoder.decode(body.bytes);
+    } catch {
+      continue;
+    }
+    first.set(event.root_session_uuid, { seq: event.seq, text });
+  }
+  return new Map([...first].map(([root, { text }]) => [root, text]));
+}
+
 export const tachoEventsIngestHandler: CapabilityHandler<
   typeof tachoEventsIngest
 > = (input, ctx) =>
@@ -1262,6 +1320,12 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       );
     }
   });
+
+  // The operator's first prompt, for each run this batch opens. It names the
+  // run in this transaction and starts its generated account right after the
+  // append, so a new run is never listed by its uuid while it waits for the
+  // enrichment sweep.
+  const firstPrompts = firstRootPrompts(input.events, retained);
 
   const result = await withTenantDb(async (tx) => {
     const bySession = new Map<string, TachoEvent[]>();
@@ -1577,6 +1641,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           : {};
       const tail = fresh.at(-1);
       const latest = lastRecordedContext(fresh);
+      const harnessVersion = batchHarnessVersion(fresh);
       const increments = {
         numTurns: sql`${schema.tachoSessions.numTurns} + ${delta.numTurns}`,
         numPrompts: sql`${schema.tachoSessions.numPrompts} + ${delta.numPrompts}`,
@@ -1656,6 +1721,13 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
                 ? {}
                 : {
                     effort: sql`COALESCE(${schema.tachoSessions.effort}, ${latest.effort})`,
+                  }),
+              // The same for the harness version, which the genesis frame of
+              // a hook-opened session never carries.
+              ...(harnessVersion === null
+                ? {}
+                : {
+                    harnessVersion: sql`COALESCE(${schema.tachoSessions.harnessVersion}, ${harnessVersion})`,
                   }),
               ...(latest.permissionMode === null
                 ? {}
@@ -2072,6 +2144,66 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       });
       if (root) rootIds.set(rootSessionUuid, root.publicId);
     }
+
+    // Name each run whose first prompt this batch carries, and remember it so
+    // its account is requested once the frames are in ClickHouse. Only a run
+    // with no name and no account yet: an operator's own name, a harness
+    // title the model already replaced, and a re-sent batch all leave it be.
+    // The workspace setting is read once, and only when a prompt is in hand.
+    // A workspace with enrichment off keeps the place-derived title.
+    const promptedRuns: string[] = [];
+    let enrichmentEnabled: boolean | undefined;
+    for (const [rootSessionUuid, prompt] of firstPrompts) {
+      const runId = rootIds.get(rootSessionUuid);
+      if (runId === undefined) continue;
+      if (enrichmentEnabled === undefined) {
+        // `run.enrich` refuses an archived workspace and one with the setting
+        // off, so a request it would refuse is not sent.
+        const workspace = await tx.query.workspaces.findFirst({
+          where: and(
+            eq(schema.workspaces.id, ctx.workspaceId),
+            eq(schema.workspaces.orgId, ctx.orgId),
+          ),
+          columns: { settings: true, archivedAt: true },
+        });
+        enrichmentEnabled =
+          workspace !== undefined &&
+          workspace.archivedAt == null &&
+          runEnrichmentEnabled(workspace.settings);
+      }
+      if (!enrichmentEnabled) break;
+      const unnamed = and(
+        eq(schema.tachoSessions.orgId, ctx.orgId),
+        eq(schema.tachoSessions.workspaceId, ctx.workspaceId),
+        eq(schema.tachoSessions.sessionUuid, rootSessionUuid),
+        isNull(schema.tachoSessions.parentSessionUuid),
+        isNull(schema.tachoSessions.name),
+        isNull(schema.tachoSessions.summary),
+      );
+      const row = await tx.query.tachoSessions.findFirst({
+        where: unnamed,
+        columns: {
+          name: true,
+          summary: true,
+          gitBranch: true,
+          worktreeBranch: true,
+        },
+      });
+      if (row === undefined || row.name != null || row.summary != null)
+        continue;
+      const title = fallbackRunTitle(
+        prompt,
+        row.worktreeBranch ?? row.gitBranch,
+      );
+      // `updated_at` is left alone: the title is not input to the account,
+      // and moving it would make the sweep queue the run a second time.
+      if (title !== null)
+        await tx
+          .update(schema.tachoSessions)
+          .set({ name: title })
+          .where(unnamed);
+      promptedRuns.push(runId);
+    }
     const sealedThisBatch = new Set(rollupRoots);
     const progressRoots = [...progressedRootUuids].flatMap((uuid) => {
       const runId = rootIds.get(uuid);
@@ -2160,6 +2292,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       sealedRoots,
       progressRoots,
       rootIds,
+      promptedRuns,
     };
   });
 
@@ -2301,6 +2434,32 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       logger.warn(
         { err, runIds: [...progressRoots] },
         "tacho.events.ingest: cost/run.progressed dispatch failed; the next batch or the seal rolls the run up",
+      );
+    }
+  }
+
+  // A run's account starts from its first prompt, as soon as that prompt's
+  // frames are in ClickHouse, where `run.enrich` reads them. The id holds for
+  // the run's life, so a re-sent batch or a second prompt-bearing batch asks
+  // once. Best-effort like the events above: a lost request is picked up by
+  // the enrichment sweep within five minutes.
+  if (result.promptedRuns.length > 0) {
+    try {
+      await eventClient.send(
+        result.promptedRuns.map((runPublicId) => ({
+          name: RUN_ENRICH_EVENT,
+          id: `run-enrich:first-prompt:${runPublicId}`,
+          data: {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            runPublicId,
+          },
+        })),
+      );
+    } catch (err) {
+      logger.warn(
+        { err, runIds: result.promptedRuns },
+        "tacho.events.ingest: run/enrich dispatch failed; the enrichment sweep summarizes the run",
       );
     }
   }
@@ -2681,20 +2840,7 @@ async function refreshSessionTitle(
     tx
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.tachoSessionFiles)
-      .where(
-        and(
-          eq(schema.tachoSessionFiles.sessionId, sessionId),
-          // A file changed by a shell command, a formatter or a build has
-          // no attested write, edit or delete, only the `observed_status`
-          // the reconciliation gave it. Counting the attested columns alone
-          // titled a run that plainly changed files as though it had
-          // changed none, and fell back to the command count.
-          observedStatusColumn
-            ? sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0
-              OR ${schema.tachoSessionFiles.observedStatus} IN ('added', 'modified', 'deleted', 'renamed')`
-            : sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0`,
-        ),
-      ),
+      .where(sessionChangedFilesWhere(sessionId, observedStatusColumn)),
     tx
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.tachoSessionCommands)

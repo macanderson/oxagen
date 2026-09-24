@@ -1,0 +1,96 @@
+{
+  "name": "get_published_steering",
+  "domain": "context",
+  "description": "Read the published .oxagen/ tree of the workspace's main repository (or a named one) at its production branch head, with every file's text, so a machine can write the steering in force.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string",
+        "enum": [
+          "main",
+          "linked"
+        ]
+      },
+      "fullName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "productionBranch": {
+        "type": "string",
+        "minLength": 1
+      },
+      "head": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "readAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "bindingId",
+      "role",
+      "fullName",
+      "productionBranch",
+      "head",
+      "files",
+      "readAt"
+    ],
+    "additionalProperties": false
+  }
+}

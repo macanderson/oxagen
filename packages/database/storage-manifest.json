@@ -1358,6 +1358,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "get_published_steering",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_rate_card",
       "reads": [],
@@ -2483,6 +2494,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "list_working_copies",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "workspace",
       "name": "list_workspaces",
       "reads": [],
@@ -2838,6 +2859,16 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "record_working_copy",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "writes": []
     },
@@ -4029,7 +4060,7 @@
       "writes": []
     }
   ],
-  "contentHash": "202f5c61fd9856b293d348bc9fd19ecb41d928af5d66b5106a3bd63b3817bd2b",
+  "contentHash": "888fa0b8c71092b95995168a594c7660e72b1cadd2a5a12ce3238d70bfe76f71",
   "domains": [
     {
       "name": "agent",
@@ -4276,7 +4307,8 @@
         "postgres:ingestion.repository_bindings",
         "postgres:ingestion.setup_suggestions",
         "postgres:ingestion.source_connections",
-        "postgres:ingestion.webhook_subscriptions"
+        "postgres:ingestion.webhook_subscriptions",
+        "postgres:ingestion.working_copies"
       ]
     },
     {
@@ -4488,7 +4520,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 149
+      "tableCount": 150
     },
     {
       "domains": [
@@ -16590,6 +16622,124 @@
       "name": "webhook_subscriptions",
       "store": "postgres",
       "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "machine_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "hostname",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "directory",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repository_full_name",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "head_commit",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "oxagen_present",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "symlinks",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pulled_commit",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_event",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cli_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reported_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "first_seen_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "last_seen_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "ingestion",
+      "id": "postgres:ingestion.working_copies",
+      "name": "working_copies",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
     },
     {
       "columns": [

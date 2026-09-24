@@ -2987,14 +2987,16 @@ type Messages = {
       facetAll: string;
       facetLabel: string;
       rows: string;
-      rowsAll: string;
       sortBy: string;
       tokensUnsorted: string;
       columns: {
         run: string;
+        summary: string;
         agent: string;
         operator: string;
         status: string;
+        pullRequests: string;
+        diff: string;
         tier: string;
         replay: string;
         tokens: string;
@@ -3021,9 +3023,6 @@ type Messages = {
         range: string;
         rangeMore: string;
         none: string;
-        previous: string;
-        next: string;
-        page: string;
         older: string;
         newest: string;
       };
@@ -3033,6 +3032,57 @@ type Messages = {
       rowAction: string;
       exportQueued: string;
       exportFailed: string;
+      actionsColumn: string;
+      summaryNone: string;
+      summaryOff: string;
+      prFilter: {
+        label: string;
+        any: string;
+        with: string;
+        without: string;
+        note: string;
+        noneWith: string;
+        noneWithout: string;
+      };
+      columnsPicker: {
+        open: string;
+        title: string;
+        subtitle: string;
+        legend: string;
+        fixed: string;
+        reset: string;
+        saved: string;
+      };
+      prs: {
+        none: string;
+        notRead: string;
+        onRunPage: string;
+        ledgerHint: string;
+        unread: string;
+        openedNoLink: string;
+        noLinkHint: string;
+        more: string;
+        unnamed: string;
+        stateUnknown: string;
+        stateUnknownHint: string;
+        state: {
+          open: string;
+          draft: string;
+          merged: string;
+          closed: string;
+        };
+        openOnGitHub: string;
+        openOnGitLab: string;
+      };
+      diff: {
+        none: string;
+        uncommitted: string;
+        spoken: string;
+        basis: {
+          harness_reported: string;
+          git_observed: string;
+        };
+      };
     };
     pause: {
       title: string;
@@ -5384,7 +5434,28 @@ type Messages = {
       title: string;
       subtitle: string;
       connect: string;
-      notRecorded: string;
+      loading: string;
+      empty: string;
+      denied: string;
+      unavailable: string;
+      retry: string;
+      truncated: string;
+      noRemote: string;
+      detached: string;
+      neverPulled: string;
+      head: string;
+      reportedBy: string;
+      reportedByKey: string;
+      reportedByUnnamed: string;
+      oxagenState: {
+        present: string;
+        absent: string;
+      };
+      symlinkState: {
+        linked: string;
+        missing: string;
+        none: string;
+      };
       filesTitle: string;
       filesToml: string;
       filesJson: string;
@@ -5393,8 +5464,8 @@ type Messages = {
       sync: {
         init: string;
         pull: string;
-        status: string;
-        propose: string;
+        steeringStatus: string;
+        contextPropose: string;
       };
       syncNote: string;
       stale: string;
@@ -5405,7 +5476,7 @@ type Messages = {
         branch: string;
         oxagen: string;
         symlinks: string;
-        bundle: string;
+        pulled: string;
         lastSeen: string;
       };
     };
@@ -5414,19 +5485,19 @@ type Messages = {
       subtitle: string;
       lead: string;
       commandLabel: string;
-      pairing: string;
-      pairingHint: string;
+      loginComment: string;
+      hint: string;
       whatLabel: string;
       writes: {
         writes: {
           name: string;
           what: string;
         };
-        links: {
+        reports: {
           name: string;
           what: string;
         };
-        noWrite: {
+        pull: {
           name: string;
           what: string;
         };
@@ -6632,6 +6703,12 @@ type Messages = {
       repoNotCaptured: string;
       repoOnlyNotCaptured: string;
       noPullRequest: string;
+      pullState: {
+        open: string;
+        closed: string;
+        merged: string;
+        unknown: string;
+      };
       pathNotCaptured: string;
       noMachine: string;
       subagents: string;

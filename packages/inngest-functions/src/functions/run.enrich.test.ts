@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   digest: null as string | null,
   name: null as string | null,
   summary: false,
+  observedAt: null as string | null,
   branch: "fix/auth-redirect" as string | null,
   writes: [] as Record<string, unknown>[],
   call: vi.fn(),
@@ -49,11 +50,11 @@ vi.mock("@oxagen/database", async (original) => {
       fn({
         select: () => ({
           from: () => ({
-            innerJoin: () => ({
-              where: () => ({
-                orderBy: () => ({
-                  limit: async () => state.sweepRows.splice(0),
-                }),
+            // The ranked subquery, then the outer read of its first few.
+            innerJoin: () => ({ where: () => ({ as: () => ({}) }) }),
+            where: () => ({
+              orderBy: () => ({
+                limit: async () => state.sweepRows.splice(0),
               }),
             }),
           }),
@@ -79,6 +80,7 @@ vi.mock("@oxagen/database", async (original) => {
                           digest: state.digest,
                           name: state.name,
                           hasSummary: state.summary,
+                          observedAt: state.observedAt,
                           branch: state.branch,
                           revision: "2026-09-23 10:00:00.123456+00",
                         },
@@ -170,6 +172,7 @@ beforeEach(() => {
   state.digest = null;
   state.name = null;
   state.summary = false;
+  state.observedAt = null;
   state.branch = "fix/auth-redirect";
   state.writes = [];
   state.bodies.clear();
@@ -240,6 +243,8 @@ it("registers enrichment under the adapter limits and serializes each organizati
   expect(config.batchEvents?.maxSize).toBeLessThanOrEqual(5);
   expect(config.concurrency).toEqual({ limit: 1, key: "event.data.orgId" });
   expect(config.batchEvents?.key).toContain("event.data.runPublicId");
+  // Every run waits out the batch before its account starts.
+  expect(config.batchEvents?.timeout).toBe("2s");
 });
 
 it("does not charge for queued child sessions or legacy rows absent from the readable selection", async () => {
@@ -309,7 +314,8 @@ it("sweeps a run whose row changed after the observed revision, and skips archiv
   expect(workspace).toContain("IS DISTINCT FROM 'false'::jsonb");
 });
 
-it("gives a run the same event id on every sweep until its job finishes or the row changes", async () => {
+it("gives a run the same event id on every sweep until its job finishes, the row changes or the window turns", async () => {
+  vi.useFakeTimers({ now: new Date("2026-09-24T12:01:00Z") });
   const row = {
     orgId: data.orgId,
     workspaceId: data.workspaceId,
@@ -329,17 +335,108 @@ it("gives a run the same event id on every sweep until its job finishes or the r
     });
   };
   await sweep();
+  vi.setSystemTime(new Date("2026-09-24T12:29:00Z"));
   await sweep();
-  const [first, second] = state.sent as { id: string; data: unknown }[];
+  vi.setSystemTime(new Date("2026-09-24T12:31:00Z"));
+  await sweep();
+  vi.useRealTimers();
+  const [first, second, third] = state.sent as { id: string; data: unknown }[];
   expect(first!.id).toBe(second!.id);
-  expect(first!.data).toEqual(data);
-  const { enrichmentEventId } = await import("./run.enrich");
+  expect(third!.id).not.toBe(first!.id);
+  expect(first!.data).toEqual({ ...data, observedAt: null });
+  const { enrichmentEventId, sweepWindow } = await import("./run.enrich");
+  const window = sweepWindow(new Date("2026-09-24T12:01:00Z"));
   expect(
-    enrichmentEventId({ ...row, observedAt: "2026-09-23 10:05:00+00" }),
+    enrichmentEventId({
+      ...row,
+      observedAt: "2026-09-23 10:05:00+00",
+      window,
+    }),
   ).not.toBe(first!.id);
   expect(
-    enrichmentEventId({ ...row, revision: "2026-09-23 10:00:01+00" }),
+    enrichmentEventId({
+      ...row,
+      revision: "2026-09-23 10:00:01+00",
+      window,
+    }),
   ).not.toBe(first!.id);
+});
+
+// #4113: runs sealed on 2026-09-24 ranked past the 500th due run in the
+// oldest-first sweep and were never queued.
+it("queues the run sealed now ahead of a week-old backlog, a few per organization", async () => {
+  const { sweepCandidates, SWEEP_RUNS_PER_ORG } = await import("./run.enrich");
+  const { schema } = await import("@oxagen/database");
+  const { drizzle } = await import("drizzle-orm/pg-proxy");
+  const db = drizzle(async () => ({ rows: [] }));
+  const query = sweepCandidates(
+    db as never,
+    schema.tachoSessions,
+    new Date("2026-09-24T12:00:00Z"),
+  ).toSQL();
+  const col = (name: string) => `"tacho"."sessions"."${name}"`;
+  // Within each organization: ended runs first, then the latest seal first.
+  const rank = new RegExp(
+    `row_number\\(\\) over \\(partition by ${escapeRegExp(col("org_id"))} order by \\(${escapeRegExp(col("outcome"))} <> \\$(\\d+)\\) desc, coalesce\\(${escapeRegExp(col("sealed_at"))}, ${escapeRegExp(col("updated_at"))}\\) desc\\)`,
+    "u",
+  ).exec(query.sql);
+  expect(rank).not.toBeNull();
+  expect(query.params[Number(rank![1]) - 1]).toBe("running");
+  const limit = /"rank" <= \$(\d+)/u.exec(query.sql);
+  expect(limit).not.toBeNull();
+  expect(query.params[Number(limit![1]) - 1]).toBe(SWEEP_RUNS_PER_ORG);
+  expect(SWEEP_RUNS_PER_ORG).toBeLessThanOrEqual(5);
+  // The old order: oldest observation or change first.
+  expect(query.sql).not.toContain(`coalesce(${col("summary_observed_at")}`);
+});
+
+describe("a queued event that no longer asks for work", () => {
+  const sweepData = { ...data, observedAt: null };
+  const queued = (eventData: unknown, sentAt: number) =>
+    state.handlers.get("run/enrich")!({
+      event: { data: eventData, ts: sentAt },
+      events: [{ data: eventData, ts: sentAt }],
+      step: { run: (_name: string, fn: () => unknown) => fn() },
+    });
+
+  it("skips a sweep event that waited past its window, and leaves the run due", async () => {
+    expect(await queued(sweepData, Date.now() - 31 * 60_000)).toEqual({
+      status: "stale",
+    });
+    expect(state.call).not.toHaveBeenCalled();
+    expect(state.writes).toHaveLength(0);
+  });
+
+  it("skips an event from before sweep events carried observedAt by its age alone", async () => {
+    expect(await queued(data, Date.now() - 3 * 60 * 60_000)).toEqual({
+      status: "stale",
+    });
+    expect(state.writes).toHaveLength(0);
+  });
+
+  it("skips a copy that arrives after another job observed the run", async () => {
+    state.observedAt = "2026-09-24 12:10:00.123+00";
+    expect(await queued(sweepData, Date.now())).toEqual({
+      status: "superseded",
+    });
+    expect(state.call).not.toHaveBeenCalled();
+    expect(state.writes).toHaveLength(0);
+  });
+
+  it("still runs a fresh sweep event for a run nobody observed since", async () => {
+    expect(await queued(sweepData, Date.now() - 60_000)).toMatchObject({
+      status: "generated",
+    });
+  });
+
+  it("always runs a person's request, however long it waited", async () => {
+    expect(
+      await queued(
+        { ...data, requestedByUserId: "user-1" },
+        Date.now() - 3 * 60 * 60_000,
+      ),
+    ).toMatchObject({ status: "generated" });
+  });
 });
 
 describe("a failed enrichment", () => {
@@ -414,9 +511,20 @@ describe("which runs the sweep queues", () => {
       true,
     ],
     [
-      "observed with no revision",
+      "observed a minute ago with no revision",
       {
         observedAt: minutesAgo(1),
+        revision: null,
+        error: null,
+        changed: true,
+        digest: "d",
+      },
+      false,
+    ],
+    [
+      "observed half an hour ago with no revision",
+      {
+        observedAt: minutesAgo(31),
         revision: null,
         error: null,
         changed: true,
@@ -436,13 +544,37 @@ describe("which runs the sweep queues", () => {
       false,
     ],
     [
-      "changed since its account",
+      // A sealed Claude Code session goes on receiving events after its seal.
+      "sealed and changed a minute after its account",
       {
         observedAt: minutesAgo(1),
         revision: "r",
         error: null,
         changed: true,
         digest: "d",
+      },
+      false,
+    ],
+    [
+      "sealed and changed half an hour after its account",
+      {
+        observedAt: minutesAgo(31),
+        revision: "r",
+        error: null,
+        changed: true,
+        digest: "d",
+      },
+      true,
+    ],
+    [
+      "sealed, changed and still unnamed",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: null,
+        changed: true,
+        digest: "d",
+        named: false,
       },
       true,
     ],
@@ -480,7 +612,7 @@ describe("which runs the sweep queues", () => {
       false,
     ],
     [
-      "failed, then got new frames",
+      "failed a minute ago, then got new frames",
       {
         observedAt: minutesAgo(1),
         revision: "r",
@@ -488,7 +620,7 @@ describe("which runs the sweep queues", () => {
         changed: true,
         digest: null,
       },
-      true,
+      false,
     ],
     [
       "failed half an hour ago",
@@ -619,6 +751,13 @@ function evaluateDue(
 ): boolean {
   const col = (name: string) => `"tacho"."sessions"."${name}"`;
   const js = text
+    .replace(
+      new RegExp(
+        `${escapeRegExp(col("updated_at"))} IS NOT DISTINCT FROM ${escapeRegExp(col("summary_observed_revision"))}`,
+        "gu",
+      ),
+      JSON.stringify(!row.changed),
+    )
     .replace(
       new RegExp(
         `${escapeRegExp(col("updated_at"))} IS DISTINCT FROM ${escapeRegExp(col("summary_observed_revision"))}`,

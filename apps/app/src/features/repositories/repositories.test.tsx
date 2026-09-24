@@ -52,6 +52,7 @@ const actions = vi.hoisted(() => ({
   readRepositoryChange: vi.fn(),
   mergeRepositoryChange: vi.fn(),
   closeRepositoryChange: vi.fn(),
+  readWorkingCopies: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -289,6 +290,10 @@ beforeEach(() => {
       }),
   );
   actions.readRepositoryChanges.mockResolvedValue({ ok: true, value: CHANGES });
+  actions.readWorkingCopies.mockResolvedValue({
+    ok: true,
+    value: { workingCopies: [] },
+  });
   actions.listInstallationRepositories.mockResolvedValue({
     ok: true,
     value: {
@@ -1316,14 +1321,40 @@ describe("the init wizard", () => {
 });
 
 describe("the other tabs", () => {
-  it("Working copies: the not-recorded row, the two files, and the gold moves to Connect a directory", async () => {
+  it("Working copies: the reported directories, the two files, and the gold moves to Connect a directory", async () => {
+    actions.readWorkingCopies.mockResolvedValue({
+      ok: true,
+      value: {
+        workingCopies: [
+          {
+            id: "wcp_laptop01",
+            hostname: "mac-studio.local",
+            directory: "/Users/mac/code/platform",
+            repository: "acme/platform",
+            branch: "main",
+            headCommit: "0123456789abcdef",
+            oxagenPresent: true,
+            symlinks: "linked",
+            pulledCommit: "0123456789abcdef",
+            lastEvent: "pull",
+            reportedBy: { userId: "usr_mac", name: "Mac Anderson" },
+            cliVersion: "3.4.0",
+            firstSeenAt: "2026-09-20T09:00:00.000Z",
+            lastSeenAt: "2026-09-24T09:00:00.000Z",
+          },
+        ],
+      },
+    });
     const { user } = await loaded("working-copies");
     expect(screen.getByTestId("working-copies-panel")).toHaveTextContent(
       "A copy that is behind is not a run that is behind.",
     );
-    expect(screen.getByTestId("working-copies-not-recorded")).toHaveAttribute(
-      "data-state",
-      "not-recorded",
+    expect(
+      await screen.findByTestId("working-copy-wcp_laptop01"),
+    ).toHaveTextContent("/Users/mac/code/platform");
+    expect(actions.readWorkingCopies).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
     );
     expect(screen.getByTestId("working-copies-files")).toHaveTextContent(
       "workspace.json",
@@ -1340,6 +1371,25 @@ describe("the other tabs", () => {
     );
     expect(dialog).toHaveTextContent("Linking a directory grants nothing.");
     await expectNoAxe(dialog);
+  });
+
+  it("Working copies is read only on its own tab, and its retry reads it again", async () => {
+    await loaded("repositories");
+    expect(actions.readWorkingCopies).not.toHaveBeenCalled();
+    cleanup();
+
+    actions.readWorkingCopies.mockResolvedValueOnce({
+      ok: false,
+      reason: "unavailable",
+      code: "store_unreachable",
+    });
+    const { user } = await loaded("working-copies");
+    expect(
+      await screen.findByTestId("working-copies-failure"),
+    ).toHaveTextContent("store_unreachable");
+    await user.click(screen.getByTestId("working-copies-retry"));
+    expect(await screen.findByTestId("working-copies-empty")).toBeTruthy();
+    expect(actions.readWorkingCopies).toHaveBeenCalledTimes(2);
   });
 
   it("Changes: every Context PR with its kind, opener, state and checks; each opens on its own path", async () => {
