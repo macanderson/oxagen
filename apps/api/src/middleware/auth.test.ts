@@ -92,4 +92,20 @@ describe("authMiddleware", () => {
     const none = await appWithAuth().request("/whoami");
     expect(none.status).toBe(401);
   });
+
+  it("answers 403 with the SSO message for a key its organization's Require SSO refuses", async () => {
+    // The key is genuine, so this is not a 401: the CLI reads 401 as "this
+    // key is not valid" and 403 as "the key is real, access is refused".
+    mocks.resolveApiKey.mockResolvedValueOnce({
+      ok: false,
+      kind: "sso_required",
+    });
+    const res = await appWithAuth().request("/whoami", {
+      headers: { authorization: "Bearer oxk_live_member" },
+    });
+    expect(res.status).toBe(403);
+    expect(await res.text()).toBe(
+      "This organization requires single sign-on. The person who created this key must sign in through SSO.",
+    );
+  });
 });

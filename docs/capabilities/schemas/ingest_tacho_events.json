@@ -31878,6 +31878,28 @@
               "additionalProperties": false
             },
             "maxItems": 100
+          },
+          "agent_day_spend": {
+            "type": "object",
+            "properties": {
+              "day": {
+                "type": "string"
+              },
+              "this_host_usd_micros": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "other_hosts_usd_micros": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "day",
+              "this_host_usd_micros",
+              "other_hosts_usd_micros"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

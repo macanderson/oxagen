@@ -116,6 +116,71 @@ export interface StatusReport {
    */
   claudeDesktop?: ReturnType<typeof claudeDesktopPresence>;
   wal?: { sessions: number; unshipped: number; oldest_unshipped_at?: string };
+  /**
+   * Whether recorded events are reaching Oxagen. Absent for a host that is
+   * not enrolled here. `tacho status` exits 1 when `healthy` is false.
+   */
+  shipping?: ShippingHealth;
+}
+
+/**
+ * How long events may wait with nothing shipped before the host is called
+ * stalled. The shipper drains on every tick, so ten minutes with an old event
+ * waiting and no successful ingest is not a slow network.
+ */
+export const SHIPPING_STALL_MS = 10 * 60_000;
+
+export interface ShippingHealth {
+  healthy: boolean;
+  /** One sentence a person can act on. */
+  detail: string;
+}
+
+/**
+ * The verdict on shipping, from the daemon's own report and the WAL. Before
+ * this, a host could queue events for a day behind a failing ingest while
+ * `tacho status` exited 0 and printed the error only as a trailing clause.
+ */
+export function shippingHealth(
+  daemon: Record<string, unknown> | null,
+  wal: { unshipped: number; oldestUnshippedAt?: string },
+  now: number,
+): ShippingHealth {
+  if (daemon === null)
+    return {
+      healthy: false,
+      detail:
+        "the daemon is not answering, so nothing is recorded or shipped (restart the service, or run `tacho enroll` again)",
+    };
+  if (wal.unshipped === 0)
+    return { healthy: true, detail: "every recorded event has shipped" };
+  const lastError =
+    typeof daemon["last_error"] === "string" && daemon["last_error"] !== ""
+      ? daemon["last_error"]
+      : undefined;
+  const count = `${wal.unshipped} event${wal.unshipped === 1 ? "" : "s"} waiting`;
+  if (lastError !== undefined)
+    return {
+      healthy: false,
+      detail: `the last ingest failed, ${count}: ${lastError}`,
+    };
+  const lastIngest =
+    typeof daemon["last_ingest_at"] === "string"
+      ? Date.parse(daemon["last_ingest_at"])
+      : Number.NaN;
+  const oldest =
+    wal.oldestUnshippedAt !== undefined
+      ? Date.parse(wal.oldestUnshippedAt)
+      : Number.NaN;
+  const ingestStale =
+    Number.isNaN(lastIngest) || now - lastIngest > SHIPPING_STALL_MS;
+  const backlogOld = !Number.isNaN(oldest) && now - oldest > SHIPPING_STALL_MS;
+  if (ingestStale && backlogOld)
+    return {
+      healthy: false,
+      detail: `nothing has shipped in over ${SHIPPING_STALL_MS / 60_000} minutes, ${count}`,
+    };
+  return { healthy: true, detail: `shipping, ${count}` };
 }
 
 const TIER_RANK = { observe: 0, harness: 1, gateway: 2 } as const;
@@ -286,6 +351,9 @@ export async function status(
   // enrolled (exit 0) disagreed with `tacho detect` about the same file and
   // kept the desktop app on its "enrolled" screens for a host that was not.
   const retired = host.revoked_at !== null;
+  const shipping = retired
+    ? undefined
+    : shippingHealth(daemon, walStats, deps.now());
   const report: StatusReport = {
     enrolled: !retired,
     ...(retired ? { retired: true } : {}),
@@ -341,6 +409,7 @@ export async function status(
         ? { oldest_unshipped_at: walStats.oldestUnshippedAt }
         : {}),
     },
+    ...(shipping !== undefined ? { shipping } : {}),
   };
   if (options.json === true) {
     deps.out(JSON.stringify(report, null, 2));
@@ -461,5 +530,9 @@ export async function status(
   deps.out(
     `WAL         ${walStats.sessions} session files, ${walStats.unshipped} events unshipped${walStats.oldestUnshippedAt !== undefined ? ` (oldest ${walStats.oldestUnshippedAt})` : ""}`,
   );
+  if (shipping !== undefined)
+    deps.out(
+      `Shipping    ${shipping.healthy ? "ok" : "FAILING"}: ${shipping.detail}`,
+    );
   return report;
 }

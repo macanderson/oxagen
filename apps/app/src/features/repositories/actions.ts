@@ -34,6 +34,10 @@ import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get"
 import { repositoryProductionBranchSet } from "@oxagen/oxagen/contracts/repository.production_branch.set";
 import { repositoryInitPrOpen } from "@oxagen/oxagen/contracts/repository.init_pr.open";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
+import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
+import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
+import type { ContextPr } from "@/data/contracts/steering";
 import type {
   AttachedInstallation,
   GitHubInstallations,
@@ -415,7 +419,9 @@ export async function readRepositoryChanges(
     if (proposal.pr === null || proposal.status === "proposed") continue;
     changes.push({
       proposalId: proposal.id,
+      lineage: proposal.lineageId,
       statement: proposal.statement,
+      why: proposal.rationale,
       kind: "context_record",
       pullRequest: proposal.pr,
       openedBy: proposal.source,
@@ -433,4 +439,105 @@ export async function readRepositoryChanges(
       ).length,
     },
   };
+}
+
+/**
+ * One change's Context PR, for the detail the Changes tab shows when a row is
+ * selected: its branch and base, each check with its own result, what merge
+ * will do, and the merge once it happened. `get_context_pr` is read here
+ * rather than through the Steering port because this page reads on demand.
+ */
+export async function readRepositoryChange(
+  org: string,
+  ws: string,
+  proposalId: string,
+): Promise<ActionResult<ContextPr>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: contextPrGet,
+    input: { proposalId },
+    page: "repositories",
+  });
+  if (!read.ok) return readToActionResult(read);
+  const out = read.value;
+  return {
+    ok: true,
+    value: {
+      proposalId: out.proposalId,
+      lineage: out.lineageId,
+      status: out.status,
+      governanceMode: out.governanceMode,
+      pr:
+        out.pr === null
+          ? null
+          : {
+              number: out.pr.number,
+              url: out.pr.url,
+              repository: out.pr.repository,
+              baseRef: out.pr.baseRef,
+              branch: out.pr.branch,
+              headSha: out.pr.headSha,
+            },
+      body: out.body,
+      checks: out.checks.map((check) => ({
+        name: check.name,
+        status: check.status,
+        summary: check.summary,
+      })),
+      onMerge: {
+        path: out.onMerge.publishes.path,
+        bundleVersion: {
+          current: out.onMerge.bundleVersion.current,
+          afterMerge: out.onMerge.bundleVersion.afterMerge,
+        },
+      },
+      merged:
+        out.merged === null
+          ? null
+          : {
+              commit: out.merged.commit,
+              at: out.merged.at,
+              promotionEventId: out.merged.promotionEventId,
+              recordId: out.merged.recordId,
+            },
+    },
+  };
+}
+
+/**
+ * Merge a change once every check passed. `merge_context_pr` re-reads the
+ * governance mode at merge time and gates the signed-in reviewer it names, so
+ * a person the mode does not admit is refused there whatever the page drew.
+ */
+export async function mergeRepositoryChange(
+  org: string,
+  ws: string,
+  proposalId: string,
+): Promise<ActionResult<{ commit: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, contextPrMerge, { proposalId });
+  return result.ok
+    ? { ok: true, value: { commit: result.value.mergedCommit } }
+    : result;
+}
+
+/**
+ * Close a change without merging: `dismiss_proposal` closes the pull request,
+ * deletes its branch and publishes nothing. The comment the dialog previews is
+ * recorded as the dismissal's reason.
+ */
+export async function closeRepositoryChange(
+  org: string,
+  ws: string,
+  proposalId: string,
+  comment: string,
+): Promise<ActionResult<{ status: "rejected" }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, contextProposalDismiss, {
+    proposalId,
+    reason: comment.trim(),
+  });
+  return result.ok
+    ? { ok: true, value: { status: result.value.status } }
+    : result;
 }

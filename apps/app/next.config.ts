@@ -75,13 +75,20 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.githubusercontent.com" },
     ],
   },
-  // Proxy /api/v1/* to the Hono API so browser calls stay same-origin. The
+  // Proxy /api/v1/* and /api/scim/v2/* to the Hono API so browser calls stay
+  // same-origin and an identity provider needs only the app host. The
   // `fallback` phase runs after every filesystem route, so a local handler
   // always wins over the proxy.
   rewrites() {
     return Promise.resolve({
       fallback: [
         { source: "/api/v1/:path*", destination: `${honoApiBase}/v1/:path*` },
+        // SCIM 2.0 (#3734): the base URL an identity provider is given is
+        // https://app.oxagen.sh/api/scim/v2, served by the Hono API.
+        {
+          source: "/api/scim/v2/:path*",
+          destination: `${honoApiBase}/api/scim/v2/:path*`,
+        },
       ],
     });
   },
