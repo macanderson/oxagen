@@ -118,6 +118,18 @@ const runWorkPrSchema = z
   })
   .strict();
 
+/** One subagent the session started, as its hook frames recorded it. */
+export const RunSubagent = z
+  .object({
+    id: z.string(),
+    type: z.string().nullable(),
+    firstSeq: z.string(),
+    lastSeq: z.string(),
+    stopped: z.boolean(),
+  })
+  .strict();
+export type RunSubagent = z.infer<typeof RunSubagent>;
+
 export const RunWork = z
   .object({
     runId: PublicId,
@@ -125,6 +137,7 @@ export const RunWork = z
     checkouts: z.array(runCheckoutSchema),
     diffs: z.array(runCapturedDiffSchema),
     pullRequests: z.array(runWorkPrSchema),
+    subagents: z.array(RunSubagent).optional(),
     complete: z.boolean(),
     warnings: z.array(z.string()),
   })
