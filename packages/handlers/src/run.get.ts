@@ -8,7 +8,9 @@
 // never its bytes (ADR-058; `get_run_frame_body` reads those on demand) and
 // its own cost record when it carried one. A witness run answers the worker
 // run it reported on as `witnessFor` (ADR-064); to an API-key caller a
-// witness run is `not_found` (lib/run-read.ts).
+// witness run is `not_found` (lib/run-read.ts). A wrapped session the
+// harness titled answers that title as the run's name: it is the name the
+// operator already knows the session by.
 //
 // `waitMs` is the handler-side long poll (ARCHITECTURE.md §3.5): with no event
 // past the cursor, the handler sleeps POLL_INTERVAL_MS at a time inside the
@@ -22,6 +24,8 @@ import {
 } from "@oxagen/oxagen/contracts/run.get";
 import type { RunFrame } from "@oxagen/run-ledger";
 import { invalidCursor, microsString } from "./run.list";
+import { readSessionConfig, readSessionTitle } from "./lib/run-work";
+import { logger } from "./logger";
 import {
   defaultRunReadDeps,
   readFrames,
@@ -100,6 +104,10 @@ export type RunGetDeps = RunReadDeps & {
   /** The long poll's clock, injectable so a test does not wait. */
   now: () => number;
   sleep: (ms: number) => Promise<void>;
+  /** The harness's latest title for a wrapped session; null when it gave none. */
+  sessionTitle: typeof readSessionTitle;
+  /** The session's latest effort and thinking settings. */
+  sessionConfig: typeof readSessionConfig;
 };
 
 export function createRunGetHandler(
@@ -129,6 +137,28 @@ export function createRunGetHandler(
     if (cursor === null) throw invalidCursor(runGet.name);
 
     const run = await resolveRun(deps, ctx, input.runId);
+    // The title and the effort settings are ClickHouse's to give. A failed
+    // read leaves the heading on the run id and the settings on what the
+    // session row holds, rather than failing the page.
+    const [title, config] =
+      run.source === "tacho"
+        ? await Promise.all([
+            deps.sessionTitle(run.sessionUuid).catch((err: unknown) => {
+              logger.warn(
+                { err, runId: input.runId },
+                "get_run: the session title could not be read; the run id stands in",
+              );
+              return null;
+            }),
+            deps.sessionConfig(run.sessionUuid).catch((err: unknown) => {
+              logger.warn(
+                { err, runId: input.runId },
+                "get_run: the session's effort settings could not be read",
+              );
+              return null;
+            }),
+          ])
+        : ([null, null] as const);
     // One frame past the page tells a full page from the end of the recording.
     // A sealed run whose page had nothing behind it answers no cursor, because
     // nothing will ever lie past it; a live run keeps its resume point, since
@@ -144,7 +174,16 @@ export function createRunGetHandler(
     const ended =
       batch.length <= input.frameLimit && run.item.status !== "live";
     return {
-      run: run.item,
+      run: {
+        ...run.item,
+        ...(title === null ? {} : { name: title }),
+        ...(config === null
+          ? {}
+          : {
+              effort: config.effort ?? run.item.effort ?? null,
+              thinking: config.thinking,
+            }),
+      },
       frames: {
         frames: frames.map(toFrame),
         cursor: last && !ended ? encodeFrameCursor(last.seq) : null,
@@ -159,6 +198,8 @@ export function defaultRunGetDeps(): RunGetDeps {
     ...defaultRunReadDeps(),
     now: () => Date.now(),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    sessionTitle: readSessionTitle,
+    sessionConfig: readSessionConfig,
   };
 }
 
