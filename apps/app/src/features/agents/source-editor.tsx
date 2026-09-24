@@ -1,29 +1,54 @@
 "use client";
-// The definition file in a source editor (mockup `pAgentSource`): the shared
-// CodeEditor, syntax-coloured and parsed on every edit with the shared TOML
-// subset so a line the editor cannot read is named; modified or unchanged
-// against the base with a line diff stat; Discard back to the base; Save opens
-// the commit dialog, which commits the draft to a branch and opens its pull
-// request. The default branch is never written, and nothing is written to
-// Postgres but the commit's cache.
+// The agent source page's body (spec pages/agent-source.md): the header with
+// the file path, its chips and the three actions, then the editor panel with
+// its bar, the gutter and textarea, and the status line; and the commit
+// dialog both this page and the Definition tab's form open.
+//
+// The draft is the one the form edits too (`draft-store.ts`), so a change made
+// on either survives moving between them until it is discarded or committed.
+// The TOML is parsed on every edit with the shared subset and a line it
+// cannot read is named. Save opens the commit dialog, which commits the draft
+// to a branch and opens its pull request through `commit_agent_definition`;
+// the default branch is never written, and nothing lands in Postgres but the
+// commit's cache.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useMemo, useState } from "react";
-import { diffStat } from "@/shared/line-diff";
+import {
+  type KeyboardEvent,
+  type SyntheticEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { buildDiff } from "@/shared/line-diff";
 import type { SafePath } from "@/shared/safe-path";
 import { parseTomlSubset } from "@/shared/toml-subset";
+import { Badge } from "@/ui/badge";
+import { CodeEditor } from "@/ui/code-editor";
+import { DiffPanel } from "@/ui/code-panel";
 import {
   buttonPrimary,
   buttonSecondary,
+  eyebrow,
+  inputBase,
   mono,
   panel,
 } from "@/ui/control-styles";
-import { CodeEditor } from "@/ui/code-editor";
 import { Field } from "@/ui/field";
-import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
-import { SheetDialog } from "@/ui/sheet-dialog";
+import { SheetDialog, SheetFooterAction } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { commitAgentDefinition } from "./actions";
+import { useDefinitionDraft } from "./draft-store";
+import { NotBacked } from "./parts";
+import {
+  type Edit,
+  findAll,
+  indent,
+  lineCol,
+  outdent,
+  toggleComment,
+} from "./source-keys";
 
 type Committed = {
   branch: string;
@@ -31,15 +56,9 @@ type Committed = {
   pullRequest: { number: number; url: string };
 };
 
-const FIELDS = ["branch", "message", "source"] as const;
+const NEW_BRANCH = "+new";
 
-/** A text field of the submitted form; absent reads as empty. */
-function textOf(form: FormData, name: string): string {
-  const value = form.get(name);
-  return typeof value === "string" ? value : "";
-}
-
-/** The commit sheet: the draft to a branch and its pull request. Shared with the Configuration form. */
+/** The commit sheet: the diff, the branch, the summary, and the pull request. Shared with the Definition tab's form. */
 export function CommitDialog({
   open,
   onOpenChange,
@@ -48,8 +67,8 @@ export function CommitDialog({
   agentId,
   path,
   branch,
+  base,
   draft,
-  stat,
   after,
 }: {
   open: boolean;
@@ -58,18 +77,29 @@ export function CommitDialog({
   ws: string;
   agentId: string;
   path: string;
+  /** The branch the last commit used, or the one proposed for a first commit. */
   branch: string;
+  /** The file the draft is compared against. */
+  base: string;
   draft: string;
-  stat: { added: number; removed: number };
+  /** Reloaded after a commit, so the base becomes the committed file. */
   after: SafePath;
 }) {
   const t = useTranslations("agents.source.commit");
   const failureText = useActionFailure();
   const navigate = useNavigate();
+  const diff = useMemo(() => buildDiff(base, draft), [base, draft]);
+  const [choice, setChoice] = useState(branch);
+  const [newBranch, setNewBranch] = useState("");
+  const [summary, setSummary] = useState("");
   const [pending, setPending] = useState(false);
-  const [invalid, setInvalid] = useState<(typeof FIELDS)[number] | null>(null);
+  const [invalid, setInvalid] = useState<
+    "branch" | "message" | "source" | null
+  >(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [committed, setCommitted] = useState<Committed | null>(null);
+  const target = choice === NEW_BRANCH ? newBranch.trim() : choice;
+  const ready = target !== "" && summary.trim() !== "";
 
   function openChange(next: boolean) {
     onOpenChange(next);
@@ -82,25 +112,27 @@ export function CommitDialog({
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
-    const form = new FormData(event.currentTarget);
+    if (pending || !ready) return;
     setPending(true);
     setInvalid(null);
     setFailure(null);
     try {
       const result = await commitAgentDefinition(org, ws, {
         agentId,
-        branch: textOf(form, "branch"),
-        message: textOf(form, "message"),
+        branch: target,
+        message: summary,
         source: draft,
       });
       if (result.ok) {
         setCommitted(result.value);
         navigate.replace(after);
-      } else if (result.reason === "invalid") {
-        const field = FIELDS.find((name) => name === result.field) ?? null;
-        setInvalid(field);
-        if (field === null) setFailure(failureText(result));
+      } else if (
+        result.reason === "invalid" &&
+        (result.field === "branch" ||
+          result.field === "message" ||
+          result.field === "source")
+      ) {
+        setInvalid(result.field);
       } else {
         setFailure(failureText(result));
       }
@@ -115,42 +147,97 @@ export function CommitDialog({
     <SheetDialog
       open={open}
       onOpenChange={openChange}
-      title={t("title", { path })}
+      title={t("title")}
+      subtitle={path}
+      closeLabel={t("cancel")}
+      wide
       testId="commit-definition"
     >
       {committed === null ? (
-        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("diff", stat)}</p>
+        <form
+          id="commit-definition-form"
+          onSubmit={(e) => void submit(e)}
+          className="flex flex-col gap-3"
+        >
+          <DiffPanel diff={diff} path={path} label={t("diffLabel")} />
           {failure === null ? null : (
             <FormAlert testId="commit-failure">{failure}</FormAlert>
           )}
           {invalid === "source" ? (
             <FormAlert testId="commit-failure">{t("invalid.source")}</FormAlert>
           ) : null}
+          <label
+            className="flex flex-col gap-1 text-sm"
+            htmlFor="commit-branch"
+          >
+            <span className="font-medium">{t("branch")}</span>
+            <select
+              id="commit-branch"
+              value={choice}
+              className={`${inputBase} max-md:text-base`}
+              aria-invalid={invalid === "branch" ? true : undefined}
+              onChange={(event) => {
+                setChoice(event.target.value);
+              }}
+            >
+              <option value={branch}>{branch}</option>
+              <option value={NEW_BRANCH}>{t("newBranch")}</option>
+            </select>
+            <span className="text-xs text-muted-foreground">
+              {t("branchHint")}
+            </span>
+          </label>
+          {choice === NEW_BRANCH ? (
+            <Field
+              id="commit-new-branch"
+              name="branch"
+              label={t("newBranchName")}
+              value={newBranch}
+              onChange={(event) => {
+                setNewBranch(event.target.value);
+              }}
+              autoComplete="off"
+              spellCheck={false}
+              required
+              error={invalid === "branch" ? t("invalid.branch") : undefined}
+            />
+          ) : invalid === "branch" ? (
+            <FormAlert testId="commit-failure">{t("invalid.branch")}</FormAlert>
+          ) : null}
           <Field
-            id="commit-branch"
-            name="branch"
-            label={t("branch")}
-            hint={t("branchHint")}
-            defaultValue={branch}
-            autoComplete="off"
-            spellCheck={false}
-            required
-            error={invalid === "branch" ? t("invalid.branch") : undefined}
-          />
-          <Field
-            id="commit-message"
+            id="commit-summary"
             name="message"
-            label={t("message")}
-            hint={t("messageHint")}
+            label={t("summary")}
+            hint={t("summaryHint")}
+            value={summary}
+            onChange={(event) => {
+              setSummary(event.target.value);
+            }}
             maxLength={200}
+            required
             error={invalid === "message" ? t("invalid.message") : undefined}
           />
-          <SubmitButton
-            pending={pending}
-            label={t("submit")}
-            pendingLabel={t("pending")}
-          />
+          <NotBacked gap="commit_description">{t("description")}</NotBacked>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked disabled className="mt-1 size-4" />
+            <span className="flex flex-col">
+              <span>{t("pullRequestBox")}</span>
+              <span className="text-xs text-muted-foreground">
+                {t("pullRequestHint")}
+              </span>
+            </span>
+          </label>
+          <SheetFooterAction>
+            <button
+              type="submit"
+              form="commit-definition-form"
+              className={buttonPrimary}
+              disabled={!ready || pending}
+              data-touch-target=""
+            >
+              {pending ? t("pending") : t("submit")}
+            </button>
+          </SheetFooterAction>
         </form>
       ) : (
         <div
@@ -180,50 +267,145 @@ export function SourceEditor({
   org,
   ws,
   agentId,
+  agentKey,
   slug,
   path,
   base,
   branch,
+  commit,
+  repository,
   back,
   after,
 }: {
   org: string;
   ws: string;
   agentId: string;
+  agentKey: string | null;
   /** The registered identity slug, which definition commits cannot change. */
   slug: string;
   /** `.oxagen/agents/<slug>.toml`. */
   path: string;
   /** The committed file, or the seed an agent with no committed file starts from. */
   base: string;
-  /** The branch the commit dialog proposes. */
+  /** The branch the last commit used, or the one proposed for a first commit. */
   branch: string;
-  /** The agent's Definition section. */
+  /** The commit the base is, or null before the first commit. */
+  commit: string | null;
+  /** `owner/repo` of the last commit, or null when none is recorded. */
+  repository: string | null;
+  /** The agent's Definition tab. */
   back: SafePath;
   /** This page, reloaded after a commit so the base is the committed file. */
   after: SafePath;
 }) {
   const t = useTranslations("agents.source");
-  const [draft, setDraft] = useState(base);
+  const [draft, setDraft] = useDefinitionDraft(slug, base);
   const [committing, setCommitting] = useState(false);
+  const [caret, setCaret] = useState(0);
+  const [find, setFind] = useState("");
+  const [current, setCurrent] = useState<number | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
   const parsed = useMemo(() => parseTomlSubset(draft), [draft]);
-  const stat = useMemo(() => diffStat(base, draft), [base, draft]);
+  const matches = useMemo(() => findAll(draft, find), [draft, find]);
   const dirty = draft !== base;
   const matchesIdentity = parsed.ok && parsed.doc.slug === slug;
+  const position = lineCol(draft, caret);
 
+  function apply(edit: Edit) {
+    setDraft(edit.value);
+    setCaret(edit.start);
+    requestAnimationFrame(() => {
+      textareaRef.current?.setSelectionRange(edit.start, edit.end);
+    });
+  }
+
+  function jump(direction: 1 | -1) {
+    if (matches.length === 0) return;
+    const index =
+      current === null
+        ? direction === 1
+          ? 0
+          : matches.length - 1
+        : (current + direction + matches.length) % matches.length;
+    const at = matches[index] ?? 0;
+    setCurrent(index);
+    setCaret(at);
+    textareaRef.current?.focus();
+    textareaRef.current?.setSelectionRange(at, at + find.length);
+  }
+
+  function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    const mod = event.metaKey || event.ctrlKey;
+    const {
+      selectionStart: start,
+      selectionEnd: end,
+      value,
+    } = event.currentTarget;
+    const key = event.key.toLowerCase();
+    if (mod && key === "s") {
+      event.preventDefault();
+      setCommitting(true);
+    } else if (mod && key === "f") {
+      event.preventDefault();
+      findInputRef.current?.focus();
+      findInputRef.current?.select();
+    } else if (mod && event.key === "/") {
+      event.preventDefault();
+      apply(toggleComment(value, start, end));
+    } else if (event.key === "Tab" && !mod) {
+      event.preventDefault();
+      apply(
+        event.shiftKey ? outdent(value, start, end) : indent(value, start, end),
+      );
+    }
+  }
+
+  const chip = `${mono} text-[11px]`;
   return (
-    <section aria-label={path} className={`${panel} flex flex-col`}>
-      <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 text-sm">
-        <span className={`${mono} break-all`}>{path}</span>
-        <span data-testid="draft-state" className="text-muted-foreground">
-          {dirty ? t("modified") : t("unchanged")}
-        </span>
-        {dirty ? (
-          <span data-testid="draft-stat" className={`${mono} text-xs`}>
-            {t("stat", stat)}
-          </span>
-        ) : null}
-        <span className="flex flex-1 flex-wrap justify-end gap-2">
+    <div className="flex flex-col gap-4" data-testid="agent-source">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-2">
+          <p className={eyebrow}>{t("eyebrow")}</p>
+          <h1 className="break-all font-mono text-lg font-bold text-foreground">
+            {path}
+          </h1>
+          <ul
+            aria-label={t("facts")}
+            className="flex flex-wrap items-center gap-2"
+          >
+            <li>
+              <Badge tone="quiet" dot={false}>
+                <span className={chip}>{repository ?? t("noRepository")}</span>
+              </Badge>
+            </li>
+            <li>
+              <Badge tone="quiet" dot={false}>
+                <span className={chip}>
+                  {commit === null
+                    ? t("uncommitted")
+                    : t("branchAt", { branch, commit: commit.slice(0, 7) })}
+                </span>
+              </Badge>
+            </li>
+            <li>
+              <Badge tone="quiet" dot={false}>
+                {t("truth")}
+              </Badge>
+            </li>
+            {agentKey === null ? null : (
+              <li>
+                <Badge tone="quiet" dot={false}>
+                  <span className={chip}>{agentKey}</span>
+                </Badge>
+              </li>
+            )}
+          </ul>
+          <p className="max-w-[70ch] text-[13px] text-muted-foreground">
+            {t("lead")}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <SafeLink to={back} className={buttonSecondary}>
             {t("back")}
           </SafeLink>
@@ -247,36 +429,99 @@ export function SourceEditor({
           >
             {t("save")}
           </button>
-        </span>
-      </div>
-      <p className="px-4 pt-3 text-xs text-muted-foreground">
-        {t("identityLocked")}
-      </p>
-      {parsed.ok && !matchesIdentity ? (
-        <div className="px-4 pt-3">
-          <FormAlert testId="source-slug-error">
-            {t("identityMismatch", { slug })}
-          </FormAlert>
         </div>
+      </header>
+      {parsed.ok && !matchesIdentity ? (
+        <FormAlert testId="source-slug-error">
+          {t("identityMismatch", { slug })}
+        </FormAlert>
       ) : null}
       {parsed.ok ? null : (
-        <div className="px-4 pt-3">
-          <FormAlert testId="parse-error">
-            {t("parse.error", {
-              line: parsed.line,
-              reason: t(`parse.reason.${parsed.code}`),
-            })}
-          </FormAlert>
-        </div>
+        <FormAlert testId="parse-error">
+          {t("parse.error", {
+            line: parsed.line,
+            reason: t(`parse.reason.${parsed.code}`),
+          })}
+        </FormAlert>
       )}
-      <div className="p-4">
+      <section aria-label={path} className={`${panel} flex flex-col`}>
+        <div className="flex flex-wrap items-center gap-3 border-b border-border bg-hl px-4 py-2.5 text-[13px]">
+          <span className={`${mono} min-w-0 break-all`}>{path}</span>
+          <span
+            data-testid="draft-state"
+            data-dirty={dirty ? "true" : "false"}
+            className="inline-flex items-center gap-1.5 text-muted-foreground"
+          >
+            <span
+              aria-hidden="true"
+              className={`size-2 rounded-full border ${dirty ? "border-info bg-info" : "border-border"}`}
+            />
+            {dirty ? t("modified") : t("unchanged")}
+          </span>
+          <label className="ml-auto flex items-center gap-2">
+            <input
+              ref={findInputRef}
+              type="search"
+              value={find}
+              placeholder={t("find.placeholder")}
+              aria-label={t("find.label")}
+              className={`${inputBase} w-44 py-1 max-md:text-base`}
+              onChange={(event) => {
+                setFind(event.target.value);
+                setCurrent(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  jump(event.shiftKey ? -1 : 1);
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setFind("");
+                  setCurrent(null);
+                  textareaRef.current?.focus();
+                }
+              }}
+            />
+            <span
+              data-testid="find-count"
+              aria-live="polite"
+              className={`${mono} text-xs text-dim`}
+            >
+              {find === ""
+                ? null
+                : current === null
+                  ? String(matches.length)
+                  : t("find.of", {
+                      index: current + 1,
+                      count: matches.length,
+                    })}
+            </span>
+          </label>
+        </div>
         <CodeEditor
           value={draft}
           onChange={setDraft}
           language="toml"
           label={path}
+          onCaret={setCaret}
+          onKeyDown={onKey}
+          textareaRef={textareaRef}
         />
-      </div>
+        <div
+          data-testid="editor-status"
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-4 py-2 text-[11.5px] text-muted-foreground"
+        >
+          <span data-testid="caret">
+            {t("position", { line: position.line, col: position.col })}
+          </span>
+          <span>{t("format")}</span>
+          <span>{t("spaces")}</span>
+          <span>{t("lineEndings")}</span>
+          <span>{t("encoding")}</span>
+          <span className="ml-auto text-dim">{t("keys")}</span>
+        </div>
+      </section>
       <CommitDialog
         open={committing}
         onOpenChange={setCommitting}
@@ -285,10 +530,10 @@ export function SourceEditor({
         agentId={agentId}
         path={path}
         branch={branch}
+        base={base}
         draft={draft}
-        stat={stat}
         after={after}
       />
-    </section>
+    </div>
   );
 }
