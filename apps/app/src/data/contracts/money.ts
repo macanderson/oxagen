@@ -93,6 +93,11 @@ export function perMillionTokens(cost: Money, tokens: number): Money | null {
 /**
  * `a − b`, exact, or null when the two carry different currencies: a
  * difference across currencies is not an amount anyone saved or spent.
+ *
+ * @internal No production caller since #4071 moved the run's cache saving to
+ * the price book. Kept for the Wasted figure being ported into
+ * `features/run/metrics.ts`. Once that caller lands, knip reports this tag as
+ * unused, and the tag goes.
  */
 export function subMoney(a: Money, b: Money): Money | null {
   if (a.currency !== b.currency) return null;
