@@ -370,6 +370,12 @@ export class SessionRecorder {
   readonly metrics: OtelMetricPoint[] = [];
   private llmCalls = new LlmCallLedger();
   private toolCalls = new ToolCallLedger();
+  /**
+   * Where this chain stood when the recorder was built. A caller whose
+   * failed call created the session has no mark of its own to roll back to,
+   * so it rolls back to this one. See `rollbackToBirth`.
+   */
+  private readonly birth: ChainMark;
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -403,6 +409,7 @@ export class SessionRecorder {
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
     if (options.restore) this.restore(options.restore);
+    this.birth = this.markChain();
   }
 
   private restore(state: RecorderState): void {
@@ -602,6 +609,17 @@ export class SessionRecorder {
     this.stopped = mark.stopped;
     this.llmCalls = new LlmCallLedger(mark.llmCalls);
     this.toolCalls = new ToolCallLedger(mark.toolCalls);
+  }
+
+  /**
+   * Undo everything this chain sealed since the recorder was built. For a
+   * session that a failed call created: the caller marked every chain before
+   * the call, and this one did not exist yet. Left alone, its genesis event
+   * keeps seq 0 without ever reaching the WAL, and the retry seals a resume
+   * at seq 1 on a chain whose first event nothing holds.
+   */
+  rollbackToBirth(): void {
+    this.rollbackChain(this.birth);
   }
 
   /**

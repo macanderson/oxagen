@@ -16,7 +16,12 @@ import {
 } from "../host/test-support";
 import type { PolicyBundle } from "../wire";
 import { handleHookEvent, type PolicyView } from "./hook-handler";
-import { HOOK_ID_LEDGER_CAPACITY, SessionRegistry } from "./registry";
+import {
+  forgetHookId,
+  HOOK_ID_LEDGER_CAPACITY,
+  SessionRegistry,
+  sawHookId,
+} from "./registry";
 
 const CONTEXT: ClaudeCodeContext = {
   agent: {
@@ -107,6 +112,71 @@ describe("the hook-id replay ledger", () => {
     );
     expect(replay.events).toEqual([]);
     expect(replay.response).toEqual({});
+  });
+
+  it("seals the replay of a hook whose live route threw", async () => {
+    const { deps } = harness();
+    const start = firstFixtureNamed("01");
+    const failing = {
+      ...deps,
+      policy: (): PolicyView => {
+        throw new Error("bundle read failed");
+      },
+    };
+    await expect(
+      handleHookEvent(
+        start.stdin,
+        start.env,
+        failing,
+        undefined,
+        undefined,
+        undefined,
+        "hook_threw",
+      ),
+    ).rejects.toThrow("bundle read failed");
+
+    // The client saw a failure and spooled the hook under the same id. The
+    // replay is the only copy, so it has to be sealed.
+    const replay = await handleHookEvent(
+      start.stdin,
+      start.env,
+      deps,
+      undefined,
+      undefined,
+      undefined,
+      "hook_threw",
+    );
+    expect(replay.events.length).toBeGreaterThan(0);
+  });
+
+  it("seals a replay once the daemon forgets an id whose write failed", async () => {
+    const { deps, registry } = harness();
+    const start = firstFixtureNamed("01");
+    await handleHookEvent(
+      start.stdin,
+      start.env,
+      deps,
+      undefined,
+      undefined,
+      undefined,
+      "hook_unwritten",
+    );
+    const record = registry.get(String(start.stdin["session_id"]));
+    if (record === undefined) throw new Error("no session record");
+    expect(sawHookId(record, "hook_unwritten")).toBe(true);
+
+    forgetHookId(record, "hook_unwritten");
+    expect(sawHookId(record, "hook_unwritten")).toBe(false);
+    const replay = await handleHookEvent(
+      start.stdin,
+      start.env,
+      deps,
+      undefined,
+      undefined,
+      undefined,
+      "hook_unwritten",
+    );
+    expect(replay.events.length).toBeGreaterThan(0);
   });
 
   it("still records a different hook_id normally", async () => {

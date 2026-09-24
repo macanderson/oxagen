@@ -136,6 +136,7 @@ import {
   type ModelUpstreams,
 } from "./model-routes";
 import {
+  forgetHookId,
   parseRegistryState,
   sessionMapKey,
   type SessionRecord,
@@ -753,6 +754,20 @@ async function initializeDaemon(
   function rollbackEveryChain(
     marks: Array<{ session: SessionRecord; mark: ChainMark }>,
   ): void {
+    // A session the failed call created has no mark: it did not exist when
+    // the marks were taken. Its chain goes back to where it was born, or its
+    // unwritten genesis keeps seq 0 and the retry seals a resume after it.
+    // A session with a WAL file is left alone: the model proxy runs off the
+    // serial queue, and it may have opened and written that session while
+    // the failed call was awaiting.
+    const marked = new Set(marks.map(({ session }) => session));
+    const unmarked = registry.list().filter((session) => !marked.has(session));
+    if (unmarked.length > 0) {
+      const onDisk = new Set(wal.sessions());
+      for (const session of unmarked)
+        if (!onDisk.has(session.recorder.sessionUuid))
+          session.recorder.rollbackToBirth();
+    }
     for (const { session, mark } of [...marks].reverse())
       session.recorder.rollbackChain(mark);
   }
@@ -2111,6 +2126,13 @@ async function initializeDaemon(
         record(outcome.events, outcome.bodies);
       } catch (error) {
         rollbackEveryChain(marks);
+        // The chain rollback does not reach the hook-id ledger, which lives
+        // on the session record. Left in place, the id would make the
+        // client's spool replay of this same hook look like a repeat, and
+        // the hook would be lost.
+        if (envelope.hook_id !== undefined && outcome.record !== undefined) {
+          forgetHookId(outcome.record, envelope.hook_id);
+        }
         throw error;
       }
     }
