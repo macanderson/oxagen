@@ -184,6 +184,7 @@ export function InviteDialog({
         }
         // The design's footer reads Cancel then Send the invitation; once the
         // answer is on screen there is nothing to cancel, so it reads Done.
+        headerClose
         closeLabel={outcome === null ? t("cancel") : t("close")}
         footer={
           outcome === null ? (

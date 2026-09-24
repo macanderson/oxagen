@@ -170,8 +170,11 @@ export const org: DataSource["org"] = {
       }),
       kernelRead(ctx, {
         contract: agentList,
-        // One row is enough: the count is the totals block, over the workspace.
-        input: { limit: 1 },
+        // The Agents count is the totals block, over the workspace. The page
+        // is the largest the contract allows, because the Archive dialog
+        // counts the rows `archive_workspace` would refuse over, and the
+        // totals cannot tell those from the built-in and retired ones.
+        input: { limit: 100 },
         page: "organization",
       }),
     ]);

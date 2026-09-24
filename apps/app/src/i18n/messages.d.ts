@@ -2813,13 +2813,17 @@ type Messages = {
         open: string;
         title: string;
         body: string;
+        agents: string;
+        noAgents: string;
+        agentsUnread: string;
         confirm: string;
         pending: string;
       };
       role: {
         open: string;
         title: string;
-        body: string;
+        person: string;
+        note: string;
         label: string;
         confirm: string;
         pending: string;
@@ -2828,6 +2832,7 @@ type Messages = {
         open: string;
         title: string;
         body: string;
+        note: string;
         confirm: string;
         pending: string;
       };
@@ -2877,8 +2882,8 @@ type Messages = {
       deliveryFailed: string;
       confirmTitle: string;
       confirmBody: string;
+      confirmNote: string;
       confirmRevoke: string;
-      keepInvitation: string;
       invitedBy: string;
       tableLabel: string;
       noMatch: string;

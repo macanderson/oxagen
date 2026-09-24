@@ -106,9 +106,10 @@ describe("the mode's facts", () => {
     ]) {
       expect(shown).toHaveTextContent(fact);
     }
-    expect(shown).toHaveTextContent(
-      "partitioned by org_id, row-level policies enforced",
-    );
+    // Row-level security on org_id is what the store has; no tenant table
+    // is partitioned by org_id, so the fact never says partitioned.
+    expect(shown).toHaveTextContent("row-level security on org_id, enforced");
+    expect(shown).not.toHaveTextContent("partitioned");
     expect(
       shown.querySelector("[data-plane-status='active']"),
     ).toHaveTextContent("active");
@@ -169,8 +170,21 @@ describe("the two writes", () => {
       );
       const dialog = await screen.findByTestId(testId);
       expect(dialog).toHaveTextContent(says);
+      // The design's header close sits beside the title.
+      expect(dialog.querySelector("[data-header-close]")).not.toBeNull();
       expect(dialog).toHaveTextContent("nothing is sent");
     },
+  );
+});
+
+it("titles the plane request as the design does", async () => {
+  await renderPlane();
+  await userEvent.click(
+    within(plane()).getByRole("button", { name: "Request a change of plane" }),
+  );
+  const dialog = await screen.findByTestId("data-plane-request");
+  expect(within(dialog).getByRole("heading")).toHaveTextContent(
+    /^Request a change of data plane$/,
   );
 });
 

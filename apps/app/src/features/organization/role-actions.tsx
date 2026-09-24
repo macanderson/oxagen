@@ -182,6 +182,7 @@ export function RoleEditor({
         subtitle={isNew ? undefined : role?.name}
         testId={`role-editor-${mode}${role === undefined ? "" : `-${role.id}`}`}
         wide
+        headerClose
         closeLabel={readOnly ? t("close") : t("cancel")}
         footer={
           readOnly ? (
@@ -432,6 +433,7 @@ export function DeleteRole({ org, role }: { org: string; role: Role }) {
         title={tDel("title")}
         subtitle={role.name}
         testId={`delete-role-${role.id}`}
+        headerClose
         closeLabel={tDel("cancel")}
         footer={
           <button

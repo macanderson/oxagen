@@ -18,7 +18,12 @@ import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
 import { endOfUtcDay } from "@/shared/expiry-day";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import {
+  buttonDanger,
+  buttonSecondary,
+  inputBase,
+  mono,
+} from "@/ui/control-styles";
 import { useExitGuard } from "@/ui/exit-guard";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -137,10 +142,13 @@ function KeyWriteDialog({
   receipt,
   listedIds,
   after,
+  danger = false,
   children,
 }: {
   open: string;
   title: string;
+  /** Revoke: the row's button and the confirm are the design's `btn danger`. */
+  danger?: boolean;
   /** The key the write acts on, under the title. */
   subtitle?: string;
   confirm: string;
@@ -155,8 +163,10 @@ function KeyWriteDialog({
   children?: ReactNode;
 }) {
   const t = useTranslations("organization.apiKeys.actions");
+  const tActions = useTranslations("organization.actions");
   const failureText = useFailureText();
   const navigate = useNavigate();
+  const formId = `${testId}-form`;
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -242,22 +252,41 @@ function KeyWriteDialog({
     <>
       <button
         type="button"
-        className={buttonSecondary}
+        className={danger ? buttonDanger : buttonSecondary}
         onClick={() => {
           openChange(true);
         }}
       >
         {openLabel}
       </button>
+      {/* The form reads Cancel then the confirm in the footer, with the
+          header's x, as the design draws `apikey`, `rotatekey` and
+          `revokekey`. The one showing of a secret has a single way out, the
+          footer's Close, so it carries no header x beside it. */}
       <SheetDialog
         open={showing}
         onOpenChange={openChange}
         title={secret === null ? title : t("secret.title")}
         subtitle={secret === null ? subtitle : undefined}
+        headerClose={secret === null}
+        closeLabel={secret === null ? tActions("cancel") : undefined}
+        footer={
+          secret === null ? (
+            <SubmitButton
+              form={formId}
+              pending={pending}
+              label={confirm}
+              pendingLabel={pendingLabel}
+              fullWidth={false}
+              danger={danger}
+            />
+          ) : undefined
+        }
         testId={testId}
       >
         {secret === null ? (
           <form
+            id={formId}
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
@@ -265,11 +294,6 @@ function KeyWriteDialog({
             {failure === null ? null : (
               <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
             )}
-            <SubmitButton
-              pending={pending}
-              label={confirm}
-              pendingLabel={pendingLabel}
-            />
           </form>
         ) : (
           <SecretPanel secret={secret} />
@@ -437,6 +461,7 @@ export function KeyRowActions({
         confirm={t("revoke.confirm")}
         pending={t("revoke.pending")}
         testId="revoke-api-key"
+        danger
         write={() => revokeApiKey(org, ws, keyId)}
         receipt={tReceipt("keyRevoked", { name: keyName })}
         listedIds={listedIds}

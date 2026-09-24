@@ -371,6 +371,7 @@ describe("EditWorkspace", () => {
               { role: "main", fullName: "acme/platform", defaultRef: "main" },
             ],
             agents: 64,
+            archiveBlockers: { count: 63, more: false },
           }}
         />
       </IntlProvider>,
@@ -393,9 +394,20 @@ describe("EditWorkspace", () => {
     expect(main).toHaveAccessibleDescription(
       "Changing main is an org-owner action with approval.",
     );
-    expect(within(dialog).getByLabelText("Production branch")).toHaveValue(
-      "main",
-    );
+    // The design's `wsBranch` select, holding the one branch recorded:
+    // edit_workspace takes no branch, so it cannot be changed from here.
+    const branch = within(dialog).getByLabelText("Production branch");
+    expect(branch.tagName).toBe("SELECT");
+    expect(branch).toHaveValue("main");
+    expect(branch).toBeDisabled();
+    // Cancel then Save in the footer, and the header's close.
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .slice(-2),
+    ).toEqual(["Cancel", "Save"]);
+    expect(dialog.querySelector("[data-header-close]")).not.toBeNull();
     expect(
       within(dialog).getByTestId("edit-workspace-agents"),
     ).toHaveTextContent("64 registered");
@@ -466,15 +478,118 @@ describe("ArchiveWorkspace", () => {
     expect(
       within(dialog).getByRole("heading", { name: "Archive workspace" }),
     ).toBeInTheDocument();
-    expect(dialog).toHaveTextContent("Core platform");
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Archive" }),
+    expect(dialog).toHaveTextContent(
+      "Archiving freezes Core platform: runs, frames, records and spend stay readable forever.",
     );
+    // No facts: the count is not readable, so the handler has the last word.
+    expect(
+      within(dialog).getByTestId("archive-workspace-agents"),
+    ).toHaveTextContent("not readable without membership");
+    const confirm = within(dialog).getByRole("button", { name: "Archive" });
+    // The design's `btn danger`: red ink, never gold.
+    expect(confirm.className).toContain("text-error-ink");
+    expect(confirm.className).not.toContain("bg-button-primary-bg");
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .slice(-2),
+    ).toEqual(["Cancel", "Archive"]);
+    await userEvent.click(confirm);
     expect(archiveWorkspace).toHaveBeenCalledWith(
       "acme",
       "wrk_0a1b2c3d4e5f6g7h8j9k0m",
     );
     expect(router.replace).toHaveBeenCalledWith("/acme?tab=workspaces");
+  });
+
+  it("draws the row's Archive as the design's danger button", () => {
+    render(
+      <IntlProvider>
+        <ArchiveWorkspace org="acme" workspace={workspace} />
+      </IntlProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Archive" }).className).toContain(
+      "text-error-ink",
+    );
+  });
+
+  it("warns about registered agents and disables Archive while any is registered (negative)", async () => {
+    render(
+      <IntlProvider>
+        <ArchiveWorkspace
+          org="acme"
+          workspace={workspace}
+          facts={{
+            repositories: [],
+            agents: 65,
+            archiveBlockers: { count: 64, more: false },
+          }}
+        />
+      </IntlProvider>,
+    );
+    const dialog = await open(
+      "Archive",
+      "archive-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    expect(
+      within(dialog).getByTestId("archive-workspace-agents"),
+    ).toHaveTextContent(
+      "64 agents are registered here. Deregister or move them first.",
+    );
+    const confirm = within(dialog).getByRole("button", { name: "Archive" });
+    expect(confirm).toBeDisabled();
+    await userEvent.click(confirm);
+    expect(archiveWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("says the count is a floor when the page of agents did not reach the end", async () => {
+    render(
+      <IntlProvider>
+        <ArchiveWorkspace
+          org="acme"
+          workspace={workspace}
+          facts={{
+            repositories: [],
+            agents: 140,
+            archiveBlockers: { count: 99, more: true },
+          }}
+        />
+      </IntlProvider>,
+    );
+    const dialog = await open(
+      "Archive",
+      "archive-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    expect(
+      within(dialog).getByTestId("archive-workspace-agents"),
+    ).toHaveTextContent("At least 99 agents are registered here.");
+  });
+
+  it("says no agents are here and leaves Archive enabled when none is registered", async () => {
+    render(
+      <IntlProvider>
+        <ArchiveWorkspace
+          org="acme"
+          workspace={workspace}
+          facts={{
+            repositories: [],
+            agents: 1,
+            archiveBlockers: { count: 0, more: false },
+          }}
+        />
+      </IntlProvider>,
+    );
+    const dialog = await open(
+      "Archive",
+      "archive-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    expect(
+      within(dialog).getByTestId("archive-workspace-agents"),
+    ).toHaveTextContent("No agents here.");
+    expect(
+      within(dialog).getByRole("button", { name: "Archive" }),
+    ).toBeEnabled();
   });
 
   it("names a workspace that still has agents and archives nothing (negative)", async () => {

@@ -11,11 +11,17 @@ import { type ReactNode, type SyntheticEvent, useState } from "react";
 import { GrantableOrgRole, type MemberList } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import {
+  buttonDanger,
+  buttonSecondary,
+  inputBase,
+  mono,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { changeMemberRole, removeOrgMember } from "./actions";
+import { note } from "./parts";
 import { recordReceipt } from "./receipt";
 
 type Failure = Exclude<ActionResult<unknown>, { ok: true }>;
@@ -91,6 +97,7 @@ function WriteDialog({
   receipt,
   after,
   state,
+  danger = false,
   children,
 }: {
   open: string;
@@ -107,6 +114,8 @@ function WriteDialog({
   after: SafePath;
   /** The open state, when the member dialog can open this one too. */
   state?: OpenState;
+  /** A write that ends something: the row's button and the confirm are `btn danger`. */
+  danger?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations("organization.actions");
@@ -149,7 +158,7 @@ function WriteDialog({
     <>
       <button
         type="button"
-        className={buttonSecondary}
+        className={danger ? buttonDanger : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
@@ -161,6 +170,7 @@ function WriteDialog({
         onOpenChange={openChange}
         title={title}
         subtitle={subtitle}
+        headerClose
         closeLabel={t("cancel")}
         footer={
           <SubmitButton
@@ -169,6 +179,7 @@ function WriteDialog({
             label={confirm}
             pendingLabel={pendingLabel}
             fullWidth={false}
+            danger={danger}
           />
         }
         testId={testId}
@@ -227,7 +238,16 @@ function ChangeRole({
       })}
       after={after}
     >
-      <p className="text-sm text-muted-foreground">{t("actions.role.body")}</p>
+      <label htmlFor={`${selectId}-person`} className="text-sm font-medium">
+        {t("actions.role.person")}
+      </label>
+      <input
+        id={`${selectId}-person`}
+        value={member.name ?? member.email}
+        disabled
+        readOnly
+        className={inputBase}
+      />
       <label htmlFor={selectId} className="text-sm font-medium">
         {t("actions.role.label")}
       </label>
@@ -245,6 +265,7 @@ function ChangeRole({
           </option>
         ))}
       </select>
+      <p className={note}>{t("actions.role.note")}</p>
     </WriteDialog>
   );
 }
@@ -267,15 +288,21 @@ function RemoveMember({
       confirm={t("actions.remove.confirm")}
       pending={t("actions.remove.pending")}
       testId="remove-member"
+      danger
       write={() => removeOrgMember(org, member.id)}
       receipt={t("receipts.memberRemoved", {
         name: member.name ?? member.email,
       })}
       after={after}
     >
-      <p className="text-sm text-muted-foreground">
-        {t("actions.remove.body", { role: t(`roles.${member.role}`) })}
+      <p className="text-sm">
+        {t.rich("actions.remove.body", {
+          name: member.name ?? member.email,
+          role: t(`roles.${member.role}`),
+          mono: (chunks) => <span className={mono}>{chunks}</span>,
+        })}
       </p>
+      <p className={note}>{t("actions.remove.note")}</p>
     </WriteDialog>
   );
 }
@@ -316,6 +343,7 @@ function MemberDialog({
         onOpenChange={setOpen}
         title={member.name ?? member.email}
         subtitle={member.email}
+        headerClose
         footer={
           changeRole === null ? undefined : (
             <button

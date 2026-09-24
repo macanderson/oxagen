@@ -109,6 +109,15 @@ export function toWorkspaceList(
  * Workspaces row: each binding's role, full name and approved production ref,
  * and the identity total over the whole workspace (never the page length).
  */
+/**
+ * The built-in interactive agent every workspace is seeded with
+ * (`INTERACTIVE_AGENT_SLUG`, packages/oxagen/src/interactive-agent.ts).
+ * `archive_workspace` leaves it out of the agents it refuses over. It is
+ * spelled here rather than imported, because that module carries the agent's
+ * whole definition and node:crypto, and the app's import graph admits neither.
+ */
+const INTERACTIVE_AGENT_SLUG = "qa-chat";
+
 export function toWorkspaceFacts(
   repositories: ContractOutput<typeof repositoryList>,
   agents: ContractOutput<typeof agentList>,
@@ -120,6 +129,13 @@ export function toWorkspaceFacts(
       defaultRef: repo.defaultRef,
     })),
     agents: agents.totals.identities,
+    archiveBlockers: {
+      count: agents.items.filter(
+        (agent) =>
+          agent.slug !== INTERACTIVE_AGENT_SLUG && agent.status !== "retired",
+      ).length,
+      more: agents.nextCursor !== null,
+    },
   };
 }
 

@@ -10,6 +10,13 @@ export const emptyLine = "text-sm text-muted-foreground";
 export const note =
   "border-l-2 border-gold pl-3 text-[13px] leading-relaxed text-muted-foreground";
 
+/**
+ * A warning in a dialog: the mockup's `.warn`, the critical hue as a hairline
+ * and a wash behind body ink, for what a write would end or refuse.
+ */
+export const warn =
+  "rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-[11px] text-[12.5px] text-foreground";
+
 export function DateCell({ iso }: { iso: string }) {
   const format = useFormatter();
   return (

@@ -82,6 +82,15 @@ describe("change role", () => {
         .map((button) => button.textContent)
         .slice(-2),
     ).toEqual(["Cancel", "Change it"]);
+    // The design's Person field, the header close, and its note.
+    expect(within(dialog).getByLabelText("Person")).toHaveValue("Marcus Bell");
+    expect(within(dialog).getByLabelText("Person")).toBeDisabled();
+    expect(dialog.querySelector("[data-header-close]")).toHaveAccessibleName(
+      "Close",
+    );
+    expect(dialog).toHaveTextContent(
+      "A grant is a governed action, not a settings change.",
+    );
     const picker = within(dialog).getByLabelText("Role");
     expect(picker).toHaveValue("billing");
     await userEvent.selectOptions(picker, "admin");
@@ -117,14 +126,30 @@ describe("remove", () => {
       value: { memberId: member.id },
     });
     renderActions();
+    // The row's Remove is the design's `btn sm danger`.
+    expect(screen.getByRole("button", { name: "Remove" }).className).toContain(
+      "text-error-ink",
+    );
     const dialog = await openDialog("Remove", "remove-member");
     expect(within(dialog).getByRole("heading")).toHaveTextContent(
       /^Remove from the organization$/,
     );
-    expect(dialog).toHaveTextContent("Marcus Bell");
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Remove" }),
+    expect(dialog).toHaveTextContent(
+      "Marcus Bell loses org.billing and every workspace grant. Their sessions end now.",
     );
+    // Which agents act for them is not recorded, and the note says so.
+    expect(dialog).toHaveTextContent("#3932");
+    // The design's `btn danger`: red ink on the confirm, never gold.
+    const confirm = within(dialog).getByRole("button", { name: "Remove" });
+    expect(confirm.className).toContain("text-error-ink");
+    expect(confirm.className).not.toContain("bg-button-primary-bg");
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .slice(-2),
+    ).toEqual(["Cancel", "Remove"]);
+    await userEvent.click(confirm);
     expect(removeOrgMember).toHaveBeenCalledWith("acme", member.id);
     expect(router.replace).toHaveBeenCalledWith(HERE);
   });

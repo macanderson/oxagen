@@ -223,7 +223,7 @@ describe("create", () => {
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Create key" }),
     );
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByTestId("create-api-key")).toBeInTheDocument();
 
     answer({ ok: true, value: minted });
@@ -331,7 +331,7 @@ describe("create", () => {
       within(dialog).getByRole("button", { name: "Create key" }),
     );
     await screen.findByTestId("create-api-key-failure");
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(router.replace).not.toHaveBeenCalled();
     await openDialog("Create key", "create-api-key");
     expect(screen.queryByTestId("create-api-key-failure")).toBeNull();
@@ -452,14 +452,28 @@ describe("revoke", () => {
   it("ends the key and reloads the page, showing no secret", async () => {
     revokeApiKey.mockResolvedValue({ ok: true, value: { keyId: KEY } });
     renderRow();
+    // The row's Revoke is the design's `btn sm danger`.
+    expect(screen.getByRole("button", { name: "Revoke" }).className).toContain(
+      "text-error-ink",
+    );
     const dialog = await openDialog("Revoke", "revoke-api-key");
     expect(
       within(dialog).getByRole("heading", { name: "Revoke this key" }),
     ).toBeInTheDocument();
     expect(dialog).toHaveTextContent("CI runner");
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Revoke" }),
-    );
+    // Cancel then Revoke in the footer, the confirm red and never gold, and
+    // the header's close beside the title.
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .slice(-2),
+    ).toEqual(["Cancel", "Revoke"]);
+    const confirm = within(dialog).getByRole("button", { name: "Revoke" });
+    expect(confirm.className).toContain("text-error-ink");
+    expect(confirm.className).not.toContain("bg-button-primary-bg");
+    expect(dialog.querySelector("[data-header-close]")).not.toBeNull();
+    await userEvent.click(confirm);
     expect(revokeApiKey).toHaveBeenCalledWith("acme", WS, KEY);
     expect(router.replace).toHaveBeenCalledWith(HERE);
     expect(router.refresh).toHaveBeenCalledOnce();

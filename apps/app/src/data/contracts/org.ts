@@ -119,6 +119,18 @@ export const WorkspaceFacts = z.object({
   repositories: z.array(BoundRepository),
   /** `list_agents` totals.identities: over the whole workspace, never a page. */
   agents: z.number().int().nonnegative(),
+  /**
+   * The agents `archive_workspace` refuses over (`workspace_has_agents`):
+   * live rows that are not retired and not the built-in interactive agent
+   * every workspace is seeded with, counted on the first `list_agents` page.
+   * `more` is true when that page did not reach the end, so the count is a
+   * floor. The Archive dialog warns and disables its confirm when it is above
+   * zero, which is what the handler would answer.
+   */
+  archiveBlockers: z.object({
+    count: z.number().int().nonnegative(),
+    more: z.boolean(),
+  }),
 });
 export type WorkspaceFacts = z.infer<typeof WorkspaceFacts>;
 

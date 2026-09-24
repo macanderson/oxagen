@@ -138,14 +138,18 @@
       "archiveWorkspace": {
         "open": "Archive",
         "title": "Archive workspace",
-        "body": "The workspace leaves the switcher. Its slug stays taken, and its runs and frames stay readable. Its API keys stop working while it is archived. None of them is revoked, so restoring the workspace brings them back.",
+        "body": "Archiving freezes <b>{name}</b>: runs, frames, records and spend stay readable forever. Its API keys stop working while it is archived. None of them is revoked, so restoring the workspace brings them back.",
+        "agents": "{more, select, yes {At least {count} agents are} other {{count, plural, one {# agent is} other {# agents are}}}} registered here. Deregister or move them first.",
+        "noAgents": "No agents here. Archiving is an owner or admin action, recorded as a security event.",
+        "agentsUnread": "Registered agents are not readable without membership here. Archive is refused while any agent is registered.",
         "confirm": "Archive",
         "pending": "Archiving"
       },
       "role": {
         "open": "Change role",
         "title": "Change role",
-        "body": "This replaces the role they hold across the organization. The record keeps the change with your name on it.",
+        "person": "Person",
+        "note": "A grant is a governed action, not a settings change. It writes an audit record. It does not widen what their agents may do: an agent’s effective permission is its own grants intersected with the operator’s.",
         "label": "Role",
         "confirm": "Change it",
         "pending": "Changing"
@@ -153,7 +157,8 @@
       "remove": {
         "open": "Remove",
         "title": "Remove from the organization",
-        "body": "They lose {role} and every workspace grant, and Oxagen revokes the command-line keys they minted. Runs stay attributed to them. Only a new invitation brings them back.",
+        "body": "{name} loses <mono>{role}</mono> and every workspace grant. Their sessions end now.",
+        "note": "Removing is a governed action and is recorded. Oxagen revokes the command-line keys they minted, and runs stay attributed to them. Which agents act on their behalf is not recorded here yet (#3932).",
         "confirm": "Remove",
         "pending": "Removing"
       },
@@ -202,9 +207,9 @@
       "revoked": "Invitation revoked.",
       "deliveryFailed": "The invitation now expires in seven days, but its email could not be sent. Resend to try again.",
       "confirmTitle": "Revoke invitation",
-      "confirmBody": "This invitation will stop working. You can send a new invitation later.",
-      "confirmRevoke": "Confirm revoke",
-      "keepInvitation": "Keep invitation",
+      "confirmBody": "The link stops working the moment this is revoked, and <b>{email}</b> gets no notice. Nothing is created for them, so nothing is left behind.",
+      "confirmNote": "Who invited them, when, and who revoked it stay in the audit record. Inviting them again issues a new link.",
+      "confirmRevoke": "Revoke",
       "invitedBy": "Invited by",
       "tableLabel": "Pending invitations",
       "noMatch": "No invitation matches this search.",
@@ -456,7 +461,7 @@
       "namespace": "ns {namespace}",
       "open": "Open",
       "archived": "archived",
-      "note": "Changing which repository is main is an org-owner action with approval, recorded as a security event. A repository may be linked to more than one workspace, and it is main for at most one.",
+      "note": "Changing which repository is main is an org-owner action with approval, recorded as a security event. A repository may be linked to more than one workspace; it is main for at most one.",
       "noMatch": "No workspace matches this search.",
       "factsUnread": "could not be read",
       "factsNoMembership": "not readable without membership",
@@ -946,7 +951,7 @@
         "degraded": "degraded",
         "disabled": "disabled"
       },
-      "sharedPostgres": "partitioned by org_id, row-level policies enforced",
+      "sharedPostgres": "row-level security on org_id, enforced",
       "verified": "verified",
       "rotated": "credentials rotated",
       "neverVerified": "verification not recorded",
@@ -978,7 +983,7 @@
       },
       "stub": {
         "plane": {
-          "title": "Request a change of plane",
+          "title": "Request a change of data plane",
           "body": "A change of plane would be requested here and decided by Oxagen, then applied with set_data_plane. No capability records the request yet, so nothing is sent. The binding is set today through set_data_plane on the API, MCP or the CLI by an owner or an admin."
         },
         "rotate": {

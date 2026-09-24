@@ -356,6 +356,7 @@ export function InvitationsTab({
           key="actions"
           org={org}
           invitationId={invitation.id}
+          email={invitation.email}
           allowed
         />,
       ],

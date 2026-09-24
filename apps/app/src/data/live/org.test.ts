@@ -398,6 +398,7 @@ describe("org.workspaceFacts", () => {
           { role: "linked", fullName: "acme/billing", defaultRef: "trunk" },
         ],
         agents: 64,
+        archiveBlockers: { count: 0, more: false },
       }),
     );
     expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
@@ -405,11 +406,36 @@ describe("org.workspaceFacts", () => {
       input: {},
       page: "organization",
     });
-    // One agent row is enough: the count is the totals block, over the workspace.
+    // The largest page: the Archive dialog counts the rows it would refuse over.
     expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
       contract: agentList,
-      input: { limit: 1 },
+      input: { limit: 100 },
       page: "organization",
+    });
+  });
+
+  it("counts the agents archive_workspace refuses over, leaving out the built-in and retired ones", async () => {
+    kernelRead.mockImplementation((_ctx, { contract }) =>
+      Promise.resolve(
+        contract === repositoryList
+          ? readOk({ repositories: [] })
+          : readOk({
+              ...agents(4),
+              items: [
+                { slug: "qa-chat", status: "unenrolled" },
+                { slug: "old-bot", status: "retired" },
+                { slug: "invoice-bot", status: "enrolled" },
+                { slug: "review-bot", status: "suspended" },
+              ],
+              nextCursor: "cmV2aWV3LWJvdA",
+            }),
+      ),
+    );
+    const read = await org.workspaceFacts(wsCtx);
+    expect(read.ok && read.value).toMatchObject({
+      agents: 4,
+      // Two live agents on this page, and the page did not reach the end.
+      archiveBlockers: { count: 2, more: true },
     });
   });
 

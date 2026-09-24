@@ -221,7 +221,11 @@ function Actions({
             workspace={workspace}
             facts={facts?.ok === true ? facts.value : null}
           />
-          <ArchiveWorkspace org={org} workspace={workspace} />
+          <ArchiveWorkspace
+            org={org}
+            workspace={workspace}
+            facts={facts?.ok === true ? facts.value : null}
+          />
         </>
       ) : null}
     </div>

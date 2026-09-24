@@ -34,6 +34,7 @@ import {
   type NewWorkspaceDraft,
 } from "./actions";
 import { textValue, WriteDialog } from "./dialog";
+import { note, warn } from "./parts";
 import {
   type RepositoryChoice,
   readRepositoryChoices,
@@ -329,6 +330,38 @@ function UnrecordedField({
 }
 
 /**
+ * Production branch on the Edit form, the design's `wsBranch` select. It
+ * offers the one branch `list_repositories` records for the main repository,
+ * and it is disabled: `edit_workspace` takes no branch, and the binding moves
+ * only by a re-approval on the Repositories page, which the hint says. A
+ * select that offered main, release and production would promise a write the
+ * form cannot make.
+ */
+function BranchSelect({ id, branch }: { id: string; branch: string | null }) {
+  const t = useTranslations("organization");
+  const tf = useTranslations("organization.actions.fields");
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-medium text-foreground">
+        {tf("productionBranch")}
+      </label>
+      <select
+        id={id}
+        disabled
+        aria-describedby={`${id}-hint`}
+        data-testid="edit-workspace-branch"
+        className={`${inputBase} max-md:text-base ${branch === null ? "text-dim" : "font-mono"}`}
+      >
+        <option>{branch ?? t("notRecorded")}</option>
+      </select>
+      <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+        {tf("productionBranchHint")}
+      </p>
+    </div>
+  );
+}
+
+/**
  * The workspace facts the Edit dialog lists under its fields. The agent count
  * is `list_agents`', when the tab could read inside the workspace; nothing
  * records a toolbelt limit or a default budget per workspace yet (#3933).
@@ -571,11 +604,9 @@ export function EditWorkspace({
         hint={tf("mainRepoFixed")}
         {...(main === undefined ? {} : { value: main.fullName })}
       />
-      <UnrecordedField
+      <BranchSelect
         id={`edit-workspace-${workspace.id}-branch`}
-        label={tf("productionBranch")}
-        hint={tf("productionBranchHint")}
-        {...(main === undefined ? {} : { value: main.defaultRef })}
+        branch={main?.defaultRef ?? null}
       />
       <GovernanceField idPrefix={`edit-workspace-${workspace.id}`} />
       <UnrecordedField
@@ -594,16 +625,58 @@ export function EditWorkspace({
   );
 }
 
+/**
+ * What Archive says about the agents registered in the workspace, and whether
+ * it can be sent. `archive_workspace` refuses while any live agent other than
+ * the built-in one is registered (`workspace_has_agents`), so the dialog warns
+ * and disables its confirm when the facts count one, as the design draws it.
+ * A workspace the viewer cannot enter has no facts: the dialog says the count
+ * is not readable and leaves the refusal to the handler.
+ */
+function ArchiveAgents({
+  blockers,
+}: {
+  blockers: WorkspaceFacts["archiveBlockers"] | null;
+}) {
+  const t = useTranslations("organization.actions.archiveWorkspace");
+  if (blockers === null) {
+    return (
+      <p data-testid="archive-workspace-agents" className={note}>
+        {t("agentsUnread")}
+      </p>
+    );
+  }
+  if (blockers.count === 0) {
+    return (
+      <p data-testid="archive-workspace-agents" className={note}>
+        {t("noAgents")}
+      </p>
+    );
+  }
+  return (
+    <p role="alert" data-testid="archive-workspace-agents" className={warn}>
+      {t("agents", {
+        count: blockers.count,
+        more: blockers.more ? "yes" : "no",
+      })}
+    </p>
+  );
+}
+
 export function ArchiveWorkspace({
   org,
   workspace,
+  facts = null,
 }: {
   org: string;
   workspace: Workspace;
+  /** What the tab read inside this workspace; null when it could not. */
+  facts?: WorkspaceFacts | null;
 }) {
   const t = useTranslations("organization.actions");
   const tr = useTranslations("organization.receipts");
   const navigate = useNavigate();
+  const blockers = facts?.archiveBlockers ?? null;
   return (
     <WriteDialog
       copy={{
@@ -615,14 +688,20 @@ export function ArchiveWorkspace({
         receipt: tr("workspaceArchived", { name: workspace.name }),
       }}
       testId={`archive-workspace-${workspace.id}`}
+      danger
+      blocked={blockers !== null && blockers.count > 0}
       submit={() => archiveWorkspace(org, workspace.id)}
       onDone={() => {
         navigate.replace(routes.organization(org, "workspaces"));
       }}
     >
-      <p className="text-sm text-muted-foreground">
-        {t("archiveWorkspace.body")}
+      <p className="text-sm">
+        {t.rich("archiveWorkspace.body", {
+          name: workspace.name,
+          b: (chunks) => <b>{chunks}</b>,
+        })}
       </p>
+      <ArchiveAgents blockers={blockers} />
     </WriteDialog>
   );
 }
