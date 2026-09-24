@@ -126,7 +126,12 @@ const source: DataSource = {
   },
   skills: { inventory: read, configuration: config },
   mandates: { list: vi.fn(), get: vi.fn() },
-  audit: { events: vi.fn(), exportEvents: vi.fn() },
+  audit: {
+    events: vi.fn(),
+    exportEvents: vi.fn(),
+    retention: vi.fn(),
+    bundle: vi.fn(),
+  },
   steering: {
     records: vi.fn(),
     record: vi.fn(),

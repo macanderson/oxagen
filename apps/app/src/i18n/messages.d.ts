@@ -697,21 +697,74 @@ type Messages = {
   audit: {
     eyebrow: string;
     description: string;
+    retentionLine: string;
     loading: string;
+    notRecorded: string;
+    tabs: {
+      label: string;
+      events: string;
+      incidents: string;
+      receipts: string;
+      exports: string;
+      keys: string;
+      retention: string;
+    };
+    tiles: {
+      label: string;
+      events48h: string;
+      events7d: string;
+      events30d: string;
+      eventsDays: string;
+      eventsNote: string;
+      atLeast: string;
+      denied: string;
+      deniedNote: string;
+      service: string;
+      serviceNote: string;
+      agent: string;
+    };
     events: {
       title: string;
+      caption: string;
+      store: string;
+      filters: string;
+      actor: string;
+      anyActor: string;
+      range: string;
+      ranges: {
+        "48h": string;
+        "7d": string;
+        "30d": string;
+      };
+      search: string;
+      searchPlaceholder: string;
+      searchNotRecorded: string;
+      result: string;
+      anyResult: string;
+      severity: string;
+      anySeverity: string;
+      severityNotRecorded: string;
+      rows: string;
+      apply: string;
       when: string;
       event: string;
-      actor: string;
       what: string;
-      result: string;
-      more: string;
-      workspace: string;
-      ip: string;
-      request: string;
-      userAgent: string;
+      reference: string;
+      kindNotRecorded: string;
       detail: string;
-      notRecorded: string;
+      none: string;
+      note: string;
+      shown: string;
+      shownOpen: string;
+      pager: string;
+      newer: string;
+      older: string;
+      actorKinds: {
+        human: string;
+        agent: string;
+        service: string;
+      };
+      actorKindNotRecorded: string;
     };
     outcomes: {
       allow: string;
@@ -719,61 +772,192 @@ type Messages = {
       error: string;
       success: string;
     };
-    filters: {
-      label: string;
-      eventType: string;
-      anyEventType: string;
-      outcome: string;
-      anyOutcome: string;
-      actor: string;
-      anyActor: string;
-      capability: string;
+    csv: {
+      open: string;
+      title: string;
+      subtitle: string;
+      body: string;
+      download: string;
+    };
+    bundle: {
+      open: string;
+      title: string;
+      subtitle: string;
+      scope: string;
+      scopeOrg: string;
       from: string;
       to: string;
-      apply: string;
+      format: string;
+      formatBundle: string;
+      formatCsv: string;
+      formatJson: string;
+      fieldsNotRecorded: string;
+      callout: string;
+      notRecorded: string;
+      build: string;
+      building: string;
+      denied: string;
+      pending: string;
+      failed: string;
+    };
+    incidents: {
+      open: string;
+      critical: string;
+      median: string;
+      money: string;
+      title: string;
+      caption: string;
+      notRecorded: string;
+    };
+    incident: {
+      title: string;
+      subject: string;
+      severity: string;
+      severities: {
+        critical: string;
+        warning: string;
+        info: string;
+      };
+      attach: string;
+      attachNone: string;
+      notRecorded: string;
+      submit: string;
+    };
+    receipts: {
+      title: string;
+      caption: string;
+      search: string;
+      searchPlaceholder: string;
+      submit: string;
+      examples: string;
+      chips: {
+        stripe: string;
+        harness: string;
+        observe: string;
+        deny: string;
+        agentKey: string;
+        effect: string;
+      };
       clear: string;
+      notRecorded: string;
     };
-    export: {
-      csv: string;
-      ndjson: string;
+    exports: {
+      callout: string;
+      notRecorded: string;
+      card: string;
+      states: {
+        queued: string;
+        processing: string;
+        ready: string;
+        failed: string;
+      };
+      verify: string;
+      download: string;
+      verifyNotRecorded: string;
+      exportId: string;
+      range: string;
+      contents: string;
+      contentsOrg: string;
+      size: string;
+      created: string;
+      completed: string;
+      signature: string;
+      keyIds: string;
+      unread: string;
+      verifier: string;
+      verifierNotRecorded: string;
+      outbound: string;
+      outboundNotRecorded: string;
     };
-    pager: {
-      label: string;
-      newer: string;
-      older: string;
-      end: string;
+    keys: {
+      title: string;
+      store: string;
+      rotate: string;
+      notRecorded: string;
+    };
+    rotate: {
+      title: string;
+      subtitle: string;
+      facts: {
+        generation: string;
+        effect: string;
+        effectValue: string;
+        old: string;
+        oldValue: string;
+        rewrap: string;
+        rewrapValue: string;
+        receipts: string;
+        receiptsValue: string;
+        recorded: string;
+        recordedValue: string;
+      };
+      notRecorded: string;
+      submit: string;
+    };
+    retention: {
+      title: string;
+      edit: string;
+      notRecorded: string;
+      tiers: string;
+      tiersNotRecorded: string;
+      redaction: string;
+      redactionCaption: string;
+      redactionNote: string;
+      store: string;
+      body: string;
+      bodyValue: string;
+      hot: string;
+      replay: string;
+      optDown: string;
+      cold: string;
+      coldValue: string;
+      coldRate: string;
+    };
+    policy: {
+      title: string;
+      subtitle: string;
+      body: string;
+      hot: string;
+      callout: string;
+      notRecorded: string;
+      submit: string;
     };
     empty: {
       title: string;
       body: string;
       action: string;
     };
-    filteredEmpty: {
-      title: string;
-      body: string;
-    };
     error: {
       title: string;
       body: string;
-      code: string;
       retry: string;
+      trace: string;
     };
     denied: {
       title: string;
       body: string;
+      request: string;
+      back: string;
+      open: string;
+      signedIn: string;
+      needed: string;
+      decidedBy: string;
+      signedInAs: string;
+    };
+    request: {
+      title: string;
+      role: string;
+      why: string;
+      notRecorded: string;
+      submit: string;
     };
     pending: {
       title: string;
       body: string;
     };
-    roles: {
-      owner: string;
-      admin: string;
-      member: string;
-      billing: string;
-      compliance: string;
-      viewer: string;
-    };
+    retentionYears: string;
+    retentionDays: string;
+    cancel: string;
   };
   auth: {
     shell: {

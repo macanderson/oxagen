@@ -237,6 +237,15 @@ export const routes = {
     q: Readonly<Record<string, string | undefined>> = {},
   ): SafePath => withQuery(pathOf(org, "audit"), q),
   /**
+   * One of Audit's other tabs, each a URL segment under the page (§1.2). The
+   * query carries the export Build bundle queued, on Exports.
+   */
+  auditTab: (
+    org: string,
+    tab: "incidents" | "receipts" | "exports" | "keys" | "retention",
+    q: Readonly<Record<string, string | undefined>> = {},
+  ): SafePath => withQuery(pathOf(org, "audit", tab), q),
+  /**
    * The authenticated download of a queued data export. The archive is a
    * private object, so this route streams the bytes rather than the tab
    * linking at storage.

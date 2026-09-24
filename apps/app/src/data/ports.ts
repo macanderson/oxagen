@@ -17,10 +17,12 @@ import type {
   ResolvedApprovalItem,
 } from "./contracts/approvals";
 import type {
+  AuditBundle,
   AuditExport,
   AuditExportQuery,
   AuditPage,
   AuditPageQuery,
+  EvidenceRetention,
 } from "./contracts/audit";
 import type {
   ContractRate,
@@ -362,6 +364,18 @@ export interface DataSource {
     events(ctx: OrgCtx, q: AuditPageQuery): Promise<Read<AuditPage>>;
     /** export_audit_events: the signed file over the same window */
     exportEvents(ctx: OrgCtx, q: AuditExportQuery): Promise<Read<AuditExport>>;
+    /**
+     * get_evidence_retention (org Owner, Admin or Billing): the body retention
+     * the header's mono line and the Retention tab print; caller
+     * features/audit/audit.tsx.
+     */
+    retention(ctx: OrgCtx): Promise<Read<EvidenceRetention>>;
+    /**
+     * get_export_status for the organization export Build bundle queued, read
+     * back by the id the Exports tab's URL carries; caller
+     * features/audit/audit.tsx.
+     */
+    bundle(ctx: OrgCtx, exportId: string): Promise<Read<AuditBundle>>;
   };
   /**
    * list_skills, one page by name over its default window (noBillingGate;

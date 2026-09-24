@@ -84,7 +84,12 @@ const source: DataSource = {
     sso: refuse,
   },
   mandates: { list: refuse, get: refuse },
-  audit: { events: refuse, exportEvents: refuse },
+  audit: {
+    events: refuse,
+    exportEvents: refuse,
+    retention: refuse,
+    bundle: refuse,
+  },
   skills: { inventory: refuse, configuration: refuse },
   steering: {
     records: refuse,

@@ -1,6 +1,8 @@
 // The audit port on the kernel (ARCHITECTURE.md §3.3): one page of the
-// organization's security audit events (query_audit_log) and the signed export
-// over the same filters (export_audit_events), both noBillingGate reads. The
+// organization's security audit events (query_audit_log), the signed export
+// over the same filters (export_audit_events), the evidence retention posture
+// (get_evidence_retention) and one queued organization export
+// (get_export_status), all noBillingGate reads. The
 // page's filters become the contracts' input here: the actor is a public id,
 // and the day range arrives already resolved as an inclusive start instant and
 // an exclusive end one (`since` and `until` of AuditWindow). Which instants a
@@ -11,18 +13,26 @@
 import "server-only";
 import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
 import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
+import { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
+import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
-  AUDIT_PAGE_SIZE,
+  AuditBundle,
   AuditExport,
   AuditPage,
   type AuditWindow,
+  EvidenceRetention,
 } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import { toAuditExport, toAuditPage } from "./mappers/audit";
+import {
+  toAuditBundle,
+  toAuditExport,
+  toAuditPage,
+  toEvidenceRetention,
+} from "./mappers/audit";
 
 function toView<O, V extends z.ZodType>(
   read: Read<O>,
@@ -56,13 +66,13 @@ function contractFilters(f: AuditWindow) {
 
 export const audit: DataSource["audit"] = {
   async events(ctx, q) {
-    const { offset, ...filters } = q;
+    const { offset, limit, ...filters } = q;
     const read = await kernelRead(ctx, {
       contract: auditLogQuery,
       input: {
         source: "security",
         ...contractFilters(filters),
-        limit: AUDIT_PAGE_SIZE,
+        limit,
         offset,
       },
       page: "audit",
@@ -82,6 +92,28 @@ export const audit: DataSource["audit"] = {
     return toView(read, AuditExport, toAuditExport, {
       orgId: ctx.orgId,
       method: "exportEvents",
+    });
+  },
+  async retention(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: billingEvidenceRetention,
+      input: {},
+      page: "audit",
+    });
+    return toView(read, EvidenceRetention, toEvidenceRetention, {
+      orgId: ctx.orgId,
+      method: "retention",
+    });
+  },
+  async bundle(ctx, exportId) {
+    const read = await kernelRead(ctx, {
+      contract: privacyDataExportStatus,
+      input: { exportId },
+      page: "audit",
+    });
+    return toView(read, AuditBundle, toAuditBundle, {
+      orgId: ctx.orgId,
+      method: "bundle",
     });
   },
 };
