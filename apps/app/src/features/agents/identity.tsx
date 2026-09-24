@@ -19,7 +19,7 @@ import { parseTomlSubset, tomlGet } from "@/shared/toml-subset";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { HarnessIcon } from "@/ui/harness-icon";
+import { HarnessLabel } from "@/ui/harness-icon";
 import { SafeLink } from "@/ui/navigation";
 import { tamperOf } from "./agent-reads";
 import { ChargeAgent, type CostCenterTarget } from "./cost-center-controls";
@@ -96,10 +96,9 @@ function IdentityFacts({
           {
             term: t("harness"),
             value: (
-              <span className="inline-flex items-center gap-2">
-                <HarnessIcon harness={identity.harness} size={16} />
+              <HarnessLabel harness={identity.harness} size={16}>
                 {agents(`harness.${identity.harness}`)}
-              </span>
+              </HarnessLabel>
             ),
           },
           {
