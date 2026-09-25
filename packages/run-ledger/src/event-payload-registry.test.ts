@@ -392,6 +392,67 @@ describe("validateInlineEventPayload", () => {
     ).toThrow(ForbiddenEventPayloadFieldError);
   });
 
+  // #4158: the assembler's manifest on an in-app run. The summary is inline;
+  // the manifest's items ride the body, committed by digest.
+  const steeringSummary = () => ({
+    schema: "oxagen.steering.manifest/1",
+    delivers: ["must", "should"],
+    budget_tokens: 4096,
+    spent_tokens: 120,
+    included: 2,
+    cut: 1,
+    text_digest: DIGEST_A,
+    manifest_digest: DIGEST_B,
+  });
+
+  it("accepts a steering manifest summary, in the context stage", () => {
+    const recorded = validateInlineEventPayload("steering.manifest", {
+      ...steeringSummary(),
+      instructions_digest: DIGEST_C,
+      unavailable_kinds: ["record"],
+    });
+    expect(recorded.stage).toBe("context");
+    expect(retentionContentClassOf("steering.manifest")).toBe(
+      "context_selection",
+    );
+    // A turn that included nothing has no text to digest.
+    expect(
+      validateInlineEventPayload("steering.manifest", {
+        ...steeringSummary(),
+        spent_tokens: 0,
+        included: 0,
+        text_digest: null,
+      }).eventType,
+    ).toBe("steering.manifest");
+  });
+
+  it("rejects a steering manifest that carries its items or its text inline (negative)", () => {
+    expect(() =>
+      validateInlineEventPayload("steering.manifest", {
+        ...steeringSummary(),
+        items: [{ id: "a-record", outcome: "included" }],
+      }),
+    ).toThrow(RunSpecValidationError);
+    expect(() =>
+      validateInlineEventPayload("steering.manifest", {
+        ...steeringSummary(),
+        text: "Follow every MUST item.",
+      }),
+    ).toThrow(ForbiddenEventPayloadFieldError);
+    expect(() =>
+      validateInlineEventPayload("steering.manifest", {
+        ...steeringSummary(),
+        delivers: ["always"],
+      }),
+    ).toThrow(RunSpecValidationError);
+    expect(() =>
+      validateInlineEventPayload("steering.manifest", {
+        ...steeringSummary(),
+        unavailable_kinds: [],
+      }),
+    ).toThrow(RunSpecValidationError);
+  });
+
   it("accepts the in-app agent's engine receipts, keyed by the engine frame seq", () => {
     const model = validateInlineEventPayload("model.engine_call_completed", {
       engine_seq: 7,

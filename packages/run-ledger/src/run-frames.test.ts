@@ -98,6 +98,11 @@ describe("run frame projection", () => {
     expect(label("context.frames_selected", { frame_count: 12 })).toBe(
       "frames=12",
     );
+    // The in-app turn's steering manifest, as its summary counts it (#4158).
+    expect(label("steering.manifest", { included: 3, cut: 0 })).toBe(
+      "included=3 cut=0",
+    );
+    expect(label("steering.manifest", null)).toBe("steering.manifest");
     expect(
       label("tool.call_completed", {
         capability_name: "read_file",
