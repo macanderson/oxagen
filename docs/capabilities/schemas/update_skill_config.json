@@ -38,7 +38,7 @@
       },
       "pullRequestNumber": {
         "type": "integer",
-        "minimum": 0
+        "exclusiveMinimum": 0
       }
     },
     "required": [
@@ -57,7 +57,7 @@
             "properties": {
               "number": {
                 "type": "integer",
-                "minimum": 0
+                "exclusiveMinimum": 0
               },
               "url": {
                 "type": "string"
@@ -93,7 +93,7 @@
                 "anyOf": [
                   {
                     "type": "integer",
-                    "minimum": 0
+                    "exclusiveMinimum": 0
                   },
                   {
                     "type": "null"
@@ -223,6 +223,9 @@
               },
               "publishedAt": {
                 "type": "string"
+              },
+              "searchable": {
+                "type": "boolean"
               }
             },
             "required": [

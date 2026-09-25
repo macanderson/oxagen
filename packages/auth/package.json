@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./server": "./src/auth.ts",
     "./client": "./src/client.ts",
+    "./password-policy": "./src/password-policy.ts",
     "./route": "./src/auth-route.ts",
     "./cli-auth": "./src/cli-auth/index.ts",
     "./resolvers": "./src/resolvers/index.ts",

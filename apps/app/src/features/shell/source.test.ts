@@ -44,6 +44,7 @@ const resolvedSince = vi.fn<DataSource["approvals"]["resolvedSince"]>();
 const mandatesList = vi.fn();
 const source = {
   runtimes: { list: vi.fn(), agents: vi.fn() },
+  conversations: { latest: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context, preferences, counts, notifications },
   billing: {
@@ -164,7 +165,9 @@ beforeEach(() => {
   context.mockReset();
   context.mockResolvedValue(listed);
   preferences.mockReset();
-  preferences.mockResolvedValue(readOk({ timeZone: "Europe/London" }));
+  preferences.mockResolvedValue(
+    readOk({ timeZone: "Europe/London", enterToSubmit: true }),
+  );
   getAuthUser.mockReset();
   getAuthUser.mockResolvedValue({
     id: "usr_marcusbell",
@@ -199,6 +202,7 @@ describe("shellSource", () => {
         emailVerified: true,
         twoFactorEnabled: true,
         timeZone: "Europe/London",
+        enterToSubmit: true,
       },
       context: listed,
       approvals: {
@@ -230,15 +234,25 @@ describe("shellSource", () => {
     );
   });
 
+  // A failed read must not turn Enter into a send the person never chose.
+  it("leaves Enter adding a line when the preference read fails (negative)", async () => {
+    preferences.mockResolvedValue(readError("control_plane_unavailable", 503));
+    expect((await shellSource(ctx, source)).data.viewer.enterToSubmit).toBe(
+      false,
+    );
+  });
+
   it("passes a failed shell.context read through, and the shell still renders (negative)", async () => {
     const down = readError("control_plane_unavailable", 503);
     context.mockResolvedValue(down);
     const { data } = await shellSource(ctx, source);
     expect(data.context).toEqual(down);
-    // With no workspace list there is nothing to read approvals or a feed in.
+    // With no workspace list there is nothing to read approvals in. The bell
+    // still reads the organization's own rows in the organization's scope.
     expect(data.approvals.workspaces).toEqual([]);
-    expect(data.feed).toBeNull();
     expect(pending).not.toHaveBeenCalled();
+    expect(notifications).toHaveBeenCalledWith(ctx);
+    expect(data.feed).toEqual(feed);
   });
 
   it("keeps a person with no recorded name as null, never an invented one", async () => {
@@ -321,7 +335,26 @@ describe("shellSource across the organization's workspaces", () => {
     const { data } = await shellSource(ctx, source);
     expect(counts).not.toHaveBeenCalled();
     expect(data.counts).toBeNull();
-    expect(data.feed).toBeNull();
+  });
+
+  it("reads the organization's own notifications for a viewer who can open no workspace (#3806)", async () => {
+    context.mockResolvedValue(readOk({ orgs: [], workspaces: [] }));
+    const orgRows = readOk({
+      items: [
+        {
+          id: "ntf_01K5RS8F3J",
+          title: "Billing contact changed",
+          unread: true,
+        },
+      ],
+      unread: 1,
+    });
+    notifications.mockResolvedValue(orgRows);
+    const { data } = await shellSource(ctx, source);
+    expect(requireViewer).not.toHaveBeenCalled();
+    expect(notifications).toHaveBeenCalledOnce();
+    expect(notifications).toHaveBeenCalledWith(ctx);
+    expect(data.feed).toEqual(orgRows);
   });
 
   it("reads the mandate ledger only for a workspace whose parked call names a mandate", async () => {

@@ -13,6 +13,11 @@ export const agentMemoryRecall = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "low",
+  // A write, though it reads like a lookup. Each recall raises the recalled
+  // memories' confidence scores, appends a memory_change row to ClickHouse,
+  // and, given an executionRef, records a citation per memory. Declared so
+  // the engine never runs it beside another call as a read.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

@@ -31,6 +31,7 @@ import { eq } from "drizzle-orm";
 import type { AssistantRunSurface } from "../runtime/assistant-run";
 import { takeAssistantStream } from "../runtime/assistant-stream";
 import {
+  AssistantStoppedError,
   AssistantTurnNeedsUserError,
   ConversationNotFoundError,
   prepareAssistantTurn,
@@ -64,6 +65,7 @@ export async function assistantAskHandler(
       conversationId: input.conversationId,
       content: input.content,
       pageContext: input.pageContext,
+      ...(input.goal ? { goal: input.goal } : {}),
       ...stream?.overrides,
     });
     stream?.onPrepared();
@@ -72,6 +74,7 @@ export async function assistantAskHandler(
     );
     return {
       conversationId: result.conversationId,
+      conversationPublicId: result.conversationPublicId,
       userMessageId: result.userMessageId,
       assistantMessageId: result.assistantMessageId,
       runId: result.runId,
@@ -87,6 +90,15 @@ export async function assistantAskHandler(
     }
     if (err instanceof AssistantTurnNeedsUserError) {
       throw new HandlerError({ code: "forbidden", reason: "no_principal" });
+    }
+    // An operator's `agent` kill switch on the assistant. Refused before
+    // anything was written, with the switch and its reason in the message.
+    if (err instanceof AssistantStoppedError) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "kill_switch",
+        message: err.message,
+      });
     }
     // Every other refusal keeps its own `code`, which the API's error
     // middleware maps: the credit gate's to 402, `engine_unavailable` and

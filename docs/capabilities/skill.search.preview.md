@@ -20,6 +20,8 @@ The withheld names are the projection the withholding mechanism exists to keep f
 
 A preview reads the repository tree once and then one `SKILL.md` per skill the selected configuration pins. A skill the configuration does not pin can only be withheld, so its id comes from the tree and its bytes stay on GitHub. The number of GitHub requests therefore follows the approved set rather than the repository: a thousand-skill repository under a ten-skill configuration costs eleven requests. The commit-keyed catalog cache remains an optimization for repeat previews rather than a requirement for the first one.
 
+A pinned `SKILL.md` can change on the production branch without passing `propose_skill`, so the catalog read repeats two of its checks on every file it fetches. A file whose frontmatter carries a granting key (`allowed-tools`, `tools`, `permissions`, `grants`, `tier` or `role`), or whose bytes contain a credential- or PII-shaped string, refuses the whole preview with `conflict` and reason `skill_catalog_unsafe`. The same refusal applies to `summarize_skill_search`, which reads the same catalog.
+
 See [the version 1 configuration format](../specs/skill-resolution-config.md). This is the configuration and human preview increment of #3098. Agent run pinning, belt injection, interjections, reflection quarantine and the Steering console remain separate integration work. Oxagen resolves skills; the harness runs them.
 
 ## App

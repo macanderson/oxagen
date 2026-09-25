@@ -45,6 +45,7 @@ const ctx = unsafeMint(WsCtx, {
 
 const REPLY = {
   conversationId: "6f1f5a8e-0000-4000-8000-00000000c0de",
+  conversationPublicId: "cnv_01k9c0de",
   userMessageId: "6f1f5a8e-0000-4000-8000-00000000a111",
   assistantMessageId: "6f1f5a8e-0000-4000-8000-00000000a222",
   runId: "arun_01k9",
@@ -86,6 +87,7 @@ describe("askAssistant", () => {
           orgSlug: "acme",
           workspaceSlug: "core-platform",
           entityId: null,
+          entityLabel: null,
         },
       },
       expect.anything(),
@@ -101,8 +103,52 @@ describe("askAssistant", () => {
       entityId: "arun_01k9",
     });
     expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      pageContext: { route: "runs", entityId: "arun_01k9" },
+      pageContext: { route: "runs", entityId: "arun_01k9", entityLabel: null },
     });
+  });
+
+  // The Run page names its run, so a question asked there reaches the turn
+  // with the title the person sees beside the id the agent can look up.
+  it("forwards the label the page gave its record, beside the record's id", async () => {
+    invoke.mockResolvedValue(REPLY);
+    const result = await askAssistant("acme", "core-platform", {
+      conversationId: null,
+      content: "why did this fail?",
+      route: "runs",
+      entityId: "arun_01k9",
+      entityLabel: "Fix the flaky checkout test",
+    });
+    expect(result).toEqual({ ok: true, value: REPLY });
+    expect(invoke.mock.calls[0]?.[1]).toEqual({
+      conversationId: null,
+      content: "why did this fail?",
+      pageContext: {
+        route: "runs",
+        orgSlug: "acme",
+        workspaceSlug: "core-platform",
+        entityId: "arun_01k9",
+        entityLabel: "Fix the flaky checkout test",
+      },
+    });
+  });
+
+  // The flyout cuts a long label before it sends one. A label that arrives
+  // past the cap anyway is refused as invalid by the contract, before the
+  // turn starts, rather than reaching the model.
+  it("refuses a label past the contract's cap before the turn starts (negative)", async () => {
+    const result = await askAssistant("acme", "core-platform", {
+      conversationId: null,
+      content: "why did this fail?",
+      route: "runs",
+      entityId: "arun_01k9",
+      entityLabel: "x".repeat(257),
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      field: "pageContext.entityLabel",
+    });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("sends a null page context when the caller has no page", async () => {

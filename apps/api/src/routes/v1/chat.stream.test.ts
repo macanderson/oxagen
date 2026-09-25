@@ -255,6 +255,7 @@ describe("POST chat/stream — the turn on the wire", () => {
           orgSlug: "acme",
           workspaceSlug: "main",
           entityId: null,
+          entityLabel: null,
         },
       },
       CTX,
@@ -267,6 +268,26 @@ describe("POST chat/stream — the turn on the wire", () => {
       effort: null,
       budget: null,
     });
+  });
+
+  // The route builds ask_assistant's input field by field, so a field the
+  // contract gains is dropped here unless the route names it.
+  it("carries a goal to ask_assistant, and sends none for an ordinary turn", async () => {
+    await post({
+      content: "author the rule",
+      goal: { statement: "the rule links both sources" },
+    }).then((r) => r.text());
+    expect(mocks.invoke).toHaveBeenLastCalledWith(
+      "ask_assistant",
+      expect.objectContaining({
+        goal: { statement: "the rule links both sources", maxRounds: 3 },
+      }),
+      CTX,
+      { surface: "api" },
+    );
+
+    await post({ content: "hi" }).then((r) => r.text());
+    expect(mocks.invoke.mock.lastCall?.[1]).not.toHaveProperty("goal");
   });
 
   it("streams the run, the translated parts, one usage event, then the output as the terminal", async () => {

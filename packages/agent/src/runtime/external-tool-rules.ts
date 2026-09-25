@@ -97,6 +97,9 @@ export function externalDecisionCheck(args: {
             if (approval.status === "refused") throw refusedByPerson(error);
             args.onApprovalRequired({
               approvalId: approval.approvalId,
+              // Carried to the parked call's ledger receipt, which names the
+              // approval the way the Run page shows it.
+              approvalPublicId: approval.approvalPublicId,
               capability: args.name,
               inputPreview: args.input,
               riskLevel: "high",

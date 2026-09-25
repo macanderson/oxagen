@@ -12,6 +12,9 @@ export const pluginCredentialReauth = registerCapability({
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   sensitivity: "medium",
+  // Reads the org and workspace slugs and returns an authorize URL. The
+  // OAuth flow that URL starts is a separate request.
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({

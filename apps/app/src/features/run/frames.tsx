@@ -439,7 +439,11 @@ export function FrameList({
       <FrameListBox label={t("label")}>
         <ol className="m-0 flex list-none flex-col gap-px p-0">
           {frames.map((frame) => {
-            const mark = markOf(frame.type, decisionOf(entries.get(frame.seq)));
+            const mark = markOf(
+              frame.type,
+              decisionOf(entries.get(frame.seq)),
+              frame.summary,
+            );
             const on = frame.seq === openSeq;
             return (
               <li key={frame.cursor}>

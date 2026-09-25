@@ -108,6 +108,25 @@ describe("walkActiveBranch", () => {
     const rows = [row({ id: "solo", parentMessageId: "solo" })];
     expect(walkActiveBranch(rows, "solo").map((r) => r.id)).toEqual(["solo"]);
   });
+
+  // ask_assistant writes its turns with no parent links. The walk from the
+  // recorded leaf used to stop at that leaf and return the last reply alone.
+  it("reads a conversation whose rows name no parent in the order it was written", () => {
+    const at = (minute: number) =>
+      new Date(`2026-09-25T10:0${String(minute)}:00.000Z`);
+    const rows = [
+      row({ id: "reply-2", role: "assistant", createdAt: at(3) }),
+      row({ id: "ask-1", createdAt: at(0) }),
+      row({ id: "reply-1", role: "assistant", createdAt: at(1) }),
+      row({ id: "ask-2", createdAt: at(2) }),
+    ];
+    expect(walkActiveBranch(rows, "reply-2").map((r) => r.id)).toEqual([
+      "ask-1",
+      "reply-1",
+      "ask-2",
+      "reply-2",
+    ]);
+  });
 });
 
 // ── messageToBlocks ───────────────────────────────────────────────────────────

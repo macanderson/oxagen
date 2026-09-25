@@ -98,7 +98,7 @@
                 "properties": {
                   "attemptNo": {
                     "type": "integer",
-                    "minimum": 0
+                    "exclusiveMinimum": 0
                   },
                   "frameSeq": {
                     "type": "string"

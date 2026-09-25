@@ -1,6 +1,6 @@
 # ADR-093: One assembler decides what reaches the agent, and records what it cut
 
-- **Status:** Accepted
+- **Status:** Accepted. Section 7 amended on 2026-09-25 (#4158).
 - **Date:** 2026-09-18
 - **Owners:** platform
 - **Decided by:** the maintainer, 2026-09-18, approving the architecture review
@@ -137,9 +137,75 @@ and whether the description line is rendered (points 1 and 2).
 
 ### 7. One home, one memory system
 
-`packages/context-provider` becomes the assembler's home and reuses
-`packWithinBudget`. `packages/engram` is deleted or folded in. The in-app
-agent's `assistant-turn.ts` uses the same assembler, so there is one.
+> **Amended 2026-09-25 (#4158).** The original text, below, named
+> `packages/context-provider` as the assembler's home and said the in-app
+> agent's turn uses the same assembler. ADR-144 moved the home, and until this
+> amendment the in-app turn did not call the assembler at all: it appended up
+> to 8,000 characters of workspace instructions through `resolvePrompt`,
+> refused them whole past that, and never read a published record. This
+> section now states what the code does.
+
+**The home.** The assembler is `assembleSteering` in
+`packages/steering-assembler/src/assemble.ts` (ADR-144).
+`packages/context-provider` and `packages/engram` are deleted. The new
+package kept the rule `packWithinBudget` applied (walk best-first, skip what
+does not fit), not the function.
+
+**One read of published records.** `readPublishedSteeringCandidates` in
+`packages/agent/src/runtime/published-steering.ts` reads a workspace's
+active context records and adapts each to a candidate. The policy bundle a
+wrapped agent's host fetches (`packages/handlers/src/lib/tacho-steering.ts`)
+and the in-app assistant's turn both read through it, so a record reads the
+same in both. It lives in `@oxagen/agent` because `@oxagen/handlers` depends
+on that package and not the reverse.
+
+**The in-app turn uses the same assembler.**
+`packages/agent/src/runtime/assistant-steering.ts` assembles each turn's
+steering from two sources:
+
+- Every published record, as the bundle reads them.
+- The workspace's `additionalInstructions`, as one `instruction` item (§3)
+  with force `should` and no instant. Every published `must` record ranks
+  above the instructions, and every published `should` record is listed
+  before them.
+
+The turn delivers `must` and `should`, as the session prefix does. A `may` or
+`info` record is cut for its tier until a channel ranks against the prompt
+(§4). The budget is `ASSISTANT_STEERING_BUDGET_TOKENS`, 4,096 budget tokens:
+a full session prefix (`PREFIX_BUDGET_TOKENS`, 2,000) beside the longest
+instructions `update_prompt_settings` accepts (8,000 characters), with 96
+left for the header and the tier headings. It replaces the 8,000-character
+refusal: an item that does not fit is cut and named, not refused whole.
+
+The text goes into the system prompt after the governance baseline, under a
+header that names both sources and states that the first-listed item wins a
+conflict. The assembler's run context takes a `header` for this, and the
+bundle keeps ADR-091's. `resolvePrompt` is no longer in the path, because
+`chat.system` is append-only and the raw instructions were the only thing it
+appended.
+
+**The manifest is on the in-app run.** Before the engine is asked anything,
+the turn appends a `steering.manifest` event to its ledger attempt, the frame
+kind a wrapped agent's host seals. The inline payload is the manifest's
+summary with three digests: the text the model read, the manifest, and the
+instructions when they were a candidate. The manifest itself is the body,
+which the Run page's Context tab reads. A ledger that refuses the event
+refuses the turn. `context.instructions_applied`, the interim frame of #3303,
+stays registered so the runs sealed before this change still validate.
+
+A failed read of the records does not refuse the turn. The turn runs on the
+instructions alone, and the payload names `record` in `unavailable_kinds`, so
+an unreachable registry never reads as a workspace that published nothing.
+
+**Not yet.** Recalled memory still reaches the in-app turn apart from the
+assembler, capped by `RECALL_LIMIT`. Gate notices and skill descriptions have
+no adapter. Both remain open under #3296.
+
+Original text, 2026-09-18:
+
+> `packages/context-provider` becomes the assembler's home and reuses
+> `packWithinBudget`. `packages/engram` is deleted or folded in. The in-app
+> agent's `assistant-turn.ts` uses the same assembler, so there is one.
 
 ### 8. The two publish paths collapse
 

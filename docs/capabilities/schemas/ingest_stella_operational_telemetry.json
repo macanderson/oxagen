@@ -84,32 +84,32 @@
             },
             "duration_ms": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
             },
             "input_tokens": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
             },
             "output_tokens": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
             },
             "cost_microusd": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
             },
             "tool_call_count": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
             },
             "changed_file_count": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
             },
             "produced_output": {

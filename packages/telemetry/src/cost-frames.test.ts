@@ -594,6 +594,62 @@ describe("readObservedModels", () => {
     }
   });
 
+  // #3281. The ranked read stops at OBSERVED_MODEL_READ_BOUND models by token
+  // volume, so a low-volume unpriced model past it was never compared. A
+  // caller that must see every model walks keyset pages in model-id order.
+  it("reads one keyset page in model-id order when asked for a page", async () => {
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    try {
+      answerBoth(summaryOf(3));
+      await readObservedModels({
+        orgId: ORG,
+        since: SINCE,
+        page: { afterModel: "model-a", size: 3 },
+      });
+      const [summary, classes] = queryMock.mock.calls.map((c) => c[0]);
+      expect(summary!.query).toContain("ORDER BY model\n");
+      expect(summary!.query).not.toContain("ORDER BY tokens DESC");
+      // The cursor filters both frame stores before they are folded.
+      expect(
+        summary!.query.match(/AND toString\(model\) > \{afterModel:String\}/g),
+      ).toHaveLength(2);
+      expect(summary!.query_params).toMatchObject({
+        afterModel: "model-a",
+        limit: 3,
+      });
+      expect(
+        (classes!.query_params.models as string[]).length,
+      ).toBeLessThanOrEqual(3);
+      // A full page is how the caller knows to ask for the next one, not a
+      // bound the read filled.
+      expect(
+        stderr.mock.calls.some((call) =>
+          String(call[0]).includes("observed_model_read_bound"),
+        ),
+      ).toBe(false);
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
+  it("reads the first page with no cursor", async () => {
+    answerBoth(summaryOf(1));
+    await readObservedModels({ orgId: ORG, since: SINCE, page: { size: 5 } });
+    const summary = queryMock.mock.calls[0]![0];
+    expect(summary.query).not.toContain("{afterModel:String}");
+    expect(summary.query_params).not.toHaveProperty("afterModel");
+    expect(summary.query_params.limit).toBe(5);
+  });
+
+  it("refuses a page size that is not a positive integer", async () => {
+    await expect(
+      readObservedModels({ orgId: ORG, since: SINCE, page: { size: 0 } }),
+    ).rejects.toThrow(RangeError);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
   it("says nothing about the bound when the read sits under it", async () => {
     const stderr = vi
       .spyOn(process.stderr, "write")

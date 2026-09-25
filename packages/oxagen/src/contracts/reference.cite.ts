@@ -29,6 +29,9 @@ export const referenceCite = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "low",
+  // Writes the turn's :Execution and a :Citation per mentioned node, and
+  // raises each node's citation count.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Member: "allow" },

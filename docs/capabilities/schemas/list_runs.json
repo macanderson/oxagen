@@ -5,10 +5,15 @@
   "mode": "sync",
   "surfaces": [
     "api",
-    "mcp"
+    "mcp",
+    "agent"
   ],
   "sensitivity": "medium",
-  "agent": null,
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "run"
+  },
   "chain": {
     "produces": [],
     "consumes": [],
@@ -679,7 +684,7 @@
                     "anyOf": [
                       {
                         "type": "integer",
-                        "minimum": 0
+                        "exclusiveMinimum": 0
                       },
                       {
                         "type": "null"

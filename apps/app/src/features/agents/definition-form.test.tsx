@@ -297,6 +297,11 @@ describe("DefinitionForm", () => {
   it("writes the instructions as a multi-line string and the colour into the harness table, and Discard restores the base", () => {
     renderForm();
     const body = screen.getByRole("textbox", { name: "Instructions" });
+    // commit_agent_definition writes only the TOML, so the hint must not promise a compiled harness file (#3508).
+    expect(body).toHaveAccessibleDescription(
+      "Saved in this definition file only. Saving does not regenerate a harness file from it. Keep credentials and personal data out of it: nothing checks for them before a commit.",
+    );
+    expect(body).not.toHaveAccessibleDescription(/compiled/i);
     fireEvent.change(body, {
       target: { value: "Cut the release.\nOpen a PR." },
     });

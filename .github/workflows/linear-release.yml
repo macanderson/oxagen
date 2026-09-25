@@ -66,7 +66,7 @@ jobs:
           echo "Captured $(wc -l < .release/notes.md) lines of release notes for ${RELEASE_TAG}."
 
       - name: Create Linear release
-        uses: linear/linear-release-action@v0
+        uses: linear/linear-release-action@d4af10092984f9bc6d5efa075b242bdf01333463 # v0
         with:
           access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
           # Title + version of the Linear release, taken from the GitHub release.

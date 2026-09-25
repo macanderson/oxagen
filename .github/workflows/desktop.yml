@@ -227,12 +227,13 @@ jobs:
         run: pnpm exec tsx tools/scripts/desktop-build-version.ts stamp "$VERSION"
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable branch
         with:
+          toolchain: stable
           targets: ${{ matrix.triple }}
 
       - name: Cache cargo
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: apps/desktop/src-tauri
 
@@ -334,7 +335,7 @@ jobs:
       - name: Build the app
         id: build
         continue-on-error: ${{ runner.os == 'macOS' }}
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Updater: present → .sig per bundle + latest.json; absent → see above.
@@ -363,7 +364,7 @@ jobs:
 
       - name: Build the app again on macOS
         if: runner.os == 'macOS' && steps.build.outcome == 'failure'
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Updater: present → .sig per bundle + latest.json; absent → see above.

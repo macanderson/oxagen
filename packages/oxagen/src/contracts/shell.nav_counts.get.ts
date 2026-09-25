@@ -20,11 +20,16 @@ export const shellNavCountsGet = registerCapability({
   description:
     "The sidebar's counts for this workspace: pending approvals, open steering proposals and open critical incidents, each null when its read answered nothing.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: false,
   noBillingGate: true,
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
