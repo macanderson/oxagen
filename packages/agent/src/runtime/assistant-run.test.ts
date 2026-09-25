@@ -304,6 +304,7 @@ function fakeStore(
     listRunAttempts: async () => [],
     readAttemptState: async () => ({}) as never,
     readAttemptEventsSince: async () => [],
+    readToolCallsForRuns: async () => new Map(),
     compactSealedAttempts: async () => 0,
     setRunSummary: async () => false,
     getFinalizationHandle: async () => null,
