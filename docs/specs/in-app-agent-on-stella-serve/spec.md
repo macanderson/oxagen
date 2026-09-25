@@ -238,22 +238,30 @@ Shipped with #2968's backend:
 - `ask_assistant` as the turn's contract, with `POST /chat/stream` as its
   streaming adapter; `get_assistant_engine` as the engine-down read.
 
-Shipped with #4175 (ADR-177):
+Shipped with #4175 (ADR-177, ADR-182):
 
 - The goal-shaped turn. `ask_assistant` takes an optional `goal`, which the
   turn sends to the engine as `GoalSpec`. The verifier's calls arrive with the
   `verdict` role and are answered on another tier, and each round's verdict
   is recorded on the run as `verification.goal_verdict` before the seal.
-  Rule authoring is the first caller (`ruleAuthoringGoal`). The witness is
-  `packages/agent/src/runtime/goal-turn.test.ts`: a rule authored across two
-  sources is answered by a graph query, with the engine, the models and the
-  graph simulated as that file's header names.
+  The witness is `packages/agent/src/runtime/goal-turn.test.ts`: a rule
+  authored across two sources is answered by a graph query, with the engine,
+  the models and the graph simulated as that file's header names.
+- Rule authoring sends a goal (ADR-182). `author_graph_rule`, on the API and
+  MCP, takes the rule as data, builds the instruction and the goal
+  (`ruleAuthoringGoal`) on the server, and asks one `ask_assistant` turn with
+  both. `packages/agent/src/handlers/graph.rule.author.test.ts` proves the
+  turn carries that goal through the real kernel. `POST /chat/stream` carries
+  a caller's `goal` too.
 
 Left, each its own change:
 
-- A control in the flyout that marks a turn as rule authoring or schema
-  building, so the app sends the goal the API and MCP already accept, and
-  `goal` on `POST /chat/stream`.
+- A goal-shaped caller for the schema builder, in the shape ADR-182 sets
+  for rules: a capability that takes the schema as data and builds its goal
+  on the server.
+- A control in the app that asks for a rule or a schema. It waits on a graph
+  page, which the rev1 scope note of 2026-09-14 cut, and it calls
+  `author_graph_rule` rather than building a goal of its own.
 - Attachments from the engine's own file system, which this host never
   mounts and refuses.
 - Bumping the client's pinned version and the image tag together when a

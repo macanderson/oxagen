@@ -197,6 +197,25 @@ describe("author_graph_rule sends the rule-authoring goal", () => {
       code: "engine_aborted",
     });
   });
+
+  it("builds a goal under the cap for the longest names the contract accepts", async () => {
+    const longest = {
+      relationshipType: `R${"_".repeat(62)}`,
+      start: {
+        label: `P${"a".repeat(62)}`,
+        source: `${"s".repeat(63)}/${"t".repeat(63)}`,
+      },
+      end: {
+        label: `A${"b".repeat(62)}`,
+        source: `${"u".repeat(63)}/${"v".repeat(63)}`,
+      },
+    };
+
+    await authorRule({ rule: longest });
+
+    const sent = mocks.ask.mock.calls[0]?.[0] as { goal: unknown };
+    expect(sent.goal).toEqual(ruleAuthoringGoal(longest));
+  });
 });
 
 describe("author_graph_rule starts no turn it may not start", () => {
