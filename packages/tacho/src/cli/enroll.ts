@@ -1449,6 +1449,10 @@ async function enrollSteps(
           return !linked;
         });
         let routedOk = false;
+        // The harnesses whose model calls reach the proxy: the base URL is
+        // ours and no managed file overrides it. Only these get a brokered
+        // credential below.
+        const reaching: TachoHarness[] = [];
         try {
           const state = await deps.modelBaseUrls.apply({
             home: deps.home,
@@ -1465,13 +1469,16 @@ async function enrollSteps(
               );
               continue;
             }
-            deps.out(
-              `      ${TACHO_HARNESS_LABELS[entry.harness]} model calls go through 127.0.0.1:${gateway.port} (${entry.key} in ${entry.file})`,
-            );
-            if (entry.shadowedBy !== undefined)
+            if (entry.shadowedBy !== undefined) {
               warnings.push(
                 `${entry.shadowedBy.file} also sets ${entry.key}, and managed settings win, so ${TACHO_HARNESS_LABELS[entry.harness]} model calls are not routed through Oxagen`,
               );
+              continue;
+            }
+            reaching.push(entry.harness);
+            deps.out(
+              `      ${TACHO_HARNESS_LABELS[entry.harness]} model calls go through 127.0.0.1:${gateway.port} (${entry.key} in ${entry.file})`,
+            );
             if (entry.toolSearch !== undefined)
               deps.out(
                 `      ${TACHO_HARNESS_LABELS[entry.harness]} keeps tool search on behind the proxy (env.ENABLE_TOOL_SEARCH=${JSON.stringify(entry.toolSearch.current)})`,
@@ -1484,12 +1491,14 @@ async function enrollSteps(
         }
         // The credential seam (ADR-143). Only once the base URL points at a
         // listening proxy: a harness holding a run token and no route to
-        // the gateway that honours it has no credential at all.
+        // the gateway that honours it has no credential at all. So a
+        // harness whose base URL is not ours, or is overridden by a managed
+        // file, keeps its own credential.
         if (routedOk && writable.length > 0) {
           const mode: CredentialMode = options.credentials ?? "brokered";
           try {
             if (mode === "brokered") {
-              const outcome = await brokerCredentials(host, writable, deps);
+              const outcome = await brokerCredentials(host, reaching, deps);
               for (const entry of outcome.harnesses)
                 deps.out(`      ${describeHarness(entry)}`);
               for (const provider of outcome.taken)

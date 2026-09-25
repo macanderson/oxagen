@@ -1,6 +1,6 @@
 # ADR-126: Keep frame bodies in the WAL and record bounded redaction details
 
-- **Status:** Accepted
+- **Status:** Accepted; the fifth guarantee, open below, is closed by [ADR-185](ADR-185-a-failed-wal-body-write-rolls-back-the-seal.md) (2026-09-25)
 - **Date:** 2026-09-19
 - **Related:** [ADR-100](ADR-100-frame-bodies-are-captured-by-default-redacted-at-the-host-capped-and-governed-by-retention.md), [#3365](https://github.com/macanderson/oxagen/issues/3365), [#3332](https://github.com/macanderson/oxagen/pull/3332), [#3342](https://github.com/macanderson/oxagen/pull/3342)
 

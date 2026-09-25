@@ -69,11 +69,12 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   advancesLatest,
+  artifactDownloadCurl,
   classifyInstaller,
   decidePublication,
   FONT_FILES,
@@ -135,11 +136,25 @@ const NO_COLOUR_ENV = {
   AWS_PAGER: "",
 };
 
-function sh(command, args, { capture = false, allowFailure = false } = {}) {
+/**
+ * Run `command`, exiting with its status when it fails. `input` is written to
+ * its stdin, which is how a secret reaches it: an argument shows in `ps`,
+ * and a failure below prints the arguments.
+ */
+function sh(
+  command,
+  args,
+  { capture = false, allowFailure = false, input = undefined } = {},
+) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
     env: NO_COLOUR_ENV,
-    stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
+    stdio: [
+      input === undefined ? (capture ? "ignore" : "inherit") : "pipe",
+      capture ? "pipe" : "inherit",
+      "inherit",
+    ],
+    ...(input === undefined ? {} : { input }),
   });
   // `status` is null when the process never ran (spawn failed) or was killed
   // by a signal. Coercing that to a number would let "aws was not on PATH" or
@@ -159,6 +174,20 @@ function sh(command, args, { capture = false, allowFailure = false } = {}) {
   }
   return capture ? result.stdout : "";
 }
+
+/**
+ * A temp directory that is removed however the script ends. Most failures
+ * end in `process.exit`, which skips any `finally`, so the removal hangs off
+ * the `exit` event instead. A signal would end the process without that
+ * event, so SIGINT, SIGTERM and SIGHUP exit through it too.
+ */
+function tempDir(prefix) {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"])
+  process.once(signal, () => process.exit(128 + osConstants.signals[signal]));
 
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -369,7 +398,7 @@ async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
         `! ${releaseUrl} does not exist; the page omits the bare-binary link`,
       );
   }
-  const dir = mkdtempSync(join(tmpdir(), "oxagen-downloads-page-"));
+  const dir = tempDir("oxagen-downloads-page-");
   if (advanceLatest(dir, sortInstallers(published), publishedAt)) {
     publishPage(dir, sortInstallers(published), publishedAt, cliRelease);
     invalidate(LATEST_PATHS);
@@ -509,7 +538,7 @@ if (resuming) {
 }
 
 // 1. Collect the build outputs.
-const work = mkdtempSync(join(tmpdir(), "oxagen-downloads-"));
+const work = tempDir("oxagen-downloads-");
 let source = fromDir !== undefined ? resolve(fromDir) : work;
 if (runId !== undefined) {
   const listing = JSON.parse(
@@ -532,19 +561,12 @@ if (runId !== undefined) {
     console.log(
       `↓ ${artifact.name} (${(artifact.size_in_bytes / 1e6).toFixed(0)} MB)`,
     );
-    sh("curl", [
-      "-sSL",
-      "--retry",
-      "5",
-      "--retry-all-errors",
-      "--retry-delay",
-      "10",
-      "-H",
-      `Authorization: Bearer ${token}`,
-      "-o",
-      zip,
-      `https://api.github.com/repos/${repo}/actions/artifacts/${artifact.id}/zip`,
-    ]);
+    const curl = artifactDownloadCurl({
+      token,
+      out: zip,
+      url: `https://api.github.com/repos/${repo}/actions/artifacts/${artifact.id}/zip`,
+    });
+    sh("curl", curl.args, { input: curl.config });
     sh("unzip", ["-q", "-o", zip, "-d", join(work, artifact.name)]);
     rmSync(zip);
   }
