@@ -825,9 +825,7 @@ export async function materializeTools(
               // approval card never renders — the stream appears hung.
               opts.onApprovalRequired?.({
                 approvalId,
-                ...(approval.publicId === undefined
-                  ? {}
-                  : { approvalPublicId: approval.publicId }),
+                approvalPublicId: approval.approvalPublicId,
                 capability: cap.name,
                 inputPreview: input,
                 riskLevel,
