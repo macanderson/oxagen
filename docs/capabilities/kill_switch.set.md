@@ -22,6 +22,8 @@ A switch is enforced in two places, and they are not the whole product:
 - **The tool gateway's per-turn gate** (`packages/agent/src/runtime/kill-switch-gate.ts`). Every tool `materializeTools` presents — a capability the in-app agent may call, and every external MCP tool — is checked against the switches that are on, before the call and again after a person answers an approval or consent card. This is the path that matches `tool_server`, `connection` and `class` switches.
 - **The kernel's agent-run IAM check** (`checkAgentRunIAM`, `packages/iam/src/check-iam.ts`). Emergency denies are consulted here for a call whose context carries an agent run.
 
+A `tool_version` switch on a capability also takes that capability off the list `materializeTools` builds (`packages/agent/src/runtime/toolbelt.ts`), so the model is not shown a tool that every call would refuse. That holds for an agent run and for the in-app agent, which lists its tools as the person who asked. An `agent`, `operator`, `workspace`, `org` or `class` switch leaves the capability list as it is, and the per-turn gate refuses each call it reaches.
+
 A switch **does not** stop a caller that carries neither. A customer agent holding an Oxagen API key against `api.oxagen.sh` or `mcp.oxagen.sh` invokes capabilities with `principalKind: "human"` and no `agentRun`, so `checkIAM` never reaches `checkAgentRunIAM` and no emergency deny is consulted. An `org`, `operator`, `workspace` or `class` switch therefore does not stop that traffic. Governing it means an IAM policy or revoking the key.
 
 State this when an operator asks what a switch covers. An emergency control whose blast radius is overstated is worse than one whose limits are written down.
