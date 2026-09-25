@@ -66,7 +66,7 @@ const {
   setAgentSuspended,
 } = await import("./actions");
 
-const ctx = unsafeMint(WsCtx, {
+const CTX_FIELDS = {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   orgId: "7a000000-0000-4000-8000-0000000000a1",
   orgSlug: "acme",
@@ -76,7 +76,8 @@ const ctx = unsafeMint(WsCtx, {
   wsSlug: "core-platform",
   wsName: "Core platform",
   wsRole: "member",
-});
+} as const;
+const ctx = unsafeMint(WsCtx, CTX_FIELDS);
 
 const AT = "2026-09-15T09:00:00.000Z";
 /** The CapabilityContext every write reaches the kernel with. */
@@ -1226,7 +1227,9 @@ describe("readAssignableRoles", () => {
   it.each(["member", "billing", "compliance", "viewer"] as const)(
     "refuses a %s before the catalogue is read (negative)",
     async (orgRole) => {
-      requireViewer.mockResolvedValue({ ...ctx, orgRole });
+      requireViewer.mockResolvedValue(
+        unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole }),
+      );
       expect(await readAssignableRoles("acme", "core-platform")).toEqual({
         ok: false,
         reason: "denied",
@@ -1237,7 +1240,9 @@ describe("readAssignableRoles", () => {
   );
 
   it("reads the catalogue for an org Owner", async () => {
-    requireViewer.mockResolvedValue({ ...ctx, orgRole: "owner" });
+    requireViewer.mockResolvedValue(
+      unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: "owner" }),
+    );
     kernelRead.mockResolvedValue(
       catalogue([roleRow("Agent Observer", { isSystemDefault: true })]),
     );
