@@ -116,6 +116,20 @@ runStreamRoute.get("/", async (c) => {
           if (!closed) cursor = frame.cursor;
         }
         if (closed) break;
+        // The frame store refused the read. The page is empty for that reason
+        // alone, so it is neither a seal nor a quiet run. Stop with the named
+        // error rather than re-read at once: the refusal is ClickHouse's memory
+        // cap, and another read straight after it adds to that load (#4243).
+        if (page.framesError !== undefined) {
+          write(
+            `event: error\ndata: ${JSON.stringify({
+              message: page.framesError.message,
+              code: page.framesError.code,
+              cursor: cursor ?? null,
+            })}\n\n`,
+          );
+          break;
+        }
         if (page.frames.frames.length > 0) deadline = Date.now() + IDLE_MS;
         // A sealed or halted run whose page had nothing behind it is done:
         // nothing will ever lie past it. A `live` run with a null cursor is
@@ -247,5 +261,6 @@ function readRun(
   ) as Promise<{
     run: { status: "live" | "sealed" | "halted" };
     frames: { frames: { cursor: string }[]; cursor: string | null };
+    framesError?: { code: string; message: string };
   }>;
 }

@@ -92,8 +92,13 @@ interface ToolUsageRow extends Record<string, unknown> {
   declared_public_id: string | null;
   call_count: number;
   failed_call_count: number;
-  first_invoked_at: Date;
-  last_invoked_at: Date;
+  /**
+   * A raw `tx.execute` on postgres-js returns `timestamptz` as Postgres text
+   * (`2026-09-24 12:34:56.789+00`), not a Date. Drizzle only maps it to a Date
+   * through a typed column (#4244).
+   */
+  first_invoked_at: Date | string;
+  last_invoked_at: Date | string;
 }
 
 /**
@@ -236,8 +241,9 @@ const MERGE_INVOKED_EDGES_CYPHER = /* cypher */ `
     i.updatedAt = datetime()
 `;
 
-function toIso(d: Date): string {
-  return d.toISOString();
+/** Normalize either timestamp shape to the ISO form Cypher's datetime() reads. */
+function toIso(value: Date | string): string {
+  return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
 /**
