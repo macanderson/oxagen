@@ -49,7 +49,11 @@ import {
   type TokenCounts,
   type ToolCallFrame,
 } from "./cost-rollup";
-import { loadPriceBook, type PriceBook } from "./price-book";
+import {
+  loadPriceBookSlice,
+  type PriceBook,
+  type PriceBookSlice,
+} from "./price-book";
 
 /**
  * Both spellings of each call event. The in-app assistant writes
@@ -341,7 +345,12 @@ export interface RunRollupDeps {
     run: FrameRunRef;
   }) => Promise<ModelCallFrame[]>;
   readToolCalls: (source: RunSource) => Promise<ToolCallFrame[]>;
-  loadPriceBook: (args: { orgId: string }) => Promise<PriceBook>;
+  /**
+   * The rows that could price the run's models over its span, never the
+   * whole book: the whole history is tens of thousands of rows, and loading
+   * it per run ran the API out of heap (#4202).
+   */
+  loadPriceBook: (slice: PriceBookSlice) => Promise<PriceBook>;
   readCarried: (
     runId: string,
   ) => Promise<Pick<RunTotalsRecord, "accepted" | "productiveRatio"> | null>;
@@ -651,7 +660,7 @@ const productionRunRollupDeps: RunRollupDeps = {
           workspaceId: source.meta.workspaceId,
           rootSessionUuid: source.frames.rootSessionUuid,
         }),
-  loadPriceBook,
+  loadPriceBook: loadPriceBookSlice,
   readCarried,
   readVerdict: (scope, runId) =>
     withSystemDb((tx) => readRunVerdict(tx, scope, runId)),
@@ -660,6 +669,31 @@ const productionRunRollupDeps: RunRollupDeps = {
   write: upsertRunTotals,
   now: () => new Date(),
 };
+
+/**
+ * The part of the book a run's model calls can be priced from: the models
+ * they name, from the first call to the last. No calls gives no models, and
+ * the loader answers that with no rows.
+ */
+export function runPriceSlice(
+  orgId: string,
+  calls: readonly ModelCallFrame[],
+): PriceBookSlice {
+  let from = Number.POSITIVE_INFINITY;
+  let to = Number.NEGATIVE_INFINITY;
+  const models = new Set<string>();
+  for (const call of calls) {
+    models.add(call.model);
+    const at = call.at.getTime();
+    if (at < from) from = at;
+    if (at > to) to = at;
+  }
+  if (models.size === 0) {
+    const epoch = new Date(0);
+    return { orgId, models: [], from: epoch, to: epoch };
+  }
+  return { orgId, models: [...models], from: new Date(from), to: new Date(to) };
+}
 
 /**
  * Rebuild one run's `cost.run_totals` row from its frames. Returns the row,
@@ -676,15 +710,22 @@ export async function rebuildRunTotals(
     orgId: source.meta.orgId,
     workspaceId: source.meta.workspaceId,
   };
-  const [modelCalls, toolCalls, book, carried, verdict, workerId] =
+  // The book waits for the model calls, because which rows to load is the
+  // models they name over the span they cover.
+  const pricedCalls = deps
+    .readModelCalls({
+      orgId: source.meta.orgId,
+      workspaceId: source.meta.workspaceId,
+      run: source.frames,
+    })
+    .then(async (calls) => ({
+      calls,
+      book: await deps.loadPriceBook(runPriceSlice(source.meta.orgId, calls)),
+    }));
+  const [{ calls: modelCalls, book }, toolCalls, carried, verdict, workerId] =
     await Promise.all([
-      deps.readModelCalls({
-        orgId: source.meta.orgId,
-        workspaceId: source.meta.workspaceId,
-        run: source.frames,
-      }),
+      pricedCalls,
       deps.readToolCalls(source),
-      deps.loadPriceBook({ orgId: source.meta.orgId }),
       deps.readCarried(publicId),
       deps.readVerdict(scope, publicId),
       deps.readWitnessedRun(scope, publicId),

@@ -69,6 +69,12 @@ interface SummaryStep {
   input: string | null;
   /** The response half's body — the result the summary describes. */
   text: string | null;
+  /**
+   * The call was made and never completed: a request with no response. It
+   * has no result, which the prompt says, so the model cannot read the
+   * missing body as a result that was not kept.
+   */
+  unfinished: boolean;
 }
 
 /**
@@ -103,17 +109,25 @@ export async function collectSummarySteps(
     const { opening } = fold;
     // The response half is the result; a producer that appends a single
     // terminal receipt records it there too, so `opening` is only read when
-    // the fold has no response half at all.
+    // the fold has neither half. A request with no response is a call that
+    // never completed (a failed or abandoned attempt): it has no result, and
+    // reading its opening would hand the model the input as what came back
+    // (#3370).
+    const result = fold.response ?? (fold.request === null ? opening : null);
     steps.push({
       seq: opening.seq,
       kind: fold.kind,
       label: opening.summary,
       input: await bodyText(fold.request),
-      text: await bodyText(fold.response ?? opening),
+      text: await bodyText(result),
+      unfinished: fold.request !== null && fold.response === null,
     });
   }
   return { steps, total: folds.length };
 }
+
+/** What the prompt says in place of the result of a call that never completed. */
+const UNFINISHED_CALL = "(no result: the call never completed)";
 
 export function summaryPrompt(
   runPublicId: string,
@@ -123,7 +137,11 @@ export function summaryPrompt(
     [
       `[${step.seq}] ${step.kind} ${step.label}`,
       ...(step.input === null ? [] : [`called with: ${step.input}`]),
-      step.text === null ? "(body not retained)" : step.text,
+      step.unfinished
+        ? UNFINISHED_CALL
+        : step.text === null
+          ? "(body not retained)"
+          : step.text,
     ].join("\n"),
   );
   const cut =

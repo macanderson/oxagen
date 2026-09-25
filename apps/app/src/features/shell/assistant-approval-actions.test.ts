@@ -51,7 +51,9 @@ beforeEach(() => {
   source.approvals.pending.mockResolvedValue(
     ok({ items: [pendingItem], more: false }),
   );
-  source.approvals.resolved.mockResolvedValue(ok([resolvedItem]));
+  source.approvals.resolved.mockResolvedValue(
+    ok({ items: [resolvedItem], more: false }),
+  );
 });
 
 describe("readParkedApprovals", () => {
@@ -94,7 +96,7 @@ describe("readParkedApprovals", () => {
   it("answers no execution for a resolved row that records none", async () => {
     const { execution: _none, ...legacy } = resolvedItem;
     source.approvals.resolved.mockResolvedValue(
-      ok([{ ...legacy, resolution: "denied" }]),
+      ok({ items: [{ ...legacy, resolution: "denied" }], more: false }),
     );
     const result = await readParkedApprovals("acme", "core", RUN);
     expect(result.ok && result.value.rows[1]).toMatchObject({

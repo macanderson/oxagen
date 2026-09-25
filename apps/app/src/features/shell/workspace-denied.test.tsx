@@ -48,6 +48,7 @@ function sourceWith(
       preferences: unread,
       counts: unread,
       notifications: unread,
+      assistantEngine: unread,
     },
   };
 }
