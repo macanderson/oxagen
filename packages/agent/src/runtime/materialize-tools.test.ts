@@ -151,12 +151,21 @@ const killSwitchMocks = vi.hoisted(() => ({
     async (_facts: { capabilityId: string; readOnly: boolean }) =>
       null as unknown,
   ),
+  /** The acting agent each gate was created with (its third argument). */
+  actingAgents: [] as unknown[],
 }));
 vi.mock("./kill-switch-gate", async (importOriginal) => {
   const real = await importOriginal<typeof import("./kill-switch-gate")>();
   return {
     ...real,
-    createKillSwitchGate: () => ({ check: killSwitchMocks.check }),
+    createKillSwitchGate: (
+      _ctx: unknown,
+      _reads?: unknown,
+      actingAgent?: unknown,
+    ) => {
+      killSwitchMocks.actingAgents.push(actingAgent);
+      return { check: killSwitchMocks.check };
+    },
   };
 });
 
@@ -348,10 +357,14 @@ vi.mock("@oxagen/iam", async () => {
   const live = await vi.importActual<
     typeof import("@oxagen/iam/live-agent-run-authorization")
   >("@oxagen/iam/live-agent-run-authorization");
+  const scopes = await vi.importActual<
+    typeof import("@oxagen/iam/resource-scope")
+  >("@oxagen/iam/resource-scope");
   return {
     emitAudit: iamMocks.emitAudit,
     matchEmergencyDeny: live.matchEmergencyDeny,
     readActiveEmergencyDenies: iamMocks.readActiveEmergencyDenies,
+    resourceScopeDigestOf: scopes.resourceScopeDigestOf,
   };
 });
 
@@ -361,7 +374,7 @@ import {
   type MaterializeOptions,
 } from "./materialize-tools";
 import { decideCapabilityForBelt } from "./toolbelt";
-import type { ActiveEmergencyDeny } from "@oxagen/iam";
+import { resourceScopeDigestOf, type ActiveEmergencyDeny } from "@oxagen/iam";
 import type { RegistryCapability } from "../registry-loader";
 import {
   invoke,
@@ -2308,7 +2321,7 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
     agentRun: null | "observer" | "contributor" | "unresolved";
     opts: Pick<
       MaterializeOptions,
-      "allowlist" | "excludeCapabilities" | "riskCeiling"
+      "allowlist" | "excludeCapabilities" | "riskCeiling" | "actingAgent"
     >;
     /** What `readActiveEmergencyDenies` answers; both sides see the rows. */
     emergencyDenies?: ActiveEmergencyDeny[];
@@ -2322,6 +2335,20 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
     capabilityId,
     resourceScopeDigest: null,
     principalId,
+    reason: "incident",
+  });
+  /** The workspace's assistant agent, as its turn passes it. */
+  const ASSISTANT = { agentId: "agt_assistant", principalId: "prn_assistant" };
+  /** An `agent` switch on the assistant: the row `set_kill_switch` writes. */
+  const assistantSwitch = (): ActiveEmergencyDeny => ({
+    publicId: "edn_agent",
+    denyKind: "resource_scope",
+    capabilityId: null,
+    resourceScopeDigest: resourceScopeDigestOf({
+      kind: "agent",
+      id: ASSISTANT.agentId,
+    }),
+    principalId: null,
     reason: "incident",
   });
   const PARITY: [string, ParityScenario][] = [
@@ -2363,6 +2390,42 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
         emergencyDenies: [killSwitch("capA", "prn_someone_else")],
       },
     ],
+    // R4 (#3370, finding 9): a person's turn, the in-app assistant's, carries
+    // no agent run. A switch that names no principal still cuts its tool.
+    [
+      "a person's turn under a kill switch on capA",
+      { agentRun: null, opts: {}, emergencyDenies: [killSwitch("capA")] },
+    ],
+    [
+      "a kill switch naming a principal leaves a person's belt whole",
+      {
+        agentRun: null,
+        opts: {},
+        emergencyDenies: [killSwitch("capA", AGENT_PRN)],
+      },
+    ],
+    // The in-app assistant's turn also answers to the agent it runs as: a
+    // deny naming that agent's principal, or an `agent` switch on it.
+    [
+      "the assistant's turn under a deny naming its agent's principal",
+      {
+        agentRun: null,
+        opts: { actingAgent: ASSISTANT },
+        emergencyDenies: [killSwitch("capA", ASSISTANT.principalId)],
+      },
+    ],
+    [
+      "the assistant's turn under an agent switch on its agent",
+      {
+        agentRun: null,
+        opts: { actingAgent: ASSISTANT },
+        emergencyDenies: [assistantSwitch()],
+      },
+    ],
+    [
+      "an agent switch on the assistant leaves a person's own belt whole",
+      { agentRun: null, opts: {}, emergencyDenies: [assistantSwitch()] },
+    ],
   ];
   it.each(PARITY)(
     "lists exactly the tools the shared belt decision keeps: %s",
@@ -2383,14 +2446,24 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
         ctx,
         scenario.opts,
       );
-      // The read happens once, and only for a resolved agent run: a human
-      // turn and a fail-closed run list nothing the kill switch could cut.
+      // The read happens once for every caller, a person's turn included. A
+      // fail-closed run skips it: it lists no capability tool a switch could
+      // cut.
       expect(iamMocks.readActiveEmergencyDenies).toHaveBeenCalledTimes(
-        resolution === undefined ? 0 : 1,
+        scenario.agentRun === "unresolved" ? 0 : 1,
       );
+      // A person's turn carries no principal ids, so only a deny that names
+      // no principal reaches it. The assistant's turn carries its agent's.
+      const principals: string[] =
+        agentRun !== null
+          ? [AGENT_PRN, HUMAN_PRN]
+          : scenario.opts.actingAgent
+            ? [ASSISTANT.principalId]
+            : [];
       for (const deny of emergencyDenies) {
-        const name = deny.capabilityId ?? "";
-        if (deny.principalId === null || deny.principalId === AGENT_PRN)
+        if (deny.capabilityId === null) continue;
+        const name = deny.capabilityId;
+        if (deny.principalId === null || principals.includes(deny.principalId))
           expect(tools[name]).toBeUndefined();
         else expect(tools[name]).toBeDefined();
       }
@@ -2420,6 +2493,7 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
             now: new Date(),
             clientIp: null,
             emergencyDenies,
+            actingAgent: scenario.opts.actingAgent ?? null,
             entitledPluginIds: new Set<string>(),
           }),
         }),
@@ -2443,6 +2517,26 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
       }
     },
   );
+
+  it("an agent switch on the assistant empties the assistant's capability belt and reaches its call gate, and leaves a person's own turn alone", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([assistantSwitch()]);
+    killSwitchMocks.actingAgents.length = 0;
+
+    const assistantTurn = await materializeTools(CTX, {
+      actingAgent: ASSISTANT,
+    });
+    expect(Object.keys(assistantTurn.tools)).toEqual([]);
+    const personTurn = await materializeTools(CTX);
+    expect(Object.keys(personTurn.tools).sort()).toEqual([
+      "capA",
+      "capB",
+      "fill_form",
+    ]);
+    // The call gate of the assistant's turn carries its agent, so the switch
+    // refuses the call there too (kill-switch-gate.test.ts). A person's gate
+    // carries none.
+    expect(killSwitchMocks.actingAgents).toEqual([ASSISTANT, null]);
+  });
 });
 
 // ── Agent RBAC Phase 4a: MCP rule enforcement (spec §3.7) ────────────────────
