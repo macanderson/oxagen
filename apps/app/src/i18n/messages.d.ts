@@ -7606,6 +7606,15 @@ type Messages = {
       close: string;
       thinking: string;
       recordedAs: string;
+      cost: {
+        label: string;
+        pending: string;
+        notRecorded: string;
+        unread: string;
+        basisNotRecorded: string;
+        estimate: string;
+        incomplete: string;
+      };
       stopped: string;
       parked: string;
       parkedCard: {
