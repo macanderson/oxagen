@@ -84,7 +84,7 @@ fold, and the client fold introduced with #3345.
 - The ledger path of `get_run_turns` counts steps from the fold. The wrapped
   path still counts in ClickHouse SQL, a second definition, until each frame
   carries its step key from ingest. That change needs a ClickHouse migration
-  and has its own issue.
+  and has its own issue, #4308.
 - The page's figures and counts share the transcript read's 10,000-frame cap,
   and say so when a run passes it, as they did before.
 - A search can read every retained body of a run, so it is bounded per read
