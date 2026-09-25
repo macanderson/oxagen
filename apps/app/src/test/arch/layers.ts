@@ -309,7 +309,10 @@ const PLATFORM_NAMED_ROWS: Readonly<
     "@oxagen/oxagen/skill-frontmatter": ["readSkillFrontmatter"],
   },
   "src/shared/skill-source-identity.ts": {
-    "@oxagen/oxagen/skill-frontmatter": ["readSkillFrontmatter"],
+    "@oxagen/oxagen/skill-frontmatter": [
+      "readSkillFrontmatter",
+      "renameSkillFrontmatterName",
+    ],
   },
   // The org gate's Require SSO lookup asks one question of billing: does the
   // organisation's plan include SSO (ADR-145). The same single tier read the
