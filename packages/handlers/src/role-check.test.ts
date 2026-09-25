@@ -100,6 +100,10 @@ const ROLE_CHECKED_CONTRACTS = [
   // A verdict on an assistant reply (#4169) takes ask_assistant's roles, and
   // ask_assistant asserts them in its turn, so this handler asserts them too.
   "record_reply_feedback",
+  // The role catalogue, its scopes and the enforcement tier. The contract
+  // declares Owner, Admin and Compliance; the app's own check was the only
+  // gate until the handler asserted them too.
+  "list_iam_roles",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

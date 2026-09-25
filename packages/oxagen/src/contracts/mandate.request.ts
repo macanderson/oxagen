@@ -18,6 +18,7 @@ export const mandateRequest = registerCapability({
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "governance" },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   // Matches the handler's own assertOrgRole call (ACCOUNTABLE_ORG_ROLES:
   // Owner/Admin/Billing/Compliance; workspace Owner/Member); the previous

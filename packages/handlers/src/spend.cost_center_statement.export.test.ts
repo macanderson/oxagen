@@ -1,5 +1,6 @@
 import {
   COST_CENTER_STATEMENT_COLUMNS,
+  COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT,
   spendCostCenterStatementExport,
 } from "@oxagen/oxagen/contracts/spend.cost_center_statement.export";
 import {
@@ -77,13 +78,21 @@ const fixtureRuns: RunTotalsRecord[] = [
   }),
 ];
 
+// A fake store that reads the way readOrgRunTotals does: the month's rows,
+// oldest first by (startedAt, runId).
 function harness(runs: RunTotalsRecord[]) {
   const readRunTotals = vi.fn(
     async (_orgId: string, q: { from: string; to: string }) =>
-      runs.filter((r) => {
-        const day = r.startedAt.toISOString().slice(0, 10);
-        return day >= q.from && day <= q.to;
-      }),
+      runs
+        .filter((r) => {
+          const day = r.startedAt.toISOString().slice(0, 10);
+          return day >= q.from && day <= q.to;
+        })
+        .sort(
+          (a, b) =>
+            a.startedAt.getTime() - b.startedAt.getTime() ||
+            (a.runId < b.runId ? -1 : a.runId > b.runId ? 1 : 0),
+        ),
   );
   return {
     handler: createCostCenterStatementHandler({ readRunTotals }),
@@ -190,6 +199,9 @@ describe("export_cost_center_statement", () => {
       pricedRun(9n, { startedAt: new Date("2026-10-01T00:00:00.000Z") }),
     ]);
     const out = await handler({ month: "2026-09", format: "csv" }, ctx());
+    // One read of the month. Keyset pages over an org-wide filter no index
+    // leads with rescanned the whole month for every page.
+    expect(readRunTotals).toHaveBeenCalledOnce();
     expect(readRunTotals).toHaveBeenCalledWith(SCOPE.orgId, {
       from: "2026-09-01",
       to: "2026-09-30",
@@ -201,5 +213,105 @@ describe("export_cost_center_statement", () => {
     const out = await exported([]);
     expect(out.lines).toEqual([]);
     expect(out.total).toEqual({ runs: 0, unpricedRuns: 0, cost: null });
+  });
+  // #3750. The read took every column of every run row in the month, and
+  // each line listed every run id in the data and again in the CSV. The read
+  // now selects the six columns it uses, and the data lists the oldest ids
+  // per line.
+  it("lists the oldest run ids on a line and counts the rest, with every id in the CSV", async () => {
+    const extra = 7;
+    const many = Array.from(
+      { length: COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT + extra },
+      (_, i) =>
+        pricedRun(10n, {
+          costCenter: ENG,
+          startedAt: new Date(Date.UTC(2026, 8, 2, 0, 0, i)),
+        }),
+    );
+    const out = await exported(many);
+    const [line] = out.lines;
+    expect(line!.runs).toBe(many.length);
+    expect(line!.runIds).toEqual(
+      many
+        .slice(0, COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT)
+        .map((r) => r.runId),
+    );
+    expect(line!.runIdsOmitted).toBe(extra);
+    const runIds = COST_CENTER_STATEMENT_COLUMNS.indexOf("run_ids");
+    const row = out.content
+      .trimEnd()
+      .split("\n")
+      .map((r) => r.split(","))
+      .find((c) => c[0] === "cost_center")!;
+    expect(row[runIds]!.split(" ")).toEqual(many.map((r) => r.runId));
+  });
+
+  // #3750. Each run overwrote its line's currency, so a line or the total
+  // holding USD and EUR runs added their micros and labelled the sum with the
+  // last run's currency. A second currency now refuses the statement.
+  it("refuses a line whose priced runs carry two currencies", async () => {
+    const { handler } = harness([
+      pricedRun(1_000_000n, {
+        costCenter: ENG,
+        currency: "USD",
+        startedAt: new Date("2026-09-02T09:00:00.000Z"),
+      }),
+      pricedRun(2_000_000n, {
+        costCenter: ENG,
+        currency: "EUR",
+        startedAt: new Date("2026-09-03T09:00:00.000Z"),
+      }),
+    ]);
+    const refusal = handler({ month: "2026-09", format: "csv" }, ctx());
+    await expect(refusal).rejects.toMatchObject({
+      code: "conflict",
+      reason: "statement_mixed_currency",
+    });
+    await expect(refusal).rejects.toThrow(/USD and in EUR/);
+  });
+
+  it("refuses a total whose lines carry different currencies", async () => {
+    const { handler } = harness([
+      pricedRun(1_000_000n, {
+        costCenter: ENG,
+        currency: "USD",
+        startedAt: new Date("2026-09-02T09:00:00.000Z"),
+      }),
+      pricedRun(2_000_000n, {
+        costCenter: MKT,
+        currency: "EUR",
+        startedAt: new Date("2026-09-03T09:00:00.000Z"),
+      }),
+    ]);
+    await expect(
+      handler({ month: "2026-09", format: "csv" }, ctx()),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "statement_mixed_currency",
+    });
+  });
+
+  it("labels a line with its priced runs' currency and ignores an unpriced run's", async () => {
+    const out = await exported([
+      pricedRun(1_000_000n, {
+        costCenter: ENG,
+        currency: "EUR",
+        startedAt: new Date("2026-09-02T09:00:00.000Z"),
+      }),
+      run({
+        costCenter: ENG,
+        currency: "USD",
+        startedAt: new Date("2026-09-03T09:00:00.000Z"),
+      }),
+    ]);
+    expect(out.lines[0]!.cost).toMatchObject({
+      micros: "1000000",
+      currency: "EUR",
+    });
+    expect(out.total.cost).toMatchObject({
+      micros: "1000000",
+      currency: "EUR",
+    });
+    expect(out.total.unpricedRuns).toBe(1);
   });
 });

@@ -15,6 +15,7 @@ export const connectionUpdate = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "connection" },
   sensitivity: "low",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

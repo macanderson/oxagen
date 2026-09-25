@@ -7,6 +7,16 @@ describe("notifications.list contract", () => {
     expect(notificationsList.domain).toBe("notification");
   });
 
+  it("declares a low-risk read on the agent surface", () => {
+    expect(notificationsList.surfaces).toContain("agent");
+    expect(notificationsList.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "read",
+    });
+    expect(notificationsList.mutates).toBe(false);
+  });
+
   it("parses valid input with defaults", () => {
     const parsed = notificationsList.input.parse({});
     expect(parsed.unreadOnly).toBe(false);

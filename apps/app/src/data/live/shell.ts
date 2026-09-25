@@ -1,6 +1,7 @@
 // The shell port on the kernel (ARCHITECTURE.md §3.3): the organizations the
 // viewer belongs to (list_orgs), the current organization's workspaces
-// (list_workspaces), and the person's own clock (get_user_preferences).
+// (list_workspaces), and the person's own clock and composer keys
+// (get_user_preferences).
 import "server-only";
 import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
@@ -99,7 +100,12 @@ export const shell: DataSource["shell"] = {
       reportUnsupportedTimeZone(ctx.orgId, ctx.userId, stored);
       timeZone = DEFAULT_TIME_ZONE;
     }
-    return readOk(ViewerPreferences.parse({ timeZone }));
+    return readOk(
+      ViewerPreferences.parse({
+        timeZone,
+        enterToSubmit: read.value.enterToSubmit,
+      }),
+    );
   },
   async counts(ctx) {
     const read = await kernelRead(ctx, {

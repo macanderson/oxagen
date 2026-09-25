@@ -167,6 +167,21 @@ export class KillSwitchDeniedError extends Error {
   }
 }
 
+/**
+ * The managed agent a person's turn runs as in the record: the in-app
+ * assistant's `qa-chat` agent (assistant-run.ts). That turn calls tools as the
+ * person (ADR-053 §1) and carries no agent run, so without this a switch on
+ * the agent would not reach it. IAM still checks the person. Only the
+ * assistant's turn passes one: a person's own calls, and every other caller
+ * of `materializeTools`, are not answerable to a switch on the assistant.
+ */
+export interface ActingAgent {
+  /** The agent's public id (`agt_…`), the id an `agent` switch digests. */
+  readonly agentId: string;
+  /** Its IAM principal, once a turn has provisioned it; null before that. */
+  readonly principalId: string | null;
+}
+
 export interface KillSwitchGate {
   /**
    * The switch that stops this call, or null when it is open. A
@@ -183,11 +198,14 @@ function sameGeneration(a: DenyGenerationVector, b: DenyGenerationVector) {
 /**
  * One gate per materialization, sharing one snapshot across every tool of
  * the turn. The execute closures run outside the route's tenant scope, so the
- * gate re-enters it for its reads.
+ * gate re-enters it for its reads. `actingAgent` names the agent a person's
+ * turn runs as, so a switch on that agent stops the turn's calls. An agent
+ * run on the context takes precedence over it.
  */
 export function createKillSwitchGate(
   ctx: CapabilityContext,
   reads: KillSwitchGateReads = postgresKillSwitchReads,
+  actingAgent: ActingAgent | null = null,
 ): KillSwitchGate {
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
   let snapshot: KillSwitchSnapshot | null = null;
@@ -221,7 +239,8 @@ export function createKillSwitchGate(
         }
       }
       if (current.switches.length === 0) return null;
-      const agentRun = ctx.agentRun;
+      const agentRun =
+        ctx.agentRun?.principalKind === "agent" ? ctx.agentRun : null;
       return matchKillSwitch(current.switches, {
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
@@ -229,16 +248,15 @@ export function createKillSwitchGate(
         serverId: facts.serverId ?? null,
         connectionId: facts.connectionId ?? null,
         consequenceTags: current.tags.get(facts.capabilityId) ?? [],
-        agentId: agentRun?.principalKind === "agent" ? agentRun.agentId : null,
+        agentId: agentRun?.agentId ?? actingAgent?.agentId ?? null,
         operatorUserId: ctx.userId ?? null,
-        principalIds:
-          agentRun?.principalKind === "agent"
-            ? [
-                agentRun.agentPrincipal.id,
-                ...(agentRun.humanPrincipal
-                  ? [agentRun.humanPrincipal.id]
-                  : []),
-              ]
+        principalIds: agentRun
+          ? [
+              agentRun.agentPrincipal.id,
+              ...(agentRun.humanPrincipal ? [agentRun.humanPrincipal.id] : []),
+            ]
+          : actingAgent?.principalId
+            ? [actingAgent.principalId]
             : [],
       });
     },

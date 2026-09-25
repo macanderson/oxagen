@@ -169,8 +169,7 @@
         "billing": "plan, meters, invoices",
         "audit": "events, incidents, holds"
       },
-      "assistant": "Assistant",
-      "assistantSub": "ask about a run, or change something",
+      "assistantSub": "about runs, agents, and spend",
       "search": "Search",
       "searchSub": "or run an action",
       "notifications": "Notifications",
@@ -218,6 +217,8 @@
           "dark": "Ink",
           "light": "Paper"
         },
+        "enterToSubmit": "Enter sends a message",
+        "enterToSubmitHint": "In the stella composer. When this is off, Enter adds a line and Cmd+Enter or Ctrl+Enter sends.",
         "preview": "Preview",
         "previewDate": "date",
         "previewNumber": "number",
@@ -296,10 +297,44 @@
         "title": "Ask stella",
         "body": "stella reads this workspace’s runs, agents, spend and knowledge graph. Every turn is recorded as a run of its own."
       },
+      "suggestions": {
+        "title": "Ask about this page",
+        "fleet": {
+          "waiting": "Which approvals are waiting on a person, and which one expires first?",
+          "stopped": "Which runs failed or halted in the last 24 hours, and why?",
+          "spend": "Which agent spent the most this week, and on what?"
+        },
+        "run": {
+          "stopped": "Why did run {label} stop?",
+          "cost": "What did run {label} cost, and which model spent the most?",
+          "denied": "Which tool calls in run {label} were denied, and by which rule?"
+        },
+        "spend": {
+          "drivers": "Which agents and models drove this month’s spend?",
+          "operators": "What did each operator spend this month, and on which agents?",
+          "budget": "Will this workspace stay within its budget this month?"
+        },
+        "mandate": {
+          "allows": "What does mandate {label} let its agent do, and what does it route to a person?",
+          "left": "How much authority is left on mandate {label} this period?",
+          "expires": "When does mandate {label} expire, and who granted it?"
+        },
+        "agents": {
+          "cost": "Which agents cost the most this month?",
+          "waiting": "Which agents have approvals waiting on a person?"
+        },
+        "agent": {
+          "runs": "How did {label}’s runs end this week?",
+          "cost": "What did {label} cost this month, and on which models?",
+          "mandate": "What does {label}’s mandate allow, and how much of it is left?"
+        }
+      },
       "composer": {
         "label": "Ask stella",
         "placeholder": "Ask about a run, an agent, or what this is costing…",
         "send": "Send",
+        "sendHintEnter": "Enter to send, Shift+Enter for a new line",
+        "sendHintModEnter": "Cmd+Enter or Ctrl+Enter to send, Enter for a new line",
         "draftTooLong": "This request would exceed the message limit. Your existing draft is unchanged. Send or shorten it, then open the recommendation again."
       },
       "refused": {

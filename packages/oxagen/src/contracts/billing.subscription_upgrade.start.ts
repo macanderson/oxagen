@@ -69,6 +69,9 @@ export const billingSubscriptionUpgradeStart = registerCapability({
   noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "billing" },
   sensitivity: "high",
+  // Opens a Stripe Checkout session, and creates the org's Stripe customer
+  // first when it has none.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Billing: "allow" },

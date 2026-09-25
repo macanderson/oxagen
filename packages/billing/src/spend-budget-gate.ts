@@ -55,6 +55,7 @@ export interface SpendGateDeps {
    *  true when THIS caller won the flip and should deliver the notification. */
   claimThreshold: (args: {
     budgetId: string;
+    orgId: string;
     workspaceId: string | null;
     threshold: number;
     periodStart: Date;
@@ -74,8 +75,8 @@ export interface BudgetThresholdNotice {
 const DEFAULT_TTL_CONFIG_MS = 30_000;
 const DEFAULT_TTL_SPEND_MS = 15_000;
 
-const productionDeps: SpendGateDeps = {
-  loadBudgets: getScopeBudgets,
+// loadBudgets is bound per call to the invocation's org and workspace.
+const productionDeps: Omit<SpendGateDeps, "loadBudgets"> = {
   readSpend: sumSpendCounter,
   now: () => Date.now(),
   claimThreshold: claimBudgetThreshold,
@@ -259,6 +260,7 @@ export async function assertWithinSpendBudget(
       void deps
         .claimThreshold({
           budgetId: budget.id,
+          orgId: budget.orgId,
           workspaceId: budget.workspaceId,
           threshold,
           periodStart: anchor,
@@ -381,11 +383,13 @@ export interface SpendBudgetStatus {
  * one, so hiding it there would strand the row.
  */
 export async function getSpendBudgetStatuses(
+  scope: { orgId: string },
   overrides: Partial<
     Pick<SpendGateDeps, "loadBudgets" | "readSpend" | "now">
   > = {},
 ): Promise<SpendBudgetStatus[]> {
-  const loadBudgets = overrides.loadBudgets ?? listSpendBudgets;
+  const loadBudgets =
+    overrides.loadBudgets ?? (() => listSpendBudgets({ orgId: scope.orgId }));
   const readSpend = overrides.readSpend ?? sumSpendCounter;
   const now = new Date((overrides.now ?? (() => Date.now()))());
 

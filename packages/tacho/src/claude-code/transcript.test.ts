@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { KIND_BODIES } from "../envelope";
 import { normalizeTranscriptLine } from "./transcript";
 
 const AT = "2026-09-08T10:00:00.000Z";
@@ -259,6 +260,45 @@ describe("transcript normalization", () => {
       body: { session_title: "Probe" },
     });
     expect(line({ type: "ai-title", timestamp: "garbage" }).drafts).toEqual([]);
+  });
+});
+
+describe("session titles", () => {
+  const titleBody = KIND_BODIES["oxagen:session_title"];
+
+  it("replaces a credential in a title with its marker", () => {
+    const key = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789";
+    const out = line({ type: "custom-title", customTitle: `debug ${key}` });
+    const shipped = [
+      out.drafts[0]?.body["session_title"],
+      out.totals.session_title,
+      out.title?.text,
+    ];
+    for (const value of shipped) {
+      expect(value).toBeTypeOf("string");
+      expect(value).not.toContain(key);
+      expect(value).toMatch(/^debug /);
+    }
+    expect(out.title?.source).toBe("custom-title");
+  });
+
+  it("cuts a title over 512 units so its frame passes the envelope", () => {
+    const out = line({ type: "ai-title", aiTitle: "t".repeat(600) });
+    const body = out.drafts[0]?.body ?? {};
+    expect(titleBody.safeParse(body).success).toBe(true);
+    expect(body["session_title"]).toBe("t".repeat(512));
+    expect(out.totals.session_title).toBe("t".repeat(512));
+    expect(out.title?.text).toBe("t".repeat(512));
+  });
+
+  it("does not split a surrogate pair at the cut", () => {
+    const out = line({
+      type: "ai-title",
+      aiTitle: `${"t".repeat(511)}\u{1F600}x`,
+    });
+    const text = out.title?.text ?? "";
+    expect(text).toBe("t".repeat(511));
+    expect(titleBody.safeParse({ session_title: text }).success).toBe(true);
   });
 });
 

@@ -1,6 +1,6 @@
 # get_skill_config
 
-Read the published configuration and its version history. `version` selects an earlier public id or version label. With no published version, the result has `enabled = false`.
+Read the published configuration and its version history. `version` selects an earlier public id or version label. With no published version, the result has `enabled = false`. Each version carries `searchable`, which is true only when it was published under the repository binding the workspace holds now. `preview_skill_search` refuses any other version with `skill_repository_changed`.
 
 **Mode:** sync
 
@@ -17,4 +17,4 @@ See [the version 1 configuration format](../specs/skill-resolution-config.md). T
 
 ## App
 
-Open Steering > Skills. Versions shows published history and an editable TOML draft. Opening a PR does not publish it. An organization owner or admin imports repository settings or publishes a verified merged PR.
+Open Steering > Skills. Versions shows published history and an editable TOML draft. The search preview offers only searchable versions. Opening a PR does not publish it. An organization owner or admin imports repository settings or publishes a verified merged PR.
