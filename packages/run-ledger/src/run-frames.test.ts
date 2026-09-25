@@ -347,10 +347,11 @@ describe("the engine's own call halves", () => {
         duration_ms: 4,
       }),
     );
-    // The third word is the approval the Run page pairs the card on.
-    expect(parked.summary).toBe(
-      "create_workspace parked apr_0a1b2c3d4e5f6g7h8j9k0m",
-    );
+    // The approval is a field of the frame, never a word of its label: a
+    // client pairs on the field and has nothing to parse (ADR-182 rule 3).
+    expect(parked.summary).toBe("create_workspace parked");
+    expect(parked.summary).not.toContain("apr_");
+    expect(parked.identity.approvalId).toBe("apr_0a1b2c3d4e5f6g7h8j9k0m");
     expect(parked.identity.toolStatus).toBe("parked");
     // Waiting on a person is not a failure: the errors chip leaves it out.
     expect(frameKinds(parked)).toContain("tools");
@@ -366,6 +367,7 @@ describe("the engine's own call halves", () => {
       }),
     );
     expect(unnamed.summary).toBe("create_workspace parked");
+    expect(unnamed.identity.approvalId).toBeUndefined();
     // A denied call is still an error, and names no approval.
     const denied = ledgerFrame(
       event(4, "tool.engine_call_completed", {

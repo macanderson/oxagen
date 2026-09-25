@@ -149,6 +149,9 @@ export function runFrame(overrides: Partial<RunFrame> = {}): RunFrame {
     observedAt: at(-3000),
     digest: "sha256:5f2d1c8a",
     summary: "anthropic · claude-opus-5 · ok",
+    tool: null,
+    toolStatus: null,
+    approvalId: null,
     body: {
       digest: "sha256:9a1b4e7c",
       bytesRef: "blob://runs/tse_7k2m9q/11",

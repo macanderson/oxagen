@@ -58,8 +58,18 @@ export const RunFrame = z.object({
   observedAt: z.iso.datetime({ offset: true }),
   /** The event's own digest. */
   digest: z.string(),
-  /** A short label the contract built from the event's receipt, never prose. */
+  /**
+   * A short label the contract built from the event's receipt, never prose.
+   * It is for a person to read. A fact the page needs is a field of its own
+   * below, never a word to parse out of this (ADR-182 rule 3).
+   */
   summary: z.string(),
+  /** The tool the frame is about, as its producer named it; null when it names none. */
+  tool: z.string().nullable(),
+  /** How the tool call ended, as its producer recorded it; null when it recorded none. */
+  toolStatus: z.string().nullable(),
+  /** The approval a parked tool call waits on (`apr_…`); null on every other frame. */
+  approvalId: z.string().nullable(),
   body: FrameBody,
   cost: Cost.nullable(),
 });

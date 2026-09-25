@@ -253,6 +253,9 @@ describe("runs.get", () => {
     observedAt: "2026-09-15T08:56:00.000Z",
     digest: "sha256:5f2d",
     summary: "anthropic · claude-opus-5 · ok",
+    tool: null,
+    toolStatus: null,
+    approvalId: null,
     body: {
       digest: "sha256:9a1b",
       bytesRef: "blob://x",
@@ -284,6 +287,35 @@ describe("runs.get", () => {
       contract: runGet,
       input: { runId: "tse_4f0a", frameLimit: 200, waitMs: 0 },
       page: "run",
+    });
+  });
+
+  it("carries a parked receipt's tool, outcome and approval as fields, not as words of its label", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        run,
+        frames: {
+          frames: [
+            {
+              ...frame,
+              type: "tool.engine_call_completed",
+              summary: "create_tag parked",
+              tool: "create_tag",
+              toolStatus: "parked",
+              approvalId: "apr_0a1b",
+            },
+          ],
+          cursor: "ZjoyMA",
+        },
+        witnessFor: null,
+      }),
+    );
+    const read = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(read.ok && read.value.frames.frames[0]).toMatchObject({
+      summary: "create_tag parked",
+      tool: "create_tag",
+      toolStatus: "parked",
+      approvalId: "apr_0a1b",
     });
   });
 

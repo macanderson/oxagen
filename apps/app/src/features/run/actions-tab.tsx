@@ -204,7 +204,8 @@ function GovernedActions({
   const steps = stepsOf(frames, open);
   const target = (seq: string | null) => (seq === null ? null : hrefOf(seq));
   const approvalFrame =
-    open.frame !== null && isApprovalFrame(open.frame.type, open.frame.summary);
+    open.frame !== null &&
+    isApprovalFrame(open.frame.type, open.frame.toolStatus);
 
   return (
     <>
@@ -231,7 +232,11 @@ function GovernedActions({
         }}
         hrefs={frames.map((frame) => hrefOf(frame.seq))}
         marks={frames.map((frame) =>
-          markOf(frame.type, decisionOf(entries.get(frame.seq)), frame.summary),
+          markOf(
+            frame.type,
+            decisionOf(entries.get(frame.seq)),
+            frame.toolStatus,
+          ),
         )}
         spent={entry?.cumulativeCost ?? null}
         total={metrics.cost}

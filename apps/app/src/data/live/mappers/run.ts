@@ -103,6 +103,9 @@ export function toRunDetail(
         observedAt: frame.observedAt,
         digest: frame.digest,
         summary: frame.summary,
+        tool: frame.tool,
+        toolStatus: frame.toolStatus,
+        approvalId: frame.approvalId,
         body: {
           digest: frame.body.digest,
           bytesRef: frame.body.bytesRef,

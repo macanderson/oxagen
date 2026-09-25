@@ -648,7 +648,11 @@ describe("parked calls", () => {
       cursor: "4",
       type: "tool.engine_call_completed",
       stage: "tool",
-      summary: "create_workspace parked apr_ws_early",
+      // The label names no approval; the frame's own field does (ADR-182).
+      summary: "create_workspace parked",
+      tool: "create_workspace",
+      toolStatus: "parked",
+      approvalId: "apr_ws_early",
       observedAt: releaseAt(4),
     });
     const { container } = await renderTab({
@@ -659,6 +663,7 @@ describe("parked calls", () => {
           type: "tool.engine_call_started",
           stage: "tool",
           summary: "create_workspace",
+          tool: "create_workspace",
           observedAt: releaseAt(3),
         }),
         receipt,

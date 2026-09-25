@@ -22,6 +22,9 @@ type Spec = {
   type: string;
   ms: number;
   summary: string;
+  /** The frame's `tool` and `toolStatus`, which `summary` shows a person. */
+  tool?: string;
+  toolStatus?: string;
   stage: string;
   turn: number | null;
   kind: TranscriptEntry["kind"];
@@ -69,6 +72,7 @@ const SPECS: readonly Spec[] = [
     type: "tool_requested",
     ms: 7698,
     summary: "github__list_pull_requests",
+    tool: "github__list_pull_requests",
     stage: "tool",
     turn: 1,
     kind: "tool_call",
@@ -77,6 +81,7 @@ const SPECS: readonly Spec[] = [
     type: "policy_decision",
     ms: 7705,
     summary: "allow github__list_pull_requests",
+    tool: "github__list_pull_requests",
     stage: "policy",
     turn: 1,
     kind: "policy",
@@ -95,6 +100,8 @@ const SPECS: readonly Spec[] = [
     type: "tool_call",
     ms: 8826,
     summary: "github__list_pull_requests ok",
+    tool: "github__list_pull_requests",
+    toolStatus: "ok",
     stage: "tool",
     turn: 1,
     kind: "tool_call",
@@ -146,6 +153,7 @@ const SPECS: readonly Spec[] = [
     type: "tool_requested",
     ms: 49276,
     summary: "github__create_release",
+    tool: "github__create_release",
     stage: "tool",
     turn: 2,
     kind: "tool_call",
@@ -154,6 +162,7 @@ const SPECS: readonly Spec[] = [
     type: "policy_decision",
     ms: 49283,
     summary: "ask github__create_release",
+    tool: "github__create_release",
     stage: "policy",
     turn: 2,
     kind: "policy",
@@ -163,6 +172,7 @@ const SPECS: readonly Spec[] = [
     type: "approval_request",
     ms: 49290,
     summary: "approval_request github__create_release",
+    tool: "github__create_release",
     stage: "policy",
     turn: 2,
     kind: "policy",
@@ -185,6 +195,9 @@ export function releaseFrames(): RunFrame[] {
       observedAt: at(spec.ms),
       digest: `sha256:ev${String(seq).padStart(2, "0")}`,
       summary: spec.summary,
+      tool: spec.tool ?? null,
+      toolStatus: spec.toolStatus ?? null,
+      approvalId: null,
       body:
         spec.body === "none"
           ? { digest: null, bytesRef: null, redactions: [], fidelity: "full" }
