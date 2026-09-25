@@ -81,7 +81,7 @@ Then wire it into MCP (`apps/mcp/src/tools/<name>.ts`) and CLI (`apps/cli/src/co
 
 **Capabilities expose on surfaces**: `api`, `mcp`, `agent`, `cli`. Default: `["api", "mcp"]`.
 
-**The `layers[]` field** is separate from `surfaces[]` — it tracks which artifacts exist for the capability: `schema`, `api`, `mcp`, `cli`, `agent`, `unit` (test), `e2e`, `docs`, `app`. The `check:manifest` and `check:ui-parity` scripts use `layers[]` to verify parity.
+**The `layers[]` field** is separate from `surfaces[]` — it tracks which artifacts exist for the capability: `schema`, `api`, `mcp`, `cli`, `unit` (test), `e2e`, `docs`, `app`. There is no `agent` layer: the agent surface is declared in `surfaces[]` alone. The `check:manifest` and `check:ui-parity` scripts use `layers[]` to verify parity.
 
 **The `agent` metadata field** on contracts controls agent-facing behavior: `{ requiresApproval, riskLevel, category }`. `requiresApproval: true` pauses the call for a person's approval only on the agent surface, when an in-app agent turn calls it, because the `api` and `mcp` surfaces do not read the flag.
 

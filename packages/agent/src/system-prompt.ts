@@ -17,10 +17,12 @@
  * Composition, in order:
  *  1. This baseline. `chat.system` accepts no customer override (ADR-097), so
  *     the baseline is always Oxagen's text.
- *  2. The workspace's own instructions, appended by `resolvePrompt` after the
- *     check in `runtime/workspace-instructions.ts`. Over its character budget
- *     the whole block is refused for the turn and a frame on the run records
- *     why. This block is the only customer-written text in the prompt.
+ *  2. The workspace's steering: its published context records and its own
+ *     instructions, ranked and fitted to a token budget by the one assembler
+ *     (`runtime/assistant-steering.ts`, ADR-093). `assistantSystemPrompt`
+ *     appends the assembled text, and a `steering.manifest` frame on the run
+ *     names every candidate as included or cut. This is the only
+ *     customer-written text in the prompt.
  *
  * Two things reach the model beside the prompt, as context messages marked as
  * system-injected: the page the person is looking at, and memories recalled for
