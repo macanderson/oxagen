@@ -5,6 +5,7 @@ import { agents } from "./agents";
 import { approvals } from "./approvals";
 import { audit } from "./audit";
 import { billing } from "./billing";
+import { conversations } from "./conversations";
 import { mandates } from "./mandates";
 import { onboarding } from "./onboarding";
 import { org } from "./org";
@@ -20,6 +21,7 @@ import { tools } from "./tools";
 export const liveSource: DataSource = {
   pretenant,
   shell,
+  conversations,
   runs,
   approvals,
   agents,
