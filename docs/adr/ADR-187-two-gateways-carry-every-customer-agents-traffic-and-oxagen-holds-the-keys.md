@@ -116,6 +116,14 @@ An operator signs in to Oxagen, opens a run that is still going, and sees it upd
 
 The page reads the run's record as it is written, so nothing waits for the run to seal.
 
+### Work orders
+
+An operator selects one or more work items (issues and tasks), chooses **Send To...**, and picks the harness, the runtime, and the toolbelt the work runs with, or an existing agent that fixes all three. Oxagen creates a work order and launches the agent to do the work, with no step on the operator's machine.
+
+- **The work order stays.** It carries the work items, the definition of done, the brief, the repositories the run may change, and the spend cap, as `work-backlog.md` and `work-in-flight-spec.md` §9 in `macanderson/oxagen-roadmap` already design. What this adds is the harness, runtime, and toolbelt choice, and the automatic launch.
+- **The launch goes to the chosen runtime.** An enrolled machine's local gateway starts the harness headless. A contained runner starts it on a CI runner (ADR-152). A customer-hosted runner starts it in the customer's network. Oxagen starts a process the customer chose and runs no turn itself (ADR-043, ADR-096).
+- **The run is bound to its work order.** Its record carries the work order, so the live run view, the work record, and verification all read from it.
+
 ### Work record
 
 Every run records where its work happened and what it produced: the repository by name, the branch, the local directory, the files it changed, its pull request, the CI status on that pull request, and the issues, tasks, and work orders it relates to. Each change lands on the run's record, so the audit trail holds it.
@@ -163,6 +171,7 @@ These are design choices this record makes. Each needs the maintainer's yes befo
 9. One encryption key per organization in the vault.
 10. Starting another agent needs a grant naming both agents.
 11. Pull request and CI changes arrive by GitHub webhook and are appended to the run's record.
+12. A send that picks a harness, runtime, and toolbelt creates a new version of an agent for that combination, so every run still belongs to one agent with one runtime.
 
 ## Consequences
 
@@ -191,6 +200,6 @@ These are design choices this record makes. Each needs the maintainer's yes befo
 ## Open for acceptance
 
 1. The sensitive-data detection design.
-2. The eleven proposals above.
+2. The twelve proposals above.
 3. How a Codex whole-run token is revoked when the harness restarts.
 4. The first regions for the Oxagen-hosted cloud gateway.
