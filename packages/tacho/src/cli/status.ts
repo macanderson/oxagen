@@ -523,6 +523,12 @@ export async function status(
     );
     if (hooks.missing.length > 0)
       deps.out(`            missing: ${hooks.missing.join(", ")}`);
+    // An enrollment before #3989 wrote `SessionEnd` as an http hook, which is
+    // lost while the daemon is down. Only `tacho enroll` rewrites it.
+    if (hooks.stale.length > 0)
+      deps.out(
+        `            outdated: ${hooks.stale.join(", ")}. Run tacho enroll again to rewrite ${hooks.stale.length === 1 ? "it" : "them"}.`,
+      );
   }
   if (claudeDesktop !== undefined) {
     deps.out(

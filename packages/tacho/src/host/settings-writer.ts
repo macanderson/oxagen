@@ -434,8 +434,23 @@ export interface HookPresence {
   complete: boolean;
   present: HookEventName[];
   missing: HookEventName[];
+  /**
+   * Present events whose Tacho entry has another hook type than this build
+   * writes: the http `SessionEnd` an enrollment before #3989 wrote, which is
+   * lost while the daemon is down. They stay in `present` and leave
+   * `complete` alone, because the detector raises `hooks_removed` whenever
+   * `complete` is false. `tacho enroll` rewrites them.
+   */
+  stale: HookEventName[];
   envOk: boolean;
   disabledByFlag: boolean;
+}
+
+/** The hook type Tacho writes for an event: `http` for telemetry, else `command`. */
+function writtenHookType(event: HookEventName): HookEntry["type"] {
+  return (HTTP_HOOK_EVENTS as readonly string[]).includes(event)
+    ? "http"
+    : "command";
 }
 
 /** Which of Tacho's hooks are installed for this enrollment. */
@@ -449,10 +464,17 @@ export function tachoHookPresence(
       : {};
   const present: HookEventName[] = [];
   const missing: HookEventName[] = [];
+  const stale: HookEventName[] = [];
   for (const event of ALL_HOOK_EVENTS) {
     const groups = settings.hooks?.[event] ?? [];
-    if (groups.some((group) => isTachoGroup(group, enrollmentId))) {
+    const ours = groups.filter((group) => isTachoGroup(group, enrollmentId));
+    if (ours.length > 0) {
       present.push(event);
+      const type = writtenHookType(event);
+      if (
+        ours.some((group) => group.hooks.some((entry) => entry.type !== type))
+      )
+        stale.push(event);
     } else {
       missing.push(event);
     }
@@ -467,6 +489,7 @@ export function tachoHookPresence(
     complete: missing.length === 0 && envOk && !disabledByFlag,
     present,
     missing,
+    stale,
     envOk,
     disabledByFlag,
   };

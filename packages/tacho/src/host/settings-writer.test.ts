@@ -92,6 +92,35 @@ describe("settings writer", () => {
     ]);
   });
 
+  it("names the http SessionEnd an earlier enrollment wrote as outdated, and still counts it present", () => {
+    const current = mergeTachoSettings({}, CONFIG).settings;
+    expect(tachoHookPresence(current, TEST_ENROLLMENT).stale).toEqual([]);
+    const earlier = JSON.parse(JSON.stringify(current)) as typeof current;
+    earlier.hooks = {
+      ...earlier.hooks,
+      SessionEnd: [
+        {
+          hooks: [
+            {
+              type: "http",
+              url: `http://127.0.0.1:47001/hook/${TEST_ENROLLMENT}`,
+              headers: { Authorization: "Bearer $TACHO_LOCAL_TOKEN" },
+              allowedEnvVars: ["TACHO_LOCAL_TOKEN"],
+              timeout: 5,
+            },
+          ],
+        },
+      ],
+    };
+    // `complete` stays true: the detector raises `hooks_removed` whenever it
+    // is false, and an upgrade must not raise that on every enrolled host.
+    expect(tachoHookPresence(earlier, TEST_ENROLLMENT)).toMatchObject({
+      complete: true,
+      missing: [],
+      stale: ["SessionEnd"],
+    });
+  });
+
   it("installs command hooks for enforcement events and http hooks for the rest", () => {
     const entries = tachoHookEntries(CONFIG);
     expect(Object.keys(entries).sort()).toEqual([...ALL_HOOK_EVENTS].sort());
