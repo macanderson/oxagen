@@ -470,8 +470,8 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
    * with a hole in it.
    *
    * One session, one write, one mark. The mark names this recorder alone, so
-   * the rollback cannot reach a sibling the loop has not settled yet — which
-   * a registry-wide snapshot would, by rebuilding every `SessionRecord` and
+   * the rollback cannot reach a sibling the loop has not settled yet. A
+   * registry-wide snapshot would, by rebuilding every `SessionRecord` and
    * detaching the recorders this loop is still holding.
    */
   function recordReconciliation(

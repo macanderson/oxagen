@@ -333,8 +333,8 @@ export function parsePorcelainZ(
  *
  * NUL-delimited rather than the default, because the default C-quotes any
  * path that needs it and this reader must key by the same spelling the
- * porcelain status uses. A rename writes three fields — status, old path,
- * new path — and the new path is the one the run changed.
+ * porcelain status uses. A rename writes three fields (status, old path,
+ * new path), and the new path is the one the run changed.
  */
 export function parseNameStatusZ(
   stdout: string,
@@ -521,7 +521,7 @@ export async function readWorkingTreeChanges(
   // Against a baseline, the question is what this session changed, and work it
   // committed is no longer in `status` at all: the tree is clean and `HEAD` has
   // moved. Comparing the worktree with the current `HEAD` answers a different
-  // question — what is uncommitted now — and a run that committed its work
+  // question, what is uncommitted now, and a run that committed its work
   // recorded none of it. So the tracked half comes from a diff against the
   // commit the session started on, which covers committed and uncommitted
   // alike, and only the untracked half still comes from `status`, because an
