@@ -238,6 +238,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [archive_conversation](conversation.archive.md) | [conversation.archive.ts](../../packages/oxagen/src/contracts/conversation.archive.ts) | api, mcp, agent |
 | [delete_conversation](conversation.delete.md) | [conversation.delete.ts](../../packages/oxagen/src/contracts/conversation.delete.ts) | api, mcp, agent |
 | [export_conversation](conversation.export.md) | [conversation.export.ts](../../packages/oxagen/src/contracts/conversation.export.ts) | api, mcp, agent |
+| [get_conversation](conversation.get.md) | [conversation.get.ts](../../packages/oxagen/src/contracts/conversation.get.ts) | api, mcp |
 | [list_conversation_files](conversation.files.list.md) | [conversation.files.list.ts](../../packages/oxagen/src/contracts/conversation.files.list.ts) | api, mcp, agent |
 | [list_conversations](conversation.list.md) | [conversation.list.ts](../../packages/oxagen/src/contracts/conversation.list.ts) | api, mcp, agent |
 | [post_conversation_message](conversation.chat.md) | [conversation.chat.ts](../../packages/oxagen/src/contracts/conversation.chat.ts) | api, mcp |

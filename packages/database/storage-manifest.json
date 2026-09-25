@@ -1079,6 +1079,16 @@
       "writes": []
     },
     {
+      "domain": "conversation",
+      "name": "get_conversation",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "get_data_plane",
       "reads": [],
@@ -3000,7 +3010,6 @@
       "name": "resolve_approval",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3011,7 +3020,6 @@
       "name": "resolve_mcp_consent",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -4109,7 +4117,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7985ad4a82a22efb8bec53c0e1bb489a0b49032e34208676b0fd8c4d64552640",
+  "contentHash": "e76bef99cdf5ed9369507fc7910a0bf94e4970d82e2ee3a218faadfe786ea1c3",
   "domains": [
     {
       "name": "agent",
@@ -8222,6 +8230,12 @@
         },
         {
           "name": "risk_level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "kind",
           "nullable": false,
           "primaryKey": false,
           "type": "text"

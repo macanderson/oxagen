@@ -113,6 +113,7 @@ export function runtimesSource(reads: {
   };
   const source: DataSource = {
     runtimes,
+    conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,

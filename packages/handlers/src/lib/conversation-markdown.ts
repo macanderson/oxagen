@@ -54,6 +54,12 @@ export interface ConversationExportModel {
 
 // ── Branch walking ────────────────────────────────────────────────────────────
 
+/** The fields a branch walk reads; `get_conversation` walks its own rows too. */
+export type BranchRow = Pick<
+  ExportMessageRow,
+  "id" | "parentMessageId" | "createdAt"
+>;
+
 /**
  * Reconstruct the active branch by walking parent links from the active leaf
  * to the root. Mirrors the app's walk-active-branch helper: when no leaf is
@@ -66,16 +72,28 @@ export interface ConversationExportModel {
  * forever while `path` grows without bound. Stop at the first repeat instead:
  * the branch we return is still the longest acyclic prefix, so a corrupt
  * conversation exports partially rather than hanging the handler.
+ *
+ * A conversation none of whose rows names a parent is linear, and its branch
+ * is every row in the order it was written. `ask_assistant` writes its turns
+ * that way, and the transcript its model reads is the same rows by
+ * `created_at`. Walked from the recorded leaf, such a conversation stopped at
+ * the leaf itself, so an export and `get_conversation` answered with the last
+ * reply alone.
  */
-export function walkActiveBranch(
-  rows: ExportMessageRow[],
+export function walkActiveBranch<R extends BranchRow>(
+  rows: readonly R[],
   leafId: string | null,
-): ExportMessageRow[] {
+): R[] {
   if (rows.length === 0) return [];
+  if (rows.every((r) => r.parentMessageId === null)) {
+    return [...rows].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+  }
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const path: ExportMessageRow[] = [];
+  const path: R[] = [];
   const visited = new Set<string>();
-  let cursor: ExportMessageRow | undefined =
+  let cursor: R | undefined =
     (leafId ? byId.get(leafId) : undefined) ?? fallbackLeaf(rows);
   while (cursor && !visited.has(cursor.id)) {
     visited.add(cursor.id);
@@ -92,7 +110,7 @@ export function walkActiveBranch(
  * parent of any other message (a true leaf); a linear conversation then walks
  * root→newest. Falls back to the first root row for degenerate data.
  */
-function fallbackLeaf(rows: ExportMessageRow[]): ExportMessageRow | undefined {
+function fallbackLeaf<R extends BranchRow>(rows: readonly R[]): R | undefined {
   const parents = new Set(
     rows.map((r) => r.parentMessageId).filter((p): p is string => p !== null),
   );

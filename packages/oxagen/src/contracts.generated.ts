@@ -148,6 +148,7 @@ import "./contracts/conversation.chat";
 import "./contracts/conversation.delete";
 import "./contracts/conversation.export";
 import "./contracts/conversation.files.list";
+import "./contracts/conversation.get";
 import "./contracts/conversation.list";
 import "./contracts/conversation.purge";
 import "./contracts/conversation.rename";

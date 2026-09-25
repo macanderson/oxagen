@@ -46,6 +46,15 @@ const askAssistantStream = vi.fn(
 const readAssistantReply = vi.fn();
 vi.mock("./assistant-stream-client", () => ({ askAssistantStream }));
 vi.mock("./assistant-actions", () => ({ readAssistantReply }));
+// The workspace reads back as having no thread yet, filed under its own id.
+// assistant-flyout.threads.test.tsx covers the read itself (#4163).
+vi.mock("./assistant-thread-actions", () => ({
+  loadAssistantThread: (_org: string, ws: string) =>
+    Promise.resolve({
+      ok: true,
+      value: { workspaceKey: `id-${ws}`, thread: null },
+    }),
+}));
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
