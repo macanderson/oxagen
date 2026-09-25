@@ -423,39 +423,45 @@ describe("resolveApiKey", () => {
   // keys, so the live lookup finds nothing. The host must hear that it was
   // revoked, not that its key is unknown, or it retries for ever.
   // -------------------------------------------------------------------------
+  // The predicate itself (organization, status, api_key_id or enrollment)
+  // runs against a real Postgres in
+  // packages/handlers/integration/tacho-host-revoked-key.test.ts.
   const ENROLLMENT = "tch_abcdefghijklmnopqrstuv";
   const retiredHostKey = (over: Record<string, unknown> = {}) => ({
     id: "aky_host",
     keyHash: sha256hex(RAW_KEY),
     orgId: "org_abc",
+    workspaceId: "wrk_abc",
+    expiresAt: null,
     scope: { purpose: "tacho_host_v1", host_enrollment_id: ENROLLMENT },
+    createdById: "usr_abc",
+    deletedAt: new Date("2026-09-25T12:00:00.000Z"),
     ...over,
   });
 
   it("answers host_revoked for a revoked host's retired key", async () => {
-    mockQuery.apiKeys.findFirst
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(retiredHostKey());
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(retiredHostKey());
     mockQuery.tachoHosts.findFirst.mockResolvedValueOnce({ id: "tch_row" });
     const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({ ok: false, kind: "host_revoked" });
+    // One read of the key table: the prefix names at most one row, live or
+    // deleted, so no second lookup is needed.
+    expect(mockQuery.apiKeys.findFirst).toHaveBeenCalledTimes(1);
     expect(mockQuery.tachoHosts.findFirst).toHaveBeenCalledTimes(1);
     // The workspace and membership reads belong to a live key only.
     expect(mockQuery.workspaces.findFirst).not.toHaveBeenCalled();
   });
 
   it("answers host_revoked for the gateway key the same enrollment minted", async () => {
-    mockQuery.apiKeys.findFirst
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(
-        retiredHostKey({
-          id: "aky_gateway",
-          scope: {
-            purpose: "tacho_gateway_v1",
-            host_enrollment_id: ENROLLMENT,
-          },
-        }),
-      );
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(
+      retiredHostKey({
+        id: "aky_gateway",
+        scope: {
+          purpose: "tacho_gateway_v1",
+          host_enrollment_id: ENROLLMENT,
+        },
+      }),
+    );
     mockQuery.tachoHosts.findFirst.mockResolvedValueOnce({ id: "tch_row" });
     expect(await resolveApiKey(RAW_KEY)).toEqual({
       ok: false,
@@ -464,11 +470,9 @@ describe("resolveApiKey", () => {
   });
 
   it("stays invalid when the retired key's hash does not match (negative)", async () => {
-    mockQuery.apiKeys.findFirst
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(
-        retiredHostKey({ keyHash: sha256hex(`${RAW_KEY}_other`) }),
-      );
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(
+      retiredHostKey({ keyHash: sha256hex(`${RAW_KEY}_other`) }),
+    );
     expect(await resolveApiKey(RAW_KEY)).toEqual({
       ok: false,
       kind: "invalid",
@@ -477,14 +481,18 @@ describe("resolveApiKey", () => {
   });
 
   it("stays invalid for a deleted key no revoked host names (negative)", async () => {
-    mockQuery.apiKeys.findFirst
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(retiredHostKey({ id: "aky_plain", scope: {} }));
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(
+      retiredHostKey({ id: "aky_plain", scope: {} }),
+    );
     mockQuery.tachoHosts.findFirst.mockResolvedValueOnce(undefined);
     expect(await resolveApiKey(RAW_KEY)).toEqual({
       ok: false,
       kind: "invalid",
     });
+    // The lookup reads deleted rows so it can tell a revoked host apart. With
+    // the hash right and the workspace active, this row would resolve if it
+    // were live, so the refusal is the deletion's.
+    expect(mockQuery.workspaces.findFirst).not.toHaveBeenCalled();
   });
 
   // -------------------------------------------------------------------------
@@ -870,24 +878,12 @@ describe("resolveApiKey", () => {
     expect(apiKeyPrefix(RAW_KEY)).not.toBe("ox");
   });
 
-  it("reaches the DB for a well-formed key (the prefix window passes the malformed guard)", async () => {
+  it("calls the DB exactly once for a well-formed key (the prefix window passes the malformed guard)", async () => {
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce(undefined);
     await resolveApiKey(RAW_KEY);
-    // The live lookup, then, because it found nothing, the lookup of a
-    // revoked host's retired key. Both read by the same indexed prefix.
-    expect(mockQuery.apiKeys.findFirst).toHaveBeenCalledTimes(2);
-  });
-
-  it("reads the key table once when the live lookup finds a row", async () => {
-    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
-      id: "aky_once",
-      keyHash: sha256hex(`${RAW_KEY}_other`),
-      orgId: "org_1",
-      workspaceId: "wrk_1",
-      expiresAt: null,
-    });
-    await resolveApiKey(RAW_KEY);
     expect(mockQuery.apiKeys.findFirst).toHaveBeenCalledTimes(1);
+    // No key, so no host to look for.
+    expect(mockQuery.tachoHosts.findFirst).not.toHaveBeenCalled();
   });
 });
 

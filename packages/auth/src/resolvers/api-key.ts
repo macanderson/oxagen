@@ -12,7 +12,7 @@
  * host retired. Revoking a host deletes its keys and marks the host row
  * `revoked` in one transaction (`revokeHostEnrollment`,
  * @oxagen/database/member-lifecycle), so the host's next request carries a
- * key no live lookup finds. Answered `invalid`, the host could not tell a
+ * deleted key. Answered `invalid`, the host could not tell a
  * revocation from a fault and kept retrying for ever. When the key's hash
  * matches and a revoked host names it, the answer is `host_revoked`, which
  * the API serves as 403 with that reason so the host stops shipping.
@@ -59,7 +59,7 @@
  * API middleware, MCP handler, CLI, or tests.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import {
   TACHO_GATEWAY_SCOPE_PURPOSE,
@@ -192,12 +192,14 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
   // resolution step: the apiKeys table carries the pre-bound tenant scope for
   // every machine-auth request. No tenant scope can exist before this lookup
   // completes — the result is used to construct one.
+  //
+  // Deleted rows are read too. `api_keys_key_prefix_idx` is unique over every
+  // row, live and deleted, so the prefix names at most one key, and one probe
+  // answers both a live key and a revoked host's retired one. A deleted row is
+  // refused below before anything reads its scope as a grant.
   const row = await withSystemDb((tx) =>
     tx.query.apiKeys.findFirst({
-      where: and(
-        eq(schema.apiKeys.keyPrefix, prefix),
-        isNull(schema.apiKeys.deletedAt),
-      ),
+      where: eq(schema.apiKeys.keyPrefix, prefix),
       columns: {
         id: true,
         keyHash: true,
@@ -206,18 +208,19 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
         expiresAt: true,
         scope: true,
         createdById: true,
+        deletedAt: true,
       },
     }),
   );
 
-  const computedHashBuf = Buffer.from(hash, "hex");
-  if (!row) {
-    return (await revokedHostKey(prefix, computedHashBuf))
+  if (!row) return { ok: false, kind: "invalid" };
+  if (!hashMatches(row.keyHash, Buffer.from(hash, "hex")))
+    return { ok: false, kind: "invalid" };
+  if (row.deletedAt != null) {
+    return (await revokedHostNames(row))
       ? { ok: false, kind: "host_revoked" }
       : { ok: false, kind: "invalid" };
   }
-  if (!hashMatches(row.keyHash, computedHashBuf))
-    return { ok: false, kind: "invalid" };
   if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
     return { ok: false, kind: "expired" };
   }
@@ -290,29 +293,18 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
 }
 
 /**
- * Whether the raw key is a deleted key of a Tacho host an operator revoked.
- * See the module comment. The deleted row must match the raw key's hash, so
- * a guess at a prefix learns nothing, and a revoked host row must name it:
- * by `api_key_id` for the host's control-plane key (a legacy key carries no
- * scope), or by the enrollment id a host or gateway key's scope records.
- * A key deleted for any other reason stays `invalid`.
+ * Whether a revoked Tacho host names this deleted key. See the module comment.
+ * The caller has already matched the key's hash, so a guess at a prefix learns
+ * nothing. The host row must be in the key's organization and revoked, and
+ * must name the key by `api_key_id` (the host's control-plane key; a legacy
+ * key carries no scope) or by the enrollment id a host or gateway key's scope
+ * records. A key deleted for any other reason stays `invalid`.
  */
-async function revokedHostKey(
-  prefix: string,
-  computedHash: Buffer,
-): Promise<boolean> {
-  // tenancy: identity resolution before a tenant scope exists, the same prefix lookup as the live one over deleted rows; its orgId is used only after the row is verified by the raw key's hash.
-  const retired = await withSystemDb((tx) =>
-    tx.query.apiKeys.findFirst({
-      where: and(
-        eq(schema.apiKeys.keyPrefix, prefix),
-        isNotNull(schema.apiKeys.deletedAt),
-      ),
-      orderBy: [desc(schema.apiKeys.deletedAt)],
-      columns: { id: true, keyHash: true, orgId: true, scope: true },
-    }),
-  );
-  if (!retired || !hashMatches(retired.keyHash, computedHash)) return false;
+async function revokedHostNames(retired: {
+  id: string;
+  orgId: string;
+  scope: unknown;
+}): Promise<boolean> {
   const enrollment = hostEnrollmentOf(retired.scope);
   // tenancy: identity resolution before a tenant scope exists; filtered by the orgId of the key just verified by its hash.
   const host = await withSystemDb((tx) =>
