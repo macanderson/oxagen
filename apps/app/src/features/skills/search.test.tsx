@@ -112,7 +112,14 @@ describe("skill search preview", () => {
 });
 
 it("offers no version while nothing is published for the current repository", () => {
-  mount({ ...configuration, current: null });
+  mount({
+    ...configuration,
+    current: null,
+    versions: configuration.versions.map((row) => ({
+      ...row,
+      searchable: false,
+    })),
+  });
   const select = screen.getByLabelText("Configuration version");
   expect(
     within(select)
@@ -125,6 +132,20 @@ it("offers no version while nothing is published for the current repository", ()
       "No configuration is published for the current repository. Skills start off.",
     ),
   ).toBeVisible();
+});
+
+it("offers only versions published under the current repository binding", () => {
+  const original = configuration.versions[0];
+  if (!original) throw new Error("version fixture missing");
+  const current = { ...original, id: "skv_456", version: "skl_v2" };
+  const earlier = { ...original, searchable: false };
+  mount({ ...configuration, current, versions: [current, earlier] });
+  const select = screen.getByLabelText("Configuration version");
+  expect(
+    within(select)
+      .getAllByRole("option")
+      .map((option) => option.textContent),
+  ).toEqual(["Select a version", "skl_v2"]);
 });
 
 it("keeps one pending request pinned to an explicitly selected older version", async () => {

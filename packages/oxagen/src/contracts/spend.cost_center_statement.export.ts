@@ -12,6 +12,11 @@
  * from the total cents by the rounding; micros are the figure that
  * reconciles. A run no frame priced is counted and listed on its line and
  * adds nothing to its cost; `unpriced_runs` says how many.
+ *
+ * The CSV `run_ids` field lists every run on its line. The `lines` data lists
+ * the oldest {@link COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT} of them and
+ * counts the rest in `runIdsOmitted`, so a month of many thousands of runs
+ * does not carry each id twice in one response.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -29,6 +34,9 @@ export const COST_CENTER_STATEMENT_COLUMNS = [
   "run_ids",
 ] as const;
 
+/** How many run ids one line of the `lines` data lists. The CSV lists them all. */
+export const COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT = 100;
+
 export const costCenterStatementLineSchema = z
   .object({
     /** The label, or `~none` for the spend no cost center claims. */
@@ -37,8 +45,14 @@ export const costCenterStatementLineSchema = z
     unpricedRuns: z.number().int().nonnegative(),
     /** Null when no run on the line was priced. */
     cost: costSchema.nullable(),
-    /** Every run on the line, oldest first: the record each figure traces to. */
-    runIds: z.array(z.string()),
+    /**
+     * The oldest runs on the line, at most
+     * {@link COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT}. The CSV `run_ids`
+     * field lists every one: the record each figure traces to.
+     */
+    runIds: z.array(z.string()).max(COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT),
+    /** Runs on the line that `runIds` leaves out. The CSV lists their ids. */
+    runIdsOmitted: z.number().int().nonnegative(),
   })
   .strict();
 export type CostCenterStatementLine = z.output<

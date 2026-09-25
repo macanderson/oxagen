@@ -8,8 +8,11 @@ The sidebar's counts for a workspace (MC spec App. E): Fleet shows pending appro
 
 ## Surface
 
+**Surfaces:** api, mcp, agent
+
 - API: `GET /v1/:org_slug/:workspace_slug/shell/nav-counts`
 - MCP: `get_nav_counts`
+- Agent: the in-app assistant finds it with `search_tools` and loads it with `load_tools`. Low risk, no approval.
 - Authentication: session (org Owner, Admin or Member; workspace Owner, Member or Viewer)
 - Capability name: `get_nav_counts`
 - Not billed (`noBillingGate: true`): a console read is never a governed action (ADR-052 exclusion 2).

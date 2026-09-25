@@ -122,4 +122,42 @@ describe("create_cost_center", () => {
     expect(double.calls.inserts).toEqual([]);
     expect(double.calls.updates).toEqual([]);
   });
+
+  it("answers conflict when a concurrent create wins the insert race", async () => {
+    // Both creates read no row; the loser's insert hits the unique index.
+    // drizzle wraps the driver error, so the SQLSTATE sits on the cause.
+    const race = Object.assign(new Error("Failed query: insert into ..."), {
+      cause: Object.assign(new Error("duplicate key value"), {
+        code: "23505",
+        constraint_name: "cost_centers_org_label_idx",
+      }),
+    });
+    const double = makeTx({ selects: [[]] });
+    double.tx.insert = () => ({
+      values: () => ({
+        returning: async () => {
+          throw race;
+        },
+      }),
+    });
+    useTx(double);
+    await expect(
+      costCenterCreateHandler({ label: "ENG-1001" }, CTX),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "cost_center_exists",
+      message: "The cost center ENG-1001 is already on the list",
+    });
+  });
+
+  it("rethrows a unique violation on any other index unchanged", async () => {
+    const other = Object.assign(new Error("duplicate key value"), {
+      code: "23505",
+      constraint_name: "cost_centers_public_id_unique",
+    });
+    mocks.withTenantDb.mockRejectedValue(other);
+    await expect(
+      costCenterCreateHandler({ label: "ENG-1001" }, CTX),
+    ).rejects.toBe(other);
+  });
 });

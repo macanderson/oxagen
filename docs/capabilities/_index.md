@@ -47,7 +47,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [demote_memory](agent.memory.demote.md) | [agent.memory.demote.ts](../../packages/oxagen/src/contracts/agent.memory.demote.ts) | api, mcp, agent |
 | [deploy_agent](agent.deploy.md) | [agent.deploy.ts](../../packages/oxagen/src/contracts/agent.deploy.ts) | api, mcp, agent |
 | [dismiss_memory_promotion](agent.memory_promotion.dismiss.md) | [agent.memory_promotion.dismiss.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.dismiss.ts) | api, mcp, agent |
-| [get_agent](agent.get.md) | [agent.get.ts](../../packages/oxagen/src/contracts/agent.get.ts) | api, mcp, cli |
+| [get_agent](agent.get.md) | [agent.get.ts](../../packages/oxagen/src/contracts/agent.get.ts) | api, mcp, agent, cli |
 | [get_agent_def](agent.definition.get.md) | [agent.definition.get.ts](../../packages/oxagen/src/contracts/agent.definition.get.ts) | api, mcp, agent |
 | [get_agent_role](agent.role.get.md) | [agent.role.get.ts](../../packages/oxagen/src/contracts/agent.role.get.ts) | api, mcp, agent |
 | [get_agent_toolbelt](agent.toolbelt.get.md) | [agent.toolbelt.get.ts](../../packages/oxagen/src/contracts/agent.toolbelt.get.ts) | api, mcp |
@@ -58,8 +58,8 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_agent_environments](agent.environment.list.md) | [agent.environment.list.ts](../../packages/oxagen/src/contracts/agent.environment.list.ts) | api, mcp, agent |
 | [list_agent_roles](agent.role.list.md) | [agent.role.list.ts](../../packages/oxagen/src/contracts/agent.role.list.ts) | api, mcp, agent |
 | [list_agent_tools](agent.tool.list.md) | [agent.tool.list.ts](../../packages/oxagen/src/contracts/agent.tool.list.ts) | api, mcp, agent |
-| [list_agents](agent.list.md) | [agent.list.ts](../../packages/oxagen/src/contracts/agent.list.ts) | api, mcp |
-| [list_approvals](agent.approval.list.md) | [agent.approval.list.ts](../../packages/oxagen/src/contracts/agent.approval.list.ts) | api, mcp |
+| [list_agents](agent.list.md) | [agent.list.ts](../../packages/oxagen/src/contracts/agent.list.ts) | api, mcp, agent |
+| [list_approvals](agent.approval.list.md) | [agent.approval.list.ts](../../packages/oxagen/src/contracts/agent.approval.list.ts) | api, mcp, agent |
 | [list_executions](agent.execution.list.md) | [agent.execution.list.ts](../../packages/oxagen/src/contracts/agent.execution.list.ts) | api, mcp, agent |
 | [list_mcp_consents](agent.mcp_consent.list.md) | [agent.mcp_consent.list.ts](../../packages/oxagen/src/contracts/agent.mcp_consent.list.ts) | api, mcp, agent |
 | [list_mcp_servers](agent.mcp.list.md) | [agent.mcp.list.ts](../../packages/oxagen/src/contracts/agent.mcp.list.ts) | api, mcp, agent |
@@ -473,9 +473,9 @@ after the registered name separately when their contract uses a dotted stem.
 | [bisect_runs](run.bisect.md) | [run.bisect.ts](../../packages/oxagen/src/contracts/run.bisect.ts) | api, mcp |
 | [export_run](run.export.md) | [run.export.ts](../../packages/oxagen/src/contracts/run.export.ts) | api |
 | [fork_run](run.fork.md) | [run.fork.ts](../../packages/oxagen/src/contracts/run.fork.ts) | api |
-| [get_run](run.get.md) | [run.get.ts](../../packages/oxagen/src/contracts/run.get.ts) | api, mcp |
+| [get_run](run.get.md) | [run.get.ts](../../packages/oxagen/src/contracts/run.get.ts) | api, mcp, agent |
 | [get_run_chain](run.chain.get.md) | [run.chain.get.ts](../../packages/oxagen/src/contracts/run.chain.get.ts) | api, mcp |
-| [get_run_cost](run.cost.md) | [run.cost.ts](../../packages/oxagen/src/contracts/run.cost.ts) | api, mcp |
+| [get_run_cost](run.cost.md) | [run.cost.ts](../../packages/oxagen/src/contracts/run.cost.ts) | api, mcp, agent |
 | [get_run_export](run.export.get.md) | [run.export.get.ts](../../packages/oxagen/src/contracts/run.export.get.ts) | api, mcp, cli |
 | [get_run_frame_body](run.frame_body.get.md) | [run.frame_body.get.ts](../../packages/oxagen/src/contracts/run.frame_body.get.ts) | api, mcp |
 | [create_run_token](run.token.issue.md) | [run.token.issue.ts](../../packages/oxagen/src/contracts/run.token.issue.ts) | api |
@@ -483,8 +483,8 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_run_proof](run.proof.get.md) | [run.proof.get.ts](../../packages/oxagen/src/contracts/run.proof.get.ts) | api |
 | [get_run_transcript](run.transcript.get.md) | [run.transcript.get.ts](../../packages/oxagen/src/contracts/run.transcript.get.ts) | api, mcp |
 | [get_run_turns](run.turns.get.md) | [run.turns.get.ts](../../packages/oxagen/src/contracts/run.turns.get.ts) | api, mcp, cli |
-| [list_recent_runs](run.recent.list.md) | [run.recent.list.ts](../../packages/oxagen/src/contracts/run.recent.list.ts) | api, mcp |
-| [list_runs](run.list.md) | [run.list.ts](../../packages/oxagen/src/contracts/run.list.ts) | api, mcp |
+| [list_recent_runs](run.recent.list.md) | [run.recent.list.ts](../../packages/oxagen/src/contracts/run.recent.list.ts) | api, mcp, agent |
+| [list_runs](run.list.md) | [run.list.ts](../../packages/oxagen/src/contracts/run.list.ts) | api, mcp, agent |
 | [seal_run](run.seal.md) | [run.seal.ts](../../packages/oxagen/src/contracts/run.seal.ts) | api, mcp |
 | [summarize_run](run.summarize.md) | [run.summarize.ts](../../packages/oxagen/src/contracts/run.summarize.ts) | api |
 
@@ -533,7 +533,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
-| [get_nav_counts](shell.nav_counts.get.md) | [shell.nav_counts.get.ts](../../packages/oxagen/src/contracts/shell.nav_counts.get.ts) | api, mcp |
+| [get_nav_counts](shell.nav_counts.get.md) | [shell.nav_counts.get.ts](../../packages/oxagen/src/contracts/shell.nav_counts.get.ts) | api, mcp, agent |
 
 ## Skill
 
@@ -552,8 +552,8 @@ after the registered name separately when their contract uses a dotted stem.
 | [export_cost_center_statement](spend.cost_center_statement.export.md) | [spend.cost_center_statement.export.ts](../../packages/oxagen/src/contracts/spend.cost_center_statement.export.ts) | api, mcp |
 | [export_statement](spend.statement.export.md) | [spend.statement.export.ts](../../packages/oxagen/src/contracts/spend.statement.export.ts) | api, mcp |
 | [get_finding_evidence](finding.evidence.get.md) | [finding.evidence.get.ts](../../packages/oxagen/src/contracts/finding.evidence.get.ts) | api, mcp |
-| [get_spend](spend.get.md) | [spend.get.ts](../../packages/oxagen/src/contracts/spend.get.ts) | api, mcp |
-| [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp |
+| [get_spend](spend.get.md) | [spend.get.ts](../../packages/oxagen/src/contracts/spend.get.ts) | api, mcp, agent |
+| [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp, agent |
 | [list_cost_centers](cost_center.list.md) | [cost_center.list.ts](../../packages/oxagen/src/contracts/cost_center.list.ts) | api, mcp |
 | [list_findings](finding.list.md) | [finding.list.ts](../../packages/oxagen/src/contracts/finding.list.ts) | api, mcp |
 | [list_waste](spend.waste.md) | [spend.waste.ts](../../packages/oxagen/src/contracts/spend.waste.ts) | api, mcp |

@@ -241,6 +241,61 @@ describe("createKillSwitchGate", () => {
   });
 });
 
+// The in-app assistant's turn runs as the person, with no agent run, and
+// hands the gate the agent it runs as. An `agent` switch on that agent stops
+// the turn's calls. The same person's own calls carry no acting agent.
+describe("an agent switch and the agent a person's turn acts as", () => {
+  const ASSISTANT = { agentId: "agt_assistant", principalId: "prn_assistant" };
+  const agentSwitch = (agentId: string): KillSwitchRow => ({
+    ...classSwitch("unused"),
+    targetKind: "agent",
+    targetId: agentId,
+    scopeKind: "workspace",
+    workspaceId: WS,
+    resourceScopeDigest: resourceScopeDigestOf({ kind: "agent", id: agentId }),
+  });
+
+  it("stops every call of the assistant's turn, reads and writes", async () => {
+    const s = store({
+      generation: 1,
+      snapshot: { ...open, switches: [agentSwitch(ASSISTANT.agentId)] },
+    });
+    const gate = createKillSwitchGate(ctx, s.reads, ASSISTANT);
+    const write = await gate.check({
+      capabilityId: "set_budget",
+      readOnly: false,
+    });
+    expect(write?.targetKind).toBe("agent");
+    expect(write?.targetId).toBe(ASSISTANT.agentId);
+    expect(
+      (await gate.check({ capabilityId: "list_runs", readOnly: true }))
+        ?.targetKind,
+    ).toBe("agent");
+  });
+
+  it("leaves the same person's own calls open (negative)", async () => {
+    const s = store({
+      generation: 1,
+      snapshot: { ...open, switches: [agentSwitch(ASSISTANT.agentId)] },
+    });
+    const gate = createKillSwitchGate(ctx, s.reads);
+    expect(
+      await gate.check({ capabilityId: "set_budget", readOnly: false }),
+    ).toBeNull();
+  });
+
+  it("leaves the assistant's calls open under a switch on another agent (negative)", async () => {
+    const s = store({
+      generation: 1,
+      snapshot: { ...open, switches: [agentSwitch("agt_someone_else")] },
+    });
+    const gate = createKillSwitchGate(ctx, s.reads, ASSISTANT);
+    expect(
+      await gate.check({ capabilityId: "set_budget", readOnly: false }),
+    ).toBeNull();
+  });
+});
+
 describe("registryCapabilityId", () => {
   it("governs an imported tool under its server's synthetic id and a declared tool under its slug", () => {
     expect(
