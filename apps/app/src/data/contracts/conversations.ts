@@ -22,6 +22,8 @@ export const ThreadMessage = z.object({
   text: z.string(),
   runId: PublicId.nullable(),
   parked: z.array(ParkedWrite),
+  /** The person stopped the turn, so `text` is what it reached (#4164). */
+  stopped: z.boolean(),
 });
 export type ThreadMessage = z.infer<typeof ThreadMessage>;
 

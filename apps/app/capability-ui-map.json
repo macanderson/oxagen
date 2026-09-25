@@ -93,6 +93,15 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
     },
+    "cancel_assistant_turn": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Stop in the assistant flyout's composer, which takes the place of Send while a turn is running and posts the turn's id to the [org]/[ws]/assistant/stop route (features/shell/assistant-send-or-stop.tsx, features/shell/assistant-stop.ts)",
+      "testid": "assistant-stop",
+      "proof": "apps/app/src/features/shell/assistant-flyout.stop.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session-622589c6-stella-r15-stop"
+    },
     "change_member_role": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",

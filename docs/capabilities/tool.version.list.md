@@ -21,6 +21,7 @@ Calls in the last 30 days come from ClickHouse `tool_invocations` for the page's
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `category` | string | no | a consequence tag (`^[a-z][a-z0-9_]{1,63}$`); only versions carrying it |
+| `serverId` | string | no | an `mcs_…` server id from `list_mcp_servers`; only versions imported from that server. Combines with `category`. An id that names no server in the workspace returns an empty page |
 | `limit` | integer | no | 1-100, default 50 |
 | `cursor` | string | no | the `nextCursor` of an earlier page; a cursor this capability did not write is `invalid_input` |
 

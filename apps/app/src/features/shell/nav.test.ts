@@ -298,6 +298,36 @@ describe("breadcrumbs", () => {
     ]);
   });
 
+  it("one steering record ends on its declared label under Steering, and on its lineage until then", () => {
+    const at = "/acme/core-platform/steering/records/ctx.release.no-reread";
+    expect(breadcrumbs(at, names).slice(2)).toEqual([
+      { kind: "nav", key: "steering", href: "/acme/core-platform/steering" },
+      { kind: "id", text: "ctx.release.no-reread", href: null },
+    ]);
+    expect(
+      breadcrumbs(at, {
+        ...names,
+        record: {
+          id: "ctx.release.no-reread",
+          label: "Read the changelog once",
+        },
+      }).slice(2),
+    ).toEqual([
+      { kind: "nav", key: "steering", href: "/acme/core-platform/steering" },
+      { kind: "name", text: "Read the changelog once", href: null },
+    ]);
+    // A label another lineage declared never names this one.
+    expect(
+      breadcrumbs(at, {
+        ...names,
+        record: { id: "ctx.other", label: "Other" },
+      }).at(-1),
+    ).toEqual({ kind: "id", text: "ctx.release.no-reread", href: null });
+    expect(
+      breadcrumbs("/acme/core-platform/steering/records", names).slice(2),
+    ).toEqual([{ kind: "nav", key: "steering", href: null }]);
+  });
+
   it("mandate, on its flat route (not nested under the agent)", () => {
     expect(
       breadcrumbs("/acme/core-platform/mandates/mnd_1", names).slice(2),

@@ -2,7 +2,10 @@
 // (ADR-061; MC spec §9, §10). Not a capability: exported through the barrel so
 // the contracts file-coverage guard sees it, like spend.shared.ts.
 import { z } from "zod";
-import { CONTEXT_RECORD_LINEAGE } from "../context-record-label";
+import {
+  CONTEXT_RECORD_LABEL_MAX,
+  CONTEXT_RECORD_LINEAGE,
+} from "../context-record-label";
 
 /** The six kinds of context-record/v0.1, Stella's file surface (spec §10.2). */
 export const recordKindSchema = z.enum([
@@ -153,10 +156,10 @@ export const proposedRecordSchema = z
       .string()
       .trim()
       .min(1)
-      .max(200)
+      .max(CONTEXT_RECORD_LABEL_MAX)
       .optional()
       .describe(
-        "Display name only. Omit it to keep the current label; changing it never creates a version.",
+        "The record's name, at most 36 characters. Omit it to keep the current label. A rename never creates a version and never changes the lineage.",
       ),
     kind: recordKindSchema,
     force: recordForceSchema,

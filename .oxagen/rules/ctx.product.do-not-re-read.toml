@@ -3,6 +3,7 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.product.do-not-re-read"
+label = "Read the changelog once"
 record_id = "rec_product_do_not_re_read_6861b5676152"
 record_hash = "sha256:25d4a4add682cc0d20ca3448962e0fe7178d59e866b06b2be4e32150a0f2684e"
 kind = "rule"

@@ -46,6 +46,7 @@ import { chatStreamRoute } from "./routes/v1/chat.stream";
 import { assistantAskRoute } from "./routes/v1/assistant.ask";
 import { assistantEngineGetRoute } from "./routes/v1/assistant.engine.get";
 import { assistantReplyFeedbackRecordRoute } from "./routes/v1/assistant.reply_feedback.record";
+import { assistantTurnCancelRoute } from "./routes/v1/assistant.turn.cancel";
 import { toolsSearchRoute } from "./routes/v1/tools.search";
 import { toolsLoadRoute } from "./routes/v1/tools.load";
 import { shellNavCountsGetRoute } from "./routes/v1/shell.nav_counts.get";
@@ -856,6 +857,7 @@ orgScoped.route("/chat/stream", chatStreamRoute);
 // The shell (#2968): the in-app agent's turn and engine probe, the command
 // menu's search, belt definitions and recent runs, the sidebar counts.
 orgScoped.route("/assistant/ask", assistantAskRoute);
+orgScoped.route("/assistant/turn/cancel", assistantTurnCancelRoute);
 orgScoped.route("/assistant/engine", assistantEngineGetRoute);
 orgScoped.route("/assistant/feedback", assistantReplyFeedbackRecordRoute);
 orgScoped.route("/tools/search", toolsSearchRoute);

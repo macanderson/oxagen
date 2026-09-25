@@ -150,6 +150,7 @@ import { runRecentList } from "./run.recent.list";
 import { assistantAsk } from "./assistant.ask";
 import { assistantEngineGet } from "./assistant.engine.get";
 import { assistantReplyFeedbackRecord } from "./assistant.reply_feedback.record";
+import { assistantTurnCancel } from "./assistant.turn.cancel";
 import { toolsSearch } from "./tools.search";
 import { toolsLoad } from "./tools.load";
 import { shellNavCountsGet } from "./shell.nav_counts.get";
@@ -765,6 +766,7 @@ export {
   assistantAsk,
   assistantEngineGet,
   assistantReplyFeedbackRecord,
+  assistantTurnCancel,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
@@ -1170,6 +1172,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   assistantAsk,
   assistantEngineGet,
   assistantReplyFeedbackRecord,
+  assistantTurnCancel,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,

@@ -3,7 +3,8 @@
 // actions: that every answered reply carries Useful and Wrong, that Useful
 // records at once, that Wrong takes an optional short note first, that the
 // person is told the vote was recorded, that a vote that failed says so and
-// keeps the note, and that no vote is offered outside a workspace.
+// keeps the note, that a stopped reply can be rated like any other, and that
+// no vote is offered outside a workspace.
 import {
   cleanup,
   fireEvent,
@@ -339,6 +340,32 @@ describe("reply feedback in the flyout", () => {
 
     expect(screen.getByTestId("assistant-answer")).toBeTruthy();
     expect(screen.queryByTestId("assistant-feedback")).toBeNull();
+  });
+
+  it("offers the vote on a reply the person stopped, which is still recorded under its run", async () => {
+    // A stopped turn saves the words it reached as the run's assistant
+    // message (#4164), so record_reply_feedback resolves a vote on it.
+    mocks.askAssistant.mockResolvedValue({
+      ...turn,
+      value: { ...turn.value, reply: "Two agents are", stopped: true },
+    });
+    mocks.recordReplyFeedback.mockResolvedValue(recorded("wrong"));
+    const { user, answer } = await answered();
+
+    expect(within(answer).getByTestId("assistant-stopped")).toBeTruthy();
+    await user.click(within(answer).getByTestId("assistant-feedback-wrong"));
+    await user.click(screen.getByTestId("assistant-feedback-send"));
+
+    expect(mocks.recordReplyFeedback).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      {
+        conversationId: CONVERSATION,
+        runId: RUN,
+        verdict: "wrong",
+        note: null,
+      },
+    );
   });
 
   it("offers no vote on a refused turn (negative)", async () => {

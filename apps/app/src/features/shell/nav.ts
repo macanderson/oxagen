@@ -306,6 +306,24 @@ export function breadcrumbs(
         out.push({ kind: "id", text: label, href: null });
       }
       break;
+    case "steering":
+      // One record ends the trail on its label under Steering (ADR-178). The
+      // segment is the lineage, so the label is the one the page declared for
+      // that lineage. Until it has, the lineage stands in, in mono as an id.
+      if (id === "records" && sub !== undefined) {
+        out.push({
+          kind: "nav",
+          key: "steering",
+          href: pathOf(org, ws, "steering"),
+        });
+        const label = names.record?.id === sub ? names.record.label : null;
+        out.push(
+          label === null
+            ? { kind: "id", text: sub, href: null }
+            : { kind: "name", text: label, href: null },
+        );
+      } else out.push({ kind: "nav", key: "steering", href: null });
+      break;
     default: {
       const key = currentNavKey(pathname);
       if (key !== null) out.push({ kind: "nav", key, href: null });

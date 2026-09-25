@@ -501,7 +501,7 @@ describe("Tools › tools tab", () => {
     });
     expect(calls.versions).toContainEqual([
       owner,
-      { category: "moves_money", cursor: null },
+      { category: "moves_money", cursor: null, serverId: null },
     ]);
     const chips = within(
       screen.getByRole("group", { name: "Filter by category" }),
@@ -510,6 +510,27 @@ describe("Tools › tools tab", () => {
     expect(picked).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(picked);
     expect(router.push).toHaveBeenCalledWith("/acme/core-platform/tools");
+  });
+
+  it("asks the kernel for the provider a chip picks, and counts against the unfiltered registry", async () => {
+    const { calls } = await renderTools({}, "tools", {
+      provider: "mcs_01k5s1",
+    });
+    expect(calls.versions).toContainEqual([
+      owner,
+      { category: null, cursor: null, serverId: "mcs_01k5s1" },
+    ]);
+    expect(calls.versions).toContainEqual([
+      owner,
+      { category: null, cursor: null, serverId: null },
+    ]);
+    const providers = within(
+      screen.getByRole("group", { name: "Filter by provider" }),
+    );
+    expect(providers.getByRole("button", { name: /Stripe/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("says the chip matched nothing rather than that the registry is empty", async () => {

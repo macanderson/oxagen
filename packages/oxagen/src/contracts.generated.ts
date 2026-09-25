@@ -81,6 +81,7 @@ import "./contracts/asset.upload";
 import "./contracts/assistant.ask";
 import "./contracts/assistant.engine.get";
 import "./contracts/assistant.reply_feedback.record";
+import "./contracts/assistant.turn.cancel";
 import "./contracts/audit.events.export";
 import "./contracts/audit.log.query";
 import "./contracts/auth.cli.authorize";

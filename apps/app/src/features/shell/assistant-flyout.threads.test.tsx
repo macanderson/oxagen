@@ -3,13 +3,7 @@
 // thread" (#4163, #3313). The turn action and the thread read are fakes: the
 // read answers the thread the record holds and the workspace id the flyout
 // files it under, so each case shows what the person sees.
-import {
-  act,
-  cleanup,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import {
@@ -40,6 +34,9 @@ vi.mock("next/navigation", () => ({
 
 const { AssistantFlyout } = await import("./assistant-flyout");
 
+/** Any turn id: the flyout mints a new one for each question (#4164). */
+const A_TURN_ID: unknown = expect.any(String);
+
 /** The workspace's id: what a rename leaves alone. */
 const WORKSPACE = "7b000000-0000-4000-8000-000000000001";
 
@@ -52,6 +49,7 @@ const RECORDED: AssistantThread = {
       text: "what is live?",
       runId: null,
       parked: [],
+      stopped: false,
     },
     {
       id: "msg_a2",
@@ -65,6 +63,7 @@ const RECORDED: AssistantThread = {
           expiresAt: "2026-09-25T10:05:00.000Z",
         },
       ],
+      stopped: false,
     },
   ],
   truncated: false,
@@ -160,6 +159,8 @@ describe("the assistant's thread across a reload", () => {
       "recorded as arun_01k9",
     );
     expect(screen.getByTestId("assistant-parked")).toBeTruthy();
+    // A reply that ran to the end carries no Stopped mark (#4164).
+    expect(screen.queryByTestId("assistant-stopped")).toBeNull();
     expect(screen.queryByTestId("assistant-intro")).toBeNull();
   });
 
@@ -172,6 +173,7 @@ describe("the assistant's thread across a reload", () => {
       conversationId: "cnv_01k9x2",
       content: "and now?",
       route: "fleet",
+      turnId: A_TURN_ID,
       entityId: null,
     });
     await waitFor(() => {

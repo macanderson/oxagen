@@ -26,3 +26,8 @@ export { PageRecord } from "./page-record";
 export { readExportStatus } from "./account-actions";
 export { handleExportDownload } from "./export-download";
 export { readExportObject } from "./export-storage";
+// The flyout's Stop control posts to a route handler, not a server action,
+// because the question it stops is itself a pending action (#4164): the
+// handler that gates the stop, and the action that asks the kernel for it.
+export { stopAssistantTurn } from "./assistant-actions";
+export { handleAssistantStop } from "./assistant-stop";

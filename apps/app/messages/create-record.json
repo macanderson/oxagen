@@ -13,10 +13,11 @@
       },
       "noGrant": "A record steers. It never grants. No sentence you write here makes a denied call allowed.",
       "next": "Pick a kind",
-      "name": "Name",
+      "name": "Label",
+      "labelHint": "The record's name, up to 36 characters. Labels can repeat, and you can rename a record later.",
       "slug": "Slug",
-      "slugHint": "The slug identifies this record and its file. You can edit it before publishing.",
-      "slugInvalid": "The slug needs at least two letters or digits from a to z or 0 to 9. Type a slug here if the name has none."
+      "slugHint": "The slug is made from the label and names the record's file. You can edit it before publishing. After that it never changes.",
+      "slugInvalid": "The slug needs at least two letters or digits from a to z or 0 to 9. Type a slug here if the label has none."
     },
     "kind": {
       "title": "What kind is it?",
@@ -211,6 +212,7 @@
       "baseMoved": "The production branch moved while the pull request was opening. Try again.",
       "proposalMoved": "Another change moved this proposal first. Open it on Context PRs to see where it stands.",
       "unanswered": "Oxagen did not answer. Try again.",
+      "slugTaken": "Another record or proposal already has this slug. Go back to the first step, change the slug, and try again. Nothing was written.",
       "refused": "The pull request was refused ({code}).",
       "invalid": "The {field} value is not one propose_record accepts. Nothing was written.",
       "pendingApproval": "Opening this pull request waits for approval: access request {request}."

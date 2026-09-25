@@ -1,8 +1,8 @@
-// Which Tools view a request asks for: a tab, a category chip on the Tools
-// tab, the labels/API-names toggle and a cursor. The tab is a path segment
-// (`/tools/providers`), as the rev1 route names it (mockup `tools.md`), and the
-// rest are query values. A tab id that is no longer served falls back to Tools,
-// so an old link never renders an empty page:
+// Which Tools view a request asks for: a tab, a category chip and a provider
+// chip on the Tools tab, the labels/API-names toggle and a cursor. The tab is
+// a path segment (`/tools/providers`), as the rev1 route names it (mockup
+// `tools.md`), and the rest are query values. A tab id that is no longer
+// served falls back to Tools, so an old link never renders an empty page:
 //
 //   - `/tools/servers` is the Providers tab's name before rev1 and lands there;
 //   - the query tabs this page had before its tabs became segments
@@ -69,6 +69,8 @@ export type ToolsView = {
   tab: ToolsTab;
   /** Only on the Tools tab: the consequence tag the chips filter by. */
   category: string | null;
+  /** Only on the Tools tab: the `mcs_…` id of the provider the rows came from. */
+  provider: string | null;
   names: ToolNameStyle;
   /** The `nextCursor` of an earlier page of the tab's own list. */
   cursor: string | null;
@@ -79,6 +81,8 @@ export type ToolsAt = { org: string; ws: string };
 
 /** The contract's own tag rule: snake_case, 2 to 64 characters. */
 const CATEGORY = /^[a-z][a-z0-9_]{1,63}$/;
+/** A provider is named by its server's public id, `mcs_` and the id's body. */
+const PROVIDER = /^mcs_[A-Za-z0-9]{1,64}$/;
 /** A cursor is opaque; only its shape is checked before it goes back to the kernel. */
 const CURSOR = /^[\w.:=+/-]{1,512}$/;
 
@@ -86,6 +90,7 @@ type Params = Readonly<Record<string, string | string[] | undefined>>;
 
 export function parseToolsView(tab: ToolsTab, params: Params): ToolsView {
   const rawCategory = firstParam(params.category);
+  const rawProvider = firstParam(params.provider);
   const rawNames = firstParam(params.names);
   const rawCursor = firstParam(params.cursor);
   return {
@@ -94,18 +99,26 @@ export function parseToolsView(tab: ToolsTab, params: Params): ToolsView {
       tab === "tools" && rawCategory !== undefined && CATEGORY.test(rawCategory)
         ? rawCategory
         : null,
+    provider:
+      tab === "tools" && rawProvider !== undefined && PROVIDER.test(rawProvider)
+        ? rawProvider
+        : null,
     names: TOOL_NAME_STYLES.find((n) => n === rawNames) ?? "labels",
     cursor:
       rawCursor !== undefined && CURSOR.test(rawCursor) ? rawCursor : null,
   };
 }
 
-/** The route for a view; the defaults (Tools, every category, labels, page one) are left off. */
+/**
+ * The route for a view; the defaults (Tools, every category, every provider,
+ * labels, page one) are left off.
+ */
 export function toolsLink(
   at: ToolsAt,
   to: {
     tab: ToolsTab;
     category?: string | null;
+    provider?: string | null;
     names?: ToolNameStyle;
     cursor?: string | null;
   },
@@ -113,6 +126,7 @@ export function toolsLink(
   return routes.tools(at.org, at.ws, {
     tab: to.tab === "tools" ? undefined : to.tab,
     category: to.category ?? undefined,
+    provider: to.provider ?? undefined,
     names: to.names === "api" ? "api" : undefined,
     cursor: to.cursor ?? undefined,
   });
