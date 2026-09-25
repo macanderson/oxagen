@@ -14,6 +14,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
+import { ProviderIcon } from "@/ui/provider-icon";
 import { cell, numericCell } from "@/ui/table";
 import { buttonGhost } from "./buttons";
 import { NotBackedValue } from "./not-backed";
@@ -23,7 +24,6 @@ import {
   type ProviderView,
   RemoveProvider,
 } from "./provider-dialog";
-import { ProviderIcon } from "./provider-icon";
 import {
   ProviderAuthorization,
   ProviderStatusLight,
