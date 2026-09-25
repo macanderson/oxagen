@@ -43,7 +43,7 @@ or `system` are left out, as the assistant's own transcript leaves them out.
 
 | Field       | Type                                                                  | Notes                                                        |
 | ----------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `messages`  | `Array<{ publicId, role, content, createdAt, runId, parkedCards }>`   | Oldest first. `runId` is the `arun_` run an assistant turn was recorded as, or null. `parkedCards` are the governed writes that turn parked for a person, each `{ approvalId, capability, expiresAt }`. |
+| `messages`  | `Array<{ publicId, role, content, createdAt, runId, parkedCards, stopped }>`   | Oldest first. `runId` is the `arun_` run an assistant turn was recorded as, or null. `parkedCards` are the governed writes that turn parked for a person, each `{ approvalId, capability, expiresAt }`. `stopped` is true when the person stopped the turn, so `content` is the part of the reply written before the stop. |
 | `truncated` | `boolean`                                                             | True when `limit` left earlier messages out.                 |
 
 ## Surfaces

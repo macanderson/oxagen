@@ -12,11 +12,18 @@
 // passes the workspace it is standing in and the flyout only offers the
 // composer when there is one.
 //
+// The flyout names each turn with a `turnId` it mints, so the person can stop
+// it (#4164). The stop does not travel through this module: the question is
+// itself a pending action, and a page's actions run one at a time, so a stop
+// sent as a second action would wait for the turn it means to end. It posts
+// to the `assistant/stop` route instead, which calls `stopAssistantTurn` here.
+//
 // `readReplyCost` is the other half of a turn: what the run it was recorded as
 // cost, read from that run's cost record on demand (#4167). It is a
 // `kernelRead` here rather than a DataSource port because a "use server"
 // feature module reads on demand through the kernel seam (ADR-089, ADR-167).
 import { assistantAsk } from "@oxagen/oxagen/contracts/assistant.ask";
+import { assistantTurnCancel } from "@oxagen/oxagen/contracts/assistant.turn.cancel";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import type { Cost } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
@@ -36,6 +43,8 @@ export type AssistantTurn = {
   runId: string;
   reply: string;
   parkedCards: readonly ParkedCard[];
+  /** The person stopped the turn; `reply` is what was written before the stop. */
+  stopped: boolean;
 };
 
 /**
@@ -50,6 +59,9 @@ export type AssistantTurn = {
  * run's title, a runtime's hostname), so the agent can cite the record the
  * way the person sees it. The caller cuts it to the contract's cap. The turn
  * strips its control characters and quotes it as a label beside the id.
+ *
+ * `turnId` is a uuid the caller mints for the turn, so `stopAssistantTurn`
+ * can name it while it runs.
  */
 export async function askAssistant(
   org: string,
@@ -60,11 +72,13 @@ export async function askAssistant(
     route: string | null;
     entityId: string | null;
     entityLabel?: string | null;
+    turnId?: string;
   },
 ): Promise<ActionResult<AssistantTurn>> {
   const ctx = await requireViewer(org, ws);
   return kernelWrite(ctx, assistantAsk, {
     conversationId: input.conversationId,
+    ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
     content: input.content,
     pageContext:
       input.route === null
@@ -130,4 +144,20 @@ export async function readReplyCost(
       incomplete: rollup.byModel.some((row) => row.hasUnpriced),
     },
   };
+}
+
+/**
+ * Stop the viewer's own turn that `askAssistant` is still running under
+ * `turnId` (#4164). `found` is false when no such turn is running: it ended,
+ * it was already stopped, or it has not started yet, in which case the stop
+ * is held and applied when it does. Only the person who asked can stop a
+ * turn, so another person's `turnId` also answers `found: false`.
+ */
+export async function stopAssistantTurn(
+  org: string,
+  ws: string,
+  turnId: string,
+): Promise<ActionResult<{ turnId: string; found: boolean }>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, assistantTurnCancel, { turnId });
 }

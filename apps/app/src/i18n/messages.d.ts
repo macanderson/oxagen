@@ -2441,6 +2441,7 @@ type Messages = {
       lead: string;
       loading: string;
       name: string;
+      label: string;
       slug: string;
       source: string;
       companions: string;
@@ -2631,6 +2632,7 @@ type Messages = {
       noGrant: string;
       next: string;
       name: string;
+      labelHint: string;
       slug: string;
       slugHint: string;
       slugInvalid: string;
@@ -2828,6 +2830,7 @@ type Messages = {
       baseMoved: string;
       proposalMoved: string;
       unanswered: string;
+      slugTaken: string;
       refused: string;
       invalid: string;
       pendingApproval: string;
@@ -4898,6 +4901,18 @@ type Messages = {
       record: string;
       published: string;
       archived: string;
+      slugTitle: string;
+      notRecorded: string;
+      versionValue: string;
+      props: {
+        kind: string;
+        force: string;
+        effect: string;
+        scope: string;
+        status: string;
+        version: string;
+        pending: string;
+      };
       forceTitle: string;
       effectTitle: string;
       kindLine: {
@@ -7600,6 +7615,7 @@ type Messages = {
         estimate: string;
         incomplete: string;
       };
+      stopped: string;
       parked: string;
       parkedCard: {
         list: string;
@@ -7685,6 +7701,8 @@ type Messages = {
         label: string;
         placeholder: string;
         send: string;
+        stop: string;
+        stopFailed: string;
         sendHintEnter: string;
         sendHintModEnter: string;
         draftTooLong: string;
@@ -9046,6 +9064,7 @@ type Messages = {
       new: string;
       published: string;
       openLabel: string;
+      cloneLabel: string;
       effectLineTitle: string;
       effectNotRecorded: string;
       truncated: string;
@@ -9289,6 +9308,8 @@ type Messages = {
       title: string;
       categories: string;
       allCategories: string;
+      providers: string;
+      allProviders: string;
       categoriesNote: string;
       allOnPage: string;
       categoriesDeclaredNote: string;
@@ -9296,6 +9317,8 @@ type Messages = {
       unclassified: string;
       noTags: string;
       emptyCategory: string;
+      emptyProvider: string;
+      emptyProviderCategory: string;
       gateNote: string;
       columns: {
         version: string;

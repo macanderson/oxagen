@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CONTEXT_RECORD_LABEL_MAX } from "../context-record-label";
 import { registerCapability } from "../registry";
 import {
   constraintEffectSchema,
@@ -37,10 +38,10 @@ export const contextRecordPublishShape = z
       .string()
       .trim()
       .min(1)
-      .max(200)
+      .max(CONTEXT_RECORD_LABEL_MAX)
       .optional()
       .describe(
-        "Display name only. Omit it to keep the current label; changing it never creates a version.",
+        "The record's name, at most 36 characters. Omit it to keep the current label. A rename never creates a version and never changes the lineage.",
       ),
     body: z
       .string()

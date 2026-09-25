@@ -63,6 +63,14 @@ const proposal = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
+// A create-only call needs a lineage no row holds yet, because the store
+// refuses one a record or a proposal already carries (ADR-178).
+const onLineage = (lineageId: string, over: Record<string, unknown> = {}) =>
+  proposal({
+    ...over,
+    record: { ...proposal().record, lineageId },
+  });
+
 beforeEach(() => {
   gate.refuse = false;
   gate.keyCreator = "u_key_creator";
@@ -94,6 +102,23 @@ describe("propose_record", () => {
     expect(
       h.store.proposals.find((p) => p.publicId === labelled.proposalId)?.source,
     ).toBe("findings job · fnd_01K5RT6C");
+  });
+
+  it("asks the store for a new lineage only when the call or the handler says create-only (ADR-178)", async () => {
+    const h = harness();
+    const insert = vi.spyOn(h.store, "insertProposal");
+    await createProposeRecordHandler(h)(proposal(), ctx());
+    expect(insert.mock.calls[0]).toHaveLength(1);
+    await createProposeRecordHandler(h)(
+      onLineage("ctx.platform.create-only-by-input", { createOnly: true }),
+      ctx(),
+    );
+    expect(insert.mock.calls[1]?.[1]).toEqual({ createOnly: true });
+    await createProposeRecordHandler({ ...h, createOnly: true })(
+      onLineage("ctx.platform.create-only-by-handler", { createOnly: false }),
+      ctx(),
+    );
+    expect(insert.mock.calls[2]?.[1]).toEqual({ createOnly: true });
   });
 
   it("is refused for a role the gate excludes, signed in or by API key, and writes no row", async () => {

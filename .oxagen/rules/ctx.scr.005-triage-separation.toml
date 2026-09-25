@@ -3,6 +3,7 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.005-triage-separation"
+label = "Issue creators apply only triage"
 record_id = "rec_scr_005_triage_separation_291a84f0285e"
 record_hash = "sha256:ac48c338ff00912a35f16660b24f1e48cd9b3cf1790f933d8e262334923db6fe"
 kind = "rule"

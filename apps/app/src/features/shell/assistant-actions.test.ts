@@ -29,7 +29,7 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { askAssistant } = await import("./assistant-actions");
+const { askAssistant, stopAssistantTurn } = await import("./assistant-actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -51,7 +51,10 @@ const REPLY = {
   runId: "arun_01k9",
   reply: "Three runs are live.",
   parkedCards: [],
+  stopped: false,
 };
+
+const TURN_ID = "0192d4a8-7c1e-7a00-8000-0000000000f1";
 
 const onFleet = {
   conversationId: null,
@@ -178,6 +181,66 @@ describe("askAssistant", () => {
       new kernel.HandlerError({ code: "forbidden", reason: "not_a_member" }),
     );
     const result = await askAssistant("acme", "core-platform", onFleet);
+    expect(result).toMatchObject({ ok: false, reason: "denied" });
+  });
+
+  // The flyout names each turn so its Stop control can reach it (#4164).
+  it("names the turn with the id the flyout minted, so the turn can be stopped", async () => {
+    invoke.mockResolvedValue(REPLY);
+    await askAssistant("acme", "core-platform", {
+      ...onFleet,
+      turnId: TURN_ID,
+    });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({ turnId: TURN_ID });
+  });
+
+  it("hands back a stopped turn's partial reply with the stop marked", async () => {
+    const stopped = { ...REPLY, reply: "Three runs", stopped: true };
+    invoke.mockResolvedValue(stopped);
+    const result = await askAssistant("acme", "core-platform", {
+      ...onFleet,
+      turnId: TURN_ID,
+    });
+    expect(result).toEqual({ ok: true, value: stopped });
+  });
+});
+
+describe("stopAssistantTurn", () => {
+  it("stops the viewer's own turn in the workspace, by the id it was asked under", async () => {
+    invoke.mockResolvedValue({ turnId: TURN_ID, found: true });
+    const result = await stopAssistantTurn("acme", "core-platform", TURN_ID);
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "cancel_assistant_turn",
+      { turnId: TURN_ID },
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: { turnId: TURN_ID, found: true },
+    });
+  });
+
+  it("answers found false for a turn that is not running, not an error", async () => {
+    invoke.mockResolvedValue({ turnId: TURN_ID, found: false });
+    const result = await stopAssistantTurn("acme", "core-platform", TURN_ID);
+    expect(result).toEqual({
+      ok: true,
+      value: { turnId: TURN_ID, found: false },
+    });
+  });
+
+  it("refuses an id that is not a uuid before the kernel is asked (negative)", async () => {
+    const result = await stopAssistantTurn("acme", "core-platform", "t1");
+    expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("answers denied when the handler refuses the caller (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({ code: "forbidden", reason: "no_principal" }),
+    );
+    const result = await stopAssistantTurn("acme", "core-platform", TURN_ID);
     expect(result).toMatchObject({ ok: false, reason: "denied" });
   });
 });

@@ -18,6 +18,11 @@
 // A reply reveals once. The flyout passes `reveal: false` for one that already
 // finished, so returning to a workspace paints its transcript whole instead of
 // retyping every answer in it.
+//
+// The flyout shows Stop until `onRevealed` fires (#4164), so every reveal it
+// asks for reports its end, including one that reduced motion skipped. A
+// reveal the flyout stops is handed the prefix already on screen as its text,
+// and it ends there.
 import {
   useEffect,
   useEffectEvent,
@@ -42,10 +47,16 @@ export interface AssistantStreamingTextProps {
   text: string;
   /** False for a reply that has already been revealed once: it paints whole. */
   reveal: boolean;
-  /** Called once, when the reveal has painted the last character. */
+  /**
+   * Called once, when the reveal has painted the last character, or at mount
+   * when a reveal was asked for and reduced motion paints the reply whole.
+   */
   onRevealed: () => void;
-  /** Called on every frame the reveal makes the reply taller. */
-  onGrow: () => void;
+  /**
+   * Called on every frame the reveal makes the reply taller, with the number
+   * of characters now on screen. A stop keeps exactly that many.
+   */
+  onGrow: (shown: number) => void;
 }
 
 export function AssistantStreamingText({
@@ -58,10 +69,17 @@ export function AssistantStreamingText({
   // arrived, so there is no server render for it to disagree with, and a
   // `reveal` that flips to false when this instance finishes changes nothing.
   const [animate] = useState(() => reveal && !prefersReducedMotion());
+  // A reveal asked for and not run has still ended. Without this the flyout
+  // would wait on it, and show Stop, for as long as the reply stays open.
+  const [skipped] = useState(() => reveal && !animate);
   const [count, setCount] = useState(0);
   const countRef = useRef(0);
   const grew = useEffectEvent(onGrow);
   const finished = useEffectEvent(onRevealed);
+
+  useEffect(() => {
+    if (skipped) finished();
+  }, [skipped]);
 
   useEffect(() => {
     if (!animate) return;
@@ -101,7 +119,7 @@ export function AssistantStreamingText({
   // called from the frame loop, the caller would read the height the reply had
   // before this frame and scroll short of the tail.
   useLayoutEffect(() => {
-    if (animate && count > 0) grew();
+    if (animate && count > 0) grew(count);
   }, [animate, count]);
 
   if (!animate) return <AssistantMarkdown>{text}</AssistantMarkdown>;

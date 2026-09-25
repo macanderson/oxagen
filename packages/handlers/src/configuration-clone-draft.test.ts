@@ -79,7 +79,7 @@ describe("configuration clone source projection", () => {
       ),
     ).toEqual({
       lineageId: "review-cloned",
-      title: "Review-cloned",
+      label: "Review-cloned",
       kind: "rule",
       force: "must",
       sharingScope: "workspace",
@@ -132,8 +132,11 @@ describe("clone editor identity", () => {
               instructions: "Edited instructions",
             }
           : {
+              // A record's name is its label (ADR-178). A title the editor
+              // left in the source stays, since it names nothing.
               lineageId: "chosen-clone",
-              title: "Chosen clone",
+              title: "Stale",
+              label: "Chosen clone",
               statement: "Edited claim",
             },
       );

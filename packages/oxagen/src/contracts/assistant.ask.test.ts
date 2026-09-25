@@ -137,7 +137,11 @@ describe("ask_assistant contract", () => {
       reply: "Three runs are live.",
       parkedCards: [],
     };
-    expect(assistantAsk.output.parse(output)).toEqual(output);
+    // A turn nobody stopped reads back as not stopped (#4164).
+    expect(assistantAsk.output.parse(output)).toEqual({
+      ...output,
+      stopped: false,
+    });
     expect(
       assistantAsk.output.safeParse({ ...output, runId: "tse_abc" }).success,
     ).toBe(false);

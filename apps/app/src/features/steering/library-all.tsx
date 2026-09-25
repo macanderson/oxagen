@@ -114,7 +114,7 @@ export function LibraryAll({
     return {
       key: row.id,
       values: {
-        item: `${row.statement ?? row.title} ${row.lineage}`,
+        item: `${row.label ?? row.title} ${row.statement ?? ""} ${row.lineage}`,
         kind: kindOf(row),
         force: row.force ?? t("notRecorded"),
         scope: row.sharingScope,
@@ -125,9 +125,17 @@ export function LibraryAll({
       node: (
         <tr key={row.id} data-lineage={row.lineage}>
           <td className={`${cell} max-w-[54ch]`}>
-            <b className="block font-medium text-foreground">
-              {row.statement ?? row.title}
+            <b data-term="label" className="block font-medium text-foreground">
+              {row.label ?? row.title}
             </b>
+            {row.statement === null ? null : (
+              <span
+                data-term="statement"
+                className="block text-[12.5px] text-muted-foreground"
+              >
+                {row.statement}
+              </span>
+            )}
             <SafeLink
               to={routes.steeringRecord(at.org, at.ws, row.lineage)}
               className={`${linkText} font-mono text-[12px]`}

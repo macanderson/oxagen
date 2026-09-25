@@ -6,7 +6,9 @@ import {
   contextBranch,
   lineageSlug,
   parseRecordFile,
+  readRecordFile,
   recordFilePath,
+  reviseRecordStatement,
   serializeRecordFile,
   stampRecordObject,
 } from "./context.steering.file";
@@ -95,5 +97,71 @@ describe("record file", () => {
         record_hash: a.record_hash,
       },
     );
+  });
+
+  it("writes the label after the lineage and keeps it out of the hash (ADR-178)", () => {
+    const input = {
+      lineageId: "ctx.release.no-reread-changelog",
+      kind: "rule" as const,
+      force: "should" as const,
+      sharingScope: "workspace" as const,
+      statement: "Do not re-read CHANGELOG.md more than once in a run.",
+      origin: "user" as const,
+      proposalPublicId: "prp_1",
+      setId: "a-intel.platform",
+    };
+    const unnamed = buildRecordFile(input).record[0]!;
+    const named = buildRecordFile({
+      ...input,
+      label: "Read the changelog once",
+    }).record[0]!;
+    const renamed = buildRecordFile({ ...input, label: "Changelog once" })
+      .record[0]!;
+    // A name is not content: the three share one identity.
+    expect(named.record_hash).toBe(unnamed.record_hash);
+    expect(named.record_id).toBe(unnamed.record_id);
+    expect(renamed.record_hash).toBe(unnamed.record_hash);
+    expect(Object.keys(named).slice(0, 3)).toEqual([
+      "lineage_id",
+      "label",
+      "record_id",
+    ]);
+    expect("label" in unnamed).toBe(false);
+
+    const text = serializeRecordFile(
+      buildRecordFile({ ...input, label: "Read the changelog once" }),
+    );
+    expect(text).toContain('label = "Read the changelog once"');
+    expect(readRecordFile(text)?.label).toBe("Read the changelog once");
+    expect(
+      readRecordFile(serializeRecordFile(buildRecordFile(input)))?.label,
+    ).toBeNull();
+  });
+
+  it("carries the label through a statement revision", () => {
+    const text = serializeRecordFile(
+      buildRecordFile({
+        lineageId: "ctx.a",
+        label: "Cache the first read",
+        kind: "fact",
+        force: "info",
+        sharingScope: "repository",
+        statement: "one",
+        origin: "inferred",
+        proposalPublicId: "prp_1",
+        setId: "o.r",
+      }),
+    );
+    const revised = reviseRecordStatement(text, "two")!;
+    const back = readRecordFile(revised)!;
+    expect(back.label).toBe("Cache the first read");
+    expect(back.statement).toBe("two");
+    const raw = (
+      parseRecordFile(revised) as { record: Record<string, unknown>[] }
+    ).record[0]!;
+    expect(stampRecordObject(raw)).toEqual({
+      record_id: back.recordId,
+      record_hash: back.recordHash,
+    });
   });
 });

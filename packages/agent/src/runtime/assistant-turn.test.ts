@@ -657,6 +657,7 @@ describe("the prepared turn", () => {
       runId: "arun_0123456789abcdef012345",
       reply: "hi",
       parkedCards: [],
+      stopped: false,
     });
     expect(usages).toEqual([
       {
@@ -1436,10 +1437,9 @@ describe("the belt the engine is handed", () => {
   beforeEach(async () => {
     mocks.registry = REGISTRY;
     mocks.readActiveEmergencyDenies.mockResolvedValue([]);
-    const real =
-      await vi.importActual<typeof import("./materialize-tools")>(
-        "./materialize-tools",
-      );
+    const real = await vi.importActual<typeof import("./materialize-tools")>(
+      "./materialize-tools",
+    );
     mocks.materializeTools.mockImplementation(
       async (...args: Parameters<typeof real.materializeTools>) => {
         mocks.log.push("materialize");
@@ -1543,5 +1543,183 @@ describe("the belt the engine is handed", () => {
     expect(mocks.openAssistantRun.mock.calls[0]![0].toolAllowlist).toContain(
       "set_budget",
     );
+  });
+});
+
+// A person's stop (#4164): the handler folds `cancel_assistant_turn`'s signal
+// into `abortSignal`, which cancels the engine, and passes it as `stopSignal`
+// too. The engine then ends the turn with its aborted outcome, and the turn
+// keeps what was written as a stopped reply instead of refusing.
+describe("a person's stop (#4164)", () => {
+  const aborted = () =>
+    Object.assign(new Error("stopped by the person who asked"), {
+      code: "engine_aborted",
+    });
+
+  /** The hooks the handler passes once the person has pressed Stop. */
+  function stoppedHooks(): AssistantTurnHooks {
+    const stop = new AbortController();
+    stop.abort("stopped by the person who asked");
+    return { abortSignal: stop.signal, stopSignal: stop.signal };
+  }
+
+  /** A turn the engine ended aborted after the given parts. */
+  function abortedTurn(parts: unknown[], text: string) {
+    return {
+      ...fakeTurn({ text }),
+      fullStream: (async function* () {
+        for (const part of parts) yield part;
+        yield { type: "error", error: aborted() };
+      })(),
+    };
+  }
+
+  function assistantInsert() {
+    return captured.inserts.find(
+      (i) => i.table === schema.messages && i.values.role === "assistant",
+    );
+  }
+
+  function executionStatus() {
+    const call = mocks.invoke.mock.calls.find(
+      (c: unknown[]) => c[0] === "get_message_execution",
+    );
+    return (call?.[1] as { status?: string } | undefined)?.status;
+  }
+
+  it("keeps the reply written before a stop mid-reply, marked stopped, and records the execution cancelled", async () => {
+    mocks.runGovernedTurn.mockImplementationOnce(async () =>
+      abortedTurn(
+        [{ type: "text-delta", text: "The run failed at" }],
+        "The run failed at",
+      ),
+    );
+    const hooks = stoppedHooks();
+    const result = await runTurn(request, hooks);
+
+    expect(result).toMatchObject({ stopped: true, reply: "The run failed at" });
+    expect(mocks.runGovernedTurn.mock.calls[0]![0].abortSignal).toBe(
+      hooks.abortSignal,
+    );
+    expect(assistantInsert()?.values).toMatchObject({
+      content: "The run failed at",
+      metadata: { status: "stopped" },
+    });
+    expect(executionStatus()).toBe("cancelled");
+  });
+
+  it("saves an empty stopped reply when the stop lands before the first token", async () => {
+    mocks.runGovernedTurn.mockImplementationOnce(async () =>
+      abortedTurn([], ""),
+    );
+    const result = await runTurn(request, stoppedHooks());
+
+    expect(result).toMatchObject({ stopped: true, reply: "" });
+    expect(assistantInsert()?.values).toMatchObject({
+      content: "",
+      metadata: { status: "stopped" },
+    });
+    expect(executionStatus()).toBe("cancelled");
+  });
+
+  it("keeps the tool call a stop cut short on the execution record", async () => {
+    mocks.runGovernedTurn.mockImplementationOnce(
+      async (args: {
+        ledger: {
+          modelCall: (r: unknown) => Promise<void>;
+          toolCall: (r: unknown) => Promise<void>;
+        };
+      }) => {
+        await args.ledger.modelCall({
+          seq: 1,
+          requestId: "mc-1",
+          role: "worker",
+          provider: "anthropic",
+          model: "claude",
+          outcome: "completed",
+        });
+        await args.ledger.toolCall({
+          seq: 2,
+          requestId: "tc-1",
+          toolName: "list_runs",
+          outcome: "cancelled",
+          input: {},
+          durationMs: 40,
+        });
+        return abortedTurn(
+          [
+            { type: "text-delta", text: "Checking your runs." },
+            { type: "tool-call", toolName: "list_runs", input: {} },
+          ],
+          "Checking your runs.",
+        );
+      },
+    );
+    const result = await runTurn(request, stoppedHooks());
+
+    expect(result).toMatchObject({
+      stopped: true,
+      reply: "Checking your runs.",
+    });
+    const call = mocks.invoke.mock.calls.find(
+      (c: unknown[]) => c[0] === "get_message_execution",
+    );
+    const input = call![1] as {
+      status: string;
+      steps: Array<{ toolCalls?: Array<Record<string, unknown>> }>;
+    };
+    expect(input.status).toBe("cancelled");
+    expect(input.steps[0]!.toolCalls).toEqual([
+      expect.objectContaining({ toolName: "list_runs", status: "failed" }),
+    ]);
+  });
+
+  it("still refuses an abort that was not a stop: a disconnect or a budget stop (negative)", async () => {
+    mocks.runGovernedTurn.mockImplementationOnce(async () =>
+      abortedTurn([{ type: "text-delta", text: "partial" }], "partial"),
+    );
+    // The handler passes the stop signal whenever the caller minted a turn
+    // id; nobody pressed Stop, so it is not aborted.
+    const disconnect = new AbortController();
+    disconnect.abort();
+    const err = await runTurn(request, {
+      abortSignal: disconnect.signal,
+      stopSignal: new AbortController().signal,
+    }).catch((e: unknown) => e);
+
+    expect(err).toMatchObject({ code: "engine_aborted" });
+    expect(assistantInsert()).toBeUndefined();
+    expect(executionStatus()).toBeUndefined();
+  });
+
+  it("still refuses a failure that ended the turn before the stop landed (negative)", async () => {
+    const failure = Object.assign(
+      new Error("the assistant engine is unavailable"),
+      { code: "engine_unavailable" },
+    );
+    mocks.runGovernedTurn.mockImplementationOnce(async () => ({
+      ...fakeTurn({ text: "" }),
+      fullStream: (async function* () {
+        yield { type: "error", error: failure };
+      })(),
+    }));
+
+    await expect(runTurn(request, stoppedHooks())).rejects.toBe(failure);
+    expect(assistantInsert()).toBeUndefined();
+  });
+
+  it("refuses a stopped turn whose receipt could not be written (negative)", async () => {
+    const unrecorded = Object.assign(new Error("receipt not written"), {
+      code: "assistant_run_not_recorded",
+    });
+    const rejected = Promise.reject(unrecorded);
+    rejected.catch(() => undefined);
+    mocks.runGovernedTurn.mockImplementationOnce(async () => ({
+      ...abortedTurn([{ type: "text-delta", text: "partial" }], "partial"),
+      finalText: rejected,
+    }));
+
+    await expect(runTurn(request, stoppedHooks())).rejects.toBe(unrecorded);
+    expect(assistantInsert()).toBeUndefined();
   });
 });

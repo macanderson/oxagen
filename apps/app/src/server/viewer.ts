@@ -308,13 +308,25 @@ export type RouteViewer =
   | { kind: "ok"; ctx: OrgCtx }
   | Exclude<ViewerResolution, { kind: "ok" }>;
 
+/** What a route handler under a workspace learns: a workspace ctx, or why there is none. */
+export type WsRouteViewer =
+  | { kind: "ok"; ctx: WsCtx }
+  | Exclude<ViewerResolution, { kind: "ok" }>;
+
 /**
- * The organization viewer for a route handler (ARCHITECTURE.md §3.1): the
- * resolution requireViewer makes, answered as a value, never as a redirect or
- * a not-found interrupt, so the handler writes its own response.
+ * The viewer for a route handler (ARCHITECTURE.md §3.1): the resolution
+ * requireViewer makes, answered as a value, never as a redirect or a
+ * not-found interrupt, so the handler writes its own response. Named with a
+ * workspace, it resolves the workspace too, and a viewer who is not a member
+ * of it is `not_found`.
  */
-export async function resolveViewer(org: string): Promise<RouteViewer> {
-  const result = await resolveSession(org);
+export function resolveViewer(org: string): Promise<RouteViewer>;
+export function resolveViewer(org: string, ws: string): Promise<WsRouteViewer>;
+export async function resolveViewer(
+  org: string,
+  ws?: string,
+): Promise<RouteViewer> {
+  const result = await resolveSession(org, ws);
   return result.kind === "ok"
     ? { kind: "ok", ctx: mintResolved(result) }
     : result;

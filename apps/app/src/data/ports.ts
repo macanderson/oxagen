@@ -546,10 +546,13 @@ export interface DataSource {
    * as `exhausted`, which the seam answers with the page's error state.
    */
   tools: {
-    /** list_tool_versions: one cursor page of the registry, optionally one consequence tag */
+    /**
+     * list_tool_versions: one cursor page of the registry, optionally one
+     * consequence tag, one server (its `mcs_…` id), or both
+     */
     versions(
       ctx: WsCtx,
-      q: { category: string | null; cursor: string | null },
+      q: { category: string | null; cursor: string | null; serverId: string | null },
     ): Promise<Read<ToolVersionPage>>;
     /** list_credential_grants: one cursor page of the broker's grants, newest first */
     grants(

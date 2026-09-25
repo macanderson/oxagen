@@ -98,6 +98,48 @@ describe("get_clone_draft", () => {
       "review-cloned-2",
     );
   });
+  it("names a record clone by a label of at most 36 characters and lets the label repeat (ADR-178)", async () => {
+    const record: ConfigurationSource = {
+      ...original,
+      kind: "record",
+      id: "ctx.core.review",
+      slug: "ctx.core.review",
+      name: "Review every changed file before merge",
+      source: [
+        'schema = "context-record/v0.1"',
+        "[[record]]",
+        'lineage_id = "ctx.core.review"',
+        'label = "Review every changed file before merge"',
+        'kind = "rule"',
+        'sharing_scope = "workspace"',
+        'statement = "Review every changed file before merge."',
+        "[record.steering]",
+        'force = "must"',
+      ].join("\n"),
+      files: [],
+    };
+    const taken = vi.fn().mockResolvedValue(
+      takenNames({
+        // A label another record already carries does not rule a
+        // candidate out. Only the slug does.
+        names: new Set(["Review every changed file bef-cloned"]),
+      }),
+    );
+    const out = await createConfigurationCloneGetHandler({
+      source: vi.fn().mockResolvedValue(record),
+      taken,
+      branchTaken: vi.fn().mockResolvedValue(false),
+    })({ kind: "record", sourceId: "ctx.core.review" }, makeCTX());
+    expect(out).toMatchObject({
+      slug: "ctx.core.review-cloned",
+      name: "Review every changed file bef-cloned",
+    });
+    expect(out.name.length).toBeLessThanOrEqual(36);
+    expect(out.source).toContain(
+      'label = "Review every changed file bef-cloned"',
+    );
+    expect(out.source).toContain('lineageId = "ctx.core.review-cloned"');
+  });
   it("refuses denied users before reading a source", async () => {
     gate.assertOrgRole.mockRejectedValue(new Error("denied"));
     const source = vi.fn();

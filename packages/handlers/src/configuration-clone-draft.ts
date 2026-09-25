@@ -80,7 +80,7 @@ export function clonedConfigurationText(
     return invalid();
   const proposed = proposedRecordSchema.safeParse({
     lineageId: slug,
-    title: name,
+    label: name,
     kind: "kind" in raw ? raw.kind : undefined,
     force: raw.steering.force,
     sharingScope: "sharing_scope" in raw ? raw.sharing_scope : undefined,
@@ -112,6 +112,6 @@ export function applyCloneIdentity(
     ...doc,
     ...(input.kind === "agent"
       ? { slug: input.slug, name: input.name }
-      : { lineageId: input.slug, title: input.name }),
+      : { lineageId: input.slug, label: input.name }),
   });
 }

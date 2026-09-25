@@ -1,0 +1,126 @@
+{
+  "turn": "04 what is pending approval",
+  "question": "What is waiting for my approval?",
+  "source": "hand-authored",
+  "handlers": {
+    "list_approvals": {
+      "items": [
+        {
+          "id": "apr_replay2",
+          "runId": "arun_replay5",
+          "tool": "create_pull_request",
+          "requester": "release-bot",
+          "createdAt": "2026-09-24T08:50:00.000Z",
+          "expiresAt": "2026-09-24T09:50:00.000Z",
+          "mandateId": null,
+          "autoEligibility": null,
+          "chain": {
+            "agentKey": "agt_replay",
+            "rule": null
+          }
+        }
+      ],
+      "nextCursor": null
+    }
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is waiting for my approval?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "list_approvals",
+      "input": {}
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "list_approvals",
+          "input": {}
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is waiting for my approval?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "One call waits for you: release-bot's create_pull_request, until 09:50 UTC."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "One call waits for you: release-bot's create_pull_request, until 09:50 UTC.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["list_approvals"],
+    "gates": [
+      "emergency_denies none",
+      "kill_switch list_approvals open",
+      "iam list_approvals allow",
+      "handler list_approvals"
+    ],
+    "ledger": [
+      "model completed",
+      "tool list_approvals completed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["ok"],
+    "refusals": [],
+    "invocations": ["list_approvals completed"],
+    "approvals": [],
+    "answer": "One call waits for you: release-bot's create_pull_request, until 09:50 UTC."
+  }
+}

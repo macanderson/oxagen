@@ -3,6 +3,7 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.001-no-full-suite-builds"
+label = "Run only the tests a change touches"
 record_id = "rec_scr_001_no_full_suite_builds_69899d168341"
 record_hash = "sha256:c095851cdba239d0aa26cbc8da90611216c0a1a7f3275d74ba23df6693e4cde0"
 kind = "constraint"

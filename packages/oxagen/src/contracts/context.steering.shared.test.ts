@@ -60,6 +60,21 @@ describe("steering vocabulary", () => {
     expect(r.success && r.data.title).toBe("Reads");
   });
 
+  it("caps a label at 36 characters (ADR-178)", () => {
+    const ok = proposedRecordSchema.safeParse({
+      ...base,
+      label: "x".repeat(36),
+    });
+    expect(ok.success).toBe(true);
+    expect(
+      proposedRecordSchema.safeParse({ ...base, label: "x".repeat(37) })
+        .success,
+    ).toBe(false);
+    expect(
+      proposedRecordSchema.safeParse({ ...base, label: "  " }).success,
+    ).toBe(false);
+  });
+
   it("runs the six §10.3 checks in order and records each outcome", () => {
     expect(CHECK_NAMES).toEqual([
       "schema",

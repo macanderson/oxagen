@@ -126,6 +126,10 @@
           "statement"
         ],
         "additionalProperties": false
+      },
+      "turnId": {
+        "type": "string",
+        "format": "uuid"
       }
     },
     "required": [
@@ -182,6 +186,10 @@
           ],
           "additionalProperties": false
         }
+      },
+      "stopped": {
+        "type": "boolean",
+        "default": false
       }
     },
     "required": [

@@ -1,8 +1,8 @@
 /**
  * Unit tests for the list_tool_versions handler (#2958). Tier-free org; the
  * role gate runs for real against a tx double. The page read is an
- * in-memory store applying the query's semantics (scope, category, order,
- * cursor, limit + 1); the gate is decided by the real matcher against
+ * in-memory store applying the query's semantics (scope, category, server,
+ * order, cursor, limit + 1); the gate is decided by the real matcher against
  * switches built the way set_kill_switch writes them.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +10,7 @@ import { isHandlerError } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { schema } from "@oxagen/database";
 import { resourceScopeDigestOf, type KillSwitchRow } from "@oxagen/iam";
+import { drizzle } from "drizzle-orm/postgres-js";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -30,6 +31,7 @@ import {
   decodeRegistryCursor,
   encodeRegistryCursor,
   gateOf,
+  registryPageQuery,
   type PageQuery,
   type RegistryRow,
   type ToolVersionListDeps,
@@ -124,6 +126,7 @@ function memoryPage(rows: RegistryRow[]) {
         // The SQL matches either half of the consequence tags; so does this.
         return unionConsequenceTags(r).includes(q.category);
       })
+      .filter((r) => q.serverId === null || r.serverPublicId === q.serverId)
       .filter((r) => {
         if (!q.cursor) return true;
         return (
@@ -266,6 +269,51 @@ describe("list_tool_versions", () => {
       ctx(),
     );
     expect(out.items.map((i) => i.slug)).toEqual(["create_payment"]);
+  });
+
+  it("filters by the server a version was imported from, alone and with a tag", async () => {
+    const rows = [
+      row({ slug: "search" }),
+      row({
+        slug: "create_issue",
+        mcpServerId: uuid(900),
+        serverPublicId: "mcs_linear",
+      }),
+      row({
+        slug: "create_payment",
+        mcpServerId: uuid(901),
+        serverPublicId: "mcs_stripe",
+        classification: classified,
+        classifiedAt: new Date(),
+      }),
+      row({
+        slug: "list_charges",
+        mcpServerId: uuid(901),
+        serverPublicId: "mcs_stripe",
+      }),
+      // Declared here: no server, so no server filter selects it.
+      row({
+        slug: "summarize_invoice",
+        source: "custom",
+        mcpServerId: null,
+        serverPublicId: null,
+      }),
+    ];
+    const handler = handlerOver(rows);
+    const stripe = await handler({ limit: 50, serverId: "mcs_stripe" }, ctx());
+    expect(stripe.items.map((i) => i.slug)).toEqual([
+      "create_payment",
+      "list_charges",
+    ]);
+    expect(stripe.items.every((i) => i.serverId === "mcs_stripe")).toBe(true);
+    const both = await handler(
+      { limit: 50, serverId: "mcs_stripe", category: "moves_money" },
+      ctx(),
+    );
+    expect(both.items.map((i) => i.slug)).toEqual(["create_payment"]);
+    const none = await handler({ limit: 50, serverId: "mcs_gone" }, ctx());
+    expect(none.items).toEqual([]);
+    expect(none.nextCursor).toBeNull();
   });
 
   it("pages on an opaque cursor and refuses a foreign one", async () => {
@@ -433,5 +481,64 @@ describe("list_tool_versions", () => {
       ctx(),
     ).catch((e: unknown) => e);
     expect(isHandlerError(err) && err.code).toBe("forbidden");
+  });
+});
+
+/** Every value bound to `<column> = $n`. */
+function boundTo(
+  stmt: { sql: string; params: unknown[] },
+  column: string,
+): unknown[] {
+  const escaped = column.replace(/[.*+?^${}()|[\]\\"]/g, "\\$&");
+  return [...stmt.sql.matchAll(new RegExp(`${escaped} = \\$(\\d+)`, "g"))].map(
+    (m) => stmt.params[Number(m[1]) - 1],
+  );
+}
+
+// The handler tests above read through memoryPage, which mirrors the query's
+// semantics. These read the SQL itself, so deleting the server predicate from
+// registryPageQuery fails here rather than passing on the mirror.
+describe("list_tool_versions page query", () => {
+  const db = drizzle.mock({ schema });
+  const scope = { orgId: ORG, workspaceId: WS };
+  const first: PageQuery = {
+    cursor: null,
+    limit: 50,
+    category: null,
+    serverId: null,
+  };
+  const SERVER_PUBLIC_ID = '"mcp"."mcp_servers"."public_id"';
+  const TOOLS_ORG = '"agent"."tools"."org_id"';
+  const TOOLS_WS = '"agent"."tools"."workspace_id"';
+
+  it("binds the server's public id on the joined server row, and keeps the tenant fence", () => {
+    const query = registryPageQuery(db, scope, {
+      ...first,
+      serverId: "mcs_stripe",
+    }).toSQL();
+    expect(boundTo(query, SERVER_PUBLIC_ID)).toEqual(["mcs_stripe"]);
+    // Bound, never interpolated.
+    expect(query.sql).not.toContain("mcs_stripe");
+    expect(boundTo(query, TOOLS_ORG)).toEqual([ORG]);
+    expect(boundTo(query, TOOLS_WS)).toEqual([WS]);
+  });
+
+  it("names no server when the page is not narrowed to one", () => {
+    const query = registryPageQuery(db, scope, first).toSQL();
+    expect(boundTo(query, SERVER_PUBLIC_ID)).toEqual([]);
+    expect(boundTo(query, TOOLS_ORG)).toEqual([ORG]);
+    expect(boundTo(query, TOOLS_WS)).toEqual([WS]);
+  });
+
+  it("holds the server beside a category and a cursor", () => {
+    const query = registryPageQuery(db, scope, {
+      ...first,
+      category: "moves_money",
+      serverId: "mcs_stripe",
+      cursor: { slug: "create_payment", id: uuid(7) },
+    }).toSQL();
+    expect(boundTo(query, SERVER_PUBLIC_ID)).toEqual(["mcs_stripe"]);
+    expect(query.params).toContain("moves_money");
+    expect(query.params).toContain(uuid(7));
   });
 });

@@ -20,6 +20,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProposalStatus } from "@/data/contracts/steering";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { IntlProvider } from "@/test/intl";
 import {
   agentPage,
@@ -529,7 +530,14 @@ describe("the Library, All shelf", () => {
       "ctx.b.info",
     ]);
     const [must, should] = rows;
-    expect(must).toHaveTextContent("A must record.");
+    // The item leads with the label (the title stands in until the record
+    // declares one), then the statement, then the slug (ADR-178).
+    expect(must?.querySelector('[data-term="label"]')).toHaveTextContent(
+      /^Read CHANGELOG.md once per run$/,
+    );
+    expect(must?.querySelector('[data-term="statement"]')).toHaveTextContent(
+      /^A must record.$/,
+    );
     expect(
       within(must ?? table).getByRole("link", { name: "ctx.a.must" }),
     ).toHaveAttribute("href", `${BASE}/records/ctx.a.must`);
@@ -877,6 +885,87 @@ describe("Records", () => {
     ).toBeVisible();
   });
 
+  it("offers Clone on each card, which opens the clone editor on that record's slug", async () => {
+    const receive = vi.fn((event: Event) => createRequestOf(event));
+    window.addEventListener(CREATE_EVENT, receive);
+    try {
+      await renderSteering("/records");
+      const card = within(section("Published records")).getByRole("article");
+      fireEvent.click(
+        within(card).getByRole("button", {
+          name: "Clone ctx.release.no-reread-changelog",
+        }),
+      );
+      expect(receive).toHaveReturnedWith({
+        kind: "record",
+        cloneSourceRef: "ctx.release.no-reread-changelog",
+      });
+    } finally {
+      window.removeEventListener(CREATE_EVENT, receive);
+    }
+  });
+
+  it("leads a card with the record's label and prints its statement under it (ADR-178)", async () => {
+    await renderSteering("/records", {
+      records: readOk({
+        records: [publishedRecord({ label: "Read the changelog once" })],
+        total: 1,
+      }),
+    });
+    const card = within(section("Published records")).getByRole("article");
+    expect(card.querySelector('[data-term="label"]')).toHaveTextContent(
+      /^Read the changelog once$/,
+    );
+    expect(card.querySelector('[data-term="statement"]')).toHaveTextContent(
+      /^Do not re-read CHANGELOG.md after the first read in a run.$/,
+    );
+  });
+
+  it("sorts the cards by label, with the title standing in for a record that declares none (ADR-178)", async () => {
+    // The statements run the other way from the labels, so a sort by
+    // statement would put the cards in the opposite order.
+    await renderSteering("/records", {
+      records: readOk({
+        records: [
+          publishedRecord({
+            id: "ctr_alpha",
+            lineage: "ctx.a.alpha",
+            label: "Alpha",
+            statement: "Zed comes last.",
+            publishedAt: "2026-09-11T09:00:00.000Z",
+          }),
+          publishedRecord({
+            id: "ctr_beta",
+            lineage: "ctx.a.beta",
+            label: "Beta",
+            statement: "Middle.",
+            publishedAt: "2026-09-12T09:00:00.000Z",
+          }),
+          publishedRecord({
+            id: "ctr_gamma",
+            lineage: "ctx.a.gamma",
+            title: "Gamma",
+            statement: "Aardvark comes first.",
+            publishedAt: "2026-09-10T09:00:00.000Z",
+          }),
+        ],
+        total: 3,
+      }),
+    });
+    const panel = section("Published records");
+    const labels = () =>
+      within(panel)
+        .getAllByRole("article")
+        .map((card) => card.querySelector('[data-term="label"]')?.textContent);
+    // Shown order is newest first.
+    expect(labels()).toEqual(["Beta", "Alpha", "Gamma"]);
+    const sort = within(panel).getByRole("combobox", { name: "Sort" });
+    fireEvent.change(sort, { target: { value: "asc" } });
+    expect(labels()).toEqual(["Alpha", "Beta", "Gamma"]);
+    fireEvent.change(sort, { target: { value: "desc" } });
+    expect(labels()).toEqual(["Gamma", "Beta", "Alpha"]);
+  });
+
   it("prints unclassified and the title for a record no Context PR wrote, with no fact it lacks", async () => {
     await renderSteering("/records", {
       records: readOk({
@@ -897,7 +986,10 @@ describe("Records", () => {
     });
     const card = within(section("Published records")).getByRole("article");
     expect(card).toHaveAttribute("data-kind", "unclassified");
-    expect(card).toHaveTextContent("Read CHANGELOG.md once per run");
+    expect(card.querySelector('[data-term="label"]')).toHaveTextContent(
+      /^Read CHANGELOG.md once per run$/,
+    );
+    expect(card.querySelector('[data-term="statement"]')).toBeNull();
     expect(card.querySelector('[data-term="force"]')).toBeNull();
     expect(card.querySelector('[data-term="tokens"]')).toBeNull();
     expect(card.querySelector('[data-term="commit"]')).toBeNull();
