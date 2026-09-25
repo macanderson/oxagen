@@ -316,6 +316,20 @@ describe("Registry › provider icon", () => {
       githubButton.querySelector('[data-provider-icon="initial"]'),
     ).toHaveTextContent("G");
   });
+
+  it("falls back to the provider's initial when its icon does not load", () => {
+    renderRegistry({ servers: readOk(rosterWithIcon()) });
+    const stripeButton = screen.getByRole("button", { name: "Open Stripe" });
+    const image = stripeButton.querySelector('[data-provider-icon="image"]');
+    if (!(image instanceof HTMLElement)) throw new Error("no Stripe icon");
+    fireEvent.error(image);
+    expect(
+      stripeButton.querySelector('[data-provider-icon="image"]'),
+    ).not.toBeInTheDocument();
+    expect(
+      stripeButton.querySelector('[data-provider-icon="initial"]'),
+    ).toHaveTextContent("S");
+  });
 });
 
 describe("Registry › provider chips", () => {
@@ -371,6 +385,17 @@ describe("Registry › provider chips", () => {
     expect(router.push).toHaveBeenLastCalledWith(
       `${TOOLS}?category=moves_money`,
     );
+  });
+
+  it("counts every provider from the unfiltered registry while one provider narrows the page", () => {
+    // The page holds Stripe's version alone. GitHub's count still comes from
+    // the unfiltered total, so it reads 1, not 0.
+    renderRegistry({
+      provider: STRIPE,
+      read: readOk(toolVersionPage({ items: [stripe()] })),
+    });
+    expect(providerChip(GITHUB)).toHaveTextContent(/GitHub1$/);
+    expect(providerChip(STRIPE)).toHaveTextContent(/Stripe1$/);
   });
 
   it("keeps the provider on the tag chips, the names toggle, and the next page", () => {

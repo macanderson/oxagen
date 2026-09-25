@@ -125,8 +125,12 @@ function afterCursor(cursor: RegistryCursor | null): SQL | undefined {
   );
 }
 
-/** Tools with an active version, by slug, one past the page. */
-function registryPageQuery(
+/**
+ * Tools with an active version, by slug, one past the page. Exported so the
+ * test can read the SQL it builds; the handler's in-memory page only mirrors
+ * these semantics.
+ */
+export function registryPageQuery(
   db: Pick<Tx, "select">,
   scope: { orgId: string; workspaceId: string },
   q: PageQuery,

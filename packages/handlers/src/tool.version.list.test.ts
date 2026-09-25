@@ -10,6 +10,7 @@ import { isHandlerError } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { schema } from "@oxagen/database";
 import { resourceScopeDigestOf, type KillSwitchRow } from "@oxagen/iam";
+import { drizzle } from "drizzle-orm/postgres-js";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -30,6 +31,7 @@ import {
   decodeRegistryCursor,
   encodeRegistryCursor,
   gateOf,
+  registryPageQuery,
   type PageQuery,
   type RegistryRow,
   type ToolVersionListDeps,
@@ -479,5 +481,64 @@ describe("list_tool_versions", () => {
       ctx(),
     ).catch((e: unknown) => e);
     expect(isHandlerError(err) && err.code).toBe("forbidden");
+  });
+});
+
+/** Every value bound to `<column> = $n`. */
+function boundTo(
+  stmt: { sql: string; params: unknown[] },
+  column: string,
+): unknown[] {
+  const escaped = column.replace(/[.*+?^${}()|[\]\\"]/g, "\\$&");
+  return [...stmt.sql.matchAll(new RegExp(`${escaped} = \\$(\\d+)`, "g"))].map(
+    (m) => stmt.params[Number(m[1]) - 1],
+  );
+}
+
+// The handler tests above read through memoryPage, which mirrors the query's
+// semantics. These read the SQL itself, so deleting the server predicate from
+// registryPageQuery fails here rather than passing on the mirror.
+describe("list_tool_versions page query", () => {
+  const db = drizzle.mock({ schema });
+  const scope = { orgId: ORG, workspaceId: WS };
+  const first: PageQuery = {
+    cursor: null,
+    limit: 50,
+    category: null,
+    serverId: null,
+  };
+  const SERVER_PUBLIC_ID = '"mcp"."mcp_servers"."public_id"';
+  const TOOLS_ORG = '"agent"."tools"."org_id"';
+  const TOOLS_WS = '"agent"."tools"."workspace_id"';
+
+  it("binds the server's public id on the joined server row, and keeps the tenant fence", () => {
+    const query = registryPageQuery(db, scope, {
+      ...first,
+      serverId: "mcs_stripe",
+    }).toSQL();
+    expect(boundTo(query, SERVER_PUBLIC_ID)).toEqual(["mcs_stripe"]);
+    // Bound, never interpolated.
+    expect(query.sql).not.toContain("mcs_stripe");
+    expect(boundTo(query, TOOLS_ORG)).toEqual([ORG]);
+    expect(boundTo(query, TOOLS_WS)).toEqual([WS]);
+  });
+
+  it("names no server when the page is not narrowed to one", () => {
+    const query = registryPageQuery(db, scope, first).toSQL();
+    expect(boundTo(query, SERVER_PUBLIC_ID)).toEqual([]);
+    expect(boundTo(query, TOOLS_ORG)).toEqual([ORG]);
+    expect(boundTo(query, TOOLS_WS)).toEqual([WS]);
+  });
+
+  it("holds the server beside a category and a cursor", () => {
+    const query = registryPageQuery(db, scope, {
+      ...first,
+      category: "moves_money",
+      serverId: "mcs_stripe",
+      cursor: { slug: "create_payment", id: uuid(7) },
+    }).toSQL();
+    expect(boundTo(query, SERVER_PUBLIC_ID)).toEqual(["mcs_stripe"]);
+    expect(query.params).toContain("moves_money");
+    expect(query.params).toContain(uuid(7));
   });
 });
