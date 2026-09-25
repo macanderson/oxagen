@@ -75,6 +75,9 @@ const turn = {
     runId: RUN,
     reply: "Three runs are live.",
     parkedCards: [],
+    // The turn's calls, which the terminal carries (#4161). The vote is what
+    // this file is about, so the turn made none.
+    toolCalls: [],
     stopped: false,
   },
 };
