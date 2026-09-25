@@ -322,6 +322,8 @@ async function readLedgerToolCalls(args: {
   workspaceId: string;
   runUuid: string;
 }): Promise<ToolCallFrame[]> {
+  // tenancy: the scheduled rollup job reads outside a tenant scope, so the
+  // query is filtered by the run's orgId, workspaceId and run uuid.
   const rows = await withSystemDb((tx) =>
     tx
       .select({
