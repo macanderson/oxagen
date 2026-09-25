@@ -17,8 +17,9 @@ import { pathOf, type SafePath } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const push = vi.fn();
-const replace = vi.fn();
+const push = vi.fn<(href: string) => void>();
+const replace =
+  vi.fn<(href: string, options?: { scroll?: boolean }) => void>();
 const router = { push, replace, refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/features/shell/client", () => ({ openApprovals: vi.fn() }));
