@@ -142,6 +142,15 @@ describe("agent.approval.resolve capability", () => {
     ).toBeUndefined();
   });
 
+  it("is not on the agent surface: a person resolves an approval, never a model (ADR-175)", () => {
+    expect(agentApprovalResolve.surfaces).toEqual(["api", "mcp"]);
+    expect(agentApprovalResolve.surfaces).not.toContain("agent");
+  });
+
+  it("declares that it writes", () => {
+    expect(agentApprovalResolve.mutates).toBe(true);
+  });
+
   it("is registered in the capability registry", () => {
     expect(getCapability("resolve_approval")).toBe(agentApprovalResolve);
   });
