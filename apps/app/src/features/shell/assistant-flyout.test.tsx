@@ -47,7 +47,8 @@ declare global {
 // Server Action it replaced did, so these cases drive it through one fake
 // that takes the same three arguments. What arrives while a turn streams is
 // assistant-flyout.streaming.test.tsx.
-const askAssistant = vi.fn();
+const askAssistant =
+  vi.fn<(org: string, ws: string, question: unknown) => Promise<unknown>>();
 vi.mock("./assistant-stream-client", () => ({
   askAssistantStream: (org: string, ws: string, question: unknown) =>
     askAssistant(org, ws, question),
