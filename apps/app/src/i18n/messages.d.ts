@@ -2439,6 +2439,7 @@ type Messages = {
       lead: string;
       loading: string;
       name: string;
+      label: string;
       slug: string;
       source: string;
       companions: string;

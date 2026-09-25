@@ -2,6 +2,7 @@
 import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { configurationCloneGet } from "@oxagen/oxagen/contracts/configuration.clone.get";
 import { configurationCloneName } from "@oxagen/oxagen/configuration-clone";
+import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import {
   configurationBranchTaken,
@@ -38,11 +39,13 @@ export function createConfigurationCloneGetHandler(
         original.name,
         ordinal,
         maximum,
+        input.kind === "record" ? CONTEXT_RECORD_LABEL_MAX : undefined,
       );
       if (input.kind === "skill") candidate.name = candidate.slug;
       if (
         taken.slugs.has(candidate.slug) ||
-        taken.names.has(candidate.name) ||
+        // A record's name is its label, which may repeat (ADR-173).
+        (input.kind !== "record" && taken.names.has(candidate.name)) ||
         taken.files.has(configurationFilePath(input.kind, candidate.slug))
       )
         continue;

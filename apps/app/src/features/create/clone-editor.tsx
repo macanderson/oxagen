@@ -9,6 +9,7 @@ import {
   inputBase,
   mono,
 } from "@/ui/control-styles";
+import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, PullRequestLink } from "@/ui/navigation";
 import { routes } from "@/shared/safe-path";
@@ -140,9 +141,13 @@ export function CloneEditor({
           </label>
           {kind === "skill" ? null : (
             <label>
-              {t("name")}
+              {/* A record's name is its label, capped at 36 (ADR-173). */}
+              {kind === "record" ? t("label") : t("name")}
               <input
                 className={inputBase}
+                maxLength={
+                  kind === "record" ? CONTEXT_RECORD_LABEL_MAX : undefined
+                }
                 value={draft.name}
                 disabled={pending}
                 onChange={(e) => {

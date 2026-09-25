@@ -155,7 +155,7 @@ describe("propose_configuration_clone", () => {
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
         lineageId: "review-cloned",
-        title: "Review-cloned",
+        label: "Review-cloned",
         statement: "Review changes.",
       }),
       { createOnly: true },

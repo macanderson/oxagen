@@ -90,7 +90,7 @@ export function createConfigurationCloneProposeHandler(deps: {
         code: "conflict",
         reason: "clone_name_taken",
         message:
-          "This name already belongs to a record or proposal. Choose a new name.",
+          "Another configuration already holds this slug or name. Choose another.",
       });
     const github = createOnlyCloneGitHub(deps.github);
     const source = applyCloneIdentity(input);
@@ -175,7 +175,7 @@ export function createConfigurationCloneProposeHandler(deps: {
     });
     if (
       record.record.lineageId !== input.slug ||
-      record.record.title !== input.name ||
+      record.record.label !== input.name ||
       input.files.length
     )
       throw new HandlerError({

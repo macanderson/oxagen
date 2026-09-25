@@ -32,7 +32,17 @@ const agentDraft = {
   slug: "triage-cloned",
   name: "Triage cloned",
 };
-const mount = (kind: "skill" | "agent" = "skill", onClose = vi.fn()) =>
+const recordDraft = {
+  ...draft,
+  kind: "record",
+  sourceId: "ctx.core.review",
+  slug: "ctx.core.review-cloned",
+  name: "Review-cloned",
+};
+const mount = (
+  kind: "skill" | "agent" | "record" = "skill",
+  onClose = vi.fn(),
+) =>
   render(
     <IntlProvider>
       <CloneEditor
@@ -72,7 +82,7 @@ describe("configuration clone editor", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Propose clone" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "already occupied",
+      "already holds this slug or name",
     );
     expect(source).toHaveValue("edited configuration");
     expect(actions.proposeClone).toHaveBeenCalledWith("acme", "core", {
@@ -155,6 +165,14 @@ describe("configuration clone editor", () => {
       slug: "triage-fork",
       name: "Triage fork",
     });
+  });
+  it("names a record clone by its label and caps it at 36 characters (ADR-173)", async () => {
+    actions.readCloneDraft.mockResolvedValue({ ok: true, value: recordDraft });
+    mount("record");
+    const label = await screen.findByLabelText<HTMLInputElement>("Label");
+    expect(label).toHaveValue("Review-cloned");
+    expect(label.maxLength).toBe(36);
+    expect(screen.queryByLabelText("Display name")).toBeNull();
   });
   it("refuses to link a pull request url it cannot read", async () => {
     actions.proposeClone.mockResolvedValue({
