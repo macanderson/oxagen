@@ -12,8 +12,11 @@
 //     cost by token class and cache saving; before the rollup reaches a
 //     wrapped run, the per-model calls and reported cost ingest has folded
 //     from its frames (`provisional`, #4032);
-//   - the whole-run transcript at `everything`: prompts, steps, tool calls,
-//     their families and batches, the wall clock split.
+//   - the whole-run transcript's `figures`, which the server counts over the
+//     run's steps (ADR-182): prompts, steps, tool calls, their families and
+//     batches, and where the recorded time went. This module counts none of
+//     them; it shapes them and works out the one figure only the reader can,
+//     the wall clock to the run's end or to the instant the page rendered.
 //
 // The per-turn ledger is not derived here. The Cost tab reads it from
 // `get_run_turns`, which counts every frame of the run where the frames are
@@ -37,20 +40,12 @@ import type {
   RunTranscript,
   RunTurn,
   TranscriptEntry,
+  TranscriptFigures,
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { PriceTokenClass } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
-import { groupOf, type ToolGroup } from "./tool-detail";
-import {
-  buildTranscript,
-  flatSteps,
-  isOperatorPrompt,
-  stepDigest,
-  type TranscriptStep,
-  type TranscriptTurn,
-} from "./transcript-model";
-import { isWhole } from "./whole-transcript";
+import type { ToolGroup } from "./tool-detail";
 
 /** The six token classes of spec §12.6, in the order the Cost tab lists them. */
 export const TOKEN_CLASSES = [
@@ -157,16 +152,13 @@ type WallClock = {
   lead: WallLead | null;
 };
 
-type ToolCall = {
-  name: string;
-  group: ToolGroup;
-  /** The call's own wall time; null when the step is one frame. */
-  ms: number | null;
-  failed: boolean;
-  /** The frame that opened the call, for its `fr N` link. */
-  seq: string;
-  /** The batch it ran in: the calls between two model steps. */
-  batch: number;
+/** The run's tool calls, as the server counted them over its steps. */
+export type ToolCalls = {
+  count: number;
+  /** Calls that failed, or that a rule, a person or the harness refused. */
+  failed: number;
+  /** Calls per tool name, most called first; `name` null for a call whose record named no tool. */
+  tools: { name: string | null; calls: number }[];
 };
 
 export type Family = {
@@ -239,10 +231,11 @@ export type RunMetrics = {
   prompts: Prompts | null;
   wall: WallClock;
   modelCalls: number | null;
-  toolCalls: ToolCall[] | null;
+  /** Null when the transcript read carried no figures. */
+  toolCalls: ToolCalls | null;
   families: Family[] | null;
   batches: Batches | null;
-  /** Entries the transcript files under the errors chip. */
+  /** Entries that failed or were refused, as the server counted them. */
   errors: number | null;
   /** Input tokens per model call, over the rollup's model calls. */
   perModelCall: number | null;
@@ -322,17 +315,6 @@ export function provisionalCost(
   return total === null
     ? null
     : { value: total, floor: metrics.provisional?.partial === true };
-}
-
-const APPROVAL_REQUEST = "approval_request";
-
-function timeOf(entry: TranscriptEntry): number {
-  return Date.parse(entry.at);
-}
-
-/** The ms from a step's first frame to its last, 0 for a one-frame step. */
-function spanOf(step: TranscriptStep): number {
-  return Math.max(0, timeOf(step.last) - timeOf(step.first));
 }
 
 /**
@@ -423,167 +405,52 @@ export function turnFigures(turns: readonly RunTurn[]): TurnFigure[] {
   });
 }
 
-/**
- * The tool calls in step order, each with the batch it ran in. A batch is
- * the calls between two model steps: one model reply asks for them, and the
- * next model call reads their results.
- */
-function toolCallsOf(
-  turns: readonly TranscriptTurn[],
-  waits: readonly Wait[],
-): ToolCall[] {
-  const calls: ToolCall[] = [];
-  let batch = -1;
-  let open = false;
-  for (const turn of turns) {
-    for (const step of flatSteps(turn)) {
-      if (step.kind === "model") {
-        open = false;
-        continue;
-      }
-      if (step.kind !== "tool") continue;
-      if (!open) {
-        batch += 1;
-        open = true;
-      }
-      const digest = stepDigest(step);
-      calls.push({
-        name: digest.name,
-        group: groupOf(digest.name),
-        ms:
-          digest.durationMs === null
-            ? null
-            : Math.max(0, digest.durationMs - waitIn(step, waits)),
-        failed: digest.node === "deny",
-        seq: step.first.seq,
-        batch,
-      });
-    }
-    // A turn boundary closes the batch: the next turn opens on a prompt.
-    open = false;
-  }
-  return calls;
+/** The server's families, by the name the page's figures use. */
+function familiesOf(figures: TranscriptFigures): Family[] {
+  return figures.calls.families.map((family) => ({
+    group: family.family,
+    calls: family.calls,
+    share: family.share,
+    ms: family.ms,
+    failed: family.failed,
+    tools: family.tools,
+  }));
 }
 
-function familiesOf(calls: readonly ToolCall[]): Family[] {
-  const by = new Map<
-    ToolGroup,
-    { calls: number; ms: number; failed: number; names: Set<string> }
-  >();
-  for (const call of calls) {
-    const family = by.get(call.group) ?? {
-      calls: 0,
-      ms: 0,
-      failed: 0,
-      names: new Set<string>(),
-    };
-    family.calls += 1;
-    family.ms += call.ms ?? 0;
-    if (call.failed) family.failed += 1;
-    family.names.add(call.name);
-    by.set(call.group, family);
-  }
-  return [...by.entries()]
-    .map(([group, family]) => ({
-      group,
-      calls: family.calls,
-      share: calls.length === 0 ? 0 : family.calls / calls.length,
-      ms: family.ms,
-      failed: family.failed,
-      tools: family.names.size,
-    }))
-    .sort((a, b) => b.calls - a.calls || a.group.localeCompare(b.group));
-}
-
-function batchesOf(
-  calls: readonly ToolCall[],
-  turns: readonly TranscriptTurn[],
-): Batches | null {
-  if (calls.length === 0) return null;
-  const steps = new Map<string, TranscriptStep>();
-  for (const turn of turns)
-    for (const step of flatSteps(turn)) steps.set(step.first.seq, step);
-  const groups = new Map<number, ToolCall[]>();
-  for (const call of calls) {
-    const group = groups.get(call.batch) ?? [];
-    group.push(call);
-    groups.set(call.batch, group);
-  }
-  const histogram = new Map<number, number>();
-  let togetherMs = 0;
-  let widest = 0;
-  let parallel = 0;
-  for (const group of groups.values()) {
-    widest = Math.max(widest, group.length);
-    if (group.length > 1) parallel += 1;
-    histogram.set(group.length, (histogram.get(group.length) ?? 0) + 1);
-    const spans = group
-      .map((call) => steps.get(call.seq))
-      .filter((step): step is TranscriptStep => step !== undefined);
-    if (spans.length === 0) continue;
-    const start = Math.min(...spans.map((step) => timeOf(step.first)));
-    const end = Math.max(...spans.map((step) => timeOf(step.last)));
-    togetherMs += Math.max(0, end - start);
-  }
+/** The server's batch figures, with their histogram keyed by batch width. */
+function batchesOf(figures: TranscriptFigures): Batches | null {
+  const batches = figures.calls.batches;
+  if (batches === null) return null;
   return {
-    count: groups.size,
-    parallel,
-    widest,
-    fanOut: calls.length / groups.size,
-    serialMs: calls.reduce((sum, call) => sum + (call.ms ?? 0), 0),
-    togetherMs,
-    histogram,
+    count: batches.count,
+    parallel: batches.parallel,
+    widest: batches.widest,
+    fanOut: batches.fanOut,
+    serialMs: batches.serialMs,
+    togetherMs: batches.togetherMs,
+    histogram: new Map(
+      batches.histogram.map((row) => [row.width, row.batches] as const),
+    ),
   };
 }
 
-/** One parked call: when it parked, and how long until the frame after it. */
-type Wait = { at: number; ms: number };
-
 /**
- * Each parked call's wait: from the approval request to the frame after it,
- * which is the time a person held the run.
+ * Where the run's time went. The server counts the model, tool and waiting
+ * parts over the run's steps; the clock they are parts of runs to the run's
+ * end, or on a live run to the instant the page rendered, which only the
+ * reader knows. What the three parts leave of it is the harness's.
  */
-function waitsOf(entries: readonly TranscriptEntry[]): Wait[] {
-  const waits: Wait[] = [];
-  entries.forEach((entry, index) => {
-    if (entry.type !== APPROVAL_REQUEST) return;
-    const next = entries[index + 1];
-    if (next !== undefined)
-      waits.push({
-        at: timeOf(entry),
-        ms: Math.max(0, timeOf(next) - timeOf(entry)),
-      });
-  });
-  return waits;
-}
-
-/**
- * The wait a step's span holds. A parked tool call's step runs from the
- * request to the result, so its span includes the time a person took to
- * answer; that time is the person's, not the tool's. The approval frame is a
- * step of its own, so the wait is found by where it falls, not by frame.
- */
-function waitIn(step: TranscriptStep, waits: readonly Wait[]) {
-  const from = timeOf(step.first);
-  const to = timeOf(step.last);
-  return waits.reduce(
-    (sum, wait) => (wait.at >= from && wait.at < to ? sum + wait.ms : sum),
-    0,
-  );
-}
-
 function wallClock(
   run: RunRow,
-  entries: readonly TranscriptEntry[] | null,
-  turns: readonly TranscriptTurn[] | null,
-  waits: readonly Wait[],
+  last: TranscriptEntry | undefined,
+  wall: TranscriptFigures["wall"] | null,
   now: number | null,
 ): WallClock {
   // The clock ends when the status says the run did: at the recorder's end
   // time, else the seal, which is the server's receipt time and can trail the
   // run by the upload. A live run is still running, so its clock runs to the
   // instant the page was rendered and keeps counting in the browser; read
-  // with no such instant, it stops at the last recorded frame.
+  // with no such instant, it stops at the end of its last recorded step.
   const endedAt = run.status === "live" ? null : (run.endedAt ?? run.sealedAt);
   const sealed = endedAt !== null;
   if (run.status !== "live" && run.sealSource === "idle_timeout")
@@ -595,34 +462,23 @@ function wallClock(
       parts: null,
       lead: null,
     };
-  const last = entries?.at(-1);
+  const lastMs =
+    last === undefined ? null : last.elapsedMs + (last.durationMs ?? 0);
   const from = Date.parse(run.startedAt);
   const ticking =
     run.status === "live" && now !== null ? { from, at: now } : null;
   const ms = sealed
     ? Math.max(0, Date.parse(endedAt) - from)
     : ticking !== null
-      ? Math.max(last?.elapsedMs ?? 0, ticking.at - from)
-      : last === undefined
-        ? null
-        : last.elapsedMs;
-  if (ms === null || entries === null || turns === null || ms === 0)
+      ? Math.max(lastMs ?? 0, ticking.at - from)
+      : lastMs;
+  if (ms === null || wall === null || ms === 0)
     return { ms, sealed, closedIdle: false, ticking, parts: null, lead: null };
-  let model = 0;
-  let tool = 0;
-  for (const turn of turns) {
-    for (const step of flatSteps(turn)) {
-      if (step.kind === "model") model += spanOf(step);
-      else if (step.kind === "tool")
-        tool += Math.max(0, spanOf(step) - waitIn(step, waits));
-    }
-  }
-  const waiting = waits.reduce((sum, wait) => sum + wait.ms, 0);
   const parts: WallParts = {
-    model,
-    tool,
-    waiting,
-    harness: Math.max(0, ms - model - tool - waiting),
+    model: wall.modelMs,
+    tool: wall.toolMs,
+    waiting: wall.waitingMs,
+    harness: Math.max(0, ms - wall.modelMs - wall.toolMs - wall.waitingMs),
   };
   const lead = WALL_LEADS.reduce((best, key) =>
     parts[key] > parts[best] ? key : best,
@@ -645,20 +501,18 @@ export function runMetrics({
 }: {
   run: RunRow;
   cost: Read<RunCost>;
-  /** The whole-run transcript at `everything`. */
+  /** The whole-run transcript at `steps`, with the run's counts and figures. */
   transcript: Read<RunTranscript>;
   /**
    * The instant the page was rendered, in epoch milliseconds. A live run's
    * wall clock runs to it and keeps counting; without it, the clock stops at
-   * the run's last recorded frame.
+   * the run's last recorded step.
    */
   now?: number | null;
 }): RunMetrics {
   const rollup = cost.ok ? cost.value.rollup : null;
-  const entries = transcript.ok ? transcript.value.entries : null;
-  const turns = entries === null ? null : buildTranscript(entries);
-  const waits = entries === null ? [] : waitsOf(entries);
-  const calls = turns === null ? null : toolCallsOf(turns, waits);
+  const read = transcript.ok ? transcript.value : null;
+  const figures = read?.figures ?? null;
   const runCost = rollup?.cost ?? run.cost;
   const tokens = rollup === null ? null : tokenFigures(rollup);
   const reported = run.reportedTokens ?? null;
@@ -674,10 +528,10 @@ export function runMetrics({
           input: reported.input + reported.cacheRead + reported.cacheWrite,
           output: reported.output,
         };
-  const promptCount =
-    entries === null ? null : entries.filter(isOperatorPrompt).length;
   return {
-    whole: transcript.ok && isWhole(transcript.value),
+    // The server counts over every frame the read folded, so the figures are
+    // the whole run's unless the run passed the read's frame cap.
+    whole: read?.complete === true,
     tokens,
     reportedTokens,
     priced: rollup === null ? null : recordedClasses(rollup),
@@ -690,26 +544,25 @@ export function runMetrics({
     cacheHit: rollup?.cacheHitRate ?? null,
     productiveRatio: rollup?.productiveRatio ?? null,
     prompts:
-      promptCount === null
+      figures === null
         ? null
-        : { count: promptCount, corrective: Math.max(0, promptCount - 1) },
-    wall: wallClock(run, entries, turns, waits, now),
-    modelCalls:
-      rollup?.modelCalls ??
-      (turns === null
+        : {
+            count: figures.prompts,
+            corrective: Math.max(0, figures.prompts - 1),
+          },
+    wall: wallClock(run, read?.entries.at(-1), figures?.wall ?? null, now),
+    modelCalls: rollup?.modelCalls ?? figures?.steps.model ?? null,
+    toolCalls:
+      figures === null
         ? null
-        : turns.reduce(
-            (sum, turn) =>
-              sum + flatSteps(turn).filter((s) => s.kind === "model").length,
-            0,
-          )),
-    toolCalls: calls,
-    families: calls === null ? null : familiesOf(calls),
-    batches: calls === null || turns === null ? null : batchesOf(calls, turns),
-    errors:
-      entries === null
-        ? null
-        : entries.filter((entry) => entry.kinds.includes("errors")).length,
+        : {
+            count: figures.calls.count,
+            failed: figures.calls.failed,
+            tools: figures.calls.tools,
+          },
+    families: figures === null ? null : familiesOf(figures),
+    batches: figures === null ? null : batchesOf(figures),
+    errors: read?.counts?.errors ?? null,
     perModelCall:
       rollup === null || tokens === null || rollup.modelCalls === 0
         ? null

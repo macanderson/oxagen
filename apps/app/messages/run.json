@@ -56,6 +56,9 @@
       "searchLabel": "Search the transcript",
       "searchPlaceholder": "Search the transcript…",
       "matches": "{shown} of {total} entries",
+      "searching": "Searching…",
+      "searchFailed": "The search did not run. Change the words to try again.",
+      "unsearched": "{count, plural, one {# body was} other {# bodies were}} not searched: kept as a digest only, unreadable, or past what one search reads.",
       "chipsLabel": "Filter the transcript",
       "chip": {
         "prompt": "prompt",
@@ -415,6 +418,7 @@
         "byCalls": "What each tool cost is not recorded, so the tools are listed by calls.",
         "noTools": "This run called no tool.",
         "toolsNotRead": "The transcript was not read, so the tools are not listed.",
+        "unnamedTool": "A tool the record did not name",
         "note": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>, and how a request splits between them is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
         "noteNotRolledUp": "The rollup has not counted this run's tokens yet, so no area is priced."
       },

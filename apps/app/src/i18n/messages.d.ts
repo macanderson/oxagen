@@ -5887,6 +5887,9 @@ type Messages = {
       searchLabel: string;
       searchPlaceholder: string;
       matches: string;
+      searching: string;
+      searchFailed: string;
+      unsearched: string;
       chipsLabel: string;
       chip: {
         prompt: string;
@@ -6246,6 +6249,7 @@ type Messages = {
         byCalls: string;
         noTools: string;
         toolsNotRead: string;
+        unnamedTool: string;
         note: string;
         noteNotRolledUp: string;
       };
