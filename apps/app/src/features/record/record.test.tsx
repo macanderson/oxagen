@@ -862,17 +862,33 @@ describe("Record › Archive", () => {
 
 describe("Record › related records", () => {
   const at = { org: "acme", ws: "core-platform", lineage: LINEAGE };
+  // Each card leads with the record's label and sorts by it (ADR-174), so the
+  // fixture names each one. The statements keep the same words, because the
+  // list shows both and a card that read one way and sorted another would
+  // make a reordering test pass for the wrong reason.
   const others = [
-    publishedRecord({ id: "ctr_a1", lineage: "ctx.a.one", statement: "Beta" }),
-    publishedRecord({ id: "ctr_a2", lineage: "ctx.a.two", statement: "Alpha" }),
+    publishedRecord({
+      id: "ctr_a1",
+      lineage: "ctx.a.one",
+      label: "Beta",
+      statement: "Beta",
+    }),
+    publishedRecord({
+      id: "ctr_a2",
+      lineage: "ctx.a.two",
+      label: "Alpha",
+      statement: "Alpha",
+    }),
     publishedRecord({
       id: "ctr_a3",
       lineage: "ctx.a.three",
+      label: "Gamma",
       statement: "Gamma",
     }),
     publishedRecord({
       id: "ctr_a4",
       lineage: "ctx.a.four",
+      label: "Delta",
       statement: "Delta",
     }),
   ];
@@ -925,7 +941,7 @@ describe("Record › related records", () => {
           .getByTestId("record-related-list")
           .querySelectorAll("li p:first-of-type"),
       ).map((p) => p.textContent);
-    await user.selectOptions(screen.getByLabelText("Sort"), "Statement A–Z");
+    await user.selectOptions(screen.getByLabelText("Sort"), "Label A–Z");
     expect(list()).toEqual(["Alpha", "Beta", "Gamma"]);
     await user.type(screen.getByLabelText("Search records"), "gam");
     expect(list()).toEqual(["Gamma"]);
