@@ -24,7 +24,7 @@ import {
   type RunTotalsRecord,
 } from "@oxagen/billing";
 import { schema, withOrgDb } from "@oxagen/database";
-import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { cost } from "./spend.shared";
 import { csvField, monthBounds } from "./spend.statement.export";
 
@@ -34,27 +34,16 @@ export type StatementRun = Pick<
   "runId" | "startedAt" | "costCenter" | "costMicros" | "costBasis" | "currency"
 >;
 
-/** The last run of the previous page. `startedAt` is RFC 3339 at millisecond precision. */
-export interface StatementCursor {
-  startedAt: string;
-  runId: string;
-}
-
-/** How many run rows one page of the statement read holds. */
-export const COST_CENTER_STATEMENT_PAGE_SIZE = 5_000;
-
 export type CostCenterStatementDeps = {
   /**
-   * One page of the organization's run rows, across its workspaces, that
-   * started in [from, to]: oldest first by (startedAt, runId), after `after`
-   * when given, at most `limit` rows.
+   * The organization's run rows, across its workspaces, that started in
+   * [from, to], oldest first by (startedAt, runId), with only the columns the
+   * statement reads.
    */
-  readRunTotalsPage: (
+  readRunTotals: (
     orgId: string,
-    q: { from: string; to: string; limit: number; after?: StatementCursor },
+    q: { from: string; to: string },
   ) => Promise<StatementRun[]>;
-  /** Rows per page, or {@link COST_CENTER_STATEMENT_PAGE_SIZE} when absent. */
-  pageSize?: number;
 };
 
 const totals = schema.runTotals;
@@ -62,16 +51,21 @@ const totals = schema.runTotals;
 /** Who may read the organization-wide statement: the people accountable for the bill. */
 const STATEMENT_READERS = { org: ["Owner", "Admin", "Billing"] } as const;
 
-async function readOrgRunTotalsPage(
+/**
+ * One ordered read of the month, not keyset pages. No index on run_totals
+ * leads with org_id, so each page of an org-wide keyset read scanned and
+ * sorted the whole org-month again, and the read grew with the square of
+ * the run count. Paging saved little memory besides: the statement keeps
+ * every run id to build the CSV. What made the old single read heavy was
+ * `select *` carrying the `breakdown` jsonb, and the six-column select
+ * below drops that.
+ */
+async function readOrgRunTotals(
   orgId: string,
-  q: { from: string; to: string; limit: number; after?: StatementCursor },
+  q: { from: string; to: string },
 ): Promise<StatementRun[]> {
   const { start } = dayBounds(q.from);
   const { next } = dayBounds(q.to);
-  // The cursor travels at millisecond precision, so the order and the
-  // comparison truncate the microseconds Postgres keeps, as
-  // listRunsWithIncompleteCost does.
-  const startedMs = sql<Date>`date_trunc('milliseconds', ${totals.startedAt})`;
   // An organization-wide read: withOrgDb widens the SELECT to every workspace
   // of the organization and RLS still fences org_id (ADR-086).
   const rows = await withOrgDb((tx) =>
@@ -90,48 +84,14 @@ async function readOrgRunTotalsPage(
           eq(totals.orgId, orgId),
           gte(totals.startedAt, start),
           lt(totals.startedAt, next),
-          q.after === undefined
-            ? undefined
-            : sql`(${startedMs}, ${totals.runId}) > (${q.after.startedAt}::timestamptz, ${q.after.runId})`,
         ),
       )
-      .orderBy(asc(startedMs), asc(totals.runId))
-      .limit(q.limit),
+      .orderBy(asc(totals.startedAt), asc(totals.runId)),
   );
   return rows.map((r) => ({
     ...r,
     costBasis: r.costBasis as CostBasis | null,
   }));
-}
-
-/**
- * Every run row of the month, page by page, handed to `visit` in store order.
- * No page is kept once visited, so the read holds one page at a time.
- */
-async function forEachRun(
-  deps: CostCenterStatementDeps,
-  orgId: string,
-  bounds: { from: string; to: string },
-  visit: (run: StatementRun) => void,
-): Promise<void> {
-  const limit = deps.pageSize ?? COST_CENTER_STATEMENT_PAGE_SIZE;
-  let after: StatementCursor | undefined;
-  for (;;) {
-    const page = await deps.readRunTotalsPage(orgId, {
-      ...bounds,
-      limit,
-      after,
-    });
-    for (const run of page) visit(run);
-    const last = page.at(-1);
-    if (page.length < limit || last === undefined) return;
-    // A store that ignored the cursor would hand back the same page for ever.
-    if (after !== undefined && last.runId === after.runId)
-      throw new Error(
-        `export_cost_center_statement: run page did not advance past ${after.runId}`,
-      );
-    after = { startedAt: last.startedAt.toISOString(), runId: last.runId };
-  }
 }
 
 interface LineAccumulator {
@@ -141,7 +101,8 @@ interface LineAccumulator {
   basis: CostBasis | null;
   /** The currency of the line's priced runs, null until one is priced. */
   currency: string | null;
-  runIds: string[];
+  /** The line's run ids, oldest first. Null on the total, which lists none. */
+  runIds: string[] | null;
 }
 
 /**
@@ -157,7 +118,7 @@ function accumulate(
   label: string,
 ): void {
   into.runs += 1;
-  into.runIds.push(run.runId);
+  into.runIds?.push(run.runId);
   if (run.costMicros === null || run.costBasis === null) {
     into.unpriced += 1;
     return;
@@ -173,13 +134,13 @@ function accumulate(
   into.basis = foldBasis(into.basis, run.costBasis);
 }
 
-const empty = (): LineAccumulator => ({
+const empty = (listsRunIds: boolean): LineAccumulator => ({
   runs: 0,
   unpriced: 0,
   micros: null,
   basis: null,
   currency: null,
-  runIds: [],
+  runIds: listsRunIds ? [] : null,
 });
 
 /** Largest cost first, unpriced lines after priced ones, the unassigned line last. */
@@ -230,21 +191,24 @@ export function createCostCenterStatementHandler(
     const userId = await resolveActingUserId(ctx);
     await assertOrgRole({ ...ctx, userId }, STATEMENT_READERS);
     const byCenter = new Map<string, LineAccumulator>();
-    const all = empty();
-    await forEachRun(deps, ctx.orgId, monthBounds(input.month), (run) => {
+    // The total line lists no run ids, so the total keeps none.
+    const all = empty(false);
+    const runs = await deps.readRunTotals(ctx.orgId, monthBounds(input.month));
+    for (const run of runs) {
       const key = run.costCenter ?? UNASSIGNED_COST_CENTER_KEY;
-      const acc = byCenter.get(key) ?? empty();
+      const acc = byCenter.get(key) ?? empty(true);
       accumulate(acc, run, `cost center ${key}`);
       byCenter.set(key, acc);
       accumulate(all, run, "organization total");
-    });
+    }
     // The CSV lists every run id. The data lists the oldest few per line and
     // counts the rest, so one response does not carry every id twice.
     const allRunIds = new Map<string, readonly string[]>();
     const lines: CostCenterStatementLine[] = [...byCenter.entries()]
       .map(([costCenter, acc]) => {
-        allRunIds.set(costCenter, acc.runIds);
-        const listed = acc.runIds.slice(
+        const runIds = acc.runIds ?? [];
+        allRunIds.set(costCenter, runIds);
+        const listed = runIds.slice(
           0,
           COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT,
         );
@@ -254,7 +218,7 @@ export function createCostCenterStatementHandler(
           unpricedRuns: acc.unpriced,
           cost: cost(acc.micros, acc.currency ?? "USD", acc.basis),
           runIds: listed,
-          runIdsOmitted: acc.runIds.length - listed.length,
+          runIdsOmitted: runIds.length - listed.length,
         };
       })
       .sort(compareLines);
@@ -290,5 +254,5 @@ export function createCostCenterStatementHandler(
 }
 
 export const spendCostCenterStatementHandler = createCostCenterStatementHandler(
-  { readRunTotalsPage: readOrgRunTotalsPage },
+  { readRunTotals: readOrgRunTotals },
 );

@@ -48,7 +48,7 @@ A line:
 
 Columns: `line, cost_center, runs, unpriced_runs, cost_micros, cost_cents, currency, basis, run_ids`. The `run_ids` field holds every run id on the line, separated by spaces. The `lines` data lists at most 100 per line so a busy month does not carry every id twice. The CSV is the complete record. The `total` line leaves `cost_center` and `run_ids` empty, because every run is on a line above it.
 
-The handler reads the month's run rows in pages of 5,000, oldest first by start time and run id, and selects only the columns the statement uses.
+The handler reads the month's run rows in one query, oldest first by start time and run id, and selects only the columns the statement uses. It does not page: no index on `run_totals` leads with the organization, so each keyset page would scan the whole month again.
 
 ## Reconciliation
 

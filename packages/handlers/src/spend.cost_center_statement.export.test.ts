@@ -9,11 +9,7 @@ import {
   type RunTotalsRecord,
 } from "@oxagen/billing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  COST_CENTER_STATEMENT_PAGE_SIZE,
-  createCostCenterStatementHandler,
-  type StatementCursor,
-} from "./spend.cost_center_statement.export";
+import { createCostCenterStatementHandler } from "./spend.cost_center_statement.export";
 import { ctx, pricedRun, run, SCOPE } from "./spend.test-support";
 
 // The org-role gate (INV-29). Allows by default, an org Billing member, so each
@@ -82,40 +78,25 @@ const fixtureRuns: RunTotalsRecord[] = [
   }),
 ];
 
-// A fake store that pages the way readOrgRunTotalsPage does: the month's
-// rows oldest first by (startedAt, runId), after the cursor, `limit` at most.
-function harness(runs: RunTotalsRecord[], pageSize?: number) {
-  const inMonth = (q: { from: string; to: string }) =>
-    runs
-      .filter((r) => {
-        const day = r.startedAt.toISOString().slice(0, 10);
-        return day >= q.from && day <= q.to;
-      })
-      .sort(
-        (a, b) =>
-          a.startedAt.getTime() - b.startedAt.getTime() ||
-          (a.runId < b.runId ? -1 : a.runId > b.runId ? 1 : 0),
-      );
-  const readRunTotalsPage = vi.fn(
-    async (
-      _orgId: string,
-      q: { from: string; to: string; limit: number; after?: StatementCursor },
-    ) => {
-      const { after } = q;
-      return inMonth(q)
-        .filter(
-          (r) =>
-            after === undefined ||
-            r.startedAt.toISOString() > after.startedAt ||
-            (r.startedAt.toISOString() === after.startedAt &&
-              r.runId > after.runId),
-        )
-        .slice(0, q.limit);
-    },
+// A fake store that reads the way readOrgRunTotals does: the month's rows,
+// oldest first by (startedAt, runId).
+function harness(runs: RunTotalsRecord[]) {
+  const readRunTotals = vi.fn(
+    async (_orgId: string, q: { from: string; to: string }) =>
+      runs
+        .filter((r) => {
+          const day = r.startedAt.toISOString().slice(0, 10);
+          return day >= q.from && day <= q.to;
+        })
+        .sort(
+          (a, b) =>
+            a.startedAt.getTime() - b.startedAt.getTime() ||
+            (a.runId < b.runId ? -1 : a.runId > b.runId ? 1 : 0),
+        ),
   );
   return {
-    handler: createCostCenterStatementHandler({ readRunTotalsPage, pageSize }),
-    readRunTotalsPage,
+    handler: createCostCenterStatementHandler({ readRunTotals }),
+    readRunTotals,
   };
 }
 
@@ -131,14 +112,14 @@ const orgTotal = fixtureRuns.reduce((sum, r) => sum + (r.costMicros ?? 0n), 0n);
 describe("export_cost_center_statement", () => {
   it("refuses a member outside Owner, Admin and Billing before reading any run", async () => {
     roleGate.refuse = true;
-    const { handler, readRunTotalsPage } = harness(fixtureRuns);
+    const { handler, readRunTotals } = harness(fixtureRuns);
     await expect(
       handler({ month: "2026-09", format: "csv" }, ctx()),
     ).rejects.toMatchObject({ code: "forbidden" });
     expect(roleGate.assertOrgRole).toHaveBeenCalledWith(expect.anything(), {
       org: ["Owner", "Admin", "Billing"],
     });
-    expect(readRunTotalsPage).not.toHaveBeenCalled();
+    expect(readRunTotals).not.toHaveBeenCalled();
   });
 
   it("answers per-center totals that sum to the organization total", async () => {
@@ -213,16 +194,17 @@ describe("export_cost_center_statement", () => {
   });
 
   it("reads the organization's month and nothing outside it", async () => {
-    const { handler, readRunTotalsPage } = harness([
+    const { handler, readRunTotals } = harness([
       ...fixtureRuns,
       pricedRun(9n, { startedAt: new Date("2026-10-01T00:00:00.000Z") }),
     ]);
     const out = await handler({ month: "2026-09", format: "csv" }, ctx());
-    expect(readRunTotalsPage).toHaveBeenCalledWith(SCOPE.orgId, {
+    // One read of the month. Keyset pages over an org-wide filter no index
+    // leads with rescanned the whole month for every page.
+    expect(readRunTotals).toHaveBeenCalledOnce();
+    expect(readRunTotals).toHaveBeenCalledWith(SCOPE.orgId, {
       from: "2026-09-01",
       to: "2026-09-30",
-      limit: COST_CENTER_STATEMENT_PAGE_SIZE,
-      after: undefined,
     });
     expect(BigInt(out.total.cost!.micros)).toBe(orgTotal);
   });
@@ -232,43 +214,10 @@ describe("export_cost_center_statement", () => {
     expect(out.lines).toEqual([]);
     expect(out.total).toEqual({ runs: 0, unpricedRuns: 0, cost: null });
   });
-  // #3750. The read took every column of every run row in the month in one
-  // SELECT, and each line listed every run id in the data and again in the
-  // CSV. The read now pages, and the data lists the oldest ids per line.
-  it("reads the month page by page and folds every page into the lines", async () => {
-    const { handler, readRunTotalsPage } = harness(fixtureRuns, 2);
-    const out = spendCostCenterStatementExport.output.parse(
-      await handler({ month: "2026-09", format: "csv" }, ctx()),
-    );
-    expect(readRunTotalsPage).toHaveBeenCalledTimes(3);
-    const cursors = readRunTotalsPage.mock.calls.map(([, q]) => q.after);
-    expect(cursors).toEqual([
-      undefined,
-      {
-        startedAt: fixtureRuns[1]!.startedAt.toISOString(),
-        runId: fixtureRuns[1]!.runId,
-      },
-      {
-        startedAt: fixtureRuns[3]!.startedAt.toISOString(),
-        runId: fixtureRuns[3]!.runId,
-      },
-    ]);
-    expect(out.total.runs).toBe(fixtureRuns.length);
-    expect(BigInt(out.total.cost!.micros)).toBe(orgTotal);
-    expect(out).toEqual(await exported());
-  });
-
-  it("stops when a page does not move the cursor forward", async () => {
-    const stuck = fixtureRuns.slice(0, 2);
-    const handler = createCostCenterStatementHandler({
-      readRunTotalsPage: async () => stuck,
-      pageSize: 2,
-    });
-    await expect(
-      handler({ month: "2026-09", format: "csv" }, ctx()),
-    ).rejects.toThrow(/did not advance/);
-  });
-
+  // #3750. The read took every column of every run row in the month, and
+  // each line listed every run id in the data and again in the CSV. The read
+  // now selects the six columns it uses, and the data lists the oldest ids
+  // per line.
   it("lists the oldest run ids on a line and counts the rest, with every id in the CSV", async () => {
     const extra = 7;
     const many = Array.from(
