@@ -386,6 +386,20 @@ jobs:
           prerelease: false
           includeUpdaterJson: ${{ steps.updater.outputs.signed == 'true' }}
 
+      # The signed bundle's binaries start under the hardened runtime with the
+      # entitlements the bundle carries: both sidecars answer --version from
+      # inside the .app, and the app stays up for 20 seconds. The plist keeps
+      # library validation on (#3214), so a dependency that needs a
+      # third-party dynamic library fails here, before anything publishes.
+      # apps/desktop/src-tauri/entitlements.md has the reasoning.
+      - name: Start the bundle's sidecars and app
+        if: runner.os == 'macOS'
+        shell: bash
+        run: >-
+          bash apps/desktop/scripts/smoke-macos-bundle.sh
+          "apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/macos/Oxagen.app"
+          apps/desktop/src-tauri/entitlements.plist
+
       # The bare CLI binaries next to the bundles, each with a .sha256, so the
       # Homebrew formula and the Scoop manifest in tools/packaging can install
       # tacho + oxagen without the app; on macOS the .dmg gets one too, for the
@@ -488,7 +502,7 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
         run: |
           curl -fsS -o /dev/null "https://downloads.oxagen.sh/desktop/$VERSION/SHA256SUMS.txt"
-          for i in 1 2 3 4 5 6; do
+          for _ in 1 2 3 4 5 6; do
             if curl -fsS "https://downloads.oxagen.sh/latest.json" -o latest.json &&
               node apps/desktop/scripts/check-latest.mjs latest.json "$VERSION"; then
               exit 0
