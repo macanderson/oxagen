@@ -1,0 +1,6 @@
+brand assets are stale against house kit 2.3.0:
+  .claude/skills/oxagen-branding/Archive.zip
+  .claude/skills/oxagen-branding/SKILL.md
+
+run: node tools/scripts/sync-brand-assets.mjs
+exit 1
