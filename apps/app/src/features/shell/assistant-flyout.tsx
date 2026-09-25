@@ -122,6 +122,7 @@ import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { AssistantReplyCost } from "./assistant-reply-cost";
 import { AssistantStreamingText } from "./assistant-streaming-text";
+import { AssistantSuggestions } from "./assistant-suggestions";
 import { AssistantThinking } from "./assistant-thinking";
 import {
   ASSISTANT_MIN_WIDTH,
@@ -131,7 +132,9 @@ import {
   widestAssistant,
   widthForKey,
 } from "./assistant-width";
+import { composerKeyAction } from "./composer-keys";
 import { parseShellPath } from "./nav";
+import { labelOnPage } from "./page-label";
 import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
 import { routes } from "@/shared/safe-path";
@@ -422,7 +425,16 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
   }
 }
 
-export function AssistantFlyout() {
+export function AssistantFlyout({
+  enterToSubmit = false,
+}: {
+  /**
+   * The person's `enter_to_submit` preference (ADR-075). On, Enter sends and
+   * Shift+Enter adds a line. Off, the stored default, Enter adds a line and
+   * Cmd+Enter or Ctrl+Enter sends (`composer-keys.ts`).
+   */
+  enterToSubmit?: boolean;
+}) {
   const t = useTranslations("shell.assistant");
   const { assistantOpen, setAssistantOpen, noteAssistantReply } =
     useShellState();
@@ -689,11 +701,15 @@ export function AssistantFlyout() {
       pending: true,
     }));
     try {
+      const entityId = recordOnPage(declaredRecord, rest[1]);
+      const entityLabel = labelOnPage(declaredRecord, entityId);
       const result = await askAssistant(org, ws, {
         conversationId,
         content,
         route,
-        entityId: recordOnPage(declaredRecord, rest[1]),
+        entityId,
+        // Only a page that named its record sends a label.
+        ...(entityLabel === null ? {} : { entityLabel }),
       });
       if (result.ok) {
         const answered: Entry = {
@@ -842,6 +858,7 @@ export function AssistantFlyout() {
           >
             <h3 className="text-sm font-semibold">{t("intro.title")}</h3>
             <p className="text-sm text-muted-foreground">{t("intro.body")}</p>
+            <AssistantSuggestions />
           </div>
         ) : (
           <ol className="flex flex-col gap-3" data-testid="assistant-log">
@@ -948,6 +965,7 @@ export function AssistantFlyout() {
                 value={draft}
                 disabled={pending}
                 aria-label={t("composer.label")}
+                aria-describedby={`${ASSISTANT_PANEL_ID}-send-hint`}
                 placeholder={t("composer.placeholder")}
                 data-testid="assistant-composer"
                 onChange={(e) => {
@@ -958,6 +976,14 @@ export function AssistantFlyout() {
                     draft: value,
                     draftTooLong: false,
                   }));
+                }}
+                onKeyDown={(e) => {
+                  if (composerKeyAction(e, enterToSubmit) !== "send") return;
+                  // A send adds no line, even when there is nothing to send.
+                  // The submit path refuses an empty draft, a turn in flight,
+                  // and a draft over the limit, as it does for the Send button.
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
                 }}
                 className="min-h-10 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
               />
@@ -971,6 +997,19 @@ export function AssistantFlyout() {
                 <Send aria-hidden="true" className="size-4" />
               </button>
             </div>
+            {/*
+              The send key for the person's setting. The app does not detect
+              the platform, so the modifier names both Cmd and Ctrl.
+            */}
+            <p
+              id={`${ASSISTANT_PANEL_ID}-send-hint`}
+              data-testid="assistant-send-hint"
+              className="mt-1.5 px-1 text-[11px] text-muted-foreground"
+            >
+              {enterToSubmit
+                ? t("composer.sendHintEnter")
+                : t("composer.sendHintModEnter")}
+            </p>
             {thread.draftTooLong ? (
               <p role="alert" className="mt-2 text-sm text-muted-foreground">
                 {t("composer.draftTooLong")}

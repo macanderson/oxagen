@@ -40,6 +40,12 @@ describe("authOutcomeKey", () => {
       { status: 401, message: "Provider domain has not been verified" },
       "ssoDomainUnverified",
     ],
+    // The server's password policy refusal (#3888), and Better Auth's own
+    // length bounds. None of them reads as a wrong password.
+    [{ code: "PASSWORD_TOO_WEAK", status: 400 }, "passwordTooWeak"],
+    [{ body: { code: "PASSWORD_TOO_WEAK" } }, "passwordTooWeak"],
+    [{ code: "PASSWORD_TOO_SHORT", status: 400 }, "passwordTooWeak"],
+    [{ code: "PASSWORD_TOO_LONG", status: 400 }, "passwordTooWeak"],
   ])("maps %j to %s", (err, key) => {
     expect(authOutcomeKey(err)).toBe(key);
   });
@@ -59,6 +65,7 @@ describe("authOutcomeKey", () => {
       "suspended",
       "rateLimited",
       "alreadyRegistered",
+      "passwordTooWeak",
       "codeWrong",
       "linkExpired",
       "oauthCancelled",

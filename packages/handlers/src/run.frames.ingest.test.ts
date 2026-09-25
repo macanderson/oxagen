@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
-import type { RunStoreOptions } from "@oxagen/run-ledger";
+import {
+  prepareAttemptEvent,
+  RunEventIntegrityError,
+  RunEventSequenceGapError,
+  type RunStoreOptions,
+} from "@oxagen/run-ledger";
 import { runFramesIngest } from "@oxagen/oxagen/contracts/run.frames.ingest";
 import { makeCTX } from "./test-utils/fixtures";
 
@@ -193,10 +198,116 @@ describe("run credential ingress", () => {
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 
+  it("returns receipts without the ledger's internal event row id", async () => {
+    const receipt = {
+      attemptSeq: 1,
+      runSeq: "7",
+      eventDigest: "sha256:abc",
+      idempotent: false,
+    };
+    append.mockImplementationOnce(async () => {
+      await options.authorizeAppend?.(
+        tx as never,
+        {
+          attempt_id: attemptId,
+          run_id: runId,
+          org_id: scope.orgId,
+          workspace_id: scope.workspaceId,
+        } as never,
+      );
+      return {
+        events: [
+          { ...receipt, eventId: "0192d4a8-7c1e-7a00-8000-000000000002" },
+        ],
+        lastAttemptSeq: 1,
+        lastRunSeq: "7",
+      };
+    });
+    const result = await runFramesIngestHandler(input, ctx);
+    expect(result.events).toEqual([receipt]);
+    expect(runFramesIngest.output.safeParse(result).success).toBe(true);
+    expect(
+      runFramesIngest.output.safeParse({
+        ...result,
+        events: [{ ...receipt, eventId: "x" }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("has no caller-controlled tenant, run, or attempt fields", () => {
     for (const field of ["orgId", "workspaceId", "runId", "attemptId"])
       expect(
         runFramesIngest.input.safeParse({ ...input, [field]: runId }).success,
       ).toBe(false);
+  });
+});
+
+describe("malformed evidence frames", () => {
+  const frame = { attemptSeq: 1, observedAt: "2026-09-20T00:00:00Z" };
+
+  it.each([
+    ["neither payload nor reference", { eventType: "tool.call_completed" }],
+    [
+      "both payload and reference",
+      {
+        eventType: "tool.call_completed",
+        payload: {},
+        encryptedPayloadRef: "evb_0123456789abcdef",
+      },
+    ],
+  ])("refuses a frame with %s at the contract", (_label, over) => {
+    const parsed = runFramesIngest.input.safeParse({
+      events: [{ ...frame, ...over }],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("answers an unknown event type as invalid input, not a server fault", async () => {
+    append.mockImplementationOnce(async ({ events }) => {
+      events.map(prepareAttemptEvent);
+      return { events: [], lastAttemptSeq: 1, lastRunSeq: "1" };
+    });
+    const bad = {
+      events: [{ ...frame, eventType: "not.a_registered_type", payload: {} }],
+    };
+    expect(runFramesIngest.input.safeParse(bad).success).toBe(true);
+    await expect(runFramesIngestHandler(bad, ctx)).rejects.toMatchObject({
+      name: "CapabilityError",
+      code: "invalid_input",
+    });
+  });
+
+  it("answers a payload that fails its event schema as invalid input", async () => {
+    append.mockImplementationOnce(async ({ events }) => {
+      events.map(prepareAttemptEvent);
+      return { events: [], lastAttemptSeq: 1, lastRunSeq: "1" };
+    });
+    const bad = {
+      events: [
+        {
+          ...frame,
+          eventType: "tool.call_completed",
+          payload: { unexpected: true },
+        },
+      ],
+    };
+    await expect(runFramesIngestHandler(bad, ctx)).rejects.toMatchObject({
+      name: "CapabilityError",
+      code: "invalid_input",
+    });
+  });
+
+  it.each([
+    ["run_event_sequence_gap", new RunEventSequenceGapError(attemptId, 1, 3)],
+    [
+      "run_event_integrity_conflict",
+      new RunEventIntegrityError(attemptId, 1, "sha256:a", "sha256:b"),
+    ],
+  ])("answers %s as a conflict", async (reason, error) => {
+    append.mockRejectedValueOnce(error);
+    await expect(runFramesIngestHandler(input, ctx)).rejects.toMatchObject({
+      code: "conflict",
+      reason,
+    });
   });
 });

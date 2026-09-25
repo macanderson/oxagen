@@ -29,6 +29,10 @@ export const notificationsList = registerCapability({
   scoped: true,
   // A console read is never a governed action (ADR-052 exclusion 2).
   noBillingGate: true,
+  // Low risk, no approval: the call reads only the calling person's own
+  // notifications. The `read` category lets the Agent Observer role list
+  // them, as it lists any other read.
+  agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "low",
   mutates: false,
   defaultEffect: "deny",

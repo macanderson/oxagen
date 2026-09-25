@@ -119,6 +119,7 @@ import {
   AttemptNotWritableError,
   RunEventIntegrityError,
   RunEventSequenceGapError,
+  RunNotWritableError,
   RunStoreStateError,
   type AttemptRejectionReason,
 } from "./run-errors";
@@ -2172,16 +2173,27 @@ export function createPostgresRunStore(
             `run ${input.runId} is a preserved legacy row and cannot take attempts`,
           );
         }
+        // A cancel, a pause and the attempt ceiling are run states a caller
+        // meets in ordinary use, and a cancel can land between the caller's
+        // read and this lock. They are typed so a surface answers 409, not 500.
         if (run.cancel_requested)
-          throw new RunStoreStateError(`run ${input.runId} was cancelled`);
+          throw new RunNotWritableError(
+            input.runId,
+            "cancelled",
+            `run ${input.runId} was cancelled`,
+          );
         if (run.ingress_paused)
-          throw new RunStoreStateError(
+          throw new RunNotWritableError(
+            input.runId,
+            "paused",
             `run ${input.runId} evidence ingress is paused`,
           );
         const maxAttempts = Number(run.max_attempts);
         const attemptNumber = Number(run.attempt_count) + 1;
         if (attemptNumber > maxAttempts) {
-          throw new RunStoreStateError(
+          throw new RunNotWritableError(
+            input.runId,
+            "attempts_exhausted",
             `run ${input.runId} has exhausted its pinned max_attempts (${maxAttempts})`,
           );
         }

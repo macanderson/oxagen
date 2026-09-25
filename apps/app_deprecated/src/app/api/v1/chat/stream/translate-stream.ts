@@ -33,8 +33,18 @@ export interface TurnUsage {
   outputTokens?: number;
   totalTokens?: number;
   /** Prompt-cache read tokens — a subset of `inputTokens` served from cache.
-   * Surfaced to the client so the chat UX can show the turn's cache-hit rate. */
+   * Surfaced to the client so the chat UX can show the turn's cache-hit rate.
+   * Legacy field name; AI SDK v7 reports reads in `inputTokenDetails`. */
   cachedInputTokens?: number;
+  /**
+   * AI SDK v7 cache breakdown. Reads and writes are both subsets of
+   * `inputTokens`, and the billing meter prices each at its own rate, so the
+   * displayed credits must carry them to match what the charge debits.
+   */
+  inputTokenDetails?: {
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  };
 }
 
 /**
@@ -64,14 +74,31 @@ export function emitUsageEvent(
   // prompt, so they can never exceed it (guards against noisy provider counts).
   const cachedTokens = Math.max(
     0,
-    Math.min(usage.cachedInputTokens ?? 0, inputTokens),
+    Math.min(
+      usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0,
+      inputTokens,
+    ),
+  );
+  // Cache writes are the rest of the prompt's cached share. Clamp them to what
+  // the reads left so reads plus writes never exceed the prompt.
+  const cacheWriteTokens = Math.max(
+    0,
+    Math.min(
+      usage.inputTokenDetails?.cacheWriteTokens ?? 0,
+      inputTokens - cachedTokens,
+    ),
   );
   let creditsCharged: number | undefined;
   try {
+    // Pass the same four fields `chargeUsageCredits` bills on. Without the
+    // cache counts the meter prices cached tokens as fresh input and the
+    // streamed figure disagrees with the debit.
     const credits = meterCreditsForUsage({
       model: modelId,
       inputTokens,
       outputTokens,
+      cachedTokens,
+      cacheWriteTokens,
     });
     creditsCharged = Number(credits);
   } catch {
@@ -469,13 +496,7 @@ export async function translateAgentStream(args: {
   for await (const raw of fullStream) {
     const pType = partType(raw);
     if (pType === "finish") {
-      const part = raw as {
-        totalUsage: {
-          inputTokens?: number;
-          outputTokens?: number;
-          totalTokens?: number;
-        };
-      };
+      const part = raw as { totalUsage: TurnUsage };
       usage = emitUsageEvent(emit, part.totalUsage, modelId);
     } else if (pType === "error") {
       // Forward a structured `error` event (NOT text) so the client shows a

@@ -9,7 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
-import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
+import {
+  digestOfCanonicalJson,
+  RETENTION_CONTENT_CLASSES,
+  validateInlineEventPayload,
+} from "@oxagen/run-ledger";
 import type {
   AppendAttemptBatchInput,
   CreateAttemptInput,
@@ -21,6 +25,7 @@ import type {
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   snapshot: vi.fn(),
+  killSwitches: vi.fn(async (): Promise<unknown[]> => []),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -46,9 +51,16 @@ vi.mock("@oxagen/run-ledger", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/iam", () => ({
-  createAgentRunAuthorizationSnapshot: mocks.snapshot,
-}));
+vi.mock("@oxagen/iam", async () => {
+  const scopes = await vi.importActual<
+    typeof import("@oxagen/iam/resource-scope")
+  >("@oxagen/iam/resource-scope");
+  return {
+    createAgentRunAuthorizationSnapshot: mocks.snapshot,
+    readActiveKillSwitches: mocks.killSwitches,
+    resourceScopeDigestOf: scopes.resourceScopeDigestOf,
+  };
+});
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
 }));
@@ -64,8 +76,11 @@ import {
   assistantRunStore,
   AssistantRunNotRecordedError,
   openAssistantRun,
+  readAssistantAgentState,
   resolveAssistantRunIdentity,
 } from "./assistant-run";
+import { assembleAssistantSteering } from "./assistant-steering";
+import { resourceScopeDigestOf } from "@oxagen/iam";
 import { setRunSealedSender } from "./run-sealed-event";
 
 const dialect = new PgDialect();
@@ -78,6 +93,7 @@ const USER = "user-1";
 const MESSAGE = "55555555-5555-4555-8555-555555555555";
 const AGENT = {
   id: "11111111-1111-4111-8111-111111111111",
+  publicId: "agt_assistant",
   versionId: "22222222-2222-4222-8222-222222222222",
 };
 
@@ -105,7 +121,9 @@ function makeTx(world: World, captured: Captured) {
       // pins the id alone.
       if (!/"slug" = \$/.test(sql))
         return [{ principalId: world.linkedByOther }];
-      return world.agent ? [{ id: AGENT.id, ...world.agent }] : [];
+      return world.agent
+        ? [{ id: AGENT.id, publicId: AGENT.publicId, ...world.agent }]
+        : [];
     }
     if (table === schema.agentVersions)
       return [{ id: AGENT.versionId, config: { graph: { mode: "read" } } }];
@@ -308,6 +326,69 @@ const UUIDS = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.snapshot.mockResolvedValue(SNAPSHOT);
+});
+
+// ── the assistant agent and its kill switch ───────────────────────────────────
+
+describe("readAssistantAgentState", () => {
+  /** An active switch as `readActiveKillSwitches` returns it. */
+  const switchOn = (kind: string, id: string) => ({
+    publicId: `edn_${kind}`,
+    targetKind: kind,
+    targetId: id,
+    resourceScopeDigest: resourceScopeDigestOf({ kind, id }),
+    reason: `${kind} incident`,
+  });
+
+  it("names the assistant agent by its public id and principal, and is not stopped with no switch on", async () => {
+    const { captured } = setup();
+    const state = await mocks.withTenantDb((tx: never) =>
+      readAssistantAgentState(tx, SCOPE),
+    );
+    expect(state).toEqual({
+      agentId: AGENT.publicId,
+      principalId: "asst-principal",
+      stoppedBy: null,
+    });
+    const agentRead = captured.selects.find((s) => s.table === schema.agents)!;
+    expect(agentRead.where).toMatch(/"slug" = \$/);
+    expect(agentRead.where).toMatch(/"workspace_id" = \$/);
+    expect(mocks.killSwitches).toHaveBeenCalledWith(expect.anything(), SCOPE);
+  });
+
+  it("is stopped by an agent switch on the assistant, and by nothing else", async () => {
+    setup();
+    mocks.killSwitches.mockResolvedValueOnce([
+      switchOn("agent", "agt_someone_else"),
+      switchOn("workspace", SCOPE.workspaceId),
+      switchOn("agent", AGENT.publicId),
+    ]);
+    const stopped = await mocks.withTenantDb((tx: never) =>
+      readAssistantAgentState(tx, SCOPE),
+    );
+    expect(stopped.stoppedBy).toEqual({
+      publicId: "edn_agent",
+      reason: "agent incident",
+    });
+
+    mocks.killSwitches.mockResolvedValueOnce([
+      switchOn("agent", "agt_someone_else"),
+      switchOn("workspace", SCOPE.workspaceId),
+    ]);
+    const open = await mocks.withTenantDb((tx: never) =>
+      readAssistantAgentState(tx, SCOPE),
+    );
+    expect(open.stoppedBy).toBeNull();
+  });
+
+  it("answers null for a workspace with no assistant agent, and reads no switch (negative)", async () => {
+    setup({ agent: null });
+    const state = await mocks.withTenantDb((tx: never) =>
+      readAssistantAgentState(tx, SCOPE),
+    );
+    expect(state).toBeNull();
+    expect(mocks.killSwitches).not.toHaveBeenCalled();
+  });
 });
 
 // ── identity ──────────────────────────────────────────────────────────────────
@@ -1294,6 +1375,92 @@ describe("the recorder hands the ledger the content its frames are about", () =>
       }),
     ).resolves.toBeUndefined();
     expect(bodyOf(ledger.batches, "model.engine_call_started")).toBeUndefined();
+  });
+});
+
+// #4158: what the assembler put in the turn's prompt, and what it cut, on the
+// run as the frame kind a wrapped agent's host seals for the same account.
+describe("the steering manifest frame", () => {
+  const decode = (body: { bytes: Uint8Array } | undefined) =>
+    body === undefined ? undefined : new TextDecoder().decode(body.bytes);
+  const manifestEvent = (batches: readonly AppendAttemptBatchInput[]) =>
+    batches.find((b) => b.events[0]!.eventType === "steering.manifest")
+      ?.events[0];
+
+  async function recorder() {
+    setupRun();
+    const ledger = fakeStore();
+    const run = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      originMessageId: MESSAGE,
+      surface: "chat",
+      instruction: "hi",
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    return { ledger, run };
+  }
+
+  const RECORD = {
+    id: "ask-before-deleting",
+    kind: "record" as const,
+    force: "must" as const,
+    body: "Ask before deleting data. (rule; ask-before-deleting)",
+    recordedAt: "2026-09-10T00:00:00.000Z",
+  };
+
+  it("carries the summary inline, the manifest as its body, and passes the ledger's registry", async () => {
+    const { ledger, run } = await recorder();
+    const steering = assembleAssistantSteering({
+      ...SCOPE,
+      records: [RECORD],
+      promptConfig: { additionalInstructions: "Answer in British English." },
+    });
+    await run.steeringManifest(steering);
+
+    const event = manifestEvent(ledger.batches)!;
+    expect(event.payload).toEqual({
+      schema: "oxagen.steering.manifest/1",
+      delivers: ["must", "should"],
+      budget_tokens: steering.manifest.budget_tokens,
+      spent_tokens: steering.manifest.spent_tokens,
+      included: 2,
+      cut: 0,
+      text_digest: steering.manifest.text_digest,
+      manifest_digest: digestOfCanonicalJson(steering.manifest),
+      instructions_digest: steering.instructionsDigest,
+    });
+    // The real store validates every payload against the registry before it
+    // writes; the fake does not, so the check is made here.
+    expect(
+      validateInlineEventPayload("steering.manifest", event.payload).stage,
+    ).toBe("context");
+    expect(JSON.parse(decode(event.body)!)).toEqual(steering.manifest);
+    expect(event.body!.contentType).toBe("application/json");
+  });
+
+  it("names a source that did not answer, and no instructions digest when none were configured", async () => {
+    const { ledger, run } = await recorder();
+    await run.steeringManifest(
+      assembleAssistantSteering({
+        ...SCOPE,
+        records: [],
+        promptConfig: null,
+        unavailableKinds: ["record"],
+      }),
+    );
+    const payload = manifestEvent(ledger.batches)!.payload as Record<
+      string,
+      unknown
+    >;
+    expect(payload["unavailable_kinds"]).toEqual(["record"]);
+    expect(payload).not.toHaveProperty("instructions_digest");
+    expect(payload["text_digest"]).toBeNull();
+    expect(
+      validateInlineEventPayload("steering.manifest", payload).eventType,
+    ).toBe("steering.manifest");
   });
 });
 

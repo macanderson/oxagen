@@ -12,6 +12,7 @@ export const connectionDelete = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "destructive" },
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

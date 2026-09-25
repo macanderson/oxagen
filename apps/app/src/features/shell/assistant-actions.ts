@@ -45,6 +45,11 @@ export type AssistantTurn = {
  * continues it. `route` is where the person was standing when they asked —
  * the agent is being asked about what is on screen, so the page travels with
  * the question.
+ *
+ * `entityLabel` is the name the page gave the record `entityId` names (a
+ * run's title, a runtime's hostname), so the agent can cite the record the
+ * way the person sees it. The caller cuts it to the contract's cap. The turn
+ * strips its control characters and quotes it as a label beside the id.
  */
 export async function askAssistant(
   org: string,
@@ -54,6 +59,7 @@ export async function askAssistant(
     content: string;
     route: string | null;
     entityId: string | null;
+    entityLabel?: string | null;
   },
 ): Promise<ActionResult<AssistantTurn>> {
   const ctx = await requireViewer(org, ws);
@@ -68,6 +74,7 @@ export async function askAssistant(
             orgSlug: org,
             workspaceSlug: ws,
             entityId: input.entityId,
+            entityLabel: input.entityLabel ?? null,
           },
   });
 }

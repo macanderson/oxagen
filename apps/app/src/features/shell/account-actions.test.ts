@@ -249,7 +249,7 @@ describe("readPreferences", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("reads get_user_preferences and answers with the three fields the tab sets", async () => {
+  it("reads get_user_preferences and answers with the four fields the tab sets", async () => {
     invoke.mockResolvedValue({
       fontSize: "medium",
       density: "comfortable",
@@ -269,13 +269,18 @@ describe("readPreferences", () => {
     );
     expect(result).toEqual({
       ok: true,
-      value: { locale: "en", timezone: "America/Los_Angeles", theme: "dark" },
+      value: {
+        locale: "en",
+        timezone: "America/Los_Angeles",
+        theme: "dark",
+        enterToSubmit: true,
+      },
     });
   });
 });
 
 describe("savePreferences", () => {
-  it("writes set_preferences as a partial of the three fields, nothing else", async () => {
+  it("writes set_preferences as a partial of the four fields, nothing else", async () => {
     invoke.mockResolvedValue({
       locale: "en",
       theme: "dark",
@@ -291,16 +296,46 @@ describe("savePreferences", () => {
       locale: "en",
       timezone: "UTC",
       theme: "dark",
+      enterToSubmit: true,
     });
     expect(invoke).toHaveBeenCalledWith(
       "set_preferences",
-      { locale: "en", timezone: "UTC", theme: "dark" },
+      { locale: "en", timezone: "UTC", theme: "dark", enterToSubmit: true },
       expect.anything(),
     );
     expect(result).toEqual({
       ok: true,
-      value: { locale: "en", timezone: "UTC", theme: "dark" },
+      value: {
+        locale: "en",
+        timezone: "UTC",
+        theme: "dark",
+        enterToSubmit: true,
+      },
     });
+  });
+
+  // enter_to_submit is the one field the tab turns off rather than picks, so
+  // a false is written as false and never dropped from the partial.
+  it("writes enter_to_submit off as false", async () => {
+    invoke.mockResolvedValue({
+      locale: "en",
+      theme: "system",
+      timezone: "UTC",
+      fontSize: "medium",
+      density: "comfortable",
+      enterToSubmit: false,
+      pendingPromptBehavior: "queue",
+      defaultTextTier: null,
+      defaultTextModel: null,
+    });
+    const result = await savePreferences("acme", {
+      locale: "en",
+      timezone: "UTC",
+      theme: "system",
+      enterToSubmit: false,
+    });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({ enterToSubmit: false });
+    expect(result).toMatchObject({ ok: true, value: { enterToSubmit: false } });
   });
 
   it("refuses a time zone the contract does not recognise before the kernel runs (negative)", async () => {
@@ -308,6 +343,7 @@ describe("savePreferences", () => {
       locale: "en",
       timezone: "not a zone!",
       theme: "dark",
+      enterToSubmit: false,
     });
     expect(result).toMatchObject({ ok: false, reason: "invalid" });
     expect(invoke).not.toHaveBeenCalled();

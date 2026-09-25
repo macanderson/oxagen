@@ -44,7 +44,7 @@ function head(value: unknown): string | undefined {
  * valid Unicode: ClickHouse stores it as a replacement character, and the
  * stored target then no longer hashes to what the collector sealed.
  */
-function cutAt(value: string, max: number): string {
+export function cutAt(value: string, max: number): string {
   const code = value.charCodeAt(max - 1);
   return value.slice(0, code >= 0xd800 && code <= 0xdbff ? max - 1 : max);
 }

@@ -581,6 +581,10 @@ export interface ObservedModelRow {
  * read unbounded. This one is higher, and it is not silent: a read that fills
  * it says so on stderr, which is what answers the objection that a bound
  * drops models nobody hears about.
+ *
+ * The bound applies to the ranked read only. The unpriced-model report walks
+ * the keyset pages (`page`) instead, because a warning does not put a dropped
+ * unpriced model back in the report (#3281).
  */
 export const OBSERVED_MODEL_READ_BOUND = 10_000;
 
@@ -714,6 +718,17 @@ export async function readObservedModels(args: {
    * wrapped agent's calls the totals leave out.
    */
   frameStores?: "all" | "gateway";
+  /**
+   * Read one keyset page in model-id order instead of the ranked read.
+   * `afterModel` is the last model id of the previous page (omitted for the
+   * first page) and `size` is how many models the page holds at most. A page
+   * shorter than `size` is the last one. A caller that must see every model,
+   * such as the unpriced-model report, walks the pages: the ranked read stops
+   * at {@link OBSERVED_MODEL_READ_BOUND} models by token volume, so a
+   * low-volume model past it would never be read at all (#3281). The page
+   * size also bounds the `models` array the class-bucket read receives.
+   */
+  page?: { afterModel?: string; size: number };
 }): Promise<ObservedModelRow[]> {
   const ch = clickhouse();
   const withTacho = (args.frameStores ?? "all") === "all";
@@ -723,6 +738,15 @@ export async function readObservedModels(args: {
       : "AND workspace_id = {workspaceId:UUID}";
   const until =
     args.until === undefined ? "" : "AND {col} <= {until:DateTime64(3)}";
+  const page = args.page;
+  if (page !== undefined && !(Number.isInteger(page.size) && page.size > 0))
+    throw new RangeError(
+      `readObservedModels: page size must be a positive integer, got ${page.size}`,
+    );
+  const afterModel =
+    page?.afterModel === undefined
+      ? ""
+      : "AND toString(model) > {afterModel:String}";
   const tachoWhere = `org_id = {orgId:UUID}
           AND ts >= {since:DateTime64(3)}
           ${until.replace("{col}", "ts")}
@@ -757,6 +781,7 @@ export async function readObservedModels(args: {
           max(toDateTime64(ts, 3, 'UTC'))     AS last_seen
         FROM tacho_events FINAL
         WHERE ${tachoWhere}
+          ${afterModel}
         GROUP BY toString(model), toString(provider)`;
 
   const summaryResult = await ch.query({
@@ -785,14 +810,21 @@ export async function readObservedModels(args: {
           ${until.replace("{col}", "created_at")}
           AND model != ''
           ${workspace}
+          ${afterModel}
         GROUP BY toString(model), toString(provider)
         ${withTacho ? tachoSummary : ""}
       )
       GROUP BY model
-      ORDER BY tokens DESC, model
+      ORDER BY ${page === undefined ? "tokens DESC, model" : "model"}
       LIMIT {limit:UInt32}
     `,
-    query_params: { ...baseParams, limit: OBSERVED_MODEL_READ_BOUND },
+    query_params: {
+      ...baseParams,
+      ...(page?.afterModel === undefined
+        ? {}
+        : { afterModel: page.afterModel }),
+      limit: page === undefined ? OBSERVED_MODEL_READ_BOUND : page.size,
+    },
     format: "JSONEachRow",
   });
   type SummaryRow = {
@@ -804,7 +836,8 @@ export async function readObservedModels(args: {
     last_seen: string;
   };
   const summaryRows = (await summaryResult.json()) as SummaryRow[];
-  if (summaryRows.length >= OBSERVED_MODEL_READ_BOUND)
+  // A full page is not a bound hit: the caller asks for the next page.
+  if (page === undefined && summaryRows.length >= OBSERVED_MODEL_READ_BOUND)
     noteObservedModelBoundHit(args);
   if (summaryRows.length === 0) return [];
 

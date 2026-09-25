@@ -406,7 +406,7 @@ describe("More sheet", () => {
         "more-switch-ws",
       ].map((id) => within(sheet).getByTestId(id).textContent),
     ).toEqual([
-      "Assistantask about a run, or change something",
+      "Ask stella*about runs, agents, and spend",
       "Searchor run an action",
       "Notifications0 unread",
       "AccountMarcus Bell",
@@ -415,6 +415,62 @@ describe("More sheet", () => {
     ]);
     for (const id of ["more-search", "more-switch-ws"])
       expect(style(within(sheet).getByTestId(id)).minHeight).toBe("44px");
+  });
+
+  // The tile is the phone's other way into the assistant, so it shows the
+  // sidebar launcher's mark and name (#4139), not a sparkle and "Assistant".
+  it("names the assistant the way the sidebar launcher does: the stella mark, then Ask stella*", async () => {
+    const user = userEvent.setup();
+    renderPhone(shellData());
+    // The rail's launcher, which `hidden md:flex` keeps off a phone's screen.
+    const launcher = screen.getByTestId("assistant-launcher");
+    await user.click(screen.getByRole("button", { name: "More" }));
+    const sheet = await screen.findByRole("dialog", { name: "More" });
+    const tile = within(sheet).getByTestId("more-assistant");
+
+    // The mark leads the tile at the launcher's 28 px, and is not read aloud.
+    const mark = present(tile.querySelector('svg[data-mark="stella-icon"]'));
+    expect(tile.firstElementChild).toBe(mark);
+    expect(mark).toHaveAttribute("aria-hidden", "true");
+    expect(mark).toHaveClass("size-7");
+    expect(mark.outerHTML).toBe(
+      present(launcher.querySelector('svg[data-mark="stella-icon"]')).outerHTML,
+    );
+    // No glyph from the icon set stands in for it.
+    expect(tile.querySelector("svg.lucide")).toBeNull();
+
+    // The name is the launcher's, markup and all: "stella*" in the wordmark
+    // face, lowercase, with the asterisk in the accent and hidden from
+    // assistive technology.
+    const name = present(tile.querySelector("b"));
+    expect(name.textContent).toBe("Ask stella*");
+    expect(name.innerHTML).toBe(
+      present(launcher.querySelector(".ox-wordmark")?.parentElement).innerHTML,
+    );
+    expect(
+      Array.from(tile.querySelectorAll(".ox-wordmark"), (el) => el.textContent),
+    ).toEqual(["stella*"]);
+    const accent = present(tile.querySelector(".ox-wordmark-accent"));
+    expect(accent.textContent).toBe("*");
+    expect(accent).toHaveAttribute("aria-hidden", "true");
+    expect(tile).toHaveAccessibleName(/^Ask stella/);
+    expect(tile).not.toHaveAccessibleName(/\*/);
+    expect(tile.textContent).not.toMatch(/Stella|Assistant/);
+  });
+
+  it("opens the assistant from its tile and closes the sheet that would cover it", async () => {
+    const user = userEvent.setup();
+    renderPhone(shellData());
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
+    await user.click(screen.getByRole("button", { name: "More" }));
+    const sheet = await screen.findByRole("dialog", { name: "More" });
+    await user.click(within(sheet).getByTestId("more-assistant"));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "More" })).toBeNull();
+    });
+    const flyout = screen.getByTestId("assistant-flyout");
+    expect(flyout).not.toHaveAttribute("inert");
+    expect(within(flyout).getByTestId("assistant-composer")).toBeTruthy();
   });
 
   it("closes itself before opening the dialog a tile names, so two sheets never stack", async () => {

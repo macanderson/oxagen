@@ -1,6 +1,7 @@
 import { withTenantDb, schema } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { sumTokenUsage } from "@oxagen/telemetry";
+import { ENTITLED_SUBSCRIPTION_STATUSES } from "./tier";
 
 export interface CurrentPeriodUsageRow {
   metric: string;
@@ -9,10 +10,15 @@ export interface CurrentPeriodUsageRow {
 }
 
 /**
- * Returns the rollup of billable units consumed during the active
+ * Returns the rollup of billable units consumed during the current
  * subscription period for the tenant. Pulls the period bounds from
  * billing.subscriptions and the raw quantities from ClickHouse.
- * Empty array when no active subscription exists.
+ *
+ * A subscription counts when its status is in
+ * {@link ENTITLED_SUBSCRIPTION_STATUSES}, the list tier resolution uses. A
+ * trialing or past-due org still consumes billable units, and filtering on
+ * `active` alone gave those orgs an empty rollup (#2976).
+ * Empty array when no entitled subscription exists.
  */
 export async function getCurrentPeriodUsage(
   orgId: string,
@@ -21,7 +27,9 @@ export async function getCurrentPeriodUsage(
     tx.query.subscriptions.findFirst({
       where: and(
         eq(schema.subscriptions.orgId, orgId),
-        eq(schema.subscriptions.status, "active"),
+        inArray(schema.subscriptions.status, [
+          ...ENTITLED_SUBSCRIPTION_STATUSES,
+        ]),
       ),
       columns: {
         currentPeriodStart: true,
