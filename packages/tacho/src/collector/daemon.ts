@@ -788,11 +788,12 @@ async function initializeDaemon(
    * Every currently known session's chain position, so a caller that is
    * about to seal events it may not be able to write can put every chain
    * back if the write fails. `checkpoint` and `recordReconciliation` already
-   * do this by hand for the one or few sessions they touch; this covers a
-   * caller — `applyCommands`, `handleHookEvent`, OTel ingestion, the
-   * detector, the registry's sweep — whose sealing runs inside a call this
-   * file does not own, and so does not know in advance which sessions (out
-   * of everything the registry currently holds) it will touch. Marking and
+   * do this by hand for the one or few sessions they touch, and so does the
+   * registry's sweep. This covers a caller (`applyCommands`,
+   * `handleHookEvent`, OTel ingestion, the detector) whose sealing runs
+   * inside a call this file does not own, and so does not know in advance
+   * which sessions (out of everything the registry currently holds) it will
+   * touch. Marking and
    * rolling back a chain the call never reaches costs nothing: the mark
    * matches the chain's position exactly and the rollback is a no-op.
    */
@@ -3446,18 +3447,31 @@ async function initializeDaemon(
         await transcriptTailer.tick();
         if (t - lastSweep >= timers.sweepMs) {
           lastSweep = t;
-          const marks = markEveryChain();
-          try {
-            record(
-              registry.sweep(isProcessAlive, timers.idleSessionMs, (session) =>
-                pendingSessionEnds.has(session.recorder.sessionUuid),
-              ),
-            );
-          } catch (error) {
-            rollbackEveryChain(marks);
-            throw error;
+          // Each session is written and sealed on its own. A write that
+          // fails rolls back only that chain and leaves it open for the next
+          // sweep. Sealing every chain first and writing them together left
+          // a chain whose write failed marked sealed with no `agent_stop` on
+          // disk, and `forgetSealed` then dropped it (#3719).
+          let failure: { error: unknown } | undefined;
+          const candidates = registry.sweepCandidates(
+            isProcessAlive,
+            timers.idleSessionMs,
+            (session) => pendingSessionEnds.has(session.recorder.sessionUuid),
+          );
+          for (const candidate of candidates) {
+            const recorder = candidate.record.recorder;
+            const mark = recorder.markChain();
+            try {
+              record(registry.finalizeSwept(candidate));
+            } catch (error) {
+              recorder.rollbackChain(mark);
+              failure ??= { error };
+              continue;
+            }
+            registry.settleSwept(candidate);
           }
           registry.forgetSealed(timers.walRetainMs);
+          if (failure !== undefined) throw failure.error;
         }
         if (t - lastCheckpoint >= timers.checkpointMs) {
           lastCheckpoint = t;

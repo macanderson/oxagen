@@ -247,6 +247,15 @@ export interface SessionRecord extends SessionFacts {
   hookIds: Map<string, number>;
 }
 
+/** A chain the sweep is about to close, and how it ends. */
+export interface SweepCandidate {
+  record: SessionRecord;
+  /** How the chain ends, or undefined for one that never started. */
+  outcome?: "completed" | "crashed";
+  /** The chain went quiet rather than losing its process. */
+  closedIdle: boolean;
+}
+
 export interface PersistedSession extends SessionFacts {
   harnessSessionId: string;
   recorder: RecorderState;
@@ -806,22 +815,28 @@ export class SessionRegistry {
   }
 
   /**
-   * Close chains whose process is gone, or that went quiet: past `idleMs`
-   * with no pid known, past `staleMs` with one (a pid can be reused, so it
-   * alone cannot keep a chain open). Returns the sealing events. A session
-   * whose process is gone with no turn open finished its last turn and
-   * exited: that is how Stella, which has no SessionEnd, ends every session,
-   * so it closes as `completed`. Anything else closes as `crashed`,
-   * including a session that only ever showed up through OTel or a
-   * transcript: the harness never told us it ended.
+   * The chains a sweep would close, and how each one ends, without closing
+   * any of them. A chain closes when its process is gone, or when it went
+   * quiet: past `idleMs` with no pid known, past `staleMs` with one (a pid
+   * can be reused, so it alone cannot keep a chain open). A session whose
+   * process is gone with no turn open finished its last turn and exited:
+   * that is how Stella, which has no SessionEnd, ends every session, so it
+   * closes as `completed`. Anything else closes as `crashed`, including a
+   * session that only ever showed up through OTel or a transcript: the
+   * harness never told us it ended.
+   *
+   * The caller seals each candidate's final events, writes them, and only
+   * then calls `settleSwept`. A chain marked sealed before its `agent_stop`
+   * was written stayed sealed when the write failed, so it never closed and
+   * `forgetSealed` later dropped it (#3719).
    */
-  sweep(
+  sweepCandidates(
     isAlive: (pid: number) => boolean,
     idleMs: number,
     deferSeal: (session: SessionRecord) => boolean = () => false,
     staleMs: number = STALE_PID_SESSION_MS,
-  ): TachoEvent[] {
-    const out: TachoEvent[] = [];
+  ): SweepCandidate[] {
+    const out: SweepCandidate[] = [];
     const now = this.options.now();
     for (const record of this.sessions.values()) {
       if (record.sealed || deferSeal(record)) continue;
@@ -833,9 +848,8 @@ export class SessionRegistry {
           ? quiet > idleMs
           : quiet > staleMs && !isInternalSession(record.harnessSessionId);
       if (!gone && !idle) continue;
-      if (!gone) record.closedIdle = true;
       if (!record.recorder.hasStarted) {
-        this.close(record);
+        out.push({ record, closedIdle: !gone });
         continue;
       }
       // The recorder's turn, not the newest hook: a Notification after
@@ -848,12 +862,51 @@ export class SessionRegistry {
         (turn.turnSeq > 0 || record.lastHookEvent === "Stop")
           ? "completed"
           : "crashed";
-      // The session ended when it was last seen, not when the sweep noticed:
-      // an idle session swept six hours late would otherwise read as having
-      // run six hours longer (#4024). `lastSeenAt` is the receipt time of its
-      // last activity, so it is at or after every event its hooks sealed.
-      out.push(...record.recorder.finalize(outcome, record.lastSeenAt));
-      this.close(record);
+      out.push({ record, outcome, closedIdle: !gone });
+    }
+    return out;
+  }
+
+  /**
+   * Seal the final events of one sweep candidate. The session ended when it
+   * was last seen, not when the sweep noticed: an idle session swept six
+   * hours late would otherwise read as having run six hours longer (#4024).
+   * `lastSeenAt` is the receipt time of its last activity, so it is at or
+   * after every event its hooks sealed. A chain that never started seals
+   * nothing.
+   */
+  finalizeSwept(candidate: SweepCandidate): TachoEvent[] {
+    const { record, outcome } = candidate;
+    if (outcome === undefined) return [];
+    return record.recorder.finalize(outcome, record.lastSeenAt);
+  }
+
+  /** Close a sweep candidate once its final events are written. */
+  settleSwept(candidate: SweepCandidate): void {
+    if (candidate.closedIdle) candidate.record.closedIdle = true;
+    this.close(candidate.record);
+  }
+
+  /**
+   * Close every chain `sweepCandidates` names and return the sealing events.
+   * It closes each one before its events are written, so a caller that
+   * writes them must use `sweepCandidates` and settle each chain itself.
+   */
+  sweep(
+    isAlive: (pid: number) => boolean,
+    idleMs: number,
+    deferSeal: (session: SessionRecord) => boolean = () => false,
+    staleMs: number = STALE_PID_SESSION_MS,
+  ): TachoEvent[] {
+    const out: TachoEvent[] = [];
+    for (const candidate of this.sweepCandidates(
+      isAlive,
+      idleMs,
+      deferSeal,
+      staleMs,
+    )) {
+      out.push(...this.finalizeSwept(candidate));
+      this.settleSwept(candidate);
     }
     return out;
   }
