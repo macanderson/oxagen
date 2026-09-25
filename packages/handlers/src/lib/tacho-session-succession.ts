@@ -1,6 +1,6 @@
 /**
  * When an enrolled host may carry on what another enrollment of the same
- * machine recorded (ADR-178).
+ * machine recorded (ADR-179).
  *
  * Every enrollment mints its own `tacho.hosts` row, so `enroll --force`, a
  * harness addition and a harness-only reassign each leave the machine under a

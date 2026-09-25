@@ -1,4 +1,4 @@
-# ADR-178: A re-enrolled host carries on its predecessor's sessions
+# ADR-179: A re-enrolled host carries on its predecessor's sessions
 
 - **Status:** Accepted
 - **Date:** 2026-09-24

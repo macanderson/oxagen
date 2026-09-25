@@ -108,7 +108,7 @@ export interface EnrollOptions extends CredentialOptions {
   /**
    * Set by `reassign`, which revokes the enrollment host.json names before
    * it enrolls again: whether the control plane confirmed that revoke. The
-   * session scope carries over only when it did (ADR-178). Not a flag.
+   * session scope carries over only when it did (ADR-179). Not a flag.
    */
   predecessorRevoked?: boolean;
 }

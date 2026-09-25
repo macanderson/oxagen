@@ -1185,7 +1185,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     // A frame the host's predecessor recorded and never shipped still names
     // the predecessor: the enrollment id sits inside the hashed event, so the
     // host cannot restate it. Those frames are accepted from a successor
-    // (ADR-178) and from no other host.
+    // (ADR-179) and from no other host.
     const foreign = [
       ...new Set(
         input.events
@@ -1488,7 +1488,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       // aside instead of retrying it (`SESSION_OWNED_ELSEWHERE` in
       // packages/tacho/src/collector/spool.ts). Change both together.
       //
-      // The one exception is a successor (ADR-178): a later enrollment of the
+      // The one exception is a successor (ADR-179): a later enrollment of the
       // same machine in the same workspace, whose predecessor is revoked,
       // carrying the session on from its recorded head. The write below
       // moves the session to it, and only while the predecessor still holds it.

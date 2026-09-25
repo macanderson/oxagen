@@ -541,7 +541,7 @@ async function initializeDaemon(
   // The session scope outlives an enrollment that replaces this one on the
   // same machine and in the same workspace, so a live session keeps its uuid
   // across `enroll --force`, a harness addition and a harness-only reassign
-  // (ADR-178).
+  // (ADR-179).
   const registry = new SessionRegistry({
     context,
     scope: sessionScopeOf(host),
