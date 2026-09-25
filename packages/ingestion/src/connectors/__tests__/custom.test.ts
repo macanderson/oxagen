@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { customSql } from "../custom-sql/index";
 import { customWebhook } from "../custom-webhook/index";
+import { loadBuiltInSchema } from "../../connector-schema-loader";
 
 // ── Custom SQL ────────────────────────────────────────────────────────────────
 
@@ -158,5 +159,41 @@ describe("custom-webhook connector – verifyWebhook", () => {
 
   it("rejects missing signature header when secret is set", () => {
     expect(customWebhook.verifyWebhook!(payload, {}, secret)).toBe(false);
+  });
+});
+
+describe("custom-webhook connector – connectionConfigSchema (#1875)", () => {
+  // The schema used to declare five keys that nothing read. A stored config
+  // from that time must still parse, and the unread keys must drop out.
+  it("parses a legacy config and drops the keys nothing reads", () => {
+    const legacy = {
+      recordTypes: [
+        {
+          sourceRecordType: "order.created",
+          eventTypeJsonPath: "$.event",
+          matcher: "order.created",
+        },
+      ],
+      signatureStrategy: "bearer_token_header",
+      signatureHeader: "x-custom-sig",
+      idJsonPath: "$.data.id",
+      displayNameJsonPath: "$.data.name",
+    };
+    const parsed = customWebhook.connectionConfigSchema.safeParse(legacy);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toEqual({
+      recordTypes: [
+        { sourceRecordType: "order.created", matcher: "order.created" },
+      ],
+    });
+  });
+
+  it("offers in the setup wizard only the config keys the connector declares", () => {
+    const schema = loadBuiltInSchema("custom-webhook");
+    const wizardKeys = (schema?.config?.fields ?? []).map((f) => f.key);
+    const declaredKeys = Object.keys(
+      customWebhook.connectionConfigSchema.shape,
+    );
+    expect(wizardKeys.sort()).toEqual(declaredKeys.sort());
   });
 });

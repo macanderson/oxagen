@@ -48,57 +48,11 @@ config:
       widget: code
       format: json
       description: >
-        JSON array of record type mappings. Each entry requires sourceRecordType (string),
-        eventTypeJsonPath (JSONPath to extract the event type, default "$.event"),
+        JSON array of record type mappings. Each entry requires sourceRecordType (string)
         and matcher (value or glob that identifies this record type).
-        Example: [{"sourceRecordType":"order.created","eventTypeJsonPath":"$.event","matcher":"order.created"}]
+        Example: [{"sourceRecordType":"order.created","matcher":"order.created"}]
       validation:
         required: true
-
-    - key: signatureStrategy
-      label: Signature Verification Strategy
-      # One strategy, so a single-value control. It was a multi-select whose
-      # validation said minItems/maxItems 1 — "exactly one" spelled as a list —
-      # and a list is what it stored, which the connector's own
-      # `signatureStrategy: z.enum(...)` can never accept. Connection preview
-      # rejected every custom-webhook connection with
-      # "Expected 'none' | 'hmac_sha256_header' | ..., received array".
-      widget: select
-      description: How to verify the authenticity of inbound webhook payloads.
-      defaultValue: hmac_sha256_header
-      options:
-        - label: HMAC-SHA256 Header
-          value: hmac_sha256_header
-        - label: Bearer Token Header
-          value: bearer_token_header
-        - label: Static Secret in Body
-          value: static_secret_body
-        - label: None (public)
-          value: none
-      validation:
-        required: true
-
-    - key: signatureHeader
-      label: Signature Header Name (optional)
-      widget: text
-      description: Override the default signature header name. Default is "x-signature".
-      validation:
-        pattern: "^[a-zA-Z][a-zA-Z0-9\\-]{0,63}$"
-
-    - key: idJsonPath
-      label: External ID JSONPath
-      widget: text
-      description: JSONPath expression to extract a stable unique identifier from each payload (e.g. "$.id").
-      defaultValue: "$.id"
-      validation:
-        pattern: "^\\$[.\\[].{0,200}$"
-
-    - key: displayNameJsonPath
-      label: Display Name JSONPath (optional)
-      widget: text
-      description: JSONPath to extract a human-readable name from each payload (e.g. "$.name").
-      validation:
-        pattern: "^\\$[.\\[].{0,200}$"
 
 recordTypes:
   selectionMode: multi
