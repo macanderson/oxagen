@@ -21,7 +21,9 @@
  * does not answer from a path that was not recorded), `engine_aborted` (the
  * turn was cancelled before it answered), and the credit gate's codes. A
  * governed write the turn opened that is waiting on a person is returned as
- * the parked card, and the turn still completes.
+ * the parked card, and the turn still completes. Every tool call the turn
+ * made comes back in `toolCalls` with its outcome and duration, so a surface
+ * can show what the reply rests on without opening the run.
  *
  * The turn is not a governed action (`noBillingGate`, #2968 decision 3): the
  * run is free to the customer and never appears in `list_runs`; `runId` opens
@@ -54,6 +56,37 @@ export const assistantParkedCardSchema = z
     capability: z.string().min(1),
     /** RFC 3339: when the approval expires unresolved. */
     expiresAt: z.string().datetime({ offset: true }),
+  })
+  .strict();
+
+/**
+ * How a tool call behind the reply ended. `denied` means a gate or a person
+ * refused it. `parked` means it did not run and waits on a person's approval.
+ */
+export const ASSISTANT_TOOL_CALL_OUTCOMES = [
+  "completed",
+  "failed",
+  "denied",
+  "cancelled",
+  "parked",
+] as const;
+
+/** One tool call the turn made, as the run recorded it. */
+export const assistantToolCallSchema = z
+  .object({
+    /** The engine's id for the call. The run's tool receipt carries the same id. */
+    toolCallId: z.string().min(1),
+    /** The canonical tool name, never the model-facing alias. */
+    toolName: z.string().min(1),
+    outcome: z.enum(ASSISTANT_TOOL_CALL_OUTCOMES),
+    /** Whole milliseconds from the engine's request to the host's answer. */
+    durationMs: z.number().int().nonnegative(),
+    /**
+     * The approval a parked call waits on: the same id as its entry in
+     * `parkedCards`. Null when no parked card names the call, which is every
+     * call that did not park.
+     */
+    approvalId: z.string().min(1).nullable(),
   })
   .strict();
 
@@ -106,6 +139,12 @@ export const assistantAsk = registerCapability({
        * never shown, while the others expire unseen.
        */
       parkedCards: z.array(assistantParkedCardSchema),
+      /**
+       * Every tool call the turn made, in the order the run recorded them;
+       * empty when it made none. The belt's `search_tools` and `load_tools`
+       * are tool calls too and appear here.
+       */
+      toolCalls: z.array(assistantToolCallSchema),
     })
     .strict(),
 });
@@ -114,3 +153,6 @@ export type AssistantAskInput = z.output<typeof assistantAsk.input>;
 export type AssistantAskOutput = z.output<typeof assistantAsk.output>;
 export type AssistantPageContext = z.output<typeof assistantPageContextSchema>;
 export type AssistantParkedCard = z.output<typeof assistantParkedCardSchema>;
+export type AssistantToolCall = z.output<typeof assistantToolCallSchema>;
+export type AssistantToolCallOutcome =
+  (typeof ASSISTANT_TOOL_CALL_OUTCOMES)[number];

@@ -548,6 +548,7 @@ describe("the prepared turn", () => {
       runId: "arun_0123456789abcdef012345",
       reply: "hi",
       parkedCards: [],
+      toolCalls: [],
     });
     expect(usages).toEqual([
       {
@@ -711,6 +712,76 @@ describe("the prepared turn", () => {
       },
     ]);
     expect(events).toHaveLength(2);
+  });
+
+  it("lists each tool call behind the reply, and reads the call its parked card names as parked (#4161)", async () => {
+    const APPROVAL = "0a1b2c3d-0000-4000-8000-00000000a001";
+    let approvalRequired: ((e: unknown) => void) | undefined;
+    mocks.materializeTools.mockImplementationOnce(
+      async (
+        _ctx: unknown,
+        opts: { onApprovalRequired: (e: unknown) => void },
+      ) => {
+        approvalRequired = opts.onApprovalRequired;
+        return {
+          tools: GOVERNED_TOOLS,
+          nameMap: {},
+          mutatingToolNames: ["set_budget"],
+          governance: {},
+        };
+      },
+    );
+    mocks.runGovernedTurn.mockImplementationOnce(
+      async (args: { ledger: { toolCall: (r: unknown) => Promise<void> } }) => {
+        await args.ledger.toolCall({
+          seq: 2,
+          requestId: "tc-1",
+          toolName: "recall_memory",
+          outcome: "completed",
+          input: {},
+          output: {},
+          durationMs: 12.6,
+        });
+        // What a governed write that parks leaves behind today: the gate
+        // opens the approval, and the engine records the call as refused
+        // with the approval id in the error (`ApprovalPendingError`).
+        approvalRequired?.({
+          approvalId: APPROVAL,
+          capability: "set_budget",
+          inputPreview: {},
+          riskLevel: "high",
+          expiresAt: "2026-09-14T10:05:00.000Z",
+        });
+        await args.ledger.toolCall({
+          seq: 3,
+          requestId: "tc-2",
+          toolName: "set_budget",
+          outcome: "denied",
+          input: {},
+          error: `refused: set_budget is waiting for approval ${APPROVAL} until 2026-09-14T10:05:00.000Z`,
+          durationMs: 4,
+        });
+        return fakeTurn({});
+      },
+    );
+    const result = await runTurn(request);
+    expect(result.parkedCards.map((c) => c.approvalId)).toEqual([APPROVAL]);
+    expect(result.toolCalls).toEqual([
+      {
+        toolCallId: "tc-1",
+        toolName: "recall_memory",
+        outcome: "completed",
+        durationMs: 13,
+        approvalId: null,
+      },
+      {
+        toolCallId: "tc-2",
+        toolName: "set_budget",
+        outcome: "parked",
+        durationMs: 4,
+        approvalId: APPROVAL,
+      },
+    ]);
   });
 
   it("does not persist a reply when the turn fails, and rejects with the failure", async () => {

@@ -56,6 +56,7 @@ import {
   assistantAsk,
   type AssistantPageContext,
   type AssistantParkedCard,
+  type AssistantToolCall,
 } from "@oxagen/oxagen/contracts/assistant.ask";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
 import {
@@ -70,6 +71,7 @@ import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { recallWorkspaceMemoryMessage } from "./assistant-recall";
+import { toolCallsFromReceipts } from "./assistant-tool-calls";
 import {
   openAssistantRun,
   type AssistantRunReceipt,
@@ -171,6 +173,8 @@ export interface AssistantTurnResult {
   reply: string;
   /** Every write this turn parked, in park order; empty when none did. */
   parkedCards: AssistantParkedCard[];
+  /** Every tool call the run recorded, in order; a parked one names its approval. */
+  toolCalls: AssistantToolCall[];
 }
 
 /** The credit gate said no. Surfaces answer 402 with the code and the message. */
@@ -630,6 +634,7 @@ async function runPreparedTurn(
     runId: run.runPublicId,
     reply,
     parkedCards: parked,
+    toolCalls: toolCallsFromReceipts(run.receipts, parked),
   };
 }
 

@@ -61,6 +61,16 @@ const RESULT = {
   runId: "arun_0123456789abcdef012345",
   reply: "three runs are live",
   parkedCards: [],
+  // Not empty, so the pass-through below is proven rather than assumed.
+  toolCalls: [
+    {
+      toolCallId: "tc-1",
+      toolName: "list_runs",
+      outcome: "completed",
+      durationMs: 41,
+      approvalId: null,
+    },
+  ],
 };
 
 beforeEach(() => {
