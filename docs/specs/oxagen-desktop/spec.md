@@ -136,7 +136,7 @@ The host API key is minted for the workspace at enrollment, so a move is a revok
 2. Strip the old enrollment's hook groups from `~/.claude/settings.json`, `~/.codex/hooks.json`, and the marker-delimited block in `~/.stella/stella.toml` (or `~/.stella/settings.json`). `enroll` replaces only groups or blocks carrying *its* enrollment id, so without this step the old ones would survive as foreign entries.
 3. Enroll again with `--force` in the target org and workspace, on the same API URL, keeping the Ed25519 device key, the loopback port and the local bearer. The hook command lines change only their enrollment id; the service unit is re-applied unchanged.
 
-`reassign --harness claude-code,codex,stella` with no `--workspace` re-enrolls in place, which is the one way to *drop* a wrapper: `enroll` may add a harness on a re-apply but never silently removes one. The same target and the same harness list is a no-op. A custom agent is not part of this list; it carries no hooks to strip, and it simply stops appearing once it stops calling `tacho hook --agent`.
+`reassign --harness claude-code,codex,cursor,stella` with no `--workspace` re-enrolls in place, which is the one way to *drop* a wrapper: `enroll` may add a harness on a re-apply but never silently removes one. The same target and the same harness list is a no-op. A custom agent is not part of this list; it carries no hooks to strip, and it simply stops appearing once it stops calling `tacho hook --agent`.
 
 
 ## 5. Sign in, org, and the CLI default
@@ -214,7 +214,7 @@ pnpm --filter @oxagen/desktop dev          # tauri dev over Vite on :1420
 | Windows | Azure Trusted Signing; without it SmartScreen warns | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` |
 | Linux | unsigned; the `.deb` and `.rpm` carry no repository yet | none |
 
-> **Fleet and MDM.** The same installers push through MDM. A post-install that runs `tacho enroll --token … --org … --workspace … --managed --harness claude-code,codex,stella` enrolls silently, and the managed settings document `enroll --print-managed` renders locks the hooks so a user cannot strip them. The session record still carries `enforcement_tier = client_attested`; the app's This machine panel says so.
+> **Fleet and MDM.** The same installers push through MDM. A post-install that runs `tacho enroll --token … --org … --workspace … --managed --harness claude-code,codex,cursor,stella` enrolls silently, and the managed settings document `enroll --print-managed` renders locks the hooks so a user cannot strip them. The session record still carries `enforcement_tier = client_attested`; the app's This machine panel says so.
 
 
 ## 10. What was verified

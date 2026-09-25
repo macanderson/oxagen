@@ -3,8 +3,19 @@
  * ships is not working, so the verdict must fail loudly rather than trail
  * the error at the end of the daemon line.
  */
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { SHIPPING_STALL_MS, shippingHealth } from "./status";
+import { writeHostFile } from "../host/host-file";
+import {
+  bundleSigner,
+  scratchPaths,
+  testHostFile,
+  unsignedBundle,
+} from "../host/test-support";
+import { Wal } from "../host/wal";
+import { minimalSession } from "../test-helpers";
+import type { CliDeps } from "./deps";
+import { SHIPPING_STALL_MS, shippingHealth, status } from "./status";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -96,5 +107,72 @@ describe("the shipping verdict", () => {
         NOW,
       ).healthy,
     ).toBe(true);
+  });
+});
+
+/**
+ * An enrolled host whose daemon answers `/status` with `daemon`, and whose
+ * WAL holds one unshipped session. Only the members `status()` reads.
+ */
+function enrolledHost(daemon: Record<string, unknown>): {
+  deps: CliDeps;
+  lines: string[];
+} {
+  const paths = scratchPaths();
+  const signer = bundleSigner();
+  writeHostFile(
+    paths.hostFile,
+    testHostFile(signer, signer.sign(unsignedBundle())),
+  );
+  new Wal(paths.wal).append(minimalSession());
+  const lines: string[] = [];
+  const deps = {
+    paths,
+    home: join(paths.root, ".."),
+    now: () => NOW,
+    out: (line: string) => lines.push(line),
+    serviceManager: {
+      kind: "launchd",
+      unitPath: join(paths.root, "unit.plist"),
+      install: () => undefined,
+      uninstall: () => undefined,
+      status: () => ({ installed: true, running: true }),
+    },
+    daemonGet: async () => daemon,
+    readSettings: () => undefined,
+    readCodexHooks: () => undefined,
+    readCursorHooks: () => undefined,
+    readStellaHooks: () => undefined,
+    readClaudeDesktopConfig: () => undefined,
+  } as unknown as CliDeps;
+  return { deps, lines };
+}
+
+describe("the shipping line", () => {
+  it("reports FAILING, and says why, when events wait behind a failed ingest", async () => {
+    const { deps, lines } = enrolledHost({
+      uptime_s: 5,
+      last_ingest_at: ago(1_000),
+      last_error: "control plane unreachable: This operation was aborted",
+    });
+    const report = await status({}, deps);
+    expect(report.wal?.unshipped).toBeGreaterThan(0);
+    expect(report.shipping?.healthy).toBe(false);
+    const line = lines.find((l) => l.startsWith("Shipping    "));
+    expect(line).toMatch(/^Shipping {4}FAILING: the last ingest failed/);
+    expect(line).toContain("This operation was aborted");
+  });
+
+  it("reports ok while the same backlog drains with no error", async () => {
+    const { deps, lines } = enrolledHost({
+      uptime_s: 5,
+      last_ingest_at: ago(1_000),
+      last_error: null,
+    });
+    const report = await status({}, deps);
+    expect(report.shipping?.healthy).toBe(true);
+    expect(lines.find((l) => l.startsWith("Shipping    "))).toMatch(
+      /^Shipping {4}ok: shipping, \d+ events? waiting$/,
+    );
   });
 });

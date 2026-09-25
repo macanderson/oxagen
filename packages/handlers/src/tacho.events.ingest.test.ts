@@ -1966,17 +1966,132 @@ describe("ingest_tacho_events", () => {
     expect(db.controlCommands[0]?.["outcome"]).toBe("sent");
   });
 
-  it("tries the spend counter again before calling its write lost", async () => {
-    // A retried batch folds these frames as already recorded, so a spend
-    // write lost here is written by no later request.
-    const db = fakeDb();
-    wire(db);
-    mocks.recordSpend
-      .mockRejectedValueOnce(new Error("redis blip"))
-      .mockRejectedValueOnce(new Error("redis blip"));
-    await tachoEventsIngestHandler(batch(session()), CONTEXT);
-    expect(mocks.recordSpend).toHaveBeenCalledTimes(3);
-    expect(mocks.loggerError).not.toHaveBeenCalled();
+  describe("the spend counter (#3825)", () => {
+    /**
+     * Make the fake's transactions roll back: every table the fake holds is
+     * snapshotted when a transaction opens and restored if its callback
+     * throws. Returns the order of each transaction's writes and commits, and
+     * the transaction objects handed out.
+     */
+    function transactional(db: FakeDb): {
+      order: string[];
+      txs: unknown[];
+    } {
+      const order: string[] = [];
+      const txs: unknown[] = [];
+      const inner = mocks.withTenantDb.getMockImplementation() as (
+        fn: (tx: unknown) => Promise<unknown>,
+      ) => Promise<unknown>;
+      mocks.withTenantDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          // Rows are copied one level deep: the fake writes whole rows or
+          // top-level fields, and some values are SQL objects that cannot be
+          // cloned.
+          const rows = <T extends object>(list: T[]): T[] =>
+            list.map((row) => ({ ...row }));
+          const saved = {
+            sessions: new Map(
+              [...db.sessions].map(([key, row]) => [key, { ...row }]),
+            ),
+            models: rows(db.models),
+            files: rows(db.files),
+            fileSets: rows(db.fileSets),
+            commands: rows(db.commands),
+            controlCommands: rows(db.controlCommands),
+            updates: rows(db.updates),
+            hosts: rows(db.hosts),
+          };
+          try {
+            const result = await inner((tx) => {
+              txs.push(tx);
+              return fn(tx);
+            });
+            order.push("commit");
+            return result;
+          } catch (err) {
+            Object.assign(db, saved);
+            order.push("rollback");
+            throw err;
+          }
+        },
+      );
+      mocks.recordSpend.mockImplementation(async () => {
+        order.push("spend");
+      });
+      return { order, txs };
+    }
+
+    it("writes the batch's cost inside the ingest transaction, before it commits", async () => {
+      const db = fakeDb();
+      wire(db);
+      const { order, txs } = transactional(db);
+      await tachoEventsIngestHandler(batch(session()), CONTEXT);
+
+      expect(mocks.recordSpend).toHaveBeenCalledOnce();
+      const [args, tx] = mocks.recordSpend.mock.calls[0] ?? [];
+      expect(args).toMatchObject({
+        orgId: CONTEXT.orgId,
+        workspaceId: CONTEXT.workspaceId,
+        micros: 1200n,
+      });
+      // The counter joins the transaction the ingest writes run in, so the
+      // two commit or roll back together.
+      expect(tx).toBeDefined();
+      expect(txs).toContain(tx);
+      const spend = order.indexOf("spend");
+      expect(order.indexOf("commit", spend)).toBeGreaterThan(spend);
+    });
+
+    it("fails the batch when the counter write fails, and the retried batch counts its cost once", async () => {
+      const db = fakeDb();
+      wire(db);
+      const { order } = transactional(db);
+      mocks.recordSpend.mockRejectedValueOnce(new Error("postgres blip"));
+      const events = session();
+
+      // The write fails: the whole batch rolls back, nothing reaches
+      // ClickHouse, and the host is answered with the error it retries on.
+      await expect(
+        tachoEventsIngestHandler(batch(events), CONTEXT),
+      ).rejects.toThrow("postgres blip");
+      expect(order).toContain("rollback");
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+      expect(mocks.loggerError).not.toHaveBeenCalledWith(
+        expect.anything(),
+        "tacho.events.ingest: spend counter write failed",
+      );
+
+      // The host sends the same batch again. Nothing it was folded from
+      // committed, so the retry computes the same cost and counts it.
+      await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(mocks.recordSpend).toHaveBeenCalledTimes(2);
+      expect(mocks.recordSpend.mock.calls[1]?.[0]).toMatchObject({
+        micros: 1200n,
+      });
+      expect(mocks.insertTachoEvents).toHaveBeenCalledOnce();
+
+      // A third delivery of the same batch is a re-send of committed frames.
+      // Its cost is already counted, so it adds nothing.
+      await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(mocks.recordSpend).toHaveBeenCalledTimes(2);
+    });
+
+    it("counts a batch once when its ClickHouse append fails after the commit", async () => {
+      // The cost committed with the rows. The host re-sends after the failed
+      // append, and the re-send folds its frames as already recorded.
+      const db = fakeDb();
+      wire(db);
+      transactional(db);
+      mocks.insertTachoEvents.mockRejectedValueOnce(
+        new Error("clickhouse down"),
+      );
+      const events = session();
+      await expect(
+        tachoEventsIngestHandler(batch(events), CONTEXT),
+      ).rejects.toThrow("clickhouse down");
+      await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(mocks.recordSpend).toHaveBeenCalledOnce();
+    });
   });
 
   describe("a successor enrollment (ADR-179)", () => {
