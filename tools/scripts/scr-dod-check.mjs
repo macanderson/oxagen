@@ -387,8 +387,8 @@ const HEADING_PREFIX = /^\s*(?:#{1,6}\s*|\*\*)\s*/;
  * Aggregating is also the conservative direction. Reading every checklist can
  * only add unchecked items, never hide one, so no arrangement of sections can
  * make the gate pass an issue that a single-section read would have failed. A
- * checkbox is counted once even when sections overlap, because a bold label
- * does not close the `##` section containing it.
+ * checkbox is counted once even when sections overlap, because neither a bold
+ * label nor a deeper heading closes the `##` section containing it.
  */
 export function dodStatus(issueBody) {
   const absent = { present: false, heading: null, checked: 0, unchecked: [] };
@@ -408,9 +408,16 @@ export function dodStatus(issueBody) {
 
     const start = heading.index + heading[0].length;
     const after = body.slice(start);
-    // The DoD section ends at the next heading of any level, so a later
-    // "### Notes" section's task list is not counted against the DoD.
-    const endMatch = after.match(/^\s*#{1,6}\s+\S/m);
+    // The DoD section ends at the next heading of the same level or higher, so
+    // a later "## Notes" section's task list is not counted against a
+    // "## Definition of done", while "### Bug A" subsections inside it are
+    // (oxagen#3678). A bold label ranks below every heading, so any heading
+    // ends it.
+    const hashes = heading[0].match(/#+/);
+    const level = hashes ? hashes[0].length : 6;
+    const endMatch = after.match(
+      new RegExp(String.raw`^\s*#{1,${level}}\s+\S`, "m"),
+    );
     const section = endMatch ? after.slice(0, endMatch.index) : after;
 
     let offset = start;
