@@ -285,6 +285,12 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
         case "tool_call": {
           const tool = toolNameOf(p);
           const outcome = field(p, "outcome");
+          // A parked call names the approval it waits on as a third word
+          // (`create_workspace parked apr_…`), so the Run page can pair the
+          // receipt with that approval's card by id rather than by instant.
+          const approval = field(p, "approval_public_id");
+          if (tool && outcome && approval && outcome === "parked")
+            return `${tool} ${outcome} ${approval}`;
           if (tool && outcome) return `${tool} ${outcome}`;
           // An intention has no outcome by design — it is the frame that says
           // a call is about to happen — so its tool name is the whole truth
