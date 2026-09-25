@@ -4,7 +4,7 @@
  * The in-app assistant carries at most `HISTORY_LIMIT` prior messages word
  * for word (`assistant-turn.ts`). Before this module a message older than
  * that window left the turn's context for good: a fact the person gave in
- * message 3 of a 120-message thread was gone from message 52 on.
+ * message 3 was gone once 50 newer messages followed it.
  *
  * The engine does not recover it. At the pinned `stella-serve` (0.9.411) a
  * stateless turn runs on exactly the messages the host sends
@@ -84,10 +84,10 @@ export const HISTORY_SUMMARY_SLACK = 10;
 export const HISTORY_SUMMARY_TIMEOUT_MS = 10_000;
 
 /**
- * The most older messages one turn reads to fold into a summary. Only a
- * thread that grew past the window before this module existed has more than
- * `HISTORY_SUMMARY_SLACK` of them. Messages past this bound are left out and
- * the summary says so.
+ * The most older messages one turn reads to fold into a summary. A rewrite
+ * usually folds in about `HISTORY_SUMMARY_SLACK` of them. Only a thread that
+ * outgrew the window before this module existed has more. Messages past this
+ * bound are left out and the summary says so.
  */
 export const HISTORY_SUMMARY_MAX_SPAN = 200;
 
@@ -109,7 +109,10 @@ const MESSAGE_SHARE_MIN_CHARS = 200;
 /** Roles the transcript carries. Tool rows and other kinds stay out. */
 const TRANSCRIPT_ROLES = new Set(["user", "assistant", "system"]);
 
-/** The marker the turn's other injected context messages open with. */
+/**
+ * Opens the summary the way the turn's other injected context opens
+ * (`assistant-recall.ts`, `pageContextMessage`), with a colon for their dash.
+ */
 const INJECTED_CONTEXT_MARKER = "(System-injected context: NOT user input.)";
 
 /** The summariser's instructions. Byte-stable, so its prefix caches. */
@@ -204,7 +207,7 @@ export interface HistorySummaryFrame {
    * `unavailable`: no summary was written and none was stored.
    */
   outcome: "applied" | "stale" | "unavailable";
-  /** Digest and length of the summary carried; null when none was. */
+  /** Digest and length of the summary carried. Null when it carried none. */
   digest: string | null;
   chars: number | null;
   coveredMessages: number;
@@ -626,8 +629,11 @@ async function storeSummary(
 ): Promise<void> {
   try {
     await runInTenantScope(args.scope, () =>
-      withTenantDb((tx) =>
-        tx
+      withTenantDb(async (tx) => {
+        // Last write wins. Two turns that both rewrite write summaries that
+        // are each true of the messages they cover, and the next turn checks
+        // the boundary of whichever it reads.
+        await tx
           .update(schema.conversations)
           .set({ historySummary: summary })
           .where(
@@ -636,8 +642,8 @@ async function storeSummary(
               eq(schema.conversations.orgId, args.scope.orgId),
               eq(schema.conversations.workspaceId, args.scope.workspaceId),
             ),
-          ),
-      ),
+          );
+      }),
     );
   } catch (err) {
     logger.error(
