@@ -73,12 +73,13 @@ export const runFramesIngest = registerCapability({
       expiresAt: z.string().datetime(),
       lastAttemptSeq: z.number().int(),
       lastRunSeq: z.string(),
+      // A receipt names the event by its sequence and digest. The ledger row
+      // id is an internal key and is not part of the public response.
       events: z.array(
         z
           .object({
             attemptSeq: z.number().int(),
             runSeq: z.string(),
-            eventId: z.string(),
             eventDigest: z.string(),
             idempotent: z.boolean(),
           })

@@ -198,6 +198,42 @@ describe("run credential ingress", () => {
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 
+  it("returns receipts without the ledger's internal event row id", async () => {
+    const receipt = {
+      attemptSeq: 1,
+      runSeq: "7",
+      eventDigest: "sha256:abc",
+      idempotent: false,
+    };
+    append.mockImplementationOnce(async () => {
+      await options.authorizeAppend?.(
+        tx as never,
+        {
+          attempt_id: attemptId,
+          run_id: runId,
+          org_id: scope.orgId,
+          workspace_id: scope.workspaceId,
+        } as never,
+      );
+      return {
+        events: [
+          { ...receipt, eventId: "0192d4a8-7c1e-7a00-8000-000000000002" },
+        ],
+        lastAttemptSeq: 1,
+        lastRunSeq: "7",
+      };
+    });
+    const result = await runFramesIngestHandler(input, ctx);
+    expect(result.events).toEqual([receipt]);
+    expect(runFramesIngest.output.safeParse(result).success).toBe(true);
+    expect(
+      runFramesIngest.output.safeParse({
+        ...result,
+        events: [{ ...receipt, eventId: "x" }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("has no caller-controlled tenant, run, or attempt fields", () => {
     for (const field of ["orgId", "workspaceId", "runId", "attemptId"])
       expect(

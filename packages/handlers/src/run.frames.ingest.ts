@@ -63,7 +63,16 @@ export const runFramesIngestHandler: CapabilityHandler<
     });
     if (!expiresAt) throw new Error("Run credential refresh was not recorded");
     return {
-      events: result.events,
+      // Copy only the public receipt fields. The ledger's eventId is the bare
+      // row id of agent.agent_run_events, which the producer has no use for.
+      events: result.events.map(
+        ({ attemptSeq, runSeq, eventDigest, idempotent }) => ({
+          attemptSeq,
+          runSeq,
+          eventDigest,
+          idempotent,
+        }),
+      ),
       lastAttemptSeq: result.lastAttemptSeq,
       lastRunSeq: result.lastRunSeq,
       expiresAt: expiresAt.toISOString(),
