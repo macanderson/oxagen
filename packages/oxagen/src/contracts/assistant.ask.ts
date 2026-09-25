@@ -5,11 +5,12 @@
  * (`stella-serve`) drives it with every completion and tool call answered by
  * Oxagen, and the reply is persisted as the assistant's message.
  *
- * `mode: "async"`: the app streams the turn over the one SSE transport,
- * `POST /v1/:org/:ws/chat/stream` (apps/app/ARCHITECTURE.md §3.5), whose
- * body is this contract's input and whose terminal `done` carries this
- * contract's output. The API route and the MCP tool run the same turn to
- * completion and return the output whole.
+ * `mode: "async"`: the API streams the turn over its SSE route,
+ * `POST /v1/:org/:ws/chat/stream`, whose body is this contract's input and
+ * whose terminal `done` carries this contract's output. The apps/app flyout
+ * does not stream: its server action makes one `kernelWrite` call and
+ * receives the output whole, as the API's `ask_assistant` route and the MCP
+ * tool do.
  *
  * The SSE route invokes this contract through the kernel too, so the gates
  * below are the same on every adapter.
