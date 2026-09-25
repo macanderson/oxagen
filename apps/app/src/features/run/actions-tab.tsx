@@ -38,7 +38,7 @@ import {
 } from "./player-model";
 import { ParkedElsewhere, ParkedHere } from "./parked-calls";
 import { DecidedApprovals } from "./resolved-approvals";
-import type { RunTabProps } from "./tab-props";
+import type { FrameTabProps } from "./tab-props";
 import { RunTimeline } from "./timeline";
 
 /**
@@ -94,7 +94,7 @@ async function readBody(
   return retained ? source.runs.frameBody(ctx, runId, open.seq) : null;
 }
 
-export async function GovernedActionsTab(props: RunTabProps) {
+export async function GovernedActionsTab(props: FrameTabProps) {
   const { ctx, source, run, detail, view, now } = props;
   const open = openFrameOf(detail.frames.frames, view.body);
   const [body, approvals] = await Promise.all([
@@ -129,7 +129,7 @@ function GovernedActions({
   mandates,
   now,
 }: {
-  props: RunTabProps;
+  props: FrameTabProps;
   open: OpenFrame | null;
   body: Read<RunFrameBody> | null;
   pending: Read<ApprovalQueue>;

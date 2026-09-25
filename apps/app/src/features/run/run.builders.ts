@@ -541,6 +541,11 @@ export function transcriptFigures(
 /**
  * The run's entries as the server counts them, by default over the one model
  * step `runTranscript` holds: a reply that carried a cost record.
+ *
+ * `frames` are the counts at `everything` the frame tabs' badges read. They
+ * default to the policy and recall counts given here, as for a run where
+ * each decision and each recall is a step of its own; a test that needs the
+ * two apart passes `frames`.
  */
 export function transcriptCounts(
   overrides: {
@@ -548,9 +553,18 @@ export function transcriptCounts(
     entries?: number;
     errors?: number;
     policy?: number;
+    frames?: TranscriptCounts["frames"];
   } = {},
 ): TranscriptCounts {
+  const frames = overrides.frames ?? {
+    kinds: {
+      policy: overrides.kinds?.policy ?? 0,
+      recall: overrides.kinds?.recall ?? 0,
+    },
+    policy: overrides.policy ?? 0,
+  };
   return {
+    frames,
     kinds: {
       prompt: 0,
       responses: 1,
@@ -754,9 +768,9 @@ type RunReads = {
   frameBody?: Read<RunFrameBody>;
   /**
    * The transcript reads the page makes: the whole run at `steps`, whose
-   * counts and figures the page draws and whose entries the Transcript tab
-   * draws, and the run at `everything` for the tabs that list frames and
-   * their counts. A function answers per zoom level, for a test that needs
+   * counts and figures the page draws (the frame tabs' counts among them)
+   * and whose entries the Transcript tab draws, and the run at `everything`
+   * when a tab that lists frames is open. A function answers per zoom level, for a test that needs
    * to tell the reads apart. A test that says nothing about it gets one step.
    */
   transcript?:

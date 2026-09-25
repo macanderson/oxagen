@@ -52,11 +52,12 @@ export type RunTabProps = {
    */
   transcript: Read<RunTranscript>;
   /**
-   * The run at `everything`, one entry per frame, for the tabs that list
-   * frames (Governed actions, Policy, Context). Read to its end when one of
-   * those tabs is open; otherwise one page, whose counts are the whole run's.
+   * The run at `everything`, one entry per frame, read to its end for the
+   * tabs that list frames (Governed actions, Policy, Context). Null when the
+   * open tab lists none: the tab badges take the frames' counts from
+   * `transcript` (`counts.frames`), so no other tab reads the run twice.
    */
-  everything: Read<RunTranscript>;
+  everything: Read<RunTranscript> | null;
   cost: Read<RunCost>;
   outputs: Read<RunOutputs>;
   /** `get_run_work`, started by the page and awaited where it is drawn. */
@@ -69,3 +70,6 @@ export type RunTabProps = {
    */
   now?: number;
 };
+
+/** What a tab that lists the run's frames receives: the run at `everything`, read. */
+export type FrameTabProps = RunTabProps & { everything: Read<RunTranscript> };

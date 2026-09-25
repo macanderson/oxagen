@@ -23,7 +23,7 @@ import {
   transcriptBody,
   transcriptEntry,
 } from "./run.builders";
-import type { RunTabProps } from "./tab-props";
+import type { FrameTabProps, RunTabProps } from "./tab-props";
 
 const at = (seconds: number) => new Date(NOW + seconds * 1000).toISOString();
 
@@ -338,6 +338,7 @@ export function evidenceTranscript(
       entries: 9,
       errors: 0,
       policy: 2,
+      frames: { kinds: { policy: 2, recall: 2 }, policy: 2 },
     },
     figures: null,
     search: null,
@@ -548,7 +549,7 @@ export function tabProps({
   work?: Read<RunWork>;
   /** `?body=`, the frame the page has open. */
   body?: string | null;
-}): RunTabProps {
+}): FrameTabProps {
   const cost = readOk(runCost());
   return {
     ctx,

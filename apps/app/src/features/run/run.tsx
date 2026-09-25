@@ -9,9 +9,10 @@
 // (`runMetrics`), and hands the open tab the whole bundle. The transcript is
 // folded and counted on the server (ADR-182): the tab counts are its
 // `counts`, and the figures its `figures`. The run at `everything`, one entry
-// per frame, is read to its end only for a tab that lists frames; any other
-// tab reads one page of it, for the counts its tabs carry. A tab's own heavy
-// read (the chain, a frame body) happens only when that tab is open.
+// per frame, is read to its end only for a tab that lists frames. The badges
+// of those tabs count frames, and the `steps` read carries those counts too
+// (`counts.frames`), so no other tab reads the run a second time. A tab's own
+// heavy read (the chain, a frame body) happens only when that tab is open.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
@@ -31,7 +32,7 @@ import { OutputsSpine } from "./outputs";
 import { ContextTab, IssuesTab, PolicyTab } from "./sections";
 import { RunDenied, RunEmpty, RunError, RunPending } from "./states";
 import { StatRow, SummaryPanel } from "./stats";
-import type { RunTabProps } from "./tab-props";
+import type { FrameTabProps, RunTabProps } from "./tab-props";
 import {
   RUN_TAB_PANEL,
   RunTabs,
@@ -57,28 +58,29 @@ function Tabs({
   selected: Tab;
 }) {
   const t = useTranslations("run.tabs");
-  const { run, transcript, everything, metrics, view, place } = props;
+  const { run, transcript, metrics, view, place } = props;
   // The server counts over every frame a read folded. A read that stopped at
   // its frame cap counted a prefix of the run, so its count is a floor.
   const countOf = (
-    read: typeof transcript,
-    pick: (counts: TranscriptCounts) => number,
+    pick: (counts: TranscriptCounts) => number | null,
   ): string | undefined => {
-    if (!read.ok || read.value.counts === null) return undefined;
-    const count = pick(read.value.counts);
-    return read.value.complete ? String(count) : t("atLeast", { count });
+    if (!transcript.ok || transcript.value.counts === null) return undefined;
+    const count = pick(transcript.value.counts);
+    if (count === null) return undefined;
+    return transcript.value.complete ? String(count) : t("atLeast", { count });
   };
-  const decisions =
-    everything.ok && everything.value.counts !== null
-      ? everything.value.counts.kinds.policy
-      : null;
+  // The tabs that list frames count frames, which the `steps` read carries
+  // as `counts.frames`.
+  const decisions = transcript.ok
+    ? (transcript.value.counts?.frames?.kinds.policy ?? null)
+    : null;
   // A run with no policy decision has nothing governed to list: the tab is
   // the frame player, and it counts the frames.
   const governed = decisions !== null && decisions > 0;
   const figures: Record<Tab, TabFigure> = {
     // The entries the Transcript tab draws, which its header line counts
     // too, so the tab and the line cannot disagree.
-    transcript: { count: countOf(transcript, (counts) => counts.entries) },
+    transcript: { count: countOf((counts) => counts.entries) },
     // The task reference now, and the issues the run's pull requests close
     // once GitHub answers; the table under the tab counts the same rows.
     issues: {
@@ -92,7 +94,7 @@ function Tabs({
     },
     actions: governed
       ? {
-          count: countOf(everything, (counts) => counts.kinds.policy),
+          count: countOf((counts) => counts.frames?.kinds.policy ?? null),
           parked,
         }
       : { label: t("player"), count: String(run.frames), parked },
@@ -103,10 +105,12 @@ function Tabs({
     // The rows the Policy table lists: the harness's own checks fold below
     // it and are not counted here.
     policy: {
-      count: countOf(everything, (counts) => counts.policy),
+      count: countOf((counts) => counts.frames?.policy ?? null),
       parked,
     },
-    context: { count: countOf(everything, (counts) => counts.kinds.recall) },
+    context: {
+      count: countOf((counts) => counts.frames?.kinds.recall ?? null),
+    },
     chain: { count: t(`status.${run.sealedAt === null ? "live" : "sealed"}`) },
   };
   return (
@@ -135,16 +139,33 @@ function sectionOf(
     case "issues":
       return IssuesTab(props);
     case "actions":
-      return GovernedActionsTab(props);
+      return withFrames(props).then(GovernedActionsTab);
     case "cost":
       return CostTab(props);
     case "policy":
-      return PolicyTab(props);
+      return withFrames(props).then(PolicyTab);
     case "context":
-      return ContextTab(props);
+      return withFrames(props).then(ContextTab);
     case "chain":
       return ChainTab(props);
   }
+}
+
+/**
+ * The props with the run at `everything`, for a tab that lists frames. The
+ * page reads it with its other reads when such a tab is open, so this reads
+ * it only for a caller that did not.
+ */
+async function withFrames(props: RunTabProps): Promise<FrameTabProps> {
+  const everything =
+    props.everything ??
+    (await readWholeTranscript(
+      props.source,
+      props.ctx,
+      props.run.id,
+      "everything",
+    ));
+  return { ...props, everything };
 }
 
 /**
@@ -238,7 +259,7 @@ export async function Run({
   // the rest of the page.
   const work = readRunWork(ctx, source, run.id);
   // The tabs that list the run's frames read them to their end. Every other
-  // tab needs only their counts, which one page carries whole.
+  // tab needs only their counts, which the `steps` read carries.
   const listsFrames =
     selected === "actions" || selected === "policy" || selected === "context";
   const [outputs, transcript, everything, cost, pending, agent, roster] =
@@ -256,7 +277,7 @@ export async function Run({
       readWholeTranscript(source, ctx, run.id, "steps", { text: "full" }),
       listsFrames
         ? readWholeTranscript(source, ctx, run.id, "everything")
-        : source.runs.transcript(ctx, run.id, "everything", { limit: 1 }),
+        : null,
       source.runs.cost(ctx, run.id),
       source.approvals.pending(ctx, { runId: run.id }),
       agentSlug === null ? null : source.agents.get(ctx, agentSlug),

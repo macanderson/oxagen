@@ -584,6 +584,7 @@ describe("runMetrics over a partial record", () => {
             entries: 9,
             errors: 2,
             policy: 2,
+            frames: null,
           },
         }),
       ),

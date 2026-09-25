@@ -60,6 +60,7 @@ describe("readWholeTranscript", () => {
       entries,
       errors: 0,
       policy: 0,
+      frames: null,
     });
     const { source, transcript } = sourceOf((after) =>
       after === undefined

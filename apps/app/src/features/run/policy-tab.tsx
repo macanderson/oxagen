@@ -22,7 +22,7 @@ import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { Note, NoValue, Panel, PanelBody } from "./parts";
 import { entriesOf } from "./recorded-entries";
-import type { Place, RunTabProps } from "./tab-props";
+import type { FrameTabProps, Place } from "./tab-props";
 import { entryKey } from "./transcript-rows";
 import { isWhole } from "./whole-transcript";
 
@@ -268,6 +268,6 @@ function DecisionTable({
 }
 
 /** The Policy tab: the whole-run transcript narrowed to its decisions. It makes no read of its own. */
-export function PolicyTab({ everything, place }: RunTabProps) {
+export function PolicyTab({ everything, place }: FrameTabProps) {
   return <PolicyDecisions read={everything} place={place} />;
 }

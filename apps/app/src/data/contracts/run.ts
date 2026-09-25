@@ -562,6 +562,18 @@ export const TranscriptCounts = z.object({
   errors: Count,
   /** Decisions a rule or a person made; the harness checking itself is not one. */
   policy: Count,
+  /**
+   * The same counts at `everything`, one entry per frame, whatever zoom was
+   * read: the frames the policy and recall chips keep, and the decisions
+   * among them a rule or a person made. The tabs that list frames count
+   * these. Null when the answer carried none.
+   */
+  frames: z
+    .object({
+      kinds: z.object({ policy: Count, recall: Count }),
+      policy: Count,
+    })
+    .nullable(),
 });
 export type TranscriptCounts = z.infer<typeof TranscriptCounts>;
 

@@ -1302,19 +1302,17 @@ describe("the outputs spine", () => {
 });
 
 describe("tabs", () => {
-  it("opens Transcript by default, reads the run at steps whole, and one page of its frames for their counts", async () => {
+  it("opens Transcript by default, and reads the run once, at steps, whole", async () => {
     const { calls } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-tab-transcript")).toBeTruthy();
-    // The Transcript tab, the stat row and the tab counts share the steps
-    // read, with whole bodies. No open tab lists frames, so the frames are
-    // read one page deep: the counts the server sends with it are the whole
-    // run's.
+    // The Transcript tab, the stat row and every tab count share the steps
+    // read, with whole bodies. No open tab lists frames, and the counts of
+    // the frames ride the steps read, so the run is not read at everything.
     expect(calls.transcript).toEqual([
       [ctx, "tse_7k2m9q", "steps", { kinds: [], limit: 500, text: "full" }],
-      [ctx, "tse_7k2m9q", "everything", { kinds: [], limit: 1 }],
     ]);
     expect(calls.cost).toHaveLength(1);
     expect(calls.chain).toHaveLength(0);
@@ -1445,6 +1443,48 @@ describe("tabs", () => {
     expect(screen.queryByText("A call is parked for approval")).toBeNull();
   });
 
+  it("counts the frame tabs from the frames' counts the steps read carries, not its step counts", async () => {
+    // One call with three decisions is one step at `steps` and three frames.
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(
+          runTranscript({
+            counts: transcriptCounts({
+              kinds: { policy: 1, recall: 1 },
+              policy: 1,
+              frames: { kinds: { policy: 3, recall: 2 }, policy: 2 },
+            }),
+          }),
+        ),
+      },
+      { tab: "cost" },
+    );
+    expect(calls.transcript.map((call) => call[2])).toEqual(["steps"]);
+    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent(
+      /^3$/,
+    );
+    expect(screen.getByTestId("run-tab-count-policy")).toHaveTextContent(/^2$/);
+    expect(screen.getByTestId("run-tab-count-context")).toHaveTextContent(
+      /^2$/,
+    );
+  });
+
+  it("draws no frame tab count when the read carried no frames' counts, rather than a zero (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(
+        runTranscript({
+          counts: { ...transcriptCounts({ policy: 1 }), frames: null },
+        }),
+      ),
+    });
+    // With no decisions counted the tab is the frame player.
+    expect(screen.getByRole("tab", { name: /Player/ })).toBeTruthy();
+    expect(screen.queryByTestId("run-tab-count-policy")).toBeNull();
+    expect(screen.queryByTestId("run-tab-count-context")).toBeNull();
+  });
+
   it("marks a count read from a transcript that stopped short as a floor", async () => {
     // The run passed the read's frame cap, so the server counted a prefix.
     await renderRun({
@@ -1481,12 +1521,8 @@ describe("transcript", () => {
       { tab: "transcript" },
     );
     // The tab makes no read of its own: the figures, the counts and the feed
-    // come from the page's read at steps, and the frames' one page is for
-    // the other tabs' counts.
-    expect(calls.transcript.map((call) => call[2])).toEqual([
-      "steps",
-      "everything",
-    ]);
+    // come from the page's one read at steps.
+    expect(calls.transcript.map((call) => call[2])).toEqual(["steps"]);
     const tab = screen.getByRole("region", { name: "Transcript" });
     const chips = within(screen.getByTestId("transcript-chips"))
       .getAllByRole("button", { pressed: true })
@@ -2266,12 +2302,8 @@ describe("cost", () => {
       { tab: "cost" },
     );
     expect(calls.cost).toHaveLength(1);
-    // The page's figures are the steps read's; the frames are read one page
-    // deep for the other tabs' counts.
-    expect(calls.transcript.map((call) => call[2])).toEqual([
-      "steps",
-      "everything",
-    ]);
+    // The page's figures and every tab count are the steps read's.
+    expect(calls.transcript.map((call) => call[2])).toEqual(["steps"]);
     expect(calls.turns).toEqual([[ctx, "tse_7k2m9q"]]);
     // Two turns; the second carries no cost, so it draws no bar.
     expect(screen.getAllByTestId("waterfall-row")).toHaveLength(2);

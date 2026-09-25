@@ -301,6 +301,7 @@ function countsOf(
   const { kinds } = counts;
   return {
     ...counts,
+    frames: counts.frames ?? null,
     kinds: {
       prompt: kinds.prompt ?? 0,
       responses: kinds.responses ?? 0,

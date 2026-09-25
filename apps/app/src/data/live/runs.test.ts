@@ -1010,6 +1010,7 @@ describe("runs.transcript", () => {
           entries: 2,
           errors: 0,
           policy: 1,
+          frames: { kinds: { policy: 3, recall: 1 }, policy: 2 },
         },
         figures: {
           steps: { model: 0, tool: 1 },
@@ -1067,6 +1068,11 @@ describe("runs.transcript", () => {
       family: "read",
     });
     expect(read.value.counts?.policy).toBe(1);
+    // The frames' counts at `everything`, carried on a read at `steps`.
+    expect(read.value.counts?.frames).toEqual({
+      kinds: { policy: 3, recall: 1 },
+      policy: 2,
+    });
     expect(read.value.figures?.calls.families[0]?.family).toBe("shell");
     expect(read.value.search).toEqual({
       query: "lines",

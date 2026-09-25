@@ -35,7 +35,7 @@ import {
 import { Fact, Facts, Meter, Note, NoValue, Panel, PanelBody } from "./parts";
 import { FrameLink } from "./policy-tab";
 import { entriesOf } from "./recorded-entries";
-import type { Place, RunTabProps } from "./tab-props";
+import type { FrameTabProps, Place, RunTabProps } from "./tab-props";
 import { entryKey, soleBody } from "./transcript-rows";
 import { isWhole } from "./whole-transcript";
 
@@ -798,7 +798,7 @@ async function readManifest(
  * The Context tab. Its one read of its own is the manifest frame's body, and
  * only when the transcript did not carry all of it.
  */
-export async function ContextTab(props: RunTabProps): Promise<ReactNode> {
+export async function ContextTab(props: FrameTabProps): Promise<ReactNode> {
   const { everything, transcript, run, place } = props;
   const entry = everything.ok ? manifestEntry(everything.value.entries) : null;
   const manifest = entry === null ? null : await readManifest(props, entry);
