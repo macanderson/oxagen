@@ -37,20 +37,12 @@ const router = vi.hoisted(() => ({
 vi.mock("next/link", () => ({
   // Next's link navigates on the client: it cancels the browser's own
   // navigation and pushes the route, which the test reads off `router.push`.
-  default: ({
-    children,
-    href,
-    ...rest
-  }: {
-    children: ReactNode;
-    href: string;
-  }) => (
+  default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a
-      href={href}
       {...rest}
       onClick={(event) => {
         event.preventDefault();
-        router.push(href);
+        router.push(rest.href);
       }}
     >
       {children}
