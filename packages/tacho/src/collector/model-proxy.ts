@@ -348,7 +348,10 @@ interface InFlight {
    * harness must not retry. Every `RetryableCut` is answered as retryable.
    */
   abort: (reason: string, retry?: RetryableCut) => void;
-  /** The ceiling the call holds against its session's budget until it settles. */
+  /**
+   * The ceiling the call holds against its session's budget and its agent's
+   * day budget until it settles.
+   */
   reserved: number;
 }
 
@@ -662,20 +665,38 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   }
 
   /**
-   * The ceiling an admitted call holds against its session's budget while it
-   * is in flight (`callCeilingMicros`), from the output cap the request
-   * states. Nothing unless the budget is enforced with a limit: an observed
-   * budget refuses no call, so a call has nothing to hold.
+   * The ceilings every call in flight holds, whatever session it belongs to.
+   * The day budget is the agent's, so it counts all of them, including calls
+   * no session could be found for.
+   */
+  function heldAll(): number {
+    let held = 0;
+    for (const calls of inFlight.values())
+      for (const call of calls) held += call.reserved;
+    return held;
+  }
+
+  /**
+   * The ceiling an admitted call holds against its budgets while it is in
+   * flight (`callCeilingMicros`), from the output cap the request states.
+   * Nothing unless the budget is enforced with a limit that applies to this
+   * call: an observed budget refuses no call, so a call has nothing to hold.
+   * The session limit applies only to a call filed under a session, and the
+   * day limit applies to every call.
    */
   function ceilingFor(
     route: ModelRoute,
     model: string | undefined,
     requestBytes: number,
     json: Record<string, unknown> | undefined,
+    hasSession: boolean,
   ): number {
     const { budget, model_prices: prices } = deps.policy().bundle;
-    if (budget.mode !== "enforced" || budget.session_limit_usd === undefined)
-      return 0;
+    if (budget.mode !== "enforced") return 0;
+    const limited =
+      (hasSession && budget.session_limit_usd !== undefined) ||
+      budget.daily_limit_usd !== undefined;
+    if (!limited) return 0;
     const cap =
       json?.["max_tokens"] ??
       json?.["max_output_tokens"] ??
@@ -888,10 +909,16 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       const day = utcDay(deps.now());
       const limit = usdToMicros(budget.daily_limit_usd);
       const used = daySpend.total(day);
-      if (used >= limit) {
+      // As for the session: what calls in flight may still spend counts as
+      // spent, so parallel calls cannot all pass on the same settled figure.
+      const held = heldAll();
+      if (used + held >= limit) {
         return {
           code: "daily_budget_exceeded",
-          message: `This agent reached its Oxagen daily budget: $${(used / 1_000_000).toFixed(2)} observed of a $${budget.daily_limit_usd.toFixed(2)} limit on ${day} (UTC). It resets at ${nextUtcDayStart(day)}. Ask the workspace's operator to raise the limit.`,
+          message:
+            held > 0
+              ? `This agent's Oxagen daily budget is taken: $${(used / 1_000_000).toFixed(2)} observed and up to $${(held / 1_000_000).toFixed(2)} held by calls in flight, of a $${budget.daily_limit_usd.toFixed(2)} limit on ${day} (UTC). Send the call again once those finish, or ask the workspace's operator to raise the limit.`
+              : `This agent reached its Oxagen daily budget: $${(used / 1_000_000).toFixed(2)} observed of a $${budget.daily_limit_usd.toFixed(2)} limit on ${day} (UTC). It resets at ${nextUtcDayStart(day)}. Ask the workspace's operator to raise the limit.`,
           source: "bundle",
           attrs: {
             "oxagen.day": day,
@@ -1209,10 +1236,15 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     let abortReason: string | undefined;
     let upstreamReq: ClientRequest | undefined;
     const entry: InFlight = {
-      reserved:
-        metered && record !== undefined
-          ? ceilingFor(route, askedModel, requestTextBytes, json())
-          : 0,
+      reserved: metered
+        ? ceilingFor(
+            route,
+            askedModel,
+            requestTextBytes,
+            json(),
+            record !== undefined,
+          )
+        : 0,
       abort: (reason, retry) => {
         abortReason = reason;
         upstreamReq?.destroy(new Error(reason));
