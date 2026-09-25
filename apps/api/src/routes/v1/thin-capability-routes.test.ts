@@ -257,6 +257,7 @@ import { tachoIncidentListRoute } from "./tacho.incident.list";
 import { assistantAsk } from "@oxagen/oxagen/contracts/assistant.ask";
 import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.get";
 import { assistantReplyGet } from "@oxagen/oxagen/contracts/assistant.reply.get";
+import { assistantReplyFeedbackRecord } from "@oxagen/oxagen/contracts/assistant.reply_feedback.record";
 import { assistantTurnCancel } from "@oxagen/oxagen/contracts/assistant.turn.cancel";
 import { toolsSearch } from "@oxagen/oxagen/contracts/tools.search";
 import { toolsLoad } from "@oxagen/oxagen/contracts/tools.load";
@@ -266,6 +267,7 @@ import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.se
 import { assistantAskRoute } from "./assistant.ask";
 import { assistantEngineGetRoute } from "./assistant.engine.get";
 import { assistantReplyGetRoute } from "./assistant.reply.get";
+import { assistantReplyFeedbackRecordRoute } from "./assistant.reply_feedback.record";
 import { assistantTurnCancelRoute } from "./assistant.turn.cancel";
 import { toolsSearchRoute } from "./tools.search";
 import { toolsLoadRoute } from "./tools.load";
@@ -1212,6 +1214,31 @@ const ROUTES: ThinRoute[] = [
     capability: assistantReplyGet.name,
     body: { runId: "arun_0123456789abcdef012345" },
     invalidBody: { runId: "tse_0123456789" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "assistant.reply_feedback.record",
+    route: assistantReplyFeedbackRecordRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: assistantReplyFeedbackRecord.name,
+    body: {
+      conversationId: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+      runId: "arun_0123456789abcdef012345",
+      verdict: "wrong",
+    },
+    expectedInput: {
+      conversationId: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+      runId: "arun_0123456789abcdef012345",
+      verdict: "wrong",
+      note: null,
+    },
+    invalidBody: {
+      conversationId: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+      runId: "arun_0123456789abcdef012345",
+      verdict: "wrong",
+      note: "x".repeat(501),
+    },
     jsonGuard: true,
     status: 200,
   },

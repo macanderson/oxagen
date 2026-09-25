@@ -39,6 +39,7 @@ export {
 } from "./data-plane-client";
 export * from "./eval-item-results";
 export * from "./router-outcomes";
+export * from "./reply-feedback";
 export {
   initTracer,
   shutdownTracer,
