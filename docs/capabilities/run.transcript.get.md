@@ -36,14 +36,25 @@ A body the store cannot return reads as `text: null` on its half; the rest of th
 ## Zoom levels
 
 - `everything`: one entry per frame, so the two halves of a step are two entries, each with its own body. A decision frame is its own entry, with kind `policy`.
-- `steps`: one entry per model call (`model.call_completed`, `model.engine_call_started`, `model.engine_call_completed`, `llm_call`, `model.request`, `model.response`) and per tool call (`tool.call_completed`, `tool.engine_call_started`, `tool.engine_call_completed`, `tool_call`, `tool_requested`), with the request half and the response half folded into one entry; every other frame folds into the step before it, and frames before the first step fold into a leading `frame` entry.
-- `turns`: one entry per `turn_start` frame; when the recording carries no turn boundaries, one entry wherever the frames' turn index changes; a run with neither is one turn.
+- `steps`: one entry per model call (`model.call_completed`, `model.engine_call_started`, `model.engine_call_completed`, `llm_call`, `model.request`, `model.response`) and per tool call (`tool.call_completed`, `tool.engine_call_started`, `tool.engine_call_completed`, `tool_call`, `tool_requested`), with the request half and the response half folded into one entry, and one entry per event: a prompt, a reply, a decision on no recorded call, a recall, the run's stop. A run of identical frames with nothing to read on them (a harness registering its hooks) is one entry. A step never crosses a turn boundary.
+- `turns`: the `steps` entries grouped by the turn they fall in, so the two zooms agree on what a turn holds. A turn opens at each `turn_start` frame; when the recording carries no turn boundaries, wherever the frames' turn index changes; a run with neither is one turn. The frames before the first turn are one entry of their own.
 
-### How the two halves pair
+The server is the only place a transcript is folded (ADR-182). A client presents the entries it is sent and does not pair, group or count frames of its own. Before ADR-182, `steps` folded every frame that was not a call half into the step before it, so a turn's prompt sat inside the previous turn's last call; a caller that counted `steps` or `turns` entries sees different counts now. The response shape only gained fields.
 
-A step is one request and one response wherever the producer writes two — the write-ahead intention and the terminal receipt. They pair on the call id the receipt records (`tool_call_id`, `model_call_id`); a wrapped session's rows carry no call id, so its halves pair on adjacency within the step kind. A producer that appends a single terminal receipt for the whole exchange records it as the `response`, because its body is the result, and `request` is then null.
+### How frames become steps
 
-A wrapped Claude Code session writes several frames for one tool call, all carrying the call's `tool_use_id` as `callId`: Oxagen's gate decision, the hook's request, the harness's own permission check, and the receipt. They are often not adjacent. The Run page gathers every frame with the same `callId` into one step, and reads the gate's recorded `target` as the step's command when the receipt kept no body.
+Within one turn, frames are taken in order, and each frame no earlier step claimed opens a step:
+
+1. A frame that carries a call id and is not a model frame gathers every frame with the same `callId` on its chain, when one of them is a tool frame. A wrapped Claude Code session writes several frames for one tool call, often not adjacent: Oxagen's gate decision, the hook's request, the harness's own permission check, the receipt, and digest-only copies from other sources. They are one step, which opens on the earliest of them.
+2. A model request pairs with the next response of its spelling that no other request took: on the call id where the request has one, else the frame right after it. So two requests sealed under one id pair with the two responses in order (#3994).
+3. A tool request with no call id takes the gates right after it that name no call either, and the receipt with no call id that closes it.
+4. A lone model or tool frame is a whole step.
+5. A run of identical frames with nothing to read on them is one step.
+6. Any other frame is its own step.
+
+A tool step also takes the effect frames (`command`, `file_io`, `network`) right after it that name its call, or that name no call when the step names none either.
+
+A step's `request` is its first request frame and its `response` the first frame that came back, each preferring a copy whose body was kept over a digest-only one. A producer that appends a single terminal receipt for the whole exchange records it as the `response`, because its body is the result, and `request` is then null. A `turn_start` that kept the operator's words carries them as its `request`, and a `turn_end`, or a message a harness reported apart from it, carries its words as its `response`.
 
 Claude Code's own permission check (`tool_decision` and `tool.blocked_on_user` in its OTel log) is recorded as `harness_permission`, not `policy_decision`. It runs on every call and is not a decision a rule made, so it answers to no chip. A row stored before this kind existed, as a `policy_decision` from `otel_log` or `otel_span` with `policy_source: harness`, reads as `harness_permission` too.
 
@@ -61,7 +72,7 @@ Claude Code's own permission check (`tool_decision` and `tool.blocked_on_user` i
 | `seal` | a frame that records the chain's own integrity: a `checkpoint`, a `telemetry_gap`, or the ledger event that closes an attempt |
 | `errors` | a call whose recorded outcome is failed, denied, cancelled, error, timeout, refused or rejected |
 
-The filter selects frames and the fold runs over what is left, so a filtered transcript is the transcript of those frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
+The fold runs over every frame first, and the filter then keeps the entries that answer a chip pressed. A filtered transcript therefore shows the same steps as an unfiltered one, only fewer of them: a `policy` selection at `steps` keeps each governed tool call whole, with both halves. At `everything` the answer is the same as filtering frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
 
 The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query opens the Transcript tab with every chip off. The tab filters the whole-run read the page already made, so no chip setting reads again.
 
@@ -76,7 +87,7 @@ The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `
 | `entries[].elapsedMs` | integer | milliseconds from the run's recorded start; clamped at zero |
 | `entries[].kind` | `turn` \| `model_call` \| `tool_call` \| `policy` \| `frame` | |
 | `entries[].type`, `label` | string | the opening frame's recorded type and its machine-derived label |
-| `entries[].callId` | string or null | the call the opening frame belongs to (`tool_call_id`, `model_call_id`, or a wrapped `toolUseId`); null when the producer recorded none. Clients that rebuild steps at `everything` pair halves on this value rather than on adjacency |
+| `entries[].callId` | string or null | the call the opening frame belongs to (`tool_call_id`, `model_call_id`, or a wrapped `toolUseId`); null when the producer recorded none. A client reads steps at the `steps` zoom rather than pairing `everything` entries on this value (ADR-182) |
 | `entries[].kinds` | string[] | the chips this entry answers to |
 | `entries[].target` | string or null | what Oxagen's gate recorded the call acting on (`tool_target`: a command, a path, a pattern), cut at 400 characters; absent when the gate recorded none |
 | `entries[].effort` | string or null | the reasoning effort the model call ran at (`low`, `medium`, `high`), as the harness recorded it on `tacho_events.effort`; null when none was recorded |
@@ -90,7 +101,7 @@ The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `
 | `entries[].{request,response}.text` | string or null | the body as UTF-8, cut at the zoom's cap (see below); null when no body was retained, the body is not text, the frame carried no content, the stored bytes do not hash to the recorded digest, or the half carries an `assembly` instead |
 | `entries[].{request,response}.truncated` | boolean | true when `text` was cut |
 | `entries[].{request,response}.assembly` | object or null | a recorded model stream folded into the message it was; null for every other half |
-| `entries[].decision` | object or null | `{ seq, decision, type, source, at }`, the decision folded into the entry. An operator command records the command as `decision`. `source` is who decided, in the envelope's `policy_source` words: `bundle` or `kernel` for Oxagen policy, `human` for an operator, `harness` or `managed_settings` for the agent's own harness; null when the frame names none. At the `steps` and `turns` zooms an operator command is not the decision of the step it folds into, because it is about the run and not about that call |
+| `entries[].decision` | object or null | `{ seq, decision, type, source, at }`, the decision folded into the entry. An operator command records the command as `decision`. `source` is who decided, in the envelope's `policy_source` words: `bundle` or `kernel` for Oxagen policy, `human` for an operator, `harness` or `managed_settings` for the agent's own harness; null when the frame names none. An operator command is its own entry at `steps`, and at `turns` it is never the turn's decision, because it is about the run and not about any one call |
 | `entries[].frames` | integer | frames folded, the opening frame included |
 | `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom and under every chip filter. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. A client groups `everything` entries into turns by this value |
 | `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed; null when none carried one. Ledger frames carry no cost record; spend is metered per run |

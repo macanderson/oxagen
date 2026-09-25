@@ -381,17 +381,31 @@ describe("get_run_transcript", () => {
     ]);
   });
 
-  it("steps: model and tool calls, folding the frames between and summing their cost", async () => {
+  it("steps: each model call, tool call and event is its own entry, within its turn", async () => {
+    // Before ADR-182 every other frame folded into the step before it, so
+    // turn 2's prompt sat inside turn 1's tool call.
     const { transcript } = harness(rows);
     const out = await transcript(input({ zoom: "steps" }), ctx());
-    expect(out.entries.map((e) => [e.seq, e.endSeq, e.kind, e.frames])).toEqual(
-      [
-        ["0", "1", "frame", 2],
-        ["2", "2", "model_call", 1],
-        ["3", "4", "tool_call", 2],
-        ["5", "6", "model_call", 2],
-      ],
-    );
+    expect(
+      out.entries.map((e) => [e.seq, e.endSeq, e.kind, e.frames, e.turn]),
+    ).toEqual([
+      ["0", "0", "frame", 1, null],
+      ["1", "1", "frame", 1, 1],
+      ["2", "2", "model_call", 1, 1],
+      ["3", "3", "tool_call", 1, 1],
+      ["4", "4", "frame", 1, 2],
+      ["5", "5", "model_call", 1, 2],
+      ["6", "6", "frame", 1, 2],
+    ]);
+    expect(out.entries.map((e) => e.cost?.micros ?? null)).toEqual([
+      null,
+      null,
+      "40",
+      null,
+      null,
+      "60",
+      null,
+    ]);
   });
 
   it("turns: one entry per turn with the turn's cost", async () => {
@@ -419,11 +433,13 @@ describe("get_run_transcript", () => {
         toolStatus: "",
         toolUseId: "tu_shared",
       }),
+      // The gate records the call it decided on, as hook-handler.ts seals it.
       tachoRow(1, {
         kind: "policy_decision",
         toolName: "",
         toolStatus: "",
         policyDecision: "route",
+        toolUseId: "tu_shared",
       }),
       tachoRow(2, { kind: "tool_call", toolUseId: "tu_shared" }),
     ]);
@@ -478,7 +494,7 @@ describe("get_run_transcript", () => {
     expect(quiet.entries[0]?.kinds).not.toContain("errors");
   });
 
-  it("filters frames by the chips pressed before folding, and echoes the selection", async () => {
+  it("filters the entries by the chips pressed after folding, and echoes the selection", async () => {
     const { transcript } = harness(rows);
     const out = await transcript(
       input({ zoom: "everything", kinds: ["tools"] }),
@@ -494,6 +510,33 @@ describe("get_run_transcript", () => {
       ctx(),
     );
     expect(all.entries).toHaveLength(rows.length);
+  });
+
+  it("steps: a filtered read shows the same step, both halves and all, as an unfiltered one", async () => {
+    const { transcript } = harness([
+      tachoRow(0, { kind: "llm_call", toolName: "", model: "haiku" }),
+      tachoRow(1, {
+        kind: "policy_decision",
+        toolName: "Read",
+        toolStatus: "",
+        policyDecision: "allow",
+        toolUseId: "tu_r",
+      }),
+      tachoRow(2, {
+        kind: "tool_requested",
+        toolStatus: "",
+        toolUseId: "tu_r",
+      }),
+      tachoRow(3, { kind: "tool_call", toolUseId: "tu_r" }),
+    ]);
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    const policy = await transcript(
+      input({ zoom: "steps", kinds: ["policy"] }),
+      ctx(),
+    );
+    expect(policy.entries).toEqual([all.entries[1]]);
+    expect(policy.entries[0]?.request?.seq).toBe("2");
+    expect(policy.entries[0]?.response?.seq).toBe("3");
   });
 
   it("pages on a cursor it owns and refuses one it did not write (negative)", async () => {
@@ -1289,7 +1332,9 @@ describe("get_run_transcript and subagent chains", () => {
     const live = { outcome: "running", sealedAt: null };
     const running = harness(root.slice(0, 3), live, children);
     const first = await running.transcript(input({ zoom: "steps" }), ctx());
-    expect(first.entries.map((e) => e.label.split(" ")[0])).toHaveLength(4);
+    // The prompt, the Task call, the subagent's brief, its model call and its
+    // Grep call.
+    expect(first.entries.map((e) => e.label.split(" ")[0])).toHaveLength(5);
     const done = harness(root, live, children);
     const reads: string[][] = [];
     let after = first.cursor as string;
@@ -1301,8 +1346,9 @@ describe("get_run_transcript and subagent chains", () => {
       reads.push(page.entries.map((e) => `${e.seq}-${e.endSeq}`));
       after = page.cursor as string;
     }
-    // The Task step once, with its result and the turn's end, then nothing.
-    expect(reads).toEqual([["1-4"], [], [], []]);
+    // The Task step once with its result, the turn's end as its own entry,
+    // then nothing.
+    expect(reads).toEqual([["1-3", "4-4"], [], [], []]);
   });
 
   it("reads a cursor of either form, and refuses a malformed chain cursor (negative)", () => {

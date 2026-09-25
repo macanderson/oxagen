@@ -22,18 +22,23 @@
  * - `everything`: one entry per frame, so the two halves of a step are two
  *   entries, each with its own body.
  * - `steps`: one entry per model call and per tool call, request and response
- *   folded together; every other frame folds into the step before it.
- * - `turns`: one entry per turn; a run whose frames carry no turn index is one
- *   turn.
+ *   folded together, and one per event: a prompt, a reply, a decision on no
+ *   recorded call, a recall. A step never crosses a turn boundary.
+ * - `turns`: the `steps` entries grouped by turn, so the two zooms agree on
+ *   what a turn holds; a run whose frames carry no turn index is one turn.
+ *
+ * The server is the only place a transcript is folded (ADR-182). A client
+ * presents these entries and does not pair, group or count frames of its own.
  *
  * Cost is a prefix sum over `seq` (§8.4): `cost` is what the entry's own
  * frames recorded and `cumulativeCost` is every frame of the run up to and
  * including it, so a reader never has to add up a page to know what a run had
  * spent by a given step. Both are null where no frame carried a cost record.
  *
- * `kinds` is the Transcript tab's chips, applied on the server: the filter
- * selects frames and the fold runs over what is left, so a filtered transcript
- * is the transcript of those frames. An empty selection keeps everything.
+ * `kinds` is the Transcript tab's chips, applied on the server after the fold:
+ * the filter keeps the entries that answer a chip pressed, so a filtered
+ * transcript shows the same steps as an unfiltered one, only fewer of them.
+ * An empty selection keeps everything.
  *
  * A `digest_only` recording produces halves with `text: null` and
  * `fidelity: "digest_only"`, and the transcript says so on every half; the
@@ -351,9 +356,8 @@ export const transcriptEntrySchema = z
     /**
      * The call the opening frame belongs to (`tool_call_id`, `model_call_id`,
      * or a wrapped session's `toolUseId`). Null when the producer recorded
-     * none. Clients that rebuild steps at `everything` pair halves on this
-     * value rather than on adjacency, so overlapping tool calls keep each
-     * result under the request that made it.
+     * none. A client reads steps at the `steps` zoom rather than pairing
+     * `everything` entries on this value (ADR-182).
      */
     callId: z.string().nullable(),
     /**

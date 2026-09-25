@@ -9,10 +9,10 @@ export const schema = {
     "The run's public id: arun_… (evidence ledger) or tse_… (wrapped agent session)",
   ),
   zoom: runTranscriptGet.input.shape.zoom.describe(
-    "turns: one entry per turn; steps: one per model call and tool call, request and result folded together; everything: one per frame",
+    "turns: the steps grouped by turn; steps: one per model call and tool call, request and result folded together, and one per event such as a prompt or a decision; everything: one per frame",
   ),
   kinds: runTranscriptGet.input.shape.kinds.describe(
-    "The chips to narrow to (prompt, responses, thinking, tools, policy, usage, recall, seal, errors); empty keeps every frame",
+    "The chips to narrow to (prompt, responses, thinking, tools, policy, usage, recall, seal, errors), applied to the folded entries; empty keeps every entry",
   ),
   after: runTranscriptGet.input.shape.after.describe(
     "An entry cursor from an earlier read; omit to read from the start",

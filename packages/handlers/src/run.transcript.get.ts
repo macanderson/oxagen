@@ -1,18 +1,20 @@
 // `get_run_transcript`: a run read as a transcript at one zoom level
 // (Mission Control spec §8.4, §14; ADR-058).
 //
-// The frames come from the run reader (lib/run-read.ts), are narrowed to the
-// chips the caller pressed (`filterFramesByKind`), and fold into entries with
-// the pure `foldTranscript` (@oxagen/run-ledger). Each entry's two halves —
-// what went out and what came back — then have their bodies read from the
-// evidence store, decoded as UTF-8 and cut at the contract's text cap.
+// The frames come from the run reader (lib/run-read.ts) and fold into entries
+// with the one transcript fold, `foldTranscript` (@oxagen/run-ledger,
+// ADR-182). The chips the caller pressed then narrow the entries
+// (`filterFoldsByKind`), so a filtered read shows the same steps as an
+// unfiltered one. Each entry's two halves (what went out and what came back)
+// have their bodies read from the evidence store, decoded as UTF-8 and cut at
+// the contract's text cap.
 //
 // Three things are computed over the whole run and not over the page: the
 // cumulative cost, which is a prefix sum from the run's first frame (§8.4),
 // the elapsed time, which is measured from the run's recorded start, and the
-// turn each entry falls in, which is counted over the unfiltered frames so a
-// chip never renumbers the turns. A page that computed any of them from its
-// own first entry would restate the run's cost, clock and turns as the page's,
+// turn each entry falls in, which the fold counts over every frame so a chip
+// never renumbers the turns. A page that computed any of them from its own
+// first entry would restate the run's cost, clock and turns as the page's,
 // which is wrong on every page but the first.
 //
 // A wrapped run's subagents record on chains of their own, each numbered from
@@ -37,13 +39,11 @@ import {
   type TranscriptZoom,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import {
-  filterFramesByKind,
+  filterFoldsByKind,
   foldTranscript,
   frameKey,
   type RunFrame,
   type TranscriptFold,
-  type TranscriptKind,
-  turnOrdinals,
   withoutDuplicateModelCalls,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
@@ -382,44 +382,6 @@ export function elapsedMs(startedAt: number, at: Date): number {
 }
 
 /**
- * A turn boundary's own body, read as the half it is. The fold keeps a turn
- * boundary out of both slots because it is not a step (`foldTranscript`'s
- * `open()`), and that is right for pairing calls. It also meant the prompt a
- * turn opened with, which the recorder kept in full on `turn_start`, reached
- * no half and so no page: every run read as if nobody had typed anything.
- *
- * The prompt is what went out, so it is the `request`; a `turn_end` reply is
- * what came back, so it is the `response`. A step half the fold already
- * placed is never displaced, and a boundary with no retained body adds
- * nothing.
- */
-const BOUNDARY_HALF: Readonly<Record<string, "request" | "response">> = {
-  turn_start: "request",
-  turn_end: "response",
-};
-
-export function boundaryHalves(fold: TranscriptFold): {
-  request: RunFrame | null;
-  response: RunFrame | null;
-} {
-  const { opening } = fold;
-  // An agent message a harness reported on its own (`tachoFramePhase`) is
-  // what came back, and it is read as that half the way a `turn_end` is.
-  const slot =
-    BOUNDARY_HALF[opening.type] ??
-    (opening.type === "oxagen:message" && opening.phase === "response"
-      ? "response"
-      : undefined);
-  if (slot === undefined || opening.body.bodyRef === null) {
-    return { request: fold.request, response: fold.response };
-  }
-  return {
-    request: fold.request ?? (slot === "request" ? opening : null),
-    response: fold.response ?? (slot === "response" ? opening : null),
-  };
-}
-
-/**
  * The part of the price book a page's blocks are priced from: the models of
  * the frames `outputRate` is asked about, which are the request and response
  * halves of each fold, from the earliest of those frames to the latest.
@@ -432,8 +394,7 @@ export function pagePriceSlice(
   let to = Number.NEGATIVE_INFINITY;
   const models = new Set<string>();
   for (const fold of page) {
-    const { request, response } = boundaryHalves(fold);
-    for (const frame of [request, response]) {
+    for (const frame of [fold.request, fold.response]) {
       if (frame === null || frame.identity.model === null) continue;
       models.add(frame.identity.model);
       const at = frame.observedAt.getTime();
@@ -461,17 +422,6 @@ function entryEffort(fold: TranscriptFold): string | null {
   return null;
 }
 
-/**
- * The chips an entry answers to: the union over every frame it folds, which
- * the fold collects as it absorbs them (#3370), not only its opening and its
- * two halves.
- */
-function entryKinds(fold: TranscriptFold): TranscriptKind[] {
-  const kinds = new Set<TranscriptKind>(fold.kinds);
-  if (fold.decision !== null) kinds.add("policy");
-  return [...kinds];
-}
-
 export function createRunTranscriptGetHandler(
   deps: RunTranscriptGetDeps,
 ): CapabilityHandler<typeof runTranscriptGet> {
@@ -493,13 +443,12 @@ export function createRunTranscriptGetHandler(
     // One model call reported by several sources is one step
     // (`withoutDuplicateModelCalls`): a proxied call drew twice.
     const shown = withoutDuplicateModelCalls(read.frames);
-    const frames = filterFramesByKind(shown, input.kinds);
-    const folds = foldTranscript(frames, input.zoom);
-    // Turns are counted over every frame of the run, so a chip filter never
-    // renumbers them: turn 2 is turn 2 whichever kinds the page shows.
-    const ordinals = turnOrdinals(shown);
-    const turnOf = new Map(
-      shown.map((frame, i) => [frame, ordinals[i] ?? null]),
+    // The fold runs over every frame, then the chips narrow its entries, so
+    // a filtered read shows the same steps, turns and turn numbers as an
+    // unfiltered one (ADR-182).
+    const folds = filterFoldsByKind(
+      foldTranscript(shown, input.zoom),
+      input.kinds,
     );
 
     // Cumulative cost is a prefix over every frame of the run (§8.4), before
@@ -521,13 +470,9 @@ export function createRunTranscriptGetHandler(
 
     // Pages are cut on each frame's position in the run as read, not on its
     // `seq`: a subagent's chain is numbered from 0 like the root's, so a
-    // sequence alone no longer orders the frames of a run.
-    const position = new Map(shown.map((frame, i) => [frame, i]));
-    const at = (frame: RunFrame): number => position.get(frame) ?? -1;
-    const spans = folds.map((fold) => ({
-      open: at(fold.opening),
-      end: at(fold.last),
-    }));
+    // sequence alone no longer orders the frames of a run. The fold states
+    // each entry's span in those positions.
+    const spans = folds.map((fold) => fold.span);
     const plan = planTranscriptPage(
       spans,
       after === null
@@ -586,13 +531,26 @@ export function createRunTranscriptGetHandler(
       });
       return entry === null ? null : Number(entry.microsPerMillion);
     };
-    const halves = await mapConcurrent(page, BODY_CONCURRENCY, async (fold) => {
-      const { request, response } = boundaryHalves(fold);
-      return {
-        request: await half(deps.bodies, scope, request, textMax, outputRate),
-        response: await half(deps.bodies, scope, response, textMax, outputRate),
-      };
-    });
+    const halves = await mapConcurrent(
+      page,
+      BODY_CONCURRENCY,
+      async (fold) => ({
+        request: await half(
+          deps.bodies,
+          scope,
+          fold.request,
+          textMax,
+          outputRate,
+        ),
+        response: await half(
+          deps.bodies,
+          scope,
+          fold.response,
+          textMax,
+          outputRate,
+        ),
+      }),
+    );
 
     const entries: TranscriptEntry[] = page.map((fold, i) => {
       const { opening } = fold;
@@ -622,7 +580,7 @@ export function createRunTranscriptGetHandler(
         target: opening.identity.target ?? null,
         effort: entryEffort(fold),
         usage: fold.usage ?? null,
-        kinds: entryKinds(fold),
+        kinds: [...fold.kinds],
         request: pair.request,
         response: pair.response,
         decision:
@@ -639,7 +597,7 @@ export function createRunTranscriptGetHandler(
                 at: fold.decision.at.toISOString(),
               },
         frames: fold.frames,
-        turn: turnOf.get(opening) ?? null,
+        turn: fold.turn,
         cost: cost(fold.costMicros),
         cumulativeCost: cost(costThrough.get(fold.last) ?? null),
       };
