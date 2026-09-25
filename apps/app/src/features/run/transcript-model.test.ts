@@ -1071,7 +1071,10 @@ describe("buildFeed, a reply's own shapes", () => {
     expect(tool?.failed).toBe(true);
   });
 
-  it("prints the call as it was made on the first line when its arguments have no headline", () => {
+  // A call whose arguments are all objects has no reading of its own. Its row
+  // prints every argument as `key value` (compactArgs, #4116) rather than the
+  // tool's name over a blank argument slot.
+  it("prints every argument as key and value when the call's arguments have no headline", () => {
     const rows = buildFeed([
       reply({
         response: transcriptBody({
@@ -1089,7 +1092,7 @@ describe("buildFeed, a reply's own shapes", () => {
       }),
     ]);
     expect(tools(rows)[0]?.call.arg).toBe(
-      '{"filter":{"state":"open"},"patch":{"labels":["a"]}}',
+      'filter {"state":"open"} · patch {"labels":["a"]}',
     );
   });
 
