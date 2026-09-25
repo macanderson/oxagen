@@ -265,6 +265,10 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
   ],
   "src/server/session.ts": ["@oxagen/auth", "@oxagen/auth/*"],
   "src/features/auth/auth-client.ts": ["@oxagen/auth/client"],
+  // The password policy the sign-up and reset screens tick is the one the
+  // server enforces (#3888). The module is pure and edge-safe, so the browser
+  // form schema imports it rather than keeping a copy that can drift.
+  "src/features/auth/schemas.ts": ["@oxagen/auth/password-policy"],
   // The shell's user menu and Account dialog make Better Auth calls of their
   // own (sign out, the session list and its revoke, fresh recovery codes). The
   // auth barrel is server-only and a feature's internals are not importable

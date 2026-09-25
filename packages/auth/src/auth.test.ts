@@ -295,7 +295,9 @@ describe("auth module — import and betterAuth config", () => {
     const epw = getConfig()["emailAndPassword"] as Record<string, unknown>;
     expect(epw["enabled"]).toBe(true);
     expect(epw["autoSignIn"]).toBe(true);
-    expect(epw["minPasswordLength"]).toBe(8);
+    // The app's sign-up and reset screens require 12 (#3888).
+    expect(epw["minPasswordLength"]).toBe(12);
+    expect(epw["maxPasswordLength"]).toBe(128);
     expect(epw["revokeSessionsOnPasswordReset"]).toBe(true);
     // In test env (isLocalEnv=true), email verification is not required
     expect(epw["requireEmailVerification"]).toBe(false);
@@ -383,6 +385,7 @@ describe("enterprise SSO wiring", () => {
   it("registers the SSO plugin and disables its provider-management paths", () => {
     const plugins = getConfig()["plugins"] as { id: string }[];
     expect(plugins.map((p) => p.id)).toContain("sso");
+    expect(plugins.map((p) => p.id)).toContain("oxagen-password-policy");
     expect(getConfig()["disabledPaths"]).toEqual([
       "/sso/register",
       "/sso/verify-domain",

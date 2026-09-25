@@ -1735,6 +1735,7 @@ type Messages = {
       suspended: string;
       rateLimited: string;
       alreadyRegistered: string;
+      passwordTooWeak: string;
       codeWrong: string;
       linkExpired: string;
       oauthCancelled: string;

@@ -25,6 +25,8 @@ import { authMethodForPath, lookupSsoProviderDomain } from "./sso/policy";
 import { createSsoDomainGuard } from "./sso/domain-guard";
 import { requireSsoPlugin } from "./sso/require-sso-plugin";
 import { selectSsoProviderPlugin } from "./sso/select-provider-plugin";
+import { PASSWORD_MAX, PASSWORD_MIN } from "./password-policy";
+import { passwordPolicyPlugin } from "./password-policy-plugin";
 import {
   sendEmailFireAndForget,
   resetPasswordEmailTemplate,
@@ -339,6 +341,9 @@ export const auth = betterAuth({
     // Names the verified provider for /sign-in/sso so only its secrets are
     // opened (./sso/select-provider-plugin.ts).
     selectSsoProviderPlugin(),
+    // Refuses a new password without 12 characters, a symbol, and a digit on
+    // sign-up, reset, and change (./password-policy-plugin.ts, #3888).
+    passwordPolicyPlugin(),
   ],
   // The SSO plugin's provider-management endpoints; the org.sso.* capabilities
   // replace them (./sso/plugin.ts).
@@ -355,7 +360,10 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
-    minPasswordLength: 8,
+    // The same bounds the app's screens enforce (./password-policy.ts). The
+    // symbol and digit rules are enforced by passwordPolicyPlugin above.
+    minPasswordLength: PASSWORD_MIN,
+    maxPasswordLength: PASSWORD_MAX,
     // Require a verified email before sign-in in deployed (production/preview)
     // environments only. Local development and the E2E harness have no real
     // mail delivery (sendEmail is a no-op locally), so enforcing it would 403
