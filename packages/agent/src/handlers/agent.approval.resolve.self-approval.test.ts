@@ -409,7 +409,9 @@ describe("resolve_approval: a turn answering its own parked write", () => {
       approvalId: APPROVAL_PUBLIC_ID,
       resolution: "approved",
       mandate: null,
-      // The parked call is queued to run once the person approves (ADR-118).
+      // The released call stays queued for the worker: the double models no
+      // resume claim, so the deciding request does not run it. An approved
+      // call itself resumes once (ADR-118).
       execution: { status: "queued", runId: null, reason: null },
     });
     expect(store.row).toMatchObject({
