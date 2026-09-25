@@ -123,7 +123,7 @@ describe("silentAssistantRunsQuery", () => {
       ]),
     );
     // The last frame of the open attempt, by its own sequence, on the
-    // server's clock; then the attempt's start; then the run's admission.
+    // server's clock. Else the attempt's start, else the run's admission.
     expect(query.sql).toMatch(
       /coalesce\(\s*\(SELECT e\.created_at FROM agent\.agent_run_events AS e\s+WHERE e\.attempt_id = agent_runs\.active_attempt_id\s+AND e\.event_record_version = 2\s+ORDER BY e\.attempt_seq DESC\s+LIMIT 1\),\s*\(SELECT a\.claimed_at FROM agent\.agent_run_attempts AS a\s+WHERE a\.id = agent_runs\.active_attempt_id\),\s*agent_runs\.created_at\s*\)/,
     );

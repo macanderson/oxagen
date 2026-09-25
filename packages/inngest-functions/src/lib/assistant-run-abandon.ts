@@ -1,4 +1,4 @@
-// assistant-run-abandon.ts — the ledger's close of an in-app assistant run
+// assistant-run-abandon.ts: the ledger's close of an in-app assistant run
 // whose process died mid-turn (#3988).
 //
 // The in-app assistant records every turn as a ledger run (`arun_…`) and
@@ -207,7 +207,7 @@ function sharedPlaneScan(args: ScanArgs) {
 export async function listDedicatedPlaneScopes(): Promise<PlaneScope[]> {
   const planes = schema.dataPlanes;
   // tenancy: the plane bindings and workspace ids live on the control plane
-  // for every organization, dedicated ones included; no tenant row is read.
+  // for every organization, dedicated ones included. No tenant row is read.
   return withSystemDb((tx) =>
     tx
       .select({
@@ -249,7 +249,7 @@ export async function abandonSilentRun(
   );
 }
 
-/** A run one pass closed; its cost is rolled up as final. */
+/** A run one pass closed. Its cost is rolled up as final. */
 export interface AbandonedAssistantRun {
   publicId: string;
   orgId: string;
