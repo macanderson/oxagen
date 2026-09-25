@@ -1,0 +1,49 @@
+{
+  "name": "cancel_assistant_turn",
+  "domain": "assistant",
+  "description": "Stop a running in-app agent turn that you asked, named by the turnId passed to ask_assistant. The turn keeps the reply written so far and its run is sealed cancelled. Idempotent.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "turnId": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "turnId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "turnId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "found": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "turnId",
+      "found"
+    ],
+    "additionalProperties": false
+  }
+}
