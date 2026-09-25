@@ -99,6 +99,9 @@ const ROLE_CHECKED_CONTRACTS = [
   "delete_cost_center",
   "set_cost_center",
   "export_cost_center_statement",
+  // A verdict on an assistant reply (#4169) takes ask_assistant's roles, and
+  // ask_assistant asserts them in its turn, so this handler asserts them too.
+  "record_reply_feedback",
   // Thirty agent-surface contracts that granted only narrow roles while their
   // handlers checked none (#4194). A workspace Member could reach each one
   // over the API, over MCP, and through stella's search_tools and

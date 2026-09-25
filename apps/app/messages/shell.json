@@ -441,7 +441,20 @@
         "check": "Check again",
         "checking": "Checking…"
       },
-      "retry": "Ask again"
+      "retry": "Ask again",
+      "feedback": {
+        "label": "Rate this reply",
+        "useful": "Useful",
+        "wrong": "Wrong",
+        "noteLabel": "What was wrong? Optional.",
+        "notePlaceholder": "The run, number, or step it got wrong",
+        "noteHint": "Up to {max} characters.",
+        "send": "Record as wrong",
+        "cancel": "Cancel",
+        "recordedUseful": "Recorded as useful against this run.",
+        "recordedWrong": "Recorded as wrong against this run.",
+        "failed": "Your rating was not recorded. Try again."
+      }
     },
     "avatar": {
       "title": "Your avatar",

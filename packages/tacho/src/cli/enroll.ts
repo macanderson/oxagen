@@ -36,6 +36,7 @@ import {
   harnessFilesRecord,
   mcpEndpointOverrideRequestFrom,
   readHostFile,
+  sessionScopeForEnrollment,
   writeHostFile,
 } from "../host/host-file";
 import {
@@ -104,6 +105,12 @@ export interface EnrollOptions extends CredentialOptions {
   credentials?: CredentialMode;
   /** Enroll even when running as root (`--allow-root`). */
   allowRoot?: boolean;
+  /**
+   * Set by `reassign`, which revokes the enrollment host.json names before
+   * it enrolls again: whether the control plane confirmed that revoke. The
+   * session scope carries over only when it did (ADR-179). Not a flag.
+   */
+  predecessorRevoked?: boolean;
 }
 
 /**
@@ -913,9 +920,31 @@ async function enrollSteps(
     const mcpEndpointOverride =
       requestedMcpEndpoint(deps, warnings) ??
       (movesDeployment ? undefined : existing?.mcp_endpoint_override);
+    // A live session keeps its uuid, and so its run, when this enrollment
+    // replaces the old one on the same machine in the same workspace and the
+    // old one is revoked. A `--force` over a live enrollment revokes it only
+    // below, and carries the scope over there.
+    const sessionScope = sessionScopeForEnrollment(
+      {
+        host_enrollment_id: response.hostEnrollmentId,
+        organization_id: response.enrollment.claims.organization_id,
+        workspace_id: response.enrollment.claims.workspace_id,
+        device_key_fingerprint: key.fingerprint,
+      },
+      existing === undefined
+        ? undefined
+        : {
+            host: existing,
+            revoked:
+              fleetRevoked ||
+              addition.revoked !== undefined ||
+              options.predecessorRevoked === true,
+          },
+    );
     host = {
       schema: HOST_FILE_SCHEMA,
       host_enrollment_id: response.hostEnrollmentId,
+      session_scope: sessionScope,
       agent_key: response.agentKey,
       organization_id: response.enrollment.claims.organization_id,
       workspace_id: response.enrollment.claims.workspace_id,
@@ -1052,11 +1081,19 @@ async function enrollSteps(
         deps,
         problems,
       );
-      if (revoked)
+      if (revoked) {
         deps.out(
           `      previous enrollment ${existing.host_enrollment_id} revoked`,
         );
-      else
+        const carried = sessionScopeForEnrollment(host, {
+          host: existing,
+          revoked: true,
+        });
+        if (carried !== host.session_scope) {
+          host = { ...host, session_scope: carried };
+          writeHostFile(deps.paths.hostFile, host);
+        }
+      } else
         warnings.push(
           `the previous enrollment ${existing.host_enrollment_id} could not be revoked (${problems.join("; ")}); its host key stays valid until ${existing.expires_at} unless an operator revokes it from the fleet page`,
         );
