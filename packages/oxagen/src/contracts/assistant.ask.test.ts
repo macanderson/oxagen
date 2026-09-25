@@ -196,6 +196,32 @@ describe("ask_assistant contract", () => {
     expect(assistantAsk.output.parse(output)).toEqual(output);
   });
 
+  // `toolCalls` has no default, unlike `stopped`. An answer that leaves it out
+  // is refused, so a surface never reads a missing list as a turn with no calls.
+  it("refuses an answer without its tool calls, or with null in their place (negative)", () => {
+    const output = {
+      conversationId: CONVERSATION,
+      conversationPublicId: CONVERSATION_PUBLIC_ID,
+      userMessageId: "0192d4a8-7c1e-7a00-8000-0000000000d1",
+      assistantMessageId: "0192d4a8-7c1e-7a00-8000-0000000000d2",
+      runId: "arun_0123456789abcdef012345",
+      reply: "Three runs are live.",
+      parkedCards: [],
+      toolCalls: [],
+    };
+    expect(assistantAsk.output.safeParse(output).success).toBe(true);
+    const withoutToolCalls: Record<string, unknown> = { ...output };
+    delete withoutToolCalls.toolCalls;
+    const refused = assistantAsk.output.safeParse(withoutToolCalls);
+    expect(refused.success).toBe(false);
+    expect(refused.error?.issues.map((issue) => issue.path)).toEqual([
+      ["toolCalls"],
+    ]);
+    expect(
+      assistantAsk.output.safeParse({ ...output, toolCalls: null }).success,
+    ).toBe(false);
+  });
+
   it("refuses a tool call with an unknown outcome, a fractional duration or an extra key (negative)", () => {
     const call = {
       toolCallId: "tc-1",
