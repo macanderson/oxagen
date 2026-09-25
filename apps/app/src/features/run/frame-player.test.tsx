@@ -18,7 +18,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
 const push = vi.fn();
-const replace = vi.fn<(path: string, options?: { scroll?: boolean }) => void>();
+const replace = vi.fn<(href: string, opts?: { scroll?: boolean }) => void>();
 const router = { push, replace, refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/features/shell/client", () => ({ openApprovals: vi.fn() }));
