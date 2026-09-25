@@ -90,3 +90,23 @@ export function isSameModelIdentity(name: string, claimed: string): boolean {
   if (rest === null || rest === "") return false;
   return POINT_IN_TIME_STAMP.test(rest);
 }
+
+/**
+ * Every name that {@link isSameModelIdentity} accepts as the same model as
+ * `name`: the id itself, and each shorter prefix of it that the id continues
+ * past with a point-in-time stamp.
+ *
+ * A price row can price an id only when its model or one of its aliases is in
+ * this list, so a store read that asks for these names returns every row the
+ * resolver could pick and none it could not use. The list is computed with
+ * {@link isSameModelIdentity} itself, so the read and the resolver cannot
+ * disagree about which rows match.
+ */
+export function claimableNames(name: string): string[] {
+  const out = [name];
+  for (let end = 1; end < name.length; end++) {
+    const claimed = name.slice(0, end);
+    if (isSameModelIdentity(name, claimed)) out.push(claimed);
+  }
+  return out;
+}

@@ -9,7 +9,9 @@
 //   - the run row: its cost and basis, when it started and sealed;
 //   - the cost rollup (`get_run_cost`): the token classes, the cache hit rate,
 //     the productive ratio, the per-model rows, and each model's recorded
-//     cost by token class and cache saving;
+//     cost by token class and cache saving; before the rollup reaches a
+//     wrapped run, the per-model calls and reported cost ingest has folded
+//     from its frames (`provisional`, #4032);
 //   - the whole-run transcript at `everything`: prompts, steps, tool calls,
 //     their families and batches, the wall clock split.
 //
@@ -22,7 +24,12 @@
 // so a rate change after the run cannot move a figure on the page (#4069).
 //
 // It is pure: the page reads, this derives, and the sections render.
-import { type Cost, type Money, sumMoney } from "@/data/contracts/money";
+import {
+  byMicrosDescending,
+  type Cost,
+  type Money,
+  sumMoney,
+} from "@/data/contracts/money";
 import type {
   CostByClass,
   RunCost,
@@ -239,7 +246,83 @@ export type RunMetrics = {
   errors: number | null;
   /** Input tokens per model call, over the rollup's model calls. */
   perModelCall: number | null;
+  /**
+   * What each model cost as the session reported it, for a wrapped run the
+   * rollup has not reached yet (#4032). Null once the rollup has a row for
+   * the run, since the rollup's figures replace it, and when the read carried
+   * none.
+   */
+  provisional: ProvisionalSpend | null;
 };
+
+/** One model's reported calls and cost, before the rollup prices them. */
+export type ProvisionalModel = {
+  model: string;
+  provider: string | null;
+  calls: number;
+  /** Null when the session reported no cost for the model's calls. */
+  cost: Cost | null;
+};
+
+export type ProvisionalSpend = {
+  /** Dearest first; a model with no reported cost after every one with one. */
+  byModel: ProvisionalModel[];
+  /**
+   * The reported costs summed. Null when no model reported one, or when they
+   * are in more than one currency: a total across currencies is not a figure.
+   */
+  total: Money | null;
+  /** Some model reported no cost, so `total` covers only the ones that did. */
+  partial: boolean;
+  toolCalls: number;
+  /** The run's last recorded event, which these figures include. */
+  asOf: string;
+};
+
+/** Order models by what they reported, dearest first, unpriced last. */
+function byReportedCost(a: ProvisionalModel, b: ProvisionalModel): number {
+  if (a.cost === null) return b.cost === null ? 0 : 1;
+  if (b.cost === null) return -1;
+  return byMicrosDescending(a.cost, b.cost);
+}
+
+/** `get_run_cost`'s provisional figures, summed; null when it carried none. */
+function provisionalSpend(cost: Read<RunCost>): ProvisionalSpend | null {
+  if (!cost.ok || cost.value.rollup !== null) return null;
+  const provisional = cost.value.provisional ?? null;
+  if (provisional === null) return null;
+  const byModel = [...provisional.byModel].sort(byReportedCost);
+  const priced = byModel.flatMap((row) =>
+    row.cost === null ? [] : [row.cost],
+  );
+  return {
+    byModel,
+    total: sumMoney(priced),
+    partial: priced.length < byModel.length,
+    toolCalls: provisional.toolCalls,
+    asOf: provisional.asOf,
+  };
+}
+
+/**
+ * The figure a cost reads when nothing metered the run: the agent's own
+ * report on the run row, else the per-model costs the session reported, both
+ * provisional. `floor` is set when some model reported no cost, so the sum
+ * is a lower bound. The stat row and the Cost so far instrument both read
+ * this, so the two print the same number.
+ */
+export function provisionalCost(
+  run: RunRow,
+  metrics: RunMetrics,
+): { value: Money; floor: boolean } | null {
+  if (metrics.cost !== null) return null;
+  if (run.reportedCost != null)
+    return { value: run.reportedCost, floor: false };
+  const total = metrics.provisional?.total ?? null;
+  return total === null
+    ? null
+    : { value: total, floor: metrics.provisional?.partial === true };
+}
 
 const APPROVAL_REQUEST = "approval_request";
 
@@ -631,5 +714,6 @@ export function runMetrics({
       rollup === null || tokens === null || rollup.modelCalls === 0
         ? null
         : Math.round(tokens.input / rollup.modelCalls),
+    provisional: provisionalSpend(cost),
   };
 }

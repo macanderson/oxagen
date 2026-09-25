@@ -116,6 +116,8 @@ const runWorkPrSchema = z
     state: z.enum(["open", "closed", "merged"]),
     headSha: z.string().nullable(),
     headRef: z.string(),
+    /** The branch the pull request merges into, as GitHub records it. */
+    baseRef: z.string(),
     association: z.enum(["recorded", "head_commit", "branch"]),
     closingIssues: runPrClosingIssuesSchema.nullable(),
     checkoutRefs: z.array(z.string()),

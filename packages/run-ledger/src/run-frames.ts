@@ -266,6 +266,7 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       const round = field(p, "round");
       const verdict = goalVerdictOf(p);
       return round && verdict ? `round ${round} ${verdict}` : event.eventType;
+    }
     case "context.history_summarized": {
       const outcome = field(p, "outcome");
       const covered = field(p, "covered_message_count");
@@ -781,7 +782,12 @@ const SEAL_TYPES: ReadonlySet<string> = new Set([
   "checkpoint",
   "telemetry_gap",
 ]);
-/** Tool outcomes that record a call that did not do what it was asked to. */
+/**
+ * Tool outcomes that record a call that did not do what it was asked to.
+ * `rejected` is tacho's word for a call the harness refused
+ * (`packages/tacho/src/envelope.ts`: ok, error, rejected, cancelled), so the
+ * errors chip keeps it (#3370).
+ */
 const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
   "failed",
   "denied",
@@ -789,6 +795,7 @@ const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
   "error",
   "timeout",
   "refused",
+  "rejected",
 ]);
 
 /**
@@ -889,6 +896,15 @@ export interface TranscriptFold {
   response: RunFrame | null;
   /** The last decision frame folded into the entry; null when none was. */
   decision: TranscriptDecision | null;
+  /**
+   * Every chip a frame folded into the entry answers to (`frameKinds`), over
+   * all of them. A turn holds more frames than its opening and its two
+   * halves: a model call then a failed tool call, or a context frame after a
+   * response. Rebuilding the chips from those few frames dropped the rest, so
+   * an entry whose only error was a later tool call did not answer `errors`
+   * (#3370). The fold collects them as it absorbs each frame instead.
+   */
+  kinds: Set<TranscriptKind>;
 }
 
 /**
@@ -988,6 +1004,7 @@ function open(frame: RunFrame, kind: TranscriptEntryKind): TranscriptFold {
     request: isStep && frame.phase === "request" ? frame : null,
     response: isStep && frame.phase !== "request" ? frame : null,
     decision: decisionOf(frame),
+    kinds: new Set(frameKinds(frame)),
   };
 }
 
@@ -1007,6 +1024,7 @@ function absorb(current: TranscriptFold, frame: RunFrame): void {
   current.frames += 1;
   current.costMicros = addCost(current.costMicros, frame.costMicros);
   current.usage = addFrameUsage(current.usage, frame.usage);
+  for (const kind of frameKinds(frame)) current.kinds.add(kind);
   if (stepKind(frame) !== null) {
     if (frame.phase === "request" && current.request === null) {
       current.request = frame;
@@ -1033,6 +1051,7 @@ function absorbPending(current: TranscriptFold, frame: RunFrame): void {
   current.frames += 1;
   current.costMicros = addCost(current.costMicros, frame.costMicros);
   current.usage = addFrameUsage(current.usage, frame.usage);
+  for (const kind of frameKinds(frame)) current.kinds.add(kind);
   const decision = callDecisionOf(frame);
   if (decision !== null) current.decision = decision;
 }
