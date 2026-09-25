@@ -7,7 +7,7 @@ body:
       value: |
         **Security vulnerabilities must NOT be reported here** — use [private vulnerability reporting](https://github.com/macanderson/oxagen/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
 
-        Creators apply exactly one label, `triage` (SCR-005). The triage pass replaces it with one priority label and the descriptive dimensions: `kind:defect`, one or more `area:*`, one `job:*`, one or more `pillar:*`. Do not add those yourself.
+        Creators apply exactly one label, `triage` (SCR-005). The triage pass (`/triage-issues`) replaces it with one priority label and the descriptive dimensions: `kind:defect`, one `size/*`, one `area:*`, one `job:*`, and one or two `pillar:*`. Do not add those yourself. Title it `Queued Bug (<Area>): <what goes wrong>` in plain words.
 
         Before filing: if you can fix it in the branch you are on, fix it there (SCR-004). File only when the fix needs a maintainer decision, a rig, a credential or real spend, or is larger than one session.
   - type: dropdown
