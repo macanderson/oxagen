@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   waitForApproval: vi.fn(),
   assertOrgRole: vi.fn(),
   promptConfig: vi.fn(),
+  generateObjectFor: vi.fn(),
   // The catalog, as `supportsReasoning` reads it: keyed by gateway ids, so a
   // bare vendor spelling is an id it cannot describe and answers false for.
   supportsReasoning: vi.fn((id: string) => id.includes("/")),
@@ -68,6 +69,23 @@ vi.mock("@oxagen/ai", () => ({
     };
   },
   supportsReasoning: (id: string) => mocks.supportsReasoning(id),
+  // The summariser's seams (history-summary.ts): the model is built from the
+  // funding source the turn resolved, exactly as `selectModel` builds it.
+  CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
+  generateObjectFor: mocks.generateObjectFor,
+  selectModelFromFunding: (
+    _orgId: string,
+    funding: { fundedBy: string; modelKey?: Selector["credential"] },
+    s: Selector,
+  ) => ({
+    model: {
+      modelId: wireIdFor({
+        ...s,
+        ...(funding.modelKey ? { credential: funding.modelKey } : {}),
+      }),
+    },
+    fundedBy: funding.fundedBy,
+  }),
 }));
 
 interface Selector {
@@ -172,7 +190,8 @@ const EXECUTION_ID = "0192d4a8-7c1e-7a00-8000-0000000000e1";
 
 interface World {
   conversationExists: boolean;
-  history: Array<{ role: string; content: string }>;
+  history: Array<{ id?: string; role: string; content: string }>;
+  historySummary?: unknown;
   apiKeyCreator: string | null;
 }
 interface Captured {
@@ -184,16 +203,30 @@ function makeTx(world: World, captured: Captured) {
   return {
     select: () => ({
       from: (table: unknown) => {
+        let offset = 0;
         const chain = {
           where: () => chain,
           orderBy: () => chain,
-          limit: () => {
+          offset: (n: number) => {
+            offset = n;
+            return chain;
+          },
+          limit: (n: number) => {
             if (table === schema.conversations)
               return Promise.resolve(
-                world.conversationExists ? [{ id: CONVERSATION }] : [],
+                world.conversationExists
+                  ? [
+                      {
+                        id: CONVERSATION,
+                        historySummary: world.historySummary ?? null,
+                      },
+                    ]
+                  : [],
               );
             if (table === schema.messages)
-              return Promise.resolve([...world.history].reverse());
+              return Promise.resolve(
+                [...world.history].reverse().slice(offset, offset + n),
+              );
             if (table === schema.organizations)
               return Promise.resolve([{ name: "Acme" }]);
             if (table === schema.workspaces)
@@ -315,6 +348,8 @@ const GOVERNED_TOOLS = {
 let sealCalls: unknown[] = [];
 /** Every workspace-instructions frame the run recorder was given, per test. */
 let instructionFrames: unknown[] = [];
+/** Every history-summary frame the run recorder was given, per test. */
+let summaryFrames: unknown[] = [];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -362,6 +397,7 @@ beforeEach(() => {
   });
   sealCalls = [];
   instructionFrames = [];
+  summaryFrames = [];
   mocks.openAssistantRun.mockImplementation(async () => {
     mocks.log.push("open-run");
     const receipts: unknown[] = [];
@@ -374,6 +410,10 @@ beforeEach(() => {
       workspaceInstructions: async (frame: unknown) => {
         mocks.log.push("instructions");
         instructionFrames.push(frame);
+      },
+      historySummary: async (frame: unknown) => {
+        mocks.log.push("history-summary");
+        summaryFrames.push(frame);
       },
       modelCall: async (r: unknown) => {
         receipts.push({ kind: "model", ...(r as object) });
@@ -762,6 +802,119 @@ describe("the prepared turn", () => {
   // #3303: the workspace's extra instructions are steering. Before this they
   // reached the model with no budget and left no line in the run's record, so
   // nobody could audit what the workspace had told the agent.
+  describe("a long thread (#4171)", () => {
+    const FACT = "My cost centre is CC-7741. Charge the migration to it.";
+    /** 120 prior messages, oldest first, with the fact at message 3. */
+    const longThread = () =>
+      Array.from({ length: 120 }, (_, i) => ({
+        id: `msg-${String(i + 1).padStart(3, "0")}`,
+        role: i % 2 === 0 ? "user" : "assistant",
+        content: i === 2 ? FACT : `message ${i + 1}`,
+      }));
+
+    beforeEach(() => {
+      // The fake summariser keeps the cost centre when it is given it, as the
+      // real one is told to keep every identifier.
+      mocks.generateObjectFor.mockImplementation(
+        async (args: { prompt: string }) => ({
+          object: {
+            summary: args.prompt.includes("CC-7741")
+              ? "- The person's cost centre is CC-7741."
+              : "- Nothing to keep.",
+          },
+          usage: { promptTokens: 900, completionTokens: 12, totalTokens: 912 },
+        }),
+      );
+    });
+
+    it("carries a fact from message 3 of a 120-message thread, and the run says a summary was used", async () => {
+      setup({ history: longThread() });
+      await runTurn(request);
+
+      const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+      const history = turnInput.history as Array<{ content: string }>;
+      // One summary, then the 40 newest messages word for word.
+      expect(history).toHaveLength(41);
+      expect(history[0]!.content).toContain("CC-7741");
+      expect(history[1]!.content).toBe("message 81");
+      expect(history.slice(1).some((m) => m.content === FACT)).toBe(false);
+
+      // Summarised on the fast tier, on the turn's funding, as assistant use.
+      expect(mocks.generateObjectFor).toHaveBeenCalledTimes(1);
+      expect(mocks.generateObjectFor.mock.calls[0]![0]).toMatchObject({
+        model: { modelId: "model-for-fast" },
+        fundedBy: "platform",
+        chargeReason: "consume_assistant_tokens",
+        telemetry: { surface: "app", messageId: "msg-user" },
+      });
+
+      expect(summaryFrames).toEqual([
+        expect.objectContaining({
+          outcome: "applied",
+          regenerated: true,
+          coveredMessages: 80,
+          windowMessages: 40,
+          text: "- The person's cost centre is CC-7741.",
+        }),
+      ]);
+      // On the record before the engine is asked anything.
+      expect(mocks.log.indexOf("history-summary")).toBeGreaterThan(
+        mocks.log.indexOf("open-run"),
+      );
+      expect(mocks.log.indexOf("history-summary")).toBeLessThan(
+        mocks.log.indexOf("engine"),
+      );
+      // Stored with the conversation for the turns after this one.
+      expect(captured.updates).toContainEqual({
+        table: schema.conversations,
+        set: {
+          historySummary: expect.objectContaining({
+            throughMessageId: "msg-080",
+            coveredMessages: 80,
+          }),
+        },
+      });
+    });
+
+    it("reuses the stored summary on the next turn without asking a model", async () => {
+      setup({ history: longThread() });
+      await runTurn(request);
+      const written = captured.updates.find(
+        (u) => u.table === schema.conversations && "historySummary" in u.set,
+      )!.set.historySummary;
+
+      // The turn above added its two messages.
+      setup({
+        history: [
+          ...longThread(),
+          { id: "msg-121", role: "user", content: "which cost centre?" },
+          { id: "msg-122", role: "assistant", content: "CC-7741." },
+        ],
+        historySummary: written,
+      });
+      mocks.generateObjectFor.mockClear();
+      mocks.runGovernedTurn.mockClear();
+      await runTurn(request);
+
+      expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+      const next = mocks.runGovernedTurn.mock.calls[0]![0];
+      const history = next.history as Array<{ content: string }>;
+      expect(history).toHaveLength(43);
+      expect(history[0]!.content).toContain("CC-7741");
+      expect(summaryFrames.at(-1)).toMatchObject({
+        outcome: "applied",
+        regenerated: false,
+      });
+    });
+
+    it("writes no summary frame for a thread that fits the window (negative)", async () => {
+      await runTurn(request);
+      expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+      expect(summaryFrames).toEqual([]);
+      expect(mocks.log).not.toContain("history-summary");
+    });
+  });
+
   describe("workspace instructions", () => {
     const INSTRUCTIONS = "Answer in British English and cite the run id.";
 
