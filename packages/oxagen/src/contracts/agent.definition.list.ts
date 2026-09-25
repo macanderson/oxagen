@@ -74,7 +74,7 @@ export const agentDefinitionList = registerCapability({
          * Refs (type + ref only, never the config payloads) of everything the
          * agent loads — functions, MCP servers, skills, subagents — taken from
          * the config of its active version (or latest, when unpublished). Lets
-         * the app's agent picker render skill/tool chips per agent without an
+         * a caller render skill and tool chips per agent without an
          * N+1 of get_agent_def calls. Empty when the agent loads nothing (or its
          * config is absent/malformed). Refs-only by design: NOT the per-tool
          * config (MCP auth, skill pins, subagent budgets) — fetch that via
