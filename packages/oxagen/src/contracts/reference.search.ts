@@ -22,7 +22,8 @@ import { registerCapability } from "../registry";
 /**
  * Kinds a chat message can reference. Must stay in lockstep with `MentionType`
  * in `@oxagen/ai/mentions` (dep direction forbids importing it here; the
- * apps/app mention unit test asserts the two lists are identical).
+ * apps/app_deprecated's `mention-meta.test.ts` asserts the two lists are
+ * identical).
  */
 export const REFERENCE_TYPES = [
   "repository",

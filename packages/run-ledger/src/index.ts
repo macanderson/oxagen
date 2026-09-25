@@ -90,7 +90,7 @@ export {
 } from "./frame-body";
 
 // One frame shape for a run from either store, and the pure reads over it:
-// the bisect alignment and the transcript fold (ADR-058).
+// the bisect alignment and what each frame is to a transcript (ADR-058).
 export {
   ledgerFrame,
   ledgerFrameSummary,
@@ -98,11 +98,9 @@ export {
   tachoTimestamp,
   bisectKey,
   bisectFrames,
-  foldTranscript,
   stepKind,
   ledgerPhase,
   frameKinds,
-  filterFramesByKind,
   isTranscriptKind,
   TRANSCRIPT_KINDS,
   turnOrdinals,
@@ -116,13 +114,46 @@ export {
   type FramePhase,
   type FrameIdentity,
   type TranscriptKind,
-  type TranscriptDecision,
   type TachoFrameRowLike,
   type BisectResult,
-  type TranscriptZoom,
+} from "./run-frames";
+// The one transcript fold: steps, turns as steps grouped by turn, and every
+// fact a reader would otherwise derive from the frames (ADR-182).
+export {
+  foldTranscript,
+  stepFolds,
+  frameFolds,
+  turnFolds,
+  filterFoldsByKind,
+  transcriptCounts,
+  toolUseClaimer,
+  recallOf,
+  RECALL_ITEM_MAX,
+  TRANSCRIPT_NODES,
+  TRANSCRIPT_OUTCOMES,
+  type TranscriptCounts,
+  type TranscriptDecision,
   type TranscriptEntryKind,
   type TranscriptFold,
-} from "./run-frames";
+  type TranscriptNode,
+  type TranscriptOutcome,
+  type TranscriptRecall,
+  type TranscriptZoom,
+  type ToolUseRef,
+} from "./transcript-steps";
+// The Run page's figures, counted over the same fold (ADR-182).
+export {
+  transcriptFigures,
+  type BatchFigures,
+  type FamilyFigure,
+  type TranscriptFigures,
+} from "./transcript-figures";
+export {
+  bareToolName,
+  TOOL_FAMILIES,
+  toolFamilyOf,
+  type ToolFamily,
+} from "./tool-family";
 export { tachoFrameSummary, tachoPhase, tachoStage } from "./tacho-kinds";
 
 // The ledger itself: admission, immutable attempts, fenced appends, seals,

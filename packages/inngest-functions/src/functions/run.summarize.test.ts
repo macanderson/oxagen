@@ -132,18 +132,44 @@ describe("run.summarize", () => {
       row(5, "agent_stop"),
     ];
     const collected = await collectSummarySteps(scope, frames, getBody);
+    // The agent starting frames the run and is left out; its stop is the
+    // run's seal and stays (ADR-182).
     expect(collected.total).toBe(5);
     expect(collected.steps.map((s) => [s.seq, s.kind, s.text])).toEqual([
-      ["0", "frame", null],
       ["1", "model_call", "What is in README?"],
       ["2", "tool_call", '{"path":"README.md"}'],
       ["3", "model_call", null],
       ["4", "model_call", null],
+      ["5", "frame", null],
     ]);
     const prompt = summaryPrompt("tse_0a1b2c", collected);
     expect(prompt).toContain("[1] model_call haiku\nWhat is in README?");
     expect(prompt).toContain("[3] model_call haiku\n(body not retained)");
     expect(prompt).not.toContain("omitted");
+  });
+
+  it("reads the operator's prompt as a step of its own, and leaves out what only frames the run", async () => {
+    store("Summarise the README.");
+    const frames = [
+      row(0, "agent_start"),
+      row(1, "oxagen:hook_health"),
+      row(2, "oxagen:hook_health"),
+      row(3, "turn_start", "Summarise the README."),
+      row(4, "llm_call", "What is in README?"),
+    ];
+    const collected = await collectSummarySteps(scope, frames, getBody);
+    expect(collected.total).toBe(2);
+    expect(collected.steps).toEqual([
+      {
+        seq: "3",
+        kind: "frame",
+        label: "turn_start",
+        input: null,
+        text: "Summarise the README.",
+        unfinished: false,
+      },
+      expect.objectContaining({ seq: "4", kind: "model_call" }),
+    ]);
   });
 
   it("bounds the steps and each body's text, and says how many steps were left out", async () => {

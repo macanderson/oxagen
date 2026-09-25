@@ -302,9 +302,11 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
       at: "src/features/shell/assistant-approval-actions.ts",
       expect: "layer",
     },
+    { at: "src/features/run/actions.ts", expect: "layer" },
   ],
-  // ADR-167: the record picker's actions, the flyout's engine read and its
-  // parked approval cards reach the port by name. Any other "use server"
+  // ADR-167: the record picker's actions, the flyout's engine read, its
+  // parked approval cards and the Run page's later transcript pages reach the
+  // port by name. Any other "use server"
   // feature module reads on demand through the kernel seam.
   "data-source-use-server.ts": [
     { at: "src/features/shell/choice-actions.ts", expect: null },
@@ -314,6 +316,8 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
       at: "src/features/shell/assistant-approval-actions.ts",
       expect: null,
     },
+    // ADR-182: a later transcript page reads the port the first page reads.
+    { at: "src/features/run/actions.ts", expect: null },
     { at: "src/features/shell/account-actions.ts", expect: "layer" },
     { at: "src/features/tools/actions.ts", expect: "layer" },
   ],

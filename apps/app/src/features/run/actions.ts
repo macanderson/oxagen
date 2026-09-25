@@ -10,6 +10,10 @@
 //
 // Steering text is evidence. Oxagen records it, quotes it and hands it to the
 // model as content; it is never executed here.
+//
+// A later transcript page is read here too, through the `runs.transcript`
+// port rather than the kernel seam, so the Run page maps every page of a
+// transcript with one mapper (ADR-167, ADR-182).
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import {
   COMMAND_REASON_MAX,
@@ -22,27 +26,19 @@ import { runExportGet } from "@oxagen/oxagen/contracts/run.export.get";
 import { runSeal } from "@oxagen/oxagen/contracts/run.seal";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
-import {
-  runTranscriptGet,
-  TRANSCRIPT_ENTRY_DEFAULT,
-} from "@oxagen/oxagen/contracts/run.transcript.get";
-import { captureError } from "@oxagen/telemetry";
-import type { z } from "zod";
-import { moneyFromMicros } from "@/data/contracts/money";
-import { DeliveryMode } from "@/data/contracts/runs";
-import {
+import { TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcript.get";
+import type {
   RunTranscript,
-  type TranscriptKind,
-  type TranscriptZoom,
+  TranscriptKind,
+  TranscriptZoom,
 } from "@/data/contracts/run";
-import type { Read } from "@/data/read";
+import { DeliveryMode } from "@/data/contracts/runs";
+import { dataSource } from "@/data/source";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type QueuedCommand = { commandIds: string[] };
-
-type RunTranscriptGetOutput = ContractOutput<typeof runTranscriptGet>;
 
 /** Where one run export stands, exactly as `get_run_export` answers it. */
 export type RunExportStatus = ContractOutput<typeof runExportGet>;
@@ -231,117 +227,21 @@ export async function readRunExport(
 }
 
 /**
- * A read carried in the shape a write's answer takes. Every caller of this
- * module is a client component, and INV-19 has every exported function of a
- * `"use server"` module answer with an `ActionResult`, so a `Read` is carried
- * across rather than returned: `denied` keeps the permission the page failure
- * names, and an error keeps its code. The Repositories page does the same
- * for its on-demand reads; the layer matrix (INV-07) keeps
- * `features/*` out of `data/live`, so each of the two owns its own copy.
- *
- * `invalid_input` becomes `invalid` rather than `unavailable`, because the
- * only input a caller varies here is the cursor: the run, the zoom and the
- * chips come from the page. That is what lets the view say "this resume point
- * is not one the read wrote" instead of "something went wrong".
- */
-/**
- * A half or a decision with its subagent chain named as the view model names
- * it (`chainRef`), and nothing named when it was recorded on the run's own.
- */
-function chained<T extends { sessionUuid?: string }>(
-  value: T | null,
-): (Omit<T, "sessionUuid"> & { chainRef?: string }) | null {
-  if (value === null) return null;
-  const { sessionUuid, ...rest } = value;
-  return sessionUuid === undefined ? rest : { ...rest, chainRef: sessionUuid };
-}
-
-function toTranscriptPage(
-  out: RunTranscriptGetOutput,
-): z.input<typeof RunTranscript> {
-  const cost = (value: RunTranscriptGetOutput["entries"][number]["cost"]) =>
-    value === null
-      ? null
-      : {
-          ...moneyFromMicros(value.micros, value.currency),
-          basis: value.basis,
-        };
-  return {
-    zoom: out.zoom,
-    kinds: out.kinds,
-    entries: out.entries.map((entry) => ({
-      seq: entry.seq,
-      endSeq: entry.endSeq,
-      ...(entry.subagent === undefined
-        ? {}
-        : {
-            subagent: {
-              chainRef: entry.subagent.sessionUuid,
-              type: entry.subagent.type,
-              spawnKey: entry.subagent.spawnCallId ?? null,
-            },
-          }),
-      at: entry.at,
-      elapsedMs: entry.elapsedMs,
-      kind: entry.kind,
-      type: entry.type,
-      label: entry.label,
-      callKey: entry.callId,
-      target: entry.target ?? null,
-      effort: entry.effort ?? null,
-      usage: entry.usage ?? null,
-      kinds: entry.kinds,
-      turn: entry.turn,
-      request: chained(entry.request),
-      response: chained(entry.response),
-      decision: chained(entry.decision),
-      frames: entry.frames,
-      cost: cost(entry.cost),
-      cumulativeCost: cost(entry.cumulativeCost),
-    })),
-    cursor: out.cursor,
-    complete: out.complete,
-  };
-}
-
-function asActionResult<T>(read: Read<T>): ActionResult<T> {
-  if (read.ok) return read;
-  switch (read.reason) {
-    case "denied":
-      return { ok: false, reason: "denied", code: read.permission };
-    case "pending_approval":
-      return {
-        ok: false,
-        reason: "pending_approval",
-        accessRequestId: read.accessRequestId,
-      };
-    case "error":
-      return read.code === "invalid_input"
-        ? {
-            ok: false,
-            reason: "invalid",
-            code: "invalid_cursor",
-            field: "after",
-          }
-        : { ok: false, reason: "unavailable", code: read.code };
-  }
-}
-
-/**
  * One later page of the transcript, for the player's own pagination
  * (`get_run_transcript`).
  *
- * A read that must happen on demand has nowhere else to live (INV-07's
- * `features` row): a page's reads go through a `DataSource` port and are made
- * when the route renders, and a navigation is exactly what appending a page
- * must not cost, because it would throw away the playhead and the scroll
- * position. So this resolves its own viewer and reads through the kernel seam,
- * as a write does.
+ * The read happens on demand: a navigation would throw away the playhead and
+ * the scroll position, so appending a page cannot wait for the route to
+ * render. It resolves its own viewer and reads the `runs.transcript` port, the
+ * same read and the same mapper the first page goes through, so a later page
+ * carries everything the first one does, the assembled reply included (ADR-167,
+ * ADR-182).
  *
- * The mapping is the port's, written out here because the layer matrix keeps
- * `features/*` out of `data/live`. `actions.test.ts` holds the two to the same
- * answer for the same contract output, so the first page and a later one
- * cannot come to disagree about one run.
+ * A cursor the capability did not write comes back as `invalid` on `after`,
+ * the one input a caller varies here: the run, the zoom and the chips come
+ * from the page. That is what lets the view say "this resume point is not one
+ * the read wrote" instead of "something went wrong". Every other refusal keeps
+ * the kind and code the port answered.
  */
 export async function readTranscriptPage(
   org: string,
@@ -352,27 +252,20 @@ export async function readTranscriptPage(
   after: string,
 ): Promise<ActionResult<RunTranscript>> {
   const ctx = await requireViewer(org, ws);
-  const read = await kernelRead(ctx, {
-    contract: runTranscriptGet,
-    input: {
-      runId,
-      zoom,
-      kinds: [...kinds],
-      limit: TRANSCRIPT_ENTRY_DEFAULT,
-      after,
-    },
-    page: "run",
+  const read = await dataSource().runs.transcript(ctx, runId, zoom, {
+    kinds: [...kinds],
+    limit: TRANSCRIPT_ENTRY_DEFAULT,
+    after,
   });
-  if (!read.ok) return asActionResult(read);
-  const view = RunTranscript.safeParse(toTranscriptPage(read.value));
-  if (view.success) return { ok: true, value: view.data };
-  captureError({
-    error: view.error,
-    source: "app",
-    orgId: ctx.orgId,
-    context: "readTranscriptPage record_unmappable",
-  });
-  return { ok: false, reason: "unavailable", code: "record_unmappable" };
+  if (!read.ok && read.reason === "error" && read.code === "invalid_input") {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_cursor",
+      field: "after",
+    };
+  }
+  return readToActionResult(read);
 }
 
 /**

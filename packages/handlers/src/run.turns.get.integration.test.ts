@@ -1,9 +1,11 @@
 // `get_run_turns` against a real ClickHouse: the rows the grouped SQL answers
 // must equal the rows the same run's frames add up to when read the way the
 // transcript reads them (every chain spliced in where it was spawned, the
-// proxy's late-report rule applied) and counted frame by frame
-// (`framesTurns`). A mocked client accepts any SQL, so only a live server can
-// tell a query that counts right from one that does not.
+// proxy's late-report rule applied), with steps counted by the transcript's
+// own step fold (`framesTurns`, ADR-182). The SQL counts steps by a rule of
+// its own, so this is what keeps the two definitions answering alike. A
+// mocked client accepts any SQL, so only a live server can tell a query that
+// counts right from one that does not.
 //
 // The fixture is one wrapped run built to exercise every rule the contract
 // states: a model call three sources reported and a transcript message's
@@ -378,7 +380,7 @@ async function harness() {
   return { deps, turns: createRunTurnsGetHandler(deps) };
 }
 
-/** The same run read as the transcript reads it and counted frame by frame. */
+/** The same run read as the transcript reads it and counted by its step fold. */
 async function reference(runId: string) {
   const { deps } = await harness();
   const { ctx } = await import("./run.test-support");

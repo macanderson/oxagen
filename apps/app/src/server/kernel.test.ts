@@ -473,18 +473,6 @@ describe("kernelWrite", () => {
       { ok: false, reason: "exhausted", code: "assistant_spend_cap" },
       0,
     ],
-    [
-      "insufficient_credits",
-      new Coded("insufficient_credits"),
-      { ok: false, reason: "exhausted", code: "insufficient_credits" },
-      0,
-    ],
-    [
-      "assistant_spend_cap",
-      new Coded("assistant_spend_cap"),
-      { ok: false, reason: "exhausted", code: "assistant_spend_cap" },
-      0,
-    ],
     // #3227: the engine's own codes reach the caller, so the flyout can say
     // the engine is down rather than the generic kernel_failure. Each is a
     // service outage, reported once like any other.

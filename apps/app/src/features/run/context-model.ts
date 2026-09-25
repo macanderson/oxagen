@@ -7,16 +7,11 @@
 // token or splits a window: the window is not recorded block by block (G10),
 // and a figure the frames did not carry is null.
 import { z } from "zod";
-import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
+import type { TranscriptEntry } from "@/data/contracts/run";
+import { soleBody } from "./transcript-model";
 
 /** The frame type the host seals the assembler's manifest into (ADR-093, ADR-144). */
 const MANIFEST_TYPE = "steering.manifest";
-
-/** The one body an entry at `everything` carries: what went out, or what came back. */
-export function bodyOf(entry: TranscriptEntry): TranscriptBody | null {
-  if (entry.request !== null && entry.response !== null) return null;
-  return entry.response ?? entry.request;
-}
 
 /** An entry on the run's own chain; a subagent's prompt and calls are its own. */
 function own(entry: TranscriptEntry): boolean {
@@ -37,7 +32,7 @@ export function firstPrompt(
     (candidate) => own(candidate) && candidate.type === "turn_start",
   );
   if (entry === undefined) return null;
-  return { seq: entry.seq, text: bodyOf(entry)?.text ?? null };
+  return { seq: entry.seq, text: soleBody(entry)?.text ?? null };
 }
 
 export type FirstRequest = {

@@ -22,6 +22,7 @@ import {
   LINE_CAP,
   mergeEntries,
   rebaseEntries,
+  soleBody,
   stepDigest,
   stepTool,
   type TranscriptStep,
@@ -2595,5 +2596,26 @@ describe("closedLine", () => {
 
   it("returns nothing for text that is only whitespace", () => {
     expect(closedLine(" \n\t ")).toBe("");
+  });
+});
+
+describe("soleBody", () => {
+  it("reads the half an entry carries: what came back, else what went out", () => {
+    const out = transcriptBody({ seq: "3", text: "Cut the release." });
+    expect(soleBody(frame({ request: out, response: null }))).toBe(out);
+    const back = transcriptBody({ seq: "4", text: "Cutting it." });
+    expect(soleBody(frame({ request: null, response: back }))).toBe(back);
+    expect(soleBody(frame({ request: null, response: null }))).toBeNull();
+  });
+
+  it("reads no body from an entry that carries both halves, since neither alone is the entry's (negative)", () => {
+    expect(
+      soleBody(
+        frame({
+          request: transcriptBody({ seq: "3", text: "asked" }),
+          response: transcriptBody({ seq: "4", text: "answered" }),
+        }),
+      ),
+    ).toBeNull();
   });
 });

@@ -1,7 +1,8 @@
 /**
  * One frame shape for a run from either store (Mission Control spec §8.2;
- * ADR-058), and the pure reads over it: the transcript fold at three zoom
- * levels (§14) and the bisect alignment (§8.4).
+ * ADR-058), and the pure reads over it: what each frame is to a transcript,
+ * the turn it falls in, and the bisect alignment (§8.4). The fold that groups
+ * frames into steps and turns is `transcript-steps.ts` (§14, ADR-182).
  *
  * The evidence ledger records a run's frames as V2 events
  * (`agent.agent_run_events`, `AttemptEventReadRecord`); a wrapped agent's
@@ -13,7 +14,7 @@
  *
  * Nothing here reads a body. A frame carries its body reference; the text a
  * transcript entry shows is fetched by the caller for the frames the fold
- * names, and folded in with `withText`.
+ * names.
  */
 import {
   MODEL_CALL_EVENT_TYPES,
@@ -76,6 +77,12 @@ export interface FrameIdentity {
    * recorded none; the ledger records none.
    */
   effort?: string;
+  /**
+   * The approval a tool call's receipt says it waits on (`apr_…`), as the
+   * in-app assistant records a parked call. Absent where the receipt names
+   * none.
+   */
+  approvalId?: string;
 }
 
 /**
@@ -369,16 +376,20 @@ function toolNameOf(payload: unknown): string | null {
 function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
   const p = event.payload;
   const step = ledgerStepKind(event.eventType);
-  // The call id is what pairs an intention with its receipt (`foldTranscript`).
+  // The call id is what pairs an intention with its receipt (`foldTranscript`,
+  // transcript-steps.ts).
   // Only the engine's own events record one; a submitted receipt stands for a
   // whole exchange and needs no pairing, so its null is correct.
-  if (step === "tool_call")
+  if (step === "tool_call") {
+    const approval = field(p, "approval_public_id");
     return {
       ...NO_IDENTITY,
       tool: toolNameOf(p),
       toolStatus: field(p, "outcome"),
       callId: field(p, "tool_call_id"),
+      ...(approval === null ? {} : { approvalId: approval }),
     };
+  }
   if (step === "model_call") {
     const provider = field(p, "provider");
     const model = field(p, "model");
@@ -654,10 +665,10 @@ export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
       policySource: field(payload, "policy_source"),
       verdict: null,
       contextRows: null,
-      // The producer's tool_use_id: foldSteps keys pending requests on it so
-      // parallel wrapped calls (start A, start B, complete A, complete B) pair
-      // correctly. Empty for kinds that carry no call id; those still fall
-      // back to adjacency within their step kind.
+      // The producer's tool_use_id: the step fold gathers every frame of one
+      // call on it, so parallel wrapped calls (start A, start B, complete A,
+      // complete B) pair correctly. Empty for kinds that carry no call id;
+      // those fall back to adjacency (`transcript-steps.ts`).
       callId: blank(row.toolUseId),
       ...(target === null || target === ""
         ? {}
@@ -731,15 +742,11 @@ export function bisectFrames(
   };
 }
 
-// ── Transcript ──────────────────────────────────────────────────────────────
-
-export type TranscriptZoom = "turns" | "steps" | "everything";
-export type TranscriptEntryKind =
-  | "turn"
-  | "model_call"
-  | "tool_call"
-  | "policy"
-  | "frame";
+// ── Transcript vocabulary ───────────────────────────────────────────────────
+//
+// What a single frame is, as the transcript reads it: which step it belongs
+// to, which chips it answers, and which turn it falls in. The fold that groups
+// frames into steps and turns is `transcript-steps.ts` (ADR-182).
 
 // The chip vocabulary is the leaf package's (`@oxagen/tacho`), so the contract
 // that publishes it as an enum and this projection that derives it read one
@@ -747,13 +754,13 @@ export type TranscriptEntryKind =
 export { isTranscriptKind, TRANSCRIPT_KINDS, type TranscriptKind };
 
 /** An operator's command as the host applied it. */
-const COMMAND_APPLIED = "oxagen:command_applied";
+export const COMMAND_APPLIED = "oxagen:command_applied";
 
 /**
  * Frames that record a decision a rule or a person made about a call, or an
  * operator's command to the run (`oxagen:command_applied`).
  */
-const POLICY_TYPES: ReadonlySet<string> = new Set([
+export const POLICY_TYPES: ReadonlySet<string> = new Set([
   "tool.approval_recorded",
   COMMAND_APPLIED,
   "policy_decision",
@@ -764,7 +771,7 @@ const POLICY_TYPES: ReadonlySet<string> = new Set([
   "token_denied",
 ]);
 /** Frames that record what was pulled into the model's context. */
-const RECALL_TYPES: ReadonlySet<string> = new Set([
+export const RECALL_TYPES: ReadonlySet<string> = new Set([
   "context.frames_selected",
   "context.instructions_applied",
   "context.history_summarized",
@@ -788,7 +795,7 @@ const SEAL_TYPES: ReadonlySet<string> = new Set([
  * (`packages/tacho/src/envelope.ts`: ok, error, rejected, cancelled), so the
  * errors chip keeps it (#3370).
  */
-const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
+export const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
   "failed",
   "denied",
   "cancelled",
@@ -833,96 +840,18 @@ export function frameKinds(frame: RunFrame): TranscriptKind[] {
 }
 
 /**
- * The frames a chip selection keeps, in order. An empty selection keeps
- * everything: no chip pressed is not the same as every chip pressed off.
- *
- * The filter runs over frames and the fold runs over what is left, so a
- * filtered transcript is the transcript of those frames — a `tools` selection
- * pairs the two halves of each tool call exactly as the unfiltered one does.
- */
-export function filterFramesByKind(
-  frames: readonly RunFrame[],
-  kinds: readonly TranscriptKind[],
-): RunFrame[] {
-  if (kinds.length === 0) return [...frames];
-  const wanted = new Set<TranscriptKind>(kinds);
-  return frames.filter((frame) =>
-    frameKinds(frame).some((kind) => wanted.has(kind)),
-  );
-}
-
-/** A decision a rule or a person made about the call an entry records. */
-export interface TranscriptDecision {
-  seq: string;
-  /** The subagent chain the decision was recorded on; absent on the run's own. */
-  sessionUuid?: string;
-  /**
-   * The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote.
-   * An operator command records the command: `pause`, `resume`, `cancel` or
-   * `steer`.
-   */
-  decision: string;
-  type: string;
-  /** Who decided, in `FrameIdentity.policySource`'s words; null when unrecorded. */
-  source: string | null;
-  at: Date;
-}
-
-/**
- * One transcript entry before its text is attached.
- *
- * `request` and `response` are the two halves of the exchange the entry
- * records: the frame that carried what went out and the frame that carried
- * what came back. A producer that appends a single terminal receipt for the
- * whole exchange (`tool.call_completed`, `llm_call`) records it as the
- * `response`, because its body is the result; `request` is then null.
- */
-export interface TranscriptFold {
-  /** The frame that opens the entry. */
-  opening: RunFrame;
-  endSeq: string;
-  /**
-   * The frame `endSeq` names. A run that reads its subagents' chains holds
-   * frames from several chains, each numbered from 0, so a sequence alone
-   * does not name one frame there; this does.
-   */
-  last: RunFrame;
-  kind: TranscriptEntryKind;
-  frames: number;
-  /** Summed cost records of the folded frames; null when none carried one. */
-  costMicros: number | null;
-  usage?: FrameUsage | null;
-  request: RunFrame | null;
-  response: RunFrame | null;
-  /** The last decision frame folded into the entry; null when none was. */
-  decision: TranscriptDecision | null;
-  /**
-   * Every chip a frame folded into the entry answers to (`frameKinds`), over
-   * all of them. A turn holds more frames than its opening and its two
-   * halves: a model call then a failed tool call, or a context frame after a
-   * response. Rebuilding the chips from those few frames dropped the rest, so
-   * an entry whose only error was a later tool call did not answer `errors`
-   * (#3370). The fold collects them as it absorbs each frame instead.
-   */
-  kinds: Set<TranscriptKind>;
-}
-
-/**
- * The frame types that open a step, in the `steps` zoom. The ledger's own
- * names come from the registry, so both spellings of each call event are
- * covered — the in-app assistant writes `model.engine_call_completed` and
- * `tool.engine_call_completed`, which this list named neither of, so every
- * ledger-recorded run folded into one `frame` entry however many calls it
- * made. The wrapped-session names are added beside them: a tacho recording
- * is not in the ledger's registry and never will be.
+ * The frame types that make a frame one half of a model call or a tool call.
+ * The ledger's own names come from the registry, so both spellings of each
+ * call event are covered: the in-app assistant writes
+ * `model.engine_call_completed` and `tool.engine_call_completed`. The
+ * wrapped-session names are added beside them: a tacho recording is not in
+ * the ledger's registry and never will be.
  *
  * The write-ahead intentions are here too, and are NOT in the registry's step
  * sets. The two sets answer different questions. The registry's answers "which
  * frame completes a call", and counting an intention there would report every
- * call twice. This one answers "which frame opens an exchange", and the
- * intention is exactly that: it carries the request the step was made with, so
- * a fold that did not open on it would leave the request stranded in the entry
- * before and make one tool call two entries again.
+ * call twice. This one answers "which frame is part of an exchange", and the
+ * intention is exactly that: it carries the request the step was made with.
  */
 const MODEL_TYPES: ReadonlySet<string> = new Set([
   ...MODEL_CALL_EVENT_TYPES,
@@ -945,7 +874,7 @@ const TURN_OPENERS: ReadonlySet<string> = new Set(["turn_start"]);
  * it opens no turn of the run, so splicing a subagent's chain in never
  * renumbers the turns a person typed.
  */
-function opensRunTurn(frame: RunFrame): boolean {
+export function opensRunTurn(frame: RunFrame): boolean {
   return TURN_OPENERS.has(frame.type) && frame.chain === undefined;
 }
 
@@ -955,333 +884,16 @@ export function stepKind(frame: RunFrame): "model_call" | "tool_call" | null {
   return null;
 }
 
-function addCost(sum: number | null, cost: number | null): number | null {
-  if (cost === null) return sum;
-  return (sum ?? 0) + cost;
-}
-
-/**
- * The decision `frame` records about the call a folded entry holds. An
- * operator command is about the run, not about any one call, so folding it
- * into a step or a turn does not make it that entry's decision: it keeps its
- * own entry at the `everything` zoom, which the Policies tab reads.
- */
-function callDecisionOf(frame: RunFrame): TranscriptDecision | null {
-  return frame.type === COMMAND_APPLIED ? null : decisionOf(frame);
-}
-
-function decisionOf(frame: RunFrame): TranscriptDecision | null {
-  if (!POLICY_TYPES.has(frame.type)) return null;
-  return {
-    seq: frame.seq,
-    ...(frame.chain === undefined
-      ? {}
-      : { sessionUuid: frame.chain.sessionUuid }),
-    decision: frame.identity.policy ?? frame.type,
-    type: frame.type,
-    source: frame.identity.policySource ?? null,
-    at: frame.observedAt,
-  };
-}
-
-/**
- * A new fold opened at `frame`. Only a step half may fill a request or
- * response slot: a turn boundary, a policy decision or an agent start is the
- * opening of the entry, not what the call was made with or what came back.
- * Putting those into `response` by default blocked the real result from
- * absorbing later, and labelled a prompt as something that came back.
- */
-function open(frame: RunFrame, kind: TranscriptEntryKind): TranscriptFold {
-  const isStep = stepKind(frame) !== null;
-  return {
-    opening: frame,
-    endSeq: frame.seq,
-    last: frame,
-    kind,
-    frames: 1,
-    costMicros: frame.costMicros,
-    usage: frame.usage ?? null,
-    request: isStep && frame.phase === "request" ? frame : null,
-    response: isStep && frame.phase !== "request" ? frame : null,
-    decision: decisionOf(frame),
-    kinds: new Set(frameKinds(frame)),
-  };
-}
-
-/**
- * Fold `frame` into `current`, which keeps its opening frame.
- *
- * Only a frame that is itself a step half may fill one of the two slots. A
- * decision, a turn boundary or a context assembly folds into the step for its
- * timing and its cost, but it is not what the call was made with or what came
- * back — letting one take the response slot made the real result open a
- * second entry, which is the two-entries-per-tool-call shape this fold exists
- * to end.
- */
-function absorb(current: TranscriptFold, frame: RunFrame): void {
-  current.endSeq = frame.seq;
-  current.last = frame;
-  current.frames += 1;
-  current.costMicros = addCost(current.costMicros, frame.costMicros);
-  current.usage = addFrameUsage(current.usage, frame.usage);
-  for (const kind of frameKinds(frame)) current.kinds.add(kind);
-  if (stepKind(frame) !== null) {
-    if (frame.phase === "request" && current.request === null) {
-      current.request = frame;
-    } else if (frame.phase !== "request" && current.response === null) {
-      current.response = frame;
-    }
-  }
-  const decision = callDecisionOf(frame);
-  if (decision !== null) current.decision = decision;
-}
-
-/**
- * Fold a policy frame held out of turn (`foldSteps`'s `pendingPolicy`) into
- * `current`. It counts toward the fold's frames and cost and sets its
- * decision like `absorb`, but it never moves `endSeq`: whichever step it
- * lands on, by seq, the held frame is not that step's own extent. Attached
- * to the step it precedes, it is always earlier than that step's opening
- * frame. Attached as the end-of-run fallback, to the step that already
- * closed, moving `endSeq` forward would stretch that step's displayed range
- * past its own last frame to cover a decision about a call that never
- * happened.
- */
-function absorbPending(current: TranscriptFold, frame: RunFrame): void {
-  current.frames += 1;
-  current.costMicros = addCost(current.costMicros, frame.costMicros);
-  current.usage = addFrameUsage(current.usage, frame.usage);
-  for (const kind of frameKinds(frame)) current.kinds.add(kind);
-  const decision = callDecisionOf(frame);
-  if (decision !== null) current.decision = decision;
-}
-
-function fold(
-  frames: readonly RunFrame[],
-  opens: (frame: RunFrame, index: number) => TranscriptEntryKind | null,
-): TranscriptFold[] {
-  const out: TranscriptFold[] = [];
-  let current: TranscriptFold | null = null;
-  frames.forEach((frame, index) => {
-    const kind = opens(frame, index);
-    if (kind !== null || current === null) {
-      current = open(frame, kind ?? "frame");
-      out.push(current);
-      return;
-    }
-    absorb(current, frame);
-  });
-  return out;
-}
-
-/**
- * Does `frame` close the step `current` opened — the response half of the same
- * exchange? Two halves pair on call id where the producer records one, and on
- * adjacency within the step kind where it does not (a wrapped session). A
- * step that already has its response is closed: the next response of the same
- * kind is a new step.
- */
-function closesStep(current: TranscriptFold, frame: RunFrame): boolean {
-  if (current.request === null || current.response !== null) return false;
-  if (frame.phase !== "response") return false;
-  if (stepKind(frame) !== stepKind(current.request)) return false;
-  const openId = current.request.identity.callId;
-  const closeId = frame.identity.callId;
-  if (openId !== null || closeId !== null) return openId === closeId;
-  return true;
-}
-
-/**
- * The `steps` transcript: one entry per model call and per tool call, request
- * and response folded together, with every other frame folding into the step
- * before it.
- *
- * A step is two frames wherever the producer writes two — the write-ahead
- * intention and the terminal receipt — so the entry carries what the call was
- * made with and what it came back with. Folding them separately, as this did
- * before, showed one tool call as two entries, each with half the exchange.
- *
- * ## Overlapping calls
- *
- * Tool calls run in parallel in the ordinary case, not the exotic one: a step
- * recorder can write `start A, start B, complete A, complete B`. A response is
- * therefore matched against every request still waiting for one
- * (`pendingByCallId`, keyed on the call id the producer recorded), not only
- * `current` — the one most recently opened. Comparing only `current` closed
- * completion A against B's still-open request, found no match, and opened a
- * response-only entry for it; completion B then did the same. Two calls
- * became four entries with every response detached from the request it
- * answered — the one thing a transcript exists to get right (finding 5,
- * macanderson/oxagen#3370). A response that carries no call id falls back to
- * `closesStep`'s adjacency check against `current`, exactly as before.
- *
- * A policy frame that arrives once the current step already has its response
- * is held rather than absorbed into it: `PreToolUse` writes `policy_decision`
- * immediately before `tool_requested` (`hook-handler.ts`), so a wrapped
- * session's decision names the call it is about to gate, not the call that
- * just finished. Absorbing it on sight put the allow or deny on the previous
- * step and left the step it actually governed with none. The same hold applies
- * when filtering removes the preceding model response (`kinds=policy,tools`):
- * the decision then meets a null current, or a model fold whose response is
- * gone, and would otherwise open a standalone frame or stick on that model
- * step (finding 4052307523). Held frames attach to the next step that opens,
- * in the order recorded, so two decisions ahead of one call are both kept and
- * the later one wins, the same as `absorb`'s own overwrite; a run that ends
- * with one or more still pending falls back to the last step rather than
- * dropping them, or opens a policy entry when no step ever did. The
- * harness's own permission check (`harness_permission`) is held the same way,
- * because Claude Code writes it before the call it gates, but it sets no
- * decision: only an Oxagen verdict does.
- */
-function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
-  const out: TranscriptFold[] = [];
-  let current: TranscriptFold | null = null;
-  const pendingPolicy: RunFrame[] = [];
-  // Open step folds still waiting for their response, keyed by the request's
-  // call id. Deleted the moment a response matches it, so a second response
-  // with the same id (should not happen) falls through to `closesStep` and
-  // then to a response-only entry, rather than silently overwriting the
-  // first response.
-  const pendingByCallId = new Map<string, TranscriptFold>();
-
-  const openEntry = (
-    frame: RunFrame,
-    kind: TranscriptEntryKind,
-  ): TranscriptFold => {
-    const next = open(frame, kind);
-    out.push(next);
-    for (const pending of pendingPolicy) absorbPending(next, pending);
-    pendingPolicy.length = 0;
-    return next;
-  };
-
-  /** Hold a pre-call policy for the next step rather than absorbing it here. */
-  const holdPolicyForNext = (fold: TranscriptFold | null): boolean => {
-    if (fold === null) return true;
-    if (fold.response !== null) return true;
-    // A model fold whose response was filtered away still looks open
-    // (request set, response null). The decision gates the tool after it.
-    if (fold.kind === "model_call" || fold.kind === "frame") return true;
-    return false;
-  };
-
-  for (const frame of frames) {
-    const kind = stepKind(frame);
-    if (kind !== null) {
-      if (frame.phase === "response") {
-        const callId = frame.identity.callId;
-        const pending =
-          callId !== null ? pendingByCallId.get(callId) : undefined;
-        if (pending !== undefined) {
-          absorb(pending, frame);
-          pendingByCallId.delete(callId as string);
-          current = pending;
-          continue;
-        }
-        if (current !== null && closesStep(current, frame)) {
-          absorb(current, frame);
-          continue;
-        }
-      }
-      // A request-phase step frame, or a response nothing pending could
-      // match, opens its own entry. A request with a call id registers so a
-      // later response — wherever `current` has moved on to by then — finds
-      // it above.
-      current = openEntry(frame, kind);
-      if (frame.phase === "request") {
-        const callId = frame.identity.callId;
-        if (callId !== null) pendingByCallId.set(callId, current);
-      }
-      continue;
-    }
-    if (
-      (POLICY_TYPES.has(frame.type) || frame.type === "harness_permission") &&
-      frame.type !== COMMAND_APPLIED &&
-      holdPolicyForNext(current)
-    ) {
-      pendingPolicy.push(frame);
-      continue;
-    }
-    if (current === null) {
-      current = openEntry(frame, "frame");
-      continue;
-    }
-    absorb(current, frame);
-  }
-  if (pendingPolicy.length > 0) {
-    if (current !== null) {
-      for (const pending of pendingPolicy) absorbPending(current, pending);
-    } else {
-      // No step opened after the held decisions: surface them as their own
-      // entries rather than dropping a run that was only policy frames.
-      const held = pendingPolicy.slice();
-      pendingPolicy.length = 0;
-      for (const pending of held) {
-        current = openEntry(
-          pending,
-          POLICY_TYPES.has(pending.type) ? "policy" : "frame",
-        );
-      }
-    }
-  }
-  return out;
-}
-
-/**
- * The transcript at a zoom level. `everything` is one entry per frame, so the
- * two halves of a step are two entries, each with its own body. `steps` is one
- * entry per model call and per tool call, request and response folded
- * together. `turns` opens an entry at every `turn_start` frame, or wherever
- * the turn index changes when the recording carries no turn boundaries; a run
- * with neither is one turn.
- */
-export function foldTranscript(
-  frames: readonly RunFrame[],
-  zoom: TranscriptZoom,
-): TranscriptFold[] {
-  if (frames.length === 0) return [];
-  switch (zoom) {
-    case "everything":
-      return fold(
-        frames,
-        (frame) =>
-          stepKind(frame) ??
-          (POLICY_TYPES.has(frame.type) ? "policy" : "frame"),
-      );
-    case "steps":
-      return foldSteps(frames);
-    case "turns": {
-      const hasBoundaries = frames.some(opensRunTurn);
-      let lastTurn: number | null = null;
-      return fold(frames, (frame, index) => {
-        if (hasBoundaries) {
-          return opensRunTurn(frame) || index === 0 ? "turn" : null;
-        }
-        // A subagent numbers its own turns; they are not the run's.
-        if (frame.chain !== undefined && index !== 0) return null;
-        const turn = frame.turnIndex;
-        if (index === 0) {
-          lastTurn = turn;
-          return "turn";
-        }
-        if (turn === null) return null;
-        // Frames before the first indexed frame belong to the first turn.
-        const opensTurn = lastTurn !== null && turn !== lastTurn;
-        lastTurn = turn;
-        return opensTurn ? "turn" : null;
-      });
-    }
-  }
-}
-
 /**
  * The turn each frame belongs to, 1-based, in frame order: the grouping the
- * transcript draws its turns from, whatever zoom the entries were read at.
+ * transcript folds its turns from, whatever zoom the entries are read at.
  *
  * A recording with `turn_start` frames counts them, and a frame recorded
  * before the first one (the agent starting, the context it was handed) is in
- * no turn and answers null. A recording without them follows the `turns`
- * fold: a new turn wherever the turn index changes, and every frame in one.
+ * no turn and answers null. A recording without them opens a turn at its
+ * first frame and wherever the recorded turn index changes after that, so
+ * every frame is in one. A subagent numbers its own turns, and those are not
+ * the run's: its frames stay in the turn they were spawned in.
  */
 export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
   if (frames.some(opensRunTurn)) {
@@ -1291,11 +903,20 @@ export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
       return turn === 0 ? null : turn;
     });
   }
-  const out: (number | null)[] = [];
-  foldTranscript(frames, "turns").forEach((fold, index) => {
-    for (let i = 0; i < fold.frames; i += 1) out.push(index + 1);
+  let turn = 0;
+  let lastIndex: number | null = null;
+  return frames.map((frame, index) => {
+    if (index === 0) {
+      turn = 1;
+      lastIndex = frame.turnIndex;
+      return turn;
+    }
+    if (frame.chain !== undefined || frame.turnIndex === null) return turn;
+    // Frames before the first indexed frame belong to the first turn.
+    if (lastIndex !== null && frame.turnIndex !== lastIndex) turn += 1;
+    lastIndex = frame.turnIndex;
+    return turn;
   });
-  return out;
 }
 
 // ── Subagent chains ─────────────────────────────────────────────────────────

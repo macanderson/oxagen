@@ -34,7 +34,7 @@ const suggestionContext = z.object({
   routeParams: z.record(z.string()).default({}),
   /** Current query string params, e.g. { tab: 'trace' }. */
   queryParams: z.record(z.string()).default({}),
-  /** The entity the page is "about", if registered via useRegisterPageEntity. */
+  /** The entity the page is "about", if registered via apps/app_deprecated's useRegisterPageEntity. */
   pageEntity: z
     .object({
       kind: z.string(),
