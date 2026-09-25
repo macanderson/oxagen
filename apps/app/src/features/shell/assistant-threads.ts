@@ -77,7 +77,7 @@ export function isRestoredEntry(id: string): boolean {
  * assistant turn (another chat surface wrote it), and the flyout has nothing
  * to link it to, so it is left out.
  */
-export function restoredEntries(
+function restoredEntries(
   thread: AssistantThread,
 ): readonly RestoredEntry[] {
   const entries: RestoredEntry[] = [];

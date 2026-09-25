@@ -6,12 +6,11 @@ import { z } from "zod";
 import { PublicId } from "./common";
 
 /** A governed write a turn parked for a person (`ask_assistant`'s card). */
-export const ParkedWrite = z.object({
+const ParkedWrite = z.object({
   approvalId: PublicId,
   capability: z.string().min(1),
   expiresAt: z.iso.datetime({ offset: true }),
 });
-export type ParkedWrite = z.infer<typeof ParkedWrite>;
 
 /**
  * One turn's half. A question carries no run and parks nothing; a reply
