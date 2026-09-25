@@ -3,12 +3,15 @@
 // never offered, each tool gets one `slug@*` row, a model named twice is listed
 // once, one failed read of two leaves a partial list instead of none, and a
 // refused read answers with the reason the store gave rather than a bare no.
+// A tool row carries its server's name and logo, a title read from its API
+// name, what it does and its risk grade, and never the server uuid its slug
+// holds.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/read";
 
 const { source } = vi.hoisted(() => ({
   source: {
-    tools: { versions: vi.fn() },
+    tools: { versions: vi.fn(), mcpServers: vi.fn() },
     agents: { list: vi.fn() },
     org: { members: vi.fn() },
     spend: { priceBook: vi.fn(), unpricedModels: vi.fn() },
@@ -18,23 +21,61 @@ vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("@/server/viewer", () => ({
   requireViewer: vi.fn(() => Promise.resolve({})),
 }));
+vi.mock("next-intl/server", async () => {
+  const { translator } = await import("@/test/intl");
+  return {
+    getTranslations: (namespace: string) =>
+      Promise.resolve(translator(namespace)),
+  };
+});
 
 const {
   chooseAgents,
   chooseApprovers,
   chooseModels,
   chooseServerTools,
+  chooseSwitchTargets,
   chooseToolPatterns,
 } = await import("./choice-actions");
 
 const ok = <T>(value: T) => ({ ok: true as const, value });
 
 function version(slug: string, v: number) {
-  return { id: `tlv_${slug}${String(v)}`, slug, version: v, name: slug };
+  return {
+    id: `tlv_${slug}${String(v)}`,
+    slug,
+    version: v,
+    name: slug,
+    description: null,
+    source: "custom",
+    serverId: null,
+    readOnly: false,
+    riskGrade: "low",
+    classification: null,
+  };
 }
+
+const NOTION_UUID = "7c084658-9d6d-480d-81eb-499322416dae";
+
+/** An imported Notion tool, slugged the way the registry slugs one. */
+function notion(name: string, v: number) {
+  return {
+    ...version(`mcp.${NOTION_UUID}.${name}`, v),
+    name,
+    source: "mcp",
+    serverId: "mcs_notion",
+  };
+}
+
+const NOTION_SERVER = {
+  id: "mcs_notion",
+  name: "Notion",
+  iconUrl: "https://notion.so/icon.png",
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
+  source.tools.mcpServers.mockResolvedValue(ok({ servers: [NOTION_SERVER] }));
 });
 
 describe("chooseToolPatterns", () => {
@@ -46,17 +87,103 @@ describe("chooseToolPatterns", () => {
       }),
     );
     const result = await chooseToolPatterns("acme", "core");
+    const facts = [
+      { text: "May write", tone: "denied" },
+      { text: "Low risk", tone: "quiet" },
+    ];
     expect(result).toEqual({
       ok: true,
       value: {
         partial: false,
         options: [
-          { value: "stripe@*", label: "stripe@*", detail: "stripe" },
-          { value: "stripe@1", label: "stripe@1", detail: "stripe" },
-          { value: "stripe@2", label: "stripe@2", detail: "stripe" },
+          {
+            value: "stripe@*",
+            label: "Stripe",
+            context: "Custom tool · every version",
+            facts,
+          },
+          {
+            value: "stripe@1",
+            label: "Stripe v1",
+            context: "Custom tool · version 1 only",
+            facts,
+          },
+          {
+            value: "stripe@2",
+            label: "Stripe v2",
+            context: "Custom tool · version 2 only",
+            facts,
+          },
         ],
       },
     });
+  });
+
+  it("names an imported tool by its server and title, never the server uuid", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [
+          {
+            ...notion("notion-create-database", 1),
+            description: "Create a database in a page.",
+            riskGrade: "high",
+            classification: { sideEffect: "write" },
+          },
+          { ...notion("notion-search", 1), readOnly: true },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseToolPatterns("acme", "core");
+    if (!result.ok) throw new Error("expected a list");
+    const [create, search] = result.value.options;
+    expect(create).toEqual({
+      value: `mcp.${NOTION_UUID}.notion-create-database@*`,
+      label: "Create database",
+      context: "Notion · every version",
+      description: "Create a database in a page.",
+      icon: { name: "Notion", url: "https://notion.so/icon.png" },
+      facts: [
+        { text: "Writes", tone: "approval" },
+        { text: "High risk", tone: "denied" },
+      ],
+    });
+    expect(search?.label).toBe("Search");
+    expect(search?.facts?.[0]).toEqual({ text: "Read only", tone: "allowed" });
+    for (const option of result.value.options) {
+      const drawn = [
+        option.label,
+        option.context,
+        option.detail,
+        option.description,
+      ].join(" ");
+      expect(drawn).not.toContain(NOTION_UUID);
+    }
+    expect(result.value.namespaces).toEqual([
+      {
+        prefix: `mcp.${NOTION_UUID}.`,
+        label: "Notion",
+        icon: { name: "Notion", url: "https://notion.so/icon.png" },
+      },
+    ]);
+  });
+
+  it("still lists the tools when the server read is refused, without a logo (negative)", async () => {
+    source.tools.mcpServers.mockResolvedValue(
+      readError("mcp_servers_unavailable", 503),
+    );
+    source.tools.versions.mockResolvedValue(
+      ok({ items: [notion("notion-search", 1)], nextCursor: null }),
+    );
+    const result = await chooseToolPatterns("acme", "core");
+    if (!result.ok) throw new Error("expected a list");
+    expect(result.value.partial).toBe(false);
+    expect(result.value.options[0]).toMatchObject({
+      label: "Notion search",
+      context: "MCP server · every version",
+    });
+    expect(result.value.options[0]?.icon).toBeUndefined();
+    expect(result.value.namespaces).toBeUndefined();
   });
 
   it("stops at ten pages and says the list is partial", async () => {
@@ -114,11 +241,24 @@ describe("chooseServerTools", () => {
       ok: true,
       value: {
         partial: false,
-        options: [
-          { value: "get_page", label: "get_page", detail: "notion_get" },
-        ],
+        options: [{ value: "get_page", label: "Get page", detail: "get_page" }],
       },
     });
+  });
+
+  it("draws the provider's logo and drops its name from each title", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({ items: [notion("notion-fetch", 1)], nextCursor: null }),
+    );
+    const result = await chooseServerTools("acme", "core", "mcs_notion");
+    expect(result.ok && result.value.options).toEqual([
+      {
+        value: "notion-fetch",
+        label: "Fetch",
+        detail: "notion-fetch",
+        icon: { name: "Notion", url: "https://notion.so/icon.png" },
+      },
+    ]);
   });
 
   it("stops at ten pages and says the list is partial", async () => {
@@ -142,6 +282,32 @@ describe("chooseServerTools", () => {
       reason: "unavailable",
       code: "tool_registry_unavailable",
     });
+  });
+});
+
+describe("chooseSwitchTargets", () => {
+  it("offers a tool version by its title, server and version, keyed by its public id", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [{ ...notion("notion-create-pages", 3), riskGrade: "critical" }],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseSwitchTargets("acme", "core", "tool_version");
+    if (!result.ok) throw new Error("expected a list");
+    expect(result.value.options).toEqual([
+      {
+        value:
+          "tlv_mcp.7c084658-9d6d-480d-81eb-499322416dae.notion-create-pages3",
+        label: "Create pages v3",
+        context: "Notion · version 3 only",
+        icon: { name: "Notion", url: "https://notion.so/icon.png" },
+        facts: [
+          { text: "May write", tone: "denied" },
+          { text: "Critical risk", tone: "critical" },
+        ],
+      },
+    ]);
   });
 });
 

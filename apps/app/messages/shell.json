@@ -493,6 +493,32 @@
       "workspace": "You cannot see this workspace",
       "permission": "workspace.read on {ws}",
       "unnamed": "You"
+    },
+    "choices": {
+      "tool": {
+        "context": "{vendor} · {versions}",
+        "everyVersion": "every version",
+        "oneVersion": "version {version} only",
+        "pinnedLabel": "{title} v{version}",
+        "source": {
+          "builtin": "Built in",
+          "custom": "Custom tool",
+          "mcp": "MCP server",
+          "foundry": "Foundry"
+        },
+        "effect": {
+          "read": "Read only",
+          "write": "Writes",
+          "irreversible": "Irreversible",
+          "undeclared": "May write"
+        },
+        "risk": {
+          "low": "Low risk",
+          "medium": "Medium risk",
+          "high": "High risk",
+          "critical": "Critical risk"
+        }
+      }
     }
   }
 }

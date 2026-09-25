@@ -8,13 +8,28 @@
 // finding a record, not for loading a registry. Past the bound the answer is
 // marked partial, and the picker says so and keeps accepting typed text where
 // the field takes patterns.
+//
+// A tool is offered by what a person can judge it by: its vendor's logo and
+// name, a title read from its API name, the version a pattern covers, whether
+// it writes, and its risk grade. An imported tool's slug is
+// `mcp.<server uuid>.<name>`, so the slug is the form's value and never a
+// line of the row.
+import { getTranslations } from "next-intl/server";
 import { APPROVER_ROLES } from "@/data/contracts/mandates";
+import type { McpServer, ToolVersion } from "@/data/contracts/tools";
 import { dataSource } from "@/data/source";
 import type { Read } from "@/data/read";
 import type { ActionResult } from "@/server/kernel";
 import { readToActionResult } from "@/server/kernel";
 import { requireViewer, type WsCtx } from "@/server/viewer";
-import type { OptionPage, PickerOption } from "@/ui/record-picker";
+import type { BadgeTone } from "@/ui/badge";
+import type {
+  OptionPage,
+  PickerFact,
+  PickerIcon,
+  PickerNamespace,
+  PickerOption,
+} from "@/ui/record-picker";
 
 // What every list here answers is INV-19's `ActionResult`, the one shape a
 // Server Action returns. A picker reads only `ok`, and `OptionLoad` in
@@ -59,8 +74,172 @@ async function walk<T>(
 function loaded(
   options: PickerOption[],
   partial = false,
+  namespaces: PickerNamespace[] = [],
 ): ActionResult<OptionPage> {
-  return { ok: true, value: { options, partial } };
+  return {
+    ok: true,
+    value: {
+      options,
+      partial,
+      ...(namespaces.length === 0 ? {} : { namespaces }),
+    },
+  };
+}
+
+// ── Tools ───────────────────────────────────────────────────────────────────
+
+/**
+ * The workspace's MCP servers by `mcs_…`, for each tool's vendor name and
+ * logo. A refused read leaves the tools without a vendor, not the list
+ * unloaded: the tools are still the record a person picks.
+ */
+async function serversById(ctx: WsCtx): Promise<Map<string, McpServer>> {
+  const read = await dataSource().tools.mcpServers(ctx);
+  return new Map(read.ok ? read.value.servers.map((s) => [s.id, s]) : []);
+}
+
+/** What a tool does to the world: its classification, else what it declares. */
+type Effect = "read" | "write" | "irreversible" | "undeclared";
+
+/**
+ * A tool row's words, read once per list. Every call to the translator stays
+ * here, where it is bound, so the catalogue check (INV-12) can expand each key.
+ */
+async function toolWords() {
+  const t = await getTranslations("shell.choices.tool");
+  return {
+    source: (source: ToolVersion["source"]) => t(`source.${source}`),
+    effect: (effect: Effect) => t(`effect.${effect}`),
+    risk: (grade: ToolVersion["riskGrade"]) => t(`risk.${grade}`),
+    pinned: (title: string, version: number) =>
+      t("pinnedLabel", { title, version }),
+    context: (vendor: string, pin: number | null) =>
+      t("context", {
+        vendor,
+        versions:
+          pin === null ? t("everyVersion") : t("oneVersion", { version: pin }),
+      }),
+  };
+}
+type ToolWords = Awaited<ReturnType<typeof toolWords>>;
+
+const EFFECT_TONE = {
+  read: "allowed",
+  write: "approval",
+  irreversible: "critical",
+  undeclared: "denied",
+} as const satisfies Record<Effect, BadgeTone>;
+
+const RISK_TONE = {
+  low: "quiet",
+  medium: "quiet",
+  high: "denied",
+  critical: "critical",
+} as const satisfies Record<ToolVersion["riskGrade"], BadgeTone>;
+
+function effectOf(version: ToolVersion): Effect {
+  if (version.classification !== null) return version.classification.sideEffect;
+  // Unclassified and not declared read-only: nothing says it cannot write.
+  return version.readOnly ? "read" : "undeclared";
+}
+
+/**
+ * A title from a tool's API name: `notion-create-database` from the Notion
+ * server reads "Create database". The vendor's own name is dropped from the
+ * front, since the logo and the context line carry it. A name that already
+ * has spaces is a title and is kept.
+ */
+function titleOf(name: string, vendor: string | null): string {
+  if (/\s/.test(name)) return name;
+  let words = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[\s_\-.]+/)
+    .filter((word) => word !== "")
+    .map((word) => (/^[A-Z][a-z]/.test(word) ? word.toLowerCase() : word));
+  const lead = (vendor ?? "")
+    .split(/\s+/)[0]
+    ?.toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  if (
+    lead !== undefined &&
+    lead !== "" &&
+    words.length > 1 &&
+    words[0]?.toLowerCase() === lead
+  )
+    words = words.slice(1);
+  const text = words.join(" ");
+  return text === "" ? name : text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Who provides a tool: its server's name and logo, or where a declared tool comes from. */
+function vendorOf(
+  version: ToolVersion,
+  servers: ReadonlyMap<string, McpServer>,
+  words: ToolWords,
+): { name: string; icon: PickerIcon | undefined } {
+  const server =
+    version.serverId === null ? undefined : servers.get(version.serverId);
+  if (server !== undefined)
+    return {
+      name: server.name,
+      icon: { name: server.name, url: server.iconUrl },
+    };
+  return { name: words.source(version.source), icon: undefined };
+}
+
+/**
+ * One tool as a picker row. `pin` null is the `slug@*` pattern that covers
+ * every version; a number is that one version.
+ */
+function toolOption(
+  value: string,
+  version: ToolVersion,
+  pin: number | null,
+  servers: ReadonlyMap<string, McpServer>,
+  words: ToolWords,
+): PickerOption {
+  const vendor = vendorOf(version, servers, words);
+  const title = titleOf(version.name, vendor.name);
+  const effect = effectOf(version);
+  const facts: PickerFact[] = [
+    { text: words.effect(effect), tone: EFFECT_TONE[effect] },
+    { text: words.risk(version.riskGrade), tone: RISK_TONE[version.riskGrade] },
+  ];
+  return {
+    value,
+    label: pin === null ? title : words.pinned(title, pin),
+    context: words.context(vendor.name, pin),
+    ...(version.description === null || version.description.trim() === ""
+      ? {}
+      : { description: version.description }),
+    ...(vendor.icon === undefined ? {} : { icon: vendor.icon }),
+    facts,
+  };
+}
+
+/**
+ * The `mcp.<server uuid>.` prefix each server's tools share, so a pattern a
+ * person typed under it is drawn with the server's logo and name. The prefix
+ * is read off a slug the server's tools carry; it is matched, never drawn.
+ */
+function serverNamespaces(
+  versions: readonly ToolVersion[],
+  servers: ReadonlyMap<string, McpServer>,
+): PickerNamespace[] {
+  const found = new Map<string, PickerNamespace>();
+  for (const version of versions) {
+    if (version.serverId === null) continue;
+    const server = servers.get(version.serverId);
+    const prefix = /^mcp\.[^.]+\./.exec(version.slug)?.[0];
+    if (server === undefined || prefix === undefined || found.has(prefix))
+      continue;
+    found.set(prefix, {
+      prefix,
+      label: server.name,
+      icon: { name: server.name, url: server.iconUrl },
+    });
+  }
+  return [...found.values()];
 }
 
 /**
@@ -72,24 +251,28 @@ export async function chooseToolPatterns(
   ws: string,
 ): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org, ws);
-  const list = await walk(PAGE_BOUND, (cursor) =>
-    dataSource().tools.versions(ctx, { category: null, cursor }),
-  );
+  const [list, servers, words] = await Promise.all([
+    walk(PAGE_BOUND, (cursor) =>
+      dataSource().tools.versions(ctx, { category: null, cursor }),
+    ),
+    serversById(ctx),
+    toolWords(),
+  ]);
   if (!list.ok) return readToActionResult<OptionPage>(list.read);
   const every = new Map<string, PickerOption>();
   const each: PickerOption[] = [];
   for (const version of list.items) {
     const pattern = `${version.slug}@*`;
     if (!every.has(pattern))
-      every.set(pattern, {
-        value: pattern,
-        label: pattern,
-        detail: version.name,
-      });
+      every.set(pattern, toolOption(pattern, version, null, servers, words));
     const exact = `${version.slug}@${String(version.version)}`;
-    each.push({ value: exact, label: exact, detail: version.name });
+    each.push(toolOption(exact, version, version.version, servers, words));
   }
-  return loaded([...every.values(), ...each], list.partial);
+  return loaded(
+    [...every.values(), ...each],
+    list.partial,
+    serverNamespaces(list.items, servers),
+  );
 }
 
 /**
@@ -104,17 +287,25 @@ export async function chooseServerTools(
   serverId: string,
 ): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org, ws);
-  const list = await walk(PAGE_BOUND, (cursor) =>
-    dataSource().tools.versions(ctx, { category: null, cursor }),
-  );
+  const [list, servers] = await Promise.all([
+    walk(PAGE_BOUND, (cursor) =>
+      dataSource().tools.versions(ctx, { category: null, cursor }),
+    ),
+    serversById(ctx),
+  ]);
   if (!list.ok) return readToActionResult<OptionPage>(list.read);
+  const server = servers.get(serverId);
   const names = new Map<string, PickerOption>();
   for (const version of list.items) {
     if (version.serverId !== serverId || names.has(version.name)) continue;
+    // The API name is what `import_tools` takes, so it stays as the detail.
     names.set(version.name, {
       value: version.name,
-      label: version.name,
-      detail: version.slug,
+      label: titleOf(version.name, server?.name ?? null),
+      detail: version.name,
+      ...(server === undefined
+        ? {}
+        : { icon: { name: server.name, url: server.iconUrl } }),
     });
   }
   return loaded([...names.values()], list.partial);
@@ -221,6 +412,7 @@ async function chooseMcpServers(
       value: server.id,
       label: server.name,
       detail: server.endpointUrl,
+      icon: { name: server.name, url: server.iconUrl },
     })),
   );
 }
@@ -252,16 +444,18 @@ export async function chooseSwitchTargets(
       })),
     );
   }
-  const list = await walk(PAGE_BOUND, (cursor) =>
-    dataSource().tools.versions(ctx, { category: null, cursor }),
-  );
+  const [list, servers, words] = await Promise.all([
+    walk(PAGE_BOUND, (cursor) =>
+      dataSource().tools.versions(ctx, { category: null, cursor }),
+    ),
+    serversById(ctx),
+    toolWords(),
+  ]);
   if (!list.ok) return readToActionResult<OptionPage>(list.read);
   return loaded(
-    list.items.map((version) => ({
-      value: version.id,
-      label: version.name,
-      detail: `${version.slug}@${String(version.version)}`,
-    })),
+    list.items.map((version) =>
+      toolOption(version.id, version, version.version, servers, words),
+    ),
     list.partial,
   );
 }

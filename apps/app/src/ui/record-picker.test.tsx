@@ -354,3 +354,156 @@ describe("RecordMultiPicker", () => {
     expect(input).toHaveValue("");
   });
 });
+
+describe("tool rows and chips", () => {
+  const UUID = "7c084658-9d6d-480d-81eb-499322416dae";
+  const NOTION = { name: "Notion", url: "https://notion.so/icon.png" };
+  const TOOLS: PickerOption[] = [
+    {
+      value: `mcp.${UUID}.notion-create-database@*`,
+      label: "Create database",
+      context: "Notion · every version",
+      description: "Create a database in a page.",
+      icon: NOTION,
+      facts: [
+        { text: "Writes", tone: "approval" },
+        { text: "High risk", tone: "denied" },
+      ],
+    },
+    {
+      value: `mcp.${UUID}.notion-search@*`,
+      label: "Search",
+      context: "Notion · every version",
+      icon: NOTION,
+      facts: [{ text: "Read only", tone: "allowed" }],
+    },
+  ];
+  const page = (): OptionLoad => ({
+    ok: true,
+    value: {
+      options: TOOLS,
+      partial: false,
+      namespaces: [{ prefix: `mcp.${UUID}.`, label: "Notion", icon: NOTION }],
+    },
+  });
+
+  it("draws the logo, title, vendor, facts and description, and never the uuid", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker id="tools" options={TOOLS} />
+      </IntlProvider>,
+    );
+    await user.click(screen.getByRole("combobox", { name: "Tools" }));
+    const [create] = screen.getAllByRole("option");
+    if (create === undefined) throw new Error("no rows");
+    expect(create).toHaveTextContent("Create database");
+    expect(create).toHaveTextContent("Notion · every version");
+    expect(create).toHaveTextContent("Writes");
+    expect(create).toHaveTextContent("High risk");
+    expect(create).toHaveTextContent("Create a database in a page.");
+    expect(
+      create.querySelector('img[data-provider-icon="image"]'),
+    ).toHaveAttribute("src", NOTION.url);
+    expect(screen.getByRole("listbox").textContent).not.toContain(UUID);
+  });
+
+  it("finds a tool by the name of the server it comes from", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker
+          id="tools"
+          options={[
+            ...TOOLS,
+            { value: "stripe@*", label: "Refund", context: "Stripe" },
+          ]}
+        />
+      </IntlProvider>,
+    );
+    await user.type(screen.getByRole("combobox"), "notion");
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+  });
+
+  it("draws a chosen tool's chip with its logo and title, and submits the pattern", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker id="tools" name="tools" options={TOOLS} />
+      </IntlProvider>,
+    );
+    await user.type(screen.getByRole("combobox"), "search");
+    await user.keyboard("{Enter}");
+    const chip = container.querySelector(
+      `[data-chip="mcp.${UUID}.notion-search@*"]`,
+    );
+    expect(chip).toHaveTextContent("Search");
+    expect(chip?.textContent).not.toContain(UUID);
+    expect(chip).toHaveAttribute("title", "Notion · every version");
+    expect(chip?.querySelector("[data-provider-icon]")).not.toBeNull();
+    expect(hidden(container, "tools")).toBe(`mcp.${UUID}.notion-search@*`);
+  });
+
+  it("draws a typed pattern under a server by the server's logo, without its uuid", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker
+          id="tools"
+          name="tools"
+          load={() => Promise.resolve(page())}
+          defaultValue={[`mcp.${UUID}.notion-*`]}
+          freeform
+        />
+      </IntlProvider>,
+    );
+    const chip = container.querySelector(`[data-chip="mcp.${UUID}.notion-*"]`);
+    await waitFor(() => {
+      expect(chip).toHaveTextContent("notion-*");
+    });
+    expect(chip?.textContent).not.toContain(UUID);
+    expect(chip).toHaveAttribute("title", "Notion");
+    expect(chip?.querySelector("[data-provider-icon]")).not.toBeNull();
+  });
+
+  it("draws a pattern no server owns as typed, in mono (negative)", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker
+          id="tools"
+          load={() => Promise.resolve(page())}
+          defaultValue={["github__*"]}
+          freeform
+        />
+      </IntlProvider>,
+    );
+    const chip = container.querySelector('[data-chip="github__*"]');
+    await waitFor(() => {
+      expect(chip).toHaveTextContent("github__*");
+    });
+    expect(chip?.querySelector("[data-provider-icon]")).toBeNull();
+    expect(chip?.querySelector(".font-mono")).not.toBeNull();
+  });
+
+  it("shows the chosen record's logo in a single picker's field", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tool">Tool</label>
+        <RecordPicker
+          id="tool"
+          name="tool"
+          options={TOOLS}
+          defaultValue={`mcp.${UUID}.notion-search@*`}
+        />
+      </IntlProvider>,
+    );
+    const input = screen.getByRole("combobox", { name: "Tool" });
+    expect(input).toHaveValue("Search");
+    expect(input).toHaveAttribute("title", "Notion · every version");
+    expect(container.querySelector("[data-provider-icon]")).not.toBeNull();
+  });
+});
