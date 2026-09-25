@@ -27,6 +27,7 @@ export const orgMemberRoleChange = registerCapability({
     category: "organization",
   },
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

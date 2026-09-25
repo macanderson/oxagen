@@ -5,7 +5,7 @@
 **Scope:** tenant + workspace
 **Surfaces:** api, mcp, agent
 **Risk level:** high
-**Requires approval:** no
+**Requires approval:** yes, on the agent surface (riskLevel: high)
 
 ## Intent
 
@@ -32,6 +32,16 @@ Soft-deletes the key row and hard-deletes every per-environment override row in
 the `environments` vault tables (PostgreSQL). Metering, IAM, and audit run
 through the kernel.
 - **Writes a `secret.key_deleted` row to `security_events`**. Before ADR-050 this action left no audit trail anywhere.
+
+## Approval
+
+When an agent turn calls this capability on the `agent` surface, the call waits
+for a person to approve it before it runs (`requiresApproval: true`). The in-app
+assistant parks the call and the key stays in place until the approved call
+resumes.
+
+The `api` and `mcp` surfaces do not read `requiresApproval`. IAM (org Owner or
+Admin) and the workspace's decision rules gate those calls.
 
 ## API
 

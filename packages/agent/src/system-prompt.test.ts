@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { buildChatSystemPrompt } from "./system-prompt";
 
 const BASE_CTX = {
@@ -8,106 +8,162 @@ const BASE_CTX = {
   workspaceName: "Main Workspace",
 };
 
+/**
+ * The prompt with every run of whitespace collapsed to one space. The golden
+ * file pins the exact layout; phrase assertions read the words, so rewrapping
+ * a paragraph does not break them.
+ */
+function flatPrompt(ctx = BASE_CTX): string {
+  return buildChatSystemPrompt(ctx).replace(/\s+/g, " ");
+}
+
 describe("buildChatSystemPrompt", () => {
-  it("returns a non-empty string", () => {
-    const prompt = buildChatSystemPrompt(BASE_CTX);
-    expect(typeof prompt).toBe("string");
-    expect(prompt.length).toBeGreaterThan(100);
+  // The whole prompt, rendered for one fixed context and compared with the
+  // checked-in file. A change to the prompt shows up in review as a diff of
+  // that file. Regenerate it with `vitest run -u` on this one test file.
+  it("matches the checked-in golden prompt", async () => {
+    await expect(buildChatSystemPrompt(BASE_CTX)).toMatchFileSnapshot(
+      "./__golden__/system-prompt.txt",
+    );
   });
 
-  describe("identity + context section", () => {
-    it("interpolates orgName into the identity line", () => {
-      expect(buildChatSystemPrompt(BASE_CTX)).toContain('"Acme Corp"');
+  describe("identity", () => {
+    it("introduces the agent as stella", () => {
+      expect(buildChatSystemPrompt(BASE_CTX)).toMatch(/^You are stella,/);
     });
 
-    it("interpolates workspaceName into the identity line", () => {
-      expect(buildChatSystemPrompt(BASE_CTX)).toContain('"Main Workspace"');
-    });
+    it.each(["governance agent", "governance plane", "Mission Control"])(
+      "never uses the retired name %s",
+      (retired) => {
+        expect(flatPrompt()).not.toContain(retired);
+      },
+    );
 
-    it("includes orgSlug in the identity line", () => {
-      expect(buildChatSystemPrompt(BASE_CTX)).toContain("org: acme");
+    it("names the product and category from ADR-113", () => {
+      const prompt = flatPrompt();
+      expect(prompt).toContain("workforce management for autonomous agents");
+      expect(prompt).toContain("agent control plane");
     });
+  });
 
-    it("includes workspaceSlug in the identity line", () => {
-      expect(buildChatSystemPrompt(BASE_CTX)).toContain("workspace: main");
+  describe("what stella can read", () => {
+    it.each([
+      "Runs",
+      "Spend",
+      "Approvals",
+      "mandates",
+      "knowledge graph",
+      "memories",
+    ])("names %s", (subject) => {
+      expect(flatPrompt()).toContain(subject);
     });
+  });
 
-    it("repeats org and workspace context in the footer", () => {
+  // The model sees the pinned tools plus the belt's two helpers
+  // (runtime/tool-belt.ts). A prompt that never names the helpers lets the
+  // model end a turn with "I cannot" that one search would have answered.
+  describe("the tool belt", () => {
+    it("names both belt helpers", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      const tail = prompt.slice(-400);
-      expect(tail).toContain("Acme Corp");
-      expect(tail).toContain("Main Workspace");
+      expect(prompt).toContain("search_tools");
+      expect(prompt).toContain("load_tools");
+    });
+
+    it("tells the model to search before it declines", () => {
+      expect(flatPrompt()).toContain(
+        "Search before you say you cannot do something.",
+      );
+    });
+  });
+
+  describe("governance", () => {
+    it("says a write that requires approval parks and has not run", () => {
+      const prompt = flatPrompt();
+      expect(prompt).toContain("parks");
+      expect(prompt).toContain("it has not run");
+    });
+
+    // First-use consent applies only to external MCP tools. Contract tools
+    // pass the kernel's gates and, when requiresApproval is set, an approval.
+    it("ties first-use consent to external MCP servers only", () => {
+      const sentences = flatPrompt()
+        .split(/(?<=\.)\s/)
+        .filter((sentence) => sentence.includes("consent"));
+      expect(sentences).toHaveLength(1);
+      expect(sentences[0]).toContain("external MCP server");
+    });
+
+    it("says the turn is recorded as a run", () => {
+      expect(flatPrompt()).toContain("This turn is recorded as a run");
+    });
+
+    it("forbids working around a refused call", () => {
+      const prompt = flatPrompt();
+      expect(prompt).toContain("Never retry it under another name");
+      expect(prompt).toContain("never ask anyone to turn a gate off");
+    });
+
+    it("separates what Oxagen observed from what a client reported", () => {
+      expect(flatPrompt()).toContain("A report is not enforcement.");
+    });
+
+    it("asks for records by their human label, not a raw id", () => {
+      expect(flatPrompt()).toContain("Name records by their human label.");
     });
   });
 
   // ADR-043: Oxagen governs agents, it does not run them. The prompt must not
-  // advertise an execution surface the runtime no longer has — a model told it
-  // can run code burns a turn discovering the tool does not exist.
-  describe("governance posture (no execution runtime)", () => {
-    it("states plainly that it is not a coding agent", () => {
-      expect(buildChatSystemPrompt(BASE_CTX)).toContain("NOT a coding agent");
-    });
-
+  // advertise an execution surface the turn does not have.
+  describe("no execution runtime", () => {
     it.each(["sandbox", "shell", "file system", "browser"])(
       "disclaims the %s rather than offering it",
       (surface) => {
-        const prompt = buildChatSystemPrompt(BASE_CTX);
-        expect(prompt).toContain(`no ${surface}`);
+        expect(flatPrompt()).toContain(`no ${surface}`);
       },
     );
 
     it.each([
       "subagent",
-      "skill",
       "execute_code",
       "run_sandbox_command",
       "dispatch_subagent",
       "render_agent_ui",
       "create_plan",
       "run_workflow",
+      "load_skill",
+      "A2A",
     ])("never references the removed %s surface", (removed) => {
       expect(buildChatSystemPrompt(BASE_CTX)).not.toContain(removed);
     });
   });
 
-  describe("grounding + governance guidance", () => {
-    it("requires claims to be grounded in a tool result", () => {
-      expect(buildChatSystemPrompt(BASE_CTX)).toContain(
-        "Ground every factual claim in a tool result",
-      );
-    });
-
-    it("forbids citing a node by its raw UUID", () => {
-      expect(buildChatSystemPrompt(BASE_CTX)).toContain("never by a raw UUID");
-    });
-
-    it("separates observed evidence from client attestation", () => {
+  // The apps/app flyout has no slash-command menu and no mention picker, so
+  // the prompt teaches neither grammar.
+  describe("no composer grammar", () => {
+    it("carries no slash-command table", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("OBSERVED");
-      expect(prompt).toContain("ATTESTED");
+      expect(prompt).not.toContain("Slash commands");
+      expect(prompt).not.toContain("`/pr");
     });
 
-    it("names the gates every tool call passes through", () => {
+    it("carries no mention grammar", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      for (const gate of [
-        "IAM",
-        "entitlement",
-        "tool RBAC",
-        "consent",
-        "approval",
-      ]) {
-        expect(prompt).toContain(gate);
-      }
-    });
-
-    it("instructs the model never to work around a refused call", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("never work around it");
-      expect(prompt).toContain("never ask the user to disable a gate");
+      expect(prompt).not.toContain("Reference mentions");
+      expect(prompt).not.toContain("[:TYPE|");
     });
   });
 
-  describe("interpolation correctness", () => {
+  describe("interpolation", () => {
+    it("names the org and workspace in the first line and the footer", () => {
+      const prompt = buildChatSystemPrompt(BASE_CTX);
+      const [first] = prompt.split("\n");
+      expect(first).toContain('"Main Workspace" (workspace: main)');
+      expect(first).toContain('"Acme Corp" (org: acme)');
+      const tail = prompt.slice(-300);
+      expect(tail).toContain("Acme Corp");
+      expect(tail).toContain("Main Workspace");
+    });
+
     it("uses different values for a different context", () => {
       const promptA = buildChatSystemPrompt(BASE_CTX);
       const promptB = buildChatSystemPrompt({
@@ -116,29 +172,13 @@ describe("buildChatSystemPrompt", () => {
         orgName: "Beta Inc",
         workspaceName: "Dev Team",
       });
-
-      expect(promptA).toContain("Acme Corp");
       expect(promptA).not.toContain("Beta Inc");
-
       expect(promptB).toContain("Beta Inc");
       expect(promptB).toContain("Dev Team");
       expect(promptB).not.toContain("Acme Corp");
     });
 
-    it("slugs appear in both the header and footer", () => {
-      const prompt = buildChatSystemPrompt({
-        orgSlug: "slug-org",
-        workspaceSlug: "slug-ws",
-        orgName: "Slug Org",
-        workspaceName: "Slug WS",
-      });
-      expect((prompt.match(/slug-org/g) ?? []).length).toBeGreaterThanOrEqual(
-        2,
-      );
-      expect((prompt.match(/slug-ws/g) ?? []).length).toBeGreaterThanOrEqual(2);
-    });
-
-    it("handles special characters in org/workspace names without breaking the prompt", () => {
+    it("keeps special characters in names intact", () => {
       const prompt = buildChatSystemPrompt({
         orgSlug: "test-org",
         workspaceSlug: "test-ws",
@@ -148,51 +188,5 @@ describe("buildChatSystemPrompt", () => {
       expect(prompt).toContain('Acme & "Partners"');
       expect(prompt).toContain("R&D / Labs");
     });
-  });
-});
-
-// ── Composed shared sections (ADR-043: one prompt, one registry each) ────────
-describe("buildChatSystemPrompt — composed protocol sections", () => {
-  const CTX = {
-    orgSlug: "acme",
-    workspaceSlug: "main",
-    orgName: "Acme",
-    workspaceName: "Main",
-  };
-
-  it("carries the slash-command table generated from the shared registry", () => {
-    const prompt = buildChatSystemPrompt(CTX);
-    expect(prompt).toContain("## Slash commands");
-    // Generated from @oxagen/ai's SLASH_COMMANDS — the same registry the
-    // composer menu renders, so the prompt and the menu cannot disagree.
-    expect(prompt).toContain("`/pr <pr-number>`");
-    expect(prompt).toContain("`/ci [ref]`");
-  });
-
-  it("carries the @-mention grammar so mention tokens are not opaque", () => {
-    const prompt = buildChatSystemPrompt(CTX);
-    expect(prompt).toContain("## Reference mentions");
-    expect(prompt).toContain("[:TYPE|:SLUG|:LOCATION|:LABEL]");
-  });
-
-  it("never offers a repository EDIT — Oxagen governs agents, it does not run them", () => {
-    const prompt = buildChatSystemPrompt(CTX);
-    expect(prompt).toContain("Oxagen does not edit repositories");
-    expect(prompt).not.toMatch(/\bpin(ned)? (a |the )?repos(itory)?\b/i);
-  });
-
-  it("names no excised runtime tool", () => {
-    const prompt = buildChatSystemPrompt(CTX);
-    for (const dead of [
-      "load_skill",
-      "render_agent_ui",
-      "run_workflow",
-      "create_plan",
-      "dispatch_subagent",
-      "execute_code",
-      "A2A",
-    ]) {
-      expect(prompt).not.toContain(dead);
-    }
   });
 });

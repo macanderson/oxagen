@@ -3,7 +3,8 @@
 // test in agent.test.tsx does not reach: hooks in place, removed and not
 // reported; a collector that reported its version and was seen; the proxy
 // on each side of the gateway rung; no run, so no tier; every host revoked;
-// and a retired identity, which is offered neither enroll nor unenroll.
+// a retired identity, which is offered neither enroll nor unenroll; and a
+// viewer without an Owner or Admin role, who is offered neither either.
 // Axe runs after every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
@@ -54,6 +55,7 @@ function renderRuntime(overrides: Partial<Props> = {}) {
     here: routes.agent("acme", "core-platform", "release-bot", {
       tab: "runtime",
     }),
+    canManageHosts: true,
     ...overrides,
   };
   render(
@@ -193,5 +195,58 @@ describe("Runtime › revoked and retired", () => {
     expect(
       screen.queryByRole("button", { name: "Unenroll build-01" }),
     ).toBeNull();
+  });
+});
+
+describe("Runtime › organization role", () => {
+  it("offers an Owner or Admin unenroll on each live host", () => {
+    renderRuntime();
+    expect(
+      screen.getByRole("button", { name: "Unenroll build-01" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("runtime-needs-role")).toBeNull();
+  });
+
+  it("offers an Owner or Admin the enroll path when no host is enrolled", () => {
+    renderRuntime({ detail: agentDetail({ hosts: [] }) });
+    expect(
+      within(screen.getByTestId("runtime-empty")).getByRole("button", {
+        name: "Show the CLI path",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("runtime-needs-role")).toBeNull();
+  });
+
+  it("offers any other viewer no unenroll and names the role it needs (negative)", () => {
+    renderRuntime({ canManageHosts: false });
+    expect(screen.getByTestId("unenroll-command")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Unenroll build-01" }),
+    ).toBeNull();
+    expect(screen.getByTestId("runtime-needs-role")).toHaveTextContent(
+      "Enrolling and unenrolling a host needs an organization Owner or Admin role.",
+    );
+  });
+
+  it("offers any other viewer no enroll path and names the role it needs (negative)", () => {
+    renderRuntime({
+      canManageHosts: false,
+      detail: agentDetail({ hosts: [] }),
+    });
+    const empty = screen.getByTestId("runtime-empty");
+    expect(
+      within(empty).queryByRole("button", { name: "Show the CLI path" }),
+    ).toBeNull();
+    expect(within(empty).getByTestId("runtime-needs-role")).toHaveTextContent(
+      "needs an organization Owner or Admin role",
+    );
+  });
+
+  it("names no role on a retired identity, which no role can enroll (negative)", () => {
+    renderRuntime({
+      canManageHosts: false,
+      detail: agentDetail({ identity: { status: "retired" } }),
+    });
+    expect(screen.queryByTestId("runtime-needs-role")).toBeNull();
   });
 });

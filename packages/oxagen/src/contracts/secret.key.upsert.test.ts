@@ -8,6 +8,13 @@ describe("secret.key.upsert contract", () => {
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(secretKeyUpsert.surfaces).toEqual(["api", "mcp", "agent"]);
   });
+  it("waits for a person's approval on the agent surface", () => {
+    expect(secretKeyUpsert.agent).toEqual({
+      requiresApproval: true,
+      riskLevel: "high",
+      category: "secret",
+    });
+  });
   it("accepts a valid input", () => {
     expect(() => secretKeyUpsert.input.parse({ key: "API_KEY" })).not.toThrow();
   });

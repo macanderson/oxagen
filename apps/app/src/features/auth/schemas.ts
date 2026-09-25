@@ -2,32 +2,23 @@
 // `auth.errors.*` (spec §15: no prose in code); the form renders the catalog
 // string. The same schema runs in the browser (instant field errors) and in the
 // server action (a crafted POST cannot skip it).
+import {
+  HAS_DIGIT,
+  HAS_SYMBOL,
+  PASSWORD_MAX,
+  PASSWORD_MIN,
+  passwordRequirements,
+} from "@oxagen/auth/password-policy";
 import { z } from "zod";
 
 /**
  * The password policy the sign-up and reset screens list and tick (mockups
- * `obPwBits`): at least 12 characters, one symbol, one digit. Better Auth's own
- * floor (packages/auth/src/auth.ts minPasswordLength) is lower, so a direct API
- * call still meets only that floor until the server enforces the same policy
- * (#3888).
+ * `obPwBits`): at least 12 characters, one symbol, one digit. It comes from
+ * `@oxagen/auth/password-policy`, the same rule the server enforces on
+ * sign-up, reset, and change, so a direct API call cannot set a password these
+ * screens refuse (#3888).
  */
-const PASSWORD_MIN = 12;
-const PASSWORD_MAX = 128;
-const HAS_SYMBOL = /[^A-Za-z0-9]/;
-const HAS_DIGIT = /[0-9]/;
-
-/** The three requirements in the order the screens list them, each true once the value meets it. */
-export function passwordRequirements(value: string): {
-  length: boolean;
-  symbol: boolean;
-  digit: boolean;
-} {
-  return {
-    length: value.length >= PASSWORD_MIN,
-    symbol: HAS_SYMBOL.test(value),
-    digit: HAS_DIGIT.test(value),
-  };
-}
+export { passwordRequirements };
 
 /** How many of the meter's four segments are lit: one per four characters (mockups `obPwBits`). */
 export function passwordMeterScore(value: string): number {

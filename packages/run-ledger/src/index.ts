@@ -330,6 +330,7 @@ export {
   RunEventIntegrityError,
   RunEventSequenceGapError,
   AttemptNotWritableError,
+  RunNotWritableError,
   RunStoreStateError,
   isRunSpecValidationError,
   isRunSpecDigestMismatchError,
@@ -341,7 +342,9 @@ export {
   isRunEventIntegrityError,
   isRunEventSequenceGapError,
   isAttemptNotWritableError,
+  isRunNotWritableError,
   isRunStoreStateError,
   type RunSpecIssue,
   type AttemptRejectionReason,
+  type RunNotWritableReason,
 } from "./run-errors";

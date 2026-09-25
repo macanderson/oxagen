@@ -6,7 +6,8 @@
 // account is waiting.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import { resendVerification } from "./actions";
+import type { AuthOutcomeKey } from "./auth-errors";
+import { liveResendVerification } from "./auth-client";
 import {
   type AuthErrorKey,
   ResendVerificationSchema,
@@ -30,7 +31,7 @@ export function VerifyPanel({
   const [error, setError] = useState<AuthErrorKey | null>(null);
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
-  const [unavailable, setUnavailable] = useState(false);
+  const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,7 +40,7 @@ export function VerifyPanel({
       email: formText(new FormData(event.currentTarget), "email"),
     });
     setSent(false);
-    setUnavailable(false);
+    setOutcome(null);
     if (!parsed.success) {
       setError(fieldErrors(parsed.error).email ?? "emailInvalid");
       return;
@@ -47,13 +48,14 @@ export function VerifyPanel({
     setError(null);
     setPending(true);
     try {
-      const result = await resendVerification({ ...parsed.data, next });
+      // Any address reads as sent. Only Better Auth's rate limit shows.
+      const result = await liveResendVerification({ ...parsed.data, next });
       if (result.ok) setSent(true);
-      else setError(result.fields?.email ?? "emailInvalid");
+      else setOutcome(result.outcome);
     } catch {
-      // A thrown action (network, server down) reads as unavailable, as on
+      // A thrown call (network, server down) reads as unavailable, as on
       // the other sign-in forms, instead of an unhandled rejection.
-      setUnavailable(true);
+      setOutcome("unavailable");
     } finally {
       setPending(false);
     }
@@ -64,11 +66,8 @@ export function VerifyPanel({
       {expired ? (
         <AuthAlert testId="verify-expired" message={t("verify.expired")} />
       ) : null}
-      {unavailable ? (
-        <AuthAlert
-          testId="verify-outcome"
-          message={t("outcomes.unavailable")}
-        />
+      {outcome ? (
+        <AuthAlert testId="verify-outcome" message={t(`outcomes.${outcome}`)} />
       ) : null}
       {sent ? (
         <p
