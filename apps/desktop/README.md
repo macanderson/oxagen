@@ -19,7 +19,7 @@ to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.h
   ([`apps/api`](../api/README.md)); the house tokens and fonts
   ([`@oxagen/ui`](../../packages/ui/README.md)).
 - **Depends on:** `@oxagen/ui`, for `styles/house-tokens.css` and
-  `styles/fonts/space-grotesk.css` (`src/styles.css`). The `tacho` and
+  `styles/house-fonts.css` (`src/styles.css`). The `tacho` and
   `oxagen` binaries are staged into the bundle by `scripts/sidecars.mjs`, not
   imported.
 - **Used by:** no workspace package imports it. It ships as a signed desktop
