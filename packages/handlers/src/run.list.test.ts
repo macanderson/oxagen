@@ -727,6 +727,17 @@ describe("list_runs queries name the tenant", () => {
     expect(query.sql).not.toContain("model.engine_call_completed");
   });
 
+  it("counts a model call with no turn index as hiding the turn count", () => {
+    // An engine call's payload is inline and names no `turn_index`. Testing
+    // for a null payload alone listed such a run with zero turns, while the
+    // seal's rollup (`deriveSealRollup`) records `null` for the same rows, so
+    // the count changed when compaction ran (#3372, finding 4).
+    const { sql } = ledgerRollupQuery(db, SCOPE, [RUN]).toSQL();
+    expect(sql).toMatch(
+      /count\(\*\) filter \(where "agent"\."agent_run_events"\."event_type" in \(.*\) and \("agent"\."agent_run_events"\."payload_inline" is null or "agent"\."agent_run_events"\."payload_inline"->>'turn_index' is null\)\)/,
+    );
+  });
+
   it("a different scope binds different tenant ids (negative)", () => {
     const query = ledgerPageQuery(db, OTHER_WORKSPACE, page).toSQL();
     expect(query.params).not.toContain(SCOPE.workspaceId);

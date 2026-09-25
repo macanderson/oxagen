@@ -5,6 +5,7 @@
  * records what it was asked; the verdict and witness-link queries run against
  * Postgres in packages/handlers/src/lib/proof.pg.test.ts.
  */
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 import {
   ZERO_TOKENS,
@@ -13,6 +14,8 @@ import {
   type RunTotalsRecord,
 } from "./cost-rollup";
 import {
+  LEDGER_CALL_HIDES_TURN,
+  LEDGER_TOOL_NAME,
   rebuildRunTotals,
   reviveBreakdown,
   serializeBreakdown,
@@ -224,6 +227,30 @@ describe("an in-app assistant run (#4167)", () => {
       "claude-sonnet-5",
     ]);
     expect(written).toHaveLength(1);
+  });
+});
+
+describe("what a ledger run's events are read for (#3372)", () => {
+  const render = (fragment: Parameters<PgDialect["sqlToQuery"]>[0]) =>
+    new PgDialect().sqlToQuery(fragment).sql;
+  const PAYLOAD = '"agent"."agent_run_events"."payload_inline"';
+
+  it("names an assistant tool call by `tool_name` when it has no `capability_name`", () => {
+    // `tool.engine_call_completed` stores its name in `tool_name`. Reading
+    // `capability_name` alone counted the call in `toolCalls` and left it
+    // out of `breakdown.tools`.
+    expect(render(LEDGER_TOOL_NAME)).toBe(
+      `coalesce(${PAYLOAD}->>'capability_name', ${PAYLOAD}->>'tool_name')`,
+    );
+  });
+
+  it("counts a model call with no turn index as hiding the turn count", () => {
+    // An engine call's payload is inline and names no `turn_index`, so a
+    // null-payload test alone reported `turns: 0` where the seal's rollup
+    // records `null`.
+    expect(render(LEDGER_CALL_HIDES_TURN)).toBe(
+      `(${PAYLOAD} is null or ${PAYLOAD}->>'turn_index' is null)`,
+    );
   });
 });
 

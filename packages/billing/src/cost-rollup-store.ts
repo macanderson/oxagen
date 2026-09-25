@@ -68,6 +68,26 @@ const TOOL_CALL_TYPES = [...TOOL_CALL_EVENT_TYPES];
 
 const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
+
+/**
+ * A ledger model call hides the run's turn count when its payload is
+ * encrypted or names no `turn_index`, which an engine call's schema never
+ * does. The seal's rollup (`deriveSealRollup`) and the Runs list read the
+ * field the same way, so a run's turns do not change when compaction swaps
+ * its rows for the seal (#3372).
+ */
+export const LEDGER_CALL_HIDES_TURN = sql`(${events.payloadInline} is null or ${events.payloadInline}->>'turn_index' is null)`;
+
+/**
+ * A ledger tool call's name, under either payload's name for it:
+ * `capability_name` on `tool.call_completed`, `tool_name` on
+ * `tool.engine_call_completed`. Reading the first alone gave every assistant
+ * tool call a null name, so it counted toward `toolCalls` and was left out
+ * of `breakdown.tools` (#3372).
+ */
+export const LEDGER_TOOL_NAME = sql<
+  string | null
+>`coalesce(${events.payloadInline}->>'capability_name', ${events.payloadInline}->>'tool_name')`;
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
 const principals = schema.principals;
@@ -152,7 +172,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
               Number,
             ),
           opaqueModelCalls:
-            sql<number>`(select count(*) from ${events} where ${events.runId} = ${runs.id} and ${inArray(events.eventType, MODEL_CALL_TYPES)} and ${events.payloadInline} is null)::int`.mapWith(
+            sql<number>`(select count(*) from ${events} where ${events.runId} = ${runs.id} and ${inArray(events.eventType, MODEL_CALL_TYPES)} and ${LEDGER_CALL_HIDES_TURN})::int`.mapWith(
               Number,
             ),
         })
@@ -296,7 +316,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
   return null;
 }
 
-/** A ledger run's tool calls: its `tool.call_completed` events; an encrypted payload names no tool. */
+/** A ledger run's tool calls, under either spelling; an encrypted payload names no tool. */
 async function readLedgerToolCalls(args: {
   orgId: string;
   workspaceId: string;
@@ -305,7 +325,7 @@ async function readLedgerToolCalls(args: {
   const rows = await withSystemDb((tx) =>
     tx
       .select({
-        name: sql<string | null>`${events.payloadInline}->>'capability_name'`,
+        name: LEDGER_TOOL_NAME,
       })
       .from(events)
       .where(
