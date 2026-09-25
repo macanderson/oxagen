@@ -155,6 +155,8 @@ async function renderTab(setup: Setup = {}) {
       body: setup.body ?? null,
     },
     metrics: runMetrics({ run, cost, transcript: everything }),
+    // The tab lists frames; the run at steps is the Transcript tab's.
+    transcript: everything,
     everything,
     cost,
     outputs: ok(runOutputs()),

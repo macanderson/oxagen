@@ -132,10 +132,28 @@ type Spec = {
   label: string;
   kinds: TranscriptEntry["kinds"];
   turn: number | null;
+  /** What the server's fold states the frame is. */
+  node: TranscriptEntry["node"];
+  /** The call a decision was made on, as the server states it. */
+  subject?: string;
+  recall?: TranscriptEntry["recall"];
   text?: string | null;
   request?: boolean;
   decision?: string;
   usage?: TranscriptUsage;
+};
+
+/** What the server reads from the manifest this fixture seals (`recallOf`). */
+const MANIFEST_RECALL: NonNullable<TranscriptEntry["recall"]> = {
+  unit: "items",
+  count: 3,
+  tokens: 1340,
+  cut: 5,
+  items: [
+    { kind: "record", label: "ctx.release.never-merge", tokens: 188 },
+    { kind: "policy", label: "gate.rg_0093", tokens: 33 },
+    { kind: "record", label: "ctx.release.notes-format", tokens: 214 },
+  ],
 };
 
 /**
@@ -155,6 +173,7 @@ export function evidenceTranscript(
       label: "agent_start",
       kinds: [],
       turn: null,
+      node: "control",
     },
     {
       seq: 1,
@@ -163,6 +182,8 @@ export function evidenceTranscript(
       label: "steering.manifest",
       kinds: ["recall"],
       turn: null,
+      node: "recall",
+      recall: manifest === null ? null : MANIFEST_RECALL,
       text: manifest,
     },
     {
@@ -172,6 +193,7 @@ export function evidenceTranscript(
       label: "context.assembled",
       kinds: ["recall"],
       turn: null,
+      node: "recall",
       text: null,
     },
     {
@@ -179,8 +201,9 @@ export function evidenceTranscript(
       type: "turn_start",
       kind: "frame",
       label: "turn_start",
-      kinds: [],
+      kinds: ["prompt"],
       turn: 1,
+      node: "prompt",
       text: "Cut 4.11.0 release notes. Task a-intel/platform#482.",
     },
     {
@@ -188,8 +211,9 @@ export function evidenceTranscript(
       type: "model.request",
       kind: "model_call",
       label: "anthropic/claude-opus-5",
-      kinds: ["prompt"],
+      kinds: [],
       turn: 1,
+      node: "model",
       request: true,
     },
     {
@@ -199,6 +223,7 @@ export function evidenceTranscript(
       label: "anthropic/claude-opus-5",
       kinds: ["responses", "usage"],
       turn: 1,
+      node: "model",
       text: "I will list the merged pull requests.",
       usage: USAGE,
     },
@@ -209,6 +234,7 @@ export function evidenceTranscript(
       label: "github__list_pull_requests",
       kinds: ["tools"],
       turn: 1,
+      node: "tool",
       request: true,
     },
     {
@@ -218,6 +244,8 @@ export function evidenceTranscript(
       label: "allow github__list_pull_requests",
       kinds: ["policy"],
       turn: 1,
+      node: "policy",
+      subject: "github__list_pull_requests",
       decision: "allow",
     },
     {
@@ -227,6 +255,7 @@ export function evidenceTranscript(
       label: "github__list_pull_requests ok",
       kinds: ["tools"],
       turn: 1,
+      node: "tool",
       text: '{"merged":38}',
     },
     {
@@ -236,6 +265,7 @@ export function evidenceTranscript(
       label: "github__create_release",
       kinds: ["tools"],
       turn: 1,
+      node: "tool",
       request: true,
     },
     {
@@ -245,6 +275,8 @@ export function evidenceTranscript(
       label: "ask github__create_release",
       kinds: ["policy"],
       turn: 1,
+      node: "policy",
+      subject: "github__create_release",
       decision: "ask",
     },
   ];
@@ -264,6 +296,10 @@ export function evidenceTranscript(
       label: spec.label,
       kinds: spec.kinds,
       turn: spec.turn,
+      node: spec.node,
+      subject: spec.subject ?? null,
+      recall: spec.recall ?? null,
+      outcome: null,
       frames: 1,
       usage: spec.usage ?? null,
       request: spec.request === true ? body : null,
@@ -287,6 +323,86 @@ export function evidenceTranscript(
     entries,
     cursor: null,
     complete: true,
+    counts: {
+      kinds: {
+        prompt: 1,
+        responses: 1,
+        thinking: 0,
+        tools: 3,
+        policy: 2,
+        usage: 1,
+        recall: 2,
+        seal: 0,
+        errors: 0,
+      },
+      entries: 9,
+      errors: 0,
+      policy: 2,
+    },
+    figures: null,
+    search: null,
+    ...overrides,
+  };
+}
+
+/**
+ * The same release run read at `steps`, as the server folds it: the model
+ * call's request and the response that reported its usage are one entry.
+ */
+export function evidenceSteps(
+  overrides: Partial<RunTranscript> = {},
+): RunTranscript {
+  const step = (seq: number, rest: Partial<TranscriptEntry>) =>
+    transcriptEntry({
+      seq: String(seq),
+      endSeq: String(seq),
+      at: at(-3600 + seq * 2),
+      elapsedMs: seq * 2000,
+      frames: 1,
+      cost: null,
+      cumulativeCost: null,
+      ...rest,
+    });
+  return {
+    zoom: "steps",
+    kinds: [],
+    entries: [
+      step(3, {
+        kind: "frame",
+        type: "turn_start",
+        label: "turn_start",
+        node: "prompt",
+        kinds: ["prompt"],
+        outcome: null,
+        request: transcriptBody({
+          seq: "3",
+          type: "turn_start",
+          text: "Cut 4.11.0 release notes. Task a-intel/platform#482.",
+        }),
+        response: null,
+      }),
+      step(4, {
+        endSeq: "5",
+        frames: 2,
+        kind: "model_call",
+        type: "model.request",
+        label: "anthropic/claude-opus-5",
+        node: "model",
+        kinds: ["responses", "usage"],
+        usage: USAGE,
+        request: transcriptBody({ seq: "4", type: "model.request" }),
+        response: transcriptBody({
+          seq: "5",
+          type: "model.response",
+          text: "I will list the merged pull requests.",
+        }),
+      }),
+    ],
+    cursor: null,
+    complete: true,
+    counts: null,
+    figures: null,
+    search: null,
     ...overrides,
   };
 }
@@ -418,6 +534,7 @@ export function tabProps({
   source,
   run = runRow(),
   everything = readOk(evidenceTranscript()),
+  transcript = readOk(evidenceSteps()),
   outputs = readOk(runOutputs()),
   work = readOk(runWork()),
   body = null,
@@ -426,6 +543,7 @@ export function tabProps({
   source: DataSource;
   run?: RunRow;
   everything?: Read<RunTranscript>;
+  transcript?: Read<RunTranscript>;
   outputs?: RunTabProps["outputs"];
   work?: Read<RunWork>;
   /** `?body=`, the frame the page has open. */
@@ -439,7 +557,8 @@ export function tabProps({
     detail: runDetail({ run }),
     place: { org: ctx.orgSlug, ws: ctx.wsSlug, runId: run.id },
     view: { kinds: [], frames: null, body },
-    metrics: runMetrics({ run, cost, transcript: everything }),
+    metrics: runMetrics({ run, cost, transcript }),
+    transcript,
     everything,
     cost,
     outputs,

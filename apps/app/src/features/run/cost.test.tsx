@@ -134,6 +134,7 @@ function props({
     place: { org: "acme", ws: "core-platform", runId: run.id },
     view: { kinds: [], frames: null, body: null },
     metrics: runMetrics({ run, cost, transcript }),
+    transcript,
     everything: transcript,
     cost,
     outputs: readOk(runOutputs()),

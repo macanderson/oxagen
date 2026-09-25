@@ -23,7 +23,7 @@ import { ReadFailure } from "@/ui/read-failure";
 import { Note, NoValue, Panel, PanelBody } from "./parts";
 import { entriesOf } from "./recorded-entries";
 import type { Place, RunTabProps } from "./tab-props";
-import { decisionSubject, entryKey } from "./transcript-model";
+import { entryKey } from "./transcript-rows";
 import { isWhole } from "./whole-transcript";
 
 /** A frame's seq, linked to the frame player when it is on the run's own chain. */
@@ -131,10 +131,11 @@ function Unrecorded() {
 
 function row(entry: TranscriptEntry, place: Place): ListRow {
   const decision = entry.decision;
-  // A gate frame that names no call (`policy deny`) says what was decided and
-  // not about what, so the cell says the call is not recorded rather than
-  // printing the frame's label as if it were one.
-  const call = decisionSubject(entry);
+  // The call the decision was made on, as the server states it. A gate frame
+  // that names no call (`policy deny`) says what was decided and not about
+  // what, so the cell says the call is not recorded rather than printing the
+  // frame's label as if it were one.
+  const call = entry.subject;
   return {
     key: entryKey(entry),
     data: { "data-testid": "run-policy-decision" },

@@ -46,7 +46,16 @@ export type RunTabProps = {
   place: Place;
   view: RunView;
   metrics: RunMetrics;
-  /** The whole-run transcript at `everything`, read to its end. */
+  /**
+   * The whole-run transcript at `steps` with whole bodies, read to its end:
+   * the Transcript tab's rows, and the counts and figures the page draws.
+   */
+  transcript: Read<RunTranscript>;
+  /**
+   * The run at `everything`, one entry per frame, for the tabs that list
+   * frames (Governed actions, Policy, Context). Read to its end when one of
+   * those tabs is open; otherwise one page, whose counts are the whole run's.
+   */
   everything: Read<RunTranscript>;
   cost: Read<RunCost>;
   outputs: Read<RunOutputs>;

@@ -83,3 +83,10 @@ fold, and the client fold introduced with #3345.
   and say so when a run passes it, as they did before.
 - A search can read every retained body of a run, so it is bounded per read
   and says what it left unsearched.
+- A chip selects what the Run page draws under it, so a chip's count in
+  `counts.kinds` is the count of what the chip shows. `prompt` is the
+  operator's prompt and no longer a model call's request, `responses` takes
+  a reply the harness reported with its words kept, `seal` is the run's own
+  stop rather than the chain's checkpoints and gaps, and `usage` takes token
+  counts reported without a cost. API and MCP callers that filtered on those
+  chips see the new selection.

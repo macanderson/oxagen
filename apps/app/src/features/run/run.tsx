@@ -4,14 +4,19 @@
 // side column, "The work", holds the Changes panel and the Outputs spine.
 //
 // The page makes the reads every part shares (the run, the whole-run
-// transcript, the cost rollup, the outputs, the work, the agent and the
-// approvals parked on the run), derives the figures once
-// (`runMetrics`), and hands the open tab the whole bundle. A tab's own heavy
+// transcript at `steps`, the cost rollup, the outputs, the work, the agent
+// and the approvals parked on the run), shapes the figures once
+// (`runMetrics`), and hands the open tab the whole bundle. The transcript is
+// folded and counted on the server (ADR-182): the tab counts are its
+// `counts`, and the figures its `figures`. The run at `everything`, one entry
+// per frame, is read to its end only for a tab that lists frames; any other
+// tab reads one page of it, for the counts its tabs carry. A tab's own heavy
 // read (the chain, a frame body) happens only when that tab is open.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
 import type { DataSource } from "@/data/ports";
+import type { TranscriptCounts } from "@/data/contracts/run";
 import { PAGE_FAILURES, readError } from "@/data/read";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
@@ -23,8 +28,7 @@ import { RunHeader } from "./header";
 import { IssuesCount } from "./issues-tab";
 import { runMetrics } from "./metrics";
 import { OutputsSpine } from "./outputs";
-import { isHarnessCheck } from "./policy-tab";
-import { ContextTab, entriesOf, IssuesTab, PolicyTab } from "./sections";
+import { ContextTab, IssuesTab, PolicyTab } from "./sections";
 import { RunDenied, RunEmpty, RunError, RunPending } from "./states";
 import { StatRow, SummaryPanel } from "./stats";
 import type { RunTabProps } from "./tab-props";
@@ -37,7 +41,6 @@ import {
   tabOf,
 } from "./tabs";
 import { parseKinds, TranscriptTab } from "./transcript";
-import { buildFeed } from "./transcript-model";
 import { readWholeTranscript } from "./whole-transcript";
 import { ChangesLoading, ChangesPanel } from "./work";
 import { readRunWork } from "./work-ci";
@@ -54,23 +57,28 @@ function Tabs({
   selected: Tab;
 }) {
   const t = useTranslations("run.tabs");
-  const { run, everything, metrics, view, place } = props;
-  // A count read from a transcript that stopped short of the run is a floor.
-  const floor = (count: number) =>
-    metrics.whole ? String(count) : t("atLeast", { count });
-  const policy = entriesOf(everything, "policy");
-  const recall = entriesOf(everything, "recall");
+  const { run, transcript, everything, metrics, view, place } = props;
+  // The server counts over every frame a read folded. A read that stopped at
+  // its frame cap counted a prefix of the run, so its count is a floor.
+  const countOf = (
+    read: typeof transcript,
+    pick: (counts: TranscriptCounts) => number,
+  ): string | undefined => {
+    if (!read.ok || read.value.counts === null) return undefined;
+    const count = pick(read.value.counts);
+    return read.value.complete ? String(count) : t("atLeast", { count });
+  };
+  const decisions =
+    everything.ok && everything.value.counts !== null
+      ? everything.value.counts.kinds.policy
+      : null;
   // A run with no policy decision has nothing governed to list: the tab is
   // the frame player, and it counts the frames.
-  const governed = policy !== null && policy.length > 0;
+  const governed = decisions !== null && decisions > 0;
   const figures: Record<Tab, TabFigure> = {
-    // The rows the Transcript tab opens with, which its header line counts
-    // as entries, so the tab and the line cannot disagree.
-    transcript: {
-      count: everything.ok
-        ? floor(buildFeed(everything.value.entries).length)
-        : undefined,
-    },
+    // The entries the Transcript tab draws, which its header line counts
+    // too, so the tab and the line cannot disagree.
+    transcript: { count: countOf(transcript, (counts) => counts.entries) },
     // The task reference now, and the issues the run's pull requests close
     // once GitHub answers; the table under the tab counts the same rows.
     issues: {
@@ -83,7 +91,10 @@ function Tabs({
       ),
     },
     actions: governed
-      ? { count: floor(policy.length), parked }
+      ? {
+          count: countOf(everything, (counts) => counts.kinds.policy),
+          parked,
+        }
       : { label: t("player"), count: String(run.frames), parked },
     cost: {
       count: metrics.cost === null ? undefined : <Money value={metrics.cost} />,
@@ -92,13 +103,10 @@ function Tabs({
     // The rows the Policy table lists: the harness's own checks fold below
     // it and are not counted here.
     policy: {
-      count:
-        policy === null
-          ? undefined
-          : floor(policy.filter((entry) => !isHarnessCheck(entry)).length),
+      count: countOf(everything, (counts) => counts.policy),
       parked,
     },
-    context: { count: recall === null ? undefined : floor(recall.length) },
+    context: { count: countOf(everything, (counts) => counts.kinds.recall) },
     chain: { count: t(`status.${run.sealedAt === null ? "live" : "sealed"}`) },
   };
   return (
@@ -229,8 +237,12 @@ export async function Run({
   // checks, diffs) streams inside the boundaries that draw it and cannot hold
   // the rest of the page.
   const work = readRunWork(ctx, source, run.id);
-  const [outputs, everything, cost, pending, agent, roster] = await Promise.all(
-    [
+  // The tabs that list the run's frames read them to their end. Every other
+  // tab needs only their counts, which one page carries whole.
+  const listsFrames =
+    selected === "actions" || selected === "policy" || selected === "context";
+  const [outputs, transcript, everything, cost, pending, agent, roster] =
+    await Promise.all([
       // A thrown outputs read folds to the Run page's own read error, so the
       // spine says the read failed rather than the page throwing.
       source.runs
@@ -241,7 +253,10 @@ export async function Run({
             PAGE_FAILURES.run.error.status,
           ),
         ),
-      readWholeTranscript(source, ctx, run.id, "everything"),
+      readWholeTranscript(source, ctx, run.id, "steps", { text: "full" }),
+      listsFrames
+        ? readWholeTranscript(source, ctx, run.id, "everything")
+        : source.runs.transcript(ctx, run.id, "everything", { limit: 1 }),
       source.runs.cost(ctx, run.id),
       source.approvals.pending(ctx, { runId: run.id }),
       agentSlug === null ? null : source.agents.get(ctx, agentSlug),
@@ -260,9 +275,8 @@ export async function Run({
                 : null,
             )
             .catch(() => null),
-    ],
-  );
-  const metrics = runMetrics({ run, cost, transcript: everything, now: at });
+    ]);
+  const metrics = runMetrics({ run, cost, transcript, now: at });
   const props: RunTabProps = {
     ctx,
     source,
@@ -271,6 +285,7 @@ export async function Run({
     place,
     view,
     metrics,
+    transcript,
     everything,
     cost,
     outputs,

@@ -1,7 +1,8 @@
 // The one transcript fold (ADR-182). The step rules here were the Run page's
-// (apps/app/src/features/run/transcript-model.test.ts) and the server's
-// (run-frames.test.ts) until the two folds became this one; their cases are
-// ported so the behaviour each pinned stays pinned where the rule now lives.
+// (the browser fold in `apps/app/src/features/run/transcript-model.ts`, since
+// removed) and the server's (run-frames.test.ts) until the two folds became
+// this one; their cases are ported so the behaviour each pinned stays pinned
+// where the rule now lives.
 import { describe, expect, it } from "vitest";
 import { NO_BODY } from "./frame-body";
 import {

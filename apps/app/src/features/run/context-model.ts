@@ -1,14 +1,16 @@
 // What the Context tab reads out of the whole-run transcript (mockup
 // `promptRow`, `runManifestPanel` and `contextTab`): the operator's first
-// prompt, the first model request and the input it reported, and the
+// prompt, the first model step and the input it reported, and the
 // `steering.manifest` frame the host sealed at the session's start.
 //
-// Pure, so each reading is tested without a render. Nothing here estimates a
-// token or splits a window: the window is not recorded block by block (G10),
-// and a figure the frames did not carry is null.
+// Pure, so each reading is tested without a render. Nothing here pairs,
+// counts or estimates: the server folds a model call's request and response
+// into one step and counts what a manifest put in front of the model
+// (ADR-182), the window is not recorded block by block (G10), and a figure
+// the record did not carry is null.
 import { z } from "zod";
 import type { TranscriptEntry } from "@/data/contracts/run";
-import { soleBody } from "./transcript-model";
+import { soleBody } from "./transcript-rows";
 
 /** The frame type the host seals the assembler's manifest into (ADR-093, ADR-144). */
 const MANIFEST_TYPE = "steering.manifest";
@@ -36,39 +38,27 @@ export function firstPrompt(
 }
 
 export type FirstRequest = {
-  entry: TranscriptEntry;
+  /** The frame the model step opens on, and its type, for its link. */
+  seq: string;
+  type: string;
   /** Every input class the call reported, summed; null when a class was not reported. */
   input: number | null;
   /** The part of that input read from cache; null when not reported. */
   cached: number | null;
-  /** The entry that reported the usage; null when none did. */
-  usageSeq: string | null;
 };
 
 /**
- * The run's first model call, and the input it reported. The request frame
- * carries no usage; the response that answers it does. The usage is taken
- * from the first model frame after the request that reports any, unless a
- * second request opened first, so one call's figures are never another's.
+ * The run's first model step on its own chain, and the input it reported.
+ * `steps` is the transcript at `steps`, where the server folded the request
+ * and the response that reported its usage into one entry, so no reading
+ * here pairs one call's request with another's figures.
  */
 export function firstRequest(
-  entries: readonly TranscriptEntry[],
+  steps: readonly TranscriptEntry[],
 ): FirstRequest | null {
-  const start = entries.findIndex(
-    (entry) => own(entry) && entry.kind === "model_call",
-  );
-  const request = entries[start];
-  if (request === undefined) return null;
-  let reported: TranscriptEntry | null = null;
-  for (const entry of entries.slice(start)) {
-    if (!own(entry) || entry.kind !== "model_call") continue;
-    if (entry !== request && entry.type === request.type) break;
-    if (entry.usage !== null && entry.usage !== undefined) {
-      reported = entry;
-      break;
-    }
-  }
-  const usage = reported?.usage ?? null;
+  const step = steps.find((entry) => own(entry) && entry.node === "model");
+  if (step === undefined) return null;
+  const usage = step.usage ?? null;
   const input =
     usage === null ||
     usage.inputUncached === null ||
@@ -77,10 +67,10 @@ export function firstRequest(
       ? null
       : usage.inputUncached + usage.cacheRead + usage.cacheWrite;
   return {
-    entry: request,
+    seq: step.seq,
+    type: step.type,
     input,
     cached: usage?.cacheRead ?? null,
-    usageSeq: reported?.seq ?? null,
   };
 }
 
@@ -119,22 +109,6 @@ export function parseManifest(text: string): ManifestBody | null {
   }
   const parsed = ManifestBody.safeParse(json);
   return parsed.success ? parsed.data : null;
-}
-
-type ManifestTally = {
-  rendered: number;
-  cut: number;
-  /** The rendered items' tokens, summed from the items listed. */
-  tokens: number;
-};
-
-export function tallyOf(manifest: ManifestBody): ManifestTally {
-  const rendered = manifest.items.filter((item) => item.outcome === "included");
-  return {
-    rendered: rendered.length,
-    cut: manifest.items.length - rendered.length,
-    tokens: rendered.reduce((sum, item) => sum + item.tokens, 0),
-  };
 }
 
 /** Where a manifest's items came from, or why they could not be read. */

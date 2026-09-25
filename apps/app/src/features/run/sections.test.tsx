@@ -37,6 +37,11 @@ const policyEntry = (seq: string, chainRef?: string) =>
     kind: "frame",
     kinds: ["policy"],
     label: "deny Bash",
+    // The call the decision was made on, as the server states it; the page
+    // reads no label.
+    node: "policy",
+    subject: "Bash",
+    outcome: "denied",
     decision: {
       seq,
       ...(chainRef === undefined ? {} : { chainRef }),

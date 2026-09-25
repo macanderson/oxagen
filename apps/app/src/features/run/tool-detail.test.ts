@@ -1,7 +1,8 @@
+import { toolFamilyOf } from "@oxagen/run-ledger";
 import { describe, expect, it } from "vitest";
 import {
+  callDetail,
   compactArgs,
-  groupOf,
   parseBody,
   shortName,
   shortPath,
@@ -13,6 +14,15 @@ import {
 /** The body as the recorder writes it: JSON, on one line. */
 function body(value: unknown): string {
   return JSON.stringify(value);
+}
+
+/**
+ * One body read the way the transcript reads it, with the family the server
+ * states for the tool's name (`toolFamilyOf`, ADR-182). The page keeps no
+ * family table, so the tests read the one the server does.
+ */
+function read(name: string | null, text: string | null) {
+  return toolDetail(name, toolFamilyOf(name ?? ""), text);
 }
 
 describe("parseBody", () => {
@@ -68,33 +78,6 @@ describe("splitBody", () => {
   });
 });
 
-describe("groupOf", () => {
-  it("groups by name, whatever its case", () => {
-    expect(groupOf("Bash")).toBe("shell");
-    expect(groupOf("bash")).toBe("shell");
-    expect(groupOf("Read")).toBe("read");
-    expect(groupOf("Edit")).toBe("edit");
-    expect(groupOf("MultiEdit")).toBe("edit");
-    expect(groupOf("Write")).toBe("create");
-    expect(groupOf("Grep")).toBe("search");
-    expect(groupOf("Glob")).toBe("search");
-    expect(groupOf("WebFetch")).toBe("web");
-    expect(groupOf("Skill")).toBe("skill");
-    expect(groupOf("Task")).toBe("agent");
-    expect(groupOf("TodoWrite")).toBe("plan");
-  });
-
-  it("puts every MCP tool in the mcp group whatever it is called", () => {
-    expect(groupOf("mcp__github__list_issues")).toBe("mcp");
-    expect(groupOf("mcp__anything__read")).toBe("mcp");
-  });
-
-  it("falls back to the generic group", () => {
-    expect(groupOf("SomethingNobodyKnows")).toBe("tool");
-    expect(groupOf("")).toBe("tool");
-  });
-});
-
 describe("shortPath", () => {
   it("keeps the last two segments of a long path", () => {
     expect(shortPath("/Users/x/Projects/oxagen/apps/app/src/kernel.ts")).toBe(
@@ -120,22 +103,16 @@ describe("shortName", () => {
       "github__list_pull_requests",
     );
   });
-
-  it("groups a prefixed tool by its own name, and an MCP tool as MCP", () => {
-    expect(groupOf("claude_code__Bash")).toBe("shell");
-    expect(groupOf("write_file")).toBe("create");
-    expect(groupOf("mcp__github__get_file_contents")).toBe("mcp");
-  });
 });
 
 describe("toolDetail", () => {
   it("returns null when nothing names the tool", () => {
-    expect(toolDetail(null, null)).toBeNull();
-    expect(toolDetail(null, body({ input: { command: "ls" } }))).toBeNull();
+    expect(read(null, null)).toBeNull();
+    expect(read(null, body({ input: { command: "ls" } }))).toBeNull();
   });
 
   it("takes the name from the body when the frame carried none", () => {
-    const detail = toolDetail(
+    const detail = read(
       null,
       body({ tool_use: { name: "Bash", input: { command: "ls -la" } } }),
     );
@@ -145,13 +122,30 @@ describe("toolDetail", () => {
 
   it("reads a value already parsed the same way (a model's tool_use block)", () => {
     expect(
-      toolDetailOf("Grep", { input: { pattern: "TODO", path: "/repo/src" } }),
-    ).toMatchObject({ headline: "TODO", detail: "in /repo/src" });
+      toolDetailOf(
+        "Grep",
+        "search",
+        { pattern: "TODO", path: "/repo/src" },
+        "3 matches",
+      ),
+    ).toMatchObject({
+      headline: "TODO",
+      detail: "in /repo/src",
+      output: "3 matches",
+    });
+  });
+
+  it("reads a body by the family it is given, not by its name", () => {
+    // The family is the server's; a tool this page never heard of reads by
+    // the family the record states.
+    expect(
+      toolDetail("run_tests", "shell", body({ input: { command: "pnpm t" } })),
+    ).toMatchObject({ name: "run_tests", group: "shell", headline: "pnpm t" });
   });
 
   describe("shell", () => {
     it("heads the line with the command and keeps the command whole as the call", () => {
-      const detail = toolDetail(
+      const detail = read(
         "Bash",
         body({ input: { command: "git status", description: "Tree" } }),
       );
@@ -168,7 +162,7 @@ describe("toolDetail", () => {
     });
 
     it("heads a multiline command with its first line", () => {
-      const detail = toolDetail(
+      const detail = read(
         "Bash",
         body({ input: { command: "cd app\npnpm test" } }),
       );
@@ -178,7 +172,7 @@ describe("toolDetail", () => {
     });
 
     it("falls back to the description when no command was recorded", () => {
-      const detail = toolDetail(
+      const detail = read(
         "Bash",
         body({ input: { description: "List files" } }),
       );
@@ -191,7 +185,7 @@ describe("toolDetail", () => {
 
   describe("a command's output", () => {
     const out = (output: unknown) =>
-      toolDetail("Bash", body({ input: { command: "x" }, output }))?.output;
+      read("Bash", body({ input: { command: "x" }, output }))?.output;
 
     it("reads a bare string, and nothing for an empty one", () => {
       expect(out("a\nb")).toBe("a\nb");
@@ -225,7 +219,7 @@ describe("toolDetail", () => {
 
   describe("read", () => {
     it("heads the line with the file and says which lines were read", () => {
-      const detail = toolDetail(
+      const detail = read(
         "Read",
         body({
           input: {
@@ -244,28 +238,27 @@ describe("toolDetail", () => {
 
     it("says an open-ended range, and nothing when none was recorded", () => {
       expect(
-        toolDetail("Read", body({ input: { file_path: "a.ts", offset: 4 } }))
-          ?.detail,
+        read("Read", body({ input: { file_path: "a.ts", offset: 4 } }))?.detail,
       ).toBe("lines 5+");
       expect(
-        toolDetail("Read", body({ input: { file_path: "a.ts" } }))?.detail,
+        read("Read", body({ input: { file_path: "a.ts" } }))?.detail,
       ).toBeNull();
     });
 
     it("leaves the headline empty when the body recorded no path", () => {
-      expect(toolDetail("Read", body({ input: {} }))?.headline).toBeNull();
+      expect(read("Read", body({ input: {} }))?.headline).toBeNull();
     });
 
     it("reads a delete the same way it reads a read", () => {
       expect(
-        toolDetail("rm", body({ input: { path: "/repo/tmp/x.log" } })),
+        read("rm", body({ input: { path: "/repo/tmp/x.log" } })),
       ).toMatchObject({ group: "delete", headline: "…/tmp/x.log" });
     });
   });
 
   describe("edit", () => {
     it("draws the change as a diff against the file it changed", () => {
-      const detail = toolDetail(
+      const detail = read(
         "Edit",
         body({
           input: {
@@ -286,7 +279,7 @@ describe("toolDetail", () => {
     });
 
     it("gives a MultiEdit one diff per replacement, in order, and skips an entry that is not one", () => {
-      const detail = toolDetail(
+      const detail = read(
         "MultiEdit",
         body({
           input: {
@@ -303,7 +296,7 @@ describe("toolDetail", () => {
     });
 
     it("records a one-sided replacement as the diff it is", () => {
-      const detail = toolDetail(
+      const detail = read(
         "Edit",
         body({ input: { file_path: "a.ts", new_string: "added" } }),
       );
@@ -312,18 +305,16 @@ describe("toolDetail", () => {
 
     it("draws nothing for an edit that recorded neither side, and says when no path was recorded", () => {
       expect(
-        toolDetail("Edit", body({ input: { file_path: "a.ts" } }))?.diffs,
+        read("Edit", body({ input: { file_path: "a.ts" } }))?.diffs,
       ).toEqual([]);
       expect(
-        toolDetail(
-          "Edit",
-          body({ input: { old_string: "a", new_string: "b" } }),
-        )?.diffs[0]?.path,
+        read("Edit", body({ input: { old_string: "a", new_string: "b" } }))
+          ?.diffs[0]?.path,
       ).toBe("(no path recorded)");
     });
 
     it("reads a notebook edit as an edit", () => {
-      const detail = toolDetail(
+      const detail = read(
         "NotebookEdit",
         body({
           input: { notebook_path: "n.ipynb", old_string: "x", new_string: "y" },
@@ -336,7 +327,7 @@ describe("toolDetail", () => {
 
   describe("create", () => {
     it("reads a new file as a diff of additions", () => {
-      const detail = toolDetail(
+      const detail = read(
         "Write",
         body({
           input: {
@@ -355,7 +346,7 @@ describe("toolDetail", () => {
 
     it("draws no diff for a create that recorded no contents (negative)", () => {
       expect(
-        toolDetail("Write", body({ input: { file_path: "a.ts" } }))?.diffs,
+        read("Write", body({ input: { file_path: "a.ts" } }))?.diffs,
       ).toEqual([]);
     });
   });
@@ -363,22 +354,19 @@ describe("toolDetail", () => {
   describe("a search, a fetch, a skill, a subagent and a plan", () => {
     it("heads a search with its pattern and says where it looked", () => {
       expect(
-        toolDetail(
-          "Grep",
-          body({ input: { pattern: "TODO", path: "/r/a/src" } }),
-        ),
+        read("Grep", body({ input: { pattern: "TODO", path: "/r/a/src" } })),
       ).toMatchObject({
         group: "search",
         headline: "TODO",
         detail: "in …/a/src",
       });
       expect(
-        toolDetail("Glob", body({ input: { pattern: "**/*.ts" } })),
+        read("Glob", body({ input: { pattern: "**/*.ts" } })),
       ).toMatchObject({ headline: "**/*.ts", detail: null });
     });
 
     it("heads a fetch with its URL, and keeps what it was asked in the call", () => {
-      const detail = toolDetail(
+      const detail = read(
         "WebFetch",
         body({ input: { url: "https://x.dev", prompt: "Summarize" } }),
       );
@@ -388,7 +376,7 @@ describe("toolDetail", () => {
 
     it("prints a skill's version once, and only when the record carried one", () => {
       expect(
-        toolDetail(
+        read(
           "Skill",
           body({ input: { skill: "file-inbox", version: "v1.2" } }),
         ),
@@ -398,13 +386,13 @@ describe("toolDetail", () => {
         detail: "v1.2",
       });
       expect(
-        toolDetail("Skill", body({ input: { skill: "file-inbox" } }))?.detail,
+        read("Skill", body({ input: { skill: "file-inbox" } }))?.detail,
       ).toBeNull();
     });
 
     it("names a subagent by what it was asked to do, and credits its type beside it", () => {
       expect(
-        toolDetail(
+        read(
           "Task",
           body({
             input: {
@@ -420,27 +408,24 @@ describe("toolDetail", () => {
         detail: "Explore",
       });
       expect(
-        toolDetail("Task", body({ input: { subagent_type: "Explore" } })),
+        read("Task", body({ input: { subagent_type: "Explore" } })),
       ).toMatchObject({ headline: "Explore", detail: null });
     });
 
     it("counts a plan's items, or reads its first line when it is prose", () => {
       expect(
-        toolDetail("TodoWrite", body({ input: { todos: [{}, {}, {}] } }))
-          ?.headline,
+        read("TodoWrite", body({ input: { todos: [{}, {}, {}] } }))?.headline,
       ).toBe("3 items");
       expect(
-        toolDetail(
-          "ExitPlanMode",
-          body({ input: { plan: "Step one\nStep two" } }),
-        )?.headline,
+        read("ExitPlanMode", body({ input: { plan: "Step one\nStep two" } }))
+          ?.headline,
       ).toBe("Step one");
     });
   });
 
   describe("a tool with no shape of its own", () => {
     it("heads the line with its arguments in order, the first bare and the rest by name", () => {
-      const detail = toolDetail(
+      const detail = read(
         "mcp__github__list_pull_requests",
         body({
           input: {
@@ -464,7 +449,7 @@ describe("toolDetail", () => {
     });
 
     it("reads a multi-line first value as the first line of something longer", () => {
-      const detail = toolDetail(
+      const detail = read(
         "run_query",
         body({ input: { sql: "select 1\nfrom t" } }),
       );
@@ -473,7 +458,7 @@ describe("toolDetail", () => {
     });
 
     it("fills the headline from every argument when none is a scalar, rather than leave it blank (#4116)", () => {
-      const detail = toolDetail(
+      const detail = read(
         "mcp__linear__search",
         body({
           input: { filter: { state: "open", team: "core" }, ids: [1, 2] },
@@ -486,17 +471,16 @@ describe("toolDetail", () => {
     });
 
     it("fills the headline of a shaped tool whose reading found nothing, from what it kept", () => {
-      expect(toolDetail("Read", body({ input: { limit: 20 } }))?.headline).toBe(
+      expect(read("Read", body({ input: { limit: 20 } }))?.headline).toBe(
         "limit 20",
       );
       expect(
-        toolDetail("Task", body({ input: { prompt: "Look\ncloser" } }))
-          ?.headline,
+        read("Task", body({ input: { prompt: "Look\ncloser" } }))?.headline,
       ).toBe("prompt Look");
     });
 
     it("has no headline and no call for an input that carried nothing (negative)", () => {
-      const detail = toolDetail("run_query", body({ input: {} }));
+      const detail = read("run_query", body({ input: {} }));
       expect(detail?.headline).toBeNull();
       expect(detail?.raw).toBeNull();
     });
@@ -520,5 +504,72 @@ describe("compactArgs", () => {
     expect(compactArgs(null)).toBeNull();
     expect(compactArgs({})).toBeNull();
     expect(compactArgs({ empty: "", none: {}, list: [] })).toBeNull();
+  });
+});
+
+describe("callDetail", () => {
+  // #3375: a tool entry's request is what the call was made with and its
+  // response is what came back. Neither stands in for the other.
+  it("reads the input from the request and the result from the response", () => {
+    const detail = callDetail({
+      name: "Bash",
+      family: "shell",
+      request: body({ command: "pnpm lint" }),
+      response: body({ output: "0 problems" }),
+    });
+    expect(detail).toMatchObject({
+      headline: "pnpm lint",
+      output: "0 problems",
+    });
+  });
+
+  it("reads a response kept as the whole exchange, and prefers the request's input", () => {
+    const whole = callDetail({
+      name: "Bash",
+      family: "shell",
+      request: null,
+      response: body({ input: { command: "ls" }, output: "a.ts" }),
+    });
+    expect(whole).toMatchObject({ headline: "ls", output: "a.ts" });
+    const both = callDetail({
+      name: "Bash",
+      family: "shell",
+      request: body({ command: "ls -la" }),
+      response: body({ input: { command: "ls" }, output: "a.ts" }),
+    });
+    expect(both).toMatchObject({ headline: "ls -la", output: "a.ts" });
+  });
+
+  it("keeps a result that is not JSON as the text it was", () => {
+    expect(
+      callDetail({
+        name: "Bash",
+        family: "shell",
+        request: body({ command: "echo hi" }),
+        response: "hi",
+      })?.output,
+    ).toBe("hi");
+  });
+
+  it("never draws the input as the result when no result came back (negative)", () => {
+    const detail = callDetail({
+      name: "Bash",
+      family: "shell",
+      request: body({ command: "sleep 60" }),
+      response: null,
+    });
+    expect(detail?.headline).toBe("sleep 60");
+    expect(detail?.output).toBeNull();
+  });
+
+  it("takes the tool's name from a body when the record named none", () => {
+    expect(
+      callDetail({
+        name: null,
+        family: "shell",
+        request: body({ tool_use: { name: "Bash", input: { command: "ls" } } }),
+        response: null,
+      })?.name,
+    ).toBe("Bash");
   });
 });

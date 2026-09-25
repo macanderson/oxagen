@@ -1,7 +1,9 @@
 // What the Context tab reads out of the transcript, without a render: the
-// first prompt, the first request and the usage that answers it (never a
-// later call's), and the manifest body read loosely but refused when it is
-// not a manifest.
+// first prompt, the first model step and the input it reported, and the
+// manifest body read loosely but refused when it is not a manifest. Pairing a
+// request with the response that reported its usage is the server's fold
+// (`packages/run-ledger/src/transcript-steps.test.ts`), so the first model
+// step arrives here as one entry.
 import { describe, expect, it } from "vitest";
 import type { TranscriptEntry } from "@/data/contracts/run";
 import {
@@ -9,7 +11,6 @@ import {
   firstRequest,
   manifestEntry,
   parseManifest,
-  tallyOf,
 } from "./context-model";
 import { transcriptBody, transcriptEntry } from "./run.builders";
 import { evidenceTranscript, manifestText } from "./sections.builders";
@@ -62,36 +63,39 @@ describe("firstPrompt", () => {
 });
 
 describe("firstRequest", () => {
-  it("pairs the first request with the usage its response reported", () => {
-    const request = firstRequest(entries);
-    expect(request?.entry.seq).toBe("4");
-    expect(request?.usageSeq).toBe("5");
-    expect(request?.input).toBe(15_368);
-    expect(request?.cached).toBe(12_000);
-  });
+  const usage = {
+    inputUncached: 3_368,
+    cacheRead: 12_000,
+    cacheWrite: 0,
+    output: 412,
+    reasoning: null,
+  };
 
-  it("never takes a later call's usage for the first call's (negative)", () => {
+  it("reads the first model step on the run's own chain, and the input it reported", () => {
     const request = firstRequest([
-      frame({ seq: "1", kind: "model_call", type: "model.request" }),
-      frame({ seq: "2", kind: "model_call", type: "model.response" }),
-      frame({ seq: "3", kind: "model_call", type: "model.request" }),
+      frame({ seq: "1", kind: "frame", type: "turn_start", node: "prompt" }),
+      frame({
+        seq: "2",
+        kind: "model_call",
+        type: "model.request",
+        node: "model",
+        subagent: { chainRef: "c1", type: "Explore" },
+        usage,
+      }),
       frame({
         seq: "4",
         kind: "model_call",
-        type: "model.response",
-        usage: {
-          inputUncached: 10,
-          cacheRead: 5,
-          cacheWrite: 0,
-          output: 1,
-          reasoning: null,
-        },
+        type: "model.request",
+        node: "model",
+        usage,
       }),
     ]);
-    expect(request?.entry.seq).toBe("1");
-    expect(request?.input).toBeNull();
-    expect(request?.cached).toBeNull();
-    expect(request?.usageSeq).toBeNull();
+    expect(request).toEqual({
+      seq: "4",
+      type: "model.request",
+      input: 15_368,
+      cached: 12_000,
+    });
   });
 
   it("leaves the total unstated when a class was not reported, and keeps the cache read that was (negative)", () => {
@@ -100,12 +104,12 @@ describe("firstRequest", () => {
         seq: "1",
         kind: "model_call",
         type: "model.call_completed",
+        node: "model",
         usage: {
+          ...usage,
           inputUncached: 100,
           cacheRead: 900,
           cacheWrite: null,
-          output: 10,
-          reasoning: null,
         },
       }),
     ]);
@@ -113,20 +117,38 @@ describe("firstRequest", () => {
     expect(request?.cached).toBe(900);
   });
 
-  it("answers null when no model call is in view", () => {
-    expect(firstRequest([frame({ kind: "frame", type: "agent_start" })])).toBe(
-      null,
-    );
+  it("reads no usage for a model step that reported none (negative)", () => {
+    const request = firstRequest([
+      frame({
+        seq: "1",
+        kind: "model_call",
+        type: "model.request",
+        node: "model",
+      }),
+    ]);
+    expect(request).toEqual({
+      seq: "1",
+      type: "model.request",
+      input: null,
+      cached: null,
+    });
+  });
+
+  it("answers null when no model step is in view", () => {
+    expect(
+      firstRequest([
+        frame({ kind: "frame", type: "agent_start", node: "control" }),
+      ]),
+    ).toBeNull();
   });
 });
 
 describe("the manifest", () => {
-  it("finds the manifest frame and reads its items and tally", () => {
+  it("finds the manifest frame and reads its items", () => {
     expect(manifestEntry(entries)?.seq).toBe("1");
     const manifest = parseManifest(manifestText());
     expect(manifest?.bundle_version).toBe(41);
-    if (manifest === null) throw new Error("a manifest");
-    expect(tallyOf(manifest)).toEqual({ rendered: 3, cut: 5, tokens: 435 });
+    expect(manifest?.items).toHaveLength(8);
   });
 
   it("reads a word the vocabulary gains later as the recorded word", () => {

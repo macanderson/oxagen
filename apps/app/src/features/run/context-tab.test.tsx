@@ -21,6 +21,7 @@ import {
   transcriptEntry,
 } from "./run.builders";
 import {
+  evidenceSteps,
   evidenceTranscript,
   manifestText,
   tabProps,
@@ -54,10 +55,13 @@ const ctx = unsafeMint(WsCtx, {
 
 async function renderContext({
   everything = readOk(evidenceTranscript()),
+  transcript = readOk(evidenceSteps()),
   run = runRow(),
   frameBody,
 }: {
   everything?: Read<RunTranscript>;
+  /** The run at `steps`, where the first model step is one entry. */
+  transcript?: Read<RunTranscript>;
   run?: ReturnType<typeof runRow>;
   frameBody?: Read<ReturnType<typeof runFrameBody>>;
 } = {}) {
@@ -65,7 +69,9 @@ async function renderContext({
     detail: readOk(runDetail({ run })),
     ...(frameBody === undefined ? {} : { frameBody }),
   });
-  const body = await ContextTab(tabProps({ ctx, source, run, everything }));
+  const body = await ContextTab(
+    tabProps({ ctx, source, run, everything, transcript }),
+  );
   const rendered = render(<IntlProvider>{body}</IntlProvider>);
   return { ...rendered, calls };
 }
@@ -98,8 +104,10 @@ describe("ContextTab", () => {
   it("draws the manifest frame as a spine: the tally, the rendered items, three cuts and the rest folded", async () => {
     await renderContext();
     const manifest = region("Steering manifest");
+    // The tally is the server's reading of the manifest (`recall`, ADR-182):
+    // what it rendered, what it cut, and the tokens it spent.
     expect(screen.getByTestId("run-manifest-tally")).toHaveTextContent(
-      "3 rendered · 5 cut · 435 tok",
+      "3 rendered · 5 cut · 1,340 tok",
     );
     const items = screen.getAllByTestId("run-manifest-item");
     expect(
@@ -149,12 +157,15 @@ describe("ContextTab", () => {
     });
     expect(calls.frameBody).toEqual([[ctx, "tse_7k2m9q", "1"]]);
     expect(screen.getByTestId("run-manifest-tally")).toHaveTextContent(
-      "3 rendered · 5 cut · 435 tok",
+      "3 rendered · 5 cut · 1,340 tok",
     );
+    expect(screen.getAllByTestId("run-manifest-item")).toHaveLength(8);
   });
 
   it("says a manifest whose body was not retained has no items to show, and reads nothing more (negative)", async () => {
     const digestOnly = evidenceTranscript();
+    // The server read no body either, so its recall is the frame count the
+    // frame recorded, which here is none.
     const entries = digestOnly.entries.map((entry) =>
       entry.type === "steering.manifest" && entry.response !== null
         ? {
@@ -163,6 +174,13 @@ describe("ContextTab", () => {
               ...entry.response,
               text: null,
               fidelity: "digest_only" as const,
+            },
+            recall: {
+              unit: "frames" as const,
+              count: null,
+              tokens: null,
+              cut: null,
+              items: [],
             },
           }
         : entry,
@@ -228,11 +246,11 @@ describe("ContextTab", () => {
   });
 
   it("says there is no window on record when no model request is in view (negative)", async () => {
-    const quiet = evidenceTranscript();
+    const quiet = evidenceSteps();
     await renderContext({
-      everything: readOk({
+      transcript: readOk({
         ...quiet,
-        entries: quiet.entries.filter((entry) => entry.kind !== "model_call"),
+        entries: quiet.entries.filter((entry) => entry.node !== "model"),
       }),
     });
     expect(screen.getByTestId("run-context-no-window")).toHaveTextContent(
@@ -264,7 +282,7 @@ describe("ContextTab", () => {
     expect(cells(manifest)).toEqual([
       "steering.manifest",
       "1",
-      "435",
+      "1,340",
       "not recorded",
       "not recorded",
     ]);
@@ -285,7 +303,7 @@ describe("ContextTab", () => {
     await renderContext();
     const walk = region("Walk the window");
     expect(walk.getAllByRole("link").map((link) => link.textContent)).toEqual([
-      "steering.manifest seq 1435 tok",
+      "steering.manifest seq 11,340 tok",
       "context.assembled seq 2fr 2",
       "turn_start seq 3fr 3",
       "model.request seq 415,368 tok",
@@ -358,13 +376,13 @@ describe("ContextTab", () => {
   });
 
   it("says how much came from cache when the request did not report every input class (negative)", async () => {
-    const base = evidenceTranscript();
+    const base = evidenceSteps();
     const entries = base.entries.map((entry) =>
       entry.usage === null || entry.usage === undefined
         ? entry
         : { ...entry, usage: { ...entry.usage, cacheWrite: null } },
     );
-    await renderContext({ everything: readOk({ ...base, entries }) });
+    await renderContext({ transcript: readOk({ ...base, entries }) });
     const prompt = region("Prompt");
     expect(
       prompt.getByText(

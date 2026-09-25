@@ -31,14 +31,34 @@ import {
   type ManifestRead,
   manifestEntry,
   parseManifest,
-  tallyOf,
 } from "./context-model";
 import { Fact, Facts, Meter, Note, NoValue, Panel, PanelBody } from "./parts";
 import { FrameLink } from "./policy-tab";
 import { entriesOf } from "./recorded-entries";
 import type { Place, RunTabProps } from "./tab-props";
-import { entryKey, soleBody } from "./transcript-model";
+import { entryKey, soleBody } from "./transcript-rows";
 import { isWhole } from "./whole-transcript";
+
+/**
+ * What a manifest put in front of the model, as the server counted it from
+ * the body it kept (`recall`, ADR-182): the items it rendered, the items it
+ * cut and the tokens it spent. Null when the server could not read those
+ * three from the manifest.
+ */
+function manifestTally(
+  entry: TranscriptEntry,
+): { rendered: number; cut: number; tokens: number } | null {
+  const recall = entry.recall;
+  if (
+    recall === null ||
+    recall.unit !== "items" ||
+    recall.count === null ||
+    recall.cut === null ||
+    recall.tokens === null
+  )
+    return null;
+  return { rendered: recall.count, cut: recall.cut, tokens: recall.tokens };
+}
 
 /** Where "Open the window" lands: the Prompt window panel below. */
 const WINDOW_ANCHOR = "run-context-window";
@@ -281,7 +301,7 @@ function ManifestSpine({
   const t = useTranslations("run.context.manifest");
   const locale = useLocale();
   const read = manifest?.state === "read" ? manifest.body : null;
-  const tally = read === null ? null : tallyOf(read);
+  const tally = manifest === null ? null : manifestTally(manifest.entry);
   const rendered =
     read?.items.filter((item) => item.outcome === "included") ?? [];
   const cuts = read?.items.filter((item) => item.outcome === "cut") ?? [];
@@ -407,8 +427,8 @@ function PromptWindow({
           <>
             <Badge tone="quiet" dot={false} mono>
               {t("request", {
-                type: request.entry.type,
-                seq: request.entry.seq,
+                type: request.type,
+                seq: request.seq,
               })}
             </Badge>
             <Badge tone="quiet" dot={false}>
@@ -448,8 +468,8 @@ function frameRow(
   tokens: (count: number) => string,
 ): ListRow {
   const counted =
-    manifest?.state === "read" && manifest.entry === entry
-      ? tallyOf(manifest.body).tokens
+    manifest !== null && manifest.entry === entry
+      ? (manifestTally(entry)?.tokens ?? null)
       : null;
   return {
     key: entryKey(entry),
@@ -660,11 +680,15 @@ function RetrievalStats({
 function ContextBody({
   run,
   read,
+  steps,
   manifest,
   place,
 }: {
   run: RunRow;
+  /** The run at `everything`: the frames the tab lists. */
   read: Read<RunTranscript>;
+  /** The run at `steps`, where the first model step is one entry. */
+  steps: Read<RunTranscript>;
   manifest: ManifestRead | null;
   place: Place;
 }) {
@@ -678,7 +702,7 @@ function ContextBody({
     );
   const entries = read.value.entries;
   const prompt = firstPrompt(entries);
-  const request = firstRequest(entries);
+  const request = steps.ok ? firstRequest(steps.value.entries) : null;
   const recalls = entriesOf(read, "recall") ?? [];
   const assembled =
     recalls.find(
@@ -687,17 +711,17 @@ function ContextBody({
     ) ?? null;
   const stopOf = (entry: TranscriptEntry): Stop | null => {
     if (entry.subagent !== undefined) return null;
-    if (manifest !== null && entry === manifest.entry)
+    if (manifest !== null && entry === manifest.entry) {
+      const tally = manifestTally(entry);
       return {
         entry,
         hue: "bg-kind-rule",
         figure:
-          manifest.state === "read"
-            ? t("walk.tokens", {
-                count: formatCount(tallyOf(manifest.body).tokens, locale),
-              })
-            : null,
+          tally === null
+            ? null
+            : t("walk.tokens", { count: formatCount(tally.tokens, locale) }),
       };
+    }
     if (entry.kinds.includes("recall"))
       return { entry, hue: "bg-fk-ctx", figure: null };
     if (
@@ -706,7 +730,13 @@ function ContextBody({
       entry.type === "turn_start"
     )
       return { entry, hue: "bg-fk-op", figure: null };
-    if (request !== null && entry === request.entry)
+    // The first model step opens on this frame (a subagent's frames were
+    // passed over above).
+    if (
+      request !== null &&
+      entry.seq === request.seq &&
+      entry.type === request.type
+    )
       return {
         entry,
         hue: "bg-fk-model",
@@ -769,13 +799,14 @@ async function readManifest(
  * only when the transcript did not carry all of it.
  */
 export async function ContextTab(props: RunTabProps): Promise<ReactNode> {
-  const { everything, run, place } = props;
+  const { everything, transcript, run, place } = props;
   const entry = everything.ok ? manifestEntry(everything.value.entries) : null;
   const manifest = entry === null ? null : await readManifest(props, entry);
   return (
     <ContextBody
       run={run}
       read={everything}
+      steps={transcript}
       manifest={manifest}
       place={place}
     />

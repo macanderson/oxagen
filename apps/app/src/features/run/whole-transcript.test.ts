@@ -1,6 +1,7 @@
-// `readWholeTranscript` and `isWhole`: the page's figures, Policy and Context
+// `readWholeTranscript` and `isWhole`: the Transcript tab, Policy and Context
 // read the run to its end rather than taking the first page as the run, at the
-// largest page the contract allows, with each entry once.
+// largest page the contract allows, with each entry once, and the counts and
+// figures the server sent with the last page.
 import { describe, expect, it, vi } from "vitest";
 import { type RunTranscript, TRANSCRIPT_ENTRY_MAX } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
@@ -42,6 +43,40 @@ function sourceOf(
 }
 
 describe("readWholeTranscript", () => {
+  it("asks every page for the bodies the caller wants, and keeps the last page's counts and figures", async () => {
+    const full = TRANSCRIPT_ENTRY_MAX;
+    const counted = (entries: number) => ({
+      kinds: {
+        prompt: 1,
+        responses: 0,
+        thinking: 0,
+        tools: 0,
+        policy: 0,
+        usage: 0,
+        recall: 0,
+        seal: 0,
+        errors: 0,
+      },
+      entries,
+      errors: 0,
+      policy: 0,
+    });
+    const { source, transcript } = sourceOf((after) =>
+      after === undefined
+        ? readOk({ ...page(0, full, "p2"), counts: counted(full) })
+        : readOk({ ...page(full, 3, null), counts: counted(full + 3) }),
+    );
+    const read = await readWholeTranscript(source, ctx, "tse_1", "steps", {
+      text: "full",
+    });
+    expect(transcript.mock.calls.map((call) => call[3])).toEqual([
+      { kinds: [], limit: 500, text: "full" },
+      { kinds: [], limit: 500, text: "full", after: "p2" },
+    ]);
+    // A live run's later page counts what was recorded since the first.
+    expect(read.ok && read.value.counts?.entries).toBe(full + 3);
+  });
+
   it("reads page after page to the end, narrowed to the chip asked for", async () => {
     const full = TRANSCRIPT_ENTRY_MAX;
     const { source, transcript } = sourceOf((after) =>
@@ -49,9 +84,9 @@ describe("readWholeTranscript", () => {
         ? readOk(page(0, full, "p2"))
         : readOk(page(full, 3, null)),
     );
-    const read = await readWholeTranscript(source, ctx, "tse_1", "everything", [
-      "policy",
-    ]);
+    const read = await readWholeTranscript(source, ctx, "tse_1", "everything", {
+      kinds: ["policy"],
+    });
     expect(read.ok && read.value.entries).toHaveLength(full + 3);
     expect(read.ok && isWhole(read.value)).toBe(true);
     expect(transcript).toHaveBeenCalledTimes(2);
