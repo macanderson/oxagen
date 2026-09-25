@@ -160,18 +160,18 @@ function stored(draft: Draft): string {
 
 /** A gate held by the dialog, so a save survives the editor closing under it. */
 function useDialogGate(): AvatarSaveGate {
-  const busy = useRef(false);
+  const busyRef = useRef(false);
   const [pending, setPending] = useState(false);
   return {
     pending,
     begin: () => {
-      if (busy.current) return false;
-      busy.current = true;
+      if (busyRef.current) return false;
+      busyRef.current = true;
       setPending(true);
       return true;
     },
     end: () => {
-      busy.current = false;
+      busyRef.current = false;
       setPending(false);
     },
   };
