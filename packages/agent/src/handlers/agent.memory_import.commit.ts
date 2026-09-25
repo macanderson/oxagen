@@ -55,7 +55,7 @@ export async function agentMemoryImportCommitHandler(
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     surface: ctx.surface,
-    executionStepId: ctx.messageId ?? ctx.requestId,
+    executionStepId: ctx.executionStepId ?? null,
   };
 
   // Embed the whole commit in ONE gateway call, metered once. Doing it per

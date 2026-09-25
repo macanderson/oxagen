@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { assistantAsk, assistantParkedCardSchema } from "./assistant.ask";
+import {
+  ASSISTANT_ENTITY_LABEL_MAX,
+  assistantAsk,
+  assistantPageContextSchema,
+  assistantParkedCardSchema,
+} from "./assistant.ask";
 import { CHAT_CONTENT_MAX_CHARS } from "./chat.message.send";
 
 const CONVERSATION = "0192d4a8-7c1e-7a00-8000-0000000000c1";
@@ -32,6 +37,7 @@ describe("ask_assistant contract", () => {
       orgSlug: "acme",
       workspaceSlug: "core",
       entityId: null,
+      entityLabel: null,
     });
   });
 
@@ -48,6 +54,57 @@ describe("ask_assistant contract", () => {
       assistantAsk.input.parse({ conversationId: CONVERSATION, content: "hi" })
         .conversationId,
     ).toBe(CONVERSATION);
+  });
+
+  // A page names its record for the turn. A caller written before the label
+  // existed (the API route, the MCP tool, the SSE route) sends none, and its
+  // context still parses, with the label null.
+  it("carries the record's label beside its id, and defaults it to null for a caller that sends none", () => {
+    const page = { route: "runs", orgSlug: "acme", workspaceSlug: "core" };
+    expect(
+      assistantPageContextSchema.parse({
+        ...page,
+        entityId: "arun_01k9",
+        entityLabel: "Fix the flaky checkout test",
+      }),
+    ).toEqual({
+      ...page,
+      entityId: "arun_01k9",
+      entityLabel: "Fix the flaky checkout test",
+    });
+    expect(
+      assistantPageContextSchema.parse({ ...page, entityId: "arun_01k9" })
+        .entityLabel,
+    ).toBeNull();
+    expect(
+      assistantPageContextSchema.parse({
+        ...page,
+        entityId: "arun_01k9",
+        entityLabel: "x".repeat(ASSISTANT_ENTITY_LABEL_MAX),
+      }).entityLabel,
+    ).toHaveLength(ASSISTANT_ENTITY_LABEL_MAX);
+  });
+
+  // The label reaches a line the model reads as system context, so the
+  // contract bounds it rather than rewriting it. The app cuts a long label to
+  // the cap before it sends one; any other caller is told.
+  it("refuses a label past the cap and an empty one (negative)", () => {
+    const page = {
+      route: "runs",
+      orgSlug: "acme",
+      workspaceSlug: "core",
+      entityId: "arun_01k9",
+    };
+    expect(
+      assistantPageContextSchema.safeParse({
+        ...page,
+        entityLabel: "x".repeat(ASSISTANT_ENTITY_LABEL_MAX + 1),
+      }).success,
+    ).toBe(false);
+    expect(
+      assistantPageContextSchema.safeParse({ ...page, entityLabel: "" })
+        .success,
+    ).toBe(false);
   });
 
   it("refuses an empty message, one past the shared cap, a non-uuid conversation and an unknown key (negative)", () => {

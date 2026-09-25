@@ -8,6 +8,13 @@ describe("secret.value.set contract", () => {
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(secretValueSet.surfaces).toEqual(["api", "mcp", "agent"]);
   });
+  it("waits for a person's approval on the agent surface", () => {
+    expect(secretValueSet.agent).toEqual({
+      requiresApproval: true,
+      riskLevel: "high",
+      category: "secret",
+    });
+  });
   it("accepts a valid input (including empty string value)", () => {
     expect(() =>
       secretValueSet.input.parse({

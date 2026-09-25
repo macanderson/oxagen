@@ -7,7 +7,9 @@
 import { digestJcs, type JsonValue } from "../digest";
 import type { TachoKind } from "../envelope";
 import { type DraftContent, textContent } from "../evidence/frame-body";
+import { redactText } from "../evidence/redaction";
 import { digestText } from "./context";
+import { cutAt } from "./tools";
 
 export interface TranscriptDraft {
   kind: TachoKind;
@@ -50,6 +52,9 @@ export interface TranscriptTotals {
  * the person renames the session, which outranks it.
  */
 export type SessionTitleSource = "ai-title" | "custom-title";
+
+/** The envelope bounds `session_title` at 512 UTF-16 units. */
+const SESSION_TITLE_MAX = 512;
 
 export interface TranscriptNormalized {
   drafts: TranscriptDraft[];
@@ -199,20 +204,30 @@ export function normalizeTranscriptLine(
     raw_source_digest: raw,
   });
   // One `oxagen:session_title` frame, whichever record named the title; the
-  // recorder seals it only when it renames the session.
+  // recorder seals it only when it renames the session. The title ships
+  // inline, so a credential pasted into it is replaced by its marker first.
+  // It is then cut to the envelope's 512-unit bound, because a longer title
+  // would make the whole frame refused and recorded as a gap.
   const titled = (
-    text: string,
+    raw: string,
     source: SessionTitleSource,
-  ): TranscriptNormalized => ({
-    drafts: [
-      {
-        ...draft("oxagen:session_title", { session_title: text }),
-        hook_source_kind: source,
-      },
-    ],
-    totals: { session_title: text },
-    title: { text, source },
-  });
+  ): TranscriptNormalized => {
+    const redacted = redactText(raw);
+    const text =
+      redacted.length > SESSION_TITLE_MAX
+        ? cutAt(redacted, SESSION_TITLE_MAX)
+        : redacted;
+    return {
+      drafts: [
+        {
+          ...draft("oxagen:session_title", { session_title: text }),
+          hook_source_kind: source,
+        },
+      ],
+      totals: { session_title: text },
+      title: { text, source },
+    };
+  };
 
   switch (type) {
     case "assistant": {

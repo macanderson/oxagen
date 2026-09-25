@@ -1,6 +1,7 @@
 // The frame player bar (mockup `fpBar`, engine.css `.fp-bar`): step to the
-// first, previous, next and last frame, scrub across the page, where the open
-// frame sits, and what the run had spent by it.
+// first, previous, next and last frame, play and pause at a chosen speed,
+// scrub across the page, where the open frame sits, and what the run had
+// spent by it.
 //
 // The steps are links, so each is a frame a reader can share. "By here" is the
 // transcript's own running total at the open frame (`cumulativeCost`), set
@@ -15,21 +16,16 @@ import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, ratioWidth } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { PlayerScrub, type StepTargets } from "./frame-player";
+import {
+  PlayButton,
+  PlayerPlayback,
+  PlayerScrub,
+  PlaySpeed,
+  type StepTargets,
+} from "./frame-player";
 import { MARK_HUE } from "./player-hues";
 import type { Mark, OpenFrame } from "./player-model";
-
-/**
- * `.fp-bar .btn.sm { padding:3px 8px; font-family:var(--mono);
- * font-size:11.5px; min-width:30px; justify-content:center }` over `.btn`
- * (`border:1px solid var(--border); background:var(--panel);
- * border-radius:9px`). A phone keeps the 44px target.
- */
-const barButton =
-  "inline-flex min-w-[30px] items-center justify-center rounded-[9px] border border-button-default-border bg-button-default-bg px-2 py-[3px] font-mono text-[11.5px] font-medium text-button-default-fg transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11 max-md:min-w-11";
-
-/** `.btn:disabled { opacity:.45; cursor:not-allowed }` */
-const disabledStep = "cursor-not-allowed opacity-45 hover:bg-button-default-bg";
+import { barButton, disabledStep } from "./player-styles";
 
 /**
  * A step to another frame: a link when there is one that way, and a disabled
@@ -164,11 +160,13 @@ export function PlayerBar({
         ];
   });
   return (
-    // `.fp-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel) }`
-    <div
-      role="group"
-      aria-label={t("label")}
-      data-testid="player-bar"
+    <PlayerPlayback
+      hrefs={hrefs}
+      times={frames.map((frame) => Date.parse(frame.observedAt))}
+      index={open.index}
+      steps={steps}
+      label={t("label")}
+      // `.fp-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel) }`
       className="flex flex-wrap items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 py-2.5"
     >
       <StepLink
@@ -187,6 +185,7 @@ export function PlayerBar({
       >
         <span aria-hidden="true">◀</span>
       </StepLink>
+      <PlayButton />
       <StepLink
         to={steps.next}
         label={t("next")}
@@ -207,7 +206,6 @@ export function PlayerBar({
         key={open.seq}
         hrefs={hrefs}
         index={open.index}
-        steps={steps}
         marks={ticks}
       />
       <span data-testid="player-position" className={count}>
@@ -225,6 +223,7 @@ export function PlayerBar({
             })}
       </span>
       <Spent spent={spent} total={total} />
+      <PlaySpeed />
       {/* `.fp-keys { display:inline-flex; gap:6px; font-size:11px; color:var(--dim); margin-left:auto }`, `kbd { font-family:var(--mono); font-size:10px; border:1px solid var(--border); border-radius:4px; padding:0 4px; color:var(--muted); background:var(--void) }` */}
       <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-dim max-md:hidden">
         {t.rich("keys", {
@@ -235,6 +234,6 @@ export function PlayerBar({
           ),
         })}
       </span>
-    </div>
+    </PlayerPlayback>
   );
 }

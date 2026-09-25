@@ -20,6 +20,7 @@ export const assetUpload = registerCapability({
     category: "generation",
   },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

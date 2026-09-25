@@ -26,6 +26,8 @@ export const privacyDataExport = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "privacy" },
   sensitivity: "high",
+  // Records the export request and dispatches the job that builds it.
+  mutates: true,
   // Assembling the ZIP spends no AI credits, and the billing and budget gates
   // run before the handler. Without this an organisation that has exhausted
   // its credits or hit its spend ceiling could not export its data, so the

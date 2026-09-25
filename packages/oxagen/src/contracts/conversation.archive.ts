@@ -23,6 +23,7 @@ export const conversationArchive = registerCapability({
   },
   // Reversible state change — not destructive despite being a write.
   sensitivity: "low",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

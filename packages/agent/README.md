@@ -1,6 +1,6 @@
 # @oxagen/agent
 
-`@oxagen/agent` is the governed-agent runtime library. It turns capability contracts and registered MCP servers into tools a model may call, applies the per-call governance gates inside each tool, runs the in-app governance agent's turn on Stella's headless engine, and implements the `agent.*` capability handlers.
+`@oxagen/agent` is the governed-agent runtime library. It turns capability contracts and registered MCP servers into tools a model may call, applies the per-call governance gates inside each tool, runs a turn of stella, the in-app agent, on Stella's headless engine, and implements the `agent.*` capability handlers.
 
 ## Boundary
 
@@ -9,6 +9,8 @@
   - The tool-count check against a provider's per-request cap (`src/runtime/tool-budget.ts`, #2611).
   - The governed turn (`runGovernedTurn` in `src/runtime/governed-turn.ts`): one bounded, metered model turn over the materialised tools, run on the `stella-serve` engine (ADR-053).
   - The assistant turn and its SSE stream (`src/runtime/assistant-turn.ts`, `src/runtime/assistant-stream.ts`) and approval resume (`src/runtime/approval-resume.ts`).
+  - The assistant turn's steering (`src/runtime/assistant-steering.ts`): published context records and the workspace's instructions, assembled by `@oxagen/steering-assembler` into the system prompt, with the manifest recorded on the run as a `steering.manifest` frame (ADR-093 §7, #4158).
+  - The published context-record read and the record adapter (`src/runtime/published-steering.ts`). The in-app turn and a wrapped agent's policy bundle (`packages/handlers/src/lib/tacho-steering.ts`) both read steering through it, so a record reads the same in both.
   - The plugin-type contributor registry and the MCP server contributors (`src/runtime/plugin-type.ts`, `src/runtime/plugin-types/`).
   - The MCP client and the Neo4j projection of invoked tools (`src/dispatch/`), and agent memory in Neo4j (`src/memory/`).
   - The `agent.*` handlers (`src/handlers/`): approvals, the MCP registry and consent ledger, memory, agent definitions and roles, executions, traces, and error clustering. `src/register.ts` registers them.
@@ -30,6 +32,7 @@
   - `@oxagen/database` and `@oxagen/tenancy`: scoped Postgres access for approvals, consent, and the MCP registry.
   - `@oxagen/ontology`: scoped Neo4j sessions for memory and tool projection.
   - `@oxagen/run-ledger` and `@oxagen/run-evidence`: run records and evidence digests for a turn.
+  - `@oxagen/steering-assembler`: ranking and budgeting the turn's steering, and its manifest.
   - `@oxagen/telemetry`: tool-call telemetry and error capture.
   - `@oxagen/mcp-config`: settings, credentials, and permissions for file-configured MCP servers (`src/runtime/plugin-types/file-mcp.ts`).
   - `@oxagen/crypto`: encryption of stored MCP server auth and approval-resume payloads.
@@ -43,6 +46,7 @@
 | `registerHandlersOnce("@oxagen/agent", ...)` over `agentHandlerNames` | injection | `packages/agent/src/register.ts` | Side-effect import in `apps/api/src/bootstrap.ts`, `apps/mcp/src/middleware.ts`, and `apps/app/src/server/kernel.ts` |
 | `materializeTools(ctx, opts)` | export | `packages/agent/src/runtime/materialize-tools.ts` | `src/runtime/assistant-turn.ts`, `src/runtime/approval-resume.ts`, `src/runtime/plugin-types/file-mcp.ts`, and `src/handlers/tools.load.ts`. `runGovernedTurn` takes the result as input |
 | `runGovernedTurn(input)` | export | `packages/agent/src/runtime/governed-turn.ts` | `packages/inngest-functions/src/lib/run-enrichment.ts` and `src/runtime/assistant-turn.ts` |
+| `readPublishedSteeringCandidates`, `recordCandidate`, `readSteeringRows` | export | `packages/agent/src/runtime/published-steering.ts` | `src/runtime/assistant-steering.ts` and `packages/handlers/src/lib/tacho-steering.ts` |
 | `streamAssistantTurn` | export | `packages/agent/src/runtime/assistant-stream.ts` | `apps/api/src/routes/v1/chat.stream.ts` |
 | `registerPluginType` / `getPluginTypeContributors` | registry | `packages/agent/src/runtime/plugin-type.ts` | `src/runtime/plugin-types/mcp.ts`, `file-mcp.ts`, and `placeholders.ts` register on import |
 | `assertToolListFitsProvider` | boundary | `packages/agent/src/runtime/tool-budget.ts` | `runGovernedTurn` and `src/runtime/tool-belt.ts` refuse a turn whose tool count exceeds `PROVIDER_TOOL_LIMITS` |

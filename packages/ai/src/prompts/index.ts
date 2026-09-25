@@ -9,7 +9,6 @@ export type { EnhancePromptArgs, EnhancePromptResult } from "./auto-improve";
 export {
   SLASH_COMMANDS,
   matchSlashCommands,
-  slashCommandsPromptSection,
 } from "./slash-commands";
 export type { SlashCommand } from "./slash-commands";
 export {
@@ -20,7 +19,6 @@ export {
   isMentionType,
   matchMentionTypes,
   mentionFromHref,
-  mentionGrammarPrompt,
   mentionPlaceholder,
   mentionToHref,
   mentionTypeInfo,

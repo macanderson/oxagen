@@ -105,9 +105,9 @@ const SORTS: readonly Sort[] = ["shown", "asc", "desc"];
 /**
  * What the record costs in the assembler: the tokens of the line the signed
  * bundle carries for it, `- <statement> (<kind>; <lineage>)`, as
- * `recordCandidate` (packages/handlers/src/lib/tacho-steering.ts) builds it
- * and `assembleSteering` counts it. Null for a record with no force or no
- * statement, which the assembler drops before counting.
+ * `recordCandidate` (packages/agent/src/runtime/published-steering.ts)
+ * builds it and `assembleSteering` counts it. Null for a record with no
+ * force or no statement, which the assembler drops before counting.
  */
 function recordTokens(record: PublishedRecord): number | null {
   const statement = record.statement?.trim() ?? "";

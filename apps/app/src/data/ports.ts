@@ -127,9 +127,10 @@ export interface DataSource {
     context(ctx: OrgCtx): Promise<Read<ShellContext>>;
     /**
      * get_user_preferences, user-global: the zone every date under the
-     * organization layout renders in, and the zone the Audit day filters are
-     * resolved against; callers: features/shell/source.ts,
-     * features/shell/viewer-clock.tsx and features/audit/filters.ts.
+     * organization layout renders in, the zone the Audit day filters are
+     * resolved against, and whether Enter sends in the assistant composer;
+     * callers: features/shell/source.ts, features/shell/viewer-clock.tsx and
+     * features/audit/filters.ts.
      */
     preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
     /**
@@ -141,9 +142,11 @@ export interface DataSource {
     /**
      * list_notifications, the viewer's newest rows and the unread count the
      * bell's dot reads; callers: features/shell/workspace-activity.tsx and
-     * features/shell/source.ts.
+     * features/shell/source.ts. A WsCtx reads the organization's rows and that
+     * workspace's. An OrgCtx reads the organization's rows alone, which is the
+     * whole feed for a viewer who can open no workspace (#3806).
      */
-    notifications(ctx: WsCtx): Promise<Read<NotificationFeed>>;
+    notifications(ctx: OrgCtx): Promise<Read<NotificationFeed>>;
   };
   /**
    * get_conversation with no id: the viewer's latest active conversation in
