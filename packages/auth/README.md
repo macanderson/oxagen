@@ -126,11 +126,30 @@ Returns a discriminated union:
 
 ```ts
 type ApiKeyResolution =
-  | { ok: true; apiKeyId: string; orgId: string; workspaceId: string }
-  | { ok: false; kind: "malformed" | "invalid" | "expired" };
+  | {
+      ok: true;
+      apiKeyId: string;
+      orgId: string;
+      workspaceId: string;
+      userId: string | null;
+    }
+  | {
+      ok: false;
+      kind:
+        | "malformed"
+        | "invalid"
+        | "expired"
+        | "purpose_locked"
+        | "workspace_archived"
+        | "sso_required"
+        | "host_revoked";
+    };
 ```
 
-Never throws for auth failures. Callers map `kind` to appropriate errors.
+Never throws for auth failures. Callers map `kind` to appropriate errors. The
+API answers `sso_required` with 403. It answers `host_revoked`, the retired key
+of a Tacho host an operator revoked, with 403 and the reason `host_revoked`,
+so the host stops sending. Every other kind is a 401.
 
 #### `resolveOrgScope(userId: string, slug: string): Promise<OrgScopeResolution>`
 
