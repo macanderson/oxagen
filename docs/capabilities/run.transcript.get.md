@@ -67,12 +67,12 @@ Each chip selects what the Run page's Transcript tab draws under it, so the coun
 | Chip | Frames it selects |
 |---|---|
 | `prompt` | the `turn_start` an operator typed to open a turn. A subagent's `turn_start` and the `oxagen:message` copies of the same prompt are not counted, so each prompt counts once. The request half of a model call is the context the model was sent and answers no chip |
-| `responses` | the response half of a model call, a single model receipt, or a reply the harness reported with its words kept: a `turn_end`, or an `oxagen:message` recorded as a response |
+| `responses` | the response half of a model call, or a single model receipt, whose body was kept; or a reply the harness reported with its words kept: a `turn_end`, or an `oxagen:message` recorded as a response. The Run page draws a row under this chip for every model step that answers it: what the model said, or a line naming what it called when it said nothing in words. A model response kept as a digest alone answers `usage` when it carried a cost, tokens or an effort, and no chip otherwise |
 | `thinking` | a model call whose usage records reasoning tokens. A wrapped session records them from Claude Code's `thinking_tokens`; a duplicate sighting of the same call carries no usage and is not counted |
 | `tools` | either half of a tool call |
 | `policy` | a decision a rule or a person made: allow, deny, route, and an operator's pause, resume, cancel or steer as the host applied it (`oxagen:command_applied`) |
 | `recall` | what was pulled into the model's context |
-| `usage` | a frame that carried a cost record, or token counts the provider reported without one |
+| `usage` | a frame that carried a cost record or token counts the provider reported without one, or a model call that recorded the reasoning effort it ran at |
 | `seal` | the run's own stop: the wrapped agent's `agent_stop` on the run's own chain, or the ledger event that closes an attempt. A `checkpoint` and a `telemetry_gap` are the chain's own, read with `get_run_chain`, and answer no chip |
 | `errors` | a call whose recorded outcome is failed, denied, cancelled, error, timeout, refused or rejected |
 
@@ -127,7 +127,7 @@ The server is the only place a transcript is folded (ADR-182), so every fact a r
 | `entries[].key` | string | the entry's name within the run: the opening frame's `seq` on the run's own chain, `<sessionUuid>:<seq>` on a subagent's. Stable across reads |
 | `entries[].parentKey` | string or null | on a subagent's entry, the `key` of the entry that spawned its chain: the call whose `tool_use_id` the chain names, or else the latest entry on the parent chain that recorded a `subagent_start`. Null on the run's own chain |
 | `entries[].node` | string or null | what kind of row the entry is: `prompt` (the operator's words), `reply` (a `turn_end` or a message the agent reported), `model`, `tool`, `policy` (a decision on no recorded call, or an operator's command), `recall`, `seal` (the run's own stop), `control` (a frame that frames the run, such as the agent starting), or `event`. Null for a turn |
-| `entries[].quiet` | boolean | true when the entry has nothing to show beyond its frames: a prompt or reply with no words to show (no body kept, a body that cannot be read, or only whitespace), a reply that repeats words just shown (`echoOf`), or an event with no decision and no failure. The words are read at `steps` only: at `everything` a prompt or reply is quiet only when it kept no half at all (see Words) |
+| `entries[].quiet` | boolean | true when the entry has nothing to show beyond its frames: a prompt or reply with no words to show (no body kept, a body that cannot be read, or only whitespace), a reply that repeats words just shown (`echoOf`), a model step that kept no reply and carried no cost, tokens or effort (a call still waiting on its reply is one), or an event with no decision and no failure. The words are read at `steps` only: at `everything` a prompt or reply is quiet only when it kept no half at all (see Words) |
 | `entries[].outcome` | string or null | `ok`, `failed`, `denied` (a rule or the harness refused it), `parked` (it waits on an approval), or `pending` (nothing came back yet); null for an entry that records no call. At `everything`, a call's request frame cannot say how the call ended, so its entry's outcome is null |
 | `entries[].approvalId` | string or null | the approval a parked call waits on (`apr_…`), when its receipt named one |
 | `entries[].gates` | object[] | every decision folded into the entry, in the order recorded, each shaped like `decision`. `decision` is the last of them |
@@ -145,7 +145,7 @@ Two facts need an entry's words, which the fold does not read: whether a prompt 
 
 A body never changes: its reference names the digest of its bytes. So the server keeps what each body it read says, per process, keyed by the organization, the workspace, the reference and the digest, up to 8 192 bodies and 8 Mi characters (`WORDS_CACHE_LIMITS`). A later read, a later page, a live run's tail read and a search answer those bodies without reading them again, and a page's prompt and reply halves are answered from what the words read kept. A read therefore reads the bodies no earlier read in that process has read, plus its page's model and tool halves. A body whose words pass 1 Mi characters is not kept and is read on each read; a body that could not be read or no longer hashes is not kept either.
 
-`turns` is a group and settles neither fact. `everything` settles neither either: it lists one entry per frame, and the reader that reads it (the Run page's governed actions, Policy and Context tabs) lists decisions, recalls and calls, none of which turns quiet on its words, while `counts.frames` needs no words. At `everything` a prompt or reply is `quiet` only when it kept no half, `echoOf` is null, and `counts` counts a prompt or reply whose words are blank or repeat.
+`turns` is a group and settles neither fact. `everything` settles neither either: it lists one entry per frame, and the reader that reads it (the Run page's governed actions, Policy and Context tabs) lists decisions, recalls and calls, none of which turns quiet on its words, while `counts.frames` needs no words. At `everything` a prompt or reply is `quiet` only when it kept no half, `echoOf` is null, and `counts` counts a prompt or reply whose words are blank or repeat. At both, the prompts of the `steps` fold still have their words read, one body per prompt, so `figures.prompts` is the same at every zoom; once the run has been read at `steps`, the cache answers them.
 
 ## Search
 
@@ -180,7 +180,7 @@ An entry whose only match sits in an unsearched half is not in the answer. A cal
 | Field | Type | Description |
 |---|---|---|
 | `figures.steps` | `{ model, tool }` | model steps and tool steps |
-| `figures.prompts` | integer | the times the operator prompted the run, the first prompt included. A subagent's `turn_start` and a model request are not the operator |
+| `figures.prompts` | integer | the times the operator prompted the run, the first prompt included, counted as `counts.kinds.prompt` counts them at `steps`: a prompt that is `quiet` there, such as one of only whitespace, is not counted. A subagent's `turn_start` and a model request are not the operator |
 | `figures.calls.count`, `.failed` | integer | tool calls, and those whose `outcome` is `failed` or `denied` |
 | `figures.calls.tools[]` | `{ name, calls }` | calls per tool, by the tool's name without a gateway's harness prefix (`claude_code__Bash` counts as `Bash`), most called first. `name` is null for calls whose record named no tool |
 | `figures.calls.families[]` | object | per family: `family`, `calls`, `share` of all calls, `ms` (the calls' own time), `failed`, and `tools` (distinct names). Most called first |

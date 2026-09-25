@@ -689,12 +689,13 @@ function decisionView(decision: TranscriptDecision) {
 
 /**
  * The reasoning effort the fold's model call ran at: the first of its frames
- * that recorded one. Null where none did, which is every ledger frame and
- * every wrapped frame from a harness that does not report it.
+ * that recorded one, as the fold's `usage` chip reads it (`frameKinds`).
+ * Null where none did, which is every ledger frame and every wrapped frame
+ * from a harness that does not report it.
  */
 function entryEffort(fold: TranscriptFold): string | null {
-  for (const frame of [fold.opening, fold.request, fold.response]) {
-    const effort = frame?.identity.effort;
+  for (const frame of fold.members) {
+    const effort = frame.identity.effort;
     if (effort !== undefined && effort !== "") return effort;
   }
   return null;
@@ -742,15 +743,24 @@ export function createRunTranscriptGetHandler(
     // tail read reads only the bodies that are new.
     //
     // `turns` is a group, and nothing in it is settled this way. At
-    // `everything`, one entry per frame, the words are not read either: the
-    // Run page reads it only to list decisions, recalls and governed actions,
-    // which never turn quiet on words, and `counts.frames` needs none. There
-    // a prompt or reply is quiet only where the fold says so, `echoOf` is
-    // null, and `counts` counts every prompt and reply the fold keeps.
-    if (input.zoom === "steps")
-      await markWords(all, (needed) =>
-        readWords(deps.bodies, scope, needed, { cache: words }),
-      );
+    // `everything`, one entry per frame, the entries' words are not read
+    // either: the Run page reads it only to list decisions, recalls and
+    // governed actions, which never turn quiet on words, and `counts.frames`
+    // needs none. There a prompt or reply is quiet only where the fold says
+    // so, `echoOf` is null, and `counts` counts every prompt and reply the
+    // fold keeps.
+    //
+    // The figures are counted over `steps` at every zoom, and count a prompt
+    // as the prompt chip counts it at `steps`. So at the other two zooms the
+    // `steps` prompts' words are read: one body per prompt, which the cache
+    // already holds once the run has been read at `steps`. The figures then
+    // do not move with the zoom.
+    await markWords(
+      input.zoom === "steps"
+        ? all
+        : steps.filter((step) => step.node === "prompt"),
+      (needed) => readWords(deps.bodies, scope, needed, { cache: words }),
+    );
     // Counted over every entry at the zoom, whatever the chips or query, so
     // a chip's count and the rows it shows agree. The frames' own policy and
     // recall counts ride every read, so a reader at `steps` never reads

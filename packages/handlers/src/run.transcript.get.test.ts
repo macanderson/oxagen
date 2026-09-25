@@ -522,6 +522,7 @@ describe("get_run_transcript", () => {
         model: "haiku",
         provider: "anthropic",
         turnSeq: 1,
+        ...stored("Reading it."),
       }),
       tachoRow(2, { turnSeq: 1, toolStatus: "error" }),
     ]);
@@ -1667,6 +1668,7 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     // `everything` lists frames for the Actions, Policy and Context tabs,
     // none of which a word turns quiet. Reading every prompt and reply of the
     // run there would cost the bodies and settle nothing any of them draws.
+    // Only the prompts' words are read, for `figures.prompts`.
     const rows = [
       tachoRow(0, {
         kind: "turn_start",
@@ -1686,7 +1688,8 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       input({ zoom: "everything", limit: 1 }),
       ctx(),
     );
-    // Only the page's one half is read.
+    // Only the prompt's body is read: its words for the figures, and the
+    // page's one half from what that read kept.
     expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
       stored("Ship it.").bytesRef,
     ]);
@@ -2383,9 +2386,13 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
   it("counts the run's figures over its steps, whatever the zoom, chips or query", async () => {
     const { transcript } = harness(run);
     const steps = await transcript(input({ zoom: "steps" }), ctx());
+    // The second prompt no longer hashes to its digest, so it shows no
+    // words and the prompt chip leaves it out; so does the figure, at every
+    // zoom (P3-4 of the ADR-182 re-review).
+    expect(steps.counts?.kinds.prompt).toBe(1);
     expect(steps.figures).toEqual({
       steps: { model: 0, tool: 2 },
-      prompts: 2,
+      prompts: 1,
       calls: {
         count: 2,
         failed: 0,

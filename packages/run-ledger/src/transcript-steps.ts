@@ -589,7 +589,11 @@ function modelFacts(
   const last = members[members.length - 1] as RunFrame;
   return {
     node: "model",
-    quiet: false,
+    // A model step draws a row under `responses` when its reply was kept,
+    // and a usage row when it carried a cost, tokens or an effort. One that
+    // did neither draws nothing: a call still waiting on its reply, or one
+    // kept as a digest with no figures. So it is quiet, and counts nowhere.
+    quiet: !kinds.has("responses") && !kinds.has("usage"),
     outcome: kinds.has("errors")
       ? "failed"
       : halves.response === null

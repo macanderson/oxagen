@@ -429,6 +429,87 @@ describe("a model step's rows", () => {
     expect(rows[0]).toMatchObject({ text: null, tokens: 40 });
   });
 
+  // Finding P2 of the ADR-182 re-review: the server counts every model step
+  // whose reply was kept under `responses`, since which rows a reply draws
+  // needs it read. A step that only called tools drew no row there, so the
+  // chip counted a step it did not show.
+  it("draws a reply that said nothing in words as one row under responses, naming what it called", () => {
+    const rows = rowsFrom([
+      model({
+        kinds: ["responses", "usage"],
+        costMicros: "12",
+        response: {
+          seq: 1,
+          type: "llm_call",
+          blocks: [
+            {
+              kind: "tool_use",
+              name: "claude_code__Bash",
+              tool: "Bash",
+              input: { command: "ls" },
+              callKey: "k1",
+              stepKey: "2",
+              family: "shell",
+            },
+            {
+              kind: "tool_use",
+              name: "Read",
+              input: { file_path: "src/a.ts" },
+              callKey: "k2",
+              stepKey: "3",
+              family: "read",
+            },
+          ],
+        },
+      }),
+    ]);
+    expect(rows.map((row) => [row.kind, row.group])).toEqual([
+      ["calls", "responses"],
+      ["usage", "usage"],
+    ]);
+    expect(rows[0]).toMatchObject({ tools: ["Bash", "Read"] });
+  });
+
+  it("draws a kept reply the page shows no words for as a row under responses too", () => {
+    const rows = rowsFrom([
+      model({
+        kinds: ["responses", "usage"],
+        costMicros: "1000",
+        response: { seq: 1, type: "llm_call", text: '{"content":[]}' },
+      }),
+      model({
+        seq: 2,
+        kinds: ["responses"],
+        response: { seq: 2, type: "llm_call", text: null },
+      }),
+    ]);
+    expect(rows.map((row) => [row.entry, row.kind])).toEqual([
+      ["1", "calls"],
+      ["1", "usage"],
+      ["2", "calls"],
+    ]);
+    expect(rows[2]).toMatchObject({ tools: [] });
+  });
+
+  it("draws no calls row for a step that said something, or one the server does not count under responses (negative)", () => {
+    const said = rowsFrom([
+      model({
+        kinds: ["responses"],
+        response: { seq: 1, type: "llm_call", text: "Done." },
+      }),
+    ]);
+    expect(said.map((row) => row.kind)).toEqual(["text"]);
+    // Kept as a digest with a cost: the server counts it under usage alone.
+    const priced = rowsFrom([
+      model({
+        kinds: ["usage"],
+        costMicros: "10",
+        response: { seq: 1, type: "llm_call", text: null },
+      }),
+    ]);
+    expect(priced.map((row) => row.kind)).toEqual(["usage"]);
+  });
+
   it("draws nothing for a model step with no words, no tokens and no cost (negative)", () => {
     expect(rowsFrom([model({ model: undefined })])).toEqual([]);
   });
@@ -465,6 +546,38 @@ describe("an event's rows", () => {
         },
       ]),
     ).toEqual([]);
+  });
+
+  // Finding P3-1 of the ADR-182 re-review: the rows trimmed a prompt's and a
+  // reply's words and hid the blank ones, a second copy of the server's rule
+  // that parted from it past the server's words bound. `quiet` alone decides.
+  it("draws every prompt and reply the server does not call quiet, reading no words to decide", () => {
+    const rows = rowsFrom([
+      {
+        seq: 1,
+        t: 0,
+        type: "turn_start",
+        kind: "frame",
+        node: "prompt",
+        turn: 1,
+        kinds: ["prompt"],
+        request: { seq: 1, type: "turn_start", text: " \n" },
+      },
+      {
+        seq: 2,
+        t: 0,
+        type: "turn_end",
+        kind: "frame",
+        node: "reply",
+        turn: 1,
+        kinds: ["responses"],
+        response: { seq: 2, type: "turn_end", text: "" },
+      },
+    ]);
+    expect(rows.map((row) => [row.entry, row.kind, row.group])).toEqual([
+      ["1", "prompt", "prompt"],
+      ["2", "text", "responses"],
+    ]);
   });
 
   it("draws a reply's words, the run's stop, and a decision on no recorded call", () => {

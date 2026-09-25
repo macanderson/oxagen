@@ -202,6 +202,16 @@ export type FeedRow = FeedBase &
     | { kind: "prompt"; text: string; turn: number | null; first: boolean }
     | { kind: "text"; text: string }
     | {
+        /**
+         * A model step whose kept reply said nothing in words: the one row
+         * it draws under `responses`, so the chip's count, which the server
+         * takes without reading the reply, is what the chip shows.
+         */
+        kind: "calls";
+        /** The tools the reply called, in order; empty when it called none the record kept. */
+        tools: string[];
+      }
+    | {
         kind: "thinking";
         /**
          * The thought as the reply kept it; null when the harness recorded
@@ -278,12 +288,6 @@ function base(
     spent: entry.cumulativeCost,
     matched: entry.matches.length > 0,
   };
-}
-
-/** A half's words, when it kept any that are not blank. */
-function wordsOf(half: TranscriptBody | null): string | null {
-  const text = half?.text ?? null;
-  return text === null || text.trim() === "" ? null : text;
 }
 
 /** The headline and its qualifier on one line, or null when neither was recorded. */
@@ -448,6 +452,12 @@ function blockToolRow(
  * cost, then any tool it called that no tool step recorded. A call a tool
  * step recorded (`stepKey`) is that step's row, so it is not drawn here, and
  * no row is ever a model frame with JSON to open.
+ *
+ * A step the server counts under `responses` draws a row under it whatever
+ * its reply said (ADR-182). The server counts every step whose reply was
+ * kept, since which of these rows a reply draws needs the reply read and a
+ * count reads none. So a reply that said nothing in words, one that only
+ * called tools, draws a `calls` row naming them.
  */
 function modelRows(entry: TranscriptEntry): FeedRow[] {
   const reply = entry.response;
@@ -471,8 +481,8 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
     // A reply kept as plain words is drawn as them. One kept as JSON the
     // recorder did not assemble is drawn by its cost alone, never as JSON to
     // open.
-    const text = wordsOf(reply);
-    if (text !== null && parseBody(text) === null)
+    const text = reply?.text ?? null;
+    if (text !== null && text.trim() !== "" && parseBody(text) === null)
       said(`${entry.key}:text`, "text", text);
   } else {
     blocks.forEach((block, index) => {
@@ -491,6 +501,18 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
       kind: "thinking",
       text: null,
       tokens: reasoning,
+    });
+  }
+  if (
+    entry.kinds.includes("responses") &&
+    !rows.some((row) => row.kind === "text")
+  ) {
+    rows.push({
+      ...base(`${entry.key}:calls`, entry, "responses"),
+      kind: "calls",
+      tools: (blocks ?? []).flatMap((block) =>
+        block.kind === "tool_use" ? [block.tool ?? block.name] : [],
+      ),
     });
   }
   const usage = entry.usage ?? null;
@@ -522,7 +544,7 @@ function eventRow(entry: TranscriptEntry): FeedRow {
     ...base(entry.key, entry, null),
     kind: "event",
     name: entry.subject ?? entry.type,
-    text: wordsOf(soleBody(entry)),
+    text: soleBody(entry)?.text ?? null,
     gates: entry.gates.map(gateOf),
     frame: openingOf(entry),
   };
@@ -530,35 +552,36 @@ function eventRow(entry: TranscriptEntry): FeedRow {
 
 /**
  * The rows one entry draws, in the order they read. An entry the server says
- * has nothing to show (`quiet`) draws none. That includes a prompt or reply
- * with no words, and a reply that repeats words the reader was just shown
- * (`echoOf`): the server compares the words, and its counts leave out every
- * quiet entry, so a count and the rows drawn agree (ADR-182). A turn (`node`
- * null) is a group, not a row.
+ * has nothing to show (`quiet`) draws none, and every other entry draws at
+ * least one. Quiet takes in a prompt or reply with no words, and a reply that
+ * repeats words the reader was just shown (`echoOf`): the server reads and
+ * compares the words, and its counts leave out every quiet entry, so a count
+ * and the rows drawn agree (ADR-182). This module reads no words to decide
+ * it. A turn (`node` null) is a group, not a row.
  *
  * @internal Exported for its unit test; the view draws rows through `feedOf`.
  */
 export function rowsOf(entry: TranscriptEntry): FeedRow[] {
   if (entry.quiet) return [];
   switch (entry.node) {
-    case "prompt": {
-      const text = wordsOf(entry.request);
-      if (text === null) return [];
+    case "prompt":
       return [
         {
           ...base(entry.key, entry, "prompt"),
           kind: "prompt",
-          text,
+          text: entry.request?.text ?? "",
           turn: entry.turn,
           first: false,
         },
       ];
-    }
-    case "reply": {
-      const text = wordsOf(entry.response);
-      if (text === null) return [];
-      return [{ ...base(entry.key, entry, "responses"), kind: "text", text }];
-    }
+    case "reply":
+      return [
+        {
+          ...base(entry.key, entry, "responses"),
+          kind: "text",
+          text: entry.response?.text ?? "",
+        },
+      ];
     case "model":
       return modelRows(entry);
     case "tool":

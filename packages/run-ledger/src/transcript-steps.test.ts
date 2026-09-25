@@ -1204,7 +1204,7 @@ describe("the turns zoom", () => {
     const [turn] = foldTranscript(
       [
         w(0, "turn_start", { turnSeq: 1 }),
-        w(1, "llm_call", { model: "m", turnSeq: 1 }),
+        w(1, "llm_call", { model: "m", turnSeq: 1, ...kept("m") }),
         w(2, "tool_call", {
           toolName: "Read",
           toolStatus: "failed",
@@ -1468,7 +1468,7 @@ describe("transcriptCounts", () => {
     const folds = frameFolds([
       w(0, "agent_start"),
       w(1, "turn_start", { turnSeq: 1, ...kept("p") }),
-      w(2, "llm_call", { model: "m", costUsdMicros: 3 }),
+      w(2, "llm_call", { model: "m", costUsdMicros: 3, ...kept("m") }),
       w(3, "tool_call", { toolName: "Bash", toolStatus: "error" }),
       w(4, "policy_decision", { policyDecision: "deny" }),
       w(5, "policy_decision", {
@@ -1496,6 +1496,67 @@ describe("transcriptCounts", () => {
     expect(counts.errors).toBe(3);
     // The managed-settings check is the harness checking itself.
     expect(counts.policy).toBe(1);
+  });
+
+  // Finding P2 of the ADR-182 re-review: every model step counted, though a
+  // call still waiting on its reply, and one kept as a digest with no cost
+  // or tokens, draw no row. A model step counts where it draws: under
+  // `responses` when its reply was kept, whatever the reply said, and under
+  // `usage` when it carried a cost, tokens or an effort.
+  it("counts a model step only under the chips it draws a row for, and not at all when it draws none (negative)", () => {
+    const folds = stepFolds([
+      w(0, "turn_start", { turnSeq: 1, ...kept("p") }),
+      // A reply that only called a tool: kept, so a row under responses.
+      w(1, "llm_call", { turnSeq: 1, model: "m", ...kept("tools-only") }),
+      w(2, "tool_call", { turnSeq: 1, toolName: "Bash", toolUseId: "tu_b" }),
+      // Kept as a digest, with a cost: a usage row and nothing else.
+      w(3, "llm_call", {
+        turnSeq: 1,
+        model: "m",
+        costUsdMicros: 5,
+        ...digestOnly("priced"),
+      }),
+      // Kept as a digest, with the effort it ran at: a usage row.
+      w(4, "llm_call", {
+        turnSeq: 1,
+        model: "m",
+        effort: "high",
+        ...digestOnly("effort"),
+      }),
+      // Kept as a digest with no figures: nothing to draw.
+      w(5, "llm_call", { turnSeq: 1, model: "m", ...digestOnly("bare") }),
+      // Sent and not yet answered: nothing to draw.
+      w(6, "model.request", {
+        turnSeq: 1,
+        model: "m",
+        toolUseId: "m_live",
+        ...kept("request"),
+      }),
+    ]);
+    const facts = folds.map((fold) => [
+      fold.key,
+      fold.node,
+      fold.quiet,
+      [...fold.kinds].sort(),
+    ]);
+    expect(facts).toEqual([
+      ["0", "prompt", false, ["prompt"]],
+      ["1", "model", false, ["responses"]],
+      ["2", "tool", false, ["tools"]],
+      ["3", "model", false, ["usage"]],
+      ["4", "model", false, ["usage"]],
+      ["5", "model", true, []],
+      ["6", "model", true, []],
+    ]);
+    expect(folds[6]?.outcome).toBe("pending");
+    const counts = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    expect(counts.entries).toBe(5);
+    expect(counts.kinds).toMatchObject({
+      prompt: 1,
+      responses: 1,
+      tools: 1,
+      usage: 2,
+    });
   });
 });
 

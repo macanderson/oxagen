@@ -112,6 +112,8 @@
       "you": "You",
       "agent": "Agent",
       "answer": "Answer",
+      "calledTools": "Called {tools}",
+      "saidNothing": "No words to show",
       "operator": "{name} · operator",
       "task": "task {ref}",
       "firstPrompt": "first prompt",

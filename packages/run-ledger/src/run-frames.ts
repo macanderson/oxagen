@@ -840,10 +840,20 @@ export function boundaryHalf(frame: RunFrame): "request" | "response" | null {
  */
 export function frameKinds(frame: RunFrame): TranscriptKind[] {
   const kinds = new Set<TranscriptKind>();
-  // What came back from a model, and a reply the harness reported with its
-  // words kept. The request half of a model call answers no chip: it is the
-  // context the model was sent, not something a person prompted.
-  if (MODEL_TYPES.has(frame.type) && frame.phase !== "request")
+  // What came back from a model with its body kept, and a reply the harness
+  // reported with its words kept. The Run page draws a row under this chip
+  // for every model step that answers it: what the model said, or a line
+  // naming what it called when it said nothing in words. A response kept as
+  // a digest alone has nothing to draw there, so it answers `usage` when it
+  // carried a cost or tokens, and no chip otherwise. Which of those rows a
+  // kept body draws needs the body read, and a count reads no body. The
+  // request half of a model call answers no chip: it is the context the
+  // model was sent, not something a person prompted.
+  if (
+    MODEL_TYPES.has(frame.type) &&
+    frame.phase !== "request" &&
+    frame.body.bodyRef !== null
+  )
     kinds.add("responses");
   if (boundaryHalf(frame) === "response") kinds.add("responses");
   // A wrapped run's prompt is the `turn_start` its operator typed. A
@@ -857,8 +867,14 @@ export function frameKinds(frame: RunFrame): TranscriptKind[] {
   if (TOOL_TYPES.has(frame.type)) kinds.add("tools");
   if (POLICY_TYPES.has(frame.type)) kinds.add("policy");
   if (RECALL_TYPES.has(frame.type)) kinds.add("recall");
-  // A cost record, or token counts the provider reported without one.
-  if (frame.costMicros !== null || (frame.usage ?? null) !== null)
+  // What the Run page's usage row shows: a cost record, token counts the
+  // provider reported without one, or the reasoning effort a model call ran
+  // at.
+  if (
+    frame.costMicros !== null ||
+    (frame.usage ?? null) !== null ||
+    (MODEL_TYPES.has(frame.type) && (frame.identity.effort ?? "") !== "")
+  )
     kinds.add("usage");
   if (stopsRun(frame)) kinds.add("seal");
   const status = frame.identity.toolStatus;

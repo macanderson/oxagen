@@ -5943,6 +5943,8 @@ type Messages = {
       you: string;
       agent: string;
       answer: string;
+      calledTools: string;
+      saidNothing: string;
       operator: string;
       task: string;
       firstPrompt: string;

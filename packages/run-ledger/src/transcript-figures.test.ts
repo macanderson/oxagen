@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { tachoFrame, type TachoFrameRowLike } from "./run-frames";
 import { transcriptFigures } from "./transcript-figures";
-import { stepFolds } from "./transcript-steps";
+import { stepFolds, transcriptCounts } from "./transcript-steps";
 
 const ROOT = "0192d4a8-7c1e-7a00-8000-00000000000a";
 const SUB = "0192d4a8-7c1e-7a00-8000-0000000000c1";
@@ -17,7 +17,17 @@ function ts(second: number): string {
   return `2026-09-11 09:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.000`;
 }
 
-/** A wrapped frame on the run's own chain, observed `second` seconds in. */
+/** A body the recorder kept, as the frame's columns name it. */
+const kept = (seq: number) => ({
+  contentDigest: `sha256:${String(seq).padStart(64, "b")}`,
+  bytesRef: `evb:v1:k:${String(seq).padStart(64, "b")}`,
+});
+
+/**
+ * A wrapped frame on the run's own chain, observed `second` seconds in. An
+ * operator's prompt keeps its words unless `over` says otherwise, since one
+ * kept as a digest alone shows the reader nothing and is not counted.
+ */
 function w(
   seq: number,
   second: number,
@@ -29,8 +39,9 @@ function w(
     ts: ts(second),
     kind,
     hash: `sha256:${String(seq).padStart(64, "0")}`,
-    contentDigest: "",
-    bytesRef: "",
+    ...(kind === "turn_start"
+      ? kept(seq)
+      : { contentDigest: "", bytesRef: "" }),
     redactions: "",
     toolName: "",
     toolStatus: "",
@@ -97,6 +108,27 @@ describe("transcriptFigures", () => {
     ]);
     expect(f.prompts).toBe(1);
     expect(f.steps.model).toBe(1);
+  });
+
+  // Finding P3-4 of the ADR-182 re-review: the figure counted a prompt of
+  // only whitespace that the prompt chip leaves out. Both count a prompt the
+  // reader is shown, so the Prompts figure and the chip agree.
+  it("counts a prompt as the prompt chip does: not one the reader is shown nothing for (negative)", () => {
+    const frames = [
+      w(0, 0, "turn_start"),
+      w(1, 1, "llm_call", { model: "m" }),
+      w(2, 2, "turn_start"),
+      w(3, 3, "turn_start", { contentDigest: "", bytesRef: "" }),
+    ];
+    const steps = stepFolds(frames);
+    // What `markWords` settles once it reads the second prompt's words and
+    // finds only whitespace.
+    const blank = steps.find((step) => step.key === "2");
+    if (blank === undefined) throw new Error("no prompt at 2");
+    blank.quiet = true;
+    const f = transcriptFigures(frames, steps);
+    expect(f.prompts).toBe(1);
+    expect(f.prompts).toBe(transcriptCounts(steps, ["prompt"]).kinds.prompt);
   });
 
   it("reads the tool calls, their failures, families and batches off the steps", () => {

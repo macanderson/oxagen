@@ -9,7 +9,8 @@
  *
  * What is counted:
  *
- * - the model steps, the tool steps and the operator's prompts;
+ * - the model steps, the tool steps and the operator's prompts, a prompt
+ *   counted as the transcript's `prompt` chip counts it;
  * - the tool calls: how many, how many failed or were refused, each tool's
  *   count, each family's figures, and the batches they ran in;
  * - where the recorded time went: model calls, tool calls, and people
@@ -320,7 +321,10 @@ export function transcriptFigures(
       model += 1;
       modelMs += step.durationMs ?? 0;
     } else if (step.node === "tool") tool += 1;
-    else if (step.node === "prompt") prompts += 1;
+    // A prompt counts as `counts.kinds.prompt` counts it: a prompt the
+    // reader is shown, so one of only whitespace is not a time the operator
+    // prompted the run.
+    if (!step.quiet && step.kinds.has("prompt")) prompts += 1;
   }
   return {
     steps: { model, tool },

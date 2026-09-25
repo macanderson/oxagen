@@ -605,6 +605,43 @@ describe("the rows", () => {
     ).toHaveAttribute("aria-expanded", "true");
   });
 
+  it("draws a model step that only called tools as the agent's line naming them, under the responses chip", () => {
+    renderSection({
+      read: readOk(
+        stepsOf(
+          releaseSteps().map((spec) =>
+            spec.seq === 8
+              ? {
+                  ...spec,
+                  kinds: ["responses" as const, "usage" as const],
+                  response: {
+                    seq: 8,
+                    type: "model.response",
+                    blocks: [
+                      {
+                        kind: "tool_use" as const,
+                        name: "Read",
+                        input: { file_path: "CHANGELOG.md" },
+                        callKey: "k8",
+                        stepKey: "9",
+                        family: "read" as const,
+                      },
+                    ],
+                  },
+                }
+              : spec,
+          ),
+        ),
+      ),
+    });
+    const calls = screen.getByTestId("transcript-calls");
+    expect(calls).toHaveTextContent("Called Read");
+    expect(calls.closest("[data-testid='tx-row']")).toHaveAttribute(
+      "data-kind",
+      "calls",
+    );
+  });
+
   it("opens every thought with expand thinking, and closes them again", () => {
     renderSection({
       read: readOk(
@@ -1555,7 +1592,15 @@ describe("a run with no frames", () => {
       read: readOk(
         runTranscript({
           entries: [
-            transcriptEntry({ request: null, response: null, cost: null }),
+            // What the server sends for a model step that kept no reply and
+            // no figures: it answers no chip and draws nothing.
+            transcriptEntry({
+              request: null,
+              response: null,
+              cost: null,
+              kinds: [],
+              quiet: true,
+            }),
           ],
         }),
       ),

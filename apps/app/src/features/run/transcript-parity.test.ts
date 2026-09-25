@@ -42,50 +42,68 @@ function stored(text: string) {
   return { contentDigest: digest, bytesRef: ref };
 }
 
-/** A recorded model stream that says `text`, then calls Write as `toolu_w`. */
-function modelStream(text: string): string {
-  const events = [
+/** A recorded model stream of `blocks`, as the gateway kept it. */
+function streamOf(
+  blocks: (
+    | { type: "text"; text: string }
+    | { type: "tool_use"; id: string; name: string; input: object }
+  )[],
+): string {
+  const events: object[] = [
     { type: "message_start", message: { usage: { input_tokens: 10 } } },
-    { type: "content_block_start", index: 0, content_block: { type: "text" } },
-    {
-      type: "content_block_delta",
-      index: 0,
-      delta: { type: "text_delta", text },
-    },
-    { type: "content_block_stop", index: 0 },
-    {
-      type: "content_block_start",
-      index: 1,
-      content_block: { type: "tool_use", id: "toolu_w", name: "Write" },
-    },
-    {
-      type: "content_block_delta",
-      index: 1,
-      delta: {
-        type: "input_json_delta",
-        partial_json: JSON.stringify({ file_path: "/p/notes.md" }),
-      },
-    },
-    { type: "content_block_stop", index: 1 },
+  ];
+  blocks.forEach((block, index) => {
+    if (block.type === "text") {
+      events.push(
+        { type: "content_block_start", index, content_block: { type: "text" } },
+        {
+          type: "content_block_delta",
+          index,
+          delta: { type: "text_delta", text: block.text },
+        },
+      );
+    } else {
+      events.push(
+        {
+          type: "content_block_start",
+          index,
+          content_block: { type: "tool_use", id: block.id, name: block.name },
+        },
+        {
+          type: "content_block_delta",
+          index,
+          delta: {
+            type: "input_json_delta",
+            partial_json: JSON.stringify(block.input),
+          },
+        },
+      );
+    }
+    events.push({ type: "content_block_stop", index });
+  });
+  events.push(
     {
       type: "message_delta",
       delta: { stop_reason: "end_turn" },
       usage: { output_tokens: 20 },
     },
     { type: "message_stop" },
-  ];
+  );
   return events
     .map((data) => `event: e\ndata: ${JSON.stringify(data)}\n\n`)
     .join("");
 }
 
 const none = { toolName: "", toolStatus: "", toolUseId: "" };
+const model = { model: "claude-opus-5", provider: "anthropic" };
 
 /**
- * Two turns: a prompt, a model step that says something and calls Write, the
- * Write call, a failed Bash call, and a closing message that repeats the
- * model's words; then a prompt of only whitespace, a closing message that
- * says something new, and the run's stop.
+ * Two turns. The first: a prompt; a model step that only calls Read, and
+ * the Read call; a model step that says something and calls Write, and the
+ * Write call; a failed Bash call; a model step kept as a digest with no cost
+ * or tokens; and a closing message that repeats the model's words. The
+ * second: a prompt of only whitespace, a closing message that says something
+ * new, a model call still waiting on its reply, and the run's stop.
  */
 const rows: TachoFrameRow[] = [
   tachoRow(0, {
@@ -97,40 +115,88 @@ const rows: TachoFrameRow[] = [
   tachoRow(1, {
     kind: "llm_call",
     ...none,
-    model: "claude-opus-5",
-    provider: "anthropic",
-    costUsdMicros: 40,
+    ...model,
+    costUsdMicros: 12,
     turnSeq: 1,
-    ...stored(modelStream("Writing the notes.")),
+    ...stored(
+      streamOf([
+        {
+          type: "tool_use",
+          id: "toolu_r",
+          name: "Read",
+          input: { file_path: "/p/plan.md" },
+        },
+      ]),
+    ),
   }),
   tachoRow(2, {
+    kind: "tool_call",
+    toolName: "Read",
+    toolStatus: "ok",
+    toolUseId: "toolu_r",
+    turnSeq: 1,
+  }),
+  tachoRow(3, {
+    kind: "llm_call",
+    ...none,
+    ...model,
+    costUsdMicros: 40,
+    turnSeq: 1,
+    ...stored(
+      streamOf([
+        { type: "text", text: "Writing the notes." },
+        {
+          type: "tool_use",
+          id: "toolu_w",
+          name: "Write",
+          input: { file_path: "/p/notes.md" },
+        },
+      ]),
+    ),
+  }),
+  tachoRow(4, {
     kind: "tool_call",
     toolName: "Write",
     toolStatus: "ok",
     toolUseId: "toolu_w",
     turnSeq: 1,
   }),
-  tachoRow(3, {
+  tachoRow(5, {
     kind: "tool_call",
     toolName: "Bash",
     toolStatus: "error",
     toolUseId: "tu_b",
     turnSeq: 1,
   }),
-  tachoRow(4, {
+  tachoRow(6, {
+    kind: "llm_call",
+    ...none,
+    ...model,
+    turnSeq: 1,
+    contentDigest: `sha256:${"d".repeat(64)}`,
+  }),
+  tachoRow(7, {
     kind: "turn_end",
     ...none,
     turnSeq: 1,
     ...stored("Writing the notes.\n"),
   }),
-  tachoRow(5, { kind: "turn_start", ...none, turnSeq: 2, ...stored(" \n") }),
-  tachoRow(6, {
+  tachoRow(8, { kind: "turn_start", ...none, turnSeq: 2, ...stored(" \n") }),
+  tachoRow(9, {
     kind: "turn_end",
     ...none,
     turnSeq: 2,
     ...stored("Nothing more to do."),
   }),
-  tachoRow(7, { kind: "agent_stop", ...none, turnSeq: 2 }),
+  tachoRow(10, {
+    kind: "model.request",
+    ...none,
+    ...model,
+    toolUseId: "m_live",
+    turnSeq: 2,
+    ...stored('{"messages":[]}'),
+  }),
+  tachoRow(11, { kind: "agent_stop", ...none, turnSeq: 2 }),
 ];
 
 function transcript() {
@@ -189,16 +255,27 @@ describe("the Transcript tab's counts and rows", () => {
     expect(counts.errors).toBe(entriesOf((row) => row.failed));
 
     // The fixture holds what used to split them: a closing message that
-    // repeats the model's streamed words, and a prompt of only whitespace.
+    // repeats the model's streamed words, a prompt of only whitespace, a
+    // model step that only called a tool, one kept as a digest with nothing
+    // to draw, and a call still waiting on its reply.
     expect(drawn.map((row) => [row.entry, row.kind])).toEqual([
       ["0", "prompt"],
-      ["1", "text"],
+      ["1", "calls"],
       ["1", "usage"],
       ["2", "tool"],
-      ["3", "tool"],
-      ["6", "text"],
-      ["7", "seal"],
+      ["3", "text"],
+      ["3", "usage"],
+      ["4", "tool"],
+      ["5", "tool"],
+      ["9", "text"],
+      ["11", "seal"],
     ]);
-    expect(counts.entries).toBe(6);
+    expect(counts.entries).toBe(8);
+    expect(counts.kinds.responses).toBe(3);
+    // The step that only called Read names it, and draws the call once, as
+    // the Read step's row.
+    expect(drawn.find((row) => row.kind === "calls")).toMatchObject({
+      tools: ["Read"],
+    });
   });
 });

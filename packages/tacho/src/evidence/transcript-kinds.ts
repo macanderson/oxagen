@@ -23,9 +23,9 @@ export const TRANSCRIPT_KINDS = [
    */
   "prompt",
   /**
-   * What came back: a model call's response half or single receipt, and a
-   * reply the harness reported with its words kept (`turn_end`, or a
-   * message recorded as a response).
+   * What came back: a model call's response half or single receipt whose
+   * body was kept, and a reply the harness reported with its words kept
+   * (`turn_end`, or a message recorded as a response).
    */
   "responses",
   /**
@@ -38,7 +38,10 @@ export const TRANSCRIPT_KINDS = [
   "tools",
   /** A decision a rule or a person made about a call: allow, deny, route. */
   "policy",
-  /** A frame that carried a cost record, or token counts without one. */
+  /**
+   * A frame that carried a cost record or token counts without one, or a
+   * model call that recorded the reasoning effort it ran at.
+   */
   "usage",
   /** What was pulled into the model's context. */
   "recall",

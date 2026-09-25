@@ -751,6 +751,32 @@ function TextRow({
   );
 }
 
+/**
+ * A model step whose kept reply said nothing in words: what it called, on
+ * one dim line under the agent's tag. It is the step's row under the
+ * responses chip, so that chip shows every step it counts.
+ */
+function CallsRow({ row }: { row: Extract<FeedRow, { kind: "calls" }> }) {
+  const t = useTranslations("run.transcript");
+  const line =
+    row.tools.length === 0
+      ? t("saidNothing")
+      : t("calledTools", { tools: row.tools.join(", ") });
+  return (
+    <div data-testid="transcript-calls" className={txRole}>
+      <div className={txRoleGut}>
+        <span className={`${txRoleTag} bg-foreground`}>{t("agent")}</span>
+      </div>
+      <div className="flex min-w-0 items-baseline gap-2">
+        <span className="min-w-0 truncate italic text-dim" title={line}>
+          {line}
+        </span>
+        <SubagentChip row={row} />
+      </div>
+    </div>
+  );
+}
+
 function ThinkingRow({
   row,
   q,
@@ -2175,6 +2201,8 @@ function FeedRowView({
           answer={answer}
         />
       );
+    case "calls":
+      return <CallsRow row={row} />;
     case "thinking":
       return <ThinkingRow row={row} q={q} open={open} onToggle={onToggle} />;
     case "tool":

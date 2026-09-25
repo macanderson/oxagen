@@ -94,13 +94,22 @@ fold, and the client fold introduced with #3345.
   counts match the rows. A body never changes, so the server keeps each
   body's words per process, keyed by tenant, reference and digest, and a
   later page or live read reads only the bodies it has not read. `everything`
-  and `turns` read no words. Recording each body's trimmed-words digest and a
+  and `turns` read only the prompts' words, for the figures, which the cache
+  holds once the run has been read at `steps`. Recording each body's trimmed-words digest and a
   blank flag at ingest would let the read compare digests and read no body
   for this; that needs a ClickHouse column and waits on its own issue.
 - A chip selects what the Run page draws under it, so a chip's count in
   `counts.kinds` is the count of what the chip shows. `prompt` is the
   operator's prompt and no longer a model call's request, `responses` takes
-  a reply the harness reported with its words kept, `seal` is the run's own
-  stop rather than the chain's checkpoints and gaps, and `usage` takes token
-  counts reported without a cost. API and MCP callers that filtered on those
-  chips see the new selection.
+  a reply the harness reported with its words kept and leaves out a model
+  response kept as a digest alone, `seal` is the run's own stop rather than
+  the chain's checkpoints and gaps, and `usage` takes token counts reported
+  without a cost and the effort a model call ran at. API and MCP callers
+  that filtered on those chips see the new selection.
+- Which rows a kept model reply draws, its words or only the tools it
+  called, needs its body read, and a count reads no body. So the Run page
+  draws a row under `responses` for every model step that answers it: what
+  the model said, or a line naming what it called when it said nothing in
+  words. A model step with nothing to draw, a call still waiting on its reply
+  or one kept as a digest with no figures, is `quiet`. The `figures.prompts`
+  figure counts a prompt as the `prompt` chip does.

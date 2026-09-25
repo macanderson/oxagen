@@ -477,7 +477,12 @@ describe("frameKinds and the chips an entry answers", () => {
     tachoRow(2, "tool_call", { toolName: "Read", toolStatus: "failed" }),
   );
   const usage = tachoFrame(
-    tachoRow(3, "llm_call", { model: "m", costUsdMicros: 9 }),
+    tachoRow(3, "llm_call", {
+      model: "m",
+      costUsdMicros: 9,
+      contentDigest: `sha256:${"d".repeat(64)}`,
+      bytesRef: "evidence://stream",
+    }),
   );
   const policy = tachoFrame(
     tachoRow(4, "policy_decision", { policyDecision: "deny" }),
@@ -614,6 +619,32 @@ describe("frameKinds and the chips an entry answers", () => {
       },
     };
     expect(frameKinds(counted)).toEqual(["usage"]);
+  });
+
+  // Finding P2 of the ADR-182 re-review: every model response answered
+  // `responses`, so a response kept as a digest alone counted under a chip
+  // that draws nothing for it. What it carried still answers `usage`, which
+  // draws its usage row, and the effort a call ran at is on that row too.
+  it("answers responses only for a model response whose body was kept (negative)", () => {
+    const digestOnly = tachoFrame(
+      tachoRow(18, "llm_call", {
+        model: "m",
+        costUsdMicros: 9,
+        contentDigest: `sha256:${"e".repeat(64)}`,
+      }),
+    );
+    const bare = tachoFrame(tachoRow(19, "llm_call", { model: "m" }));
+    const effort = tachoFrame(
+      tachoRow(20, "llm_call", { model: "m", effort: "high" }),
+    );
+    expect(frameKinds(digestOnly)).toEqual(["usage"]);
+    expect(frameKinds(bare)).toEqual([]);
+    expect(frameKinds(effort)).toEqual(["usage"]);
+    // Effort is a model call's; a tool frame that named one answers no usage.
+    const toolEffort = tachoFrame(
+      tachoRow(21, "tool_call", { toolName: "Read", effort: "high" }),
+    );
+    expect(frameKinds(toolEffort)).toEqual(["tools"]);
   });
 
   it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {

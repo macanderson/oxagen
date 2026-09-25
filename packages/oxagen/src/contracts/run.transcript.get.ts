@@ -571,7 +571,8 @@ export const transcriptEntrySchema = z
     /**
      * True when the entry has nothing to show a reader beyond its frames: a
      * prompt or reply with no words to show, a reply that repeats words the
-     * reader was just shown (`echoOf`), or an event with no decision and no
+     * reader was just shown (`echoOf`), a model step that kept no reply and
+     * carried no cost, tokens or effort, or an event with no decision and no
      * failure. `counts` counts no quiet entry. The words are read at `steps`
      * only: at `everything` a prompt or reply is quiet only when it kept no
      * half at all, so one whose words are blank or repeat is not quiet there.
@@ -741,7 +742,10 @@ export const transcriptBatchFiguresSchema = z
 export const transcriptFiguresSchema = z
   .object({
     steps: z.object({ model: count, tool: count }).strict(),
-    /** The times the operator prompted the run, the first prompt included. */
+    /**
+     * The times the operator prompted the run, the first prompt included,
+     * counted as `counts.kinds.prompt` counts them at `steps`.
+     */
     prompts: count,
     calls: z
       .object({
