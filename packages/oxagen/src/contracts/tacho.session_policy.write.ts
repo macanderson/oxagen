@@ -23,6 +23,7 @@ export const tachoSessionPolicyWrite = registerCapability({
     category: "workspace",
   },
   sensitivity: "medium",
+  mutates: true,
   noBillingGate: true,
   defaultEffect: "deny",
   defaultRoles: {

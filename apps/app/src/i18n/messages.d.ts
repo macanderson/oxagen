@@ -7516,6 +7516,8 @@ type Messages = {
           dark: string;
           light: string;
         };
+        enterToSubmit: string;
+        enterToSubmitHint: string;
         preview: string;
         previewDate: string;
         previewNumber: string;
@@ -7630,6 +7632,8 @@ type Messages = {
         label: string;
         placeholder: string;
         send: string;
+        sendHintEnter: string;
+        sendHintModEnter: string;
         draftTooLong: string;
       };
       refused: {

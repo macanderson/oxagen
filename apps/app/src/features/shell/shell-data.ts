@@ -53,6 +53,8 @@ export type ShellData = {
     twoFactorEnabled: boolean;
     /** The IANA zone the chrome's dates render in, and the Account dialog's current choice. */
     timeZone: string;
+    /** `enter_to_submit` (ADR-075): Enter sends in the assistant composer. Off, Cmd+Enter or Ctrl+Enter sends. */
+    enterToSubmit: boolean;
   };
   context: Read<ShellContext>;
   /** The approvals drawer and the counts read off it. */

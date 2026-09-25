@@ -253,9 +253,19 @@ export async function resumeApprovedCall(
           riskCeiling: payload.riskLevel,
           serverAllowlist: new Set(),
         });
-        if (!Object.values(tools.nameMap).includes(cap.name))
-          throw new ApprovalResumeError("tool_authorization_changed");
-        const budgets = await getSpendBudgetStatuses({ orgId: ctx.orgId });
+        if (!Object.values(tools.nameMap).includes(cap.name)) {
+          // The listing leaves out a tool a kill switch names (toolbelt.ts,
+          // R4), so a missing tool can mean a switch rather than a changed
+          // grant. Name the switch when it is one, as the check below does.
+          const switched = await createKillSwitchGate(ctx).check({
+            capabilityId: cap.name,
+            readOnly: false,
+          });
+          throw new ApprovalResumeError(
+            switched ? "kill_switch_active" : "tool_authorization_changed",
+          );
+        }
+        const budgets = await getSpendBudgetStatuses();
         if (budgets.some((status) => status.budget.enabled && status.overLimit))
           throw new ApprovalResumeError("budget_exhausted");
         // invoke owns the fresh decision-rule check and its approval receipt.

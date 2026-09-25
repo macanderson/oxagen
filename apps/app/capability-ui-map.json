@@ -603,7 +603,7 @@
       "page": "apps/app/src/app/[org]/layout.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-514c860f-account-dialog-w11",
-      "entry": "Preferences in the user menu on every organization page opens the Account dialog's Preferences tab, which reads get_user_preferences on open (features/shell/account-dialog.tsx, features/shell/account-actions.ts); every organization and workspace page also reads it through the shell port so <ViewerClock> and the chrome hand the stored zone to next-intl, and each date on the page renders in it (features/shell/viewer-clock.tsx, features/shell/shell-chrome.tsx)",
+      "entry": "Preferences in the user menu on every organization page opens the Account dialog's Preferences tab, which reads get_user_preferences on open (features/shell/account-dialog.tsx, features/shell/account-actions.ts); every organization and workspace page also reads it through the shell port so <ViewerClock> and the chrome hand the stored zone to next-intl, and each date on the page renders in it (features/shell/viewer-clock.tsx, features/shell/shell-chrome.tsx); the chrome also hands enter_to_submit to the assistant flyout, where it decides whether Enter or Cmd+Enter sends (features/shell/composer-keys.ts)",
       "testid": "open-preferences",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
@@ -1327,7 +1327,7 @@
       "page": "apps/app/src/app/[org]/layout.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-514c860f-account-dialog-w11",
-      "entry": "Account dialog \u203a Preferences \u203a Save writes locale, time zone and theme through set_preferences (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "entry": "Account dialog \u203a Preferences \u203a Save writes locale, time zone, theme, and enter_to_submit (\"Enter sends a message\") through set_preferences (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
       "testid": "account-preferences-save",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
