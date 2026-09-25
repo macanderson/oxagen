@@ -71,6 +71,7 @@ const turn = (over: Record<string, unknown> = {}) => ({
     runId: "arun_01ka",
     reply: "Two agents are idle.",
     parkedCards: [],
+    toolCalls: [],
     ...over,
   },
 });
@@ -372,6 +373,7 @@ describe("A stopped reply after a reload", () => {
         text: "what is live?",
         runId: null,
         parked: [],
+        toolCalls: [],
         stopped: false,
       },
       {
@@ -380,6 +382,7 @@ describe("A stopped reply after a reload", () => {
         text: "Two agents are",
         runId: "arun_01k9",
         parked: [],
+        toolCalls: [],
         stopped: true,
       },
     ],

@@ -552,7 +552,11 @@ export interface DataSource {
      */
     versions(
       ctx: WsCtx,
-      q: { category: string | null; cursor: string | null; serverId: string | null },
+      q: {
+        category: string | null;
+        cursor: string | null;
+        serverId: string | null;
+      },
     ): Promise<Read<ToolVersionPage>>;
     /** list_credential_grants: one cursor page of the broker's grants, newest first */
     grants(

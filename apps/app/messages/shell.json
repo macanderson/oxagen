@@ -340,6 +340,19 @@
           "unavailable": "The decision did not reach Oxagen ({code}). Nothing changed. Try again."
         }
       },
+      "toolCalls": {
+        "summary": "{count, plural, one {# tool call} other {# tool calls}}",
+        "outcome": {
+          "completed": "Completed",
+          "failed": "Failed",
+          "denied": "Denied",
+          "cancelled": "Cancelled",
+          "parked": "Waiting for approval"
+        },
+        "tool": "Tool",
+        "callId": "Call id",
+        "approvalId": "Approval id"
+      },
       "needsWorkspace": "stella works inside one workspace. Open a workspace to ask stella something.",
       "intro": {
         "title": "Ask stella",

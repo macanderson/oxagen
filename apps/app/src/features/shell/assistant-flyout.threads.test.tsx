@@ -71,6 +71,7 @@ const RECORDED: AssistantThread = {
       text: "what is live?",
       runId: null,
       parked: [],
+      toolCalls: [],
       stopped: false,
     },
     {
@@ -83,6 +84,23 @@ const RECORDED: AssistantThread = {
           approvalId: "apr_01k5rt9xq7v3m8n2p4s6t8w0",
           capability: "set_budget",
           expiresAt: "2026-09-25T10:05:00.000Z",
+        },
+      ],
+      // The calls get_conversation read from the reply's run (#4161).
+      toolCalls: [
+        {
+          toolCallRef: "tc-1",
+          toolName: "list_runs",
+          outcome: "completed",
+          durationMs: 41,
+          approvalId: null,
+        },
+        {
+          toolCallRef: "tc-2",
+          toolName: "set_budget",
+          outcome: "parked",
+          durationMs: 88,
+          approvalId: "apr_01k5rt9xq7v3m8n2p4s6t8w0",
         },
       ],
       stopped: false,
@@ -106,6 +124,7 @@ const turn = (over: Record<string, unknown> = {}) => ({
     runId: "arun_01ka",
     reply: "Two agents are idle.",
     parkedCards: [],
+    toolCalls: [],
     ...over,
   },
 });
@@ -184,6 +203,36 @@ describe("the assistant's thread across a reload", () => {
     // A reply that ran to the end carries no Stopped mark (#4164).
     expect(screen.queryByTestId("assistant-stopped")).toBeNull();
     expect(screen.queryByTestId("assistant-intro")).toBeNull();
+  });
+
+  // #4161: a restored reply lists the calls its run made, as it did when new.
+  it("lists the tool calls behind a restored reply under it", async () => {
+    await openFlyout();
+    const calls = await screen.findByTestId("assistant-tool-calls");
+    expect(screen.getByTestId("assistant-answer")).toContainElement(calls);
+    expect(calls).toHaveTextContent("2 tool calls");
+    expect(
+      screen
+        .getAllByTestId("assistant-tool-call")
+        .map((row) => row.dataset.outcome),
+    ).toEqual(["completed", "parked"]);
+    // The parked call names the approval its card decides.
+    expect(
+      screen.getByTestId("assistant-tool-call-approval"),
+    ).toHaveTextContent("apr_01k5rt9xq7v3m8n2p4s6t8w0");
+    await expectNoAxe(calls);
+  });
+
+  it("draws no tool-call list for a restored reply whose run made no calls (negative)", async () => {
+    loadAssistantThread.mockResolvedValue(
+      loaded({
+        ...RECORDED,
+        messages: RECORDED.messages.map((m) => ({ ...m, toolCalls: [] })),
+      }),
+    );
+    await openFlyout();
+    await screen.findByTestId("assistant-recorded-as");
+    expect(screen.queryByTestId("assistant-tool-calls")).toBeNull();
   });
 
   // The thread read files the thread under the workspace's id, which holds

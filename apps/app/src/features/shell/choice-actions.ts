@@ -264,7 +264,11 @@ export async function chooseToolPatterns(
   const ctx = await requireViewer(org, ws);
   const [list, servers, words] = await Promise.all([
     walk(PAGE_BOUND, (cursor) =>
-      dataSource().tools.versions(ctx, { category: null, cursor, serverId: null }),
+      dataSource().tools.versions(ctx, {
+        category: null,
+        cursor,
+        serverId: null,
+      }),
     ),
     serversById(ctx),
     toolWords(),
@@ -300,7 +304,11 @@ export async function chooseServerTools(
   const ctx = await requireViewer(org, ws);
   const [list, servers] = await Promise.all([
     walk(PAGE_BOUND, (cursor) =>
-      dataSource().tools.versions(ctx, { category: null, cursor, serverId: null }),
+      dataSource().tools.versions(ctx, {
+        category: null,
+        cursor,
+        serverId: null,
+      }),
     ),
     serversById(ctx),
   ]);
@@ -457,7 +465,11 @@ export async function chooseSwitchTargets(
   }
   const [list, servers, words] = await Promise.all([
     walk(PAGE_BOUND, (cursor) =>
-      dataSource().tools.versions(ctx, { category: null, cursor, serverId: null }),
+      dataSource().tools.versions(ctx, {
+        category: null,
+        cursor,
+        serverId: null,
+      }),
     ),
     serversById(ctx),
     toolWords(),

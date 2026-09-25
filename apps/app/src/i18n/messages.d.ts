@@ -7655,6 +7655,19 @@ type Messages = {
           unavailable: string;
         };
       };
+      toolCalls: {
+        summary: string;
+        outcome: {
+          completed: string;
+          failed: string;
+          denied: string;
+          cancelled: string;
+          parked: string;
+        };
+        tool: string;
+        callId: string;
+        approvalId: string;
+      };
       needsWorkspace: string;
       intro: {
         title: string;

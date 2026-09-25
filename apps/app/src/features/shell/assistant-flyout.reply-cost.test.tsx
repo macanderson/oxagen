@@ -56,10 +56,9 @@ const { AssistantReplyCost } = await import("./assistant-reply-cost");
 // The hook's re-read delay (`use-reply-cost.ts`), stated here rather than
 // exported from the module: the hook is its only production reader.
 const REPLY_COST_REREAD_MS = 60_000;
-const actual =
-  await vi.importActual<typeof import("./assistant-actions")>(
-    "./assistant-actions",
-  );
+const actual = await vi.importActual<typeof import("./assistant-actions")>(
+  "./assistant-actions",
+);
 
 type Recorded = Extract<ReplyCost, { kind: "recorded" }>;
 
@@ -162,6 +161,7 @@ beforeEach(() => {
       runId: "arun_01k9",
       reply: "Three runs are live.",
       parkedCards: [],
+      toolCalls: [],
       stopped: false,
     },
   });

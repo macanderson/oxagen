@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { assistantParkedCardSchema } from "./assistant.ask";
+import {
+  assistantParkedCardSchema,
+  assistantToolCallSchema,
+} from "./assistant.ask";
 import {
   conversationPublicIdSchema,
   conversationSummary,
@@ -12,8 +15,10 @@ export const CONVERSATION_MESSAGES_MAX = 200;
 /**
  * One message on the conversation's thread. `runId` and `parkedCards` are
  * what an `ask_assistant` turn recorded on its reply: the run the turn was
- * recorded as, and the governed writes it parked for a person. A message no
- * turn wrote carries `null` and `[]`.
+ * recorded as, and the governed writes it parked for a person. `toolCalls` is
+ * read from that run's ledger each time, never stored on the message, so it
+ * lists what `ask_assistant` listed when the reply was new (#4161). A message
+ * no turn wrote carries `null`, `[]` and `[]`.
  */
 export const conversationMessage = z.object({
   publicId: z.string(),
@@ -23,6 +28,12 @@ export const conversationMessage = z.object({
   /** `arun_…`: the run an assistant turn was recorded as. */
   runId: z.string().nullable(),
   parkedCards: z.array(assistantParkedCardSchema),
+  /**
+   * The tool calls behind an assistant reply, in the order the run recorded
+   * them. Empty on a user or system message, on a reply with no run, and on
+   * every reply when the run ledger could not be read.
+   */
+  toolCalls: z.array(assistantToolCallSchema),
   /** True when the person stopped the turn and this is its partial reply (#4164). */
   stopped: z.boolean(),
 });

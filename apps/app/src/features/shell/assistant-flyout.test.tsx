@@ -187,6 +187,7 @@ const turn = (over: Record<string, unknown> = {}) => ({
     runId: "arun_01k9",
     reply: "Three runs are live.",
     parkedCards: [],
+    toolCalls: [],
     ...over,
   },
 });
@@ -477,6 +478,54 @@ describe("AssistantFlyout", () => {
       "href",
       "/acme/core-platform/runs/arun_01k9",
     );
+  });
+
+  // #4161: the calls behind the answer sit closed under it, and the run link
+  // stays the way to the full evidence.
+  it("lists the tool calls behind the reply under it, and keeps the run link", async () => {
+    askAssistant.mockResolvedValue(
+      turn({
+        toolCalls: [
+          {
+            toolCallId: "tc-1",
+            toolName: "list_runs",
+            outcome: "completed",
+            durationMs: 41,
+            approvalId: null,
+          },
+          {
+            toolCallId: "tc-2",
+            toolName: "retire_agent",
+            outcome: "parked",
+            durationMs: 4,
+            approvalId: "apr_1",
+          },
+        ],
+      }),
+    );
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    const calls = await screen.findByTestId("assistant-tool-calls");
+    expect(screen.getByTestId("assistant-answer")).toContainElement(calls);
+    expect(calls).toHaveTextContent("2 tool calls");
+    expect(
+      screen
+        .getAllByTestId("assistant-tool-call")
+        .map((row) => row.dataset.outcome),
+    ).toEqual(["completed", "parked"]);
+    expect(
+      screen.getByTestId("assistant-tool-call-approval"),
+    ).toHaveTextContent("apr_1");
+    expect(
+      screen.getByTestId("assistant-recorded-as").querySelector("a"),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/arun_01k9");
+  });
+
+  it("draws no tool-call list for a reply that made no calls (negative)", async () => {
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    await screen.findByTestId("assistant-recorded-as");
+    expect(screen.queryByTestId("assistant-tool-calls")).toBeNull();
   });
 
   it("surfaces every parked write rather than dropping the ones it cannot show", async () => {

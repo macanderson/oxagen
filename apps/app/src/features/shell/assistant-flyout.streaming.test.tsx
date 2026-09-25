@@ -174,6 +174,7 @@ describe("a streamed reply", () => {
         runId: RUN,
         reply: "Three runs are live.",
         parkedCards: [],
+        toolCalls: [],
         stopped: false,
       },
     });
@@ -183,9 +184,9 @@ describe("a streamed reply", () => {
     expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
       "Three runs are live.",
     );
-    expect(
-      screen.getByRole("link", { name: RUN }).getAttribute("href"),
-    ).toBe(`/acme/core-platform/runs/${RUN}`);
+    expect(screen.getByRole("link", { name: RUN }).getAttribute("href")).toBe(
+      `/acme/core-platform/runs/${RUN}`,
+    );
   });
 
   it("names the tool the turn is calling while it runs, and drops the line when it ends", async () => {
@@ -225,6 +226,7 @@ describe("a streamed reply", () => {
         runId: RUN,
         reply: "Read [the runbook](https://oxagen.sh/docs) first.",
         parkedCards: [],
+        toolCalls: [],
         stopped: false,
       },
     });
@@ -243,6 +245,7 @@ describe("a streamed reply", () => {
         runId: RUN,
         reply: "Three runs are live.",
         parkedCards: [],
+        toolCalls: [],
         stopped: false,
       },
     });

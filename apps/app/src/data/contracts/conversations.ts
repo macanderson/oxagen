@@ -1,7 +1,8 @@
 // The assistant's thread as the flyout reopens it (#4163): the viewer's
 // latest conversation in a workspace, read back through `get_conversation`,
 // and the turns on it. Only what the flyout draws is carried: the question,
-// the reply with the run it was recorded as, and the writes it parked.
+// the reply with the run it was recorded as, the tool calls that run made
+// (#4161), and the writes it parked.
 import { z } from "zod";
 import { PublicId } from "./common";
 
@@ -13,8 +14,31 @@ const ParkedWrite = z.object({
 });
 
 /**
- * One turn's half. A question carries no run and parks nothing; a reply
- * carries the run it was recorded as, or null when no turn recorded one.
+ * One tool call behind a reply, as `get_conversation` reads it from the
+ * reply's run.
+ *
+ * `toolCallRef` is **a `…Ref`, not an id field, because it is not one of
+ * ours.** The engine mints it for its own call, and Oxagen neither issues it
+ * nor can validate it, so INV-11 carries it under a name that says what it is
+ * rather than claiming a public id it is not (`mandates.ts` carries the same
+ * reasoning for `externalEffectRef`).
+ *
+ * `approvalId` names the approval a parked call waits on, and is null for
+ * every other outcome. It is the approval's own public id (`apr_…`), the same
+ * id its entry in `parked` carries, so it is a `PublicId`.
+ */
+const ToolCall = z.object({
+  toolCallRef: z.string().min(1),
+  toolName: z.string().min(1),
+  outcome: z.enum(["completed", "failed", "denied", "cancelled", "parked"]),
+  durationMs: z.number().int().nonnegative(),
+  approvalId: PublicId.nullable(),
+});
+
+/**
+ * One turn's half. A question carries no run, parks nothing, and calls no
+ * tool. A reply carries the run it was recorded as, or null when no turn
+ * recorded one, and the tool calls that run made.
  */
 export const ThreadMessage = z.object({
   id: PublicId,
@@ -22,6 +46,7 @@ export const ThreadMessage = z.object({
   text: z.string(),
   runId: PublicId.nullable(),
   parked: z.array(ParkedWrite),
+  toolCalls: z.array(ToolCall),
   /** The person stopped the turn, so `text` is what it reached (#4164). */
   stopped: z.boolean(),
 });

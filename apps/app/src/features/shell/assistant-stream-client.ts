@@ -40,12 +40,27 @@ export type ParkedCard = {
   expiresAt: string;
 };
 
+/**
+ * One tool call behind a reply (#4161). `parked` is a governed write waiting
+ * on a person; `approvalId` names its approval, and is null for every other
+ * outcome.
+ */
+export type ToolCallSummary = {
+  toolCallId: string;
+  toolName: string;
+  outcome: "completed" | "failed" | "denied" | "cancelled" | "parked";
+  durationMs: number;
+  approvalId: string | null;
+};
+
 type AssistantTurn = {
   conversationId: string;
   /** `arun_…`: the run this turn was recorded as; the Run page opens it. */
   runId: string;
   reply: string;
   parkedCards: readonly ParkedCard[];
+  /** Every tool call the turn made, in the order the run recorded them. */
+  toolCalls: readonly ToolCallSummary[];
   /** The person stopped the turn; `reply` is what was written before the stop. */
   stopped: boolean;
 };
@@ -232,12 +247,24 @@ const parkedCardSchema = z.object({
   expiresAt: z.string(),
 });
 
+/** One tool call on the terminal, in the shape the contract answers. */
+const toolCallSchema = z.object({
+  toolCallId: z.string(),
+  toolName: z.string(),
+  outcome: z.enum(["completed", "failed", "denied", "cancelled", "parked"]),
+  durationMs: z.number().int().nonnegative(),
+  approvalId: z.string().nullable(),
+});
+
 /** The terminal's data: ask_assistant's output, read for what the flyout shows. */
 const turnSchema = z.object({
   conversationId: z.string(),
   runId: z.string(),
   reply: z.string(),
   parkedCards: z.array(parkedCardSchema),
+  // A terminal written before the field shipped carries no list, and that is
+  // a turn with no calls to show, not a refusal.
+  toolCalls: z.array(toolCallSchema).default([]),
   // A stopped turn is not a refusal: it ends with its terminal and the reply
   // it had written (#4164). The contract defaults the flag to false.
   stopped: z.boolean().default(false),

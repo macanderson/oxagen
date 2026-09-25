@@ -101,6 +101,7 @@ export async function assistantAskHandler(
       runId: result.runId,
       reply: result.reply,
       parkedCards: result.parkedCards,
+      toolCalls: result.toolCalls,
       stopped: result.stopped,
     };
   } catch (err) {

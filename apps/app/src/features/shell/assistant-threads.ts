@@ -32,7 +32,7 @@
 // time the flyout opens, it reads again.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssistantThread } from "@/data/contracts/conversations";
-import type { ParkedCard } from "./assistant-stream-client";
+import type { ParkedCard, ToolCallSummary } from "./assistant-stream-client";
 import { loadAssistantThread } from "./assistant-thread-actions";
 
 /** One workspace's thread, whatever the flyout draws its entries as. */
@@ -54,6 +54,7 @@ export type RestoredEntry =
       text: string;
       runId: string;
       parked: readonly ParkedCard[];
+      toolCalls: readonly ToolCallSummary[];
       /** The person stopped it, so a reload shows the mark again (#4164). */
       stopped: boolean;
     };
@@ -63,9 +64,10 @@ export type ThreadStatus = "idle" | "loading" | "failed";
 
 /**
  * The recorded thread as entries. A question is `asked`; a reply is
- * `answered` with the run it was recorded as. A reply with no run was not an
- * assistant turn (another chat surface wrote it), and the flyout has nothing
- * to link it to, so it is left out.
+ * `answered` with the run it was recorded as and the tool calls that run
+ * made, so a restored reply lists what it listed when it was new (#4161). A
+ * reply with no run was not an assistant turn (another chat surface wrote
+ * it), and the flyout has nothing to link it to, so it is left out.
  */
 function restoredEntries(thread: AssistantThread): readonly RestoredEntry[] {
   const entries: RestoredEntry[] = [];
@@ -79,6 +81,16 @@ function restoredEntries(thread: AssistantThread): readonly RestoredEntry[] {
         text: message.text,
         runId: message.runId,
         parked: message.parked,
+        // A restored call goes into the shape a live turn produces, where the
+        // engine's call id keeps the engine's name for it (INV-11 is why the
+        // view model calls it `toolCallRef`).
+        toolCalls: message.toolCalls.map((call) => ({
+          toolCallId: call.toolCallRef,
+          toolName: call.toolName,
+          outcome: call.outcome,
+          durationMs: call.durationMs,
+          approvalId: call.approvalId,
+        })),
         stopped: message.stopped,
       });
     }

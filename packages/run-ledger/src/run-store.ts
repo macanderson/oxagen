@@ -101,7 +101,9 @@ import {
   computeEventDigest,
   EMPTY_EVENT_STREAM_DIGEST,
   EVENT_SCHEMA_VERSION,
+  EVENT_TYPE_REGISTRY,
   isTerminalEventType,
+  type ToolEngineCallOutcome,
   validateEncryptedEventReference,
   validateInlineEventPayload,
 } from "./event-payload-registry";
@@ -297,6 +299,20 @@ export interface AttemptEventReadRecord {
   recordedAt: Date;
   /** The frame's content as recorded: a digest, and a reference when retained. */
   body: FrameBodyColumns;
+}
+
+/**
+ * One tool call the in-app assistant's engine made, read back from its
+ * `tool.engine_call_completed` frame. `approvalPublicId` is set only on a
+ * parked call that recorded the approval it waits on.
+ */
+export interface RunToolCallRecord {
+  runSeq: string;
+  toolCallId: string;
+  toolName: string;
+  outcome: ToolEngineCallOutcome;
+  durationMs: number;
+  approvalPublicId: string | null;
 }
 
 /** The generated summary as `summarize_run` writes it. */
@@ -577,6 +593,18 @@ export interface RunStore {
     afterRunSeq: string,
     limit?: number,
   ): Promise<AttemptEventReadRecord[]>;
+
+  /**
+   * The engine tool calls of many runs in one read, keyed by run public id
+   * (`arun_…`), each run's calls in `run_seq` order. A run with no calls, or
+   * one RLS hides, has no key. A compacted attempt's calls are read from its
+   * archive segment, as `readAttemptEventsSince` reads them. A frame whose
+   * payload is encrypted or does not parse is left out and logged, so one
+   * such frame cannot fail the read of every other call.
+   */
+  readToolCallsForRuns(
+    runPublicIds: readonly string[],
+  ): Promise<ReadonlyMap<string, RunToolCallRecord[]>>;
 
   /**
    * Compaction (spec §13.3): remove the hot frames of every attempt sealed
@@ -1749,6 +1777,100 @@ export interface CompactedSealRow {
   final_run_seq: string;
 }
 
+/** The frame type the in-app assistant's engine records each tool call as. */
+const TOOL_ENGINE_CALL_COMPLETED = "tool.engine_call_completed";
+
+/** A list of run public ids as bind parameters, for an `IN (…)` clause. */
+function runPublicIdList(runPublicIds: readonly string[]): SQL {
+  return sql.join(
+    runPublicIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
+}
+
+/**
+ * The engine tool-call frames of many runs still in the hot table, by run
+ * public id. The run's `public_id` is joined rather than resolved first, so
+ * one statement answers every run. `event_record_version = 2` is a literal
+ * so the planner can use the partial `(run_id, run_seq)` index. The caller
+ * passes at least one id, because `IN ()` is not SQL.
+ */
+export function buildReadToolCallsForRunsSql(
+  runPublicIds: readonly string[],
+): SQL {
+  return sql`
+    SELECT
+      r.public_id AS run_public_id, e.run_seq::text AS run_seq,
+      e.payload_inline
+    FROM agent.agent_run_events e
+    JOIN agent.agent_runs r ON r.id = e.run_id
+    WHERE e.event_record_version = 2
+      AND e.event_type = ${TOOL_ENGINE_CALL_COMPLETED}
+      AND r.public_id IN (${runPublicIdList(runPublicIds)})
+    ORDER BY e.run_id, e.run_seq ASC
+  `;
+}
+
+/** Driver-typed row behind `buildReadToolCallsForRunsSql`. */
+export interface ToolCallFrameRow {
+  run_public_id: string;
+  run_seq: string;
+  payload_inline: unknown | null;
+}
+
+/**
+ * The sealed attempts of many runs that compaction removed from the hot
+ * table, by run public id. Their frames are read from the archive segment.
+ */
+export function buildListCompactedSealsForRunsSql(
+  runPublicIds: readonly string[],
+): SQL {
+  return sql`
+    SELECT
+      r.public_id AS run_public_id,
+      s.attempt_id, a.public_id AS attempt_public_id,
+      s.archive_segment_ref, s.final_run_seq::text AS final_run_seq
+    FROM agent.agent_run_attempt_seals s
+    JOIN agent.agent_run_attempts a ON a.id = s.attempt_id
+    JOIN agent.agent_runs r ON r.id = s.run_id
+    WHERE r.public_id IN (${runPublicIdList(runPublicIds)})
+      AND s.archive_segment_ref IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM agent.agent_run_events e
+        WHERE e.attempt_id = s.attempt_id
+      )
+    ORDER BY s.run_id, s.final_run_seq ASC
+  `;
+}
+
+/** A compacted seal with the public id of the run it belongs to. */
+export interface RunCompactedSealRow extends CompactedSealRow {
+  run_public_id: string;
+}
+
+/**
+ * One tool-call frame as a record, or the reason it cannot be one: an
+ * encrypted payload has no inline copy, and a payload the registry's schema
+ * refuses is not a tool call this reader can vouch for.
+ */
+function toolCallRecordOf(
+  runSeq: string,
+  payload: unknown | null,
+): RunToolCallRecord | "encrypted" | "unparseable" {
+  if (payload === null) return "encrypted";
+  const parsed =
+    EVENT_TYPE_REGISTRY[TOOL_ENGINE_CALL_COMPLETED].schema.safeParse(payload);
+  if (!parsed.success) return "unparseable";
+  return {
+    runSeq,
+    toolCallId: parsed.data.tool_call_id,
+    toolName: parsed.data.tool_name,
+    outcome: parsed.data.outcome,
+    durationMs: parsed.data.duration_ms,
+    approvalPublicId: parsed.data.approval_public_id ?? null,
+  };
+}
+
 export function buildSetRunSummarySql(
   runId: string,
   summary: GeneratedRunSummary,
@@ -2632,6 +2754,69 @@ export function createPostgresRunStore(
       return [...restored, ...hot]
         .sort((a, b) => (BigInt(a.runSeq) < BigInt(b.runSeq) ? -1 : 1))
         .slice(0, limit);
+    },
+
+    async readToolCallsForRuns(runPublicIds) {
+      const ids = [...new Set(runPublicIds)];
+      const calls = new Map<string, RunToolCallRecord[]>();
+      if (ids.length === 0) return calls;
+      const { hot, compacted } = await withTenantDb(async (tx: Tx) => {
+        const rows = (await tx.execute(
+          buildReadToolCallsForRunsSql(ids),
+        )) as unknown as ToolCallFrameRow[];
+        const seals = (await tx.execute(
+          buildListCompactedSealsForRunsSql(ids),
+        )) as unknown as RunCompactedSealRow[];
+        return { hot: rows, compacted: seals };
+      });
+      const frames: Array<{
+        runPublicId: string;
+        runSeq: string;
+        payload: unknown | null;
+      }> = [];
+      if (compacted.length > 0) {
+        if (!archive) {
+          const runs = [...new Set(compacted.map((s) => s.run_public_id))];
+          throw new RunStoreStateError(
+            `runs ${runs.join(", ")} have compacted attempts but the ledger has no archive store`,
+          );
+        }
+        for (const seal of compacted) {
+          const bytes = await archive.getSegment(seal.archive_segment_ref);
+          for (const frame of framesFromSegment(seal, bytes, "0")) {
+            if (frame.eventType !== TOOL_ENGINE_CALL_COMPLETED) continue;
+            frames.push({
+              runPublicId: seal.run_public_id,
+              runSeq: frame.runSeq,
+              payload: frame.payload,
+            });
+          }
+        }
+      }
+      for (const row of hot) {
+        frames.push({
+          runPublicId: row.run_public_id,
+          runSeq: String(row.run_seq),
+          payload: row.payload_inline ?? null,
+        });
+      }
+      // Compacted attempts sealed before any attempt still in the hot table,
+      // so sorting on `run_seq` puts each run's calls in the order recorded.
+      frames.sort((a, b) => (BigInt(a.runSeq) < BigInt(b.runSeq) ? -1 : 1));
+      for (const frame of frames) {
+        const call = toolCallRecordOf(frame.runSeq, frame.payload);
+        if (typeof call === "string") {
+          console.warn(
+            `[run-ledger] left out a ${TOOL_ENGINE_CALL_COMPLETED} frame whose payload is ${call === "encrypted" ? "encrypted" : "not a tool call the registry accepts"}`,
+            { runPublicId: frame.runPublicId, runSeq: frame.runSeq },
+          );
+          continue;
+        }
+        const list = calls.get(frame.runPublicId);
+        if (list) list.push(call);
+        else calls.set(frame.runPublicId, [call]);
+      }
+      return calls;
     },
 
     async setRunSummary(runId, summary) {

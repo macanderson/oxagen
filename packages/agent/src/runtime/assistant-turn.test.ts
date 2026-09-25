@@ -657,6 +657,7 @@ describe("the prepared turn", () => {
       runId: "arun_0123456789abcdef012345",
       reply: "hi",
       parkedCards: [],
+      toolCalls: [],
       stopped: false,
     });
     expect(usages).toEqual([
@@ -862,6 +863,79 @@ describe("the prepared turn", () => {
         approvalId: "apr_01k5rt9xq7v3m8n2p4s6t8w0",
         capability: "set_budget",
         expiresAt: "2026-09-14T10:05:00.000Z",
+      },
+    ]);
+  });
+
+  it("lists each tool call behind the reply, with a parked call under its card's approval id (#4161)", async () => {
+    const ROW_ID = "4b2f7a0e-6c1d-4e8a-9f3b-2d5c7e9a1b3c";
+    const PUBLIC_ID = "apr_01k5rt9xq7v3m8n2p4s6t8w0";
+    let approvalRequired: ((e: unknown) => void) | undefined;
+    mocks.materializeTools.mockImplementationOnce(
+      async (
+        _ctx: unknown,
+        opts: { onApprovalRequired: (e: unknown) => void },
+      ) => {
+        approvalRequired = opts.onApprovalRequired;
+        return {
+          tools: GOVERNED_TOOLS,
+          nameMap: {},
+          mutatingToolNames: ["set_budget"],
+          governance: {},
+        };
+      },
+    );
+    mocks.runGovernedTurn.mockImplementationOnce(
+      async (args: { ledger: { toolCall: (r: unknown) => Promise<void> } }) => {
+        await args.ledger.toolCall({
+          seq: 2,
+          requestId: "tc-1",
+          toolName: "recall_memory",
+          outcome: "completed",
+          input: {},
+          output: {},
+          durationMs: 12.6,
+        });
+        // What a governed write that parks leaves behind: the gate opens the
+        // approval, and the engine records the call as parked with the
+        // approval's public id (#4196). The error names the same public id.
+        approvalRequired?.({
+          approvalId: ROW_ID,
+          approvalPublicId: PUBLIC_ID,
+          capability: "set_budget",
+          inputPreview: {},
+          riskLevel: "high",
+          expiresAt: "2026-09-14T10:05:00.000Z",
+        });
+        await args.ledger.toolCall({
+          seq: 3,
+          requestId: "tc-2",
+          toolName: "set_budget",
+          outcome: "parked",
+          approvalPublicId: PUBLIC_ID,
+          input: {},
+          error: `refused: set_budget is waiting for approval ${PUBLIC_ID} until 2026-09-14T10:05:00.000Z`,
+          durationMs: 4,
+        });
+        return fakeTurn({});
+      },
+    );
+    const result = await runTurn(request);
+    expect(result.parkedCards.map((c) => c.approvalId)).toEqual([PUBLIC_ID]);
+    expect(result.toolCalls).toEqual([
+      {
+        toolCallId: "tc-1",
+        toolName: "recall_memory",
+        outcome: "completed",
+        durationMs: 13,
+        approvalId: null,
+      },
+      {
+        toolCallId: "tc-2",
+        toolName: "set_budget",
+        outcome: "parked",
+        durationMs: 4,
+        approvalId: PUBLIC_ID,
       },
     ]);
   });

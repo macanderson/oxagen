@@ -44,6 +44,7 @@ const THREAD = {
       text: "what is live?",
       runId: null,
       parked: [],
+      toolCalls: [],
       stopped: false,
     },
   ],

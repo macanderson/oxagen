@@ -3,10 +3,17 @@ import { getTableName, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { schema } from "@oxagen/database";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
+import { conversationGet } from "@oxagen/oxagen/contracts/conversation.get";
+import type { RunToolCallRecord } from "@oxagen/run-ledger";
 
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   apiKeyCreator: vi.fn((): string | null => null),
+  readToolCallsForRuns: vi.fn(
+    async (
+      _runPublicIds: readonly string[],
+    ): Promise<ReadonlyMap<string, RunToolCallRecord[]>> => new Map(),
+  ),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -26,7 +33,7 @@ vi.mock("@oxagen/iam/org-role", () => ({
   }) => ctx.userId ?? (ctx.apiKeyId ? mocks.apiKeyCreator() : null),
 }));
 
-import { conversationGetHandler } from "./conversation.get";
+import { createConversationGetHandler } from "./conversation.get";
 import { makeCTX } from "./test-utils/fixtures";
 
 const dialect = new PgDialect();
@@ -139,18 +146,56 @@ function run(
   mocks.withTenantDb.mockImplementation((fn: (t: unknown) => unknown) =>
     Promise.resolve(fn(tx)),
   );
+  const handler = createConversationGetHandler({
+    readToolCallsForRuns: mocks.readToolCallsForRuns,
+  });
   return {
     reads,
-    out: conversationGetHandler(
+    out: handler(
       { conversationId: input.conversationId, limit: input.limit ?? 100 },
       ctx,
     ),
   };
 }
 
+/** One tool call as the run ledger reads it back. */
+function ledgerCall(
+  runSeq: string,
+  over: Partial<RunToolCallRecord> = {},
+): RunToolCallRecord {
+  return {
+    runSeq,
+    toolCallId: `tc-${runSeq}`,
+    toolName: "list_runs",
+    outcome: "completed",
+    durationMs: 40,
+    approvalPublicId: null,
+    ...over,
+  };
+}
+
+// The ledger as the two replies' runs recorded them: one read on the first,
+// a read and a parked write on the second.
+const LEDGER = new Map<string, RunToolCallRecord[]>([
+  ["arun_0001", [ledgerCall("3")]],
+  [
+    "arun_0002",
+    [
+      ledgerCall("4", { toolName: "get_budget", durationMs: 12 }),
+      ledgerCall("6", {
+        toolName: "set_budget",
+        outcome: "parked",
+        durationMs: 88,
+        approvalPublicId: CARD.approvalId,
+      }),
+    ],
+  ],
+]);
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.apiKeyCreator.mockReturnValue(null);
+  mocks.readToolCallsForRuns.mockImplementation(async () => new Map());
 });
 
 describe("get_conversation", () => {
@@ -291,6 +336,125 @@ describe("get_conversation", () => {
     const messages = (await out).conversation?.messages ?? [];
     expect(messages.map((m) => m.publicId)).not.toContain("msg_t9");
     expect(messages).toHaveLength(4);
+  });
+
+  it("lists each reply's tool calls from its run, read from the ledger once for the thread", async () => {
+    mocks.readToolCallsForRuns.mockImplementation(async () => LEDGER);
+    const { out } = run(
+      { conversationId: null },
+      { conversations: [CONVERSATION_ROW], messages: MESSAGE_ROWS },
+    );
+    const result = await out;
+    const messages = result.conversation?.messages ?? [];
+    expect(mocks.readToolCallsForRuns).toHaveBeenCalledTimes(1);
+    expect(mocks.readToolCallsForRuns).toHaveBeenCalledWith([
+      "arun_0001",
+      "arun_0002",
+    ]);
+    expect(messages[1]?.toolCalls).toEqual([
+      {
+        toolCallId: "tc-3",
+        toolName: "list_runs",
+        outcome: "completed",
+        durationMs: 40,
+        approvalId: null,
+      },
+    ]);
+    // The parked write points at the same approval as the reply's card.
+    expect(messages[3]?.toolCalls).toEqual([
+      {
+        toolCallId: "tc-4",
+        toolName: "get_budget",
+        outcome: "completed",
+        durationMs: 12,
+        approvalId: null,
+      },
+      {
+        toolCallId: "tc-6",
+        toolName: "set_budget",
+        outcome: "parked",
+        durationMs: 88,
+        approvalId: CARD.approvalId,
+      },
+    ]);
+    expect(messages[3]?.parkedCards[0]?.approvalId).toBe(CARD.approvalId);
+    // A person's message never lists calls.
+    expect(messages[0]?.toolCalls).toEqual([]);
+    expect(messages[2]?.toolCalls).toEqual([]);
+    // The answer is one the contract accepts.
+    expect(() => conversationGet.output.parse(result)).not.toThrow();
+  });
+
+  it("reads only the runs of the replies it returns", async () => {
+    mocks.readToolCallsForRuns.mockImplementation(async () => LEDGER);
+    const { out } = run(
+      { conversationId: null, limit: 1 },
+      { conversations: [CONVERSATION_ROW], messages: MESSAGE_ROWS },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    expect(mocks.readToolCallsForRuns).toHaveBeenCalledWith(["arun_0002"]);
+    expect(messages.map((m) => m.toolCalls.length)).toEqual([2]);
+  });
+
+  it("asks the ledger for a run once when two replies share it", async () => {
+    const second = {
+      ...MESSAGE_ROWS[1],
+      id: "m5",
+      publicId: "msg_a5",
+      content: "And one more.",
+      createdAt: at(4),
+    };
+    const { out } = run(
+      { conversationId: null },
+      {
+        conversations: [CONVERSATION_ROW],
+        messages: [...MESSAGE_ROWS, second],
+      },
+    );
+    await out;
+    expect(mocks.readToolCallsForRuns).toHaveBeenCalledWith([
+      "arun_0001",
+      "arun_0002",
+    ]);
+  });
+
+  it("does not read the ledger when no reply returned was recorded as a run", async () => {
+    const [ask, reply] = MESSAGE_ROWS;
+    const unrecorded = { ...reply, metadata: { status: "complete" } };
+    const { out } = run(
+      { conversationId: null },
+      { conversations: [CONVERSATION_ROW], messages: [ask, unrecorded] },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    expect(mocks.readToolCallsForRuns).not.toHaveBeenCalled();
+    expect(messages.map((m) => m.toolCalls)).toEqual([[], []]);
+  });
+
+  it("lists no calls for a reply whose run the ledger holds none for", async () => {
+    mocks.readToolCallsForRuns.mockImplementation(
+      async () => new Map([["arun_0001", [ledgerCall("3")]]]),
+    );
+    const { out } = run(
+      { conversationId: null },
+      { conversations: [CONVERSATION_ROW], messages: MESSAGE_ROWS },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    expect(messages[1]?.toolCalls).toHaveLength(1);
+    expect(messages[3]?.toolCalls).toEqual([]);
+  });
+
+  it("still returns the thread when the ledger read fails, with no calls on any reply (negative)", async () => {
+    mocks.readToolCallsForRuns.mockImplementation(async () => {
+      throw new Error("ledger unavailable");
+    });
+    const { out } = run(
+      { conversationId: null },
+      { conversations: [CONVERSATION_ROW], messages: MESSAGE_ROWS },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    expect(messages).toHaveLength(4);
+    expect(messages.map((m) => m.toolCalls)).toEqual([[], [], [], []]);
+    expect(messages[3]?.parkedCards).toEqual([CARD]);
   });
 
   it("reads an API key's conversations as the person who created the key", async () => {

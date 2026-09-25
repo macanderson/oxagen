@@ -55,6 +55,7 @@ A label is untrusted text: an agent, a model, or a person wrote it. The turn giv
 | `runId` | string | `arun_…`, the run the turn was recorded as; `get_run` opens it |
 | `reply` | string | the assistant's reply, whole |
 | `parkedCards` | array | one `{ approvalId, capability, expiresAt }` per governed write the turn opened that waits on a person, in park order; empty when nothing parked. A turn can park more than one, and each has its own five-minute expiry, so all of them are returned |
+| `toolCalls` | array | one `{ toolCallId, toolName, outcome, durationMs, approvalId }` per tool call the turn made, in the order the run recorded them, including `search_tools` and `load_tools`; empty when it made none. `outcome` is `completed`, `failed`, `denied`, `cancelled` or `parked`. `approvalId` names the parked card a parked call waits on and is null for every other call |
 | `stopped` | boolean | true when the person stopped the turn with `cancel_assistant_turn`; `reply` is then what the engine wrote before the stop, and may be empty. False otherwise |
 
 ## Conversation

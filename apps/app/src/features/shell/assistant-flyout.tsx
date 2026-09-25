@@ -146,6 +146,7 @@ import {
   askAssistantStream,
   type AssistantRefusal,
   type ParkedCard,
+  type ToolCallSummary,
 } from "./assistant-stream-client";
 import {
   AssistantAnswering,
@@ -158,6 +159,7 @@ import {
   requestAssistantStop,
 } from "./assistant-send-or-stop";
 import { AssistantSuggestions } from "./assistant-suggestions";
+import { AssistantToolCalls } from "./assistant-tool-calls";
 import { AssistantThinking } from "./assistant-thinking";
 import { AssistantThreadBar } from "./assistant-thread-bar";
 import {
@@ -211,6 +213,7 @@ type Entry =
       text: string;
       runId: string;
       parked: readonly ParkedCard[];
+      toolCalls: readonly ToolCallSummary[];
       /** The person stopped it, so `text` is what it reached before the stop. */
       stopped?: boolean;
       /**
@@ -270,7 +273,11 @@ function runningTurnOf(entries: readonly Entry[]): RunningTurn | null {
  */
 type Thread = ThreadState<Entry>;
 
-/** A turn read back from the record is already an entry the log draws. */
+/**
+ * A turn read back from the record, as an entry the log draws. A restored
+ * reply carries the tool calls `get_conversation` read from its run, so it
+ * lists the calls a live reply lists (#4161).
+ */
 function restoreEntry(entry: RestoredEntry): Entry {
   return entry;
 }
@@ -889,6 +896,7 @@ export function AssistantFlyout({
           text: value.reply,
           runId: value.runId,
           parked: value.parkedCards,
+          toolCalls: value.toolCalls,
           stopped: value.stopped,
           conversationId: value.conversationId,
         }));
@@ -992,6 +1000,10 @@ export function AssistantFlyout({
         text: found.reply,
         runId,
         parked: entry.parked,
+        // `get_assistant_reply` answers the reply, not the run's tool calls,
+        // so a reply recovered after a dropped stream lists none. Reading the
+        // thread back lists them from the run (`get_conversation`).
+        toolCalls: [],
         stopped: found.stopped,
         conversationId: found.conversationId,
       }));
@@ -1172,6 +1184,7 @@ export function AssistantFlyout({
                         entry.runId
                       )}
                     </p>
+                    <AssistantToolCalls calls={entry.toolCalls} />
                     {/* What the run cost, from its record (#4167). */}
                     {shownScope === null ? null : (
                       <AssistantReplyCost

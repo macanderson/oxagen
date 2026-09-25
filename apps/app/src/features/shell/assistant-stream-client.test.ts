@@ -186,6 +186,9 @@ describe("askAssistantStream", () => {
         runId: TURN.runId,
         reply: TURN.reply,
         parkedCards: [],
+        // This route output names no calls, and the terminal defaults the
+        // list to empty rather than refusing the turn (#4161).
+        toolCalls: [],
         // The route's output names no stop, and the contract reads that as
         // a turn that ran to its end.
         stopped: false,
@@ -224,6 +227,7 @@ describe("askAssistantStream", () => {
         runId: TURN.runId,
         reply: "Three runs",
         parkedCards: [],
+        toolCalls: [],
         stopped: true,
       },
     });

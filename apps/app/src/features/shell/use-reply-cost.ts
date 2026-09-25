@@ -33,7 +33,10 @@ import { type ReplyCost, readReplyCost } from "./assistant-actions";
 const REPLY_COST_REREAD_MS = 60_000;
 
 /** The line's state: a read in flight, a read that failed, or what the record said. */
-export type ReplyCostView = { kind: "reading" } | { kind: "unread" } | ReplyCost;
+export type ReplyCostView =
+  | { kind: "reading" }
+  | { kind: "unread" }
+  | ReplyCost;
 
 async function readOnce(
   org: string,

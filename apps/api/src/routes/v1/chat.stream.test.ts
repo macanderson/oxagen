@@ -87,6 +87,7 @@ const OUTPUT = {
   runId: "arun_0123456789abcdef012345",
   reply: "hello world",
   parkedCards: [],
+  toolCalls: [],
 };
 
 async function post(

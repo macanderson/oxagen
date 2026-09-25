@@ -99,9 +99,7 @@ describe("tools.versions", () => {
       permission: "tools.read",
     } as const;
     kernelRead.mockResolvedValue(denied);
-    expect(await tools.versions(ctx, firstPage)).toEqual(
-      denied,
-    );
+    expect(await tools.versions(ctx, firstPage)).toEqual(denied);
     expect(captureError).not.toHaveBeenCalled();
   });
 
