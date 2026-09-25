@@ -1,7 +1,10 @@
 {
-  "turn": "01 why a run was refused",
+  "turn": "11 IAM refuses a run read",
   "question": "Why was run arun_replay7 refused?",
   "source": "hand-authored",
+  "gates": {
+    "iamDeny": ["get_run"]
+  },
   "handlers": {
     "get_run": {
       "run": {
@@ -132,14 +135,14 @@
       "type": "event",
       "event": {
         "type": "text",
-        "text": "The workspace's monthly budget was spent, so the create_pull_request call was refused."
+        "text": "Your role cannot read that run."
       }
     },
     {
       "type": "turn_complete",
       "outcome": {
         "status": "completed",
-        "text": "The workspace's monthly budget was spent, so the create_pull_request call was refused.",
+        "text": "Your role cannot read that run.",
         "cost_usd": 0.002
       }
     }
@@ -149,19 +152,18 @@
     "gates": [
       "emergency_denies none",
       "kill_switch get_run open",
-      "iam get_run allow",
-      "handler get_run"
+      "iam get_run deny"
     ],
     "ledger": [
       "model completed",
-      "tool get_run completed",
+      "tool get_run failed",
       "model completed",
       "seal completed"
     ],
-    "answers": ["ok"],
-    "refusals": [],
-    "invocations": ["get_run completed"],
+    "answers": ["error"],
+    "refusals": ["authz_denied"],
+    "invocations": ["get_run failed CapabilityError"],
     "approvals": [],
-    "answer": "The workspace's monthly budget was spent, so the create_pull_request call was refused."
+    "answer": "Your role cannot read that run."
   }
 }

@@ -23,7 +23,7 @@
  * recorded from `stella-serve`. README.md in this folder says how to record
  * one and how to add a turn.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -49,6 +49,7 @@ const streamAgentReply = vi.hoisted(() => vi.fn());
 const insertToolInvocation = vi.hoisted(() => vi.fn(async () => undefined));
 const createApprovalRequest = vi.hoisted(() => vi.fn());
 const waitForApproval = vi.hoisted(() => vi.fn());
+const readActiveEmergencyDenies = vi.hoisted(() => vi.fn());
 
 // The model chokepoint answers from the fixture; the rest of @oxagen/ai stays
 // real, because materializeTools builds its tools with it.
@@ -83,6 +84,17 @@ vi.mock("../plugin-type", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../plugin-type")>()),
   getPluginTypeContributors: () => [],
 }));
+// The belt reads the active emergency denies once per turn (R4, #3370). The
+// fake answers from the fixture's kill switches, and the tenant seam hands it
+// a stand-in transaction because nothing else on this path reads Postgres.
+vi.mock("@oxagen/iam", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/iam")>()),
+  readActiveEmergencyDenies,
+}));
+vi.mock("@oxagen/database", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/database")>()),
+  withTenantDb: async (fn: (tx: unknown) => unknown) => fn({}),
+}));
 vi.mock("@oxagen/plugins", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/plugins")>()),
   listEntitledCapabilityPluginIds: async () => new Set<string>(),
@@ -103,11 +115,12 @@ interface ReplayFixture {
   turn: string;
   question: string;
   source: "hand-authored" | "recorded";
-  /** Open issues whose merge is expected to change this fixture. */
-  breaksWhen?: string[];
   gates?: {
     iamDeny?: string[];
+    /** Switched off before the turn: cut from the belt and refused per call. */
     killSwitch?: string[];
+    /** Switched off after the belt was built: refused per call only. */
+    killSwitchMidTurn?: string[];
     gauExhausted?: boolean;
     budgetExceeded?: boolean;
   };
@@ -123,7 +136,6 @@ interface ReplayFixture {
     invocations: string[];
     approvals: string[];
     answer: string;
-    offBelt?: string[];
     loadUnknown?: string[];
   };
 }
@@ -136,16 +148,16 @@ const MODEL = "anthropic/claude-sonnet-4.6";
 
 const FIXTURES_DIR = join(__dirname, "fixtures");
 
-function loadFixtures(): ReplayFixture[] {
+function loadFixtures(): Array<{ file: string; fixture: ReplayFixture }> {
   return readdirSync(FIXTURES_DIR)
     .filter((file) => file.endsWith(".json"))
     .sort()
-    .map(
-      (file) =>
-        JSON.parse(
-          readFileSync(join(FIXTURES_DIR, file), "utf8"),
-        ) as ReplayFixture,
-    );
+    .map((file) => ({
+      file: join(FIXTURES_DIR, file),
+      fixture: JSON.parse(
+        readFileSync(join(FIXTURES_DIR, file), "utf8"),
+      ) as ReplayFixture,
+    }));
 }
 
 interface Completion {
@@ -274,9 +286,23 @@ async function replay(fixture: ReplayFixture) {
       return output;
     });
   }
+  const switchedOff = closed.killSwitch ?? [];
+  readActiveEmergencyDenies.mockImplementation(async () => {
+    gates.push(`emergency_denies ${switchedOff.join(" ") || "none"}`);
+    return switchedOff.map((capabilityId) => ({
+      publicId: `edn_${capabilityId}`,
+      denyKind: "capability",
+      capabilityId,
+      resourceScopeDigest: null,
+      principalId: null,
+      reason: "replay: switched off for the set",
+    }));
+  });
   const killSwitchGate: KillSwitchGate = {
     check: async ({ capabilityId }) => {
-      const hit = closed.killSwitch?.includes(capabilityId) === true;
+      const hit =
+        switchedOff.includes(capabilityId) ||
+        closed.killSwitchMidTurn?.includes(capabilityId) === true;
       gates.push(`kill_switch ${capabilityId} ${hit ? "hit" : "open"}`);
       return hit ? killSwitchRow(capabilityId) : null;
     },
@@ -285,7 +311,8 @@ async function replay(fixture: ReplayFixture) {
     async (args: { capabilityName: string }) => {
       gates.push(`approval ${args.capabilityName} opened`);
       return {
-        approvalId: "apr_replay_1",
+        approvalId: "1e6b6273-8f90-41a2-9314-2f3041526375",
+        approvalPublicId: "apr_replay1",
         expiresAt: new Date("2026-09-24T12:05:00.000Z"),
       };
     },
@@ -334,7 +361,11 @@ async function replay(fixture: ReplayFixture) {
     },
     toolCallStarted: async () => undefined,
     toolCall: async (record) => {
-      ledger.push(`tool ${record.toolName} ${record.outcome}`);
+      ledger.push(
+        [`tool ${record.toolName} ${record.outcome}`, record.approvalPublicId]
+          .filter(Boolean)
+          .join(" "),
+      );
     },
     seal: async (outcome: TurnLedgerOutcome) => {
       ledger.push(`seal ${outcome.status}`);
@@ -373,8 +404,6 @@ async function replay(fixture: ReplayFixture) {
     ledger,
     approvals,
     engine,
-    materialised,
-    belt,
   };
 }
 
@@ -386,6 +415,7 @@ describe("assistant replay set", () => {
     insertToolInvocation.mockClear();
     createApprovalRequest.mockReset();
     waitForApproval.mockReset();
+    readActiveEmergencyDenies.mockReset();
   });
   afterEach(() => {
     clearKernelIAMRuntime();
@@ -395,67 +425,68 @@ describe("assistant replay set", () => {
   });
 
   it("holds between 10 and 20 turns, each named once", () => {
-    const names = fixtures.map((f) => f.turn);
-    expect(names.length).toBeGreaterThanOrEqual(1);
+    const names = fixtures.map(({ fixture }) => fixture.turn);
+    expect(names.length).toBeGreaterThanOrEqual(10);
+    expect(names.length).toBeLessThanOrEqual(20);
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it.each(fixtures.map((f) => [f.turn, f] as const))(
-    "replays %s",
-    async (_name, fixture) => {
-      const run = await replay(fixture);
-      const want = fixture.expect;
+  it.each(
+    fixtures.map(({ file, fixture }) => [fixture.turn, file, fixture] as const),
+  )("replays %s", async (_name, file, fixture) => {
+    const run = await replay(fixture);
+    const want = fixture.expect;
 
-      // One object, one assertion: a failing fixture shows every field that
-      // moved, not only the first.
-      const observed: ReplayFixture["expect"] = {
-        tools: run.parts
-          .filter((p) => p.type === "tool-call")
-          .map((p) => String(p.toolName)),
-        gates: run.gates,
-        ledger: run.ledger,
-        answers: run.engine.posts
-          .filter((post) => post.route === "tool-result")
-          .map((post) => answerClass(post.body)),
-        refusals: run.parts
-          .filter((p) => p.type === "tool-error")
-          .map((p) => (p.error as { code?: string }).code ?? "uncoded"),
-        invocations: insertToolInvocation.mock.calls.map((call) => {
-          const row = (call as unknown[])[0] as {
-            capability_name: string;
-            status: string;
-            error_class: string | null;
-          };
-          return [row.capability_name, row.status, row.error_class]
-            .filter((v) => v !== null && v !== "")
-            .join(" ");
-        }),
-        approvals: run.approvals,
-        answer: run.answer,
-      };
-      if (want.offBelt) {
-        // A name the belt cannot reach: neither materialised nor loadable.
-        const reachable = new Set([
-          ...Object.values(run.materialised.nameMap),
-          ...Object.keys(run.belt.tools),
-        ]);
-        observed.offBelt = want.offBelt.filter((name) => !reachable.has(name));
-      }
-      if (want.loadUnknown) {
-        observed.loadUnknown = run.parts
-          .filter((p) => p.type === "tool-result" && p.toolName === LOAD_TOOLS)
-          .flatMap((p) => (p.output as { unknown?: string[] }).unknown ?? []);
-      }
-      if (process.env.REPLAY_DEBUG) {
-        console.log(
-          JSON.stringify(
-            { observed, posts: run.engine.posts, parts: run.parts },
-            null,
-            1,
-          ),
-        );
-      }
-      expect(observed).toEqual(want);
-    },
-  );
+    // One object, one assertion: a failing fixture shows every field that
+    // moved, not only the first.
+    const observed: ReplayFixture["expect"] = {
+      tools: run.parts
+        .filter((p) => p.type === "tool-call")
+        .map((p) => String(p.toolName)),
+      gates: run.gates,
+      ledger: run.ledger,
+      answers: run.engine.posts
+        .filter((post) => post.route === "tool-result")
+        .map((post) => answerClass(post.body)),
+      refusals: run.parts
+        .filter((p) => p.type === "tool-error")
+        .map((p) => (p.error as { code?: string }).code ?? "uncoded"),
+      invocations: insertToolInvocation.mock.calls.map((call) => {
+        const row = (call as unknown[])[0] as {
+          capability_name: string;
+          status: string;
+          error_class: string | null;
+        };
+        return [row.capability_name, row.status, row.error_class]
+          .filter((v) => v !== null && v !== "")
+          .join(" ");
+      }),
+      approvals: run.approvals,
+      answer: run.answer,
+    };
+    if (want.loadUnknown) {
+      observed.loadUnknown = run.parts
+        .filter((p) => p.type === "tool-result" && p.toolName === LOAD_TOOLS)
+        .flatMap((p) => (p.output as { unknown?: string[] }).unknown ?? []);
+    }
+    if (process.env.REPLAY_DEBUG) {
+      console.log(
+        JSON.stringify(
+          { observed, posts: run.engine.posts, parts: run.parts },
+          null,
+          1,
+        ),
+      );
+    }
+    if (process.env.REPLAY_UPDATE) {
+      // Re-pin: write what this turn produced into the fixture, then read
+      // the diff before committing it. README.md says when to use this.
+      writeFileSync(
+        file,
+        `${JSON.stringify({ ...fixture, expect: observed }, null, 2)}\n`,
+      );
+      return;
+    }
+    expect(observed).toEqual(want);
+  });
 });

@@ -1,0 +1,267 @@
+{
+  "turn": "06 a spend drill found and loaded",
+  "question": "Break down release-bot's spend by tool.",
+  "source": "hand-authored",
+  "handlers": {
+    "get_spend_drill": {
+      "kind": "agent",
+      "key": "agt_replay",
+      "period": {
+        "from": "2026-09-01",
+        "to": "2026-09-24"
+      },
+      "total": {
+        "cost": {
+          "micros": "1140000",
+          "currency": "USD",
+          "basis": "gateway_observed"
+        },
+        "calls": 130,
+        "runs": 9,
+        "proven": null,
+        "accepted": null,
+        "productiveRatio": null
+      },
+      "series": [
+        {
+          "day": "2026-09-23",
+          "cost": {
+            "micros": "412000",
+            "currency": "USD",
+            "basis": "gateway_observed"
+          },
+          "calls": 40,
+          "runs": 3
+        }
+      ],
+      "averages": {
+        "perCall": null,
+        "perRun": {
+          "micros": "126000",
+          "currency": "USD"
+        }
+      },
+      "share": 0.62,
+      "byTool": [
+        {
+          "name": "create_pull_request",
+          "calls": 6,
+          "runs": 4
+        }
+      ]
+    }
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Break down release-bot's spend by tool."
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "search_tools",
+      "input": {
+        "query": "spend drill"
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "search_tools",
+          "input": {
+            "query": "spend drill"
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Break down release-bot's spend by tool."
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-1",
+      "name": "load_tools",
+      "input": {
+        "names": ["get_spend_drill"]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_2",
+          "name": "load_tools",
+          "input": {
+            "names": ["get_spend_drill"]
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-2",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Break down release-bot's spend by tool."
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_2",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-2",
+      "name": "get_spend_drill",
+      "input": {
+        "kind": "agent",
+        "key": "agt_replay"
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_3",
+          "name": "get_spend_drill",
+          "input": {
+            "kind": "agent",
+            "key": "agt_replay"
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-3",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Break down release-bot's spend by tool."
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_3",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "release-bot's spend went mostly to create_pull_request: 6 calls across 4 runs."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "release-bot's spend went mostly to create_pull_request: 6 calls across 4 runs.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["search_tools", "load_tools", "get_spend_drill"],
+    "gates": [
+      "emergency_denies none",
+      "kill_switch get_spend_drill open",
+      "iam get_spend_drill allow",
+      "handler get_spend_drill"
+    ],
+    "ledger": [
+      "model completed",
+      "tool search_tools completed",
+      "model completed",
+      "tool load_tools completed",
+      "model completed",
+      "tool get_spend_drill completed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["ok", "ok", "ok"],
+    "refusals": [],
+    "invocations": ["get_spend_drill completed"],
+    "approvals": [],
+    "answer": "release-bot's spend went mostly to create_pull_request: 6 calls across 4 runs.",
+    "loadUnknown": []
+  }
+}
