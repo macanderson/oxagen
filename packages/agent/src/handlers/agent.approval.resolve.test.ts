@@ -22,6 +22,11 @@
  *     `released`, in the one transaction the UPDATE runs in; `approved`
  *     releases nothing and reports `held`; a row with no mandate reports
  *     null and never touches the ledger
+ *   - delivery (ADR-118, #3127): an approved row that stores the parked
+ *     call runs it in the deciding request, outside the enclosing governed
+ *     action, and answers what the row then records; a delivery that throws
+ *     leaves the decision standing and answers the row as it stands; a
+ *     denied row and a row with no stored call never run anything
  *   - who answers a mandate row (§6.9, INV-29): a workspace Member who
  *     passes the wide gate but holds no role for moves_money → forbidden,
  *     no lock, no release, no UPDATE; an agent principal (resolved or on an
@@ -29,13 +34,32 @@
  *     Billing user resolves; approvers narrow it: a role outside the list
  *     → `not_an_approver`, a user the list names resolves; a mandate row
  *     gone at the read → `approval_expired`
+ *   - a run and the approval it raised (ADR-175): a call whose run is the
+ *     one the row records, by its internal id or its public id → forbidden
+ *     `run_cannot_resolve_own_approval`, no UPDATE, no NOTIFY, nothing
+ *     recorded through the kernel; a call with no run, a call from another
+ *     run, and a row that records no run resolve, and the last two make no
+ *     run lookup the answer does not need
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
+import { z } from "zod";
 import { schema } from "@oxagen/database";
-import { isHandlerError } from "@oxagen/oxagen";
+import {
+  getCapability,
+  isHandlerError,
+  registerCapability,
+} from "@oxagen/oxagen";
 import {
   clearBillingAdmissionGate,
   clearHandlersForTests,
@@ -57,6 +81,9 @@ const mocks = vi.hoisted(() => ({
     publicId: "mnd_01k5rt9xq7v3m8n2p4s6t8w0",
   })),
   release: vi.fn(async () => 1),
+  resumeApprovedCall: vi.fn<(ref: unknown) => Promise<string>>(
+    async () => "succeeded",
+  ),
 }));
 
 vi.mock("@oxagen/rules", () => ({
@@ -88,8 +115,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
-vi.mock("../runtime/approval", () => ({
+// resolveRunPublicId stays real: the self-approval check reads the calling
+// run's public id through it, against the tx double below.
+vi.mock("../runtime/approval", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../runtime/approval")>()),
   notifyResolution: mocks.notifyResolution,
+}));
+
+vi.mock("../runtime/approval-resume", () => ({
+  resumeApprovedCall: mocks.resumeApprovedCall,
 }));
 
 import { agentApprovalResolveHandler } from "./agent.approval.resolve";
@@ -128,6 +162,10 @@ type Tenant = {
   userPublicId?: string;
   /** False when the row lapsed between the read and the UPDATE. */
   updateMatches?: boolean;
+  /** The run the row records as having parked the call; null when none. */
+  runPublicId?: string | null;
+  /** `agent_runs` in this workspace: internal id → public id. */
+  runs?: Record<string, string>;
 };
 
 type Captured = {
@@ -140,6 +178,8 @@ type Captured = {
   updateTx: unknown;
   /** Whether `release` had run when the UPDATE started. */
   releasedBeforeUpdate: boolean;
+  /** How many times the `agent_runs` lookup ran. */
+  runLookups: number;
 };
 
 /**
@@ -161,6 +201,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
           {
             mandateId: tenant.mandate?.mandateId ?? null,
             toolCallId: tenant.mandate?.toolCallId ?? null,
+            runPublicId: tenant.runPublicId ?? null,
           },
         ]
       : [];
@@ -172,7 +213,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
         }),
       },
     },
-    select: () => ({
+    select: (projection?: Record<string, unknown>) => ({
       from: (table: unknown) => {
         let lastWhere: SQL | null = null;
         const chain = {
@@ -204,6 +245,13 @@ function makeTx(tenant: Tenant, captured: Captured) {
               );
             }
             if (table === schema.approvalRequests) {
+              // The execution read-back asks for the resume columns; the
+              // pending read asks for the mandate hop.
+              if (projection && "resumeRunPublicId" in projection) {
+                return Promise.resolve(
+                  tenant.resume ? [tenant.resume.readBack] : [],
+                );
+              }
               return Promise.resolve(pendingRow());
             }
             if (table === schema.mandates) {
@@ -225,6 +273,14 @@ function makeTx(tenant: Tenant, captured: Captured) {
               return Promise.resolve(
                 tenant.userPublicId ? [{ publicId: tenant.userPublicId }] : [],
               );
+            }
+            if (table === schema.agentRuns) {
+              captured.runLookups += 1;
+              const ids = lastWhere ? render(lastWhere).params : [];
+              const hit = Object.entries(tenant.runs ?? {}).find(([id]) =>
+                ids.includes(id),
+              );
+              return Promise.resolve(hit ? [{ publicId: hit[1] }] : []);
             }
             throw new Error("unexpected table");
           },
@@ -265,6 +321,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
                             id: tenant.matchedRowId,
                             messageId: tenant.messageId,
                             capabilityName: "set_budget",
+                            resumeStatus: tenant.resume?.afterUpdate ?? null,
                           },
                         ]
                       : [],
@@ -291,6 +348,14 @@ function makeTx(tenant: Tenant, captured: Captured) {
 const MESSAGE_UUID = "7c1e0a2b-3d4f-4a5b-8c6d-9e0f1a2b3c4d";
 const ROW_UUID = "4b2f7a0e-6c1d-4e8a-9f3b-2d5c7e9a1b3c";
 const PUBLIC_ID = "apr_01k5rt9xq7v3m8n2p4s6t8w0";
+/** A run that parked a call: `agent_runs.id` and its public id. */
+const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
+const RUN_PUBLIC_ID = "arun_01k5rt9xq7v3m8n2p4s6t8w0";
+const OTHER_RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000b2";
+const RUNS = {
+  [RUN_UUID]: RUN_PUBLIC_ID,
+  [OTHER_RUN_UUID]: "arun_01k5rt9xq7v3m8n2p4s6t8w9",
+};
 
 function setup(overrides: Partial<Tenant> = {}): Captured {
   const tenant: Tenant = {
@@ -310,6 +375,7 @@ function setup(overrides: Partial<Tenant> = {}): Captured {
     requesterWhere: null,
     updateTx: null,
     releasedBeforeUpdate: false,
+    runLookups: 0,
   };
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(fn(makeTx(tenant, captured))),
@@ -318,6 +384,10 @@ function setup(overrides: Partial<Tenant> = {}): Captured {
 }
 
 const forbidden = (e: unknown) => isHandlerError(e) && e.code === "forbidden";
+const ownRun = (e: unknown) =>
+  forbidden(e) &&
+  isHandlerError(e) &&
+  e.reason === "run_cannot_resolve_own_approval";
 const conflict = (e: unknown) =>
   isHandlerError(e) && e.code === "conflict" && e.reason === "approval_expired";
 
@@ -341,6 +411,7 @@ describe("resolve_approval — role gate", () => {
       approvalId: PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      execution: null,
     });
   });
 
@@ -357,6 +428,7 @@ describe("resolve_approval — role gate", () => {
         approvalId: PUBLIC_ID,
         resolution: "denied",
         mandate: null,
+        execution: null,
       });
     },
   );
@@ -412,6 +484,7 @@ describe("resolve_approval — role gate", () => {
         approvalId: PUBLIC_ID,
         resolution: "approved",
         mandate: null,
+        execution: null,
       });
       expect(captured.set?.resolvedByUserId).toBe("u_creator");
     });
@@ -496,6 +569,7 @@ describe("resolve_approval — the UPDATE", () => {
       approvalId: PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      execution: null,
     });
   });
 
@@ -624,6 +698,7 @@ describe("resolve_approval — governed-action accrual through the kernel", () =
       approvalId: PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      execution: null,
     });
     expect(recorder).toHaveBeenCalledTimes(1);
     expect(recorder.mock.calls[0]?.[0]).toMatchObject({
@@ -659,6 +734,35 @@ describe("resolve_approval — governed-action accrual through the kernel", () =
     expect(captured.set).toBeNull();
   });
 
+  it("records nothing for a call from the run that raised the approval: opts.runId reaches the handler", async () => {
+    const captured = setup({ runPublicId: RUN_PUBLIC_ID, runs: RUNS });
+    await expect(
+      invoke(
+        "resolve_approval",
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        kernelCtx,
+        { runId: RUN_UUID },
+      ),
+    ).rejects.toSatisfy(ownRun);
+    expect(recorder).not.toHaveBeenCalled();
+    expect(captured.set).toBeNull();
+  });
+
+  it("refuses the agent surface before the handler: a model is never offered the decision", async () => {
+    const captured = setup();
+    await expect(
+      invoke(
+        "resolve_approval",
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        kernelCtx,
+        { surface: "agent" },
+      ),
+    ).rejects.toMatchObject({ code: "surface_denied" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(captured.set).toBeNull();
+    expect(recorder).not.toHaveBeenCalled();
+  });
+
   it("refuses an id that is neither apr_ nor a uuid at the contract, before the handler", async () => {
     const captured = setup();
     await expect(
@@ -671,6 +775,185 @@ describe("resolve_approval — governed-action accrual through the kernel", () =
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
     expect(captured.set).toBeNull();
     expect(recorder).not.toHaveBeenCalled();
+  });
+});
+
+// ── delivering the approved call (ADR-118, #3127) ────────────────────────────
+
+describe("resolve_approval — delivering the approved call", () => {
+  const RAN = {
+    resumeStatus: "succeeded",
+    resumeRunPublicId: "arun_resumed",
+    resumeError: null,
+  };
+
+  it("runs an approved stored call in the deciding request and answers what the row records", async () => {
+    setup({ resume: { afterUpdate: "queued", readBack: RAN } });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    // Delivered by the row uuid, inside the caller's org and workspace.
+    expect(mocks.resumeApprovedCall).toHaveBeenCalledTimes(1);
+    expect(mocks.resumeApprovedCall).toHaveBeenCalledWith({
+      id: ROW_UUID,
+      orgId: CTX.orgId,
+      workspaceId: CTX.workspaceId,
+    });
+    // The answer is the row read back, not what the delivery returned.
+    expect(out.execution).toEqual({
+      status: "succeeded",
+      runId: "arun_resumed",
+      reason: null,
+    });
+  });
+
+  it("reports a refused delivery as the row records it", async () => {
+    mocks.resumeApprovedCall.mockResolvedValueOnce("failed");
+    setup({
+      resume: {
+        afterUpdate: "queued",
+        readBack: {
+          resumeStatus: "failed",
+          resumeRunPublicId: null,
+          resumeError: "requester_access_revoked",
+        },
+      },
+    });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    expect(out.execution).toEqual({
+      status: "failed",
+      runId: null,
+      reason: "requester_access_revoked",
+    });
+  });
+
+  it("keeps the decision when delivery throws, and answers the row as it stands (negative)", async () => {
+    mocks.resumeApprovedCall.mockRejectedValueOnce(new Error("ledger down"));
+    const captured = setup({
+      resume: {
+        afterUpdate: "queued",
+        readBack: {
+          resumeStatus: "queued",
+          resumeRunPublicId: null,
+          resumeError: null,
+        },
+      },
+    });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    expect(captured.set).toMatchObject({ resolution: "approved" });
+    expect(mocks.notifyResolution).toHaveBeenCalledTimes(1);
+    expect(out.resolution).toBe("approved");
+    // Still queued, so the periodic worker delivers it.
+    expect(out.execution).toEqual({
+      status: "queued",
+      runId: null,
+      reason: null,
+    });
+  });
+
+  it("never runs a denied stored call (negative)", async () => {
+    setup({
+      resume: {
+        afterUpdate: "denied",
+        readBack: {
+          resumeStatus: "denied",
+          resumeRunPublicId: null,
+          resumeError: null,
+        },
+      },
+    });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "denied", note: "not now" },
+      CTX,
+    );
+    expect(mocks.resumeApprovedCall).not.toHaveBeenCalled();
+    expect(out.execution).toEqual({
+      status: "denied",
+      runId: null,
+      reason: null,
+    });
+  });
+
+  it("runs nothing and answers no execution for a row that stores no call (negative)", async () => {
+    setup();
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    expect(mocks.resumeApprovedCall).not.toHaveBeenCalled();
+    expect(out.execution).toBeNull();
+  });
+
+  describe("through the kernel", () => {
+    const ORG = "00000000-0000-0000-0000-000000000001";
+    const WS = "00000000-0000-0000-0000-000000000002";
+    const USER = "00000000-0000-0000-0000-000000000003";
+    const kernelCtx = makeCTX({ orgId: ORG, workspaceId: WS, userId: USER });
+    const PARKED = "test.parked_write";
+    let recorder: Mock<(r: GovernedActionRecord) => Promise<void>>;
+
+    beforeEach(() => {
+      clearHandlersForTests();
+      clearKernelIAMRuntime();
+      clearBillingAdmissionGate();
+      clearSecurityEventEmitter();
+      if (!getCapability(PARKED)) {
+        registerCapability({
+          name: PARKED,
+          domain: "test",
+          description: "The write a parked call asked for.",
+          mode: "sync" as const,
+          surfaces: ["agent"] as const,
+          layers: ["unit"] as const,
+          sensitivity: "low" as const,
+          defaultEffect: "allow" as const,
+          defaultRoles: { org: {}, workspace: {} },
+          input: z.object({}),
+          output: z.object({ ok: z.boolean() }),
+        });
+      }
+      registerHandler(
+        "resolve_approval",
+        async () => (input, ctx) =>
+          agentApprovalResolveHandler(
+            input as Parameters<typeof agentApprovalResolveHandler>[0],
+            ctx,
+          ),
+      );
+      registerHandler(PARKED, async () => async () => ({ ok: true }));
+      recorder = vi.fn<(r: GovernedActionRecord) => Promise<void>>();
+      setUsageRecorder(recorder);
+      // The delivery invokes the stored call the way resumeApprovedCall does.
+      mocks.resumeApprovedCall.mockImplementationOnce(async () => {
+        await invoke(PARKED, {}, kernelCtx, { surface: "agent" });
+        return "succeeded";
+      });
+    });
+
+    afterEach(() => {
+      clearUsageRecorder();
+      clearHandlersForTests();
+    });
+
+    it("meters the delivered call as its own governed action, not as part of the decision", async () => {
+      setup({ resume: { afterUpdate: "queued", readBack: RAN } });
+      await invoke(
+        "resolve_approval",
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        kernelCtx,
+      );
+      // Nested inside the decision, the call would accrue nothing, and the
+      // write would go unmetered where the periodic worker meters it.
+      const billed = recorder.mock.calls.map(([record]) => record.capability);
+      expect(billed).toEqual([PARKED, "resolve_approval"]);
+    });
   });
 });
 
@@ -847,5 +1130,84 @@ describe("resolve_approval — who answers a call a mandate parked", () => {
       ),
     ).rejects.toSatisfy(conflict);
     untouched(captured);
+  });
+});
+
+// ── a run and the approval it raised ─────────────────────────────────────────
+
+describe("resolve_approval: a run and the approval it raised", () => {
+  it.each([
+    ["its internal id, as the in-app assistant carries it", RUN_UUID],
+    ["its public id", RUN_PUBLIC_ID],
+  ])(
+    "refuses a call from the run that raised it, by %s: no UPDATE, no NOTIFY",
+    async (_how, runId) => {
+      const captured = setup({ runPublicId: RUN_PUBLIC_ID, runs: RUNS });
+      const err = await agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        { ...CTX, runId },
+      ).catch((e: unknown) => e);
+      expect(err).toSatisfy(ownRun);
+      // The refusal sends the person to the page where they decide.
+      expect((err as Error).message).toBe(
+        "The run that raised this approval cannot resolve it. Approve or deny it on Fleet.",
+      );
+      expect(captured.set).toBeNull();
+      expect(captured.notification).toBeNull();
+      expect(mocks.notifyResolution).not.toHaveBeenCalled();
+    },
+  );
+
+  it("lets the person resolve the same approval with no run on the call, as Fleet does", async () => {
+    const captured = setup({ runPublicId: RUN_PUBLIC_ID, runs: RUNS });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        CTX,
+      ),
+    ).resolves.toEqual({
+      approvalId: PUBLIC_ID,
+      resolution: "approved",
+      mandate: null,
+    });
+    expect(captured.set).toMatchObject({
+      resolution: "approved",
+      resolvedByUserId: "u_1",
+    });
+    // No run on the call leaves nothing to compare, so no run is read.
+    expect(captured.runLookups).toBe(0);
+  });
+
+  it("does not refuse a call from a run the row does not record (negative)", async () => {
+    const captured = setup({ runPublicId: RUN_PUBLIC_ID, runs: RUNS });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "denied" },
+        { ...CTX, runId: OTHER_RUN_UUID },
+      ),
+    ).resolves.toMatchObject({ resolution: "denied" });
+    expect(captured.runLookups).toBe(1);
+  });
+
+  it("does not refuse a uuid that names no run in this workspace (negative)", async () => {
+    const captured = setup({ runPublicId: RUN_PUBLIC_ID, runs: {} });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        { ...CTX, runId: RUN_UUID },
+      ),
+    ).resolves.toMatchObject({ resolution: "approved" });
+    expect(captured.runLookups).toBe(1);
+  });
+
+  it("does not refuse when the row records no run, and reads no run (negative)", async () => {
+    const captured = setup({ runPublicId: null, runs: RUNS });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        { ...CTX, runId: RUN_UUID },
+      ),
+    ).resolves.toMatchObject({ resolution: "approved" });
+    expect(captured.runLookups).toBe(0);
   });
 });

@@ -60,7 +60,12 @@ import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 import { isRowCommand } from "@/shared/row-commands";
 
-/** What the decision answered: the resolution, and the mandate settlement when a mandate parked the call. */
+/**
+ * What the decision answered: the resolution, the mandate settlement when a
+ * mandate parked the call, and what became of a call the in-app assistant
+ * parked, read back from the approval row after the handler delivered it
+ * (ADR-118). `execution` is null on a row that stores no call.
+ */
 export type ApprovalDecision = {
   approvalId: string;
   resolution: "approved" | "denied";
@@ -68,6 +73,11 @@ export type ApprovalDecision = {
     mandateId: string;
     reserved: { measure: string; value: string; unitOrCurrency: string }[];
     outcome: "held" | "released";
+  } | null;
+  execution: {
+    status: string;
+    runId: string | null;
+    reason: string | null;
   } | null;
 };
 
@@ -124,6 +134,7 @@ export async function resolveApprovalAction(
           approvalId: result.value.approvalId,
           resolution: result.value.resolution,
           mandate: result.value.mandate,
+          execution: result.value.execution ?? null,
         },
       }
     : result;
