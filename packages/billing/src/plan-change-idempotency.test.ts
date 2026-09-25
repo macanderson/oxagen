@@ -9,7 +9,10 @@
  * Stripe's own de-duplication is what acts on it.
  */
 import { describe, expect, it } from "vitest";
-import { planChangeIdempotencyKey } from "./subscriptions";
+import {
+  planChangeIdempotencyKey,
+  seatChangeIdempotencyKey,
+} from "./subscriptions";
 
 const SUB = "sub_123";
 const PRICE = "price_pro_monthly";
@@ -82,5 +85,53 @@ describe("plan-change idempotency key (#1421)", () => {
     const key = planChangeIdempotencyKey(SUB, PRICE);
     expect(key).toBe(`plan_change:${SUB}:${PRICE}`);
     expect(key).not.toMatch(/\d{9,}/);
+  });
+});
+
+describe("seat-change idempotency key (#2976)", () => {
+  it("gives A->B and B->A different keys, so changing back applies", () => {
+    // The old key was `seats:${sub}:${seats}`. 5->8->5 reused the first `:5`
+    // key, Stripe replayed its stored response, and the return to 5 never ran.
+    const oldKey = (seats: number) => `seats:${SUB}:${seats}`;
+    expect(oldKey(5)).toBe(oldKey(5)); // the old collision
+
+    const first = seatChangeIdempotencyKey(SUB, 8, 5);
+    const up = seatChangeIdempotencyKey(SUB, 5, 8);
+    const back = seatChangeIdempotencyKey(SUB, 8, 5);
+    const original = seatChangeIdempotencyKey(SUB, 3, 5);
+    expect(up).not.toBe(back);
+    expect(original).not.toBe(back);
+    expect(first).toBe(back);
+  });
+
+  it("dedupes a double submit of one change", () => {
+    // Both submits read the same prior count off the row.
+    expect(seatChangeIdempotencyKey(SUB, 3, 5)).toBe(
+      seatChangeIdempotencyKey(SUB, 3, 5),
+    );
+    expect(seatChangeIdempotencyKey(SUB, 3, 5, "req_1")).toBe(
+      seatChangeIdempotencyKey(SUB, 3, 5, "req_1"),
+    );
+  });
+
+  it("lets a request id separate two deliberate submits of one transition", () => {
+    expect(seatChangeIdempotencyKey(SUB, 3, 5, "req_1")).not.toBe(
+      seatChangeIdempotencyKey(SUB, 3, 5, "req_2"),
+    );
+  });
+
+  it("keeps two subscriptions apart", () => {
+    expect(seatChangeIdempotencyKey(SUB, 3, 5)).not.toBe(
+      seatChangeIdempotencyKey("sub_other", 3, 5),
+    );
+  });
+
+  it("carries no clock at all", () => {
+    const key = seatChangeIdempotencyKey(SUB, 3, 5);
+    expect(key).toBe(`seats:${SUB}:3->5`);
+    expect(key).not.toMatch(/\d{9,}/);
+    expect(seatChangeIdempotencyKey(SUB, 3, 5, "req_1")).toBe(
+      `seats:${SUB}:3->5:req_1`,
+    );
   });
 });

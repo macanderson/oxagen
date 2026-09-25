@@ -546,8 +546,8 @@ export async function reactivateOrgSubscription(orgId: string): Promise<void> {
  * customer; both calls succeed, both reconcile to the same end state, and only
  * Stripe shows the second one.
  *
- * `setSubscriptionSeats` next door already had the right shape
- * (`seats:${subId}:${seats}`, no clock), and `autoreload.ts` reaches the same
+ * `setSubscriptionSeats` next door carries no clock either (see
+ * {@link seatChangeIdempotencyKey}), and `autoreload.ts` reaches the same
  * conclusion the other way — it persists the key it charged under, because no
  * wall-clock derivation could survive a retry (#1420).
  *
@@ -631,6 +631,32 @@ export async function upgradeSubscription(
 }
 
 /**
+ * Build the Stripe idempotency key for a seat change.
+ *
+ * The key names the transition, `prior->seats`, not only the target count. It
+ * used to be `seats:${subId}:${seats}`. A change from 5 to 8 and back to 5
+ * inside Stripe's 24-hour key window then reused the first `:5` key, Stripe
+ * replayed the stored response, and the second change never applied (#2976).
+ * The row still read 8 seats while the caller saw success.
+ *
+ * With the prior count in the key, 5->8 and 8->5 are different keys. A double
+ * submit of one change still reads the same prior count, so it produces the
+ * same key and Stripe dedupes it.
+ *
+ * `requestId` separates two deliberate submits of the same transition, the way
+ * it does in {@link planChangeIdempotencyKey}. The key never carries a clock.
+ */
+export function seatChangeIdempotencyKey(
+  stripeSubId: string,
+  priorSeats: number,
+  seats: number,
+  requestId?: string,
+): string {
+  const base = `seats:${stripeSubId}:${priorSeats}->${seats}`;
+  return requestId ? `${base}:${requestId}` : base;
+}
+
+/**
  * Update the seat count on an active subscription.
  *
  * Guard: if `seats` is less than the number of currently used seats
@@ -643,6 +669,13 @@ export async function upgradeSubscription(
 export async function setSubscriptionSeats(
   orgId: string,
   seats: number,
+  opts: {
+    /**
+     * Identifies this submit. See {@link seatChangeIdempotencyKey} for what it
+     * adds to the key.
+     */
+    requestId?: string;
+  } = {},
 ): Promise<void> {
   if (seats < 1) throw new Error("seats must be >= 1");
 
@@ -669,7 +702,12 @@ export async function setSubscriptionSeats(
   // on the next cycle (avoids surprising the customer with an immediate refund).
   const isIncrease = seats > row.seatCount;
   const prorationBehavior = isIncrease ? "always_invoice" : "create_prorations";
-  const idempotencyKey = `seats:${row.stripeSubscriptionId}:${seats}`;
+  const idempotencyKey = seatChangeIdempotencyKey(
+    row.stripeSubscriptionId,
+    row.seatCount,
+    seats,
+    opts.requestId,
+  );
 
   logger.info(
     { orgId, seats, previous: row.seatCount, prorationBehavior },
