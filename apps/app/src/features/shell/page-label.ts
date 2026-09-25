@@ -10,6 +10,8 @@
  * `ASSISTANT_ENTITY_LABEL_MAX` in `@oxagen/oxagen/contracts/assistant.ask`,
  * written out so the client bundle does not load the contract registry.
  * `assistant-flyout.page-label.test.tsx` holds the two equal.
+ *
+ * @internal Exported for that test; nothing outside this module imports it.
  */
 export const ENTITY_LABEL_MAX = 256;
 
