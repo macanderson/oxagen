@@ -9,6 +9,7 @@ export const configuration: SkillConfiguration = {
     pullRequestNumber: 12,
     digest: `sha256:${"b".repeat(64)}`,
     publishedAt: "2026-09-20T10:00:00.000Z",
+    searchable: true,
   },
   versions: [
     {
@@ -18,6 +19,7 @@ export const configuration: SkillConfiguration = {
       pullRequestNumber: 12,
       digest: `sha256:${"b".repeat(64)}`,
       publishedAt: "2026-09-20T10:00:00.000Z",
+      searchable: true,
     },
   ],
 };

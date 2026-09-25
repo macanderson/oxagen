@@ -92,5 +92,13 @@ export const publishedSkillConfigSchema = z
     digest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     config: skillConfigSchema,
     publishedAt: z.string().datetime(),
+    /**
+     * True when the version was published under the repository binding the
+     * workspace holds now. `preview_skill_search` refuses any other version
+     * with `skill_repository_changed`, so a client offers only these for a
+     * preview. `get_skill_config` sets it on every row. A publication result
+     * omits it.
+     */
+    searchable: z.boolean().optional(),
   })
   .strict();
