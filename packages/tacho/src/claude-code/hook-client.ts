@@ -354,9 +354,10 @@ function localMatchContext(): MatchContext {
  * the set an operator relies on is read from the record, not from this file.
  *
  * `SessionStart` and `UserPromptSubmit` carry no tool identity to evaluate at
- * all; `Stop`, `PostToolUse`, `PostToolUseFailure`, `Notification` and
- * `PermissionDenied` refuse nothing (the `default` branch below). The daemon
- * answers `Stop` and the two post-tool events with the operator's queued
+ * all; `Stop`, `PostToolUse`, `PostToolUseFailure`, `Notification`,
+ * `PermissionDenied` and `SessionEnd` refuse nothing (the `default` branch
+ * below). The daemon answers `Stop` and the two post-tool events with the
+ * operator's queued
  * steers and a resume's continuation; with the daemon down, those stay
  * queued for the next boundary it answers. Of the three tool-bearing events, only `ask` and `no_rule`
  * outcomes fail open, and even then to the harness's OWN permission prompt, a
@@ -371,6 +372,7 @@ export const FAIL_OPEN_HOOK_PATHS: readonly string[] = [
   "PostToolUseFailure",
   "Notification",
   "PermissionDenied",
+  "SessionEnd",
   "PreToolUse:ask",
   "PreToolUse:no_rule",
   "PermissionRequest:ask",

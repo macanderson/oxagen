@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FAIL_OPEN_HOOK_PATHS } from "../claude-code/hook-client";
 import {
   ALL_HOOK_EVENTS,
   COMMAND_HOOK_EVENTS,
@@ -53,6 +54,9 @@ describe("settings writer", () => {
       },
     ]);
     expect(HTTP_HOOK_EVENTS as readonly string[]).not.toContain("SessionEnd");
+    // It now reaches the local evaluator, which answers `{}` with the daemon
+    // down, so the fail-open set signed onto the bundle has to name it.
+    expect(FAIL_OPEN_HOOK_PATHS).toContain("SessionEnd");
   });
 
   it("replaces the http SessionEnd an earlier enrollment wrote with the command hook", () => {
