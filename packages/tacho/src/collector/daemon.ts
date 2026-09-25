@@ -1201,20 +1201,19 @@ async function initializeDaemon(
     const withdrawn = registry.withdrawQueuedPrompts(
       "withdrawn before delivery: the retention mandate no longer keeps prompt content",
     );
-    let snapshots = 0;
     for (const pending of pendingSessionEnds.values())
-      for (const persisted of pending.terminal?.state.sessions ?? []) {
-        if (persisted.control.messages.length === 0) continue;
+      for (const persisted of pending.terminal?.state.sessions ?? [])
         persisted.control.messages = [];
-        snapshots += 1;
-      }
-    if (snapshots > 0) persistPendingEnds();
-    if (withdrawn > 0) {
-      persistState();
+    // Both files are rewritten whether or not this call withdrew anything.
+    // A write that threw on an earlier attempt left the prompts on disk and
+    // already gone from memory, so the retry finds nothing to withdraw, and
+    // it clears the debt once this returns.
+    persistPendingEnds();
+    persistState();
+    if (withdrawn > 0)
       log(
         `mandate narrowed: withdrew ${withdrawn} queued prompt(s) from ${paths.daemonState}`,
       );
-    }
     return withdrawn;
   }
 
@@ -1383,15 +1382,21 @@ async function initializeDaemon(
           }),
         (result) => ({ events: result.events }),
       );
-      // Written before the acknowledgements leave. A queued message or steer
-      // seals no frame, so nothing else marked the state dirty, and a crash
-      // before the next frame lost a prompt the operator had been told was
-      // `received`.
-      persistState();
-      pendingAcks.push(...result.acknowledgements);
-      // Only the commands that took effect: an expired or refused kill must
-      // not cut a session's model calls.
-      interruptModelCalls(result.applied);
+      try {
+        // Written before the acknowledgements leave. A queued message or
+        // steer seals no frame, so nothing else marked the state dirty, and a
+        // crash before the next frame lost a prompt the operator had been
+        // told was `received`.
+        persistState();
+        pendingAcks.push(...result.acknowledgements);
+      } finally {
+        // The commands took effect whether or not the write landed, and a
+        // redelivered one is answered from the ledger rather than applied
+        // again, so this is the only chance to cut its model calls. Only
+        // the commands that took effect: an expired or refused kill must not
+        // cut a session's model calls.
+        interruptModelCalls(result.applied);
+      }
     }
   }
 

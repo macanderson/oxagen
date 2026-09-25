@@ -9,7 +9,7 @@
  * and the hook handler matches rules with the host's home and honours the
  * harness's read-only claim.
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -155,6 +155,10 @@ function fakePlane(etag: string) {
     queue: (delivered: DeliveredCommand) => queue.push(delivered),
     offerBundle: (next: PolicyBundle) => {
       bundle = next;
+    },
+    /** Answer `not_modified` again, as a poll after the change does. */
+    withdrawOffer: () => {
+      bundle = undefined;
     },
   };
 }
@@ -547,6 +551,59 @@ describe("the daemon's audit wiring", () => {
         detail: expect.stringContaining("retention mandate"),
       }),
     ]);
+  });
+
+  it("rewrites daemon.json on the owed retry when the narrowing's own write failed", async () => {
+    // The narrowing withdrew the steer from memory and then failed to write
+    // daemon.json. The retry found nothing left to withdraw, skipped the
+    // write, and cleared the debt with the text still on disk.
+    const text = "Drop the index before the backfill.";
+    const log: string[] = [];
+    const { handle, plane, signer, paths } = await boot({
+      bundle: {
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      },
+      log,
+    });
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: handle.registry.get(SESSION)!.recorder.sessionUuid,
+        payload: { text },
+      }),
+    );
+    await handle.tick();
+    const onDisk = readFileSync(paths.daemonState, "utf8");
+    expect(onDisk).toContain(text);
+
+    // A directory where the file was makes the state write throw.
+    rmSync(paths.daemonState);
+    mkdirSync(join(paths.daemonState, "blocked"), { recursive: true });
+    plane.offerBundle(
+      signer.sign(
+        unsignedBundle({
+          version: 4,
+          etag: "etag-4",
+          retention: { mode: "digest_only", classes: [] },
+        }),
+      ),
+    );
+    await handle.refreshBundle();
+    expect(log.some((line) => line.startsWith("failed to erase bodies"))).toBe(
+      true,
+    );
+
+    // The disk comes back holding the file the failed write left.
+    rmSync(paths.daemonState, { recursive: true, force: true });
+    writeFileSync(paths.daemonState, onDisk);
+    plane.withdrawOffer();
+    await handle.refreshBundle();
+    expect(
+      log.some((line) => line.startsWith("completed an owed body purge")),
+    ).toBe(true);
+    expect(readFileSync(paths.daemonState, "utf8")).not.toContain(text);
   });
 
   it("writes a queued steer to disk before it acknowledges it", async () => {
