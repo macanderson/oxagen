@@ -70,6 +70,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
+import { ASSISTANT_MESSAGE_STOPPED } from "./assistant-message-status";
 import { recallWorkspaceMemoryMessage } from "./assistant-recall";
 import { toolCallsFromReceipts } from "./assistant-tool-calls";
 import {
@@ -722,7 +723,7 @@ async function runPreparedTurn(
         surface: request.surface,
         runId: run.runPublicId,
         parkedCards: parked,
-        ...(stopped ? { status: "stopped" as const } : {}),
+        ...(stopped ? { status: ASSISTANT_MESSAGE_STOPPED } : {}),
       }),
     ),
   );
@@ -1053,7 +1054,7 @@ export async function appendAssistantMessage(
     runId: string;
     parkedCards: readonly AssistantParkedCard[];
     /** Overrides `complete` for a turn the person stopped (#4164). */
-    status?: "stopped";
+    status?: typeof ASSISTANT_MESSAGE_STOPPED;
   },
 ): Promise<string> {
   const { parkedCards, ...recorded } = metadata;

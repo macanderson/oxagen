@@ -1678,6 +1678,8 @@ describe("a person's stop (#4164)", () => {
     expect(mocks.runGovernedTurn.mock.calls[0]![0].abortSignal).toBe(
       hooks.abortSignal,
     );
+    // The literal, not ASSISTANT_MESSAGE_STOPPED: `get_conversation` reads
+    // saved rows by this string, so the writer must keep writing it.
     expect(assistantInsert()?.values).toMatchObject({
       content: "The run failed at",
       metadata: { status: "stopped" },

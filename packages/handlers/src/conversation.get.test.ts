@@ -245,6 +245,8 @@ describe("get_conversation", () => {
       parentMessageId: null,
       role: "assistant",
       content: "Two runs are",
+      // The literal, not ASSISTANT_MESSAGE_STOPPED: saved rows carry this
+      // string, so the reader must keep reading it.
       metadata: { status: "stopped", surface: "chat", runId: "arun_0003" },
       createdAt: at(4),
     };
