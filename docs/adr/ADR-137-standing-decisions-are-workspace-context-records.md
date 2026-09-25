@@ -1,6 +1,6 @@
 # ADR-137: Standing decisions are workspace context records, stored once
 
-- Status: accepted. ADR-181 (2026-09-25) removed `.oxagen/` from this repository. The standing decisions now live in the `AGENTS.md` block.
+- Status: accepted
 - Date: 2026-09-22
 - Related: ADR-038 (the replicated markdown corpus this supersedes), ADR-039 (the centralized check), ADR-091 (a record steers through the bundle), ADR-099 (a linked repository is steered from the workspace's main repository)
 

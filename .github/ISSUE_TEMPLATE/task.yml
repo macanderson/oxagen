@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Creators apply exactly one label, `triage` (SCR-005). The triage pass replaces it with one priority label and the descriptive dimensions: one `kind:*` (`defect`, `gap`, `feature`, `debt`), one or more `area:*`, one `job:*`, one or more `pillar:*`, and `needs:decision` or `needs:rig` when SCR-004's deferral cases apply. Do not add those yourself.
+        Creators apply exactly one label, `triage` (SCR-005). The triage pass replaces it with one priority label and the descriptive dimensions: one `kind:*` (`defect`, `gap`, `feature`, `debt`), one `size/*`, one `area:*`, one `job:*`, one or two `pillar:*`, and `needs:decision` or `needs:rig` when SCR-004's deferral cases apply. Do not add those yourself. Title it `Queued <Kind> (<Area>): <statement>` (see `/triage-issues`).
 
         Fix over file (SCR-004): a defect noticed during a task is fixed in that task's PR. File only when the fix needs a maintainer decision, a rig, a credential or real spend, or is larger than one session — and say which. One issue carries the full weight of the change; use checklist items in the definition of done rather than sub-issues.
   - type: textarea

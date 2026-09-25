@@ -2,7 +2,7 @@
 # caller stubs (oxagen #2661).
 #
 # ADR-038 replicated docs/scr/ across five org repos. ADR-137 retired that
-# corpus. Standing decisions live in oxagen's AGENTS.md (ADR-181),
+# corpus. Standing decisions live in oxagen's AGENTS.md,
 # and a connected repository is steered from the workspace. This workflow
 # fails when any of the five repos still has a file under docs/scr/. The DoD
 # caller stubs are a separate replication and stay on the second step.
@@ -118,7 +118,7 @@ jobs:
               '### Context',
               '',
               'A repository still carries `docs/scr/`. ADR-137 retired that corpus.',
-              'Standing decisions live in oxagen `AGENTS.md` (ADR-181).',
+              'Standing decisions live in oxagen `AGENTS.md`.',
               'A connected repository is steered from the workspace and does not keep a copy.',
               '',
               process.env.REPORT,

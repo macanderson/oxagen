@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Creators apply exactly one label, `triage` (SCR-005). The triage pass replaces it with one priority label and the descriptive dimensions: `kind:feature`, one or more `area:*`, one `job:*`, one or more `pillar:*`. Do not add those yourself.
+        Creators apply exactly one label, `triage` (SCR-005). The triage pass (`/triage-issues`) replaces it with one priority label and the descriptive dimensions: `kind:feature`, one `size/*`, one `area:*`, one `job:*`, and one or two `pillar:*`. Do not add those yourself. Title it `Queued Feature (<Area>): <what a person will be able to do>`.
 
         `kind:feature` is for capability that does not exist in any form. If the spec or the mockup already shows it and the built app has part of it, that is a gap: use the Task template and describe the whole page or slice, backend included, so one issue carries the full weight of the change.
   - type: textarea
