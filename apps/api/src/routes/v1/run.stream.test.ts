@@ -262,6 +262,29 @@ describe("GET /runs/:run_id/stream", () => {
     }
   });
 
+  // get_run answers the header with framesError when ClickHouse refuses the
+  // frame read (#4243). The empty page is neither a seal nor a quiet run.
+  it("ends with the named error when get_run could not read the frames, and does not read again (negative)", async () => {
+    const refused = {
+      ...page([], null, "sealed"),
+      framesError: {
+        code: "frames_unavailable",
+        message: "The run's frames could not be read.",
+      },
+    };
+    mocks.invoke
+      .mockResolvedValueOnce(page(["1"], "cur_1"))
+      .mockResolvedValueOnce(refused);
+    const { status, text } = await open();
+    expect(status).toBe(200);
+    expect(events(text)).toEqual(["run", "error"]);
+    expect(text).toContain('"code":"frames_unavailable"');
+    expect(text).toContain('"cursor":"cur_1"');
+    expect(text).not.toContain('"reason":"sealed"');
+    expect(mocks.invoke).toHaveBeenCalledTimes(2);
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
   it("logs unexpected failures and keeps their details out of the event", async () => {
     const error = new Error("private database connection details");
     mocks.invoke

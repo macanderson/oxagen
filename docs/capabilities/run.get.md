@@ -36,6 +36,7 @@ The Run page's header and one page of its frames (`apps/app/ARCHITECTURE.md` §1
 | `frames.frames[].cost` | `{ micros, currency, basis }` or null | the frame's own cost record; a wrapped session's `llm_call` frames carry one (`client_attested`), ledger frames carry none |
 | `frames.cursor` | string or null | the point to continue from, past every frame this read consumed; null when nothing lay past `framesAfter`, so the caller keeps its cursor, and null on a sealed run whose page had nothing behind it (the handler reads one frame past the page to know); a live run keeps its cursor on every non-empty page |
 | `witnessFor` | string or null | the worker run this run witnessed, by the first `proof.observed` verdict naming it (spec §8.5 "Stamping", ADR-064); a witness run renders its own tab set. Null for every other run |
+| `framesError` | `{ code, message }`, absent when the frames were read | `code` is `frames_unavailable` when the frame store refused the read, such as ClickHouse over its memory cap. The header still answers, `frames.frames` is empty and `frames.cursor` is null, so the caller keeps its cursor and does not read the run as sealed (#4243) |
 
 A read that starts at the page cursor or at any frame's own cursor repeats nothing and skips nothing. `summary` is a short label built from identifiers in the frame's receipt (engine, model, tool, outcome, policy decision); an encrypted payload shows the event type and nothing it cannot read. A tool receipt whose outcome is `parked` names the approval it waits on as a third word (`create_workspace parked apr_…`), and the Run page pairs the receipt with that approval's card by it. A wrapped frame's `stage` is the stage its kind belongs to (`session`, `turn`, `model`, `tool`, `policy`, `effect`, `proof`, `control`, `chain`).
 
@@ -66,5 +67,7 @@ Every invoke runs the IAM check and the audit and security emissions once, befor
 The live stream renews its idle deadline when it emits frames. Its terminal
 event carries the last emitted frame cursor, including on the final page.
 Unexpected failures are logged on the server and return `stream_unavailable`
-with a generic message. A named server error stops the browser subscription;
+with a generic message. A read that answers `framesError` ends the stream with
+that error's `code` (`frames_unavailable`) and message rather than reading
+again at once. A named server error stops the browser subscription;
 a transport disconnect retains EventSource retry behavior.
