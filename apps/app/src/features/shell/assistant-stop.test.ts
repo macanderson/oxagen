@@ -128,6 +128,25 @@ describe("the gates", () => {
     expect(stopTurn).not.toHaveBeenCalled();
   });
 
+  // Only the organization was renamed. The resolution names the workspace it
+  // found, and the route falls back to the requested slug if it names none.
+  it.each([
+    ["names the workspace", "core-platform"],
+    ["names no workspace", null],
+  ])("keeps the workspace when only the organization was renamed and the resolution %s", async (_how, ws) => {
+    resolveViewer.mockResolvedValue({
+      kind: "redirect",
+      org: "acme-robotics",
+      ws,
+    });
+    const response = await call();
+    expect(response.status).toBe(308);
+    expect(new URL(response.headers.get("location") ?? "").pathname).toBe(
+      "/acme-robotics/core-platform/assistant/stop",
+    );
+    expect(stopTurn).not.toHaveBeenCalled();
+  });
+
   it("refuses a body with no turn id, or one that is not a uuid (negative)", async () => {
     expect((await call(JSON.stringify({}))).status).toBe(400);
     expect((await call(JSON.stringify({ turnId: "t1" }))).status).toBe(400);
@@ -144,6 +163,29 @@ describe("the kernel's refusals", () => {
       code: "forbidden",
     });
     expect((await call()).status).toBe(403);
+  });
+
+  it("answers 400 when the kernel refuses the turn id (negative)", async () => {
+    stopTurn.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "turnId",
+    });
+    const response = await call();
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ code: "invalid" });
+  });
+
+  it("answers 404 when the kernel finds no such workspace (negative)", async () => {
+    stopTurn.mockResolvedValue({
+      ok: false,
+      reason: "not_found",
+      code: "not_found",
+    });
+    const response = await call();
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ code: "not_found" });
   });
 
   it("answers 503 when the kernel cannot be reached, never a 404 (negative)", async () => {
