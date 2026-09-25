@@ -195,9 +195,12 @@ function policyAttrs(
 
 /**
  * The harness process pid: Claude Code exports `CLAUDE_PID`; for a harness
- * that exports nothing (Stella) `tacho-hook` finds the process itself and
- * passes it as `TACHO_HARNESS_PID`. The registry sweep seals the chain when
- * that process is gone.
+ * that exports nothing (Stella, Codex) `tacho-hook` finds the process itself
+ * and passes it as `TACHO_HARNESS_PID`. The registry sweep seals the chain
+ * when that process is gone, and an operator's `cancel` signals it. A Cursor
+ * hook carries neither, because the process that runs it serves many
+ * conversations (`runTachoHook` says why), so a Cursor chain ends on its own
+ * `sessionEnd` or the idle bound.
  */
 export function pidFromEnv(
   env: Record<string, string | undefined>,

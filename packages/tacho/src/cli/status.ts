@@ -3,6 +3,7 @@
  * event, bundle version and age, last ingest, spool depth, unobserved
  * sessions since boot (spec section 5.1).
  */
+import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
 import { codexHookPresence } from "../host/codex-writer";
@@ -15,7 +16,8 @@ import { tachoHookPresence } from "../host/settings-writer";
 import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
 import { isBrokerableHarness, isModelRoutedHarness } from "../wire";
-import type { CliDeps } from "./deps";
+import { type CliDeps, cursorAppFacts } from "./deps";
+import { CURSOR_COVERAGE_NOTE, wrappedCursor } from "./detect";
 
 export interface StatusOptions {
   json?: boolean;
@@ -106,6 +108,13 @@ export interface StatusReport {
    * because a moved config directory means there are two.
    */
   cursorHooks?: Array<{ path: string } & ReturnType<typeof cursorHookPresence>>;
+  /**
+   * Present when the host enrolled Cursor: which Cursor this machine has, by
+   * the rule `tacho detect` applies (ADR-141). `cli` is the `cursor-agent`
+   * alias enrollment recorded, still on disk; `app` is the editor on disk;
+   * `null` is neither, and enrollment covers that machine all the same.
+   */
+  cursorInstall?: { foundVia: "cli" | "app" | null; path?: string };
   /** Present when the host enrolled Stella. */
   stellaHooks?: ReturnType<typeof stellaHookPresence>;
   /**
@@ -189,6 +198,32 @@ export function shippingHealth(
       detail: `nothing has shipped in over ${SHIPPING_STALL_MS / 60_000} minutes, ${count}`,
     };
   return { healthy: true, detail: `shipping, ${count}` };
+}
+
+/**
+ * Which Cursor this machine has, without the login-shell PATH lookup
+ * `tacho detect` runs: the `cursor-agent` path enrollment recorded, when it
+ * is still on disk, and the editor at the locations its platform documents.
+ * The verdict comes from `wrappedCursor`, so status and detect apply one rule.
+ */
+function installedCursor(
+  execpath: string | undefined,
+  deps: CliDeps,
+): NonNullable<StatusReport["cursorInstall"]> {
+  const cli =
+    execpath !== undefined && execpath.length > 0 && existsSync(execpath)
+      ? execpath
+      : undefined;
+  const app =
+    deps.cursorEditor?.() ?? cursorAppFacts(deps.platform, deps.home, deps.env);
+  const found = wrappedCursor(
+    { ...(cli !== undefined ? { path: cli } : {}), app },
+    [],
+  );
+  return {
+    foundVia: found.foundVia ?? null,
+    ...(found.path !== undefined ? { path: found.path } : {}),
+  };
 }
 
 const TIER_RANK = { observe: 0, harness: 1, gateway: 2 } as const;
@@ -294,6 +329,9 @@ export async function status(
           host.host_enrollment_id,
         ),
       }))
+    : undefined;
+  const cursorInstall = host.harnesses.includes("cursor")
+    ? installedCursor(host.cursor_execpath ?? undefined, deps)
     : undefined;
   const stellaHooks = host.harnesses.includes("stella")
     ? guarded(() =>
@@ -408,6 +446,7 @@ export async function status(
     hooks,
     ...(codexHooks !== undefined ? { codexHooks } : {}),
     ...(cursorHooks !== undefined ? { cursorHooks } : {}),
+    ...(cursorInstall !== undefined ? { cursorInstall } : {}),
     ...(stellaHooks !== undefined ? { stellaHooks } : {}),
     ...(claudeDesktop !== undefined ? { claudeDesktop } : {}),
     wal: {
@@ -492,6 +531,12 @@ export async function status(
     );
     if (hooks.missing.length > 0)
       deps.out(`            missing: ${hooks.missing.join(", ")}`);
+    // An enrollment before #3989 wrote `SessionEnd` as an http hook, which is
+    // lost while the daemon is down. Only `tacho enroll` rewrites it.
+    if (hooks.stale.length > 0)
+      deps.out(
+        `            outdated: ${hooks.stale.join(", ")}. Run tacho enroll again to rewrite ${hooks.stale.length === 1 ? "it" : "them"}.`,
+      );
   }
   if (claudeDesktop !== undefined) {
     deps.out(
@@ -513,6 +558,16 @@ export async function status(
     if (codexHooks.missing.length > 0)
       deps.out(`            missing: ${codexHooks.missing.join(", ")}`);
   }
+  if (cursorInstall !== undefined)
+    deps.out(
+      `Cursor      ${
+        cursorInstall.foundVia === "cli"
+          ? `installed as the cursor-agent CLI at ${cursorInstall.path}`
+          : cursorInstall.foundVia === "app"
+            ? `installed as the Cursor editor at ${cursorInstall.path}`
+            : `not found on this machine, and ${CURSOR_COVERAGE_NOTE}`
+      }`,
+    );
   for (const entry of cursorHooks ?? []) {
     deps.out(
       `Cursor      ${entry.complete ? "complete" : "INCOMPLETE"}: ${entry.present.length} present, ${entry.missing.length} missing (${entry.path})`,
