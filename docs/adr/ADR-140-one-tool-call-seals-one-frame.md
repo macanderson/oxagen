@@ -1,6 +1,6 @@
 # ADR-140: One tool call seals one frame, sealed by the source that reports it first
 
-- Status: accepted
+- Status: accepted; amended 2026-09-25 (the #3651 fold stays, see the amendment at the end)
 - Date: 2026-09-22
 - Related: ADR-058 (run record placement and digest-only retention), ADR-100 (frame bodies), ADR-101 (four wrapped harnesses), #3661 (the defect), #3651 (the read-side fold this replaces)
 
@@ -51,3 +51,17 @@ The chain's claim is that it holds what happened, once. A seam that reports the 
 - Sessions recorded before this change still hold three frames per call. The read-side fold added by #3651 stays for them. Removing it would misread history.
 - `body_frames` over `content_frames` rises to what the host captured, so `body_missing` stops being reported for sessions that missed nothing.
 - A witness for the rule is `packages/tacho/src/claude-code/recorder-tool-call.test.ts`.
+
+## Amendment 2026-09-25: the #3651 fold stays
+
+The Related line above calls #3651 "the read-side fold this replaces". That is wrong. This record does not replace the fold, and the Consequences section keeps it. Read the Related entry as "#3651 (the read-side fold, kept for sessions recorded before this change)". The rest of the record stands.
+
+The fold in `apps/app/src/features/run/transcript-model.ts` stays for two reasons:
+
+- A session recorded before this change still holds three `tool_call` frames per call. Without the fold, the Run page would show each of those calls three times.
+- A digest-only first sighting followed by the hook's body still seals two frames, the second stamped `oxagen.tool_call_duplicate_of`. Nothing in `apps/app/src` or `packages/telemetry/src` reads that stamp, so the fold is what shows that call once.
+
+The definition of done on #3661 asked for two things this record does not do, and this record supersedes both:
+
+- Merge the facts a later sighting carries onto the sealed frame. "What this loses" gives the reasons: a deferred seal can lose a call outright in a crash, stamped copies keep three frames per call, and each lost fact is recoverable at the seam that owns it.
+- Remove the read-side fold. It stays, for the reasons above.
