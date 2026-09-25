@@ -1095,6 +1095,7 @@ describe("runs.work", () => {
         state: "open",
         headSha: "abc123",
         headRef: "release/3.2",
+        baseRef: "main",
         association: "recorded",
         closingIssues: null,
         checkoutIds: ["chk_1"],

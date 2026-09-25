@@ -15,6 +15,7 @@ import type {
 import type {
   ApprovalQueue,
   ResolvedApprovalItem,
+  ResolvedApprovals,
 } from "./contracts/approvals";
 import type {
   AuditBundle,
@@ -61,6 +62,7 @@ import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { PullRequestFilter, RunPage } from "./contracts/runs";
 import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
 import type {
+  AssistantEngine,
   OrgChoice,
   NavCounts,
   NotificationFeed,
@@ -147,6 +149,14 @@ export interface DataSource {
      * whole feed for a viewer who can open no workspace (#3806).
      */
     notifications(ctx: OrgCtx): Promise<Read<NotificationFeed>>;
+    /**
+     * get_assistant_engine, whether stella's engine can take a turn. Read on
+     * demand, never when a layout renders: the flyout reads it when it opens,
+     * when the window takes focus, and from its Check again control, and the
+     * probe of a down engine can take up to seven seconds; caller:
+     * features/shell/engine-actions.ts (ADR-167).
+     */
+    assistantEngine(ctx: WsCtx): Promise<Read<AssistantEngine>>;
   };
   /**
    * get_conversation with no id: the viewer's latest active conversation in
@@ -261,11 +271,13 @@ export interface DataSource {
      * list_resolved_approvals, narrowed to one run: the Run page's Approvals
      * tab reads back a resolved decision, including one a decision rule
      * auto-approved with no person, that `pending` never shows (#3153).
+     * Walked to the end of the run's ledger under a bound, with `more` set
+     * when the bound stopped the walk (#3477).
      */
     resolved(
       ctx: WsCtx,
       q: { runId: string },
-    ): Promise<Read<ResolvedApprovalItem[]>>;
+    ): Promise<Read<ResolvedApprovals>>;
     /**
      * list_resolved_approvals since an instant, one page: the approvals
      * drawer's "N resolved today" (mockup `apdBody()`), with `more` set when

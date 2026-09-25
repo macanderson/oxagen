@@ -40,7 +40,6 @@ import {
   filterFramesByKind,
   foldTranscript,
   frameKey,
-  frameKinds,
   type RunFrame,
   type TranscriptFold,
   type TranscriptKind,
@@ -462,13 +461,13 @@ function entryEffort(fold: TranscriptFold): string | null {
   return null;
 }
 
-/** The chips an entry answers to: the union over the frames it folds. */
+/**
+ * The chips an entry answers to: the union over every frame it folds, which
+ * the fold collects as it absorbs them (#3370), not only its opening and its
+ * two halves.
+ */
 function entryKinds(fold: TranscriptFold): TranscriptKind[] {
-  const kinds = new Set<TranscriptKind>();
-  for (const frame of [fold.opening, fold.request, fold.response]) {
-    if (frame === null) continue;
-    for (const kind of frameKinds(frame)) kinds.add(kind);
-  }
+  const kinds = new Set<TranscriptKind>(fold.kinds);
   if (fold.decision !== null) kinds.add("policy");
   return [...kinds];
 }
