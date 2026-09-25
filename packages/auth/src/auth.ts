@@ -29,6 +29,7 @@ import {
   sendEmailFireAndForget,
   resetPasswordEmailTemplate,
   emailVerificationTemplate,
+  existingAccountEmailTemplate,
 } from "@oxagen/notifications";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
@@ -379,6 +380,29 @@ export const auth = betterAuth({
           ...resetPasswordEmailTemplate({ resetUrl: url, email: user.email }),
         },
         "password-reset",
+      );
+    },
+    // While requireEmailVerification is on (deployed environments), a sign-up
+    // with a registered address gets the same reply as a new one, so the page
+    // never reveals which addresses have accounts. Better Auth calls this hook
+    // for that case, in the background, with the existing user. Without it
+    // the owner never learns of the attempt, and a returning person waits for
+    // a verification mail that never comes (#4043). Locally the sign-up is
+    // refused with USER_ALREADY_EXISTS and this hook does not run.
+    onExistingUserSignUp: async ({ user }) => {
+      sendEmailFireAndForget(
+        {
+          to: user.email,
+          ...existingAccountEmailTemplate({
+            email: user.email,
+            loginUrl: new URL("/login", env.BETTER_AUTH_URL).toString(),
+            forgotPasswordUrl: new URL(
+              "/forgot-password",
+              env.BETTER_AUTH_URL,
+            ).toString(),
+          }),
+        },
+        "existing-account",
       );
     },
   },

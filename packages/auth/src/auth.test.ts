@@ -31,6 +31,10 @@ const capture = vi.hoisted(() => ({
   config: null as Record<string, unknown> | null,
 }));
 
+const { TEST_BETTER_AUTH_URL } = vi.hoisted(() => ({
+  TEST_BETTER_AUTH_URL: "https://app.oxagen.test",
+}));
+
 // ---------------------------------------------------------------------------
 // All external dependency mocks — declared before any static import so vitest
 // hoists them before auth.ts and its transitive deps are evaluated.
@@ -132,7 +136,13 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: (keys: readonly string[]) => {
     const result: Record<string, string> = {};
     for (const k of keys as string[]) {
-      result[k] = process.env[k] ?? `test-value-for-${k}`;
+      // BETTER_AUTH_URL feeds new URL() in the mail hooks, so its fallback
+      // must parse as a URL.
+      result[k] =
+        process.env[k] ??
+        (k === "BETTER_AUTH_URL"
+          ? TEST_BETTER_AUTH_URL
+          : `test-value-for-${k}`);
     }
     return result;
   },
@@ -159,6 +169,12 @@ vi.mock("@oxagen/notifications", () => ({
     subject: "Verify your email",
     html: "<p>Click to verify</p>",
   })),
+  existingAccountEmailTemplate: vi.fn(
+    (input: { loginUrl: string; forgotPasswordUrl: string }) => ({
+      subject: "You already have an Oxagen account",
+      html: `<a href="${input.loginUrl}">Log in</a> <a href="${input.forgotPasswordUrl}">Reset it here</a>`,
+    }),
+  ),
 }));
 
 // account-linking.ts imports from drizzle-orm
@@ -178,7 +194,10 @@ vi.mock("drizzle-orm", () => ({
 import { auth } from "./auth";
 import { withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { sendEmailFireAndForget } from "@oxagen/notifications";
+import {
+  existingAccountEmailTemplate,
+  sendEmailFireAndForget,
+} from "@oxagen/notifications";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { isNonSsoSignInRefused } from "./sso/policy";
 
@@ -533,6 +552,46 @@ describe("emailAndPassword.sendResetPassword callback", () => {
         url: "https://example.com/reset?t=x",
       }),
     ).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onExistingUserSignUp callback body (#4043)
+// ---------------------------------------------------------------------------
+
+describe("emailAndPassword.onExistingUserSignUp callback", () => {
+  beforeEach(() => {
+    vi.mocked(sendEmailFireAndForget).mockClear();
+    vi.mocked(existingAccountEmailTemplate).mockClear();
+  });
+
+  it("is configured, so a sign-up with a registered address mails the owner", () => {
+    const epw = getConfig()["emailAndPassword"] as Record<string, unknown>;
+    expect(typeof epw["onExistingUserSignUp"]).toBe("function");
+  });
+
+  it("sends one mail to the owner with the login and forgot-password links", async () => {
+    const epw = getConfig()["emailAndPassword"] as Record<string, AnyFn>;
+    await expect(
+      epw["onExistingUserSignUp"]!({ user: { email: "owner@example.com" } }),
+    ).resolves.toBeUndefined();
+
+    expect(sendEmailFireAndForget).toHaveBeenCalledOnce();
+    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock
+      .calls[0]! as [Record<string, unknown>, string];
+    expect(emailArg["to"]).toBe("owner@example.com");
+    expect(tagArg).toBe("existing-account");
+
+    const templateInput = vi.mocked(existingAccountEmailTemplate).mock
+      .calls[0]![0];
+    const base = process.env.BETTER_AUTH_URL ?? TEST_BETTER_AUTH_URL;
+    expect(templateInput.email).toBe("owner@example.com");
+    expect(templateInput.loginUrl).toBe(new URL("/login", base).toString());
+    expect(templateInput.forgotPasswordUrl).toBe(
+      new URL("/forgot-password", base).toString(),
+    );
+    expect(emailArg["html"]).toContain("Log in");
+    expect(emailArg["html"]).toContain("Reset it here");
   });
 });
 
