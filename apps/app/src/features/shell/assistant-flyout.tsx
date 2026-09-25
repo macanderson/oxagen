@@ -40,11 +40,18 @@
 // of winning it: there is no timing at which a reply can reach the wrong
 // thread.
 //
-// Stopping a turn on purpose is a different thing from walking away from it,
-// and it is not here. It belongs to run controls (#2953), whose job is to
-// cancel any run through one mechanism rather than one per surface. An
-// assistant turn is recorded as a run, so that mechanism will cover it. It
-// does not exist yet: today nothing stops a turn once it is asked.
+// Stopping a turn on purpose is a different thing from walking away from it
+// (#4164). While a turn runs, the composer's Send is Stop
+// (`assistant-send-or-stop.tsx`). The flyout names each turn with a uuid it
+// mints and posts that id to the workspace the turn was asked in. The server
+// cancels the engine's turn and records the run as cancelled, and the turn
+// comes back with what it had written, which the flyout shows marked Stopped.
+// Replies do not stream yet (#4204), so an answer arrives whole and then types
+// itself out. Stop during that reveal keeps what is on screen and marks it
+// Stopped, but only in this page: the run had already finished, so the record
+// keeps the whole reply and a reload shows it. Closing the flyout or leaving
+// the workspace never stops anything. Run controls for every run (#2953) are
+// a separate thing.
 //
 // Each answer names the run it was recorded as, and links it. `list_runs`
 // excludes the `chat` and `api-chat` surfaces — the assistant is Oxagen's, and
@@ -105,7 +112,7 @@
 // container renders on every pass and only its contents are conditional: a
 // polite region inserted in the same commit as its own text is announced
 // unreliably.
-import { CircleAlert, Send } from "lucide-react";
+import { CircleAlert } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -124,6 +131,10 @@ import {
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { AssistantParkedApprovals } from "./assistant-parked-approvals";
+import {
+  AssistantSendOrStop,
+  requestAssistantStop,
+} from "./assistant-send-or-stop";
 import { AssistantStreamingText } from "./assistant-streaming-text";
 import { AssistantSuggestions } from "./assistant-suggestions";
 import { AssistantThinking } from "./assistant-thinking";
@@ -153,13 +164,25 @@ import { SafeLink, useNavigate } from "@/ui/navigation";
 import { StellaIcon, StellaWordmark } from "@/ui/stella-mark";
 
 type Entry =
-  | { kind: "asked"; id: string; text: string }
+  | {
+      kind: "asked";
+      id: string;
+      text: string;
+      /**
+       * The turn this question started, for Stop: the id the flyout minted
+       * and the workspace it was asked in. A question read back from the
+       * record has none, because its turn is over.
+       */
+      turn?: RunningTurn;
+    }
   | {
       kind: "answered";
       id: string;
       text: string;
       runId: string;
       parked: readonly ParkedCard[];
+      /** The person stopped it, so `text` is what it reached before the stop. */
+      stopped?: boolean;
     }
   | {
       kind: "refused";
@@ -170,6 +193,20 @@ type Entry =
       /** The question that was refused, so "Ask again" can send it unchanged. */
       question: string;
     };
+
+/** A turn Stop can reach: its id, and the workspace it runs in. */
+type RunningTurn = { id: string; org: string; ws: string };
+
+/**
+ * The turn a waiting thread is waiting on: the one its newest question
+ * started. Read from the entry, not from the page, because the person may be
+ * on another workspace, and the thread can be filed under the workspace's id
+ * while the turn runs.
+ */
+function runningTurnOf(entries: readonly Entry[]): RunningTurn | null {
+  const newest = entries.findLast((entry) => entry.kind === "asked");
+  return newest?.kind === "asked" ? (newest.turn ?? null) : null;
+}
 
 /**
  * One workspace's conversation with the assistant: what was said, the
@@ -482,6 +519,13 @@ export function AssistantFlyout({
   // so the growth follows the tail only while the reader has not scrolled up
   // to read something else.
   const pinnedRef = useRef(true);
+  // How much of each answer its reveal has put on screen, which is what a stop
+  // during the reveal keeps. A ref: it changes every frame and draws nothing.
+  const shownRef = useRef(new Map<string, number>());
+  // The turn whose stop is on its way or has been taken, so Stop does not
+  // send twice, and the turn whose stop failed, so the flyout can say so.
+  const [stopping, setStopping] = useState<string | null>(null);
+  const [stopFailed, setStopFailed] = useState<string | null>(null);
 
   // The workspace whose thread is on screen. An organization page is not a
   // switch (it has no conversation of its own), so it keeps showing the last
@@ -491,10 +535,20 @@ export function AssistantFlyout({
   const [shownScope, setShownScope] = useState(scope);
   if (scope !== null && scope !== shownScope) setShownScope(scope);
   const thread: Thread =
-    shownScope === null
-      ? EMPTY_THREAD
-      : (threadOf(shownScope) ?? EMPTY_THREAD);
+    shownScope === null ? EMPTY_THREAD : (threadOf(shownScope) ?? EMPTY_THREAD);
   const { entries, draft, pending } = thread;
+  // What Stop would end: the turn this thread is waiting on, or else its
+  // newest answer while that is still typing itself out.
+  const running = pending ? runningTurnOf(entries) : null;
+  const newest = entries.at(-1);
+  const revealing =
+    !pending &&
+    newest?.kind === "answered" &&
+    newest.stopped !== true &&
+    !revealed.has(newest.id) &&
+    !isRestoredEntry(newest.id)
+      ? newest
+      : null;
   // The workspace whose thread is on screen, which is where its parked writes
   // were recorded, even on an organization page. Slugs hold no "/".
   const [threadOrg, threadWs] = shownScope?.split("/") ?? [];
@@ -673,6 +727,9 @@ export function AssistantFlyout({
       return;
     nextIdRef.current += 1;
     const id = `t${nextIdRef.current.toString()}`;
+    // The turn's name, minted here so Stop can name it while the question is
+    // still in flight (#4164).
+    const turnId = crypto.randomUUID();
     /**
      * The thread this turn belongs to, fixed now. Everything it produces goes
      * back to this thread: the reply, the run, the conversation id, a refusal,
@@ -683,8 +740,9 @@ export function AssistantFlyout({
      *
      * One thread holds at most one turn in flight, so nothing races this one
      * for `conversationId`. Two layers hold it, and each is enough on its own:
-     * the composer is `disabled` while its thread is `pending`, and the check
-     * at the top of this function refuses a submit that reaches it anyway.
+     * the composer is `disabled` while its thread is `pending`, and its button
+     * is Stop rather than Send, and the check at the top of this function
+     * refuses a submit that reaches it anyway.
      * Both survive the person leaving and coming back, because leaving no
      * longer clears `pending`. The two tests named "refuses a second question
      * …" fail only when both layers are gone, which is what "each is enough"
@@ -695,7 +753,10 @@ export function AssistantFlyout({
     const { conversationId } = thread;
     updateThread(asked, (t) => ({
       ...t,
-      entries: [...t.entries, { kind: "asked", id, text: content }],
+      entries: [
+        ...t.entries,
+        { kind: "asked", id, text: content, turn: { id: turnId, org, ws } },
+      ],
       ...(fromDraft ? { draft: "", draftTooLong: false } : {}),
       pending: true,
     }));
@@ -706,6 +767,7 @@ export function AssistantFlyout({
         conversationId,
         content,
         route,
+        turnId,
         entityId,
         // Only a page that named its record sends a label.
         ...(entityLabel === null ? {} : { entityLabel }),
@@ -717,6 +779,7 @@ export function AssistantFlyout({
           text: result.value.reply,
           runId: result.value.runId,
           parked: result.value.parkedCards,
+          stopped: result.value.stopped,
         };
         updateThread(asked, (t) => ({
           ...t,
@@ -769,6 +832,35 @@ export function AssistantFlyout({
       // person has not read yet if the panel was closed while it ran.
       noteAssistantReply();
     }
+  }
+
+  /**
+   * Stop the running turn, or else the answer typing itself out. A turn is
+   * stopped on the server, and the answer it comes back with carries the
+   * mark. A reveal is stopped here: it keeps what it has shown.
+   */
+  async function stop() {
+    if (running !== null) {
+      const turn = running;
+      setStopping(turn.id);
+      setStopFailed(null);
+      if (await requestAssistantStop(turn.org, turn.ws, turn.id)) return;
+      setStopping(null);
+      setStopFailed(turn.id);
+      return;
+    }
+    if (revealing === null || shownScope === null) return;
+    const { id } = revealing;
+    const shown = shownRef.current.get(id) ?? 0;
+    updateThread(shownScope, (t) => ({
+      ...t,
+      entries: t.entries.map((entry) =>
+        entry.id === id && entry.kind === "answered"
+          ? { ...entry, text: entry.text.slice(0, shown), stopped: true }
+          : entry,
+      ),
+    }));
+    setRevealed((prior) => new Set(prior).add(id));
   }
 
   return (
@@ -881,14 +973,33 @@ export function AssistantFlyout({
                   <div data-testid="assistant-answer">
                     <AssistantStreamingText
                       text={entry.text}
+                      // A stopped answer is what the person chose to keep, so
+                      // it paints whole rather than typing out after the stop.
                       reveal={
-                        !revealed.has(entry.id) && !isRestoredEntry(entry.id)
+                        entry.stopped !== true &&
+                        !revealed.has(entry.id) &&
+                        !isRestoredEntry(entry.id)
                       }
                       onRevealed={() => {
-                        setRevealed((prior) => new Set(prior).add(entry.id));
+                        setRevealed((prior) =>
+                          prior.has(entry.id)
+                            ? prior
+                            : new Set(prior).add(entry.id),
+                        );
                       }}
-                      onGrow={followReveal}
+                      onGrow={(shown) => {
+                        shownRef.current.set(entry.id, shown);
+                        followReveal();
+                      }}
                     />
+                    {entry.stopped === true ? (
+                      <p
+                        data-testid="assistant-stopped"
+                        className="mt-1 text-[12px] text-muted-foreground"
+                      >
+                        {t("stopped")}
+                      </p>
+                    ) : null}
                     <p
                       data-testid="assistant-recorded-as"
                       className="mt-1 font-mono text-[11px] text-muted-foreground"
@@ -1002,15 +1113,19 @@ export function AssistantFlyout({
                 }}
                 className="min-h-10 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
               />
-              <button
-                type="submit"
-                aria-label={t("composer.send")}
-                aria-disabled={pending || draft.trim() === "" || undefined}
-                data-testid="assistant-send"
-                className="mb-0.5 grid size-8 flex-none place-items-center rounded-md bg-gold text-on-gold focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60"
-              >
-                <Send aria-hidden="true" className="size-4" />
-              </button>
+              <AssistantSendOrStop
+                stop={
+                  running === null && revealing === null
+                    ? null
+                    : {
+                        onStop: () => {
+                          void stop();
+                        },
+                        stopping: running !== null && stopping === running.id,
+                      }
+                }
+                sendDisabled={pending || draft.trim() === ""}
+              />
             </div>
             {/*
               The send key for the person's setting. The app does not detect
@@ -1025,6 +1140,15 @@ export function AssistantFlyout({
                 ? t("composer.sendHintEnter")
                 : t("composer.sendHintModEnter")}
             </p>
+            {running !== null && stopFailed === running.id ? (
+              <p
+                role="alert"
+                data-testid="assistant-stop-failed"
+                className="mt-2 text-sm text-muted-foreground"
+              >
+                {t("composer.stopFailed")}
+              </p>
+            ) : null}
             {thread.draftTooLong ? (
               <p role="alert" className="mt-2 text-sm text-muted-foreground">
                 {t("composer.draftTooLong")}

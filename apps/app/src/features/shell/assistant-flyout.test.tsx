@@ -90,6 +90,9 @@ vi.mock("next/navigation", () => ({
 
 const { AssistantFlyout } = await import("./assistant-flyout");
 
+/** Any turn id: the flyout mints a new one for each question (#4164). */
+const A_TURN_ID: unknown = expect.any(String);
+
 function OpenIt() {
   const { setAssistantOpen } = useShellState();
   return (
@@ -142,7 +145,16 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 async function ask(user: ReturnType<typeof userEvent.setup>, text: string) {
   await user.type(screen.getByTestId("assistant-composer"), text);
-  await user.click(screen.getByTestId("assistant-send"));
+  // Send is Stop while the last answer types itself out (#4164), so a
+  // follow-up waits for the reveal to end, as a person does.
+  await user.click(await screen.findByTestId("assistant-send"));
+}
+
+/** Submit the composer's form the way a key press does, with no button. */
+function submitComposer() {
+  const form = screen.getByTestId("assistant-composer").closest("form");
+  if (form === null) throw new Error("the composer has no form");
+  fireEvent.submit(form);
 }
 
 /**
@@ -236,6 +248,7 @@ describe("AssistantFlyout", () => {
       conversationId: null,
       content: "what is live?",
       route: "fleet",
+      turnId: A_TURN_ID,
       entityId: null,
     });
     await findAnswerText("Three runs are live.");
@@ -743,6 +756,7 @@ describe("AssistantFlyout", () => {
         conversationId: null,
         content: "second",
         route: "fleet",
+        turnId: A_TURN_ID,
         entityId: null,
       },
     ]);
@@ -850,8 +864,11 @@ describe("AssistantFlyout", () => {
     await ask(user, "first");
 
     expect(screen.getByTestId("assistant-composer")).toBeDisabled();
-    await user.type(screen.getByTestId("assistant-composer"), "second");
-    await user.click(screen.getByTestId("assistant-send"));
+    // Send is Stop while the turn runs, so the only way left to ask is a
+    // submit that reaches the form, and the send path refuses it.
+    expect(screen.queryByTestId("assistant-send")).toBeNull();
+    expect(screen.getByTestId("assistant-stop")).toBeTruthy();
+    submitComposer();
     expect(askAssistant).toHaveBeenCalledTimes(1);
   });
 
@@ -869,8 +886,8 @@ describe("AssistantFlyout", () => {
 
     expect(screen.getByTestId("assistant-thinking")).toBeTruthy();
     expect(screen.getByTestId("assistant-composer")).toBeDisabled();
-    await user.type(screen.getByTestId("assistant-composer"), "second");
-    await user.click(screen.getByTestId("assistant-send"));
+    expect(screen.queryByTestId("assistant-send")).toBeNull();
+    submitComposer();
     expect(askAssistant).toHaveBeenCalledTimes(1);
 
     settle({ reply: "the first answer." });
@@ -897,6 +914,7 @@ describe("AssistantFlyout", () => {
         conversationId: null,
         content: "and here?",
         route: "fleet",
+        turnId: A_TURN_ID,
         entityId: null,
       },
     ]);

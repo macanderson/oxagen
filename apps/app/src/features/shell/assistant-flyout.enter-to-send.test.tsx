@@ -42,6 +42,9 @@ vi.mock("next/navigation", () => ({
 
 const { AssistantFlyout } = await import("./assistant-flyout");
 
+/** Any turn id: the flyout mints a new one for each question (#4164). */
+const A_TURN_ID: unknown = expect.any(String);
+
 function OpenIt() {
   const { setAssistantOpen } = useShellState();
   return (
@@ -95,6 +98,7 @@ function expectAsked(content: string) {
     conversationId: null,
     content,
     route: "fleet",
+    turnId: A_TURN_ID,
     entityId: null,
   });
 }

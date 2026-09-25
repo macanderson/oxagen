@@ -7582,6 +7582,7 @@ type Messages = {
       close: string;
       thinking: string;
       recordedAs: string;
+      stopped: string;
       parked: string;
       parkedCard: {
         list: string;
@@ -7667,6 +7668,8 @@ type Messages = {
         label: string;
         placeholder: string;
         send: string;
+        stop: string;
+        stopFailed: string;
         sendHintEnter: string;
         sendHintModEnter: string;
         draftTooLong: string;
