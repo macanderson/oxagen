@@ -335,6 +335,19 @@ describe("agent.role.assign handler", () => {
     );
   });
 
+  it("refuses a retired (archived) agent before any role read or write", async () => {
+    fake.enqueue([{ ...AGENT_ROW, status: "archived" }], [SYSTEM_ROLE], []);
+    await expect(
+      agentRoleAssignHandler(INPUT, CTX_BUILD),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "agent_retired",
+      message: 'Agent "my-agent" is retired',
+    });
+    expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+    expect(mocks.emitAudit).not.toHaveBeenCalled();
+  });
+
   it("throws when the agent does not exist in this workspace", async () => {
     fake.enqueue([]); // agent select empty
     await expect(agentRoleAssignHandler(INPUT, CTX_BUILD)).rejects.toThrow(

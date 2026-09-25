@@ -126,6 +126,8 @@ export interface AgentRoleAgentRow {
   publicId: string;
   slug: string;
   principalId: string | null;
+  /** `draft`, `active`, or `archived` (the column is text with a check constraint). */
+  status: string;
 }
 
 /**
@@ -133,6 +135,10 @@ export interface AgentRoleAgentRow {
  * live rows only — selecting just what the role handlers need. Throws (plain
  * Error, matching the sibling agent.* handlers' not-found convention) when
  * nothing matches.
+ *
+ * A retired (archived) agent still resolves here, so `list_agent_roles`,
+ * `get_agent_role`, and `revoke_agent_role` keep working on it.
+ * `assign_agent_role` refuses it with `assertAgentNotRetired`.
  */
 export async function resolveAgentForRoles(
   tx: Tx,
@@ -151,6 +157,7 @@ export async function resolveAgentForRoles(
       publicId: schema.agents.publicId,
       slug: schema.agents.slug,
       principalId: schema.agents.principalId,
+      status: schema.agents.status,
     })
     .from(schema.agents)
     .where(
