@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
-// The flyout's Stop control (#4164). While a turn runs, the composer's button
-// is Stop, and a press posts the turn's id to the workspace's stop route. The
-// turn then comes back with whatever it had written, marked Stopped. While an
-// answer types itself out, Stop keeps what is already on screen. Closing the
-// flyout stops nothing (ADR-092, #3292). A stopped reply keeps its mark after
-// a reload.
+// The flyout's Stop control (#4164). While a turn streams, the composer's
+// button is Stop, and a press posts the turn's id to the workspace's stop
+// route. The stream then ends with whatever the turn had written, marked
+// Stopped. Closing the flyout stops nothing (ADR-092, #3292). A stopped reply
+// keeps its mark after a reload.
 //
-// The turn action, the thread read and `fetch` are fakes. Which turn the
+// The stream client (assistant-stream-client.ts), the thread read and `fetch`
+// are fakes. The stream client is driven through one fake that takes the
+// question and the stream handlers, so a case can write part of a reply
+// before the stop. Which turn the
 // server stops, and that its run records cancelled, is proved where the turn
 // runs: `packages/agent/src/handlers/assistant.ask.stop.test.ts` and
 // `packages/agent/src/runtime/assistant-turn.test.ts`.
@@ -28,7 +30,20 @@ import { IntlProvider } from "@/test/intl";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
 const askAssistant = vi.fn();
-vi.mock("./assistant-actions", () => ({ askAssistant }));
+/** The stream handlers the flyout passed each turn, in order. */
+const streamed: Array<{ onText?: (delta: string) => void }> = [];
+vi.mock("./assistant-stream-client", () => ({
+  askAssistantStream: (
+    org: string,
+    ws: string,
+    question: unknown,
+    on: { onText?: (delta: string) => void } = {},
+  ): unknown => {
+    streamed.push(on);
+    return askAssistant(org, ws, question);
+  },
+}));
+vi.mock("./assistant-actions", () => ({ readAssistantReply: vi.fn() }));
 const loadAssistantThread = vi.fn();
 vi.mock("./assistant-thread-actions", () => ({ loadAssistantThread }));
 vi.mock("./assistant-parked-approvals", () => ({
@@ -160,6 +175,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   askAssistant.mockReset();
+  streamed.length = 0;
   loadAssistantThread.mockReset();
   fetchStop.mockReset();
   refresh.mockReset();
@@ -216,8 +232,7 @@ describe("Stop while a turn runs", () => {
     expect(screen.getByTestId("assistant-recorded-as")).toHaveTextContent(
       "recorded as arun_01ka",
     );
-    // A stopped answer does not type itself out, so the turn is over and the
-    // button is Send again.
+    // The stream has ended, so the turn is over and the button is Send again.
     expect(await screen.findByTestId("assistant-send")).toBeTruthy();
     expect(screen.queryByTestId("assistant-stop")).toBeNull();
   });
@@ -232,9 +247,36 @@ describe("Stop while a turn runs", () => {
     const answer = await screen.findByTestId("assistant-answer");
     expect(answer).toHaveTextContent("Two agents are");
     expect(screen.getByTestId("assistant-stopped")).toBeTruthy();
-    // Painted whole: nothing about it is still revealing.
-    expect(answer.querySelector("[inert]")).toBeNull();
-    expect(screen.queryByTestId("assistant-answer-announced")).toBeNull();
+    // A stop is not a refusal, and not a dropped stream.
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByTestId("assistant-dropped")).toBeNull();
+  });
+
+  it("shows the words that streamed before the stop, then the recorded partial reply marked Stopped", async () => {
+    const held = heldTurn();
+    const user = await openFlyout();
+    await ask(user, "what is live?");
+    const on = streamed[0];
+    act(() => {
+      on?.onText?.("Two agents ");
+      on?.onText?.("are");
+    });
+    expect(await screen.findByTestId("assistant-answering")).toHaveTextContent(
+      "Two agents are",
+    );
+
+    await user.click(await screen.findByTestId("assistant-stop"));
+    expect(postedStop().turnId).toBe(askedTurnId());
+    await held.end(turn({ reply: "Two agents are", stopped: true }));
+
+    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
+      "Two agents are",
+    );
+    expect(screen.queryByTestId("assistant-answering")).toBeNull();
+    expect(screen.getByTestId("assistant-stopped")).toHaveTextContent(
+      "Stopped",
+    );
+    expect(await screen.findByTestId("assistant-send")).toBeTruthy();
   });
 
   // A write that parked for approval before the stop is still on the record,
@@ -318,84 +360,6 @@ describe("Stop while a turn runs", () => {
   });
 });
 
-describe("Stop while an answer types itself out", () => {
-  // The frames are run by hand, so the answer is caught part way through.
-  let frames: FrameRequestCallback[] = [];
-  const step = (ts: number) => {
-    const due = frames;
-    frames = [];
-    act(() => {
-      for (const frame of due) frame(ts);
-    });
-  };
-
-  beforeEach(() => {
-    frames = [];
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((frame) => {
-      frames.push(frame);
-      return frames.length;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(
-      () => undefined,
-    );
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  const LONG =
-    "Three runs are live. The first is a nightly backfill that has read four of its nine tables. The second is a review of the billing change. The third is waiting on an approval that expires at ten.";
-
-  it("freezes the answer at what is on screen and marks it, without asking the server", async () => {
-    askAssistant.mockResolvedValue(turn({ reply: LONG }));
-    const user = await openFlyout();
-    await ask(user, "what is live?");
-    await screen.findByTestId("assistant-answer");
-
-    // The turn is over, and its answer is still typing out: Stop shows.
-    step(1000);
-    step(1016);
-    const stop = await screen.findByTestId("assistant-stop");
-    const shown = screen
-      .getByTestId("assistant-answer")
-      .querySelector("[inert]")?.textContent;
-    expect(shown?.length).toBeGreaterThan(0);
-    expect(shown?.length).toBeLessThan(LONG.length);
-
-    await user.click(stop);
-
-    const answer = screen.getByTestId("assistant-answer");
-    expect(answer).toHaveTextContent(shown ?? "");
-    expect(answer.textContent).not.toContain("expires at ten");
-    expect(screen.getByTestId("assistant-stopped")).toBeTruthy();
-    expect(await screen.findByTestId("assistant-send")).toBeTruthy();
-    // The frames that were due draw nothing more.
-    step(1032);
-    expect(screen.getByTestId("assistant-answer").textContent).not.toContain(
-      "expires at ten",
-    );
-    // The turn had already ended, so there was nothing on the server to stop.
-    expect(fetchStop).not.toHaveBeenCalled();
-  });
-
-  it("is Send again once the answer has typed out whole (negative)", async () => {
-    askAssistant.mockResolvedValue(turn({ reply: "Two agents are idle." }));
-    const user = await openFlyout();
-    await ask(user, "what is live?");
-    await screen.findByTestId("assistant-stop");
-
-    for (let ts = 1000; frames.length > 0 && ts < 3000; ts += 16) {
-      step(ts);
-    }
-
-    expect(await screen.findByTestId("assistant-send")).toBeTruthy();
-    expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
-      "Two agents are idle.",
-    );
-    expect(screen.queryByTestId("assistant-stopped")).toBeNull();
-  });
-});
-
 describe("A stopped reply after a reload", () => {
   // The thread as get_conversation reads it back: the partial reply was
   // saved with its stop, and the read says so (#4164).
@@ -434,7 +398,6 @@ describe("A stopped reply after a reload", () => {
 
     const answer = await screen.findByTestId("assistant-answer");
     expect(answer).toHaveTextContent("Two agents are");
-    expect(answer.querySelector("[inert]")).toBeNull();
     expect(screen.getByTestId("assistant-stopped")).toHaveTextContent(
       "Stopped",
     );

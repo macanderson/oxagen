@@ -172,3 +172,86 @@ describe("SheetDialog header close", () => {
     expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
   });
 });
+
+describe("SheetDialog icon and extra-wide size", () => {
+  it("draws the icon before the title", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog
+          open
+          onOpenChange={vi.fn()}
+          title="Notion"
+          icon={<span data-testid="mark">N</span>}
+          testId="marked"
+        >
+          <p>Body</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    const slot = document.querySelector("[data-sheet-icon]");
+    expect(slot).toContainElement(screen.getByTestId("mark"));
+    const title = screen.getByText("Notion");
+    expect(slot?.compareDocumentPosition(title) ?? 0).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("leaves no icon slot when there is no icon", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog open onOpenChange={vi.fn()} title="Plain" testId="plain">
+          <p>Body</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    expect(document.querySelector("[data-sheet-icon]")).toBeNull();
+  });
+
+  it("gives the extra-wide dialog 760px at a fixed height", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog
+          open
+          onOpenChange={vi.fn()}
+          title="Reader"
+          wide="xl"
+          testId="reader"
+        >
+          <p>Body</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    const popup = screen.getByTestId("reader");
+    expect(popup.className).toContain("max-w-[760px]");
+    expect(popup.className).toContain("h-[min(76dvh,720px)]");
+    expect(popup.className).not.toContain("max-w-[600px]");
+  });
+
+  // About twenty dialogs pass `wide` as a boolean, so the older two widths
+  // must not move when the third was added.
+  it.each([
+    { wide: true, width: "max-w-[600px]" },
+    { wide: false, width: "max-w-md" },
+  ])(
+    "keeps the $width width for wide={$wide}, with no fixed height",
+    ({ wide, width }) => {
+      render(
+        <IntlProvider>
+          <SheetDialog
+            open
+            onOpenChange={vi.fn()}
+            title="Sized"
+            wide={wide}
+            testId="sized"
+          >
+            <p>Body</p>
+          </SheetDialog>
+        </IntlProvider>,
+      );
+      const popup = screen.getByTestId("sized");
+      expect(popup.className).toContain(width);
+      expect(popup.className).not.toContain("max-w-[760px]");
+      expect(popup.className).not.toContain("h-[min(76dvh,720px)]");
+    },
+  );
+});

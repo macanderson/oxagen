@@ -939,6 +939,15 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "get_assistant_reply",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "get_auth_alerts",
       "reads": [],
@@ -4127,7 +4136,7 @@
       "writes": []
     }
   ],
-  "contentHash": "73bc9b4846b5fc582364a8f70419e96fe196f9fc200f2f863f4a94b4f484ce21",
+  "contentHash": "84eba562ffbf0c501bf6db20754b09792ca1b3dcc81eb585e574cf973294de0c",
   "domains": [
     {
       "name": "agent",

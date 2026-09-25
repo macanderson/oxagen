@@ -1,10 +1,10 @@
 // The flyout's Stop control: `POST /{org}/{ws}/assistant/stop` with
 // `{ turnId }` (#4164).
 //
-// It is a route and not a server action because the question it stops is
-// itself a pending server action (`askAssistant`), and the actions of one page
-// run one at a time. A stop sent as a second action would wait behind the turn
-// it means to end, and reach it only after the turn had finished.
+// It is a route and not a server action because the actions of one page run
+// one at a time. A stop sent as an action would wait behind any action still
+// pending, and it has to reach the turn while the turn streams
+// (`assistant-stream-client.ts`), before the turn finishes on its own.
 //
 // The gates run in order. The request must be JSON, which a form on another
 // site cannot send without a preflight this route never answers. The viewer

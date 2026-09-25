@@ -22,15 +22,23 @@ import { IntlProvider } from "@/test/intl";
 import type { ReplyCost } from "./assistant-actions";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
-const { askAssistant, readReplyCost, kernelRead, requireViewer } = vi.hoisted(
-  () => ({
-    askAssistant: vi.fn(),
-    readReplyCost: vi.fn(),
-    kernelRead: vi.fn(),
-    requireViewer: vi.fn(),
-  }),
-);
-vi.mock("./assistant-actions", () => ({ askAssistant, readReplyCost }));
+const {
+  askAssistantStream,
+  readAssistantReply,
+  readReplyCost,
+  kernelRead,
+  requireViewer,
+} = vi.hoisted(() => ({
+  askAssistantStream: vi.fn(),
+  readAssistantReply: vi.fn(),
+  readReplyCost: vi.fn(),
+  kernelRead: vi.fn(),
+  requireViewer: vi.fn(),
+}));
+// The turn streams over the API's chat stream (assistant-stream-client.ts);
+// the reply read and the cost read are the Server Actions.
+vi.mock("./assistant-stream-client", () => ({ askAssistantStream }));
+vi.mock("./assistant-actions", () => ({ readAssistantReply, readReplyCost }));
 // The action's own seams, for the real `readReplyCost` read at the bottom.
 vi.mock("@/server/kernel", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/kernel")>()),
@@ -142,19 +150,19 @@ beforeEach(() => {
     shouldAdvanceTime: true,
     toFake: ["setTimeout", "clearTimeout"],
   });
-  askAssistant.mockReset();
+  askAssistantStream.mockReset();
+  readAssistantReply.mockReset();
   readReplyCost.mockReset();
   kernelRead.mockReset();
   requireViewer.mockReset();
-  askAssistant.mockResolvedValue({
+  askAssistantStream.mockResolvedValue({
     ok: true,
     value: {
       conversationId: "6f1f5a8e-0000-4000-8000-00000000c0de",
-      userMessageId: "6f1f5a8e-0000-4000-8000-00000000u001",
-      assistantMessageId: "6f1f5a8e-0000-4000-8000-00000000a001",
       runId: "arun_01k9",
       reply: "Three runs are live.",
       parkedCards: [],
+      stopped: false,
     },
   });
 });
@@ -236,6 +244,50 @@ describe("the cost under a reply", () => {
 
     expect(line.textContent).toBe("cost $0.00 · anthropic/claude-sonnet-4.5");
     expect(line).not.toHaveTextContent("pending");
+  });
+
+  // A stream that dropped keeps no cost line: the reply is not finished on
+  // screen. Once the finished reply loads from the run, it carries that run,
+  // and the line reads its cost.
+  it("reads the cost of a dropped reply once it loads from the run", async () => {
+    askAssistantStream.mockResolvedValue({
+      ok: false,
+      reason: "dropped",
+      runId: "arun_01k9",
+    });
+    readAssistantReply.mockResolvedValue({
+      ok: true,
+      value: {
+        state: "answered",
+        conversationId: "6f1f5a8e-0000-4000-8000-00000000c0de",
+        reply: "Three runs are live.",
+        stopped: false,
+      },
+    });
+    readReplyCost.mockResolvedValue(recorded());
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(
+      <IntlProvider>
+        <ShellStateProvider>
+          <OpenIt />
+          <AssistantFlyout />
+        </ShellStateProvider>
+      </IntlProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "open assistant" }));
+    await user.type(screen.getByTestId("assistant-composer"), "what was that?");
+    await user.click(screen.getByTestId("assistant-send"));
+    const load = await screen.findByTestId("assistant-load-reply");
+    expect(screen.queryByTestId("assistant-reply-cost")).toBeNull();
+    await user.click(load);
+
+    const line = await screen.findByTestId("assistant-reply-cost");
+    await settled(line, "recorded");
+    expect(readReplyCost).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_01k9",
+    );
   });
 });
 

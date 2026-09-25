@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-// Reply feedback in the assistant flyout (#4169) over fake turn and feedback
-// actions: that every answered reply carries Useful and Wrong, that Useful
-// records at once, that Wrong takes an optional short note first, that the
-// person is told the vote was recorded, that a vote that failed says so and
-// keeps the note, that a stopped reply can be rated like any other, and that
-// no vote is offered outside a workspace.
+// Reply feedback in the assistant flyout (#4169) over a fake turn stream and
+// fake feedback action: that every answered reply carries Useful and Wrong,
+// that Useful records at once, that Wrong takes an optional short note first,
+// that the person is told the vote was recorded, that a vote that failed says
+// so and keeps the note, that a stopped reply and a reply loaded after its
+// stream dropped can be rated like any other, and that no vote is offered
+// outside a workspace.
 import {
   cleanup,
   fireEvent,
@@ -28,15 +29,22 @@ import { IntlProvider } from "@/test/intl";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
 const mocks = vi.hoisted(() => ({
-  askAssistant: vi.fn(),
+  askAssistantStream: vi.fn(),
+  readAssistantReply: vi.fn(),
   recordReplyFeedback: vi.fn(),
   pathname: vi.fn(() => "/acme/core-platform"),
+}));
+// The turn streams over the API's chat stream (assistant-stream-client.ts).
+// What arrives while it streams is assistant-flyout.streaming.test.tsx; here
+// the fake answers with the finished turn at once.
+vi.mock("./assistant-stream-client", () => ({
+  askAssistantStream: mocks.askAssistantStream,
 }));
 // The cost line under each reply has its own file
 // (assistant-flyout.reply-cost.test.tsx). Here its read never answers, so the
 // line holds "pending" and the votes are the only thing under test.
 vi.mock("./assistant-actions", () => ({
-  askAssistant: mocks.askAssistant,
+  readAssistantReply: mocks.readAssistantReply,
   readReplyCost: () => new Promise(() => undefined),
 }));
 // The engine read has its own file (assistant-flyout.engine-health.test.tsx).
@@ -64,11 +72,10 @@ const turn = {
   ok: true,
   value: {
     conversationId: CONVERSATION,
-    userMessageId: "6f1f5a8e-0000-4000-8000-00000000a001",
-    assistantMessageId: "6f1f5a8e-0000-4000-8000-00000000a002",
     runId: RUN,
     reply: "Three runs are live.",
     parkedCards: [],
+    stopped: false,
   },
 };
 
@@ -129,9 +136,10 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  mocks.askAssistant.mockReset();
+  mocks.askAssistantStream.mockReset();
+  mocks.readAssistantReply.mockReset();
   mocks.recordReplyFeedback.mockReset();
-  mocks.askAssistant.mockResolvedValue(turn);
+  mocks.askAssistantStream.mockResolvedValue(turn);
   mocks.pathname.mockReturnValue("/acme/core-platform");
 });
 afterEach(cleanup);
@@ -170,9 +178,9 @@ describe("reply feedback in the flyout", () => {
       },
     );
     await waitFor(() => {
-      expect(screen.getByTestId("assistant-feedback-recorded")).toHaveTextContent(
-        "Recorded as useful against this run.",
-      );
+      expect(
+        screen.getByTestId("assistant-feedback-recorded"),
+      ).toHaveTextContent("Recorded as useful against this run.");
     });
     expect(screen.getByTestId("assistant-feedback-useful")).toHaveAttribute(
       "aria-pressed",
@@ -211,9 +219,9 @@ describe("reply feedback in the flyout", () => {
       },
     );
     await waitFor(() => {
-      expect(screen.getByTestId("assistant-feedback-recorded")).toHaveTextContent(
-        "Recorded as wrong against this run.",
-      );
+      expect(
+        screen.getByTestId("assistant-feedback-recorded"),
+      ).toHaveTextContent("Recorded as wrong against this run.");
     });
     expect(screen.queryByTestId("assistant-feedback-note-form")).toBeNull();
     expect(screen.getByTestId("assistant-feedback-wrong")).toHaveFocus();
@@ -295,16 +303,18 @@ describe("reply feedback in the flyout", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Your rating was not recorded. Try again.",
     );
-    expect(screen.getByTestId("assistant-feedback-recorded")).toHaveTextContent("");
+    expect(screen.getByTestId("assistant-feedback-recorded")).toHaveTextContent(
+      "",
+    );
     expect(screen.getByTestId("assistant-feedback-note")).toHaveValue(
       "Off by 2",
     );
 
     await user.click(screen.getByTestId("assistant-feedback-send"));
     await waitFor(() => {
-      expect(screen.getByTestId("assistant-feedback-recorded")).toHaveTextContent(
-        "Recorded as wrong against this run.",
-      );
+      expect(
+        screen.getByTestId("assistant-feedback-recorded"),
+      ).toHaveTextContent("Recorded as wrong against this run.");
     });
     expect(screen.queryByTestId("assistant-feedback-failed")).toBeNull();
   });
@@ -351,7 +361,7 @@ describe("reply feedback in the flyout", () => {
   it("offers the vote on a reply the person stopped, which is still recorded under its run", async () => {
     // A stopped turn saves the words it reached as the run's assistant
     // message (#4164), so record_reply_feedback resolves a vote on it.
-    mocks.askAssistant.mockResolvedValue({
+    mocks.askAssistantStream.mockResolvedValue({
       ...turn,
       value: { ...turn.value, reply: "Two agents are", stopped: true },
     });
@@ -381,8 +391,126 @@ describe("reply feedback in the flyout", () => {
     );
   });
 
+  it("offers the vote on a reply loaded after its stream dropped, under the run the stream named", async () => {
+    mocks.askAssistantStream.mockResolvedValue({
+      ok: false,
+      reason: "dropped",
+      runId: RUN,
+    });
+    mocks.readAssistantReply.mockResolvedValue({
+      ok: true,
+      value: {
+        state: "answered",
+        conversationId: CONVERSATION,
+        reply: "Three runs are live.",
+        stopped: false,
+      },
+    });
+    mocks.recordReplyFeedback.mockResolvedValue(recorded("useful"));
+    const user = userEvent.setup();
+    render(tree());
+    await user.click(screen.getByRole("button", { name: "open assistant" }));
+    await user.type(screen.getByTestId("assistant-composer"), "what is live?");
+    await user.click(screen.getByTestId("assistant-send"));
+
+    // A dropped stream is not a reply yet: nothing to rate until it loads.
+    await screen.findByTestId("assistant-dropped");
+    expect(screen.queryByTestId("assistant-feedback")).toBeNull();
+
+    await user.click(screen.getByTestId("assistant-load-reply"));
+    const answer = await screen.findByTestId("assistant-answer");
+    await user.click(within(answer).getByTestId("assistant-feedback-useful"));
+
+    expect(mocks.recordReplyFeedback).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      {
+        conversationId: CONVERSATION,
+        runId: RUN,
+        verdict: "useful",
+        note: null,
+      },
+    );
+  });
+
+  it("rates a loaded reply in the conversation it was saved in, not the one asked since", async () => {
+    // The first turn's stream drops before it names a conversation, and the
+    // person asks something else, which starts a second one. The first reply, loaded
+    // afterwards, still sits in its own conversation, and a vote on it that
+    // named the thread's current one would be refused.
+    const EARLIER = "6f1f5a8e-0000-4000-8000-00000000c0d1";
+    const EARLIER_RUN = "arun_01k8";
+    mocks.askAssistantStream
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: "dropped",
+        runId: EARLIER_RUN,
+      })
+      .mockResolvedValueOnce(turn);
+    mocks.readAssistantReply.mockResolvedValue({
+      ok: true,
+      value: {
+        state: "answered",
+        conversationId: EARLIER,
+        reply: "Two runs are live.",
+        stopped: false,
+      },
+    });
+    mocks.recordReplyFeedback.mockResolvedValue(recorded("wrong"));
+    const user = userEvent.setup();
+    render(tree());
+    await user.click(screen.getByRole("button", { name: "open assistant" }));
+    await user.type(screen.getByTestId("assistant-composer"), "what is live?");
+    await user.click(screen.getByTestId("assistant-send"));
+    await screen.findByTestId("assistant-dropped");
+    await user.type(screen.getByTestId("assistant-composer"), "and now?");
+    await user.click(screen.getByTestId("assistant-send"));
+    await screen.findByTestId("assistant-answer");
+    // Asked with no conversation yet, so the second turn started its own.
+    expect(mocks.askAssistantStream.mock.calls[1]?.[2]).toMatchObject({
+      conversationId: null,
+    });
+
+    await user.click(screen.getByTestId("assistant-load-reply"));
+    await waitFor(() => {
+      expect(screen.getAllByTestId("assistant-answer")).toHaveLength(2);
+    });
+    const [loaded, retried] = screen.getAllByTestId("assistant-answer");
+    if (loaded === undefined || retried === undefined)
+      throw new Error("expected two answers");
+    expect(loaded).toHaveTextContent("Two runs are live.");
+
+    await user.click(within(loaded).getByTestId("assistant-feedback-wrong"));
+    await user.click(within(loaded).getByTestId("assistant-feedback-send"));
+    await user.click(within(retried).getByTestId("assistant-feedback-wrong"));
+    await user.click(within(retried).getByTestId("assistant-feedback-send"));
+
+    expect(mocks.recordReplyFeedback).toHaveBeenNthCalledWith(
+      1,
+      "acme",
+      "core-platform",
+      {
+        conversationId: EARLIER,
+        runId: EARLIER_RUN,
+        verdict: "wrong",
+        note: null,
+      },
+    );
+    expect(mocks.recordReplyFeedback).toHaveBeenNthCalledWith(
+      2,
+      "acme",
+      "core-platform",
+      {
+        conversationId: CONVERSATION,
+        runId: RUN,
+        verdict: "wrong",
+        note: null,
+      },
+    );
+  });
+
   it("offers no vote on a refused turn (negative)", async () => {
-    mocks.askAssistant.mockResolvedValue({
+    mocks.askAssistantStream.mockResolvedValue({
       ok: false,
       reason: "unavailable",
       code: "engine_unavailable",

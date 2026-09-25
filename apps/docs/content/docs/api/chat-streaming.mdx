@@ -29,7 +29,7 @@ Content-Type: application/json
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `content` | string | Yes | The message text you send. |
-| `conversationId` | string | No | Existing conversation to continue. Omit it to start a new conversation. |
+| `conversationId` | string | No | Existing conversation to continue, by its `cnv_` public ID or the conversation ID a response returned. Omit it to start a new conversation. |
 | `activeServerIds` | string[] | No | MCP server IDs to turn on for this turn. Omit it or pass `[]` to load every workspace server. |
 | `tier` | string | No | Model tier override: `"fast"`, `"balanced"`, or `"precise"`. Omit it to use workspace defaults. |
 | `model` | string | No | Explicit model ID override. Omit it to use workspace defaults. |

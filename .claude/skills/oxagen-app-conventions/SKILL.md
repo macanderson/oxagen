@@ -26,7 +26,7 @@ Since `apps/app` does not bootstrap IAM (see `oxagen-tenancy`), a Server Action 
 
 ## Chat transport — one SSE pipe, do not add a second
 
-Single stream: `POST /api/v1/chat/stream`, consumed client-side by `apps/app/src/components/chat/use-tool-stream.ts` (a `"use client"` hook). It defines a rich discriminated-union event vocabulary and reducer-style live state — `LiveToolCall`, `LiveReasoning`, `LiveStep`, `LiveTextSegment`, `LivePendingApproval`, `LivePendingConsent`, `LivePlan`, `LiveFanout`, `LiveMemoryRecall` — each keyed by a stable id (`toolCallId`, `reasoningId`, `stepIndex`, `approvalId`, `fanoutId`) so partial-stream updates merge in place. **Do not add a second transport** for chat; extend this one.
+Single stream: the API's `POST /v1/:org/:ws/chat/stream` (`apps/api/src/routes/v1/chat.stream.ts`), the streaming adapter of `ask_assistant`. The assistant flyout reads it same-origin through the app's `/api/v1/*` rewrite with `apps/app/src/features/shell/assistant-stream-client.ts`, which answers every outcome in the `ActionResult` shape `kernelWrite` gives (ADR-176). A turn is not a Server Action: Next.js dispatches those one at a time per client. A dropped connection does not stop the turn, and `get_assistant_reply` loads its finished reply. **Do not add a second transport** for chat; extend this one. The deprecated app's `use-tool-stream.ts` is not the pattern for `apps/app`.
 
 ## Generative UI registry (`apps/app/src/components/chat/chat-component-registry.tsx`)
 
@@ -49,7 +49,8 @@ Request interception lives in `apps/app/src/proxy.ts` — `middleware.ts` is **n
 
 - `import { Button } from "@oxagen/ui/components/button"` anywhere outside `apps/app/src/components/ui/*.tsx`.
 - Creating `apps/app/src/middleware.ts` — it is silently ignored; use `proxy.ts`.
-- Adding a second streaming transport for chat instead of extending `use-tool-stream.ts` and its event vocabulary.
+- Adding a second streaming transport for chat instead of extending the API's chat stream and `assistant-stream-client.ts`.
+- Running an assistant turn through a Server Action, which holds every other action in the app behind it.
 - Renaming a `componentId` key in `chat-component-registry.tsx` without a data migration for persisted `content_blocks` rows.
 - Returning `null` for an unrecognized `componentId` instead of the `UnknownComponentCard` fallback + `logUnknownComponent()`.
 - Calling a `"use client"` exported function directly from a Server Component instead of rendering it as a component.
