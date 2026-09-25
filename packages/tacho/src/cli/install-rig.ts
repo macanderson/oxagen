@@ -225,8 +225,16 @@ export interface RigHome {
   /** The scratch HOME. Everything the rig touches is under it. */
   home: string;
   platform: RigPlatform;
-  /** The machine's service manager state. */
-  machine: RigMachine;
+  /**
+   * The machine's service manager state. `seedHome` always sets it. A rig
+   * built from a home without one starts with nothing loaded.
+   */
+  machine?: RigMachine;
+}
+
+/** A service manager that holds nothing of Tacho's. */
+function idleMachine(): RigMachine {
+  return { loaded: false, tasks: new Set(), daemonPid: undefined };
 }
 
 /**
@@ -322,11 +330,7 @@ export function seedHome(options: SeedOptions = {}): RigHome {
     )}\n`,
     0o600,
   );
-  return {
-    home,
-    platform,
-    machine: { loaded: false, tasks: new Set(), daemonPid: undefined },
-  };
+  return { home, platform, machine: idleMachine() };
 }
 
 function enrollmentResponse(
@@ -462,7 +466,7 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
   const lines: string[] = [];
   const errors: string[] = [];
   const signer = bundleSigner();
-  const { machine } = seed;
+  const machine = seed.machine ?? idleMachine();
   const { tasks } = machine;
   let offline = false;
   let dead = false;
