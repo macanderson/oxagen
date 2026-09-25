@@ -26,8 +26,15 @@
       "conversationId": {
         "anyOf": [
           {
-            "type": "string",
-            "format": "uuid"
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "string"
+              }
+            ]
           },
           {
             "type": "null"
@@ -99,6 +106,26 @@
           }
         ],
         "default": null
+      },
+      "goal": {
+        "type": "object",
+        "properties": {
+          "statement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "maxRounds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4,
+            "default": 3
+          }
+        },
+        "required": [
+          "statement"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
@@ -113,6 +140,9 @@
       "conversationId": {
         "type": "string",
         "format": "uuid"
+      },
+      "conversationPublicId": {
+        "type": "string"
       },
       "userMessageId": {
         "type": "string",
@@ -156,6 +186,7 @@
     },
     "required": [
       "conversationId",
+      "conversationPublicId",
       "userMessageId",
       "assistantMessageId",
       "runId",

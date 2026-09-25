@@ -43,7 +43,7 @@
       },
       "limit": {
         "type": "integer",
-        "minimum": 0,
+        "exclusiveMinimum": 0,
         "maximum": 50,
         "default": 10
       },

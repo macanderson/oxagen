@@ -45,8 +45,9 @@ describe("tenant policy manifest", () => {
     expect(tables).toContain("chat.conversations");
   });
 
-  it("omits immutable children whose isolation is transitive via FK", () => {
-    // They carry no org cols — a policy on them cannot compile.
+  it("omits immutable children that carry no org columns", () => {
+    // A manifest policy on them cannot compile. RLS is not transitive via FK,
+    // so agent.agent_versions has no row isolation of its own (#2156).
     const tables = POLICY_MANIFEST.map((e) => e.table);
     expect(tables).not.toContain("agent.agent_versions");
   });

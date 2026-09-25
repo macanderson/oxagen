@@ -34,9 +34,12 @@
  * deletion changes the active set. None of these writes needs an in-process
  * cache notification.
  *
- * The four version columns arrive in migration `20260918160000`, and
- * production applies migrations by hand while `deploy-node` ships on merge
- * without waiting. So every read here asks `information_schema` first and
+ * The four version columns arrive in migration `20260918160000`. When this
+ * was written, production applied migrations by hand while `deploy-node`
+ * shipped on merge without waiting. `migration-gate` now applies them and
+ * holds the deploy (#3653), but a database restored from before that
+ * migration, or a local one not yet migrated, still lacks the columns. So
+ * every read here asks `information_schema` first and
  * names the version columns only once they exist; until then it assembles
  * from the record row alone, which is what this module did before #3312 and
  * is the right answer for a database on which no version can yet carry a

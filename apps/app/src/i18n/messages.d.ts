@@ -5936,6 +5936,7 @@ type Messages = {
       noResult: string;
       parked: string;
       parkedNote: string;
+      parkedApproval: string;
       gate: string;
       frame: string;
       subagentFrame: string;
@@ -7582,10 +7583,53 @@ type Messages = {
       thinking: string;
       recordedAs: string;
       parked: string;
+      parkedCard: {
+        list: string;
+        checking: string;
+        waiting: string;
+        expired: string;
+        denied: string;
+        approved: {
+          plain: string;
+          ran: string;
+          dispatched: string;
+          queued: string;
+          running: string;
+          indeterminate: string;
+          tooLate: string;
+          failed: string;
+          other: string;
+        };
+        byRule: string;
+        recordedAs: string;
+        answeredFirst: string;
+        note: string;
+        noteHint: string;
+        approve: string;
+        approving: string;
+        deny: string;
+        denying: string;
+        unread: string;
+        checkAgain: string;
+        failure: {
+          noteRequired: string;
+          invalid: string;
+          refused: string;
+          pendingApproval: string;
+          exhausted: string;
+          billingLink: string;
+          unavailable: string;
+        };
+      };
       needsWorkspace: string;
       intro: {
         title: string;
         body: string;
+      };
+      thread: {
+        new: string;
+        loading: string;
+        loadFailed: string;
       };
       suggestions: {
         title: string;

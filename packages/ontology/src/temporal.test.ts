@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildValidityFilter,
-  edgeCloseOnSupersedeSet,
-  edgeCloseParams,
-  edgeOpenPredicate,
   edgeValidityOnCreateSet,
-  edgeValidityOnMatchSet,
   edgeValidityParams,
   edgeValidityReturn,
   readEdgeValidity,
@@ -37,36 +33,6 @@ describe("edgeValidityOnCreateSet", () => {
   });
 });
 
-describe("edgeValidityOnMatchSet", () => {
-  it("preserves lower bounds and reopens upper bounds on re-assertion", () => {
-    const frag = edgeValidityOnMatchSet("r");
-    expect(frag).toContain(
-      "r.validFrom = coalesce(r.validFrom, datetime($validFrom), datetime())",
-    );
-    expect(frag).toContain("r.recordedAt = coalesce(r.recordedAt, datetime())");
-    expect(frag).toContain("r.validTo = null");
-    expect(frag).toContain("r.invalidatedAt = null");
-  });
-});
-
-describe("edgeCloseOnSupersedeSet / edgeOpenPredicate", () => {
-  it("closes both axes idempotently via coalesce", () => {
-    const frag = edgeCloseOnSupersedeSet("old");
-    expect(frag).toContain(
-      "old.validTo = coalesce(old.validTo, datetime($closedAt))",
-    );
-    expect(frag).toContain(
-      "old.invalidatedAt = coalesce(old.invalidatedAt, datetime($closedAt))",
-    );
-  });
-
-  it("open predicate selects only unclosed edges", () => {
-    expect(edgeOpenPredicate("old")).toBe(
-      "old.validTo IS NULL AND old.invalidatedAt IS NULL",
-    );
-  });
-});
-
 describe("edgeValidityParams", () => {
   it("passes through an ISO observed time", () => {
     expect(edgeValidityParams("2024-01-01T00:00:00.000Z")).toEqual({
@@ -88,18 +54,18 @@ describe("edgeValidityParams", () => {
   });
 });
 
-describe("edgeCloseParams", () => {
-  it("uses the supplied close time", () => {
-    expect(edgeCloseParams("2024-02-02T00:00:00.000Z")).toEqual({
-      closedAt: "2024-02-02T00:00:00.000Z",
-    });
-  });
-
-  it("defaults to now when omitted", () => {
-    const before = Date.now();
-    const { closedAt } = edgeCloseParams();
-    const t = new Date(closedAt).getTime();
-    expect(t).toBeGreaterThanOrEqual(before - 1000);
+describe("module exports", () => {
+  // The ON MATCH, supersession-close and open-predicate helpers were removed
+  // because nothing called them (#2974). This keeps them from returning unused.
+  it("exports only the helpers the write and read handlers call", async () => {
+    const mod = await import("./temporal");
+    expect(Object.keys(mod).sort()).toEqual([
+      "buildValidityFilter",
+      "edgeValidityOnCreateSet",
+      "edgeValidityParams",
+      "edgeValidityReturn",
+      "readEdgeValidity",
+    ]);
   });
 });
 

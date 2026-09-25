@@ -118,7 +118,7 @@
           },
           "limit": {
             "type": "integer",
-            "minimum": 0
+            "exclusiveMinimum": 0
           },
           "sentToModel": {
             "type": "string",

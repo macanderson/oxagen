@@ -57,12 +57,30 @@ const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
  * reaching the port stops the picker's actions from copying eight mappers into
  * a feature lane.
  *
- * The module resolves its own viewer first (INV-19, actions.test.ts) and
- * answers in `ActionResult`. The list is exact: a second module needs its own
+ * `assistant-thread-actions` reads the assistant's thread when the flyout
+ * opens (#4163). The workspace layout could read it as it renders, but that
+ * layout renders on every full load, every first visit to a workspace and
+ * every refresh a governed write ends with, so the thread would be read on
+ * page loads where the flyout never opens. The `conversations` port maps the
+ * record and checks that every id is a public id (INV-11), which the action
+ * would otherwise have to copy.
+ *
+ * Each module resolves its own viewer first (INV-19, actions.test.ts) and
+ * answers in `ActionResult`. The list is exact: another module needs its own
  * reason here and in ADR-167.
+ *
+ * `assistant-approval-actions` is the second (#4162). The assistant flyout
+ * draws each write a turn parked as a card, and the card reads its approval
+ * row whenever it changes: after a decision, and while it waits for Fleet, a
+ * second viewer or the expiry. The rows arrive with the turn, long after the
+ * layout rendered, so no route render can hand them down. The approvals
+ * port's `pending` and `resolved` already hold the kernel call, the mapping
+ * and the view-model check the Run page uses for the same rows.
  */
 const PORT_READING_ACTIONS: readonly string[] = [
   "features/shell/choice-actions",
+  "features/shell/assistant-approval-actions",
+  "features/shell/assistant-thread-actions",
 ];
 
 const isVocabulary = (target: string): boolean =>
@@ -104,7 +122,14 @@ const ALLOWED: Record<
   features: (from, target, edge) => {
     const page = featurePage(from.file);
     if (page !== null && under(target, `features/${page}`)) return true;
-    if (isFeatureBarrel(target) || target === "features/shell/client")
+    // A lane's `client` entry is its public surface for client components in
+    // another lane, which may not import a barrel (INV-21). Fleet's carries
+    // the approval decision the assistant flyout's parked cards make (#4162).
+    if (
+      isFeatureBarrel(target) ||
+      target === "features/fleet/client" ||
+      target === "features/shell/client"
+    )
       return true;
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
