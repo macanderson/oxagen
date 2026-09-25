@@ -1,18 +1,23 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+// Consent to an external MCP tool is a person's decision, so the contract is
+// not on the `agent` surface (ADR-175, the same decision as
+// `resolve_approval`). The handler answers only a row the consent gate wrote
+// (`kind = 'consent'`), and refuses a call from the run the row records.
 export const agentMcpConsentResolve = registerCapability({
   name: "resolve_mcp_consent",
   domain: "agent",
   description:
     "Grant or deny first-use consent for an external MCP tool; the decision resumes the paused agent stream and is remembered for subsequent calls",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
+  // Writes the resolution onto the consent row and the durable consent.
+  mutates: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "approval" },
   sensitivity: "medium",
-  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

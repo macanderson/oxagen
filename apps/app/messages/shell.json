@@ -291,11 +291,54 @@
       "close": "Close stella",
       "thinking": "Working…",
       "recordedAs": "recorded as",
-      "parked": "{count, plural, one {# write is waiting on a person} other {# writes are waiting on a person}}. Approve or deny them on Fleet.",
+      "parked": "{count, plural, one {This turn parked # write for a person to decide} other {This turn parked # writes for a person to decide}}. Approve or deny each one here or on Fleet.",
+      "parkedCard": {
+        "list": "Writes this turn parked",
+        "checking": "Reading this approval…",
+        "waiting": "Waits for a decision until {time}.",
+        "expired": "This approval expired before anyone decided, so the call did not run. Ask again to park a new one.",
+        "denied": "Denied. The call did not run. Ask stella for something else when you are ready.",
+        "approved": {
+          "plain": "Approved.",
+          "ran": "Approved. The call ran.",
+          "dispatched": "Approved. The call started and finishes in the background.",
+          "queued": "Approved. The call is queued to run.",
+          "running": "Approved. The call is running.",
+          "indeterminate": "Approved, but the call’s outcome is unknown. Check its run before you ask for it again.",
+          "tooLate": "Approved, but the approval expired before the call could run.",
+          "failed": "Approved, but the call did not run ({reason}).",
+          "other": "Approved. The call reads as {status}."
+        },
+        "byRule": "A rule decided it: {rule}.",
+        "recordedAs": "recorded as",
+        "answeredFirst": "Someone else answered this approval before your decision reached it.",
+        "note": "Reason",
+        "noteHint": "A denial needs a reason. The record keeps it with the decision.",
+        "approve": "Approve",
+        "approving": "Approving…",
+        "deny": "Deny",
+        "denying": "Denying…",
+        "unread": "The approval could not be read ({code}). You can still decide. The record refuses a decision it no longer takes.",
+        "checkAgain": "Check again",
+        "failure": {
+          "noteRequired": "Write a reason before you deny this call.",
+          "invalid": "The decision was refused as invalid ({code}).",
+          "refused": "Your decision was refused ({code}). An organization owner or admin, or a workspace owner or member, can answer this approval.",
+          "pendingApproval": "Your access to answer this approval waits on request {accessRequestId}.",
+          "exhausted": "The decision was refused because this organization is out of credit ({code}).",
+          "billingLink": "Add credit on Billing",
+          "unavailable": "The decision did not reach Oxagen ({code}). Nothing changed. Try again."
+        }
+      },
       "needsWorkspace": "stella works inside one workspace. Open a workspace to ask stella something.",
       "intro": {
         "title": "Ask stella",
         "body": "stella reads this workspace’s runs, agents, spend and knowledge graph. Every turn is recorded as a run of its own."
+      },
+      "thread": {
+        "new": "New thread",
+        "loading": "Loading your last thread…",
+        "loadFailed": "Your last thread could not be loaded. A new question starts a new thread."
       },
       "suggestions": {
         "title": "Ask about this page",

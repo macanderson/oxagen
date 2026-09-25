@@ -29,19 +29,40 @@ export function isApprovalPublicId(value: string): boolean {
   return PUBLIC_ID.test(value);
 }
 
+/**
+ * What became of the approved call itself (ADR-118), read back from the
+ * approval row once the decision has been delivered. `status` is the row's
+ * `resume_status`: `succeeded` or `dispatched` when the call ran, `failed` or
+ * `indeterminate` when it did not or its outcome is unknown, `queued` when
+ * delivery is left to the periodic worker, `denied` or `expired` when it will
+ * never run. `runId` is the fresh run the call was recorded as; `reason` is the
+ * refusal or failure code.
+ */
+const approvalExecutionSchema = z.object({
+  status: z.string(),
+  runId: z.string().nullable(),
+  reason: z.string().nullable(),
+});
+
 // `resolve_approval` is the rev1 governed action (apps/app/ARCHITECTURE.md
 // §1.5): the human decision on a tool call is what ADR-052 bills, so the
 // contract carries no `noBillingGate`. A decision that matches no row leaves
 // the handler as `HandlerError { code: "conflict", reason: "approval_expired" }`
 // and never reaches the recorder, which is why the output enum holds only the
 // two decisions a caller can make (§3.9 item 15).
+//
+// An approval is a person's decision, so the contract is not on the `agent`
+// surface (ADR-175). The in-app assistant acts as the person who typed, and a
+// model holding this tool approved the write its own turn had parked. People
+// resolve from Fleet, the Run page and the shell's approvals drawer, which
+// invoke through the app's kernel seam and name no surface.
 export const agentApprovalResolve = registerCapability({
   name: "resolve_approval",
   domain: "agent",
   description:
-    "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
+    "Approve or deny a pending tool-call approval request; an approved call the in-app assistant parked runs at once, and the answer says what became of it",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   // Writes the resolution onto the approval row and, on a mandate row that
@@ -83,6 +104,14 @@ export const agentApprovalResolve = registerCapability({
         outcome: z.enum(["held", "released"]),
       })
       .nullable(),
+    /**
+     * The parked call's execution (ADR-118): on a row the in-app assistant
+     * parked, what the call did once this decision was delivered. Null on a
+     * row with no stored call (a mandate row, a legacy row, a budget pause).
+     * Optional because the field was added after callers began building this
+     * output by hand.
+     */
+    execution: approvalExecutionSchema.nullable().optional(),
   }),
 });
 

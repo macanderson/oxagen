@@ -2506,14 +2506,39 @@ async function initializeDaemon(
   let servingSince = Number.POSITIVE_INFINITY;
   const outageGapped = new Set<string>();
 
+  /**
+   * What the last drain left in the spool: each file it read and left in
+   * place, by name, with the harness session id it names, and whether it
+   * left files it has not read.
+   *
+   * The sweep runs right after the drain, and the drain stops at a transient
+   * failure and replays at most `SPOOL_DRAIN_LIMIT` files a call. The sweep
+   * used to seal a session whose hooks were still in the spool. The replay
+   * then put the session's last turns after its `agent_stop`, and the
+   * outcome was judged without them (#4111). The sweep now defers a session
+   * the spool still names, and every session while the spool holds files the
+   * drain has not read. A spool file never changes once written, so a name
+   * kept here is not read again for its session id.
+   */
+  let spoolLeft = new Map<string, string | undefined>();
+  let spoolHeld = new Set<string>();
+  let spoolUnread = false;
+
+  /** Whether the spool may still hold a hook for this session. */
+  function spoolHolds(session: SessionRecord): boolean {
+    return spoolUnread || spoolHeld.has(session.harnessSessionId);
+  }
+
   /** Replay what `tacho-hook` spooled while the daemon was down, in order. */
   async function drainSpool(listedAt?: number): Promise<number> {
     if (listedAt !== undefined) watchLedgerClock(listedAt);
     const listed = readdirSync(paths.spool)
       .filter((name) => name.endsWith(".json"))
       .sort();
-    const files = listed.slice(0, SPOOL_DRAIN_LIMIT);
-    if (files.length === 0) {
+    if (listed.length === 0) {
+      spoolLeft = new Map();
+      spoolHeld = new Set();
+      spoolUnread = false;
       if (listedAt !== undefined) pruneHookLedgers(listedAt);
       return 0;
     }
@@ -2524,9 +2549,25 @@ async function initializeDaemon(
     // outage had already spooled was lost a second time by the drain meant
     // to recover it.
     const succeeded: string[] = [];
+    const left = new Map<string, string | undefined>();
+    let unread = false;
+    let reads = 0;
     let processed = 0;
     let interrupted = false;
-    for (const name of files) {
+    for (const [index, name] of listed.entries()) {
+      // A file past the replay limit, or after a transient failure, waits
+      // for a later drain. It is read here only for the session it names,
+      // once, and within the same budget of reads the replay has.
+      const replaying = !interrupted && index < SPOOL_DRAIN_LIMIT;
+      if (!replaying && spoolLeft.has(name)) {
+        left.set(name, spoolLeft.get(name));
+        continue;
+      }
+      if (reads === SPOOL_DRAIN_LIMIT) {
+        unread = true;
+        continue;
+      }
+      reads += 1;
       const path = join(paths.spool, name);
       let file: SpoolFile;
       try {
@@ -2534,6 +2575,11 @@ async function initializeDaemon(
         if (file.schema !== "tacho.spool.v1")
           throw new Error("not a spool file");
       } catch (error) {
+        // It names no session. The drain sets it aside when it reaches it.
+        if (!replaying) {
+          left.set(name, undefined);
+          continue;
+        }
         moveToFailedSpool(
           path,
           name,
@@ -2543,6 +2589,10 @@ async function initializeDaemon(
         continue;
       }
       const sessionId = (file.payload as { session_id?: string }).session_id;
+      if (!replaying) {
+        left.set(name, sessionId);
+        continue;
+      }
       // A hook spooled since this process began serving was refused or
       // answered late, not missed: its replay here recovers it, and nothing
       // else the daemon receives directly was lost.
@@ -2563,15 +2613,21 @@ async function initializeDaemon(
           processed += 1;
           continue;
         }
-        // A transient failure: stop here and leave every file this call has
-        // not yet attempted, including this one, for the next drain.
+        // A transient failure: stop replaying here and leave every file this
+        // call has not yet attempted, including this one, for the next drain.
         log(
           `spool drain stopped at ${name}: ${error instanceof Error ? error.message : String(error)}`,
         );
         interrupted = true;
-        break;
+        left.set(name, sessionId);
       }
     }
+    // A file moved to spool/failed/ is not in `left`, so it holds nothing.
+    spoolLeft = left;
+    spoolHeld = new Set(
+      [...left.values()].filter((id): id is string => typeof id === "string"),
+    );
+    spoolUnread = unread;
     // The http hooks of the same window were lost: chain the gap honestly,
     // for every session this pass actually reached.
     const gapMarks: Array<{ session: SessionRecord; mark: ChainMark }> = [];
@@ -2608,7 +2664,7 @@ async function initializeDaemon(
     if (
       listedAt !== undefined &&
       !interrupted &&
-      files.length === listed.length
+      listed.length <= SPOOL_DRAIN_LIMIT
     ) {
       pruneHookLedgers(listedAt);
     }
@@ -3488,7 +3544,9 @@ async function initializeDaemon(
           const candidates = registry.sweepCandidates(
             isProcessAlive,
             timers.idleSessionMs,
-            (session) => pendingSessionEnds.has(session.recorder.sessionUuid),
+            (session) =>
+              pendingSessionEnds.has(session.recorder.sessionUuid) ||
+              spoolHolds(session),
           );
           for (const candidate of candidates) {
             const recorder = candidate.record.recorder;

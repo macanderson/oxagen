@@ -58,6 +58,15 @@ module may.
 - A second module joins the list only with its own reason, written in
   `layers.ts` and added to this record.
 
+**Amendment, 2026-09-25 (#4163): `features/shell/assistant-thread-actions.ts`
+joins the list.** The assistant flyout reads the viewer's latest thread when it
+opens, through the `conversations` port. Reading it in the workspace layout
+would read it on every full load, first visit, and post-write refresh, whether
+or not the flyout opens. The port already maps `get_conversation` and checks
+every id is a public id (INV-11). The module carries `"use server"`, resolves
+its viewer with `requireViewer`, and answers an `ActionResult`, like
+`choice-actions.ts`.
+
 ## Alternatives rejected
 
 **Call `kernelRead` in `choice-actions.ts`, as ADR-089 does.** The module
@@ -83,5 +92,29 @@ Workspace settings dialog.
   A mapper fix reaches both.
 - `ARCHITECTURE.md` §2 names the grant in the `features` row, and "Shell
   activity boundaries" says where a picker's reads live.
-- The rule is a list with one entry. A reviewer who sees a second entry
-  without a matching change here has found a defect.
+- The rule is a named list. A reviewer who sees an entry without a matching
+  section in this record has found a defect.
+
+## Second module: the assistant's parked approvals (2026-09-25, #4162)
+
+`features/shell/assistant-approval-actions.ts` joins the list, under the same
+terms: `"use server"`, `requireViewer` before the read, and an
+`ActionResult` answer.
+
+The assistant flyout draws each write a turn parked as a card with Approve and
+Deny. A card shows what its approval row records, because a person on Fleet, a
+second viewer, the expiry sweep and the decision's own delivery (ADR-118) all
+change that row, and the flyout and Fleet have to agree. So the card reads the
+row after every decision and while it still waits. The rows arrive with the
+turn, long after the layout rendered, so no route render can hand them down.
+
+The approvals port's `pending` and `resolved`, narrowed to the turn's run, are
+the reads the Run page's Governed actions tab makes for the same rows. Reading
+them through `kernelRead` instead would copy both mappers into the shell lane,
+with the public-id mapping and the view-model check, which is the trade this
+record rejects for the picker.
+
+- `layers.ts` names the module in `PORT_READING_ACTIONS` with this reason.
+- `import-graph.test.ts` places the `data-source-use-server.ts` probe at the
+  module, where it passes, and the directive-less `imports-data-source.ts`
+  probe there, where it fails.
