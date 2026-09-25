@@ -7799,6 +7799,7 @@ type Messages = {
         missingVersion: string;
         catalogInvalid: string;
         catalogTooLarge: string;
+        catalogUnsafe: string;
       };
     };
   };
