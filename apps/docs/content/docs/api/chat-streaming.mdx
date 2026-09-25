@@ -97,7 +97,7 @@ The stream resumes once the request is answered. `decision` is `"approved"` or `
 
 ## Message threading
 
-Pass `conversationId` to continue an existing thread. The route loads the last 50 messages from the conversation, so you do not pass message IDs to keep history.
+Pass `conversationId` to continue an existing thread. The route loads the conversation's history for you, so you do not pass message IDs to keep it. The model reads up to the last 50 messages word for word. When a thread grows past that, Oxagen summarises the older messages into one note and sends it ahead of them, so facts from early in the thread still reach the model. The summary is stored with the conversation and rewritten about once every five turns. The run for each turn records whether it carried a summary.
 
 Omit `conversationId` to start a new conversation. Keep the conversation ID from the first response and send it with later messages in the same thread.
 

@@ -31,7 +31,6 @@ import {
   supportsReasoning,
   type ModelFundingSource,
   type ModelIdentity,
-  type ModelMessage,
   type StreamAgentReplyArgs,
 } from "@oxagen/ai";
 import {
@@ -65,7 +64,7 @@ import {
 import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { INTERACTIVE_AGENT_CAPABILITIES } from "@oxagen/oxagen/interactive-agent";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
@@ -88,6 +87,11 @@ import {
   type GovernedTurnUsage,
 } from "./governed-turn";
 import {
+  compactHistory,
+  loadConversationHistory,
+  type LoadedHistory,
+} from "./history-summary";
+import {
   materializeTools,
   type ApprovalRequiredEvent,
 } from "./materialize-tools";
@@ -99,9 +103,11 @@ const logger = pino({
   base: { pkg: "agent.assistant-turn" },
 });
 
-/** Prior turns the transcript carries. */
+/**
+ * Prior messages the transcript carries word for word. Older ones reach the
+ * turn as one summary (`history-summary.ts`).
+ */
 const HISTORY_LIMIT = 50;
-const VALID_ROLES = new Set(["user", "assistant", "system"]);
 /** How long a "prompt"-mode budget approval waits on a person. */
 const BUDGET_APPROVAL_TTL_MS = 5 * 60 * 1000;
 /** The capability name the budget-continue approval is filed under. */
@@ -383,6 +389,19 @@ async function runPreparedTurn(
     messageId,
     executionStepId: messageId,
   };
+  // Started here and awaited once the run is open, so a summary the thread
+  // needs is written while the tools, the prompt and the memory load. It
+  // never rejects: a summary it cannot write leaves the plain window (#4171).
+  const compactedHistory = compactHistory(history, {
+    scope,
+    conversationId,
+    funding,
+    telemetry: {
+      surface: request.surface === "chat" ? "app" : "api",
+      messageId,
+    },
+    ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
+  });
 
   const parked: AssistantParkedCard[] = [];
   const onApprovalRequired = (event: ApprovalRequiredEvent): void => {
@@ -563,6 +582,11 @@ async function runPreparedTurn(
     // refuses the turn here, the same as any other receipt it will not take:
     // steering the record cannot account for is what #3303 is about.
     await run.steeringManifest(steering);
+    // The same holds for a summary carried in place of older messages. It
+    // rides the history, not the system prompt, so the assembler never sees
+    // it (ADR-174 §4).
+    const compacted = await compactedHistory;
+    if (compacted.frame) await run.historySummary(compacted.frame);
     turn = await runGovernedTurn({
       telemetry: {
         ...scope,
@@ -589,7 +613,7 @@ async function runPreparedTurn(
         }),
         steering,
       ),
-      history,
+      history: compacted.history,
       contextMessages: [
         pageContextMessage(request.pageContext),
         recalledMemory,
@@ -839,9 +863,9 @@ type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
 type Scope = { orgId: string; workspaceId: string };
 
 /**
- * Resolve or open the conversation and append the person's message, then
- * load the prior turns as the transcript, newest last, without the message
- * just written.
+ * Resolve or open the conversation, load its prior messages and stored
+ * summary, then append the person's message. The history excludes the
+ * message just written.
  */
 async function appendUserMessage(
   tx: Tx,
@@ -852,7 +876,7 @@ async function appendUserMessage(
 ): Promise<{
   conversationId: string;
   userMessageId: string;
-  history: ModelMessage[];
+  history: LoadedHistory;
 }> {
   let conversationId = request.conversationId;
   if (conversationId) {
@@ -884,25 +908,11 @@ async function appendUserMessage(
     conversationId = created.id;
   }
 
-  const rows = await tx
-    .select({ role: schema.messages.role, content: schema.messages.content })
-    .from(schema.messages)
-    .where(
-      and(
-        eq(schema.messages.conversationId, conversationId),
-        eq(schema.messages.orgId, scope.orgId),
-        eq(schema.messages.workspaceId, scope.workspaceId),
-      ),
-    )
-    .orderBy(desc(schema.messages.createdAt))
-    .limit(HISTORY_LIMIT);
-  const history: ModelMessage[] = rows
-    .filter((r) => VALID_ROLES.has(r.role) && r.content.trim().length > 0)
-    .map((r) => ({
-      role: r.role as "user" | "assistant" | "system",
-      content: r.content,
-    }))
-    .reverse();
+  const history = await loadConversationHistory(tx, {
+    scope,
+    conversationId,
+    limit: HISTORY_LIMIT,
+  });
 
   const [userMessage] = await tx
     .insert(schema.messages)

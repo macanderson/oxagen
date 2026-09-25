@@ -828,6 +828,20 @@ describe("frameKinds and filterFramesByKind", () => {
     expect(frameKinds(recall)).toEqual(["recall"]);
   });
 
+  it("files a history summary under recall and names what it stands in for (#4171)", () => {
+    const summary = ledgerFrame(
+      event(9, "context.history_summarized", {
+        provider: "conversation_history",
+        outcome: "applied",
+        covered_message_count: 80,
+        window_message_count: 40,
+        regenerated: true,
+      }),
+    );
+    expect(frameKinds(summary)).toEqual(["recall"]);
+    expect(summary.summary).toBe("history summary applied (80)");
+  });
+
   it("counts the prompt an operator typed, once, and not a subagent's", () => {
     const typed = tachoFrame(tachoRow(6, "turn_start", { turnSeq: 1 }));
     const handed = tachoFrame(

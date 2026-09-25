@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
+import { digestJcs } from "@oxagen/run-evidence";
 import {
   digestOfCanonicalJson,
   RETENTION_CONTENT_CLASSES,
@@ -75,6 +76,7 @@ import {
   ASSISTANT_RETENTION_POLICY,
   assistantRunStore,
   AssistantRunNotRecordedError,
+  HISTORY_SUMMARY_PROVIDER,
   openAssistantRun,
   readAssistantAgentState,
   resolveAssistantRunIdentity,
@@ -1323,6 +1325,72 @@ describe("the recorder hands the ledger the content its frames are about", () =>
       }),
     ).resolves.toBeUndefined();
     expect(bodyOf(ledger.batches, "model.engine_call_started")).toBeUndefined();
+  });
+
+  // #4171: the run says a summary stood in for the thread's older messages,
+  // names it by digest, and keeps its text as the body.
+  it("records the history summary the turn carried as a context frame", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "which cost centre?",
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    const text = "- The person's cost centre is CC-7741.";
+    await recorder.historySummary({
+      outcome: "applied",
+      digest: digestJcs(text),
+      chars: text.length,
+      coveredMessages: 80,
+      windowMessages: 40,
+      regenerated: true,
+      text,
+    });
+    await recorder.historySummary({
+      outcome: "unavailable",
+      digest: null,
+      chars: null,
+      coveredMessages: 0,
+      windowMessages: 50,
+      regenerated: false,
+      reasonCode: "summary_timeout",
+      text: null,
+    });
+    const frames = ledger.batches
+      .map((b) => b.events[0]!)
+      .filter((e) => e.eventType === "context.history_summarized");
+    expect(frames.map((f) => f.payload)).toEqual([
+      {
+        provider: HISTORY_SUMMARY_PROVIDER,
+        outcome: "applied",
+        summary_digest: digestJcs(text),
+        summary_chars: text.length,
+        covered_message_count: 80,
+        window_message_count: 40,
+        regenerated: true,
+      },
+      {
+        provider: HISTORY_SUMMARY_PROVIDER,
+        outcome: "unavailable",
+        covered_message_count: 0,
+        window_message_count: 50,
+        regenerated: false,
+        reason_code: "summary_timeout",
+      },
+    ]);
+    // The ledger's own registry takes both payloads as written.
+    for (const frame of frames) {
+      expect(() =>
+        validateInlineEventPayload(frame.eventType, frame.payload),
+      ).not.toThrow();
+    }
+    expect(decode(frames[0]!.body)).toBe(JSON.stringify(text));
+    expect(frames[1]!.body).toBeUndefined();
   });
 });
 

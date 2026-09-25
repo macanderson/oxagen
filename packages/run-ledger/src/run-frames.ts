@@ -262,6 +262,12 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       if (provider && outcome) return `${provider} ${outcome}`;
       return outcome ?? event.eventType;
     }
+    case "context.history_summarized": {
+      const outcome = field(p, "outcome");
+      const covered = field(p, "covered_message_count");
+      if (outcome && covered) return `history summary ${outcome} (${covered})`;
+      return outcome ? `history summary ${outcome}` : event.eventType;
+    }
     case "steering.manifest": {
       const included = field(p, "included");
       const cut = field(p, "cut");
@@ -742,6 +748,7 @@ const POLICY_TYPES: ReadonlySet<string> = new Set([
 const RECALL_TYPES: ReadonlySet<string> = new Set([
   "context.frames_selected",
   "context.instructions_applied",
+  "context.history_summarized",
   "context.assembled",
   // What the assembler put in front of a wrapped agent at its start, and
   // what it cut (ADR-093).

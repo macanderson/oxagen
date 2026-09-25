@@ -286,6 +286,39 @@ const contextInstructionsAppliedSchema = z
   .strict();
 
 /**
+ * A summary of the conversation older than the turn's verbatim window,
+ * carried in the turn's context in place of those messages (#4171). The
+ * in-app agent writes one when a thread outgrows its history window, so a
+ * reader of the run can tell the model saw a summary and not the messages
+ * themselves. The digest identifies the exact summary; its text rides the
+ * frame's body, never this payload.
+ *
+ * `applied` means the turn carried a summary that covers every message older
+ * than the window. `stale` means a new summary could not be written in time,
+ * so the turn carried the previous one and the messages between it and the
+ * window were left out. `unavailable` means there was no summary to carry and
+ * the turn ran on the window alone.
+ */
+const contextHistorySummarizedSchema = z
+  .object({
+    /** Which history was summarised, e.g. `conversation_history`. */
+    provider: shortLabelSchema,
+    outcome: z.enum(["applied", "stale", "unavailable"]),
+    /** Set when a summary reached the turn. */
+    summary_digest: sha256DigestSchema.optional(),
+    summary_chars: countSchema.optional(),
+    /** Messages the carried summary stands in for. */
+    covered_message_count: countSchema,
+    /** Messages the turn carried word for word. */
+    window_message_count: countSchema,
+    /** True when this turn wrote the summary it carried. */
+    regenerated: z.boolean(),
+    /** Set when the outcome is not `applied`: why the summary is old or gone. */
+    reason_code: reasonCodeSchema.optional(),
+  })
+  .strict();
+
+/**
  * What the steering assembler (`@oxagen/steering-assembler`, ADR-093) put in
  * front of the model, and what it cut. The in-app agent writes one before the
  * engine is asked anything. A wrapped agent's host seals a frame of the same
@@ -668,6 +701,11 @@ export const EVENT_TYPE_REGISTRY = {
     stage: "context",
     contentClass: "context_selection",
     schema: contextInstructionsAppliedSchema,
+  },
+  "context.history_summarized": {
+    stage: "context",
+    contentClass: "context_selection",
+    schema: contextHistorySummarizedSchema,
   },
   "steering.manifest": {
     stage: "context",

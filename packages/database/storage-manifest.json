@@ -4100,7 +4100,7 @@
       "writes": []
     }
   ],
-  "contentHash": "540157713918917a7360451d0cc4b5b39efe38729cb236898afc233e56b2490e",
+  "contentHash": "9b8a88847905799c589a67ed039effbabe46a444d3f54b33cade9fcf44ac3bcb",
   "domains": [
     {
       "name": "agent",
@@ -12407,6 +12407,12 @@
         },
         {
           "name": "code_binding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "history_summary",
           "nullable": true,
           "primaryKey": false,
           "type": "jsonb"
