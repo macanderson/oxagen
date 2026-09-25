@@ -837,8 +837,16 @@ describe("runGovernedTurn on the engine", () => {
     await drain(result);
     // The engine's vocabulary has no wait, so it is still told a refusal.
     const answer = engine.posts.find((p) => p.route === "tool-result")!
-      .body as { output: { error: { class?: string } } };
+      .body as { output: { error: { class?: string; message?: string } } };
     expect(answer.output.error.class).toBe("refused_by_policy");
+    // The model reads this message. It names the public id the person sees
+    // on the card, not the approval row's uuid.
+    expect(answer.output.error.message).toContain(
+      "waiting for approval apr_0a1b2c3d4e5f6g7h8j9k0m until",
+    );
+    expect(answer.output.error.message).not.toContain(
+      "0192f0c4-0000-7000-8000-000000000001",
+    );
     expect(toolCalls).toEqual([
       expect.objectContaining({
         toolName: "search_nodes",
