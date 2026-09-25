@@ -27,11 +27,12 @@ export async function agentMcpRegisterHandler(
   input: AgentMcpRegisterInput,
   ctx: CapabilityContext,
 ): Promise<AgentMcpRegisterOutput> {
-  // SSRF guard: validate the endpoint before any outbound connection that
-  // carries auth secrets (the streamable-http probe below).
-  if (input.transportType === "streamable-http") {
-    assertPublicHttpUrl(input.endpointUrl, { refusing: REFUSING_MCP });
-  }
+  // Validate the endpoint for every transport, before the probe and before
+  // the insert. The streamable-http probe below connects with auth secrets
+  // attached. A stdio row is never probed here, but its endpoint_url is still
+  // stored and shown, so a username or password in it would sit in the
+  // column in the clear (#3720).
+  assertPublicHttpUrl(input.endpointUrl, { refusing: REFUSING_MCP });
 
   // Run the health check before insert so we persist the live tool list
   // alongside the row — the chat surface lists external tools without a
