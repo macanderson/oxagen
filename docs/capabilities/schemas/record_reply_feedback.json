@@ -1,0 +1,103 @@
+{
+  "name": "record_reply_feedback",
+  "domain": "assistant",
+  "description": "Record a person's verdict on one reply of the in-app assistant, useful or wrong, with an optional short note, against the run the reply was recorded as. Refused unless the run is an assistant run in this workspace whose reply sits in the caller's own conversation.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "conversationId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "runId": {
+        "type": "string"
+      },
+      "verdict": {
+        "type": "string",
+        "enum": [
+          "useful",
+          "wrong"
+        ]
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    },
+    "required": [
+      "conversationId",
+      "runId",
+      "verdict"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "conversationId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "messageId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "verdict": {
+        "type": "string",
+        "enum": [
+          "useful",
+          "wrong"
+        ]
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "recordedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId",
+      "conversationId",
+      "messageId",
+      "verdict",
+      "note",
+      "recordedAt"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -97,6 +97,9 @@ const ROLE_CHECKED_CONTRACTS = [
   "delete_cost_center",
   "set_cost_center",
   "export_cost_center_statement",
+  // A verdict on an assistant reply (#4169) takes ask_assistant's roles, and
+  // ask_assistant asserts them in its turn, so this handler asserts them too.
+  "record_reply_feedback",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

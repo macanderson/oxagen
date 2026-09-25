@@ -551,6 +551,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./conversation.attachment.add"))
         .conversationAttachmentAddHandler as CapabilityHandlerFn,
   );
+  // A person's verdict on an assistant reply (#4169). The turn itself is
+  // `ask_assistant`, bound in @oxagen/agent; the verdict needs none of the
+  // agent runtime, so it binds here.
+  registerHandler(
+    "record_reply_feedback",
+    async () =>
+      (await import("./assistant.reply_feedback.record"))
+        .assistantReplyFeedbackRecordHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "export_data",
     async () =>
