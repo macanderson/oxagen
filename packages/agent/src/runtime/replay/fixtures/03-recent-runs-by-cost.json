@@ -1,0 +1,180 @@
+{
+  "turn": "03 recent runs and their cost",
+  "question": "What did my last two runs cost?",
+  "source": "hand-authored",
+  "handlers": {
+    "list_runs": {
+      "runs": [
+        {
+          "id": "arun_replay3",
+          "source": "ledger",
+          "agentKey": "agt_replay",
+          "operatorId": null,
+          "operatorKind": "agent",
+          "operatorName": "release-bot",
+          "operatorAttribution": null,
+          "status": "sealed",
+          "outcome": "completed",
+          "turns": 3,
+          "steps": 12,
+          "frames": 40,
+          "cost": {
+            "micros": "412000",
+            "currency": "USD",
+            "basis": "gateway_observed"
+          },
+          "taskRef": null,
+          "startedAt": "2026-09-24T09:00:00.000Z",
+          "sealedAt": "2026-09-24T09:04:00.000Z",
+          "endedAt": "2026-09-24T09:04:00.000Z",
+          "replayGrade": null,
+          "verdict": null,
+          "enforcementTier": "gateway",
+          "completenessGaps": [],
+          "canSummarize": false,
+          "model": null,
+          "machine": null,
+          "name": "Release notes",
+          "summary": null
+        },
+        {
+          "id": "arun_replay4",
+          "source": "ledger",
+          "agentKey": "agt_replay",
+          "operatorId": null,
+          "operatorKind": "agent",
+          "operatorName": "release-bot",
+          "operatorAttribution": null,
+          "status": "sealed",
+          "outcome": "completed",
+          "turns": 3,
+          "steps": 12,
+          "frames": 40,
+          "cost": {
+            "micros": "87000",
+            "currency": "USD",
+            "basis": "gateway_observed"
+          },
+          "taskRef": null,
+          "startedAt": "2026-09-24T09:00:00.000Z",
+          "sealedAt": "2026-09-24T09:04:00.000Z",
+          "endedAt": "2026-09-24T09:04:00.000Z",
+          "replayGrade": null,
+          "verdict": null,
+          "enforcementTier": "gateway",
+          "completenessGaps": [],
+          "canSummarize": false,
+          "model": null,
+          "machine": null,
+          "name": "Release notes",
+          "summary": null
+        }
+      ],
+      "nextCursor": null
+    }
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What did my last two runs cost?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "list_runs",
+      "input": {
+        "limit": 2
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "list_runs",
+          "input": {
+            "limit": 2
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What did my last two runs cost?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "arun_replay3 cost $0.41 and arun_replay4 cost $0.09."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "arun_replay3 cost $0.41 and arun_replay4 cost $0.09.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["list_runs"],
+    "gates": [
+      "emergency_denies none",
+      "kill_switch list_runs open",
+      "iam list_runs allow",
+      "handler list_runs"
+    ],
+    "ledger": [
+      "model completed",
+      "tool list_runs completed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["ok"],
+    "refusals": [],
+    "invocations": ["list_runs completed"],
+    "approvals": [],
+    "answer": "arun_replay3 cost $0.41 and arun_replay4 cost $0.09."
+  }
+}
