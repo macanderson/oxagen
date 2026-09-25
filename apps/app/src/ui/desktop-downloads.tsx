@@ -62,6 +62,12 @@ export function DesktopDownloads() {
           </Fragment>
         ))}
       </dl>
+      <p
+        className="max-w-prose text-xs text-muted-foreground"
+        data-testid="desktop-downloads-macos-first-launch"
+      >
+        {t("macosFirstLaunch")}
+      </p>
       <p className="text-xs">
         <DesktopDownloadsPageLink
           to={DESKTOP_DOWNLOADS_PAGE}

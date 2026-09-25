@@ -30,7 +30,7 @@ export function desktopInstallers(version: string): Platform[] {
   return [
     {
       name: "macOS",
-      note: "macOS 12 or newer. Open the .dmg and drag Oxagen to Applications.",
+      note: "macOS 12 or newer. Open the .dmg and drag Oxagen to Applications. Builds are not yet notarized, so macOS refuses the first launch. Choose Done, then click Open Anyway in System Settings > Privacy & Security.",
       installers: [
         { label: "Apple silicon", file: `Oxagen_${version}_aarch64.dmg` },
         { label: "Intel", file: `Oxagen_${version}_x64.dmg` },
