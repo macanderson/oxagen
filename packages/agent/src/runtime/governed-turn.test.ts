@@ -72,6 +72,7 @@ import {
   type TurnLedgerToolCall,
   type TurnLedgerToolIntent,
 } from "./governed-turn";
+import { ApprovalPendingError } from "./approval-pending";
 import { modelForRole } from "./engine/provider";
 import { LOAD_TOOLS, SEARCH_TOOLS, createToolBelt } from "./tool-belt";
 
@@ -794,6 +795,49 @@ describe("runGovernedTurn on the engine", () => {
         outcome: "denied",
         error: "approval denied for search_nodes",
       }),
+    ]);
+  });
+
+  it("records a call parked for approval, and how the engine is answered", async () => {
+    const { engine, client } = setup();
+    const toolCalls: TurnLedgerToolCall[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          // What materializeTools throws under `approvalMode: "park"`.
+          execute: async () => {
+            throw new ApprovalPendingError(
+              "create_workspace",
+              "0192f0c4-0000-7000-8000-000000000001",
+              "2026-09-25T12:05:00.000Z",
+              "apr_0a1b2c3d4e5f6g7h8j9k0m",
+            );
+          },
+        } as never,
+      },
+      engine: client,
+      ledger: {
+        modelCallStarted: async () => undefined,
+        modelCall: async () => undefined,
+        toolCallStarted: async () => undefined,
+        toolCall: async (record) => {
+          toolCalls.push(record);
+        },
+        seal: async () => undefined,
+      },
+    });
+    await drain(result);
+    const answer = engine.posts.find((p) => p.route === "tool-result")!
+      .body as { output: { error: { class?: string } } };
+    expect(answer.output.error.class).toBe("refused_by_policy");
+    expect(toolCalls).toEqual([
+      expect.objectContaining({ toolName: "search_nodes", outcome: "denied" }),
     ]);
   });
 

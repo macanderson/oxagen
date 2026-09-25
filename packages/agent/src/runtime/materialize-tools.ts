@@ -1,3 +1,4 @@
+import { ApprovalPendingError } from "./approval-pending";
 import { ApprovalResumeError } from "./approval-resume-payload";
 import { tool, jsonSchema, type Tool, type ToolSet } from "@oxagen/ai";
 import { type ZodTypeAny } from "zod";
@@ -214,24 +215,9 @@ export interface MaterializeOptions {
   runIdRef?: { current: string | null };
 }
 
-/**
- * A governed write the turn opened that is waiting on a person. Thrown out of
- * a tool's `execute` under `approvalMode: "park"`; the engine reads it as a
- * refusal by policy and the surface reads the fields as the parked card.
- */
-export class ApprovalPendingError extends Error {
-  override readonly name = "ApprovalPendingError";
-  readonly code = "pending_approval" as const;
-  constructor(
-    readonly capability: string,
-    readonly approvalId: string,
-    readonly expiresAt: string,
-  ) {
-    super(
-      `refused: ${capability} is waiting for approval ${approvalId} until ${expiresAt}`,
-    );
-  }
-}
+// Re-exported from its own module, which the engine port reads without
+// pulling this one in (see approval-pending.ts).
+export { ApprovalPendingError } from "./approval-pending";
 
 // Result of materializeTools: the Vercel AI SDK tool map keyed by *model-safe*
 // names, plus a reverse map from each model-safe name back to the real
