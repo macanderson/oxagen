@@ -716,6 +716,7 @@ export function runSource(reads: RunReads) {
       preferences: refuse,
       counts: refuse,
       notifications: refuse,
+      assistantEngine: refuse,
     },
     runs: {
       list: refuse,
