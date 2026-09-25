@@ -1,6 +1,7 @@
 import { and, eq, isNull, inArray, ilike, or } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { pluginCatalogBrowse } from "@oxagen/oxagen/contracts/plugin.catalog.browse";
 import { listOxagenPlugins } from "@oxagen/oxagen/plugins";
 import {
   listServers,
@@ -10,6 +11,7 @@ import {
 } from "@oxagen/plugins/registry";
 import type { ServerResponse } from "@oxagen/plugins/registry";
 import { seedWorkspaceDefaultRegistry } from "./workspace-registry-seed";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 // ── TTL cache for live registry fetches ──────────────────────────────────────
@@ -83,6 +85,9 @@ const STATIC_PLUGIN_TYPES = new Set([
 ]);
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(pluginCatalogBrowse, ctx);
   const { search, pluginType, authKind, installed, limit, offset } = input as {
     search?: string;
     pluginType?:

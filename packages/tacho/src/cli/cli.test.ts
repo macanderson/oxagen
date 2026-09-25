@@ -1302,6 +1302,36 @@ describe("enroll → status → unenroll", () => {
       "Presenting the one-time enrollment token",
     );
 
+    // A token on the now-enrolled host is refused, not swallowed by the
+    // re-apply: nothing is presented and the command does not report success.
+    const presented = () =>
+      d.requests.filter((r) => r.url.endsWith("/v1/tacho/enroll")).length;
+    const second = await enroll(
+      {
+        enrollmentToken: "oxe_1time_0123456789abcdefghjkmnpqrs",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(second.ok).toBe(false);
+    expect(presented()).toBe(1);
+    expect(d.errors.join("\n")).toContain(
+      "already enrolled as acme.core.release-manager",
+    );
+    expect(d.errors.join("\n")).toContain("--force");
+    expect(d.lines.some((l) => l.includes("Already enrolled"))).toBe(false);
+    // --force presents the token and replaces the enrollment.
+    const forced = await enroll(
+      {
+        enrollmentToken: "oxe_1time_0123456789abcdefghjkmnpqrs",
+        apiUrl: "https://api.test",
+        force: true,
+      },
+      d,
+    );
+    expect(forced.ok).toBe(true);
+    expect(presented()).toBe(2);
+
     const used = deps();
     const refused = await enroll(
       {

@@ -23,6 +23,8 @@ export const conversationMessage = z.object({
   /** `arun_…`: the run an assistant turn was recorded as. */
   runId: z.string().nullable(),
   parkedCards: z.array(assistantParkedCardSchema),
+  /** True when the person stopped the turn and this is its partial reply (#4164). */
+  stopped: z.boolean(),
 });
 
 /**

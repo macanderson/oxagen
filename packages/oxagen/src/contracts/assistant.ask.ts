@@ -24,6 +24,12 @@
  * governed write the turn opened that is waiting on a person is returned as
  * the parked card, and the turn still completes.
  *
+ * A turn the person stops is not a refusal. When the caller passed `turnId`
+ * and `cancel_assistant_turn` names it, the turn returns with `stopped: true`
+ * and whatever reply the engine had written, and the run is sealed
+ * `cancelled`. A disconnect and a budget stop still refuse with
+ * `engine_aborted`.
+ *
  * The turn is not a governed action (`noBillingGate`, #2968 decision 3): the
  * run is free to the customer and never appears in `list_runs`; `runId` opens
  * it through `get_run`. Each tool call inside it is a top-level governed
@@ -170,6 +176,13 @@ export const assistantAsk = registerCapability({
        * contract is not on the agent surface.
        */
       goal: assistantGoalSchema.optional(),
+      /**
+       * A key the caller mints before it asks, so it can stop the turn with
+       * `cancel_assistant_turn` while this call is still waiting. Omitted, the
+       * turn can still end on a disconnect or a budget stop, but nobody can
+       * stop it by name.
+       */
+      turnId: z.string().uuid().optional(),
     })
     .strict(),
   output: z
@@ -194,6 +207,12 @@ export const assistantAsk = registerCapability({
        * never shown, while the others expire unseen.
        */
       parkedCards: z.array(assistantParkedCardSchema),
+      /**
+       * True when the person who asked stopped the turn with
+       * `cancel_assistant_turn`. `reply` then holds what the engine wrote
+       * before the stop, possibly nothing, and the run is sealed `cancelled`.
+       */
+      stopped: z.boolean().default(false),
     })
     .strict(),
 });

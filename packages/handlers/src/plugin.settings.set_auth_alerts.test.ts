@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// The handler's role gate (#4194) runs for real against a role fixture. The
+// default caller is an org Owner; a case that needs another sets roleGate.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
+
 const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
 }));
@@ -13,6 +19,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { handler } from "./plugin.settings.set_auth_alerts";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 
 const ctx = {
   orgId: "org-1",
@@ -68,5 +75,20 @@ describe("plugin.settings.set_auth_alerts handler", () => {
     await expect(handler({ sendEmail: false, roles: [] }, ctx)).rejects.toThrow(
       "constraint violation",
     );
+  });
+});
+
+// Witness for the role gate (#4194). The kernel's IAM check allows every
+// capability for a non-enterprise org, so without the handler's
+// assertContractRole call this Member would get through and the test fails.
+describe("set_auth_alerts role gate", () => {
+  beforeEach(() => resetRoleGate());
+
+  it("refuses a workspace Member as forbidden and reads no tenant data", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      handler({ sendEmail: false, roles: ["Owner"] }, ctx as never),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
 });

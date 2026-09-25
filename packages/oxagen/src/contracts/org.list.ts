@@ -58,16 +58,24 @@ export const orgList = registerCapability({
   // resolver correctly falls through to the contract defaultEffect when no
   // matching role-grant row exists. (OXA fix — CLI workspace picker 403.)
   defaultEffect: "allow",
+  // Every role a person can hold. The org side names the four IAM org roles;
+  // a plain member holds no org role, so the workspace side carries them.
+  // "Member" and "Viewer" are not org roles (`SystemOrgRole`), so granting
+  // them on the org side granted nobody, and stella's belt, which compares
+  // these grants to the caller's IAM roles, dropped the tool for a workspace
+  // Member (#4194).
   defaultRoles: {
     org: {
       Owner: "allow",
       Admin: "allow",
-      Member: "allow",
       Billing: "allow",
       Compliance: "allow",
+    },
+    workspace: {
+      Owner: "allow",
+      Member: "allow",
       Viewer: "allow",
     },
-    workspace: {},
   },
   input: z.object({}),
   output: z.object({

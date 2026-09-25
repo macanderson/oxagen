@@ -122,7 +122,7 @@ function detailRecord(
     id: mirrored?.id ?? null,
     lineageId: file.lineageId,
     title: mirrored?.title ?? file.lineageId,
-    label: mirrored?.label ?? contextRecordLabel(file.lineageId),
+    label: file.label ?? mirrored?.label ?? contextRecordLabel(file.lineageId),
     kind: file.kind,
     force: file.force,
     constraintEffect: mirrored?.constraintEffect ?? null,

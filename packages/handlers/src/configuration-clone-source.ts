@@ -13,6 +13,10 @@ import {
 } from "./skill-config.repository";
 import type { SkillScope } from "./skill-config.store";
 import { recordFilePath } from "./context.steering.file";
+import {
+  contextRecordLabel,
+  fitContextRecordLabel,
+} from "@oxagen/oxagen/context-record-label";
 import { sha256Hex, canonicalJson } from "./registry-digest";
 
 export type ConfigurationSource = {
@@ -83,7 +87,7 @@ export async function readConfigurationSource(
       tx
         .select({
           slug: schema.contextRecords.slug,
-          title: schema.contextRecords.title,
+          label: schema.contextRecords.label,
           constraintEffect: schema.contextRecords.constraintEffect,
         })
         .from(schema.contextRecords)
@@ -101,7 +105,11 @@ export async function readConfigurationSource(
     );
     if (record) {
       slug = record.slug;
-      name = record.title;
+      // A record's name is its label (ADR-178). A row written before the
+      // label existed gets the one its slug reads as.
+      name =
+        fitContextRecordLabel(record.label ?? "") ||
+        contextRecordLabel(record.slug);
       if (
         record.constraintEffect === "require" ||
         record.constraintEffect === "forbid"
@@ -240,12 +248,10 @@ export async function readTakenConfigurationNames(
         names.add(row.name);
       }
     }
+    // A record's label may repeat (ADR-178), so only its slug is taken.
     if (kind === "record") {
       const records = await tx
-        .select({
-          slug: schema.contextRecords.slug,
-          title: schema.contextRecords.title,
-        })
+        .select({ slug: schema.contextRecords.slug })
         .from(schema.contextRecords)
         .where(
           and(
@@ -253,10 +259,7 @@ export async function readTakenConfigurationNames(
             eq(schema.contextRecords.workspaceId, scope.workspaceId),
           ),
         );
-      for (const row of records) {
-        slugs.add(row.slug);
-        names.add(row.title);
-      }
+      for (const row of records) slugs.add(row.slug);
       const proposals = await tx
         .select({ lineageId: schema.contextProposals.lineageId })
         .from(schema.contextProposals)
@@ -314,10 +317,7 @@ export async function configurationNameTaken(
           and(
             eq(schema.contextRecords.orgId, scope.orgId),
             eq(schema.contextRecords.workspaceId, scope.workspaceId),
-            or(
-              eq(schema.contextRecords.slug, slug),
-              eq(schema.contextRecords.title, name),
-            ),
+            eq(schema.contextRecords.slug, slug),
           ),
         )
         .limit(1);

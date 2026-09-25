@@ -193,6 +193,34 @@ describe("get_conversation", () => {
     expect(messages[3]?.publicId).toBe("msg_a4");
   });
 
+  it("marks a reply the person stopped, and no other message", async () => {
+    const stopped = {
+      id: "m5",
+      publicId: "msg_a5",
+      parentMessageId: null,
+      role: "assistant",
+      content: "Two runs are",
+      metadata: { status: "stopped", surface: "chat", runId: "arun_0003" },
+      createdAt: at(4),
+    };
+    const { out } = run(
+      { conversationId: "cnv_01k9x2" },
+      {
+        conversations: [CONVERSATION_ROW],
+        messages: [...MESSAGE_ROWS, stopped],
+      },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    expect(messages.map((m) => m.stopped)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      true,
+    ]);
+    expect(messages[4]?.content).toBe("Two runs are");
+  });
+
   // The ownership rule the other conversation handlers apply: this org and
   // workspace, the person asking, not deleted.
   it("reads only the caller's own conversation, and never a deleted one", async () => {

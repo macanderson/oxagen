@@ -165,6 +165,8 @@ function toMessage(row: MessageRow): ConversationMessage | null {
     createdAt: row.createdAt.toISOString(),
     runId: typeof metadata.runId === "string" ? metadata.runId : null,
     parkedCards: parkedCardsOf(metadata.parkedCards),
+    // `appendAssistantMessage` saves a reply the person stopped as "stopped" (#4164).
+    stopped: metadata.status === "stopped",
   };
 }
 

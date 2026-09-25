@@ -30,18 +30,23 @@ export type ConfigurationCloneDraft = z.infer<
   typeof configurationCloneDraftSchema
 >;
 
-/** Fit the suffix inside the existing identifier limit without dropping the suffix. */
+/**
+ * Fit the suffix inside the existing identifier limit without dropping the
+ * suffix. `nameMaximum` caps the name the same way: a record's name is its
+ * label, which is at most 36 characters (ADR-178).
+ */
 export function configurationCloneName(
   slug: string,
   name: string,
   ordinal: number,
   maximum: number,
+  nameMaximum = 200,
 ) {
   const suffix = ordinal === 0 ? "-cloned" : `-cloned-${ordinal}`;
   const stem = slug.slice(0, maximum - suffix.length).replace(/[.-]+$/, "");
   if (!stem) throw new Error("The clone suffix leaves no identifier stem");
   return {
     slug: `${stem}${suffix}`,
-    name: `${name.slice(0, 200 - suffix.length)}${suffix}`,
+    name: `${name.slice(0, nameMaximum - suffix.length).trimEnd()}${suffix}`,
   };
 }

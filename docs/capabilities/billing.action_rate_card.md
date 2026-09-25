@@ -2,7 +2,7 @@
 
 **Domain:** billing
 **Mode:** sync
-**Scope:** org + workspace (Owner, Admin, Billing, Member)
+**Scope:** org + workspace (org Owner, Admin, or Billing, or workspace Owner, Member, or Viewer)
 **Surfaces:** api, mcp, agent
 **Risk level:** low
 **Capability name:** `get_rate_card`
@@ -58,7 +58,7 @@ None (`{}`). Reads the caller's active org scope only to attach `yourTier` /
 
 ## Roles
 
-Org: Owner, Admin, Billing, Member. Workspace: none.
+Org: Owner, Admin, Billing. Workspace: Owner, Member, Viewer.
 
 ## Side effects
 

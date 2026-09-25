@@ -31,6 +31,7 @@ import { buttonDanger, buttonGhost } from "./buttons";
 import { gapRef } from "./gaps";
 import { NotBackedValue } from "./not-backed";
 import { NotCarried, StateDot } from "./parts";
+import { ProviderIcon } from "@/ui/provider-icon";
 import { GateDot, HazardCell } from "./registry-cells";
 import {
   ProviderAuthorization,
@@ -507,7 +508,10 @@ export function ProviderDialog({
   );
 }
 
-/** A button that opens one provider's drill-down: the Provider cell of a Tools row. */
+/**
+ * A button that opens one provider's drill-down: the Provider cell of a Tools
+ * row, with the provider's icon before its name.
+ */
 export function ProviderButton({
   at,
   view,
@@ -532,6 +536,11 @@ export function ProviderButton({
           setOpen(true);
         }}
       >
+        <ProviderIcon
+          name={view.server.name}
+          iconUrl={view.server.iconUrl}
+          size={20}
+        />
         {view.server.name}
       </button>
       <ProviderDialog

@@ -6,6 +6,7 @@ import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 const SuggestionSchema = z.object({
@@ -27,6 +28,9 @@ const SuggestionSchema = z.object({
 export const connectionMappingsSuggestHandler: CapabilityHandler<
   typeof connectionMappingsSuggest
 > = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(connectionMappingsSuggest, ctx);
   // Verify connection ownership (scoped to org + workspace)
   const [conn] = await withTenantDb((tx) =>
     tx

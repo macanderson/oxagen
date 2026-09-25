@@ -69,10 +69,11 @@ describe("parseToolsTab", () => {
 });
 
 describe("parseToolsView", () => {
-  it("defaults to labels, with no category and no cursor", () => {
+  it("defaults to labels, with no category, no provider, and no cursor", () => {
     expect(parseToolsView("tools", {})).toEqual({
       tab: "tools",
       category: null,
+      provider: null,
       names: "labels",
       cursor: null,
     });
@@ -87,6 +88,18 @@ describe("parseToolsView", () => {
     ).toBeNull();
     expect(
       parseToolsView("switches", { category: "moves_money" }).category,
+    ).toBeNull();
+  });
+
+  it("reads a provider only on the Tools tab, and only as a server's public id", () => {
+    expect(parseToolsView("tools", { provider: "mcs_01k5s1" }).provider).toBe(
+      "mcs_01k5s1",
+    );
+    for (const provider of ["tlv_01k5s1", "mcs_", "mcs_01k5s1/x", "Stripe"]) {
+      expect(parseToolsView("tools", { provider }).provider).toBeNull();
+    }
+    expect(
+      parseToolsView("switches", { provider: "mcs_01k5s1" }).provider,
     ).toBeNull();
   });
 
@@ -137,6 +150,31 @@ describe("toolsLink", () => {
     );
   });
 
+  it("puts a provider in the query beside the category, before the toggle and cursor", () => {
+    expect(
+      toolsLink(at, {
+        tab: "tools",
+        category: "moves_money",
+        provider: "mcs_01k5s1",
+        names: "api",
+        cursor: "c2",
+      }),
+    ).toBe(
+      "/acme/core-platform/tools?category=moves_money&provider=mcs_01k5s1&names=api&cursor=c2",
+    );
+    expect(toolsLink(at, { tab: "tools", provider: null })).toBe(
+      "/acme/core-platform/tools",
+    );
+  });
+
+  it("round-trips a provider through parseToolsView", () => {
+    const link = toolsLink(at, { tab: "tools", provider: "mcs_01k5s1" });
+    const url = new URL(link, "https://mission-control.invalid");
+    expect(
+      parseToolsView("tools", Object.fromEntries(url.searchParams)).provider,
+    ).toBe("mcs_01k5s1");
+  });
+
   it("round-trips through parseToolsTab and parseToolsView", () => {
     const link = toolsLink(at, { tab: "providers", cursor: "c9" });
     const url = new URL(link, "https://mission-control.invalid");
@@ -148,6 +186,7 @@ describe("toolsLink", () => {
     ).toEqual({
       tab: "providers",
       category: null,
+      provider: null,
       names: "labels",
       cursor: "c9",
     });

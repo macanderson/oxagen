@@ -3,6 +3,7 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.003-dod-verified-close"
+label = "Close issues on a verified DoD"
 record_id = "rec_scr_003_dod_verified_close_2110ac63134f"
 record_hash = "sha256:74a2b14ad2a8e730ebb52cc73d0990cd4d2a4ae940df092dc3b186e538f73ca2"
 kind = "rule"

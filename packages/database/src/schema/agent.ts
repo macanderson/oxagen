@@ -1455,7 +1455,7 @@ export const contextRecords = agentSchema.table(
     ),
     labelCheck: check(
       "context_records_label_check",
-      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 200)`,
+      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 36)`,
     ),
     statusCheck: check(
       "context_records_status_check",
@@ -1682,7 +1682,7 @@ export const contextProposals = agentSchema.table(
       ),
     labelCheck: check(
       "context_proposals_label_check",
-      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 200)`,
+      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 36)`,
     ),
     kindCheck: check(
       "context_proposals_kind_check",

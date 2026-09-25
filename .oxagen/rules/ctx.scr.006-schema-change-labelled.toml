@@ -3,6 +3,7 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.006-schema-change-labelled"
+label = "Label every schema change"
 record_id = "rec_scr_006_schema_change_labelled_4a1bc2e09ec7"
 record_hash = "sha256:88a9e6cba17f3b1cae177d98483b77d6f880f46524b26a764df3ec678e754e10"
 kind = "procedure"
