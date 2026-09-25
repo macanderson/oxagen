@@ -65,7 +65,7 @@ a dictionary oracle, and the digest would cost a table rebuild.
 
 The privacy processor gains an erasure path. For a user-scope request, the
 `erase-clickhouse-rows` step reads the subject's address from `auth.users`
-and calls `eraseClaudeSessionRows` (`packages/telemetry/src/claude-sessions.ts`),
+and calls `eraseClaudeSessionRows` (`packages/telemetry/src/claude-telemetry.ts`),
 which runs:
 
 ```sql

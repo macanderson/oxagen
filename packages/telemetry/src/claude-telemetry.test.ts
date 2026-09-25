@@ -1,4 +1,4 @@
-// claude-sessions.test.ts
+// claude-telemetry.test.ts
 //
 // ADR-183 keeps `claude_sessions.user_email` for the table's two-year TTL and
 // erases one person's rows on request. These cases tie that decision to the
@@ -21,7 +21,7 @@ import {
   CLAUDE_SESSIONS_TABLE,
   ERASE_CLAUDE_SESSIONS_QUERY,
   eraseClaudeSessionRows,
-} from "./claude-sessions";
+} from "./claude-telemetry";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migration0007 = readFileSync(

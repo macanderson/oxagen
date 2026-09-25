@@ -4,7 +4,7 @@ import { clickhouse } from "./clickhouse";
 import {
   CLAUDE_SESSIONS_TABLE,
   eraseClaudeSessionRows,
-} from "./claude-sessions";
+} from "./claude-telemetry";
 
 // CI migrates ClickHouse before the unit job, so `claude_sessions` exists.
 // Missing configuration skips local collection. This is the witness that the
