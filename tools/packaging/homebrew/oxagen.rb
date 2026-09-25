@@ -50,7 +50,9 @@ cask "oxagen" do
   zap trash: "~/.config/oxagen"
 
   caveats <<~EOS
-    Until releases are Developer ID signed and notarized, Gatekeeper shows
-    "cannot verify" on first open: right-click Oxagen.app and choose Open.
+    Until releases are Developer ID signed and notarized, macOS refuses the
+    first open of Oxagen.app. Choose Done, then open System Settings >
+    Privacy & Security and click Open Anyway. Or clear the quarantine flag:
+      xattr -dr com.apple.quarantine /Applications/Oxagen.app
   EOS
 end
