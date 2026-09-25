@@ -13,6 +13,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Hono as HonoType } from "hono";
+import type { CapabilityErrorCode } from "@oxagen/oxagen/kernel";
 
 const mocks = vi.hoisted(() => ({
   capabilityContext: vi.fn(),
@@ -26,6 +27,12 @@ vi.mock("../../lib/context", () => ({
 vi.mock("../../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: mocks.logError, info: vi.fn() },
 }));
+// The middleware reports a 500 to the error stream; the probe below throws
+// server faults at it on purpose, so nothing is sent anywhere.
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
+  return { ...real, captureError: vi.fn() };
+});
 vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/oxagen/kernel")>();
   return { ...real, invoke: mocks.invoke };
@@ -35,7 +42,9 @@ const { Hono } = await import("hono");
 const { HandlerError } = await import("@oxagen/oxagen");
 const { CapabilityError } = await import("@oxagen/oxagen/kernel");
 const { errorMiddleware } = await import("../../middleware/error");
-const { runStreamRoute } = await import("./run.stream");
+const { CLIENT_FACING_CAPABILITY_CODES, runStreamRoute } = await import(
+  "./run.stream"
+);
 
 const app = new Hono();
 app.onError(errorMiddleware as never);
@@ -216,6 +225,40 @@ describe("GET /runs/:run_id/stream", () => {
     expect(text).toContain('"cursor":"cur_1"');
   });
 
+  it("sends a handler's forbidden refusal as forbidden, with its reason beside it (negative)", async () => {
+    // Access changed mid-stream. The app keys "access changed" on the code,
+    // so the reason alone would read as an ordinary refusal.
+    mocks.invoke
+      .mockResolvedValueOnce(page(["1"], "cur_1"))
+      .mockRejectedValueOnce(
+        new HandlerError({
+          code: "forbidden",
+          reason: "session_required",
+          message: "Sign in again to read this run",
+        }),
+      );
+    const { status, text } = await open();
+    expect(status).toBe(200);
+    expect(events(text)).toEqual(["run", "error"]);
+    expect(text).toContain('"code":"forbidden"');
+    expect(text).toContain('"reason":"session_required"');
+    expect(text).toContain("Sign in again to read this run");
+    expect(text).toContain('"cursor":"cur_1"');
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it("sends any other handler refusal under its reason (negative)", async () => {
+    mocks.invoke
+      .mockResolvedValueOnce(page(["1"], "cur_1"))
+      .mockRejectedValueOnce(
+        new HandlerError({ code: "not_found", reason: "run_not_found" }),
+      );
+    const { text } = await open();
+    expect(events(text)).toEqual(["run", "error"]);
+    expect(text).toContain('"code":"run_not_found"');
+    expect(text).toContain('"reason":"run_not_found"');
+  });
+
   it("keeps an active stream open past its initial idle deadline", async () => {
     const clock = vi.spyOn(Date, "now");
     let now = 0;
@@ -276,6 +319,65 @@ describe("GET /runs/:run_id/stream", () => {
       { err: error, runId: RUN_ID, requestId: CTX.requestId },
       "run stream failed",
     );
+  });
+
+  it("logs a server-fault kernel code as stream_unavailable and keeps its diagnostics out of the event (negative, #3652)", async () => {
+    // A later read whose output failed validation: the kernel's message
+    // carries the validation diagnostics, and the middleware calls it a 500.
+    const error = new CapabilityError(
+      "get_run",
+      "invalid_output",
+      "output failed validation: frames.0.digest: Invalid string",
+    );
+    mocks.invoke
+      .mockResolvedValueOnce(page(["1"], null))
+      .mockRejectedValueOnce(error);
+    const { status, text } = await open();
+    expect(status).toBe(200);
+    expect(events(text)).toEqual(["run", "error"]);
+    expect(text).toContain('"code":"stream_unavailable"');
+    expect(text).toContain('"message":"Run stream unavailable"');
+    expect(text).toContain('"cursor":"cur_1"');
+    expect(text).not.toContain("invalid_output");
+    expect(text).not.toContain("frames.0.digest");
+    expect(mocks.logError).toHaveBeenCalledWith(
+      { err: error, runId: RUN_ID, requestId: CTX.requestId },
+      "run stream failed",
+    );
+  });
+
+  it("forwards exactly the kernel codes the error middleware answers with a 4xx", async () => {
+    // The route's list and the middleware's branches are two readings of one
+    // decision, so each code is thrown at the middleware and its status read.
+    const probe = new Hono();
+    probe.onError(errorMiddleware as never);
+    probe.get("/:code", (c) => {
+      throw new CapabilityError(
+        "get_run",
+        c.req.param("code") as CapabilityErrorCode,
+        "probe",
+      );
+    });
+    const statusOf = async (code: string) =>
+      (await probe.request(`/${code}`)).status;
+    for (const code of CLIENT_FACING_CAPABILITY_CODES)
+      expect(await statusOf(code), code).toBeLessThan(500);
+    for (const code of [
+      "invalid_output",
+      "decision_rules_unavailable",
+      "external_rules_unavailable",
+      "external_settlement_unsupported",
+      "capability_not_installed",
+      "lifecycle_not_allowed",
+      "lifecycle_event_denied",
+      "lifecycle_context_invalid",
+      "lifecycle_recursion_denied",
+    ]) {
+      expect(CLIENT_FACING_CAPABILITY_CODES.has(code as never), code).toBe(
+        false,
+      );
+      expect(await statusOf(code), code).toBe(500);
+    }
   });
 
   it("refuses a run id the contract does not accept (negative)", async () => {

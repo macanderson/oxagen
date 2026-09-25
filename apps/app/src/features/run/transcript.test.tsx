@@ -127,6 +127,13 @@ afterEach(() => {
 const rows = () => screen.queryAllByTestId("tx-row");
 const kinds = () => rows().map((row) => row.getAttribute("data-kind"));
 const readout = () => screen.getByTestId("transport-readout");
+/** The tool name a row prints for itself, not one of a nested subagent row. */
+function ownToolName(row: HTMLElement): string | null {
+  const name = Array.from(
+    row.querySelectorAll('[data-testid="tx-tool-name"]'),
+  ).find((found) => found.closest('[data-testid="tx-row"]') === row);
+  return name?.textContent ?? null;
+}
 /** The tool row whose name reads `name`. */
 function toolRow(name: string): HTMLElement {
   const found = rows().find(
@@ -1936,5 +1943,115 @@ describe("the filter chips, as #4026 drew them", () => {
     });
     expect(screen.queryByTestId("transcript-chips")).toBeNull();
     expect(screen.queryByTestId("transcript")).toBeNull();
+  });
+});
+
+describe("a read the page makes again", () => {
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000d4";
+  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_A" };
+  /** A run whose subagent, spawned by the Task call at 2, calls Grep. */
+  const specs = (late: boolean): FrameSpec[] => [
+    {
+      seq: 1,
+      t: 0,
+      type: "turn_start",
+      kind: "frame",
+      turn: 1,
+      request: "Find the flaky test.",
+    },
+    {
+      seq: 2,
+      t: 1,
+      type: "tool_call",
+      kind: "tool_call",
+      label: "Task ok",
+      turn: 1,
+      callKey: "toolu_A",
+      response: '{"input":{"description":"Search the tests"},"output":"done"}',
+    },
+    {
+      seq: 0,
+      t: 2,
+      type: "tool_call",
+      kind: "tool_call",
+      label: "Grep ok",
+      turn: 1,
+      callKey: "toolu_X1",
+      subagent: sub,
+      response: '{"input":{"pattern":"flaky"},"output":"a.test.ts"}',
+    },
+    // Recorded late: the tail read's cursor had already passed it.
+    ...(late
+      ? [
+          {
+            seq: 1,
+            t: 5,
+            type: "tool_call",
+            kind: "tool_call" as const,
+            label: "Read ok",
+            turn: 1,
+            callKey: "toolu_X2",
+            subagent: sub,
+            response: '{"input":{"file_path":"a.test.ts"},"output":"it()"}',
+          },
+        ]
+      : []),
+    {
+      seq: 3,
+      t: 3,
+      type: "tool_call",
+      kind: "tool_call",
+      label: "Bash ok",
+      turn: 1,
+      callKey: "toolu_B",
+      response: '{"input":{"command":"git diff"},"output":""}',
+    },
+  ];
+  const view = (read: Read<RunTranscript>, status: RunRow["status"]) => (
+    <IntlProvider>
+      <TranscriptSection
+        read={read}
+        run={{
+          ...RUN,
+          status,
+          sealedAt: status === "live" ? null : RUN.sealedAt,
+        }}
+        kinds={[]}
+        {...PLACE}
+      />
+    </IntlProvider>
+  );
+  const names = () =>
+    rows().flatMap((row) => {
+      const name = ownToolName(row);
+      return name === null ? [] : [name];
+    });
+
+  it("takes the page's new read, so a subagent frame recorded behind the cursor shows under its call once the run seals (#4083)", () => {
+    const { rerender } = render(
+      view(
+        readOk(transcriptOf(specs(false), { cursor: "c1", complete: true })),
+        "live",
+      ),
+    );
+    expect(names()).toEqual(["Task", "Grep", "Bash"]);
+    // The seal refreshes the page, which reads the whole run again.
+    rerender(view(readOk(transcriptOf(specs(true))), "sealed"));
+    expect(names()).toEqual(["Task", "Grep", "Read", "Bash"]);
+    const nested = screen.getByTestId("transcript-subagent-steps");
+    expect(
+      within(nested)
+        .getAllByTestId("tx-tool-name")
+        .map((name) => name.textContent),
+    ).toEqual(["Grep", "Read"]);
+    // The new read carried no cursor, so nothing more is offered.
+    expect(screen.queryByTestId("transcript-more")).toBeNull();
+  });
+
+  it("keeps the rows it holds when the page renders again with the same read (negative)", () => {
+    const read = readOk(transcriptOf(specs(false)));
+    const { rerender } = render(view(read, "sealed"));
+    rerender(view(read, "sealed"));
+    expect(names()).toEqual(["Task", "Grep", "Bash"]);
   });
 });
