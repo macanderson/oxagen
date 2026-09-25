@@ -5,7 +5,6 @@
 import { describe, expect, it } from "vitest";
 import type { TranscriptEntry } from "@/data/contracts/run";
 import {
-  bodyOf,
   firstPrompt,
   firstRequest,
   manifestEntry,
@@ -45,27 +44,6 @@ describe("firstPrompt", () => {
     ]);
     expect(prompt).toEqual({ seq: "2", text: null });
     expect(firstPrompt([])).toBeNull();
-  });
-});
-
-describe("bodyOf", () => {
-  it("reads the half an entry carries: what came back, else what went out", () => {
-    const out = transcriptBody({ seq: "3", text: "Cut the release." });
-    expect(bodyOf(frame({ request: out, response: null }))).toBe(out);
-    const back = transcriptBody({ seq: "4", text: "Cutting it." });
-    expect(bodyOf(frame({ request: null, response: back }))).toBe(back);
-    expect(bodyOf(frame({ request: null, response: null }))).toBeNull();
-  });
-
-  it("reads no body from an entry that carries both halves, since neither alone is the entry's (negative)", () => {
-    expect(
-      bodyOf(
-        frame({
-          request: transcriptBody({ seq: "3", text: "asked" }),
-          response: transcriptBody({ seq: "4", text: "answered" }),
-        }),
-      ),
-    ).toBeNull();
   });
 
   it("reads a prompt recorded as the request half of its turn_start", () => {

@@ -39,10 +39,11 @@ import {
  * its result in `response`; a positional `response ?? request` would silently
  * render a tool's input where its result belongs, and nothing about the page
  * would look wrong. A caller that needs both halves reads them by name, which
- * is what the tool reading does. Module-private: the feed reads a prompt,
- * a reply and a recall frame through it, which are single-frame entries.
+ * is what the tool reading does. The feed reads a prompt, a reply and a
+ * recall frame through it, and the Context tab a prompt and the manifest, all
+ * of them single-frame entries.
  */
-function soleBody(entry: TranscriptEntry): TranscriptBody | null {
+export function soleBody(entry: TranscriptEntry): TranscriptBody | null {
   if (entry.request !== null && entry.response !== null) return null;
   return entry.response ?? entry.request;
 }
