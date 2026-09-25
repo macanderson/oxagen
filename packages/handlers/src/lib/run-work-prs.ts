@@ -250,6 +250,7 @@ export async function readWorkPullRequests(
           state: pr.merged ? "merged" : pr.state,
           headSha: pr.headSha,
           headRef: pr.headRef,
+          baseRef: pr.baseRef,
           association: receipt
             ? "recorded"
             : checkout.headSha === pr.headSha

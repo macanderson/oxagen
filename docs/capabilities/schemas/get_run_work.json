@@ -292,6 +292,9 @@
             "headRef": {
               "type": "string"
             },
+            "baseRef": {
+              "type": "string"
+            },
             "association": {
               "type": "string",
               "enum": [
@@ -631,6 +634,7 @@
             "state",
             "headSha",
             "headRef",
+            "baseRef",
             "association",
             "closingIssues",
             "checkoutIds",

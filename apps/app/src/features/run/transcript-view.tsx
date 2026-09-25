@@ -66,6 +66,7 @@ import {
   type Frames,
   type FrameRef,
   mergeEntries,
+  rebaseEntries,
 } from "./transcript-model";
 import { useRunStream } from "./use-run-stream";
 
@@ -1464,6 +1465,31 @@ export function TranscriptView({
   const [complete, setComplete] = useState(transcript.complete);
   const [reading, setReading] = useState(false);
   const [pageFailure, setPageFailure] = useState<PageFailure | null>(null);
+
+  // The page read the run again: the seal refreshes it, and so do the run
+  // controls. That read is the record as it stands, in the order the server
+  // placed it, so it replaces what this view had paged in. A subagent frame
+  // the tail read could not reach, because it landed before the cursor,
+  // arrives this way once the run seals (#4083). Entries this view read past
+  // the page's own bound stay, and so does the cursor that reached them.
+  const [readFrom, setReadFrom] = useState(first);
+  if (readFrom !== first) {
+    setReadFrom(first);
+    const rebased = rebaseEntries(first, entries);
+    setEntries(rebased);
+    if (rebased.length === first.length) {
+      setCursor(transcript.cursor);
+      setComplete(transcript.complete);
+    }
+  }
+  // The refs follow the state a rebase set. A page read sets both itself,
+  // before the render, so an append in flight never merges onto a stale list.
+  useEffect(() => {
+    heldRef.current = entries;
+  }, [entries]);
+  useEffect(() => {
+    cursorRef.current = cursor;
+  }, [cursor]);
 
   const rows = useMemo(() => buildFeed(entries), [entries]);
 

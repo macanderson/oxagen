@@ -4,7 +4,7 @@
 // (tacho `toolCallContent`), `tool_requested` holds the bare input, and a
 // producer that records a content block holds `{tool_use: {name, input}}`.
 // The transcript row for a call (mockup `txRow`, kind `tool`) leads with the
-// tool's short name and what it acted on, and under it shows the output it
+// tool's short name and what it acted on, and once opened shows the output it
 // read and, for an edit or a new file, the change as a diff. This module reads
 // those out of the body so the row never prints the JSON at the reader.
 //
@@ -481,6 +481,50 @@ function genericReading(input: Json | null): Reading {
   };
 }
 
+/**
+ * The most characters an argument line built from the record carries. The row
+ * truncates to its own width; this only keeps a huge argument out of the page.
+ */
+const ARGS_LINE_MAX = 240;
+
+/** A value on one line: a scalar as itself, anything else as compact JSON. */
+function oneLine(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const text = scalar(value);
+  if (text !== null) {
+    const { head } = firstLine(text);
+    return head.trim() === "" ? null : head;
+  }
+  try {
+    const json = JSON.stringify(value);
+    return typeof json === "string" && json !== "{}" && json !== "[]"
+      ? json
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Every argument the call kept, compacted to one line as `key value`: the
+ * fallback for a reading that found no headline of its own, so the row never
+ * shows a blank argument slot over arguments the record holds (#4116). Null
+ * only when the input carried nothing.
+ *
+ * @internal Exported for its unit test; `toolDetailOf` is its caller.
+ */
+export function compactArgs(input: Json | null): string | null {
+  const parts = Object.entries(input ?? {}).flatMap(([key, value]) => {
+    const text = oneLine(value);
+    return text === null ? [] : [`${key} ${text}`];
+  });
+  if (parts.length === 0) return null;
+  const line = parts.join(" · ");
+  return line.length > ARGS_LINE_MAX
+    ? `${line.slice(0, ARGS_LINE_MAX - 1)}…`
+    : line;
+}
+
 function readingOf(group: ToolGroup, input: Json | null): Reading {
   switch (group) {
     case "shell":
@@ -536,10 +580,15 @@ export function toolDetailOf(
   if (tool === null) return null;
   const group = groupOf(tool);
   const { raw, ...reading } = readingOf(group, input);
+  // A reading that found nothing it knows (a tool whose every argument is an
+  // object, a read with no path) still has the arguments the record kept.
+  const headline = reading.headline ?? compactArgs(input);
   return {
     name: shortName(tool),
     group,
     ...reading,
+    headline,
+    multiline: reading.headline === null ? false : reading.multiline,
     raw: raw ?? pretty(input),
     output: outputText(output),
   };
