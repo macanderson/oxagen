@@ -5,21 +5,25 @@
  * `billing.spend_counters` holds one row per (org, workspace, UTC day) in
  * micro-USD. Every recorder that prices a model call adds to it in the same
  * breath as it writes the frame: the `@oxagen/ai` gateway after `token_usage`,
- * the tacho ingest handler after a batch that carried cost. The gate
- * (./spend-budget-gate.ts) and the budget panel sum these rows over the
- * ceiling's window in Postgres, so a ClickHouse stall neither zeroes a
- * ceiling nor denies a call.
+ * and the tacho ingest handler inside the transaction that records a batch
+ * that carried cost (#3825). The gate (./spend-budget-gate.ts) and the budget
+ * panel sum these rows over the ceiling's window in Postgres, so a ClickHouse
+ * stall neither zeroes a ceiling nor denies a call.
  *
  * The counter is day-granular. A rolling window that starts mid-day counts
  * the whole of its first day, a bounded over-count of at most one day's
  * spend at the window's tail; a monthly window starts on a day boundary and
  * is exact.
  *
- * Both functions run on the system connection with explicit org and
- * workspace predicates: the recorders run outside a tenant scope (the AI SDK
- * fires `onFinish` after the request's scope is gone), and an org-level
- * ceiling sums every workspace's rows, which a workspace-scoped session
- * could not see.
+ * Both functions default to the system connection with explicit org and
+ * workspace predicates: the gateway recorder runs outside a tenant scope (the
+ * AI SDK fires `onFinish` after the request's scope is gone), and an
+ * org-level ceiling sums every workspace's rows, which a workspace-scoped
+ * session could not see. `recordSpend` also takes the caller's transaction.
+ * Tacho ingest passes its tenant transaction, so the counter and the batch
+ * commit or roll back together. The `tenant_isolation` policy on
+ * `billing.spend_counters` admits that write because the row names the
+ * transaction's own org and workspace.
  */
 import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
