@@ -22,6 +22,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
+import { streamAssistantTurn } from "../runtime/assistant-stream";
 import type { AssistantTurnHooks } from "../runtime/assistant-turn";
 import {
   ASSISTANT_TURN_STOP_REASON,
@@ -103,6 +104,30 @@ describe("ask_assistant with a turn id", () => {
     expect(seen?.abortSignal?.aborted).toBe(true);
     expect(out.stopped).toBe(true);
     expect(out.reply).toBe("The run failed at");
+  });
+
+  // POST /chat/stream hands the turn its hooks and no abort signal: a dropped
+  // connection is not a stop (ADR-092, ADR-176). The stop must still reach
+  // the turn there, through the registry's own controller.
+  it("stops a streamed turn that carries no request signal, and keeps the stream's hooks", async () => {
+    const onPart = vi.fn();
+    let seen: AssistantTurnHooks | undefined;
+    mocks.run.mockImplementation(async (hooks?: AssistantTurnHooks) => {
+      seen = hooks;
+      expect(hooks?.abortSignal?.aborted).toBe(false);
+      expect(stopAssistantTurn(KEY)).toEqual({ found: true });
+      return { ...RESULT, stopped: hooks?.stopSignal?.aborted === true };
+    });
+
+    const out = await streamAssistantTurn(
+      { overrides: {}, hooks: { onPart }, onPrepared: () => undefined },
+      () => assistantAskHandler({ ...INPUT, turnId: TURN_ID }, CTX),
+    );
+
+    expect(seen?.onPart).toBe(onPart);
+    expect(seen?.abortSignal).toBe(seen?.stopSignal);
+    expect(seen?.abortSignal?.reason).toBe(ASSISTANT_TURN_STOP_REASON);
+    expect(out.stopped).toBe(true);
   });
 
   it("forgets the turn once it returns: a later stop finds nothing", async () => {

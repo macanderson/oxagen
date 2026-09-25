@@ -1,0 +1,79 @@
+{
+  "name": "get_assistant_reply",
+  "domain": "assistant",
+  "description": "Read the reply an in-app agent turn left on the record, by the run it was recorded as: the persisted reply and its conversation, or the run's status while no reply is recorded.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "runStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "reply": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "conversationId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "conversationId",
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "runId",
+      "runStatus",
+      "reply"
+    ],
+    "additionalProperties": false
+  }
+}

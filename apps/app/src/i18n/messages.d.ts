@@ -7723,6 +7723,18 @@ type Messages = {
         model: string;
         unavailable: string;
       };
+      answering: {
+        tool: string;
+      };
+      dropped: {
+        body: string;
+        noRun: string;
+        load: string;
+        loading: string;
+        running: string;
+        ended: string;
+        unread: string;
+      };
       engine: {
         unreachable: string;
         starting: string;

@@ -26,7 +26,7 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 | `conversationId` | `cnv_` public id, uuid, or null | no | the conversation to continue, by the `cnv_` id every conversation capability takes (`get_conversation` reads it back) or by the internal id `conversationId` below carries; null opens a new conversation. A conversation that is not yours, or is deleted or archived, is `not_found` |
 | `content` | string | yes | 1 to 32 KiB, the cap every chat ingress shares |
 | `pageContext` | object or null | no | `{ route, orgSlug, workspaceSlug, entityId, entityLabel }`: where the person was when they asked, and the record on screen. Null for a caller with no page. See [Page context](#page-context) |
-| `turnId` | uuid | no | a name the caller mints for this turn so it can stop it with [`cancel_assistant_turn`](assistant.turn.cancel.md). Omitted, the turn can still end on a disconnect or a budget stop, but nobody can stop it by name. See [Stopping a turn](#stopping-a-turn) |
+| `turnId` | uuid | no | a name the caller mints for this turn so it can stop it with [`cancel_assistant_turn`](assistant.turn.cancel.md). Omitted, the turn can still end on a budget stop, but nobody can stop it by name. See [Stopping a turn](#stopping-a-turn) |
 | `goal` | object | no | `{ statement, maxRounds }`: `statement` is 1 to 2,000 characters, trimmed; `maxRounds` is 1 to 4, default 3. Omitted runs one ordinary turn. See [Goal-shaped turns](#goal-shaped-turns) |
 
 ### Page context
@@ -73,7 +73,7 @@ A caller that passes `turnId` can stop the turn with [`cancel_assistant_turn`](a
 
 A stopped turn cancels its engine turn, seals its run `cancelled`, and still answers: `reply` is the text written before the stop, saved with message status `stopped`, and `stopped` is true. A tool call that already ran is not undone, and a write that parked stays in `parkedCards`.
 
-A disconnect or a per-turn budget stop also aborts the turn, and seals it `cancelled`, but it refuses with `engine_aborted` and saves no reply. Closing the flyout or leaving the page is neither. The app does not tie the turn to the page, so the turn runs to its end and its reply is on the record when the person comes back (ADR-092, #3292).
+A per-turn budget stop also aborts the turn, and seals it `cancelled`, but it refuses with `engine_aborted` and saves no reply. A dropped connection, closing the flyout and leaving the page are not stops. The turn is not tied to the connection, so it runs to its end and its reply is on the record when the person comes back (ADR-092, ADR-176, #3292). On the SSE route the caller sends `turnId` in the request body, and the turn stops through its own registration, not through the request.
 
 ## Goal-shaped turns
 
@@ -100,7 +100,9 @@ The engine is declared every governed tool plus the two meta-tools. Each complet
 | `forbidden` (reason `kill_switch`) | 403 | an `agent` kill switch is on for the workspace's assistant agent; the turn is refused before anything is written, and the message names the switch and its reason |
 | `engine_unavailable` | 503 | `stella-serve` is not configured or could not be reached; nothing falls back to an in-process loop (ADR-053 §4) |
 | `assistant_run_not_recorded` | 503 | the ledger could not admit the turn, or a receipt could not be written; the assistant does not answer from a path that was not recorded |
-| `engine_aborted` | 409 | the turn was cancelled before it answered by a client disconnect or a per-turn budget stop; nothing is saved as a reply. A stop the person asked for is not an error: see [Stopping a turn](#stopping-a-turn) |
+| `engine_aborted` | 409 | the turn was cancelled before it answered by a per-turn budget stop; nothing is saved as a reply. A stop the person asked for is not an error: see [Stopping a turn](#stopping-a-turn) |
 | `insufficient_credits`, `billing_suspended`, `assistant_spend_cap` | 402 | the platform-funded turn credit gate refused the turn |
 
 On the SSE route a failure after the turn is prepared arrives as an `error` event carrying the code (or the handler refusal's reason), followed by `event: done` with `[DONE]`.
+
+While the turn is quiet, the SSE route writes a `: keep-alive` comment every 15 seconds, so a proxy or load balancer does not close an idle connection. A dropped connection does not stop the turn (ADR-092, ADR-176): the turn runs to completion and persists its reply, and a client that lost the stream reads the finished reply with [`get_assistant_reply`](assistant.reply.get.md) by the run the stream's first event named. Stopping a turn on purpose is [`cancel_assistant_turn`](assistant.turn.cancel.md) naming the `turnId` the request carried (#4164).

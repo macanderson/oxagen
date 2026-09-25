@@ -28,8 +28,17 @@ import { IntlProvider } from "@/test/intl";
 import { engineRead } from "./shell.builders";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
-const askAssistant = vi.fn();
-vi.mock("./assistant-actions", () => ({ askAssistant }));
+// The turn's transport (assistant-stream-client.ts) answers in the shape the
+// Server Action it replaced did, so these cases drive it through one fake
+// that takes the same three arguments. What arrives while a turn streams is
+// assistant-flyout.streaming.test.tsx.
+const askAssistant =
+  vi.fn<(org: string, ws: string, question: unknown) => Promise<unknown>>();
+vi.mock("./assistant-stream-client", () => ({
+  askAssistantStream: (org: string, ws: string, question: unknown) =>
+    askAssistant(org, ws, question),
+}));
+vi.mock("./assistant-actions", () => ({ readAssistantReply: vi.fn() }));
 const readAssistantEngine = vi.fn();
 vi.mock("./engine-actions", () => ({ readAssistantEngine }));
 
@@ -86,6 +95,7 @@ const turn = {
     runId: "arun_01k9",
     reply: "Three runs are live.",
     parkedCards: [],
+    stopped: false,
   },
 };
 

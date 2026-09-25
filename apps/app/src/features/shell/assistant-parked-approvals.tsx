@@ -37,7 +37,7 @@ import {
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { SafeLink, useNavigate } from "@/ui/navigation";
-import type { ParkedCard } from "./assistant-actions";
+import type { ParkedCard } from "./assistant-stream-client";
 import {
   type ParkedApprovalRow,
   type ParkedExecution,

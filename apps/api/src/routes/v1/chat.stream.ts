@@ -28,12 +28,20 @@ const BodySchema = z.object({
   // CHAT_CONTENT_MAX_CHARS in the chat.message.send contract) so every chat
   // surface rejects oversized prompts identically.
   content: z.string().min(1).max(CHAT_CONTENT_MAX_CHARS),
-  conversationId: z.string().uuid().nullable().default(null),
+  // The contract's own field: an internal id or a `cnv_` public id. The
+  // flyout continues a thread it read back on reload by the public id
+  // `get_conversation` returns, so a UUID-only rule here would refuse the
+  // first question after every reload.
+  conversationId: assistantAsk.input.shape.conversationId,
   // Where the person is (the app's flyout); null for a caller with no page.
   pageContext: assistantPageContextSchema.nullable().default(null),
   // A goal-shaped turn: the engine's verifier judges each round against it
   // (ADR-177). Omitted for an ordinary turn, as in ask_assistant's input.
   goal: assistantGoalSchema.optional(),
+  // The id the caller minted for this turn, so it can stop the turn by name
+  // with `cancel_assistant_turn` while the stream is open (#4164). Omitted,
+  // nobody can stop the turn by name.
+  turnId: assistantAsk.input.shape.turnId,
   // Per-turn MCP server allowlist. When non-empty, only those servers' tools
   // are loaded for this turn. Omit or pass [] to load all workspace MCPs.
   activeServerIds: z.array(z.string()).optional().default([]),
@@ -48,13 +56,25 @@ const BodySchema = z.object({
 
 export const chatStreamRoute = new Hono<AppEnv>();
 
+/**
+ * How often an open stream writes an SSE comment while the turn is quiet. A
+ * turn can go a minute without a part: a slow tool call, a long model call.
+ * The app reaches this route through its `/api/v1/*` rewrite, and Next.js
+ * closes a proxied socket that is idle for 30 seconds; a load balancer's idle
+ * timeout does the same. A comment every 15 seconds keeps the connection
+ * open, and every SSE reader skips it.
+ */
+export const CHAT_STREAM_HEARTBEAT_MS = 15_000;
+
 // POST /:org_slug/:workspace_slug/chat/stream
 //
-// The one SSE transport of the in-app agent (apps/app/ARCHITECTURE.md §3.5):
-// the streaming adapter of `ask_assistant`. Body: this route's BodySchema, the
-// contract's input plus the surface's model and budget overrides. Each SSE
-// line: `data: <JSON ApiStreamEvent>\n\n`. Terminal: `event: done\ndata:
-// <JSON ask_assistant output>\n\n`.
+// The one SSE transport of the in-app agent (apps/app/ARCHITECTURE.md §3.5,
+// ADR-176): the streaming adapter of `ask_assistant`, and the transport the
+// app's assistant flyout reads, same-origin through the app's `/api/v1/*`
+// rewrite. Body: this route's BodySchema, the contract's input plus the
+// surface's model and budget overrides. Each SSE line: `data: <JSON
+// ApiStreamEvent>\n\n`, with a `: keep-alive` comment while the turn is quiet.
+// Terminal: `event: done\ndata: <JSON ask_assistant output>\n\n`.
 //
 // The turn is `invoke("ask_assistant")`, exactly as on POST /assistant/ask, so
 // the contract's IAM, audit, rules and billing gates and its handler's role
@@ -63,6 +83,16 @@ export const chatStreamRoute = new Hono<AppEnv>();
 // through the error middleware as the response, with the status
 // /assistant/ask answers; after that the stream is open and a failure is a
 // typed `error` event.
+//
+// A dropped connection does not stop the turn (ADR-092, ADR-176). The turn
+// runs to completion and persists its reply, so a client that lost the
+// stream can read the finished reply with `get_assistant_reply`. A socket
+// closing is not a decision to stop: cancelling mid-turn can leave a governed
+// write half done, and a network blip is not a choice the person made.
+// Stopping a turn on purpose is `cancel_assistant_turn` naming the `turnId`
+// the caller sent here (#4164). The handler registers the turn under that id
+// with its own abort controller, so the stop reaches the engine although the
+// turn carries no signal from this request.
 chatStreamRoute.post("/", async (c) => {
   let rawBody: unknown;
   try {
@@ -144,7 +174,9 @@ chatStreamRoute.post("/", async (c) => {
               totalTokens: usage.totalTokens,
             },
           }),
-        abortSignal: c.req.raw.signal,
+        // No `abortSignal`: the request's signal fires when the client goes
+        // away, and a turn the person walked away from is owned to
+        // completion (ADR-092). Only the writes above stop.
       },
       onPrepared: prepared,
     },
@@ -156,6 +188,7 @@ chatStreamRoute.post("/", async (c) => {
           content: body.content,
           pageContext: body.pageContext,
           ...(body.goal ? { goal: body.goal } : {}),
+          ...(body.turnId ? { turnId: body.turnId } : {}),
         },
         ctx,
         { surface: "api" },
@@ -165,6 +198,14 @@ chatStreamRoute.post("/", async (c) => {
   // A refusal before the turn is prepared rejects here and becomes the
   // response through the error middleware.
   await Promise.race([preparedSignal, turn]);
+
+  const heartbeat = setInterval(() => {
+    if (closed) {
+      clearInterval(heartbeat);
+      return;
+    }
+    write(": keep-alive\n\n");
+  }, CHAT_STREAM_HEARTBEAT_MS);
 
   void turn
     .then(
@@ -186,6 +227,7 @@ chatStreamRoute.post("/", async (c) => {
       },
     )
     .then((terminal) => {
+      clearInterval(heartbeat);
       write(`event: done\ndata: ${terminal}\n\n`);
       closed = true;
       try {

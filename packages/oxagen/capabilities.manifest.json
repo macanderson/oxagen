@@ -1358,6 +1358,22 @@
       }
     },
     {
+      "name": "get_assistant_reply",
+      "file": "assistant.reply.get.ts",
+      "domain": "assistant",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "cancel_assistant_turn",
       "file": "assistant.turn.cancel.ts",
       "domain": "assistant",
