@@ -75,6 +75,9 @@ const turn = {
     runId: RUN,
     reply: "Three runs are live.",
     parkedCards: [],
+    // #4256 made a turn carry the tool calls its run made; the stream client
+    // defaults the list to [], so a live answer always has one.
+    toolCalls: [],
     stopped: false,
   },
 };
