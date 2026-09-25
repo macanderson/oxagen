@@ -23,7 +23,7 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `conversationId` | uuid or null | no | null opens a new conversation; an id outside the workspace is `not_found` |
+| `conversationId` | `cnv_` public id, uuid, or null | no | the conversation to continue, by the `cnv_` id every conversation capability takes (`get_conversation` reads it back) or by the internal id `conversationId` below carries; null opens a new conversation. A conversation that is not yours, or is deleted or archived, is `not_found` |
 | `content` | string | yes | 1 to 32 KiB, the cap every chat ingress shares |
 | `pageContext` | object or null | no | `{ route, orgSlug, workspaceSlug, entityId }` — where the person was when they asked; null for a caller with no page |
 
@@ -32,11 +32,16 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 | Field | Type | Description |
 |---|---|---|
 | `conversationId` | uuid | the conversation the turn was appended to |
+| `conversationPublicId` | string | `cnv_…`, the same conversation by its public id; `get_conversation` reads the thread back |
 | `userMessageId` | uuid | the person's message |
 | `assistantMessageId` | uuid | the persisted reply |
 | `runId` | string | `arun_…`, the run the turn was recorded as; `get_run` opens it |
 | `reply` | string | the assistant's reply, whole |
 | `parkedCards` | array | one `{ approvalId, capability, expiresAt }` per governed write the turn opened that waits on a person, in park order; empty when nothing parked. A turn can park more than one, and each has its own five-minute expiry, so all of them are returned |
+
+## Conversation
+
+A turn continues a conversation only when it is the asker's own, in this workspace, and neither deleted nor archived: the rule `list_conversations` and `get_conversation` apply (#4163). The person's message is written before the engine is asked anything, so a turn that fails still leaves the question on the record. The reply is written with the run it was recorded as (`metadata.runId`) and, when the turn parked governed writes, the cards (`metadata.parkedCards`), so `get_conversation` returns the thread as the turn answered it.
 
 ## Recording
 
@@ -52,7 +57,7 @@ The engine is declared every governed tool plus the two meta-tools. Each complet
 
 | Code | Status | When |
 |---|---|---|
-| `not_found` (reason `conversation_not_found`) | 404 | `conversationId` names no conversation in this workspace |
+| `not_found` (reason `conversation_not_found`) | 404 | `conversationId` names no conversation of the asker's in this workspace, or one that is deleted or archived |
 | `forbidden` (reason `no_principal`, `org_role_required`) | 403 | the caller carries no person to ask as, or the person holds none of the contract's roles |
 | `engine_unavailable` | 503 | `stella-serve` is not configured or could not be reached; nothing falls back to an in-process loop (ADR-053 §4) |
 | `assistant_run_not_recorded` | 503 | the ledger could not admit the turn, or a receipt could not be written; the assistant does not answer from a path that was not recorded |
