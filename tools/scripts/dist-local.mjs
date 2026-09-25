@@ -148,8 +148,9 @@ if (buildEnv.TAURI_SIGNING_PRIVATE_KEY) {
   );
 }
 // Without a Developer ID, sign ad hoc so the bundle carries a seal that
-// `codesign --verify` accepts and Gatekeeper shows the unidentified-developer
-// prompt rather than refusing the app as damaged (see desktop.yml).
+// `codesign --verify` accepts. A quarantined copy is then refused but can be
+// opened through Privacy & Security > Open Anyway, rather than refused as
+// damaged with no way past (see desktop.yml, #4249).
 if (process.platform === "darwin" && !buildEnv.APPLE_SIGNING_IDENTITY) {
   buildEnv.APPLE_SIGNING_IDENTITY = "-";
   console.log("• macOS code signing: ad hoc (no APPLE_SIGNING_IDENTITY)");
