@@ -188,14 +188,13 @@ describe("agent.mcp.register handler", () => {
     },
   );
 
-  // Every transport runs the guard. A stdio row is never probed, but its
-  // endpoint_url is stored and displayed, so it must not carry a credential
-  // or point at a private address (#3720).
+  // A stdio row is never probed, but its endpoint_url is stored and
+  // displayed, so it must not carry a credential (#3720). Its scheme and host
+  // are not a network address, so the public-address guard does not apply.
   it.each([
+    ["stdio://user:pass@x", "username and password"],
     ["https://user:pass@mcp.example.com/", "username and password"],
     ["https://sk-live-abc123@mcp.example.com/", "username only"],
-    ["http://10.1.2.3/mcp", "RFC1918 class A"],
-    ["http://169.254.169.254/latest/meta-data/", "cloud-metadata link-local"],
   ])(
     "rejects a stdio registration whose endpoint %s carries %s",
     async (url) => {
@@ -205,13 +204,34 @@ describe("agent.mcp.register handler", () => {
         endpointUrl: url,
       };
 
-      await expect(agentMcpRegisterHandler(input, CTX)).rejects.toThrow(
-        /Refusing to register MCP server/,
+      const refusal = agentMcpRegisterHandler(input, CTX);
+      await expect(refusal).rejects.toThrow(
+        /Refusing to register MCP server: .* must not carry a username or password/,
       );
+      await expect(refusal).rejects.not.toThrow(/user:pass|sk-live-abc123/);
       expect(mocks.healthcheckMock).not.toHaveBeenCalled();
       expect(mocks.insertSpy).not.toHaveBeenCalled();
     },
   );
+
+  it("registers a stdio server whose endpoint is a stdio command URI", async () => {
+    const input = {
+      ...BASE_INPUT,
+      transportType: "stdio" as const,
+      endpointUrl: "stdio://linear",
+    };
+
+    const result = await agentMcpRegisterHandler(input, CTX);
+
+    expect(mocks.healthcheckMock).not.toHaveBeenCalled();
+    expect(mocks.insertSpy).toHaveBeenCalledTimes(1);
+    const valuesArg = mocks.insertValues.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(valuesArg.endpointUrl).toBe("stdio://linear");
+    expect(result.healthStatus).toBe("degraded");
+  });
 
   it("registers a stdio server whose endpoint is a clean public URL", async () => {
     const input = {
