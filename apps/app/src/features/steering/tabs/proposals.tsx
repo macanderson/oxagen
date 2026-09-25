@@ -8,10 +8,19 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { buttonSecondary } from "@/ui/control-styles";
+import { LiveRefresh } from "@/ui/live-refresh";
 import { PressLink } from "@/ui/press-link";
 import { ContextPrs } from "../context-prs";
 import { Proposals } from "../proposals";
 import { type ProposalSegment, type SteeringAt, steeringLink } from "../view";
+
+/** A proposal whose Context PR is open on the repository host. */
+const OPEN_PR_STATUSES: ReadonlySet<string> = new Set([
+  "pr_open",
+  "checks_running",
+  "checks_passed",
+  "checks_failed",
+]);
 
 const chip = `${buttonSecondary} min-h-7 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
 
@@ -75,8 +84,14 @@ export async function ProposalsTab({
       ? (preread ?? source.steering.contextPr(ctx, proposal))
       : null,
   ]);
+  // A Context PR can merge or close on the repository host at any moment, and
+  // the repository sync moves the proposal within seconds (ADR-182). While
+  // one is open, the page re-reads itself so the change shows up here.
+  const waiting =
+    read.ok && read.value.proposals.some((p) => OPEN_PR_STATUSES.has(p.status));
   return (
     <div className="flex flex-col gap-4" data-testid="tab-proposals">
+      <LiveRefresh active={waiting} intervalMs={10_000} />
       <Segments at={at} current={segment} />
       {segment === "prs" ? (
         <ContextPrs

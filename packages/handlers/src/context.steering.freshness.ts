@@ -16,6 +16,11 @@ import {
 } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import { readSteeringConnection } from "./context.steering.host";
+import {
+  postgresSyncStore,
+  type SyncState,
+  type SyncStore,
+} from "./context.steering.sync.store";
 
 /**
  * Read the `steering` block out of `workspaces.settings`.
@@ -48,9 +53,12 @@ export function createGetSteeringFreshnessHandler(
   deps: Pick<SteeringDeps, "store"> & {
     /** The connection seam; injected so a test can answer without a database. */
     readConnection?: typeof readSteeringConnection;
+    /** The repository sync's state (ADR-182); injected for the same reason. */
+    readSyncState?: SyncStore["readState"];
   },
 ): CapabilityHandler<typeof contextSteeringFreshness> {
   const readConnection = deps.readConnection ?? readSteeringConnection;
+  const readSyncState = deps.readSyncState ?? postgresSyncStore.readState;
   return async (_input, ctx): Promise<ContextSteeringFreshnessOutput> => {
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
@@ -59,7 +67,7 @@ export function createGetSteeringFreshnessHandler(
     // new steering version with the old `headCommit`. The other two reads
     // run alongside it because this sits in front of a developer's prompt
     // and the latency is the whole budget.
-    const [{ version: steeringVersion, publication }, binding, settings] =
+    const [{ version: steeringVersion, publication }, binding, settings, sync] =
       await Promise.all([
         deps.store.versionAndPublication(scope),
         // The same seam Context PRs resolve through, not a binding-only
@@ -96,6 +104,9 @@ export function createGetSteeringFreshnessHandler(
             .limit(1);
           return rows[0]?.settings ?? null;
         }),
+        // A sync state that cannot be read is no reason to fail the read in
+        // front of a developer's prompt; the page shows no sync line.
+        readSyncState(scope).catch(() => null),
       ]);
 
     return {
@@ -107,7 +118,30 @@ export function createGetSteeringFreshnessHandler(
       provider: binding?.provider ?? null,
       defaultBranch: binding?.defaultRef ?? null,
       policy: readGatePolicy(settings),
+      sync: syncView(sync),
     };
+  };
+}
+
+/**
+ * The sync state as the contract spells it. A request newer than the last
+ * finished sync reads `pending`, whatever the last sync decided: a push or a
+ * merge is on its way into the registry.
+ */
+export function syncView(
+  state: SyncState | null,
+): ContextSteeringFreshnessOutput["sync"] {
+  if (!state) return null;
+  const pending =
+    state.requestedAt !== null &&
+    (state.syncedAt === null || state.requestedAt > state.syncedAt);
+  return {
+    status: pending ? "pending" : state.status,
+    headSha: state.headSha,
+    requestedAt: state.requestedAt?.toISOString() ?? null,
+    syncedAt: state.syncedAt?.toISOString() ?? null,
+    error: state.error,
+    findings: state.findings,
   };
 }
 

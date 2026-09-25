@@ -189,6 +189,27 @@ export const SteeringFreshness = z.object({
     autoSync: z.boolean(),
     blockStaleRuns: z.boolean(),
   }),
+  /**
+   * The repository sync (ADR-182): the production-branch commit the registry
+   * last matched and what was wrong with the record files there. Null before
+   * the workspace's first sync.
+   */
+  sync: z
+    .object({
+      status: z.enum(["pending", "synced", "problems", "failed"]),
+      headSha: z.string().min(1).nullable(),
+      syncedAt: Instant.nullable(),
+      error: z.string().nullable(),
+      findings: z.array(
+        z.object({
+          level: z.enum(["error", "warning"]),
+          path: z.string(),
+          lineageId: z.string().nullable(),
+          message: z.string(),
+        }),
+      ),
+    })
+    .nullable(),
 });
 export type SteeringFreshness = z.infer<typeof SteeringFreshness>;
 

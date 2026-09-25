@@ -199,6 +199,20 @@ export function toSteeringFreshness(
       autoSync: out.policy.autoSync,
       blockStaleRuns: out.policy.blockStaleRuns,
     },
+    sync: out.sync
+      ? {
+          status: out.sync.status,
+          headSha: out.sync.headSha,
+          syncedAt: out.sync.syncedAt,
+          error: out.sync.error,
+          findings: out.sync.findings.map((f) => ({
+            level: f.level,
+            path: f.path,
+            lineageId: f.lineageId,
+            message: f.message,
+          })),
+        }
+      : null,
   };
 }
 
