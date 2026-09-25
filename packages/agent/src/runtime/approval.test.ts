@@ -156,6 +156,25 @@ describe("approval runtime", () => {
     expect(delta).toBeLessThanOrEqual(10_000 + 1000);
   });
 
+  it.each([
+    ["an approval when the caller names no kind", undefined, "approval"],
+    ["a consent request when the consent gate asks", "consent", "consent"],
+  ] as const)(
+    "records the row's kind: %s (ADR-XXX)",
+    async (_why, kind, recorded) => {
+      await createApprovalRequest({
+        orgId: "ten_1",
+        workspaceId: "ws_1",
+        messageId: "msg_1",
+        capabilityName: "mcp.1f3b6c22-9d1e-4a55-9d3d-6d1f0c9a2b77.search",
+        inputPreview: {},
+        riskLevel: "medium",
+        ...(kind ? { kind } : {}),
+      });
+      expect(insertedValues[0]).toMatchObject({ kind: recorded });
+    },
+  );
+
   it("createApprovalRequest writes one approval.requested row per person who may resolve it", async () => {
     // One row per qualifying assignment: a person holding both an org and a
     // workspace role appears twice, and is told once.
@@ -250,7 +269,7 @@ describe("approval runtime", () => {
     expect(insertMock).not.toHaveBeenCalled();
   });
 
-  it("keys the dedupe on the call: the turn's message, the capability and the tool call", async () => {
+  it("keys the dedupe on the call: the turn's message, the capability, the kind and the tool call", async () => {
     await createApprovalRequest({
       orgId: "ten_1",
       workspaceId: "ws_1",
@@ -264,6 +283,8 @@ describe("approval runtime", () => {
     expect(sql).toMatch(/"approval_requests"\."message_id" = \$\d+/);
     expect(sql).toMatch(/"approval_requests"\."capability_name" = \$\d+/);
     expect(sql).toMatch(/"approval_requests"\."tool_call_id" = \$\d+/);
+    // A consent request is never handed back as an approval, or the reverse.
+    expect(sql).toMatch(/"approval_requests"\."kind" = \$\d+/);
     // Unresolved and unexpired only: a denied call may be asked again, and an
     // approval past its window is one nobody can answer.
     expect(sql).toMatch(/"approval_requests"\."resolution" is null/);

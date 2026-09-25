@@ -44,7 +44,7 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import { lockMandate, parseMandateRow, release } from "@oxagen/rules";
 import { and, eq, sql } from "drizzle-orm";
-import { notifyResolution, resolveRunPublicId } from "../runtime/approval";
+import { notifyResolution, raisedByCallingRun } from "../runtime/approval";
 import { APPROVAL_RESOLVER_ROLES } from "@oxagen/rules/approval-notify";
 import { approvalIdCondition } from "../runtime/approval-id";
 import type {
@@ -208,34 +208,6 @@ export async function agentApprovalResolveHandler(
     note: input.note ?? null,
   });
   return { approvalId: input.approvalId, resolution: input.decision, mandate };
-}
-
-/**
- * Whether the call comes from the run the approval row records as raising it.
- *
- * The row records that run's public id (`arun_…` or `tse_…`, #3286). The call
- * carries the run the kernel resolved for it in `ctx.runId`: the caller's
- * `opts.runId`, the outer handler's run, or the agent run. The in-app
- * assistant passes the internal `agent_runs.id`, so a uuid is read back to
- * its public id in the caller's workspace with `resolveRunPublicId`, the read
- * `createApprovalRequest` made when it parked the call. A row that records no
- * run, or a call that carries none, matches nothing: a null is "not
- * recorded", never "this run".
- */
-async function raisedByCallingRun(
-  tx: Tx,
-  ctx: CheckedContext,
-  recorded: string | null,
-): Promise<boolean> {
-  const calling = ctx.runId ?? null;
-  if (recorded === null || calling === null) return false;
-  if (calling === recorded) return true;
-  const callingPublicId = await resolveRunPublicId(tx, {
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId,
-    runId: calling,
-  });
-  return callingPublicId === recorded;
 }
 
 type MandateSettlement = AgentApprovalResolveOutput["mandate"];

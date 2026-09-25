@@ -2991,7 +2991,6 @@
       "name": "resolve_mcp_consent",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -4089,7 +4088,7 @@
       "writes": []
     }
   ],
-  "contentHash": "6f8979135da044b78c5b9a1eb945aa69eed5c6969bc1300d659abe91211c31a7",
+  "contentHash": "9398ec8bb433946a1759d2de0bf6e23353aea7b58991c2bf72e99594f2b89365",
   "domains": [
     {
       "name": "agent",
@@ -8202,6 +8201,12 @@
         },
         {
           "name": "risk_level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "kind",
           "nullable": false,
           "primaryKey": false,
           "type": "text"

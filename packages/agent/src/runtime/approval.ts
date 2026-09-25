@@ -60,6 +60,12 @@ export interface CreateApprovalArgs {
   runId?: string | null;
   ttlMs?: number;
   resumeRequesterUserId?: string;
+  /**
+   * What the row asks a person for (ADR-XXX). The first-use consent gate
+   * passes `consent`, the only kind `resolve_mcp_consent` answers. Every
+   * other caller leaves it out and writes `approval`.
+   */
+  kind?: "approval" | "consent";
 }
 
 /** `agent_runs.id` is a uuid; anything else is a caller's sentinel, not a run. */
@@ -92,6 +98,35 @@ export async function resolveRunPublicId(
     )
     .limit(1);
   return row?.publicId ?? null;
+}
+
+/**
+ * Whether a call comes from the run an approval row records as raising it
+ * (ADR-XXX). `resolve_approval` and `resolve_mcp_consent` both refuse such a
+ * call: a run never answers the question it put to a person.
+ *
+ * The row records that run's public id (`arun_…` or `tse_…`, #3286). The call
+ * carries the run the kernel resolved for it in `ctx.runId`: the caller's
+ * `opts.runId`, the outer handler's run, or the agent run. The in-app
+ * assistant passes the internal `agent_runs.id`, so a uuid is read back to
+ * its public id in the caller's workspace, the read the park made. A row that
+ * records no run, or a call that carries none, matches nothing: a null is
+ * "not recorded", never "this run".
+ */
+export async function raisedByCallingRun(
+  tx: Tx,
+  call: { orgId: string; workspaceId: string; runId?: string | null },
+  recorded: string | null,
+): Promise<boolean> {
+  const calling = call.runId ?? null;
+  if (recorded === null || calling === null) return false;
+  if (calling === recorded) return true;
+  const callingPublicId = await resolveRunPublicId(tx, {
+    orgId: call.orgId,
+    workspaceId: call.workspaceId,
+    runId: calling,
+  });
+  return callingPublicId === recorded;
 }
 
 export interface ApprovalResolution {
@@ -218,6 +253,7 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
         capabilityName: args.capabilityName,
         inputPreview: args.inputPreview as object,
         riskLevel: args.riskLevel,
+        kind: args.kind ?? "approval",
         executionStepId: args.executionStepId ?? null,
         toolCallId: args.toolCallId ?? null,
         runPublicId: await resolveRunPublicId(tx, args),
@@ -355,6 +391,9 @@ async function findLiveApproval(
         eq(a.workspaceId, args.workspaceId),
         eq(a.messageId, args.messageId),
         eq(a.capabilityName, args.capabilityName),
+        // A consent request and an approval for the same tool are two
+        // questions, so one is never handed back for the other.
+        eq(a.kind, args.kind ?? "approval"),
         args.toolCallId
           ? eq(a.toolCallId, args.toolCallId)
           : isNull(a.toolCallId),
