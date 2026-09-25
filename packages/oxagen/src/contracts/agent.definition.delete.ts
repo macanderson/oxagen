@@ -21,6 +21,7 @@ export const agentDefinitionDelete = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "mutation" },
   sensitivity: "destructive",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

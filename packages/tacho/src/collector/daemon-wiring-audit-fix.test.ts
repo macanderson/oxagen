@@ -255,6 +255,57 @@ describe("the daemon's audit wiring", () => {
     ).toEqual(["received", "received", "applied"]);
   });
 
+  it("keeps a steer queued and unacknowledged when its delivery frame fails to reach the WAL", async () => {
+    const { handle, plane } = await boot();
+    await handle.api.handleHook(hook("SessionStart"));
+    const record = handle.registry.get(SESSION)!;
+    plane.queue(
+      command({
+        id: "cmd_lost",
+        command: "steer",
+        session_uuid: record.recorder.sessionUuid,
+        payload: { text: "Stop after this file." },
+      }),
+    );
+    await handle.tick();
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_lost"]);
+
+    const append = handle.wal.append.bind(handle.wal);
+    handle.wal.append = () => {
+      throw new Error("ENOSPC: no space left on device");
+    };
+    await expect(
+      handle.api.handleHook(hook("UserPromptSubmit", { prompt: "go on" })),
+    ).rejects.toThrow(/ENOSPC/);
+    handle.wal.append = append;
+
+    // The failed write took the delivery frame back, so the steer waits for
+    // the next boundary and the plane hears nothing claiming it applied.
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_lost"]);
+    await handle.tick();
+    expect(
+      plane.acks
+        .filter((a) => a.command_id === "cmd_lost")
+        .map((a) => a.status),
+    ).toEqual(["received"]);
+
+    const response = await handle.api.handleHook(
+      hook("UserPromptSubmit", { prompt: "go on" }),
+    );
+    expect(response).toMatchObject({
+      hookSpecificOutput: { additionalContext: "Stop after this file." },
+    });
+    await handle.tick();
+    const applied = plane.acks.find(
+      (a) => a.command_id === "cmd_lost" && a.status === "applied",
+    );
+    expect(applied?.applied_at_seq).toBeDefined();
+    const frame = handle.wal
+      .read(record.recorder.sessionUuid)
+      .find((event) => event.seq === applied?.applied_at_seq);
+    expect(frame?.attrs?.["command.id"]).toBe("cmd_lost");
+  });
+
   it("acknowledges a message whose session sealed before a boundary as expired", async () => {
     const { handle, plane } = await boot();
     await handle.api.handleHook(hook("SessionStart"));
@@ -280,6 +331,57 @@ describe("the daemon's audit wiring", () => {
         detail: EXPIRED_ON_SEAL_DETAIL,
       },
     ]);
+  });
+
+  it("sends no expired ack for a steer whose SessionEnd write failed", async () => {
+    const { handle, plane } = await boot();
+    await handle.api.handleHook(hook("SessionStart"));
+    const record = handle.registry.get(SESSION)!;
+    const uuid = record.recorder.sessionUuid;
+    plane.queue(
+      command({
+        id: "cmd_kept",
+        command: "steer",
+        session_uuid: uuid,
+        payload: { text: "Stop after this file." },
+      }),
+    );
+    await handle.tick();
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_kept"]);
+
+    // The seal queues `expired` for the steer before the terminal frame is
+    // written. The write fails, so the seal did not happen.
+    const append = handle.wal.append.bind(handle.wal);
+    handle.wal.append = () => {
+      throw new Error("ENOSPC: no space left on device");
+    };
+    await expect(handle.api.handleHook(hook("SessionEnd"))).rejects.toThrow(
+      /ENOSPC/,
+    );
+    handle.wal.append = append;
+
+    expect(record.sealed).toBe(false);
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_kept"]);
+    await handle.tick();
+    expect(
+      plane.acks
+        .filter((a) => a.command_id === "cmd_kept")
+        .map((a) => a.status),
+    ).toEqual(["received"]);
+
+    // A boundary still delivers it, and the plane hears one outcome.
+    const response = await handle.api.handleHook(
+      hook("UserPromptSubmit", { prompt: "go on" }),
+    );
+    expect(response).toMatchObject({
+      hookSpecificOutput: { additionalContext: "Stop after this file." },
+    });
+    await handle.tick();
+    expect(
+      plane.acks
+        .filter((a) => a.command_id === "cmd_kept")
+        .map((a) => a.status),
+    ).toEqual(["received", "applied"]);
   });
 
   it("keeps the baseline across a cd inside the same repository", async () => {

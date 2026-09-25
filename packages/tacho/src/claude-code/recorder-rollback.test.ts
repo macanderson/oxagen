@@ -28,6 +28,24 @@ const context: ClaudeCodeContext = {
   },
 };
 
+function toolCall(name: string) {
+  return {
+    tool_name: name,
+    tool_source: "mcp",
+    mcp_server_name: "oxagen",
+    mcp_tool_name: name,
+    tool_status: "ok",
+    tool_duration_ms: 1,
+  };
+}
+
+function bytes(text: string) {
+  return {
+    content_type: "text/plain",
+    bytes: new TextEncoder().encode(text),
+  };
+}
+
 function recorder(harnessSessionId: string): SessionRecorder {
   const made = new SessionRecorder({ context, harnessSessionId, scope: SCOPE });
   made.ingestHook(
@@ -100,6 +118,33 @@ describe("the recorder's chain mark", () => {
     expect(chain.openChildren.size).toBe(0);
     expect(chain.chainCursor).toEqual(mark.cursor);
     expect(chain.takeBodies()).toEqual([]);
+  });
+
+  it("puts back a body the failed caller had already drained", () => {
+    // The daemon seals, drains the bodies into the write, and only then
+    // learns the write failed. A body sealed before the mark belongs to an
+    // event the chain still holds, so the rollback has to return it even
+    // though `takeBodies` took it out of the recorder.
+    const chain = recorder(ID);
+    const kept = chain.sealCollectorEvent("tool_call", toolCall("kept"), {
+      ts: at,
+      content: bytes("kept"),
+    });
+    const mark = chain.markChain();
+    chain.sealCollectorEvent("tool_call", toolCall("abandoned"), {
+      ts: at,
+      content: bytes("abandoned"),
+    });
+    expect(chain.takeBodies().map((body) => body.seq)).toEqual([
+      kept.seq,
+      kept.seq + 1,
+    ]);
+    chain.rollbackChain(mark);
+    const restored = chain.takeBodies();
+    expect(restored.map((body) => body.event_id_idem)).toEqual([
+      kept.event_id_idem,
+    ]);
+    expect(new TextDecoder().decode(restored[0]?.bytes)).toBe("kept");
   });
 
   it("leaves another session's recorder where it stood", () => {

@@ -21,12 +21,16 @@
 // the shell to re-derive it through rules that have to be kept in step.
 //
 // A route whose record is a path segment (`runs/[run]`, `agents/[agent]`) needs
-// no declaration: the URL cannot disagree with the page about it, because there
-// is nothing to parse. The flyout keeps reading those from the path.
+// no declaration for its id: the URL cannot disagree with the page about it,
+// because there is nothing to parse. The flyout reads those from the path. The
+// Run, agent and Mandate pages declare anyway, to name the record, and they
+// declare the id as the URL names it, so the id the flyout sends is unchanged.
 //
-// A page may also declare the record's label, for the breadcrumb. The segment
-// is a key (`tch_…`) and a person reads the name the page drew from the record
-// (`mbell-mbp-16`); only the page has read the record, so only it can say.
+// A page may also declare the record's label, for the breadcrumb and for the
+// assistant. The segment is a key (`tch_…`) and a person reads the name the
+// page drew from the record (`mbell-mbp-16`); only the page has read the
+// record, so only it can say. The flyout sends the label beside the id
+// (`page-label.ts`), so the agent can cite the record by that name.
 //
 // The store is a module singleton rather than context because the page is not
 // inside the shell's provider: `ShellClient` renders chrome, and the layout
@@ -92,7 +96,7 @@ export function PageRecord({
   route: string;
   /** The record on screen, from the page's own parse of its query. */
   id: string | null;
-  /** The record's name as the page drew it, for the breadcrumb in place of the id. */
+  /** The record's name as the page drew it: the breadcrumb's text, and the label the assistant is sent. */
   label?: string | null;
 }) {
   useEffect(() => {

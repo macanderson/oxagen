@@ -13,11 +13,11 @@ import {
   Ellipsis,
   type LucideIcon,
   Search,
-  Sparkles,
   UserRound,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
+import { AskStella } from "./assistant-launcher";
 import {
   isMoreCurrent,
   isNavItemCurrent,
@@ -36,6 +36,7 @@ import { type ShellCounts, useShellCounts } from "./use-activity";
 import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
+import { StellaIcon } from "@/ui/stella-mark";
 
 const slotClass =
   "relative flex min-h-13 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[10.5px] font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-[current=page]:text-app-topbar-fg";
@@ -119,25 +120,37 @@ function tileCount(key: NavKey, counts: ShellCounts): number | null {
   return value !== null && value > 0 ? value : null;
 }
 
+/**
+ * What a tile leads with: a glyph in the tile's muted square, or a mark drawn
+ * at the square's size in its place.
+ */
+type TileLead =
+  | { icon: LucideIcon; mark?: undefined }
+  | { icon?: undefined; mark: ReactNode };
+
 /** `.mtile`: an icon, a name, one line under it, and a count where something waits. */
 function Tile({
   icon: Icon,
+  mark,
   label,
   sub,
   count = null,
   countLabel = "",
-}: {
-  icon: LucideIcon;
-  label: string;
+}: TileLead & {
+  label: ReactNode;
   sub: string;
   count?: number | null;
   countLabel?: string;
 }) {
   return (
     <>
-      <span className="grid size-7 flex-none place-items-center rounded-lg border border-border bg-muted text-muted-foreground">
-        <Icon aria-hidden="true" className="size-4" />
-      </span>
+      {Icon === undefined ? (
+        mark
+      ) : (
+        <span className="grid size-7 flex-none place-items-center rounded-lg border border-border bg-muted text-muted-foreground">
+          <Icon aria-hidden="true" className="size-4" />
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <b className="block truncate text-sm font-semibold">{label}</b>
         <span className="block truncate text-xs font-normal text-muted-foreground">
@@ -335,6 +348,8 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
         <hr className="my-3 border-border" />
         <ul className="grid grid-cols-2 gap-2">
           <li>
+            {/* The sidebar launcher's mark and name, so the phone's second way
+                into the assistant reads the same as the first (#4139). */}
             <TileButton
               testId="more-assistant"
               onClick={then(() => {
@@ -342,8 +357,8 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
               })}
             >
               <Tile
-                icon={Sparkles}
-                label={t("mobileNav.assistant")}
+                mark={<StellaIcon className="size-7 flex-none" />}
+                label={<AskStella />}
                 sub={t("mobileNav.assistantSub")}
               />
             </TileButton>
