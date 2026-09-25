@@ -56,7 +56,7 @@ The cloud gateway has three entry points: model APIs (Anthropic, OpenAI, Gemini,
 2. **Check the run.** A paused or cancelled run, or a spent budget, is refused.
 3. **Apply policy.** Allow, deny, send to a person for approval, or narrow the input.
 4. **Reserve budget.** Hold the call's largest possible cost against the run, agent, team, and organization budgets, so parallel calls cannot overrun.
-5. **Add context.** Add the context records chosen for this agent and turn, and any queued operator steer, and record what was added.
+5. **Add context.** Add the steering records chosen for this agent and turn, and any queued operator steer, and record what was added.
 6. **Forward.** Attach the credential from the vault and route the call.
 7. **Meter.** Count usage as the response streams, and cut the stream on command.
 8. **Settle.** Price the actual usage and release the rest of the reservation.
@@ -84,9 +84,11 @@ The hooks carry the same commands to the harness's own tools: they refuse the ne
 
 Commands reach a run at every tier (ADR-163). Who may command which agents, and who may command all of them at once, follows the grants in `mission-control-spec.md` §7.6 in `macanderson/oxagen-roadmap`.
 
-### Context records
+### Steering records
 
-"Context record" stays the name. A context record has a kind, and the kinds include skills, business rules, code rules, style preferences, facts, and memories, alongside the kinds in use today. There is no separate agent persona. A team authors context records in Oxagen. The cloud gateway adds the ones that fit each turn, and a harness that reads files (skills, rules) receives them through a pull request to the repository, as context records land today.
+Steering record is the only name for these records, and a steering PR is the pull request that publishes one. A steering record has a kind: skills, business rules, code rules, style preferences, facts, and memories, alongside the kinds in use today. There is no separate agent persona. The section of the app that holds them is Steering. A team authors steering records in Oxagen. The cloud gateway adds the ones that fit each turn, and a harness that reads files (skills, rules) receives them through a steering PR to the repository.
+
+Each steering record is a Markdown file (`.md`) with YAML frontmatter, one record per file, under `.oxagen/steering/`. The frontmatter holds its fields (schema, id, lineage, label, kind, force, scope, origin, and provenance), and the body is its statement. A skill keeps the `SKILL.md` shape with these fields added, so a steering PR can place it where each harness reads skills. The record's hash covers the parsed fields and the body, never the file's bytes, so reformatting a file is not a new version, and the label stays outside the hash (ADR-178). This replaces the TOML files under `.oxagen/rules/`.
 
 ### Retention
 
@@ -96,11 +98,15 @@ The workspace chooses what Oxagen stores, as it does today: digests only (`diges
 
 Each event is appended to its run's hash chain and signed by the gateway that saw it. A daily root of every chain goes to write-once storage, so any later edit shows. Every change in the control plane (policy, key, budget, toolbelt, role) is an event with its actor. An export maps the record to SOC 2 controls: who could call what, every call and refusal, and every policy change with its approver.
 
-### Spend and verification
+### Spend
 
 - The cloud gateway prices each call from the provider's own usage figures and attributes it to the organization, team, agent, run, task, and parent run.
-- Waste is spend with a reason code (failed outcome, errors and retries, cache misses, loops, reverted work, oversized model). `gateway-plan.md` defines each.
-- A run is bound to a task whose checks are written and locked before it starts (`dod-spec.md` in `macanderson/oxagen-roadmap`). The agent can claim done. A verifier outside its reach runs the checks and signs the verdict. The headline figure is cost per verified outcome.
+- Oxagen bills governed actions only. Model calls pass through the cloud gateway, and Oxagen does not bill them: the customer pays the model provider on its own key.
+- Waste is spend with a reason code (abandoned run, errors and retries, cache misses, loops, reverted work, oversized model). Spend on work a person accepted still counts when its changes are reverted. `gateway-plan.md` defines each code.
+
+### Done
+
+A run is done when its model says it is done. Many runs have no issue and no definition of done, so this stays the rule. Verifying done against checks written before the run, and a person's acceptance on top of it, are future state and not built (`dod-spec.md` in `macanderson/oxagen-roadmap`). When they exist, spend on runs that fail verification becomes waste too.
 
 ### Live run view
 
@@ -118,7 +124,7 @@ The page reads the run's record as it is written, so nothing waits for the run t
 
 ### Work orders
 
-An operator selects one or more work items (issues and tasks), chooses **Send To...**, and picks the harness, the runtime, and the toolbelt the work runs with, or an existing agent that fixes all three. Oxagen creates a work order and launches the agent to do the work, with no step on the operator's machine.
+An operator selects one or more work items (issues and tasks), chooses **Send To...**, and picks the harness, the runtime, and the toolbelt the work runs with, or any existing agent in the workspace that fixes all three. The operator's role is the only limit on which agents they can send to. Oxagen creates a work order and launches the agent to do the work, with no step on the operator's machine.
 
 - **The work order stays.** It carries the work items, the definition of done, the brief, the repositories the run may change, and the spend cap, as `work-backlog.md` and `work-in-flight-spec.md` §9 in `macanderson/oxagen-roadmap` already design. What this adds is the harness, runtime, and toolbelt choice, and the automatic launch.
 - **The launch goes to the chosen runtime.** An enrolled machine's local gateway starts the harness headless. A contained runner starts it on a CI runner (ADR-152). A customer-hosted runner starts it in the customer's network. Oxagen starts a process the customer chose and runs no turn itself (ADR-043, ADR-096).
@@ -147,6 +153,7 @@ Every agent connects to the cloud gateway, so agents message and start one anoth
 
 - The cloud gateway runs in regions Oxagen chooses. A customer may run the same image in its own network, where it dials out to Oxagen, keeps keys in the customer's KMS, and keeps bodies inside that network.
 - It keeps serving from its last signed configuration while Oxagen's control plane is unreachable.
+- A fully self-hosted control plane with no connection to Oxagen (air-gapped mode) stays a future option for regulated customers. It is not built.
 - The local gateway runs on every enrolled machine, and in a contained runtime inside the sandbox.
 
 ### Coverage limits
@@ -175,11 +182,11 @@ These are design choices this record makes. Each needs the maintainer's yes befo
 
 ## Consequences
 
-- **Memories become a kind of context record.** They live today in Neo4j as `AgentMemory` (`packages/agent/src/memory/neo4j.ts:135`), separate from context records.
-- **Skills become a kind of context record.** They live today in `.oxagen/skills/<name>/SKILL.md`, written by `propose_skill`, separate from context records.
-- **The renames and personas in flight stop.** The rename to "steering records" (#4325) and agent personas (#4326) do not happen.
+- **Memories become a kind of steering record.** They live today in Neo4j as `AgentMemory` (`packages/agent/src/memory/neo4j.ts:135`), separate from the other records.
+- **Skills become a kind of steering record.** They live today in `.oxagen/skills/<name>/SKILL.md`, written by `propose_skill`, separate from the other records.
+- **The rename reaches the code.** No older name for a steering record or a steering PR remains in the product, the code, the schema, the capabilities, the API, or the MCP tools (#4325). Stella's record loader reads the Markdown format, the Context Graph Protocol renames its record type, and the stored records in each repository move to `.oxagen/steering/`. Agent personas (#4326) do not happen.
 - **Keys leave the machine.** `credentials.json` goes away for any harness whose calls route through the cloud gateway. One platform variable encrypts every workspace's MCP credentials today (`packages/plugins/src/credentials/kms.ts:4-5`).
-- **The toolbelt reaches customer agents.** The in-app agent leaves it (#4310).
+- **The toolbelt reaches customer agents.** The in-app agent leaves it (#4310). The in-app agent's spend shows on the Billing page only, never among the customer's agents on the Spend page.
 - **Tier evidence.** A call the cloud gateway carried is the control plane's own evidence for the `gateway` tier.
 
 ## Supersedes and amends
