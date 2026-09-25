@@ -895,7 +895,23 @@ function ToolRow({
             </pre>
           )}
           {call.parked === null ? null : (
-            <div className={`${txSub} ml-5`}>{t("parkedNote")}</div>
+            <div className={`${txSub} ml-5`}>
+              {t("parkedNote")}
+              {call.approvalId === null ? null : (
+                <span data-testid="tx-parked-approval">
+                  {t.rich("parkedApproval", {
+                    approval: call.approvalId,
+                    // The raw id is a detail to copy, so one click selects the
+                    // whole of it.
+                    code: (chunks) => (
+                      <span className="select-all text-muted-foreground">
+                        {chunks}
+                      </span>
+                    ),
+                  })}
+                </span>
+              )}
+            </div>
           )}
           <div className={`${txSub} ml-5`}>
             <FrameChip frame={call.frame} place={place}>

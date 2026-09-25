@@ -32,12 +32,12 @@
     "properties": {
       "halfLifeLowDays": {
         "type": "integer",
-        "minimum": 0,
+        "exclusiveMinimum": 0,
         "default": 30
       },
       "halfLifeHighDays": {
         "type": "integer",
-        "minimum": 0,
+        "exclusiveMinimum": 0,
         "default": 90
       },
       "recallThreshold": {

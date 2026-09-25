@@ -60,6 +60,12 @@ export interface CreateApprovalArgs {
   runId?: string | null;
   ttlMs?: number;
   resumeRequesterUserId?: string;
+  /**
+   * What the row asks a person for (ADR-175). The first-use consent gate
+   * passes `consent`, the only kind `resolve_mcp_consent` answers. Every
+   * other caller leaves it out and writes `approval`.
+   */
+  kind?: "approval" | "consent";
 }
 
 /** `agent_runs.id` is a uuid; anything else is a caller's sentinel, not a run. */
@@ -92,6 +98,35 @@ export async function resolveRunPublicId(
     )
     .limit(1);
   return row?.publicId ?? null;
+}
+
+/**
+ * Whether a call comes from the run an approval row records as raising it
+ * (ADR-175). `resolve_approval` and `resolve_mcp_consent` both refuse such a
+ * call: a run never answers the question it put to a person.
+ *
+ * The row records that run's public id (`arun_…` or `tse_…`, #3286). The call
+ * carries the run the kernel resolved for it in `ctx.runId`: the caller's
+ * `opts.runId`, the outer handler's run, or the agent run. The in-app
+ * assistant passes the internal `agent_runs.id`, so a uuid is read back to
+ * its public id in the caller's workspace, the read the park made. A row that
+ * records no run, or a call that carries none, matches nothing: a null is
+ * "not recorded", never "this run".
+ */
+export async function raisedByCallingRun(
+  tx: Tx,
+  call: { orgId: string; workspaceId: string; runId?: string | null },
+  recorded: string | null,
+): Promise<boolean> {
+  const calling = call.runId ?? null;
+  if (recorded === null || calling === null) return false;
+  if (calling === recorded) return true;
+  const callingPublicId = await resolveRunPublicId(tx, {
+    orgId: call.orgId,
+    workspaceId: call.workspaceId,
+    runId: calling,
+  });
+  return callingPublicId === recorded;
 }
 
 export interface ApprovalResolution {
@@ -165,7 +200,13 @@ async function ensureListener(): Promise<void> {
 }
 
 export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
+  /** The row uuid, which waiters and NOTIFY are keyed by. */
   approvalId: string;
+  /**
+   * The public id (`apr_…`) that list reads, Fleet and a parked card show.
+   * Absent only from a test double that returns no public id.
+   */
+  publicId?: string;
   resolution?: string | null;
   resumeStatus?: string | null;
   expiresAt?: Date;
@@ -191,7 +232,7 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
       digest = null;
     }
   }
-  const approvalId = await withTenantDb(async (tx) => {
+  const recorded = await withTenantDb(async (tx) => {
     // One live approval per parked call. `approvalMode: "park"` throws rather
     // than blocking, so the model sees a failed tool call and may ask again for
     // the same call — without this, each retry writes a fresh approval and
@@ -218,13 +259,17 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
         capabilityName: args.capabilityName,
         inputPreview: args.inputPreview as object,
         riskLevel: args.riskLevel,
+        kind: args.kind ?? "approval",
         executionStepId: args.executionStepId ?? null,
         toolCallId: args.toolCallId ?? null,
         runPublicId: await resolveRunPublicId(tx, args),
         inputDigest: digest,
         expiresAt,
       })
-      .returning({ id: schema.approvalRequests.id });
+      .returning({
+        id: schema.approvalRequests.id,
+        publicId: schema.approvalRequests.publicId,
+      });
     if (!row) throw new Error("approval insert failed");
 
     // MC spec §7.7 approval.requested, written with the approval so neither
@@ -238,9 +283,9 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
       riskLevel: args.riskLevel,
       expiresAt,
     });
-    return row.id;
+    return row;
   });
-  return { approvalId };
+  return { approvalId: recorded.id, publicId: recorded.publicId };
 }
 
 async function createResumableApproval(args: CreateApprovalArgs) {
@@ -300,6 +345,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
     if (existing)
       return {
         approvalId: existing.id,
+        publicId: existing.publicId,
         resolution: existing.resolution,
         resumeStatus: existing.resumeStatus,
         expiresAt: existing.expiresAt,
@@ -321,7 +367,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
         resumePayload: payload,
         resumeStatus: "waiting",
       })
-      .returning({ approvalId: a.id });
+      .returning({ approvalId: a.id, publicId: a.publicId });
     if (!row) throw new ApprovalResumeError("approval_not_recorded");
     await notifyApprovalRequested(tx, {
       orgId: args.orgId,
@@ -344,10 +390,10 @@ type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
 async function findLiveApproval(
   tx: Tx,
   args: CreateApprovalArgs,
-): Promise<string | null> {
+): Promise<{ id: string; publicId: string } | null> {
   const a = schema.approvalRequests;
   const [row] = await tx
-    .select({ id: a.id })
+    .select({ id: a.id, publicId: a.publicId })
     .from(a)
     .where(
       and(
@@ -355,6 +401,9 @@ async function findLiveApproval(
         eq(a.workspaceId, args.workspaceId),
         eq(a.messageId, args.messageId),
         eq(a.capabilityName, args.capabilityName),
+        // A consent request and an approval for the same tool are two
+        // questions, so one is never handed back for the other.
+        eq(a.kind, args.kind ?? "approval"),
         args.toolCallId
           ? eq(a.toolCallId, args.toolCallId)
           : isNull(a.toolCallId),
@@ -363,7 +412,7 @@ async function findLiveApproval(
       ),
     )
     .limit(1);
-  return row?.id ?? null;
+  return row ?? null;
 }
 
 // Pauses execution until the approval resolves (via PG NOTIFY) or the

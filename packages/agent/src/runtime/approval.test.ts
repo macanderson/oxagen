@@ -13,7 +13,9 @@ vi.mock("pino", () => ({
 const insertedValues: unknown[] = [];
 const executeSpy = vi.fn(async () => undefined);
 
-const returningMock = vi.fn(async () => [{ id: "appr_123" }]);
+const returningMock = vi.fn(async () => [
+  { id: "appr_123", publicId: "apr_123" },
+]);
 const valuesMock = vi.fn((v: unknown) => {
   insertedValues.push(v);
   return { returning: returningMock };
@@ -23,9 +25,9 @@ const insertMock = vi.fn(() => ({ values: valuesMock }));
 // Three reads share the fake: the approver fan-out (principals ⨝ assignments
 // ⨝ roles), the dedupe read for a live approval on this call, and
 // readApproval. The first two are told apart from readApproval by table and
-// by projection width — the dedupe read asks for `id` alone.
+// by projection width — the dedupe read asks for `id` and `publicId` alone.
 let approverRows: Array<{ userId: string | null }> = [];
-let liveApprovalRows: Array<{ id: string }> = [];
+let liveApprovalRows: Array<{ id: string; publicId: string }> = [];
 let readApprovalRows: Array<Record<string, unknown>> = [];
 let fromTable: unknown = null;
 let projectionKeys = 0;
@@ -34,7 +36,7 @@ const whereConds: SQL[] = [];
 const limitMock = vi.fn(async () => {
   if (fromTable === schema.principals) return approverRows;
   if (fromTable === schema.approvalRequests)
-    return projectionKeys === 1 ? liveApprovalRows : readApprovalRows;
+    return projectionKeys === 2 ? liveApprovalRows : readApprovalRows;
   return [];
 });
 const whereMock = vi.fn((cond: SQL) => {
@@ -140,6 +142,9 @@ describe("approval runtime", () => {
       ttlMs: 10_000,
     });
     expect(res.approvalId).toBe("appr_123");
+    // The public id a parked card carries, so the flyout can match the row
+    // that Fleet and the list reads show.
+    expect(res.publicId).toBe("apr_123");
     expect(insertMock).toHaveBeenCalledTimes(1);
     const row = insertedValues[0] as {
       capabilityName: string;
@@ -155,6 +160,25 @@ describe("approval runtime", () => {
     expect(delta).toBeGreaterThanOrEqual(10_000 - 50);
     expect(delta).toBeLessThanOrEqual(10_000 + 1000);
   });
+
+  it.each([
+    ["an approval when the caller names no kind", undefined, "approval"],
+    ["a consent request when the consent gate asks", "consent", "consent"],
+  ] as const)(
+    "records the row's kind: %s (ADR-175)",
+    async (_why, kind, recorded) => {
+      await createApprovalRequest({
+        orgId: "ten_1",
+        workspaceId: "ws_1",
+        messageId: "msg_1",
+        capabilityName: "mcp.1f3b6c22-9d1e-4a55-9d3d-6d1f0c9a2b77.search",
+        inputPreview: {},
+        riskLevel: "medium",
+        ...(kind ? { kind } : {}),
+      });
+      expect(insertedValues[0]).toMatchObject({ kind: recorded });
+    },
+  );
 
   it("createApprovalRequest writes one approval.requested row per person who may resolve it", async () => {
     // One row per qualifying assignment: a person holding both an org and a
@@ -235,7 +259,7 @@ describe("approval runtime", () => {
   // each retry writes a fresh approval and another fan-out, and the person is
   // asked to answer the same write several times.
   it("reuses a live approval for the same parked call instead of writing another (negative)", async () => {
-    liveApprovalRows = [{ id: "appr_existing" }];
+    liveApprovalRows = [{ id: "appr_existing", publicId: "apr_existing" }];
     approverRows = [{ userId: "u_owner" }];
     const res = await createApprovalRequest({
       orgId: "ten_1",
@@ -247,10 +271,11 @@ describe("approval runtime", () => {
       toolCallId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
     });
     expect(res.approvalId).toBe("appr_existing");
+    expect(res.publicId).toBe("apr_existing");
     expect(insertMock).not.toHaveBeenCalled();
   });
 
-  it("keys the dedupe on the call: the turn's message, the capability and the tool call", async () => {
+  it("keys the dedupe on the call: the turn's message, the capability, the kind and the tool call", async () => {
     await createApprovalRequest({
       orgId: "ten_1",
       workspaceId: "ws_1",
@@ -264,6 +289,8 @@ describe("approval runtime", () => {
     expect(sql).toMatch(/"approval_requests"\."message_id" = \$\d+/);
     expect(sql).toMatch(/"approval_requests"\."capability_name" = \$\d+/);
     expect(sql).toMatch(/"approval_requests"\."tool_call_id" = \$\d+/);
+    // A consent request is never handed back as an approval, or the reverse.
+    expect(sql).toMatch(/"approval_requests"\."kind" = \$\d+/);
     // Unresolved and unexpired only: a denied call may be asked again, and an
     // approval past its window is one nobody can answer.
     expect(sql).toMatch(/"approval_requests"\."resolution" is null/);
