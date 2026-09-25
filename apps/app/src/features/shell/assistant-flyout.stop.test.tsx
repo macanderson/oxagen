@@ -51,8 +51,9 @@ vi.mock("./assistant-parked-approvals", () => ({
 }));
 
 const refresh = vi.fn();
+const pathname = vi.fn(() => "/acme/core-platform");
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/acme/core-platform",
+  usePathname: () => pathname(),
   useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
@@ -119,14 +120,19 @@ const tree = (): ReactNode => (
 
 async function openFlyout() {
   const user = userEvent.setup();
-  render(tree());
+  const { rerender } = render(tree());
   await user.click(screen.getByRole("button", { name: "open assistant" }));
   // The thread read settles first, so the question below is not refused as
   // "still loading".
   await waitFor(() => {
     expect(loadAssistantThread).toHaveBeenCalled();
   });
-  return user;
+  /** Move the page to another path, as a client navigation does. */
+  const renavigate = (to: string) => {
+    pathname.mockReturnValue(to);
+    rerender(tree());
+  };
+  return { user, renavigate };
 }
 
 async function ask(user: ReturnType<typeof userEvent.setup>, text: string) {
@@ -141,12 +147,25 @@ function turnIdIn(value: unknown): unknown {
     : undefined;
 }
 
-/** The turn id the flyout minted and handed the question. */
-function askedTurnId(): string {
-  const input: unknown = askAssistant.mock.calls[0]?.[2];
+/** The turn id the flyout minted and handed a question, the first by default. */
+function askedTurnId(call = 0): string {
+  const input: unknown = askAssistant.mock.calls[call]?.[2];
   const turnId = turnIdIn(input);
   if (typeof turnId !== "string") throw new Error("no turnId was asked");
   return turnId;
+}
+
+/** The shape of a turn id the flyout mints. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Let a stop the flyout sent come back and settle its state. */
+async function settleStop() {
+  await waitFor(() => {
+    expect(fetchStop).toHaveBeenCalledTimes(1);
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 }
 
 /** A stop the flyout posted: its path and the turn id in its body. */
@@ -164,13 +183,18 @@ function postedStop(call = 0): { path: string; turnId: unknown } {
   return { path: url, turnId: turnIdIn(body) };
 }
 
-beforeAll(() => {
+/** Stub `matchMedia`, matching only the queries named. */
+function stubMedia(matching: readonly string[] = []) {
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: false,
+    matches: matching.includes(query),
     media: query,
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
   }));
+}
+
+beforeAll(() => {
+  stubMedia();
   vi.stubGlobal("fetch", fetchStop);
 });
 
@@ -189,13 +213,14 @@ beforeEach(() => {
     },
   });
   fetchStop.mockResolvedValue(Response.json({ turnId: "t", found: true }));
+  pathname.mockReturnValue("/acme/core-platform");
 });
 afterEach(cleanup);
 
 describe("Stop while a turn runs", () => {
   it("replaces Send while the turn runs, on the same button, so focus stays on it", async () => {
     heldTurn();
-    const user = await openFlyout();
+    const { user } = await openFlyout();
     await ask(user, "what is live?");
 
     const stop = await screen.findByTestId("assistant-stop");
@@ -208,7 +233,7 @@ describe("Stop while a turn runs", () => {
 
   it("stops a turn before its first word and keeps nothing but the mark", async () => {
     const held = heldTurn();
-    const user = await openFlyout();
+    const { user } = await openFlyout();
     await ask(user, "what is live?");
     await user.click(await screen.findByTestId("assistant-stop"));
 
@@ -240,7 +265,7 @@ describe("Stop while a turn runs", () => {
 
   it("keeps the words a turn stopped mid-reply had written, whole and marked", async () => {
     const held = heldTurn();
-    const user = await openFlyout();
+    const { user } = await openFlyout();
     await ask(user, "what is live?");
     await user.click(await screen.findByTestId("assistant-stop"));
     await held.end(turn({ reply: "Two agents are", stopped: true }));
@@ -255,7 +280,7 @@ describe("Stop while a turn runs", () => {
 
   it("shows the words that streamed before the stop, then the recorded partial reply marked Stopped", async () => {
     const held = heldTurn();
-    const user = await openFlyout();
+    const { user } = await openFlyout();
     await ask(user, "what is live?");
     const on = streamed[0];
     act(() => {
@@ -284,7 +309,7 @@ describe("Stop while a turn runs", () => {
   // waiting for a decision, so the stopped answer says so.
   it("stops a turn during a tool call and still shows the write it parked", async () => {
     const held = heldTurn();
-    const user = await openFlyout();
+    const { user } = await openFlyout();
     await ask(user, "raise the budget");
     await user.click(await screen.findByTestId("assistant-stop"));
     await held.end(
@@ -312,7 +337,7 @@ describe("Stop while a turn runs", () => {
     );
     fetchStop.mockRejectedValueOnce(new TypeError("offline"));
     const held = heldTurn();
-    const user = await openFlyout();
+    const { user } = await openFlyout();
     await ask(user, "what is live?");
 
     await user.click(await screen.findByTestId("assistant-stop"));
@@ -345,7 +370,7 @@ describe("Stop while a turn runs", () => {
 
   it("stops nothing when the person closes the flyout mid-turn (negative)", async () => {
     const held = heldTurn();
-    const user = await openFlyout();
+    const { user } = await openFlyout();
     await ask(user, "what is live?");
     await screen.findByTestId("assistant-stop");
 
@@ -356,6 +381,121 @@ describe("Stop while a turn runs", () => {
     await held.end(turn());
 
     expect(await screen.findByTestId("assistant-answer")).toBeTruthy();
+    expect(screen.queryByTestId("assistant-stopped")).toBeNull();
+    expect(fetchStop).not.toHaveBeenCalled();
+  });
+  // A stop that lands before its turn registers is held, and the route
+  // answers `found: false`. The stop was taken, so it is not a failure.
+  it("treats a found false answer as a sent stop and marks the reply that ends stopped", async () => {
+    fetchStop.mockResolvedValue(Response.json({ turnId: "t", found: false }));
+    const held = heldTurn();
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    await user.click(await screen.findByTestId("assistant-stop"));
+    await settleStop();
+
+    expect(screen.queryByTestId("assistant-stop-failed")).toBeNull();
+    expect(screen.getByTestId("assistant-stop")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+
+    await held.end(turn({ reply: "", stopped: true }));
+    expect(await screen.findByTestId("assistant-stopped")).toHaveTextContent(
+      "Stopped",
+    );
+  });
+
+  it("shows no mark when a found false stop came after the turn had finished (negative)", async () => {
+    fetchStop.mockResolvedValue(Response.json({ turnId: "t", found: false }));
+    const held = heldTurn();
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    await user.click(await screen.findByTestId("assistant-stop"));
+    await settleStop();
+    await held.end(turn());
+
+    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
+      "Two agents are idle.",
+    );
+    expect(screen.queryByTestId("assistant-stopped")).toBeNull();
+    expect(screen.queryByTestId("assistant-stop-failed")).toBeNull();
+    expect(await screen.findByTestId("assistant-send")).toBeTruthy();
+  });
+
+  // The route holds a stop that arrives before its turn for a minute. An id
+  // reused across questions would let that stop end the next question.
+  it("names each question with a fresh turn id", async () => {
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    expect(await screen.findByTestId("assistant-answer")).toBeTruthy();
+    await ask(user, "and what is idle?");
+    await waitFor(() => {
+      expect(askAssistant).toHaveBeenCalledTimes(2);
+    });
+
+    const first = askedTurnId(0);
+    const second = askedTurnId(1);
+    expect(first).toMatch(UUID);
+    expect(second).toMatch(UUID);
+    expect(second).not.toBe(first);
+  });
+
+  // The workspace is renamed while its turn runs. The new slug reads the
+  // same thread, so Stop still shows there. The stop names the slugs the
+  // question was asked under, and the route redirects an old slug to the
+  // current one (`assistant-stop.ts`).
+  it("sends the stop to the workspace the question was asked in, not the page's current slugs", async () => {
+    const held = heldTurn();
+    const { user, renavigate } = await openFlyout();
+    await ask(user, "what is live?");
+    await screen.findByTestId("assistant-stop");
+
+    act(() => {
+      renavigate("/acme/platform-core");
+    });
+    await waitFor(() => {
+      expect(loadAssistantThread).toHaveBeenCalledWith(
+        "acme",
+        "platform-core",
+      );
+    });
+    await user.click(await screen.findByTestId("assistant-stop"));
+
+    expect(postedStop()).toEqual({
+      path: "/acme/core-platform/assistant/stop",
+      turnId: askedTurnId(),
+    });
+    await held.end(turn({ reply: "", stopped: true }));
+    expect(await screen.findByTestId("assistant-stopped")).toBeTruthy();
+  });
+});
+
+describe("Stop under reduced motion", () => {
+  beforeEach(() => {
+    stubMedia(["(prefers-reduced-motion: reduce)"]);
+  });
+  afterEach(() => {
+    stubMedia();
+  });
+
+  // The flyout once typed a finished reply out and showed Stop until the
+  // typing ended. Reduced motion skipped the typing, so it had to report
+  // itself done at once, or Stop stayed after every answer (#4164). #4204
+  // replaced the typing with the live stream. This case fails if a reveal
+  // comes back and holds Stop for a person who asked for less motion.
+  it("paints the answer whole and gives Send back when the turn ends", async () => {
+    const held = heldTurn();
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    expect(await screen.findByTestId("assistant-stop")).toBeTruthy();
+    await held.end(turn());
+
+    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
+      "Two agents are idle.",
+    );
+    expect(await screen.findByTestId("assistant-send")).toBeTruthy();
+    expect(screen.queryByTestId("assistant-stop")).toBeNull();
     expect(screen.queryByTestId("assistant-stopped")).toBeNull();
     expect(fetchStop).not.toHaveBeenCalled();
   });
