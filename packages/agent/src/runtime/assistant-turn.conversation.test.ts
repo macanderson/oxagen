@@ -47,6 +47,8 @@ function fakeTx(found: (typeof CONVERSATION)[]) {
           }
           const chain = {
             orderBy: () => chain,
+            // The history read pages with an offset (#4195).
+            offset: () => chain,
             limit: () => Promise.resolve(isConversation ? found : []),
           };
           return chain;
@@ -143,7 +145,11 @@ describe("appendUserMessage", () => {
   it("opens a conversation owned by the asker when none is named", async () => {
     const { tx, captured } = fakeTx([]);
     const out = await appendUserMessage(tx, SCOPE, USER, ask(null), "chat");
-    expect(captured.lookups).toHaveLength(0);
+    // No ownership lookup: nothing was named. The history read of the new
+    // conversation's summary row (#4195) selects by id alone.
+    expect(
+      captured.lookups.filter((l) => l.where.includes('"user_id"')),
+    ).toHaveLength(0);
     expect(captured.inserts[0]).toMatchObject({
       table: CONVERSATIONS,
       values: { userId: USER, status: "active", ...SCOPE },
