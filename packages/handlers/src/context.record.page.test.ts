@@ -102,9 +102,16 @@ describe("get_record, file-backed", () => {
     await publish(h);
     const row = h.store.records[0]!;
     row.statement = "Stale wording the mirror never refreshed.";
+    row.label = "Stale mirror label";
 
     const out = await read(h);
     expect(out.record.statement).toBe("Keep a diff under 400 lines.");
+    // The file carries the label too (ADR-174), so its label wins as well.
+    const file = readRecordFile(
+      h.github.files.get(`${h.github.heads.get("main")}:${PATH}`)!,
+    )!;
+    expect(file.label).not.toBeNull();
+    expect(out.record.label).toBe(file.label);
     // The mirror still supplies what the file does not carry.
     expect(out.record.id).toBe(row.publicId);
   });
@@ -266,6 +273,7 @@ describe("revise_context_record", () => {
     expect(revised.kind).toBe(published.kind);
     expect(revised.force).toBe(published.force);
     expect(revised.sharingScope).toBe(published.sharingScope);
+    expect(revised.label).toBe(published.label);
     expect(revised.statement).toBe("Keep a diff under 200 lines.");
     // The content changed, so the content's identity changed with it.
     expect(revised.recordHash).not.toBe(published.recordHash);

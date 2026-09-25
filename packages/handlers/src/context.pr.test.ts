@@ -36,6 +36,7 @@ import { createDismissProposalHandler } from "./context.proposal.dismiss";
 import { createProposeRecordHandler } from "./context.proposal.create";
 import { createListRecordsHandler } from "./context.records.list";
 import { stringify } from "smol-toml";
+import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import { parseChecked } from "./context.steering.checks";
 import { stampRecordObject } from "./context.steering.file";
 import {
@@ -324,6 +325,44 @@ describe("open_context_pr", () => {
       stampedRecordId: restamped.record_id,
       recordHash: restamped.record_hash,
     });
+  });
+
+  it("writes the proposal's label into the file, else the published record's, else one read from the slug (ADR-174)", async () => {
+    const committedLabel = async (h: Harness) => {
+      const parsed = parseChecked(
+        (await h.github.readFile(REPO, PATH, BRANCH))!,
+      );
+      if (!parsed.ok) throw new Error(parsed.reason);
+      return parsed.file.raw[0]!.label;
+    };
+
+    const derived = harness();
+    await createOpenContextPrHandler(derived)(
+      { proposalId: await proposed(derived) },
+      ctx(),
+    );
+    expect(await committedLabel(derived)).toBe(contextRecordLabel(LINEAGE));
+
+    const h = harness();
+    const named = await proposed(h, {
+      record: { ...proposalInput().record, label: "Read the changelog once" },
+    });
+    await createOpenContextPrHandler(h)({ proposalId: named }, ctx());
+    expect(await committedLabel(h)).toBe("Read the changelog once");
+    await createMergeContextPrHandler(h)(
+      { proposalId: named },
+      ctx({ userId: REVIEWER }),
+    );
+
+    // A revision that sets no label keeps the name the record already has.
+    const revision = await proposed(h, {
+      record: {
+        ...proposalInput().record,
+        statement: "Cache the first CHANGELOG.md read; never re-read it.",
+      },
+    });
+    await createOpenContextPrHandler(h)({ proposalId: revision }, ctx());
+    expect(await committedLabel(h)).toBe("Read the changelog once");
   });
 
   it("refuses a second PR on a lineage that has one open, a merged or rejected proposal, and a workspace with no repository", async () => {
@@ -866,6 +905,67 @@ describe("merge_context_pr", () => {
     ]);
     expect(h.github.deletedBranches).toEqual([BRANCH, BRANCH]);
     expect(h.github.pulls.map((p) => p.number)).toEqual([519, 520]);
+  });
+
+  it("writes the record's name into the file: the proposal's, else the one the record holds, else one read from the slug (ADR-174)", async () => {
+    const h = harness();
+    const labelIn = async () =>
+      parseChecked((await h.github.readFile(REPO, PATH, BRANCH))!);
+
+    // A proposal that names nothing, on a lineage nothing holds: the file
+    // carries the name the slug reads as, and the registry takes it.
+    const first = await opened(h);
+    const unnamed = await labelIn();
+    expect(unnamed.ok && unnamed.file.record[0]!.label).toBe(
+      "No Reread Changelog",
+    );
+    await createMergeContextPrHandler(h)(
+      { proposalId: first },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(h.store.records[0]!.label).toBe("No Reread Changelog");
+
+    // A proposal that renames the record writes its label, and every check,
+    // the file-against-proposal one included, passes.
+    const renamed = await proposed(h, {
+      record: { ...proposalInput().record, label: "Read the changelog once" },
+    });
+    const out = await createOpenContextPrHandler(h)(
+      { proposalId: renamed },
+      ctx(),
+    );
+    expect(out.status).toBe("checks_passed");
+    const named = await labelIn();
+    expect(named.ok && named.file.record[0]!.label).toBe(
+      "Read the changelog once",
+    );
+    await createMergeContextPrHandler(h)(
+      { proposalId: renamed },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(h.store.records[0]!.label).toBe("Read the changelog once");
+
+    // A revision that sets no label keeps the name the record holds. A file
+    // that fell back to the slug's name would rename the record on merge.
+    const revised = await opened(h, {
+      record: {
+        ...proposalInput().record,
+        statement: "Cache the first CHANGELOG.md read; never re-read it.",
+      },
+    });
+    const kept = await labelIn();
+    expect(kept.ok && kept.file.record[0]!.label).toBe(
+      "Read the changelog once",
+    );
+    await createMergeContextPrHandler(h)(
+      { proposalId: revised },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(h.store.records).toHaveLength(1);
+    expect(h.store.records[0]).toMatchObject({
+      label: "Read the changelog once",
+      version: 3,
+    });
   });
 
   it("is refused when the head moved after the checks passed, and publishes nothing", async () => {
