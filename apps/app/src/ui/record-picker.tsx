@@ -19,6 +19,13 @@
 // Options come either as a list the page already holds or from `load`, a
 // read-only Server Action the picker calls the first time it opens. The
 // filter runs on the client, over the loaded list.
+//
+// A row says what a person needs in order to choose, not the id the form
+// sends: a vendor's logo, the record's name, where it comes from, and facts
+// such as whether a tool writes and how risky it is, over as many lines as
+// that takes. A chip carries the same logo and name. The value itself is never
+// drawn when the option names it, because for an imported tool it is a
+// pattern over a server uuid nobody can read.
 import { useTranslations } from "next-intl";
 import {
   type KeyboardEvent,
@@ -30,7 +37,15 @@ import {
   useRef,
   useState,
 } from "react";
+import { Badge, type BadgeTone } from "./badge";
 import { inputBase, mono } from "./control-styles";
+import { ProviderIcon } from "./provider-icon";
+
+/** A logo: the vendor's https icon, or the initial of `name` on a tile. */
+export type PickerIcon = { name: string; url: string | null };
+
+/** A short fact drawn as a badge beside the label, such as "Read only". */
+export type PickerFact = { text: string; tone: BadgeTone };
 
 export type PickerOption = {
   /** What the form sends: an id, a slug, or a pattern. */
@@ -39,12 +54,32 @@ export type PickerOption = {
   label: string;
   /** A second line, such as the slug or id, drawn in mono. */
   detail?: string | undefined;
+  /** A second line in plain text, such as the vendor and the version it covers. */
+  context?: string | undefined;
+  /** What the record does, clamped to two lines under the rest. */
+  description?: string | undefined;
+  /** Drawn before the label, in the list and on the chip. */
+  icon?: PickerIcon | undefined;
+  /** Badges after the label: what a tool does to the world, its risk grade. */
+  facts?: readonly PickerFact[] | undefined;
+};
+
+/**
+ * A value prefix one record owns, such as an MCP server's `mcp.<uuid>.`. A
+ * typed pattern under it that matches no option is drawn with the owner's
+ * logo and name and the rest of the pattern, never the prefix.
+ */
+export type PickerNamespace = {
+  prefix: string;
+  label: string;
+  icon?: PickerIcon | undefined;
 };
 
 /** One loaded list. `partial` says the list stopped at a bound before the end. */
 export type OptionPage = {
   options: readonly PickerOption[];
   partial: boolean;
+  namespaces?: readonly PickerNamespace[] | undefined;
 };
 
 /** What `load` answers. An `ActionResult<OptionPage>` fits it. */
@@ -59,6 +94,7 @@ const SHOWN = 50;
 
 /** The options of a list that has not loaded, one array so memos keep. */
 const NONE: readonly PickerOption[] = [];
+const NO_NAMESPACES: readonly PickerNamespace[] = [];
 
 /** The multi picker's box: the input recipe, lit by the focus inside it. */
 const chipBox =
@@ -76,30 +112,105 @@ const SEPARATOR = /[,\n]+/;
 /**
  * The options that match `query`, best first: a label or value that starts
  * with the query, then one with a word that starts with it, then any that
- * contain it. Case is ignored, and the detail line is searched too, so a
- * person can find a record by its slug or id.
+ * contain it. Case is ignored, and the detail and context lines are searched
+ * too, so a person can find a record by its slug or id, or a tool by the name
+ * of the server it comes from.
  */
 function rank(options: readonly PickerOption[], query: string): PickerOption[] {
   const q = query.trim().toLowerCase();
   if (q === "") return [...options];
   const scored: { option: PickerOption; score: number; at: number }[] = [];
+  const hasWord = (text: string) =>
+    text.split(/[\s_\-./:@·]+/).some((word) => word.startsWith(q));
   options.forEach((option, at) => {
     const label = option.label.toLowerCase();
     const value = option.value.toLowerCase();
     const detail = (option.detail ?? "").toLowerCase();
+    const context = (option.context ?? "").toLowerCase();
     let score = -1;
     if (label.startsWith(q) || value.startsWith(q)) score = 0;
+    else if (hasWord(label) || hasWord(value) || hasWord(context)) score = 1;
     else if (
-      label.split(/[\s_\-./:@]+/).some((word) => word.startsWith(q)) ||
-      value.split(/[\s_\-./:@]+/).some((word) => word.startsWith(q))
+      label.includes(q) ||
+      value.includes(q) ||
+      detail.includes(q) ||
+      context.includes(q)
     )
-      score = 1;
-    else if (label.includes(q) || value.includes(q) || detail.includes(q))
       score = 2;
     if (score >= 0) scored.push({ option, score, at });
   });
   scored.sort((a, b) => a.score - b.score || a.at - b.at);
   return scored.map((s) => s.option);
+}
+
+/** How a chosen value is drawn: the option's name and logo, or the pattern as typed. */
+type Shown = {
+  label: string;
+  icon: PickerIcon | undefined;
+  /** Where the value comes from, on hover. */
+  context: string | undefined;
+  /** No option or namespace names it, so it is drawn as the raw value. */
+  raw: boolean;
+  /** The list that names it has not arrived, so `label` says it is loading. */
+  pending: boolean;
+};
+
+/** A uuid anywhere in a value, such as the server segment of an MCP tool's slug. */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/**
+ * The option that is `value`, then a namespace that owns its prefix (the
+ * pattern after the prefix, under the owner's logo), then the value itself.
+ * While the list is still loading, a value that carries a uuid is drawn as
+ * `loading` rather than raw, because the list about to arrive names it. A
+ * value a person can read, such as `claude-opus-*`, is drawn as it is.
+ */
+function shownFor(
+  value: string,
+  options: readonly PickerOption[],
+  namespaces: readonly PickerNamespace[],
+  loading: string | null,
+): Shown {
+  const option = options.find((o) => o.value === value);
+  if (option !== undefined)
+    return {
+      label: option.label,
+      icon: option.icon,
+      context: option.context,
+      raw: false,
+      pending: false,
+    };
+  const owner = namespaces.find(
+    (ns) => value.startsWith(ns.prefix) && value.length > ns.prefix.length,
+  );
+  if (owner !== undefined)
+    return {
+      label: value.slice(owner.prefix.length),
+      icon: owner.icon,
+      context: owner.label,
+      raw: true,
+      pending: false,
+    };
+  if (loading !== null && UUID.test(value))
+    return {
+      label: loading,
+      icon: undefined,
+      context: undefined,
+      raw: false,
+      pending: true,
+    };
+  return {
+    label: value,
+    icon: undefined,
+    context: undefined,
+    raw: true,
+    pending: false,
+  };
+}
+
+/** The list has not arrived yet: `load` has not run, or has not answered. */
+function isPending(source: Source): boolean {
+  return source.status === "idle" || source.status === "loading";
 }
 
 /** The picker's options: the list it was given, or the one `load` fetches on first open. */
@@ -126,12 +237,17 @@ function useSource(
       },
     );
   }, [load]);
+  // A picker given neither a list nor a way to load one has nothing to wait
+  // for, so it reads as an empty list rather than one still loading.
   const source = useMemo<Source>(
     () =>
-      options !== undefined
-        ? { status: "ready", page: { options, partial: false } }
+      options !== undefined || load === undefined
+        ? {
+            status: "ready",
+            page: { options: options ?? NONE, partial: false },
+          }
         : loaded,
-    [options, loaded],
+    [options, load, loaded],
   );
   return [source, ensure];
 }
@@ -186,12 +302,8 @@ function OptionList({
 }: ListProps) {
   const t = useTranslations("ui.picker");
   const shown = matches.slice(0, SHOWN);
-  const rows: { value: string; label: ReactNode; detail?: string }[] = [
-    ...shown.map((o) => ({
-      value: o.value,
-      label: o.label,
-      ...(o.detail === undefined ? {} : { detail: o.detail }),
-    })),
+  const rows: (Omit<PickerOption, "label"> & { label: ReactNode })[] = [
+    ...shown,
     ...(typed === null
       ? []
       : [{ value: typed, label: t("useTyped", { value: typed }) }]),
@@ -210,7 +322,7 @@ function OptionList({
         <div
           id={listId}
           role="listbox"
-          className="max-h-56 overflow-y-auto p-1"
+          className="max-h-80 overflow-y-auto p-1"
         >
           {rows.map((row, i) => {
             const active = i === highlight;
@@ -242,8 +354,29 @@ function OptionList({
                 >
                   {chosen ? "✓" : ""}
                 </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate">{row.label}</span>
+                {row.icon === undefined ? null : (
+                  <ProviderIcon
+                    name={row.icon.name}
+                    iconUrl={row.icon.url}
+                    size={20}
+                  />
+                )}
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="min-w-0 truncate font-medium">
+                      {row.label}
+                    </span>
+                    {row.facts?.map((fact) => (
+                      <Badge key={fact.text} tone={fact.tone} dot={false}>
+                        {fact.text}
+                      </Badge>
+                    ))}
+                  </span>
+                  {row.context === undefined ? null : (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {row.context}
+                    </span>
+                  )}
                   {row.detail !== undefined && row.detail !== row.label ? (
                     <span
                       className={`${mono} truncate text-xs text-muted-foreground`}
@@ -251,6 +384,11 @@ function OptionList({
                       {row.detail}
                     </span>
                   ) : null}
+                  {row.description === undefined ? null : (
+                    <span className="line-clamp-2 text-xs text-muted-foreground">
+                      {row.description}
+                    </span>
+                  )}
                 </span>
               </div>
             );
@@ -333,14 +471,23 @@ export function RecordPicker({
   const [own, setOwn] = useState(defaultValue);
   const value = controlled ?? own;
   const all = source.status === "ready" ? source.page.options : NONE;
-  const labelOf = (v: string) => all.find((o) => o.value === v)?.label ?? v;
+  const namespaces =
+    source.status === "ready"
+      ? (source.page.namespaces ?? NO_NAMESPACES)
+      : NO_NAMESPACES;
+  const loading = isPending(source) ? t("loading") : null;
+  const chosen =
+    value === "" ? null : shownFor(value, all, namespaces, loading);
   // A prefilled value is shown by its label, so its list is read up front.
   const prefilled = value !== "";
   useEffect(() => {
     if (prefilled) ensure();
   }, [prefilled, ensure]);
   const [query, setQuery] = useState<string | null>(null);
-  const text = query ?? (value === "" ? "" : labelOf(value));
+  // A value still loading leaves the field empty and says so in the placeholder.
+  const text = query ?? (chosen?.pending === true ? "" : (chosen?.label ?? ""));
+  // The chosen record's logo sits in the field while its name is shown there.
+  const icon = query === null ? chosen?.icon : undefined;
   const matches = useMemo(
     () => (query === null ? [...all] : rank(all, query)),
     [all, query],
@@ -387,45 +534,57 @@ export function RecordPicker({
 
   return (
     <div className="min-w-0" data-testid={testId}>
-      <input
-        id={id}
-        type="text"
-        role="combobox"
-        autoComplete="off"
-        aria-expanded={open && rowCount > 0}
-        aria-controls={open && rowCount > 0 ? listId : undefined}
-        aria-autocomplete="list"
-        aria-activedescendant={
-          open && rowCount > 0 ? optionId(highlight) : undefined
-        }
-        aria-describedby={describedBy}
-        aria-invalid={invalid}
-        required={required === true && value === ""}
-        disabled={disabled}
-        placeholder={placeholder ?? t("search")}
-        value={text}
-        onFocus={openList}
-        onClick={openList}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setHighlight(0);
-          if (!open) openList();
-          if (e.target.value === "" && value !== "") {
-            if (controlled === undefined) setOwn("");
-            onChange?.("");
+      <div className="relative">
+        {icon === undefined ? null : (
+          <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center">
+            <ProviderIcon name={icon.name} iconUrl={icon.url} size={18} />
+          </span>
+        )}
+        <input
+          id={id}
+          type="text"
+          role="combobox"
+          autoComplete="off"
+          aria-expanded={open && rowCount > 0}
+          aria-controls={open && rowCount > 0 ? listId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            open && rowCount > 0 ? optionId(highlight) : undefined
           }
-        }}
-        onBlur={() => {
-          if (freeform && query !== null && query.trim() !== "")
-            pick(query.trim());
-          else {
-            setQuery(null);
-            setOpen(false);
+          aria-describedby={describedBy}
+          aria-invalid={invalid}
+          required={required === true && value === ""}
+          disabled={disabled}
+          placeholder={
+            chosen?.pending === true
+              ? chosen.label
+              : (placeholder ?? t("search"))
           }
-        }}
-        onKeyDown={onKeyDown}
-        className={inputBase}
-      />
+          value={text}
+          onFocus={openList}
+          onClick={openList}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setHighlight(0);
+            if (!open) openList();
+            if (e.target.value === "" && value !== "") {
+              if (controlled === undefined) setOwn("");
+              onChange?.("");
+            }
+          }}
+          onBlur={() => {
+            if (freeform && query !== null && query.trim() !== "")
+              pick(query.trim());
+            else {
+              setQuery(null);
+              setOpen(false);
+            }
+          }}
+          onKeyDown={onKeyDown}
+          title={query === null ? chosen?.context : undefined}
+          className={`${inputBase} ${icon === undefined ? "" : "pl-9"}`}
+        />
+      </div>
       {name === undefined ? null : (
         <input type="hidden" name={name} value={value} />
       )}
@@ -479,6 +638,10 @@ export function RecordMultiPicker({
   const [own, setOwn] = useState<readonly string[]>(defaultValue);
   const values = controlled ?? own;
   const all = source.status === "ready" ? source.page.options : NONE;
+  const namespaces =
+    source.status === "ready"
+      ? (source.page.namespaces ?? NO_NAMESPACES)
+      : NO_NAMESPACES;
   const [query, setQuery] = useState("");
   const matches = useMemo(() => rank(all, query), [all, query]);
   const typed = typedRow(freeform, query, all);
@@ -514,7 +677,8 @@ export function RecordMultiPicker({
   };
 
   const rowValue = (i: number) => rowAt(i, matches, typed);
-  const labelOf = (v: string) => all.find((o) => o.value === v)?.label ?? v;
+  const loading = isPending(source) ? t("loading") : null;
+  const labelOf = (v: string) => shownFor(v, all, namespaces, loading).label;
   /** The typed text names this value outright, by its value or its label. */
   const names = (v: string) => {
     const said = query.trim().toLowerCase();
@@ -569,14 +733,23 @@ export function RecordMultiPicker({
     <div className="min-w-0" data-testid={testId}>
       <div className={chipBox} aria-disabled={disabled}>
         {values.map((v) => {
-          const label = labelOf(v);
+          const shown = shownFor(v, all, namespaces, loading);
+          const label = shown.label;
           return (
             <span
               key={v}
               data-chip={v}
+              title={shown.context}
               className="inline-flex max-w-full items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-xs text-foreground"
             >
-              <span className={`truncate ${label === v ? mono : ""}`}>
+              {shown.icon === undefined ? null : (
+                <ProviderIcon
+                  name={shown.icon.name}
+                  iconUrl={shown.icon.url}
+                  size={16}
+                />
+              )}
+              <span className={`truncate ${shown.raw ? mono : ""}`}>
                 {label}
               </span>
               <button
