@@ -966,6 +966,22 @@
             "type": "null"
           }
         ]
+      },
+      "framesError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "const": "frames_unavailable"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

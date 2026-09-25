@@ -20,6 +20,7 @@ describe("ShellWorkspace", () => {
         preferences: vi.fn(),
         counts: vi.fn(() => Promise.resolve(counts)),
         notifications: vi.fn(() => Promise.resolve(feed)),
+        assistantEngine: vi.fn(),
       },
     };
     const { WsCtx } = await import("@/server/viewer");

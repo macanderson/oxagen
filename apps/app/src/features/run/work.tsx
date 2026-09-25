@@ -4,16 +4,17 @@
 //
 // It reads the same work read the header's checkout strip does, so the strip,
 // this panel and the Issues tab's Linked work cannot name a different pull
-// request. The files are the ones the outputs recorded with a line stat. A
-// fact neither read carries (the base branch, a release) reads as not
-// recorded, never guessed.
+// request. The files are the ones the outputs recorded with a line stat. The
+// base is the branch each pull request merges into, as GitHub records it. A
+// fact neither read carries (a release, or the base of a run with no pull
+// request) reads as not recorded, never guessed.
 import { useLocale, useTranslations } from "next-intl";
 import { use } from "react";
 import type { RunOutputNode, RunOutputs } from "@/data/contracts/run";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-import { parseGitHubUrl } from "@/shared/github-url";
+import { type GitHubUrl, parseGitHubUrl } from "@/shared/github-url";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { buttonSecondary, kvTerm, kvValue } from "@/ui/control-styles";
@@ -46,6 +47,38 @@ const PR_TONE: Record<Pull["state"], BadgeTone> = {
 /** One file the run changed, with a stat the record carries. */
 export function isFileChange(node: RunOutputNode) {
   return (node.kind === "file" || node.kind === "change") && node.stat !== null;
+}
+
+/** One branch the run's pull requests merge into, with its page on the forge. */
+type Base = { key: string; label: string; url: GitHubUrl | null };
+
+/**
+ * Each branch the run's pull requests merge into, once per repository. The
+ * repository is named only when the pull requests span more than one, so a
+ * run in one repository reads `main`, not `acme/platform:main`.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
+export function basesOf(pulls: readonly Pull[]): Base[] {
+  const repos = new Set(pulls.map((pr) => pr.repository.url));
+  const bases = new Map<string, Base>();
+  for (const pr of pulls) {
+    if (pr.baseRef === "") continue;
+    const key = `${pr.repository.url}#${pr.baseRef}`;
+    if (bases.has(key)) continue;
+    // A slash in a branch name stays a path separator; any other character a
+    // URL must escape is escaped, or `parseGitHubUrl` would refuse the link.
+    const path = pr.baseRef.split("/").map(encodeURIComponent).join("/");
+    bases.set(key, {
+      key,
+      label:
+        repos.size > 1
+          ? `${pr.repository.owner}/${pr.repository.name}:${pr.baseRef}`
+          : pr.baseRef,
+      url: parseGitHubUrl(`${pr.repository.url}/tree/${path}`),
+    });
+  }
+  return [...bases.values()];
 }
 
 /** The whole set's state: failing wins over pending, which wins over passing. */
@@ -96,6 +129,7 @@ function ChangesBody({
   const t = useTranslations("run.work");
   const pulls = work.ok ? work.value.pullRequests : [];
   const ci = ciOf(pulls);
+  const bases = basesOf(pulls);
   const files = outputs.ok ? outputs.value.nodes.filter(isFileChange) : [];
   const added = files.reduce((sum, node) => sum + (node.stat?.added ?? 0), 0);
   const removed = files.reduce(
@@ -151,7 +185,28 @@ function ChangesBody({
           )}
         </Row>
         <Row label={t("base")}>
-          <span className="text-dim">{t("baseNotRecorded")}</span>
+          {bases.length === 0 ? (
+            // A failed read is named once, on the pull request row above.
+            <span className="text-dim">{t("baseNotRecorded")}</span>
+          ) : (
+            <span className="flex flex-wrap items-center gap-1.5">
+              {bases.map((base) =>
+                base.url === null ? (
+                  <span key={base.key} className="font-mono">
+                    {base.label}
+                  </span>
+                ) : (
+                  <GitHubLink
+                    key={base.key}
+                    to={base.url}
+                    className="font-mono text-link hover:underline"
+                  >
+                    {base.label}
+                  </GitHubLink>
+                ),
+              )}
+            </span>
+          )}
         </Row>
         <Row label={t("release")}>
           <span className="text-dim">{t("releaseNotRecorded")}</span>
