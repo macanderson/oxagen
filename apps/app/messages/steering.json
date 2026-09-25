@@ -413,6 +413,7 @@
       "new": "new \u00b7 bundle v{version}",
       "published": "published",
       "openLabel": "Open {lineage}",
+      "cloneLabel": "Clone {lineage}",
       "effectLineTitle": "Rendered, cited, and violated counts are not recorded yet. Tracked in #{issue}.",
       "effectNotRecorded": "effect not recorded",
       "truncated": "Showing the first {read} of {total} records in force.",

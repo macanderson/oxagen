@@ -8922,6 +8922,7 @@ type Messages = {
       new: string;
       published: string;
       openLabel: string;
+      cloneLabel: string;
       effectLineTitle: string;
       effectNotRecorded: string;
       truncated: string;

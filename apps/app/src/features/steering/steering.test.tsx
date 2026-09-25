@@ -20,6 +20,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProposalStatus } from "@/data/contracts/steering";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { IntlProvider } from "@/test/intl";
 import {
   agentPage,
@@ -882,6 +883,26 @@ describe("Records", () => {
         name: "Open ctx.release.no-reread-changelog",
       }),
     ).toBeVisible();
+  });
+
+  it("offers Clone on each card, which opens the clone editor on that record's slug", async () => {
+    const receive = vi.fn((event: Event) => createRequestOf(event));
+    window.addEventListener(CREATE_EVENT, receive);
+    try {
+      await renderSteering("/records");
+      const card = within(section("Published records")).getByRole("article");
+      fireEvent.click(
+        within(card).getByRole("button", {
+          name: "Clone ctx.release.no-reread-changelog",
+        }),
+      );
+      expect(receive).toHaveReturnedWith({
+        kind: "record",
+        cloneSourceRef: "ctx.release.no-reread-changelog",
+      });
+    } finally {
+      window.removeEventListener(CREATE_EVENT, receive);
+    }
   });
 
   it("leads a card with the record's label and prints its statement under it (ADR-174)", async () => {

@@ -44,6 +44,7 @@ import {
 import { pageNumbers } from "@/ui/faceted-list-table";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { CloneButton } from "@/ui/clone-button";
 import { PressLink } from "@/ui/press-link";
 import { STEERING_GAPS } from "./gaps";
 import { budgetTokens } from "./tokens";
@@ -324,6 +325,12 @@ function RecordShelfCard({
             >
               {t("open")}
             </SafeLink>
+            <CloneButton
+              kind="record"
+              sourceRef={record.lineage}
+              label={t("cloneLabel", { lineage: record.lineage })}
+              className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-[12.5px]`}
+            />
           </span>
         </div>
         {/* The label names the record and the statement says what it asks
