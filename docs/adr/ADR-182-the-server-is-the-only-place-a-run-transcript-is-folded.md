@@ -115,3 +115,9 @@ fold, and the client fold introduced with #3345.
   words. A model step with nothing to draw, a call still waiting on its reply
   or one kept as a digest with no figures, is `quiet`. The `figures.prompts`
   figure counts a prompt as the `prompt` chip does.
+- The Run page draws a row under a chip only when the entry's `kinds` carry
+  that chip, and marks a row failed only as the errors count does. The server
+  counts `thinking` from the reasoning tokens a provider reported, and
+  `tools` from tool steps, so a kept thought of a step that reported none,
+  and a call only the reply records, are drawn under `responses`. A failed
+  result of such a call shows in its row and makes no error.

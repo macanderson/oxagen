@@ -6,7 +6,7 @@
 // the page does with an entry: which rows it draws, which half each row
 // reads, and how a page of entries is merged into what a reader holds.
 import { describe, expect, it } from "vitest";
-import type { TranscriptEntry } from "@/data/contracts/run";
+import type { TranscriptEntry, TranscriptKind } from "@/data/contracts/run";
 import { transcriptBody, transcriptEntry } from "./run.builders";
 import {
   releaseSteps,
@@ -338,9 +338,14 @@ describe("a model step's rows", () => {
     ...over,
   });
 
-  it("draws a call no tool step recorded from the reply's block, with the result the reply kept", () => {
+  // Finding P2-4 of the ADR-182 third review: the server counts `tools` on
+  // tool steps and errors on an entry's outcome, so a call only the reply
+  // records is part of the reply, under `responses`, and its failed result
+  // is shown without making the step an error no count took.
+  it("draws a call no tool step recorded from the reply's block, under responses, with the result the reply kept", () => {
     const rows = rowsFrom([
       model({
+        kinds: ["responses"],
         response: {
           seq: 1,
           type: "llm_call",
@@ -366,14 +371,64 @@ describe("a model step's rows", () => {
         },
       }),
     ]);
-    const tool = only(rows);
-    expect(tool.failed).toBe(true);
+    expect(rows.map((row) => [row.kind, row.group, row.failed])).toEqual([
+      ["calls", "responses", false],
+      ["tool", "responses", false],
+    ]);
+    const tool = rows[1];
     expect(toolOf(tool)).toMatchObject({
       name: "Read",
       group: "read",
       output: "no such file",
       pending: false,
     });
+  });
+
+  // Finding P2-3 of the ADR-182 third review: the server counts `thinking`
+  // from the reasoning tokens a provider reported and reads no body, so a
+  // thought kept in the reply of a step that reported none is drawn under
+  // `responses`, the chip that counted the step.
+  it("draws a kept thought under thinking only when the server counted the step there", () => {
+    const thought = (kinds: TranscriptKind[]) =>
+      rowsFrom([
+        model({
+          kinds,
+          response: {
+            seq: 1,
+            type: "llm_call",
+            blocks: [
+              { kind: "thinking", text: "Read the plan first." },
+              { kind: "text", text: "Reading it." },
+            ],
+          },
+        }),
+      ]).map((row) => [row.kind, row.group]);
+    expect(thought(["responses", "thinking"])).toEqual([
+      ["thinking", "thinking"],
+      ["text", "responses"],
+    ]);
+    expect(thought(["responses"])).toEqual([
+      ["thinking", "responses"],
+      ["text", "responses"],
+    ]);
+  });
+
+  it("files a row under no chip the entry does not answer, and marks every row of an entry the server counted as an error (negative)", () => {
+    const rows = rowsFrom([
+      model({
+        kinds: ["usage", "errors"],
+        costMicros: "10",
+        response: {
+          seq: 1,
+          type: "llm_call",
+          blocks: [{ kind: "thinking", text: "Try again." }],
+        },
+      }),
+    ]);
+    expect(rows.map((row) => [row.kind, row.group, row.failed])).toEqual([
+      ["thinking", null, true],
+      ["usage", "usage", true],
+    ]);
   });
 
   it("names a call from the reply's block by the server's reading of its tool", () => {
@@ -610,6 +665,7 @@ describe("an event's rows", () => {
         node: "seal",
         turn: 1,
         label: "end_turn",
+        kinds: ["seal"],
       },
     ]);
     expect(rows.map((row) => row.kind)).toEqual(["text", "event", "seal"]);

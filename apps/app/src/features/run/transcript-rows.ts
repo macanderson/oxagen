@@ -266,9 +266,37 @@ function gateOf(gate: TranscriptEntry["gates"][number]): FeedGate {
   };
 }
 
-/** The entry's call failed, or was refused, as the server states it. */
+/**
+ * The entry failed, was refused, or answers the errors chip, as the server
+ * states it: the rule `transcriptCounts` counts errors by, so the errors
+ * toggle shows the entries its count counted. Every row of an entry takes
+ * this, including a call the entry's reply made that no tool step recorded,
+ * whose own result the server does not read.
+ */
 function failedOf(entry: TranscriptEntry): boolean {
-  return entry.outcome === "failed" || entry.outcome === "denied";
+  return (
+    entry.outcome === "failed" ||
+    entry.outcome === "denied" ||
+    entry.kinds.includes("errors")
+  );
+}
+
+/**
+ * The chip a row of `entry` is drawn under. A row appears under a chip only
+ * when the server counted its entry there (`kinds`), so a chip's count is
+ * the entries it shows (ADR-182). A row the page would file under a chip the
+ * entry does not answer goes under `responses` when the entry answers that,
+ * and under no chip otherwise. Two rows take the fallback: a thinking block
+ * of a model step that reported no reasoning tokens, since the server counts
+ * `thinking` from the provider's report and reads no body; and a call the
+ * reply made that no tool step recorded, since `tools` counts tool steps.
+ */
+function chipOf(
+  entry: TranscriptEntry,
+  wanted: FeedGroup | null,
+): FeedGroup | null {
+  if (wanted === null || entry.kinds.includes(wanted)) return wanted;
+  return entry.kinds.includes("responses") ? "responses" : null;
 }
 
 function base(
@@ -281,7 +309,7 @@ function base(
     entry: entry.key,
     at: entry.at,
     elapsedMs: entry.elapsedMs,
-    group,
+    group: chipOf(entry, group),
     failed: failedOf(entry),
     subagent: entry.subagent,
     parent: entry.parentKey,
@@ -410,7 +438,9 @@ function toolRow(entry: TranscriptEntry): FeedRow {
 /**
  * A tool the model called that no tool step recorded: the gateway saw the
  * call in the reply, and the harness wrote no frame of its own for it. Its
- * result is what the reply's own result block said, when one was kept.
+ * result is what the reply's own result block said, when one was kept. No
+ * count takes it as a tool call, so it is drawn as part of the reply
+ * (`chipOf`).
  */
 function blockToolRow(
   block: ToolUse,
@@ -439,12 +469,10 @@ function blockToolRow(
     truncated: entry.response?.truncated === true,
     frame,
   };
-  return {
-    ...base(key, entry, "tools"),
-    failed: block.result?.ok === false,
-    kind: "tool",
-    call,
-  };
+  // Filed under `tools` only if the server counted this entry there, which
+  // it does not for a model step (`chipOf`). A failed result is shown in the
+  // row's output and is not an error of the entry's: no count reads it.
+  return { ...base(key, entry, "tools"), kind: "tool", call };
 }
 
 /**
@@ -458,6 +486,11 @@ function blockToolRow(
  * kept, since which of these rows a reply draws needs the reply read and a
  * count reads none. So a reply that said nothing in words, one that only
  * called tools, draws a `calls` row naming them.
+ *
+ * Each row's chip is the server's (`chipOf`): a kept thought is drawn under
+ * `thinking` when the step reported reasoning tokens and under `responses`
+ * when it did not, and a call no tool step recorded is drawn under
+ * `responses`.
  */
 function modelRows(entry: TranscriptEntry): FeedRow[] {
   const reply = entry.response;

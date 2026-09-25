@@ -327,13 +327,18 @@ function usage(input: number, cache: number, output: number): TranscriptUsage {
   };
 }
 
-/** A model step that answered, as the fold states one: its reply and its cost. */
+/**
+ * A model step that answered, as the fold states one: its reply and its
+ * cost. `kinds` are the chips the server counts it under; a step that
+ * reported reasoning tokens also answers `thinking`.
+ */
 function modelStep(
   seq: number,
   t: number,
   blocks: BlockSpec[],
   costMicros: string,
   used: TranscriptUsage,
+  kinds: TranscriptKind[] = ["responses", "usage"],
 ): StepSpec {
   return {
     seq,
@@ -346,7 +351,7 @@ function modelStep(
     response: { seq, type: "model.response", blocks },
     costMicros,
     usage: used,
-    kinds: ["responses", "usage"],
+    kinds,
     outcome: "ok",
     model: "anthropic/claude-opus-5",
   };
@@ -453,10 +458,14 @@ export function releaseSteps(): StepSpec[] {
       },
     },
     {
-      ...modelStep(3, 0.4, firstReply, "412600", {
-        ...usage(3368, 12000, 412),
-        reasoning: 64,
-      }),
+      ...modelStep(
+        3,
+        0.4,
+        firstReply,
+        "412600",
+        { ...usage(3368, 12000, 412), reasoning: 64 },
+        ["responses", "thinking", "usage"],
+      ),
       type: "model.request",
       endSeq: 4,
       callId: "msg_1",
@@ -571,6 +580,7 @@ export function releaseSteps(): StepSpec[] {
       ],
       "622000",
       { ...usage(1188, 15284, 734), reasoning: 48 },
+      ["responses", "thinking", "usage"],
     ),
     receipt(14, 70.1, "Edit", "edit", {
       input: {

@@ -46,6 +46,7 @@ function stored(text: string) {
 function streamOf(
   blocks: (
     | { type: "text"; text: string }
+    | { type: "thinking"; text: string }
     | { type: "tool_use"; id: string; name: string; input: object }
   )[],
 ): string {
@@ -60,6 +61,19 @@ function streamOf(
           type: "content_block_delta",
           index,
           delta: { type: "text_delta", text: block.text },
+        },
+      );
+    } else if (block.type === "thinking") {
+      events.push(
+        {
+          type: "content_block_start",
+          index,
+          content_block: { type: "thinking" },
+        },
+        {
+          type: "content_block_delta",
+          index,
+          delta: { type: "thinking_delta", thinking: block.text },
         },
       );
     } else {
@@ -102,8 +116,10 @@ const model = { model: "claude-opus-5", provider: "anthropic" };
  * the Read call; a model step that says something and calls Write, and the
  * Write call; a failed Bash call; a model step kept as a digest with no cost
  * or tokens; and a closing message that repeats the model's words. The
- * second: a prompt of only whitespace, a closing message that says something
- * new, a model call still waiting on its reply, and the run's stop.
+ * second: a prompt of only whitespace; a model step that kept its thinking
+ * and reported no reasoning tokens; a model step that called Grep, which no
+ * tool step recorded; a closing message that says something new; a model
+ * call still waiting on its reply; and the run's stop.
  */
 const rows: TachoFrameRow[] = [
   tachoRow(0, {
@@ -183,12 +199,42 @@ const rows: TachoFrameRow[] = [
   }),
   tachoRow(8, { kind: "turn_start", ...none, turnSeq: 2, ...stored(" \n") }),
   tachoRow(9, {
+    kind: "llm_call",
+    ...none,
+    ...model,
+    costUsdMicros: 9,
+    turnSeq: 2,
+    ...stored(
+      streamOf([
+        { type: "thinking", text: "The notes are written; check them." },
+        { type: "text", text: "Checking the notes." },
+      ]),
+    ),
+  }),
+  tachoRow(10, {
+    kind: "llm_call",
+    ...none,
+    ...model,
+    costUsdMicros: 8,
+    turnSeq: 2,
+    ...stored(
+      streamOf([
+        {
+          type: "tool_use",
+          id: "toolu_g",
+          name: "Grep",
+          input: { pattern: "TODO" },
+        },
+      ]),
+    ),
+  }),
+  tachoRow(11, {
     kind: "turn_end",
     ...none,
     turnSeq: 2,
     ...stored("Nothing more to do."),
   }),
-  tachoRow(10, {
+  tachoRow(12, {
     kind: "model.request",
     ...none,
     ...model,
@@ -196,7 +242,7 @@ const rows: TachoFrameRow[] = [
     turnSeq: 2,
     ...stored('{"messages":[]}'),
   }),
-  tachoRow(11, { kind: "agent_stop", ...none, turnSeq: 2 }),
+  tachoRow(13, { kind: "agent_stop", ...none, turnSeq: 2 }),
 ];
 
 function transcript() {
@@ -253,25 +299,46 @@ describe("the Transcript tab's counts and rows", () => {
     }
     expect(counts.entries).toBe(entriesOf(() => true));
     expect(counts.errors).toBe(entriesOf((row) => row.failed));
+    // A row is drawn under a chip only when the server counted its entry
+    // there, whatever the row itself shows.
+    const kindsOf = new Map(
+      read.entries.map((entry) => [entry.key, entry.kinds]),
+    );
+    const misfiled = drawn.filter(
+      (row) =>
+        row.group !== null &&
+        !(kindsOf.get(row.entry) ?? []).includes(row.group),
+    );
+    expect(misfiled.map((row) => [row.key, row.group])).toEqual([]);
 
     // The fixture holds what used to split them: a closing message that
     // repeats the model's streamed words, a prompt of only whitespace, a
     // model step that only called a tool, one kept as a digest with nothing
-    // to draw, and a call still waiting on its reply.
-    expect(drawn.map((row) => [row.entry, row.kind])).toEqual([
-      ["0", "prompt"],
-      ["1", "calls"],
-      ["1", "usage"],
-      ["2", "tool"],
-      ["3", "text"],
-      ["3", "usage"],
-      ["4", "tool"],
-      ["5", "tool"],
-      ["9", "text"],
-      ["11", "seal"],
+    // to draw, a thought kept with no reasoning tokens reported, a call only
+    // the reply records, and a call still waiting on its reply.
+    expect(drawn.map((row) => [row.entry, row.kind, row.group])).toEqual([
+      ["0", "prompt", "prompt"],
+      ["1", "calls", "responses"],
+      ["1", "usage", "usage"],
+      ["2", "tool", "tools"],
+      ["3", "text", "responses"],
+      ["3", "usage", "usage"],
+      ["4", "tool", "tools"],
+      ["5", "tool", "tools"],
+      ["9", "thinking", "responses"],
+      ["9", "text", "responses"],
+      ["9", "usage", "usage"],
+      ["10", "calls", "responses"],
+      ["10", "usage", "usage"],
+      ["10", "tool", "responses"],
+      ["11", "text", "responses"],
+      ["13", "seal", "seal"],
     ]);
-    expect(counts.entries).toBe(8);
-    expect(counts.kinds.responses).toBe(3);
+    expect(counts.entries).toBe(10);
+    expect(counts.kinds.responses).toBe(5);
+    expect(counts.kinds.thinking).toBe(0);
+    expect(counts.kinds.tools).toBe(3);
+    expect(counts.errors).toBe(1);
     // The step that only called Read names it, and draws the call once, as
     // the Read step's row.
     expect(drawn.find((row) => row.kind === "calls")).toMatchObject({
