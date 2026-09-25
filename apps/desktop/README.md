@@ -265,5 +265,9 @@ src-tauri/      Rust shell: state reads, the two user-scoped API calls, tray;
                 decision functions); capabilities/default.json scopes the
                 sidecars and the updater; tauri.unsigned.conf.json is the
                 no-key overlay
-scripts/        sidecars.mjs (stage binaries), icons.mjs
+scripts/        sidecars.mjs (stage binaries), icons.mjs, publish-downloads.mjs
+                and check-latest.mjs (the downloads host), e2e-smoke.mjs (an
+                installed app against the live control plane),
+                smoke-macos-bundle.sh (CI: start the signed bundle's sidecars
+                and app under the hardened runtime), rig-stubs.mjs
 ```
