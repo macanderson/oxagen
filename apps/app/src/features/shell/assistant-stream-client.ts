@@ -38,7 +38,7 @@ export type ParkedCard = {
   expiresAt: string;
 };
 
-export type AssistantTurn = {
+type AssistantTurn = {
   conversationId: string;
   /** `arun_…`: the run this turn was recorded as; the Run page opens it. */
   runId: string;
@@ -53,7 +53,7 @@ export type AssistantRefusal = Extract<
 >;
 
 /** The stream ended before its terminal. The turn itself ran on. */
-export type AssistantStreamDropped = {
+type AssistantStreamDropped = {
   ok: false;
   reason: "dropped";
   /** The run the stream named before it dropped; null when it named none. */
@@ -81,7 +81,7 @@ export type AssistantQuestion = {
 };
 
 /** A tool call the turn made, named by the capability it called. */
-export type StreamedToolCall = { id: string; capability: string };
+type StreamedToolCall = { id: string; capability: string };
 
 /** What the flyout hears while the turn runs. Every handler is optional. */
 export type AssistantStreamHandlers = {
@@ -128,6 +128,8 @@ const UNCLASSIFIED = "kernel_failure";
  * A failure the route named after the stream opened, classified as the kernel
  * seam classifies the same code. The route names a handler refusal by its
  * reason, so `conversation_not_found` is the not-found it was on the seam.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function refusalOfCode(code: string | undefined): AssistantRefusal {
   if (code === undefined) {
@@ -163,6 +165,8 @@ const envelopeSchema = z.object({
  * A refusal the route answered before the stream opened: the error
  * middleware's envelope and its status. The status carries the kind and the
  * envelope the code, the handler's reason first, as on the kernel seam.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function refusalOfResponse(
   status: number,
@@ -295,7 +299,7 @@ function parseJson(text: string): unknown {
 }
 
 /** The route for a workspace: same-origin, through the `/api/v1/*` rewrite. */
-export function assistantStreamUrl(org: string, ws: string): string {
+function assistantStreamUrl(org: string, ws: string): string {
   return `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(ws)}/chat/stream`;
 }
 
