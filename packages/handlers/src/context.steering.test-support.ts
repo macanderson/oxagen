@@ -91,7 +91,41 @@ export class MemoryStore implements SteeringStore {
   }[] = [];
   appends: AppendRow[] = [];
 
-  async insertProposal(values: Parameters<SteeringStore["insertProposal"]>[0]) {
+  async insertProposal(
+    values: Parameters<SteeringStore["insertProposal"]>[0],
+    options?: Parameters<SteeringStore["insertProposal"]>[1],
+  ) {
+    // The Postgres store takes the lineage's advisory lock and refuses a slug
+    // a record or a proposal already holds (ADR-174). The refusal is what a
+    // caller branches on, so the double reproduces it over its own rows; the
+    // lock has no meaning here. context.steering.store.pg.test.ts proves the
+    // real one against a database.
+    if (options?.createOnly) {
+      // Both columns are citext, so the store matches ignoring case.
+      const lineage = values.lineageId.toLowerCase();
+      const held =
+        this.records.some(
+          (r) =>
+            r.orgId === values.orgId &&
+            r.workspaceId === values.workspaceId &&
+            r.slug.toLowerCase() === lineage,
+        ) ||
+        this.proposals.some(
+          (p) =>
+            p.orgId === values.orgId &&
+            p.workspaceId === values.workspaceId &&
+            p.lineageId.toLowerCase() === lineage,
+        );
+      if (held) {
+        const { HandlerError } = await import("@oxagen/oxagen");
+        throw new HandlerError({
+          code: "conflict",
+          reason: "clone_name_taken",
+          message:
+            "This slug already belongs to a record or a proposal. Choose another slug.",
+        });
+      }
+    }
     const now = new Date();
     const row: ProposalRow = {
       id: uuid(),
