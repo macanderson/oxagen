@@ -76,6 +76,9 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
     // is still pending and still past its expiry at write time, so a stale
     // accept cannot mark a renewed invitation expired.
     const now = new Date();
+    // tenancy: global invitations row, filtered by the id and pending status
+    // the verified invitation read above returned; the invitee has no org
+    // membership yet, so no orgId scope applies.
     await withSystemDb((tx) =>
       tx
         .update(schema.invitations)
