@@ -60,6 +60,7 @@ export function toAgentPage(out: AgentListOutput): z.input<typeof AgentPage> {
     nextCursor: out.nextCursor,
     totals: {
       identities: out.totals.identities,
+      retired: out.totals.retired,
       enrolled: out.totals.enrolled,
       unenrolled: out.totals.unenrolled,
       holdingMandate: out.totals.holdingMandate,
