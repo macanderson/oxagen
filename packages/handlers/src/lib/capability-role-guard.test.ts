@@ -10,7 +10,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 
 const mocks = vi.hoisted(() => ({
   membershipReads: [] as Array<Array<{ role: string }>>,
@@ -36,8 +36,19 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-const { assertCallerRole, permittedRoles } = await import(
-  "./capability-role-guard"
+// assertContractRole's gate runs for real against a role fixture.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("../test-utils/org-role-gate")).orgRoleModule(),
+);
+
+const {
+  assertCallerRole,
+  assertContractRole,
+  contractRoleRequirement,
+  permittedRoles,
+} = await import("./capability-role-guard");
+const { resetRoleGate, roleGate } = await import(
+  "../test-utils/org-role-gate"
 );
 
 const CTX: CapabilityContext = {
@@ -191,5 +202,99 @@ describe("assertCallerRole", () => {
       "Forbidden: do_thing grants no role in its contract",
     );
     expect(mocks.systemDbCalls).not.toHaveBeenCalled();
+  });
+});
+
+describe("contractRoleRequirement", () => {
+  it("names the allowed org and workspace roles by IAM name", () => {
+    expect(
+      contractRoleRequirement(
+        cap(
+          "c",
+          { Owner: "allow", Admin: "allow", Billing: "deny" },
+          { Owner: "allow", Member: "require_approval" },
+        ),
+      ),
+    ).toEqual({ org: ["Owner", "Admin"], workspace: ["Owner"] });
+  });
+
+  it("leaves the workspace leg out when the contract grants none", () => {
+    expect(contractRoleRequirement(cap("c", { Owner: "allow" }))).toEqual({
+      org: ["Owner"],
+    });
+  });
+});
+
+describe("assertContractRole", () => {
+  const OWNER_ADMIN = cap("do_thing", { Owner: "allow", Admin: "allow" });
+  const WITH_WS_OWNER = cap(
+    "do_thing",
+    { Owner: "allow", Admin: "allow" },
+    { Owner: "allow" },
+  );
+
+  beforeEach(() => resetRoleGate());
+
+  it("returns the org role that satisfied the contract", async () => {
+    roleGate.roles = { org: "Admin" };
+    await expect(assertContractRole(OWNER_ADMIN, CTX)).resolves.toBe("Admin");
+  });
+
+  it("refuses a workspace Member with HandlerError forbidden", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    const err = await assertContractRole(WITH_WS_OWNER, CTX).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(isHandlerError(err)).toBe(true);
+    expect(err).toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+  });
+
+  it("passes a workspace role the contract grants", async () => {
+    roleGate.roles = { org: null, workspace: "Owner" };
+    await expect(assertContractRole(WITH_WS_OWNER, CTX)).resolves.toBe(
+      "Owner",
+    );
+  });
+
+  it("does not pass a workspace role when the contract grants only org roles", async () => {
+    roleGate.roles = { org: null, workspace: "Owner" };
+    await expect(assertContractRole(OWNER_ADMIN, CTX)).rejects.toMatchObject({
+      code: "forbidden",
+    });
+  });
+
+  it("acts as an API key's creator", async () => {
+    roleGate.roles = { org: "Owner", keyCreator: "u_creator" };
+    await expect(
+      assertContractRole(OWNER_ADMIN, {
+        ...CTX,
+        userId: null,
+        apiKeyId: "key_1",
+      }),
+    ).resolves.toBe("Owner");
+  });
+
+  it("refuses a key with no creator as no_principal", async () => {
+    roleGate.roles = { org: "Owner", keyCreator: null };
+    await expect(
+      assertContractRole(OWNER_ADMIN, {
+        ...CTX,
+        userId: null,
+        apiKeyId: "key_1",
+      }),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
+  });
+
+  it("refuses a contract that grants no role, naming it", async () => {
+    await expect(
+      assertContractRole(cap("nobody", { Owner: "deny" }), CTX),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      message: "nobody grants no role in its contract",
+    });
   });
 });

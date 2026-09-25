@@ -63,5 +63,5 @@ Tool name: `unset_secret_value`
 ## Errors
 
 - `validation_error` — missing/empty `keyId` or `environmentId`.
-- `unauthorized` — caller is not org Owner/Admin.
+- `forbidden` (`org_role_required`): the caller is not an org Owner or Admin.
 - `not_found` — key or environment not found in the active workspace.

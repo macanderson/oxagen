@@ -1,5 +1,7 @@
 import { updateEnvironment } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { environmentUpdate } from "@oxagen/oxagen/contracts/environment.update";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 export const environmentUpdateHandler: CapabilityHandlerFn = async (
@@ -10,6 +12,9 @@ export const environmentUpdateHandler: CapabilityHandlerFn = async (
     throw new Error(
       "[environment.update] workspaceId is required (scoped capability)",
     );
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(environmentUpdate, ctx);
   const { environmentId, name, slug, description, isActive } = input as {
     environmentId: string;
     name?: string;

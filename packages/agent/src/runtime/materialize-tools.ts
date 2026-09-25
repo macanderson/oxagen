@@ -30,6 +30,11 @@ import {
 } from "@oxagen/billing";
 import { withTenantDb } from "@oxagen/database";
 import { readActiveEmergencyDenies } from "@oxagen/iam";
+import {
+  resolveActingUserId,
+  resolveActorOrgRoles,
+  resolveActorWorkspaceRoles,
+} from "@oxagen/iam/org-role";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { capabilityMutates } from "@oxagen/oxagen/types";
@@ -55,7 +60,11 @@ import {
   type ActingAgent,
   type KillSwitchGate,
 } from "./kill-switch-gate";
-import { decideCapabilityForBelt, decideMcpToolForBelt } from "./toolbelt";
+import {
+  decideCapabilityForBelt,
+  decideMcpToolForBelt,
+  type CallerRoles,
+} from "./toolbelt";
 // Side-effect imports register the plugin-type contributors.
 import "./plugin-types/mcp";
 import "./plugin-types/file-mcp";
@@ -194,6 +203,12 @@ export interface MaterializeOptions {
   // Workspace risk policy: when set to "low" or "medium", any capability
   // with a strictly-higher riskLevel is filtered out of the tool set.
   riskCeiling?: "low" | "medium" | "high";
+  /**
+   * The person's IAM roles, when the caller already read them for this turn.
+   * Absent, materializeTools reads them itself, once, the first time a
+   * capability needs the answer (#4194).
+   */
+  callerRoles?: CallerRoles;
   /** When provided, only MCP servers whose publicId is in this set are loaded for the turn. */
   serverAllowlist?: Set<string>;
   /**
@@ -548,6 +563,23 @@ function parseMcpSyntheticId(
   return { serverId: rest.slice(0, dot), toolName: rest.slice(dot + 1) };
 }
 
+/**
+ * The org-wide and workspace IAM roles of the person a turn acts for: the
+ * signed-in user, or an API key's creator (`resolveActingUserId`). A context
+ * that resolves to nobody holds no role.
+ */
+async function readCallerRoles(ctx: CapabilityContext): Promise<CallerRoles> {
+  const userId = await resolveActingUserId(ctx);
+  if (!userId) return { org: [], workspace: [] };
+  const [org, workspace] = await Promise.all([
+    resolveActorOrgRoles(ctx.orgId, userId),
+    ctx.workspaceId
+      ? resolveActorWorkspaceRoles(ctx.orgId, ctx.workspaceId, userId)
+      : Promise.resolve([]),
+  ]);
+  return { org, workspace };
+}
+
 export async function materializeTools(
   ctx: CapabilityContext,
   opts: MaterializeOptions = {},
@@ -685,6 +717,34 @@ export async function materializeTools(
       : entitledPluginIds;
   };
 
+  // The person's roles (#4194), read once and only when a capability with a
+  // role map is decided for a person's turn. An agent run keeps its
+  // delegation ceiling instead. The same user the handlers' role gate acts as
+  // is read: the signed-in user, or an API key's creator. No such user holds
+  // no role. A failed read leaves every role-mapped capability out of the
+  // belt (fail closed), the rule the entitlement read follows.
+  let callerRoles: CallerRoles | "unavailable" | null =
+    opts.callerRoles ?? null;
+  const callerRolesFor = async (
+    cap: AnyCapability,
+  ): Promise<CallerRoles | "unavailable" | undefined> => {
+    if (agentRun?.principalKind === "agent" || !cap.defaultRoles) {
+      return undefined;
+    }
+    if (callerRoles === null) {
+      try {
+        callerRoles = await readCallerRoles(ctx);
+      } catch (err) {
+        logger.warn(
+          { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "role read failed — excluding every role-mapped capability (fail-closed)",
+        );
+        callerRoles = "unavailable";
+      }
+    }
+    return callerRoles;
+  };
+
   for (const cap of all) {
     // One decision per tool, shared with `get_agent_toolbelt` (toolbelt.ts):
     // surface, exclusion, allowlist, risk ceiling, the run's cached
@@ -704,6 +764,7 @@ export async function materializeTools(
       emergencyDenies,
       actingAgent: opts.actingAgent ?? null,
       entitledPluginIds: await entitledPluginIdsFor(cap),
+      callerRoles: await callerRolesFor(cap),
     });
     if (decision.outcome === "deny") continue;
     const riskLevel = decision.riskLevel;

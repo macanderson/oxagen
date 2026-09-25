@@ -29,7 +29,7 @@ No input fields.
 
 ## Roles
 
-Org Owner, Org Admin, Org Member, Org Billing, Org Compliance, Org Viewer.
+Org: Owner, Admin, Billing, Compliance. Workspace: Owner, Member, Viewer. These are every role a person can hold. The handler returns only the caller's own memberships.
 
 ## Side effects
 

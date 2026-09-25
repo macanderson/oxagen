@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceModelSettingsWrite } from "@oxagen/oxagen/contracts/workspace.model_settings.write";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 export const workspaceModelSettingsWriteHandler: CapabilityHandler<
@@ -26,6 +27,9 @@ export const workspaceModelSettingsWriteHandler: CapabilityHandler<
       "workspace.model.settings.write requires an authenticated user",
     );
   }
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(workspaceModelSettingsWrite, ctx);
 
   // Only include explicitly provided fields in the update. "not provided" means
   // leave the column unchanged; "explicitly null" clears the model preference.

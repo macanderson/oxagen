@@ -2,6 +2,8 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { pluginCredentialReauth } from "@oxagen/oxagen/contracts/plugin.credential.reauth";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 /**
@@ -19,6 +21,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       "[plugin.credential.reauth] workspaceId is required (scoped capability)",
     );
   }
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(pluginCredentialReauth, ctx);
 
   // Resolve org slug + workspace slug from the context ids.
   let slugs: { orgSlug: string | null; workspaceSlug: string | null };

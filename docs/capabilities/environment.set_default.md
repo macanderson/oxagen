@@ -50,5 +50,5 @@ Tool name: `set_default_environment`
 ## Errors
 
 - `validation_error` — missing/empty `environmentId`.
-- `unauthorized` — caller is not org Owner/Admin.
+- `forbidden` (`org_role_required`): the caller is not an org Owner or Admin.
 - `not_found` — no environment with that id in the active workspace.

@@ -11,7 +11,9 @@
 // when it is a function declaration. A role gate is `assertOrgRole`, or
 // `assertConsequenceRole` (`@oxagen/iam/mandate-role`), which asks for the org
 // roles a workspace names for a consequence and calls `assertOrgRole` with the
-// resolved user itself (rule two scans that call). Every entry must also be a
+// resolved user itself (rule two scans that call), or `assertContractRole`
+// (`./lib/capability-role-guard`), which asks for the roles the contract's
+// `defaultRoles` grants the same way. Every entry must also be a
 // registered contract, so a renamed capability fails here rather than silently
 // dropping out of the gate. The arrays grow with each lane that adds a
 // role-checked handler.
@@ -100,10 +102,40 @@ const ROLE_CHECKED_CONTRACTS = [
   // A verdict on an assistant reply (#4169) takes ask_assistant's roles, and
   // ask_assistant asserts them in its turn, so this handler asserts them too.
   "record_reply_feedback",
-  // The role catalogue, its scopes and the enforcement tier. The contract
-  // declares Owner, Admin and Compliance; the app's own check was the only
-  // gate until the handler asserted them too.
+  // Thirty agent-surface contracts that granted only narrow roles while their
+  // handlers checked none (#4194). A workspace Member could reach each one
+  // over the API, over MCP, and through stella's search_tools and
+  // load_tools. Each now calls assertContractRole with its own contract.
+  "bind_agent_environment",
+  "unbind_agent_environment",
+  "create_environment",
+  "update_environment",
+  "delete_environment",
+  "set_default_environment",
+  "unset_secret_value",
+  "install_plugin",
+  "install_plugins_bulk",
+  "uninstall_plugin",
+  "set_plugin_enabled",
+  "add_plugin_registry",
+  "remove_plugin_registry",
+  "set_auth_alerts",
+  "get_auth_alerts",
+  "update_org_settings",
+  "update_prompt_settings",
+  "update_budget_policy",
+  "update_model_settings",
+  "update_memory_policy",
+  "set_connection_mappings",
+  "suggest_connection_mappings",
+  "reauth_plugin_credential",
+  "get_usage_breakdown",
+  "get_evidence_retention",
   "list_iam_roles",
+  "get_capability_registry",
+  "list_capability_registry",
+  "browse_plugin_catalog",
+  "get_catalog_plugin",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [
@@ -215,8 +247,16 @@ const isCallTo = (node: ts.Node, name: string): node is ts.CallExpression =>
   ts.isIdentifier(node.expression) &&
   node.expression.text === name;
 
-/** The calls that gate a handler on an org role. */
-const ROLE_GATES = ["assertOrgRole", "assertConsequenceRole"] as const;
+/**
+ * The calls that gate a handler on an org role. `assertContractRole`
+ * (`./lib/capability-role-guard`) calls `assertOrgRole` with the resolved
+ * user and the contract's own roles, and rule two scans that call.
+ */
+const ROLE_GATES = [
+  "assertOrgRole",
+  "assertConsequenceRole",
+  "assertContractRole",
+] as const;
 
 /**
  * Whether the exported handler contains a call to a role gate: in its
@@ -392,6 +432,16 @@ describe("INV-29: role-restricted contracts are gated in their handler", () => {
     );
     expect(handlerCallsRoleGate(source, "handler")).toBe(true);
   });
+
+  it("the scan sees assertContractRole as a gate", () => {
+    const source = parseSource(
+      "probe.ts",
+      `export const handler = async (_input, ctx) => {
+         await assertContractRole(contract, ctx);
+       };`,
+    );
+    expect(handlerCallsRoleGate(source, "handler")).toBe(true);
+  });
 });
 
 describe("INV-29: role-restricted packages/agent contracts are gated in their handler", () => {
@@ -441,6 +491,7 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         "handlers/src/audit.events.export.ts",
         "handlers/src/audit.log.query.ts",
         "handlers/src/workspace.archive.ts",
+        "handlers/src/lib/capability-role-guard.ts",
         "iam/src/mandate-role.ts",
       ]),
     );

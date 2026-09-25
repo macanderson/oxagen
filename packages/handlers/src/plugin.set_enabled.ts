@@ -2,6 +2,8 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { pluginSetEnabled } from "@oxagen/oxagen/contracts/plugin.set_enabled";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 /** Map authKind from the installed plugin to the authStrategy expected by connectMcp. */
@@ -234,6 +236,9 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
 };
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(pluginSetEnabled, ctx);
   const { scope } = input as Input;
   return scope === "org"
     ? setOrgEnabled(input, ctx)

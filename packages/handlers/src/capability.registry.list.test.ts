@@ -7,6 +7,12 @@
  * plugin entitlement enrichment, which is mocked at the pluginForContract seam).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// The handler's role gate (#4194) runs for real against a role fixture. The
+// default caller is an org Owner; a case that needs another sets roleGate.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
 import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +30,7 @@ import {
   projectCapabilitySummary,
 } from "./capability.registry.list";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 
 function registerFixture(
   name: string,
@@ -175,5 +182,31 @@ describe("capabilityRegistryListHandler", () => {
     });
     expect(summary.auditTargetKind).toBe("graph.node");
     expect(summary.plugin).toBeNull();
+  });
+});
+
+// The contract grants org Owner, Admin, or Compliance, or workspace Owner.
+// The kernel's IAM check allows every capability for a non-enterprise org,
+// so the handler is the only gate there (#4194).
+describe("capabilityRegistryListHandler role gate", () => {
+  beforeEach(() => resetRoleGate());
+
+  it("refuses a workspace Member as forbidden", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      capabilityRegistryListHandler({ limit: 500, offset: 0 }, CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+  });
+
+  it.each([
+    ["an org Compliance member", { org: "Compliance" }],
+    ["a workspace Owner", { org: null, workspace: "Owner" }],
+  ])("allows %s", async (_who, roles) => {
+    roleGate.roles = roles;
+    const out = await capabilityRegistryListHandler(
+      { limit: 500, offset: 0 },
+      CTX,
+    );
+    expect(out.offset).toBe(0);
   });
 });
