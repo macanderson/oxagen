@@ -579,7 +579,6 @@
           <tr><th scope="row">Let a rule allow or deny a tool call</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td></tr>
           <tr><th scope="row">Send a tool call to a person</th><td><span class="sup p">Partly</span><small>Claude Code asks you on your own machine.</small></td><td><span class="sup n">No</span><small>Oxagen denies the call and says why.</small></td><td><span class="sup n">No</span><small>Oxagen denies the call and says why.</small></td><td><span class="sup p">Partly</span><small>Stella asks you before the call runs.</small></td></tr>
           <tr><th scope="row">Record model calls and their cost</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup n">No</span><small>Cursor sends model calls to its own servers.</small></td><td><span class="sup y">Yes</span><small>For Anthropic models.</small></td></tr>
-          <tr><th scope="row">Route MCP tool calls through Oxagen</th><td><span class="sup n">No</span><small>Not built yet. Connectors from claude.ai run on Anthropic's servers, so Oxagen can't route them.</small></td><td><span class="sup n">No</span><small>Not built yet. ChatGPT apps run on OpenAI's servers, so Oxagen can't route them.</small></td><td><span class="sup n">No</span><small>Not built yet. Cloud Agents run their tools on Cursor's servers, so Oxagen can't route them.</small></td><td><span class="sup n">No</span><small>Not possible yet. Stella reads MCP servers only from files inside each repository.</small></td></tr>
           <tr><th scope="row">Send a message to a running agent</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup p">Partly</span><small>Only when a session starts.</small></td><td><span class="sup p">Partly</span><small>Only when a session starts.</small></td></tr>
           <tr><th scope="row">Stop a run</th><td><span class="sup y">Yes</span></td><td><span class="sup p">Partly</span><small>Oxagen blocks the next tool call and ends the model call in progress.</small></td><td><span class="sup p">Partly</span><small>Oxagen blocks the next tool call.</small></td><td><span class="sup y">Yes</span></td></tr>
           <tr><th scope="row">Load your skills and rules</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td></tr>
@@ -589,8 +588,7 @@
       </div>
       <p class="matrix-key" aria-hidden="true"><span class="sup y">Yes</span><span class="sup p">Partly</span><span class="sup n">No</span></p>
       <p class="matrix-note">Claude Desktop connects in a different way. It calls Oxagen's own
-      tools, and Oxagen checks and records those calls only. Its remote connectors run on
-      Anthropic's servers, so Oxagen can't route them. If you built your own agent, it can
+      tools, and Oxagen checks and records those calls only. If you built your own agent, it can
       send its events to Oxagen with the <code>tacho hook</code> command.</p>
       </div>
     </div>
