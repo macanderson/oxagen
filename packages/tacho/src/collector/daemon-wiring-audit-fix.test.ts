@@ -34,7 +34,7 @@ import type {
   DeliveredCommand,
   PolicyBundle,
 } from "../wire";
-import { type DaemonHandle, startDaemon } from "./daemon";
+import { type DaemonHandle, type DaemonTimers, startDaemon } from "./daemon";
 import { handleHookEvent, type PolicyView } from "./hook-handler";
 import { applyCommands, HandledCommands, type InboxDeps } from "./inbox";
 import {
@@ -103,9 +103,10 @@ function fakePlane(etag: string) {
   const queue: DeliveredCommand[] = [];
   const acks: CommandAcknowledgement[] = [];
   let bundle: PolicyBundle | undefined;
-  // Once set, every request is refused the way the API refuses the key a
-  // revoke retired: 403 with the reason `host_revoked`.
-  let revoked = false;
+  // Once set, every request (or every request to the named endpoints) is
+  // refused the way the API refuses the key a revoke retired: 403 with the
+  // reason `host_revoked`.
+  let revoked: readonly string[] | "all" | undefined;
   const requests: string[] = [];
   const control = (): ControlEnvelope => ({
     host_status: "active",
@@ -116,7 +117,10 @@ function fakePlane(etag: string) {
   const fetch: FetchLike = async (url, init) => {
     const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
     requests.push(url);
-    if (revoked) {
+    if (
+      revoked === "all" ||
+      (revoked !== undefined && revoked.some((path) => url.endsWith(path)))
+    ) {
       return {
         ok: false,
         status: 403,
@@ -177,8 +181,8 @@ function fakePlane(etag: string) {
     offerBundle: (next: PolicyBundle) => {
       bundle = next;
     },
-    revoke: () => {
-      revoked = true;
+    revoke: (only?: readonly string[]) => {
+      revoked = only ?? "all";
     },
   };
 }
@@ -205,6 +209,7 @@ describe("the daemon's audit wiring", () => {
       git?: () => Record<string, string>;
       paths?: ReturnType<typeof scratchPaths>;
       log?: string[];
+      timers?: Partial<DaemonTimers>;
     } = {},
   ) {
     const paths = options.paths ?? scratchPaths();
@@ -243,6 +248,7 @@ describe("the daemon's audit wiring", () => {
         sweepMs: 0,
         checkpointMs: 0,
         commandsPollMs: 0,
+        ...options.timers,
       },
     });
     handles.push(handle);
@@ -564,7 +570,10 @@ describe("the daemon's audit wiring", () => {
   it("marks the host revoked, stops shipping and refuses tools once the control plane answers host_revoked", async () => {
     // A revoke retires the host's key, so no control envelope can carry the
     // revoked status. The refusal is the only word the host gets (#3944).
-    const { handle, plane, paths } = await boot();
+    // A bundle refresh on every tick, so the test sees it stop too.
+    const { handle, plane, paths } = await boot({
+      timers: { bundleRefreshMs: 0 },
+    });
     await handle.api.handleHook(hook("SessionStart"));
     plane.revoke();
     const before = plane.requests.length;
@@ -583,11 +592,12 @@ describe("the daemon's audit wiring", () => {
       host_status: "revoked",
       last_error: expect.stringContaining("revoked this host's enrollment"),
     });
-    // One refused ingest, and then nothing more goes to the control plane:
-    // no ingest and no command poll.
+    // One refused bundle refresh and one refused ingest, and then nothing
+    // more goes to the control plane: no refresh, no ingest, no command poll.
     await handle.tick();
     await handle.tick();
     expect(plane.requests.slice(before)).toEqual([
+      expect.stringMatching(/\/bundle$/),
       expect.stringMatching(/\/events$/),
     ]);
     const response = await handle.api.handleHook(
@@ -603,6 +613,20 @@ describe("the daemon's audit wiring", () => {
         permissionDecisionReason: expect.stringContaining("revoked"),
       },
     });
+  });
+
+  it("learns the revocation from a refused command poll too, and stops shipping", async () => {
+    // A host with nothing to ship still polls for commands, so it hears the
+    // refusal there instead of waiting for its next ingest.
+    const { handle, plane } = await boot();
+    plane.revoke(["/commands"]);
+    await handle.tick();
+    expect(handle.shipper.hostRevoked).toBe(true);
+    expect(handle.host().host_status).toBe("revoked");
+    const sent = plane.requests.length;
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.tick();
+    expect(plane.requests).toHaveLength(sent);
   });
 
   it("reads the host status from host.json alone when the bundle does not verify", async () => {

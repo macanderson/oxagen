@@ -165,6 +165,7 @@ import {
   type HookEnvelope,
 } from "./server";
 import {
+  isHostRevokedRefusal,
   type RetentionDecision,
   Shipper,
   serverRequestedWaitMs,
@@ -1483,7 +1484,7 @@ async function initializeDaemon(
 
   async function sendAcks(): Promise<void> {
     // A revoked host's poll is refused on every attempt and never clears,
-    // so it stops with the shipper rather than logging a failure a minute.
+    // so it stops once the shipper or a poll has heard the revocation.
     if (shipper.hostRevoked) return;
     // A message whose session sealed before a boundary reached it is
     // `expired`; left unsent, the operator reads it as still on its way.
@@ -1519,6 +1520,12 @@ async function initializeDaemon(
     } catch (error) {
       pendingAcks.unshift(...acks);
       commandPollFailures += 1;
+      if (error instanceof ControlError && isHostRevokedRefusal(error)) {
+        // An idle host learns here rather than at its next ingest. The
+        // shipper stops with it, and neither asks again.
+        shipper.markHostRevoked();
+        return;
+      }
       if (
         error instanceof ControlError &&
         (error.status === 400 || error.status === 422)
@@ -3590,6 +3597,8 @@ async function initializeDaemon(
     // mandate the control plane holds now rather than the one cached before
     // an outage.
     await stage("bundle refresh", async () => {
+      // A revoked host's key fetches nothing, so it stops asking (#3944).
+      if (shipper.hostRevoked) return;
       if (now() - lastRefresh >= timers.bundleRefreshMs) {
         lastRefresh = now();
         await refreshBundle();

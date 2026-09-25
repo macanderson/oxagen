@@ -2,7 +2,7 @@
 
 Revoke a Tacho host. The host's API keys are soft-deleted, the host row becomes `revoked`, and a `revoke` command is queued. Idempotent.
 
-A retired key cannot fetch that command, so the host learns of the revocation from the refusal. Its next ingest is answered 403 with the reason `host_revoked`, for a retired key by the API's auth resolver and for a live key on a revoked host by the handler (#3944). The collector then marks the host revoked, stops shipping and polling, keeps its recorded events in the local spool, and shows the revocation in `tacho status`. From then on every session on the host is denied at its next prompt or tool boundary while the hooks remain installed. If they are not installed, the next session on the host is an `unobserved_session` incident.
+A retired key cannot fetch that command, so the host learns of the revocation from the refusal. Its next ingest or command poll is answered 403 with the reason `host_revoked`, for a retired key by the API's auth resolver and for a live key on a revoked host by the handler (#3944). The collector then marks the host revoked, stops shipping, polling, and refreshing its bundle, keeps its recorded events in the local spool, and shows the revocation in `tacho status`. From then on every session on the host is denied at its next prompt or tool boundary while the hooks remain installed. If they are not installed, the next session on the host is an `unobserved_session` incident.
 
 ## Mode
 

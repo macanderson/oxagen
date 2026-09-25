@@ -181,7 +181,7 @@ function sessionOwnedElsewhere(error: ControlError): boolean {
  * in step with this string (`TACHO_HOST_REVOKED`).
  */
 const HOST_REVOKED = "host_revoked";
-function hostRevoked(error: ControlError): boolean {
+export function isHostRevokedRefusal(error: ControlError): boolean {
   if (error.status !== 403) return false;
   try {
     const parsed = JSON.parse(error.body) as {
@@ -299,10 +299,11 @@ export class Shipper {
   }
 
   /**
-   * Stop for good: the control plane said an operator revoked this host.
-   * Nothing is marked shipped or quarantined, so the WAL keeps every event.
+   * Stop for good: the control plane said an operator revoked this host, on
+   * an ingest or on another request the daemon made. Nothing is marked
+   * shipped or quarantined, so the WAL keeps every event.
    */
-  private stopRevoked(): void {
+  markHostRevoked(): void {
     if (this.revoked) return;
     this.revoked = true;
     this.lastError = HOST_REVOKED_MESSAGE;
@@ -827,11 +828,11 @@ export class Shipper {
         this.succeed();
         return this.shipBatch(batch, bodies);
       }
-      if (error instanceof ControlError && hostRevoked(error)) {
+      if (error instanceof ControlError && isHostRevokedRefusal(error)) {
         // An operator revoked this host. Backing off would retry a refusal
         // that never clears, for ever, while the WAL grows. Stop instead,
         // and keep the batch where it is.
-        this.stopRevoked();
+        this.markHostRevoked();
         return { shipped: 0, quarantined: 0, reachable: true };
       }
       // 401, a 403 that names no revocation, 429, 5xx: keep the batch, back off.
