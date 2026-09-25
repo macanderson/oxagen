@@ -280,7 +280,7 @@ export async function readSteeringRows(
   );
   // Before the migration the version columns cannot be named at all, so the
   // read is the record-row one and `classificationOf` takes its fallback for
-  // every row -- the same answer, because no version can carry a
+  // every row. That is the same answer, because no version can carry a
   // classification on a database that has nowhere to put one.
   if (!ready) {
     return (await tx
@@ -307,9 +307,10 @@ export async function readSteeringRows(
  * on that order. A row that cannot steer (no force, no statement) is left
  * out, as `recordCandidate` explains.
  *
- * Uncached: one probe and one select per call. The bundle keeps its own
- * cache keyed on the steering version (`readWorkspaceSteering`); a turn of
- * the in-app assistant reads once and is far rarer than a host's poll.
+ * Uncached: one select per call, after the column probe, which keeps its
+ * answer per plane. The bundle keeps its own cache keyed on the steering
+ * version (`readWorkspaceSteering`). A turn of the in-app assistant reads
+ * once, and turns are far rarer than a host's polls.
  */
 export async function readPublishedSteeringCandidates(
   tx: SteeringTx,
