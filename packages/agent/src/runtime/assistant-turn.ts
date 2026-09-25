@@ -437,8 +437,9 @@ async function runPreparedTurn(
       parked.push({
         // The contract promises the public id (`apr_…`): it is the id the
         // flyout matches against `list_approvals` and
-        // `list_resolved_approvals`, and the one Fleet shows. The row uuid is
-        // the fallback for a writer that returned no public id.
+        // `list_resolved_approvals`, and the one Fleet shows. Every writer
+        // that parks a call returns one. The event type leaves it optional,
+        // so the row uuid stands in rather than an empty id.
         approvalId: event.approvalPublicId ?? event.approvalId,
         capability: event.capability,
         expiresAt: event.expiresAt,
@@ -751,7 +752,7 @@ async function runPreparedTurn(
     runId: run.runPublicId,
     reply,
     parkedCards: parked,
-    toolCalls: toolCallsFromReceipts(run.receipts, parked),
+    toolCalls: toolCallsFromReceipts(run.receipts),
     stopped,
   };
 }

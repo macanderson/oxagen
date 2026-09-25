@@ -109,7 +109,7 @@ export function externalDecisionCheck(args: {
           }
           const ttlMs = 5 * 60_000;
           const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-          const { approvalId } = await createApprovalRequest({
+          const { approvalId, approvalPublicId } = await createApprovalRequest({
             orgId: args.ctx.orgId,
             workspaceId: args.ctx.workspaceId,
             messageId: args.ctx.messageId,
@@ -123,6 +123,9 @@ export function externalDecisionCheck(args: {
           });
           args.onApprovalRequired({
             approvalId,
+            // The surface's card names the approval by its public id, as the
+            // parked path above and a governed write's approval both do.
+            approvalPublicId,
             capability: args.name,
             inputPreview: args.input,
             riskLevel: "high",

@@ -154,10 +154,7 @@ async function getConversation(
     ...message,
     toolCalls:
       message.role === "assistant" && message.runId !== null
-        ? toolCallsFromLedger(
-            callsByRun.get(message.runId) ?? [],
-            message.parkedCards,
-          )
+        ? toolCallsFromLedger(callsByRun.get(message.runId) ?? [])
         : [],
   }));
 
