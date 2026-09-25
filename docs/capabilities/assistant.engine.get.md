@@ -1,6 +1,8 @@
 # get_assistant_engine
 
-Whether the in-app agent's engine can take a turn (ADR-053 §4; MC spec §4.4). The engine is a required service, so the flyout reads this before it offers a composer and again on Retry after an `engine_unavailable` refusal.
+Whether the in-app agent's engine can take a turn (ADR-053 §4; MC spec §4.4). The engine is a required service, so the app's assistant flyout reads this when it opens. While the engine reports any state but `ready`, the flyout names the state above the composer and holds Send. It reads again on window focus once the answer is 15 seconds old, from its Check again control, and after a turn comes back with an `engine_unavailable` refusal (#3227).
+
+The app keeps `endpoint` on the server. The flyout receives the state and the error code only.
 
 The probe calls the engine's own readiness route, `GET /readyz`, up to three times with a two-second timeout each, and the answer names what was observed. Nothing here starts a turn or falls back to an in-process loop.
 
