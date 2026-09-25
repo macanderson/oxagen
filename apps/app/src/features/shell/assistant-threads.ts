@@ -91,7 +91,16 @@ function restoredEntries(thread: AssistantThread): readonly RestoredEntry[] {
         text: message.text,
         runId: message.runId,
         parked: message.parked,
-        toolCalls: message.toolCalls,
+        // A restored call goes into the shape a live turn produces, where the
+        // engine's call id keeps the engine's name for it (INV-11 is why the
+        // view model calls it `toolCallRef`).
+        toolCalls: message.toolCalls.map((call) => ({
+          toolCallId: call.toolCallRef,
+          toolName: call.toolName,
+          outcome: call.outcome,
+          durationMs: call.durationMs,
+          approvalId: call.approvalId,
+        })),
       });
     }
   }

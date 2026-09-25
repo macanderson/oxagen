@@ -15,15 +15,24 @@ const ParkedWrite = z.object({
 
 /**
  * One tool call behind a reply, as `get_conversation` reads it from the
- * reply's run. `approvalId` names the approval a parked call waits on, and is
- * null for every other outcome.
+ * reply's run.
+ *
+ * `toolCallRef` is **a `…Ref`, not an id field, because it is not one of
+ * ours.** The engine mints it for its own call, and Oxagen neither issues it
+ * nor can validate it, so INV-11 carries it under a name that says what it is
+ * rather than claiming a public id it is not (`mandates.ts` carries the same
+ * reasoning for `externalEffectRef`).
+ *
+ * `approvalId` names the approval a parked call waits on, and is null for
+ * every other outcome. It is the approval's own public id (`apr_…`), the same
+ * id its entry in `parked` carries, so it is a `PublicId`.
  */
 const ToolCall = z.object({
-  toolCallId: z.string().min(1),
+  toolCallRef: z.string().min(1),
   toolName: z.string().min(1),
   outcome: z.enum(["completed", "failed", "denied", "cancelled", "parked"]),
   durationMs: z.number().int().nonnegative(),
-  approvalId: z.string().min(1).nullable(),
+  approvalId: PublicId.nullable(),
 });
 
 /**

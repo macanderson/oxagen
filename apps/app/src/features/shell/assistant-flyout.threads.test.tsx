@@ -63,14 +63,14 @@ const RECORDED: AssistantThread = {
       // The calls get_conversation read from the reply's run (#4161).
       toolCalls: [
         {
-          toolCallId: "tc-1",
+          toolCallRef: "tc-1",
           toolName: "list_runs",
           outcome: "completed",
           durationMs: 41,
           approvalId: null,
         },
         {
-          toolCallId: "tc-2",
+          toolCallRef: "tc-2",
           toolName: "set_budget",
           outcome: "parked",
           durationMs: 88,

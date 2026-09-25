@@ -24,6 +24,10 @@ type StoredMessage = StoredConversation["messages"][number];
 /**
  * A stored message as the flyout draws it. A `system` row is the model's
  * instruction, not something the person said or read, so it is left out.
+ *
+ * The contract names the engine's own call id `toolCallId`, which is what the
+ * engine calls it; the view model carries it as `toolCallRef`, because it is
+ * not an id Oxagen mints (INV-11). This is the one place the two names meet.
  */
 function toThreadMessage(message: StoredMessage): ThreadMessage | null {
   if (message.role === "system") return null;
@@ -33,7 +37,13 @@ function toThreadMessage(message: StoredMessage): ThreadMessage | null {
     text: message.content,
     runId: message.runId,
     parked: message.parkedCards,
-    toolCalls: message.toolCalls,
+    toolCalls: message.toolCalls.map((call) => ({
+      toolCallRef: call.toolCallId,
+      toolName: call.toolName,
+      outcome: call.outcome,
+      durationMs: call.durationMs,
+      approvalId: call.approvalId,
+    })),
   };
 }
 

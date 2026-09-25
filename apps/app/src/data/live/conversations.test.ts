@@ -66,6 +66,13 @@ const CALLS = [
   },
 ];
 
+// The same calls as the view model carries them: the engine's call id under
+// the name INV-11 gives a reference Oxagen does not mint.
+const VIEW_CALLS = CALLS.map(({ toolCallId, ...rest }) => ({
+  toolCallRef: toolCallId,
+  ...rest,
+}));
+
 const conversation = (messages: unknown[]) => ({
   publicId: "cnv_01k9x2",
   title: null,
@@ -127,7 +134,7 @@ describe("conversations.latest", () => {
             text: "One write waits on a person.",
             runId: "arun_0002",
             parked: [CARD],
-            toolCalls: CALLS,
+            toolCalls: VIEW_CALLS,
           },
         ],
         truncated: false,
