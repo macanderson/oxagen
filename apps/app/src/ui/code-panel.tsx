@@ -1,6 +1,7 @@
 "use client";
-// A read-only diff, with line numbers and the house code colours: the surface
-// the agent source editor shows a proposed change on.
+// Read-only code in the house colours: a diff with line numbers, the surface
+// the agent source editor shows a proposed change on, and a plain block, the
+// surface a tool's worked example is shown on.
 //
 // It shares its type scale, its ground (`--code-bg`) and its token colours
 // with `code-editor.tsx`, so a change a reader reviews here and the file they
@@ -9,7 +10,7 @@
 // house defines, which is what keeps a code block inside the brand in both
 // light and dark rather than carrying a vendor's palette into it.
 
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import {
   type CodeLanguage,
   type CodeTokenKind,
@@ -135,5 +136,49 @@ export function DiffPanel({
       </div>
       <div className="sr-only">{`${label}: ${path}, ${stat}`}</div>
     </div>
+  );
+}
+
+/**
+ * Code as written, in the house colours, with no gutter: a worked example or
+ * a payload a reader copies rather than reviews. Long lines wrap, because a
+ * block inside a dialog that scrolls sideways hides the end of every line.
+ */
+export function CodeBlock({
+  code,
+  language = "text",
+  label,
+}: {
+  code: string;
+  language?: CodeLanguage;
+  /**
+   * What the block holds, for a screen reader. A `pre` has no role that may
+   * carry a name, so a labelled block is a group.
+   */
+  label?: string;
+}) {
+  // Each line keyed by where it starts in the code, which never repeats.
+  const lines: { start: number; text: string }[] = [];
+  let start = 0;
+  for (const text of code.split("\n")) {
+    lines.push({ start, text });
+    start += text.length + 1;
+  }
+  return (
+    <pre
+      data-code-block=""
+      role={label === undefined ? undefined : "group"}
+      aria-label={label}
+      className={`${codeText} whitespace-pre-wrap break-words rounded-md border border-border bg-code-bg px-3 py-2.5 text-foreground`}
+    >
+      <code>
+        {lines.map((line) => (
+          <Fragment key={line.start}>
+            {line.start === 0 ? null : "\n"}
+            {paint(line.text, language)}
+          </Fragment>
+        ))}
+      </code>
+    </pre>
   );
 }

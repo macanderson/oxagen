@@ -40,6 +40,7 @@ export function SheetDialog({
   onOpenChange,
   title,
   subtitle,
+  icon,
   tabs,
   footer,
   footerNote,
@@ -57,6 +58,8 @@ export function SheetDialog({
   title: string;
   /** A line under the title in the muted ink: the record the dialog is about. */
   subtitle?: string;
+  /** A mark before the title: the logo of the system the record came from. */
+  icon?: ReactNode;
   /** A tab row that sits between the header and the body (the Account dialog). */
   tabs?: ReactNode;
   /** Actions drawn before the Close button; the primary action goes here. */
@@ -77,8 +80,13 @@ export function SheetDialog({
    * takes the mockup's own name, "Close", so no two controls share a name.
    */
   headerClose?: boolean;
-  /** The mockup's dialog width (600px) for editors that need two columns. */
-  wide?: boolean;
+  /**
+   * `true` is the mockup's dialog width (600px), for editors that need two
+   * columns. `"xl"` is 760px at a fixed height, for a tabbed reader that
+   * carries prose and code: every tab gets the same box, so switching tabs
+   * never resizes the dialog under the pointer.
+   */
+  wide?: boolean | "xl";
   /** Organization activity opens beside the page on desktop. */
   side?: boolean;
   testId: string;
@@ -86,6 +94,12 @@ export function SheetDialog({
 }) {
   const t = useTranslations("ui.dialog");
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const width =
+    wide === "xl"
+      ? "h-[min(76dvh,720px)] max-w-[760px]"
+      : wide
+        ? "max-w-[600px]"
+        : "max-w-md";
   return (
     <Dialog.Root
       open={open}
@@ -105,13 +119,18 @@ export function SheetDialog({
           aria-modal="true"
           data-sheet=""
           data-testid={testId}
-          className={`fixed z-50 flex flex-col overflow-hidden border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${side ? "inset-y-0 right-0 w-full max-w-lg" : `left-1/2 top-[12vh] max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-xl ${wide ? "max-w-[600px]" : "max-w-md"}`}`}
+          className={`fixed z-50 flex flex-col overflow-hidden border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${side ? "inset-y-0 right-0 w-full max-w-lg" : `left-1/2 top-[12vh] max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-xl ${width}`}`}
         >
           <SheetHandle />
           <div
             data-sheet-header=""
             className={`flex items-start gap-3 border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
           >
+            {icon === undefined ? null : (
+              <span data-sheet-icon="" className="flex flex-none">
+                {icon}
+              </span>
+            )}
             <div className="min-w-0 flex-1">
               <Dialog.Title className="text-base font-semibold">
                 {title}
