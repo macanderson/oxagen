@@ -14,7 +14,9 @@
 #      hold the full state machine (closing / refs-only / neither).
 #   3. No PR body or commit message may put a negation before a closing
 #      keyword. GitHub ignores the negation and closes the issue anyway
-#      (#3680). `check-closing-keywords.mjs` holds that rule.
+#      (#3680). Nor may a commit close an issue the PR body names only with
+#      `Refs`, because a squash merge closes it from the commit message.
+#      `check-closing-keywords.mjs` holds both rules.
 #
 # ## Why this is a reusable workflow rather than five copies
 #
@@ -170,18 +172,21 @@ jobs:
             // phrasing, so this second check fails the PR over it instead.
             // Commit messages count too, because a squash merge can carry
             // them into the commit that lands on main.
-            const sources = [{ label: 'PR body', text: pr.body }]
+            // The same check fails a commit that still closes an issue the
+            // description demoted to `Refs`, since the squash closes it anyway.
+            const sources = [{ label: 'PR body', text: pr.body, kind: 'body' }]
             try {
               const commits = await github.paginate(github.rest.pulls.listCommits, {
                 ...context.repo, pull_number: pr.number, per_page: 100 })
               for (const c of commits) {
                 sources.push({
-                  label: `commit ${c.sha.slice(0, 7)}`, text: c.commit.message })
+                  label: `commit ${c.sha.slice(0, 7)}`, text: c.commit.message,
+                  kind: 'commit' })
               }
             } catch (error) {
               core.warning(`Could not list the pull request's commits: ${error.message}`)
             }
-            const closingResult = checkClosingKeywords(sources)
+            const closingResult = checkClosingKeywords(sources, { repository: context.repo })
 
             const result = { ok: dodResult.ok && closingResult.ok }
             const summary = [formatVerdict(dodResult), formatClosingKeywords(closingResult)]
