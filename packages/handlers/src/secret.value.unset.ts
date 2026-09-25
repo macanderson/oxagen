@@ -1,5 +1,7 @@
 import { unsetSecretValue } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { secretValueUnset } from "@oxagen/oxagen/contracts/secret.value.unset";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 import { emitSecurityEvent } from "@oxagen/database/security";
 
@@ -11,6 +13,9 @@ export const secretValueUnsetHandler: CapabilityHandlerFn = async (
     throw new Error(
       "[secret.value.unset] workspaceId is required (scoped capability)",
     );
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(secretValueUnset, ctx);
   const { keyId, environmentId } = input as {
     keyId: string;
     environmentId: string;

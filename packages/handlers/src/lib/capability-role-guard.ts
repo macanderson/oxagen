@@ -18,9 +18,26 @@
 // point. A hand-copied `{"owner","admin"}` in five handlers is five places to
 // drift from the one table the IAM layer reads; this way the handler enforces
 // whatever the contract declares, and a contract edit moves both gates at once.
+//
+// Two guards live here. `assertCallerRole` is the older one: it reads the
+// membership columns (`org_users.role`, `workspace_users.role`), waves an API
+// key through, and refuses with a plain Error. `assertContractRole` is the one
+// new handlers use (#4194): it asks `assertOrgRole` in @oxagen/iam, which
+// reads the IAM role assignments the assistant's own gate reads, acts as an
+// API key's creator (apps/app/ARCHITECTURE.md §9, 2026-09-15), and refuses
+// with `HandlerError { code: "forbidden" }`, which the API maps to 403.
 
-import type { CapabilityContext, CapabilityDeclaration } from "@oxagen/oxagen";
+import {
+  HandlerError,
+  type CapabilityContext,
+  type CapabilityDeclaration,
+} from "@oxagen/oxagen";
 import { schema, withSystemDb } from "@oxagen/database";
+import {
+  assertOrgRole,
+  resolveActingUserId,
+  type OrgRoleRequirement,
+} from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 
 /** The two fields of a contract this guard reads. */
@@ -176,4 +193,51 @@ export async function assertCallerRole(
   }
 
   throw new Error(denial);
+}
+
+/**
+ * The `assertOrgRole` requirement a contract's `defaultRoles` declares: every
+ * org role and every workspace role it grants `"allow"`, by IAM role name
+ * (`iam.roles.name`), in declaration order. `"require_approval"` grants
+ * nothing, for the reason `permittedRoles` gives.
+ */
+export function contractRoleRequirement(
+  capability: RoleGatedCapability,
+): OrgRoleRequirement {
+  const { orgNames, workspaceNames } = permittedRoles(capability);
+  return workspaceNames.length > 0
+    ? { org: orgNames, workspace: workspaceNames }
+    : { org: orgNames };
+}
+
+/**
+ * Refuse the call unless the acting user holds a role the contract grants.
+ *
+ * The acting user is the signed-in user, or the creator of the API key
+ * (`resolveActingUserId`), so a key acts with its creator's current roles and
+ * no more. The check is `assertOrgRole` over `contractRoleRequirement`: an org
+ * role the contract grants passes, and so does a granted workspace role on
+ * `ctx.workspaceId`. Anything else is `HandlerError { code: "forbidden" }`,
+ * with reason `no_principal` when no user resolves and `org_role_required`
+ * otherwise. Returns the role that satisfied the check.
+ *
+ * Call it first in a handler, before any read of tenant data, so a refused
+ * caller learns nothing from the call but the refusal.
+ */
+export async function assertContractRole(
+  capability: RoleGatedCapability,
+  ctx: CapabilityContext,
+): Promise<string> {
+  const required = contractRoleRequirement(capability);
+  if (required.org.length === 0 && !required.workspace) {
+    // A contract that grants no role cannot be passed by role. The fix is in
+    // the contract, so the message names it.
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "org_role_required",
+      message: `${capability.name} grants no role in its contract`,
+    });
+  }
+  const actingUserId = await resolveActingUserId(ctx);
+  return assertOrgRole({ ...ctx, userId: actingUserId }, required);
 }

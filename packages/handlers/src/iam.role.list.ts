@@ -7,6 +7,7 @@ import {
 import { PERMISSION_CATALOG } from "@oxagen/oxagen/iam";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, inArray, isNull, or, gt, sql } from "drizzle-orm";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { toRoleRow } from "./lib/iam-roles";
 import { roleEnforcementOf } from "./lib/org-tier";
 import { logger } from "./logger";
@@ -27,6 +28,9 @@ export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
   input,
   ctx,
 ) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(iamRoleList, ctx);
   const { orgId } = ctx;
   const enforcement = await roleEnforcementOf(ctx);
 
