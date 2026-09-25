@@ -201,8 +201,9 @@ export interface MaterializeOptions {
    * A mutable box the caller fills in AFTER materialization, once the run
    * this turn opened is known. `runPreparedTurn` calls `materializeTools`
    * before `openAssistantRun` (the belt has to exist to build the run's
-   * `toolAllowlist`), so `ctx.agentRun` is not yet attached when these
-   * closures are built and a value read from it here would be permanently
+   * `toolAllowlist`), and its context never carries `ctx.agentRun` at all:
+   * the assistant acts as the person who asked, before the run opens and
+   * after it. A value read from `ctx.agentRun` here would be permanently
    * null. Every tool's `execute` reads `runIdRef.current` at CALL time
    * instead — by then the caller has set it to the opened run's public id —
    * so a parked approval attaches to the run whose Policy tab a person is
@@ -579,20 +580,25 @@ export async function materializeTools(
   };
   const agentRunNow = new Date();
 
-  // The active emergency denies, read once when the turn carries a resolved
-  // agent run: a kill switch cuts the tool from the belt the model receives,
-  // the same rows `get_agent_toolbelt` reports under `kill_switch`, and the
-  // kernel enforces them again at invoke. This runs inside the caller's
-  // tenant scope (the chat route wraps materializeTools in runInTenantScope).
-  const emergencyDenies =
-    agentRun?.principalKind === "agent" && agentRunResolution !== null
-      ? await withTenantDb((tx) =>
-          readActiveEmergencyDenies(tx, {
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId || null,
-          }),
-        )
-      : [];
+  // The active emergency denies, read once per materialization for every
+  // caller: a kill switch cuts the tool from the belt the model receives, the
+  // same rows `get_agent_toolbelt` reports under `kill_switch`. The kernel
+  // enforces them again at invoke for an agent run, and the kill-switch gate
+  // in each tool's `execute` checks every caller's call. A person's turn
+  // reads them too (R4, #3370 finding 9). The in-app assistant lists its
+  // tools as the person and never carries an agent run, so a read gated on
+  // one left a switched tool on its belt. Only a fail-closed run skips the
+  // read, because it lists no capability tools at all. This runs inside the
+  // caller's tenant scope (every caller wraps materializeTools in
+  // runInTenantScope).
+  const emergencyDenies = agentRunFailClosed
+    ? []
+    : await withTenantDb((tx) =>
+        readActiveEmergencyDenies(tx, {
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId || null,
+        }),
+      );
 
   // Entitlement filter: if a capability is claimed by a plugin, the org must
   // have that plugin installed and enabled. Lazily fetch the entitled set on

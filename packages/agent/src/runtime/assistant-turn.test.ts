@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@oxagen/database";
 import { digestJcs } from "@oxagen/run-evidence";
+import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({
   apiKeyCreator: vi.fn((): string | null => null),
@@ -27,6 +28,13 @@ const mocks = vi.hoisted(() => ({
   // The catalog, as `supportsReasoning` reads it: keyed by gateway ids, so a
   // bare vendor spelling is an id it cannot describe and answers false for.
   supportsReasoning: vi.fn((id: string) => id.includes("/")),
+  // The belt suite runs the real materializeTools over these two seams.
+  readActiveEmergencyDenies: vi.fn(
+    async (): Promise<
+      readonly import("@oxagen/iam").ActiveEmergencyDeny[]
+    > => [],
+  ),
+  registry: [] as unknown[],
   log: [] as string[],
 }));
 
@@ -140,6 +148,32 @@ vi.mock("./materialize-tools", async (importOriginal) => {
 vi.mock("./governed-turn", async (importOriginal) => {
   const real = await importOriginal<typeof import("./governed-turn")>();
   return { ...real, runGovernedTurn: mocks.runGovernedTurn };
+});
+// The seams the real materializeTools reads when the belt suite calls it: the
+// active emergency denies, the capability registry, and the plugin-type
+// contributors (none here, so no MCP server is dialled).
+vi.mock("@oxagen/iam", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/iam")>();
+  return {
+    ...real,
+    readActiveEmergencyDenies: mocks.readActiveEmergencyDenies,
+  };
+});
+vi.mock("../registry-loader", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../registry-loader")>();
+  return {
+    ...real,
+    getOxagenRegistry: async () => ({
+      listCapabilities: () => mocks.registry,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }),
+  };
+});
+vi.mock("./plugin-type", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./plugin-type")>();
+  return { ...real, getPluginTypeContributors: () => [] };
 });
 
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
@@ -1060,5 +1094,116 @@ describe("the prepared turn", () => {
       await expect(runTurn(request)).rejects.toBe(failure);
       expect(executionCall()).toBeUndefined();
     });
+  });
+});
+
+// R4 (#3370, finding 9): the turn materialises its tools before it opens its
+// run, as the person who asked. This suite runs the real materializeTools, so
+// the belt the engine receives is the one production builds. Before the fix a
+// tool an emergency deny named reached the engine and the run's allowlist,
+// because the listing read the denies only for an agent run, and this turn
+// never carries one: not before the run opens, and not after.
+describe("the belt the engine is handed", () => {
+  const REGISTRY = [
+    {
+      name: "recall_memory",
+      description: "Recall",
+      surfaces: ["agent"],
+      agent: { riskLevel: "low" },
+      mutates: false,
+      input: z.object({}),
+    },
+    {
+      name: "set_budget",
+      description: "Set",
+      surfaces: ["agent"],
+      agent: { riskLevel: "high" },
+      input: z.object({}),
+    },
+  ];
+
+  /** A kill switch on one tool: the shape `set_kill_switch` writes. */
+  const killSwitch = (principalId: string | null = null) => ({
+    publicId: "edn_set_budget",
+    denyKind: "capability" as const,
+    capabilityId: "set_budget",
+    resourceScopeDigest: null,
+    principalId,
+    reason: "incident",
+  });
+
+  beforeEach(async () => {
+    mocks.registry = REGISTRY;
+    mocks.readActiveEmergencyDenies.mockResolvedValue([]);
+    const real =
+      await vi.importActual<typeof import("./materialize-tools")>(
+        "./materialize-tools",
+      );
+    mocks.materializeTools.mockImplementation(
+      async (...args: Parameters<typeof real.materializeTools>) => {
+        mocks.log.push("materialize");
+        return real.materializeTools(...args);
+      },
+    );
+  });
+
+  it("leaves a switched tool out of the engine's tools, the model's aliases, and the run's allowlist", async () => {
+    mocks.readActiveEmergencyDenies.mockResolvedValue([killSwitch()]);
+    const aliases: Array<Record<string, string>> = [];
+    await runTurn(request, { onTools: (map) => aliases.push(map) });
+
+    expect(mocks.readActiveEmergencyDenies).toHaveBeenCalledTimes(1);
+    expect(mocks.readActiveEmergencyDenies).toHaveBeenCalledWith(
+      expect.anything(),
+      { orgId: "org-1", workspaceId: "ws-1" },
+    );
+    const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+    expect(Object.keys(turnInput.tools).sort()).toEqual(
+      [LOAD_TOOLS, SEARCH_TOOLS, "recall_memory"].sort(),
+    );
+    expect(aliases).toEqual([{ recall_memory: "recall_memory" }]);
+    expect(mocks.openAssistantRun.mock.calls[0]![0].toolAllowlist).toEqual([
+      "recall_memory",
+      SEARCH_TOOLS,
+      LOAD_TOOLS,
+    ]);
+    // The refusals keep their order: the credit gate before anything is
+    // written, the belt before the run, the run before the engine.
+    expect(mocks.log).toEqual([
+      "roles",
+      "funding",
+      "gate",
+      "insert:message:user",
+      "materialize",
+      "open-run",
+      "engine",
+      "insert:message:assistant",
+    ]);
+  });
+
+  it("carries no agent run before or after the run opens, so the order was never the cause", async () => {
+    await runTurn(request);
+    const [materializeCtx] = mocks.materializeTools.mock.calls[0]!;
+    expect(materializeCtx).not.toHaveProperty("agentRun");
+    // The execution record is written with the turn's context after the run
+    // opened and sealed. It still names the person, not an agent run, so
+    // opening the run first would have handed the listing nothing new.
+    const execution = mocks.invoke.mock.calls.find(
+      (c: unknown[]) => c[0] === "get_message_execution",
+    );
+    expect(execution![2]).toMatchObject({ userId: "user-1" });
+    expect(execution![2]).not.toHaveProperty("agentRun");
+  });
+
+  it("keeps a tool whose deny names a principal, since a person's turn carries none (negative)", async () => {
+    mocks.readActiveEmergencyDenies.mockResolvedValue([
+      killSwitch("prn_someone_else"),
+    ]);
+    await runTurn(request);
+    const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+    expect(Object.keys(turnInput.tools)).toContain("set_budget");
+    expect(mocks.openAssistantRun.mock.calls[0]![0].toolAllowlist).toContain(
+      "set_budget",
+    );
   });
 });

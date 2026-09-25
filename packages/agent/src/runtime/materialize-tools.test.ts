@@ -2357,6 +2357,20 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
         emergencyDenies: [killSwitch("capA", "prn_someone_else")],
       },
     ],
+    // R4 (#3370, finding 9): a person's turn, the in-app assistant's, carries
+    // no agent run. A switch that names no principal still cuts its tool.
+    [
+      "a person's turn under a kill switch on capA",
+      { agentRun: null, opts: {}, emergencyDenies: [killSwitch("capA")] },
+    ],
+    [
+      "a kill switch naming a principal leaves a person's belt whole",
+      {
+        agentRun: null,
+        opts: {},
+        emergencyDenies: [killSwitch("capA", AGENT_PRN)],
+      },
+    ],
   ];
   it.each(PARITY)(
     "lists exactly the tools the shared belt decision keeps: %s",
@@ -2377,14 +2391,19 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
         ctx,
         scenario.opts,
       );
-      // The read happens once, and only for a resolved agent run: a human
-      // turn and a fail-closed run list nothing the kill switch could cut.
+      // The read happens once for every caller, a person's turn included. A
+      // fail-closed run skips it: it lists no capability tool a switch could
+      // cut.
       expect(iamMocks.readActiveEmergencyDenies).toHaveBeenCalledTimes(
-        resolution === undefined ? 0 : 1,
+        scenario.agentRun === "unresolved" ? 0 : 1,
       );
+      // A person's turn carries no principal ids, so only a deny that names
+      // no principal reaches it.
+      const principals: string[] =
+        agentRun === null ? [] : [AGENT_PRN, HUMAN_PRN];
       for (const deny of emergencyDenies) {
         const name = deny.capabilityId ?? "";
-        if (deny.principalId === null || deny.principalId === AGENT_PRN)
+        if (deny.principalId === null || principals.includes(deny.principalId))
           expect(tools[name]).toBeUndefined();
         else expect(tools[name]).toBeDefined();
       }

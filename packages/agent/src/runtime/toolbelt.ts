@@ -15,7 +15,9 @@
 //   5. agent run unresolved — an agent run without its resolution fails closed;
 //   6. delegation ceiling — the resolver's agent ∩ human outcome (deny wins,
 //      `pending_approval` stays visible and routes to approval at call time);
-//   7. kill switch — an active emergency deny naming the capability;
+//   7. kill switch — an active emergency deny naming the capability. It
+//      reaches an agent run through the run's principals, and a person's
+//      turn through a deny that names no principal, as the per-call gate does;
 //   8. entitlement — a plugin-claimed contract needs the plugin installed;
 //   9. the contract's own `agent.requiresApproval`.
 //
@@ -127,20 +129,31 @@ export function decideCapabilityForBelt(
     rule = ceilingRule(perms);
     if (perms.outcome === "deny") return deny(rule);
     if (perms.outcome === "pending_approval") outcome = "require_approval";
-    const run = env.agentRun;
-    const killed =
-      env.emergencyDenies.length === 0
-        ? null
-        : matchEmergencyDeny(env.emergencyDenies, {
-            capability: cap.name,
-            principalIds: [
-              run.agentPrincipal.id,
-              ...(run.humanPrincipal ? [run.humanPrincipal.id] : []),
-            ],
-            resourceScopeDigest: null,
-          });
-    if (killed !== null) return deny("kill_switch");
   }
+
+  // The kill switch reaches every caller, not only an agent run. The in-app
+  // assistant lists its tools as the person who asked (ADR-053 §1) and never
+  // carries an agent run. While this check sat inside the agent-run branch, a
+  // switched tool stayed on the assistant's belt and the per-call gate
+  // refused every call to it (R4, #3370 finding 9). With no run there are no
+  // principal ids, so only a deny that names no principal matches. Those are
+  // the facts `createKillSwitchGate` matches a person's call on.
+  const run = env.agentRun;
+  const killed =
+    env.emergencyDenies.length === 0
+      ? null
+      : matchEmergencyDeny(env.emergencyDenies, {
+          capability: cap.name,
+          principalIds:
+            run === null
+              ? []
+              : [
+                  run.agentPrincipal.id,
+                  ...(run.humanPrincipal ? [run.humanPrincipal.id] : []),
+                ],
+          resourceScopeDigest: null,
+        });
+  if (killed !== null) return deny("kill_switch");
 
   const plugin = pluginForContract(cap.name);
   if (plugin) {

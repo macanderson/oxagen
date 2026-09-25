@@ -359,10 +359,20 @@ async function runPreparedTurn(
     hooks.onApprovalRequired?.(event);
   };
 
-  // Filled in once `openAssistantRun` opens the run below; every materialized
-  // tool's `execute` closure reads it at call time so a parked approval
-  // attaches to this turn's run rather than to whatever `capCtx.agentRun`
-  // held before the run existed (finding 9, macanderson/oxagen#3370).
+  // The belt is built before the run opens, and the order is deliberate. The
+  // run's spec pins the tools this turn holds (`toolAllowlist` below), so the
+  // set has to exist first. Opening the run first would not change the
+  // listing either: the turn acts as the person who asked (ADR-053 §1), and
+  // `capCtx` carries no agent run before the run opens or after it. The
+  // listing's kill-switch cut keys on the caller, not on a run, so it applies
+  // to this turn as it does to any person's (R4, macanderson/oxagen#3370
+  // finding 9), and a switched tool is left out of the allowlist as well.
+  // The delegation ceiling is an agent run's gate. A person's call passes the
+  // kernel's IAM check as that person at invoke.
+  //
+  // `runIdRef` is filled in once `openAssistantRun` opens the run below.
+  // Every materialized tool's `execute` closure reads it at call time, so a
+  // parked approval attaches to this turn's run (finding 9).
   const runIdRef: { current: string | null } = { current: null };
 
   const [materialised, promptConfig, recalledMemory] = await inScope(() =>

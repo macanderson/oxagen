@@ -255,6 +255,35 @@ describe("decideCapabilityForBelt", () => {
     ).toBe("allow");
   });
 
+  // R4 (#3370, finding 9): the in-app assistant lists its tools as a person
+  // and carries no agent run. A switch reaches it all the same, on the facts
+  // the per-call gate matches a person's call on: no principal ids.
+  it("an emergency deny that names no principal cuts the tool from a person's belt too, and one that names a principal does not", () => {
+    const byCapability: ActiveEmergencyDeny = {
+      publicId: "edn_1",
+      denyKind: "capability",
+      capabilityId: WRITE.name,
+      resourceScopeDigest: null,
+      principalId: null,
+      reason: "incident",
+    };
+    expect(
+      decideCapabilityForBelt(WRITE, env({ emergencyDenies: [byCapability] })),
+    ).toMatchObject({ outcome: "deny", rule: "kill_switch" });
+    expect(
+      decideCapabilityForBelt(
+        WRITE,
+        env({
+          emergencyDenies: [{ ...byCapability, principalId: AGENT_PRN }],
+        }),
+      ),
+    ).toMatchObject({ outcome: "require_approval", rule: "contract_approval" });
+    expect(
+      decideCapabilityForBelt(READ, env({ emergencyDenies: [byCapability] }))
+        .outcome,
+    ).toBe("allow");
+  });
+
   it("a plugin-claimed contract needs the plugin entitled, and an unavailable read fails closed", () => {
     pluginMocks.pluginForContract.mockReturnValue({ id: "plg_github" });
     expect(decideCapabilityForBelt(READ, env()).rule).toBe("entitlement");
