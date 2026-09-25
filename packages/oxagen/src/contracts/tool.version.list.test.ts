@@ -23,6 +23,22 @@ describe("list_tool_versions", () => {
     ).toEqual({ category: "moves_money", limit: 5 });
   });
 
+  it("accepts a server filter alone and beside a category, and refuses an empty one", () => {
+    expect(toolVersionList.input.parse({ serverId: "mcs_linear" })).toEqual({
+      serverId: "mcs_linear",
+      limit: 50,
+    });
+    expect(
+      toolVersionList.input.parse({
+        serverId: "mcs_linear",
+        category: "moves_money",
+      }),
+    ).toEqual({ serverId: "mcs_linear", category: "moves_money", limit: 50 });
+    expect(toolVersionList.input.safeParse({ serverId: "" }).success).toBe(
+      false,
+    );
+  });
+
   it("refuses a category outside the tag pattern", () => {
     expect(toolVersionList.input.safeParse({ category: "Moves" }).success).toBe(
       false,

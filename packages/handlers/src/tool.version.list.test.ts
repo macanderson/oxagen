@@ -1,8 +1,8 @@
 /**
  * Unit tests for the list_tool_versions handler (#2958). Tier-free org; the
  * role gate runs for real against a tx double. The page read is an
- * in-memory store applying the query's semantics (scope, category, order,
- * cursor, limit + 1); the gate is decided by the real matcher against
+ * in-memory store applying the query's semantics (scope, category, server,
+ * order, cursor, limit + 1); the gate is decided by the real matcher against
  * switches built the way set_kill_switch writes them.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -124,6 +124,7 @@ function memoryPage(rows: RegistryRow[]) {
         // The SQL matches either half of the consequence tags; so does this.
         return unionConsequenceTags(r).includes(q.category);
       })
+      .filter((r) => q.serverId === null || r.serverPublicId === q.serverId)
       .filter((r) => {
         if (!q.cursor) return true;
         return (
@@ -266,6 +267,51 @@ describe("list_tool_versions", () => {
       ctx(),
     );
     expect(out.items.map((i) => i.slug)).toEqual(["create_payment"]);
+  });
+
+  it("filters by the server a version was imported from, alone and with a tag", async () => {
+    const rows = [
+      row({ slug: "search" }),
+      row({
+        slug: "create_issue",
+        mcpServerId: uuid(900),
+        serverPublicId: "mcs_linear",
+      }),
+      row({
+        slug: "create_payment",
+        mcpServerId: uuid(901),
+        serverPublicId: "mcs_stripe",
+        classification: classified,
+        classifiedAt: new Date(),
+      }),
+      row({
+        slug: "list_charges",
+        mcpServerId: uuid(901),
+        serverPublicId: "mcs_stripe",
+      }),
+      // Declared here: no server, so no server filter selects it.
+      row({
+        slug: "summarize_invoice",
+        source: "custom",
+        mcpServerId: null,
+        serverPublicId: null,
+      }),
+    ];
+    const handler = handlerOver(rows);
+    const stripe = await handler({ limit: 50, serverId: "mcs_stripe" }, ctx());
+    expect(stripe.items.map((i) => i.slug)).toEqual([
+      "create_payment",
+      "list_charges",
+    ]);
+    expect(stripe.items.every((i) => i.serverId === "mcs_stripe")).toBe(true);
+    const both = await handler(
+      { limit: 50, serverId: "mcs_stripe", category: "moves_money" },
+      ctx(),
+    );
+    expect(both.items.map((i) => i.slug)).toEqual(["create_payment"]);
+    const none = await handler({ limit: 50, serverId: "mcs_gone" }, ctx());
+    expect(none.items).toEqual([]);
+    expect(none.nextCursor).toBeNull();
   });
 
   it("pages on an opaque cursor and refuses a foreign one", async () => {

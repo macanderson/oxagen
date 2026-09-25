@@ -12,7 +12,8 @@
 //   3. Read one row past the page: tools joined to their active version,
 //      optionally only those carrying the category tag in either half of the
 //      consequence tags (the declared `consequence_tags` column or the
-//      classified `classification` jsonb).
+//      classified `classification` jsonb), and optionally only those imported
+//      from one server, named by its `mcs_…` public id.
 //   4. Decide the gate each row is under today from the switches that are on
 //      — version, then server, then class (the recorded decision order,
 //      INV-10) — with the same matcher the gateway's gate uses, and read the
@@ -108,6 +109,8 @@ export type PageQuery = {
   cursor: RegistryCursor | null;
   limit: number;
   category: string | null;
+  /** The `mcs_…` public id of the one server whose versions the page holds. */
+  serverId: string | null;
 };
 
 const tools = schema.tools;
@@ -170,6 +173,10 @@ function registryPageQuery(
         q.category === null
           ? undefined
           : sql`(${versions.classification}->'consequenceTags' @> ${JSON.stringify([q.category])}::jsonb OR ${versions.consequenceTags} @> ARRAY[${q.category}]::text[])`,
+        // The server is named by its public id, the one the page and the MCP
+        // tool know; the join above already carries it. A declared tool has
+        // no server, so the left join's null never matches.
+        q.serverId === null ? undefined : eq(servers.publicId, q.serverId),
         afterCursor(q.cursor),
       ),
     )
@@ -304,6 +311,7 @@ export function createToolVersionListHandler(
       cursor,
       limit: input.limit,
       category: input.category ?? null,
+      serverId: input.serverId ?? null,
     });
     const page = rows.slice(0, input.limit);
     const last = page.at(-1);
