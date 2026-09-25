@@ -21,6 +21,7 @@ import {
   markOf,
   matchApprovals,
   openFrameOf,
+  parkedReceipt,
   runStateOf,
   stepsOf,
   tickPositions,
@@ -89,6 +90,27 @@ describe("markOf", () => {
     expect(isParked("policy_decision", "ask")).toBe(true);
     expect(isParked("policy_decision", "allow")).toBe(false);
     expect(isParked("policy_decision", null)).toBe(false);
+  });
+
+  it("reads the assistant's parked receipt as needing a person, and its denied one as not", () => {
+    const receipt = "tool.engine_call_completed";
+    expect(parkedReceipt(receipt, "create_tag parked apr_0a1b")).toEqual({
+      approvalId: "apr_0a1b",
+    });
+    expect(parkedReceipt(receipt, "create_tag parked")).toEqual({
+      approvalId: null,
+    });
+    expect(parkedReceipt(receipt, "create_tag denied")).toBeNull();
+    // Only the ledger's receipt: a wrapped `tool_call` names no park this way.
+    expect(parkedReceipt("tool_call", "create_tag parked")).toBeNull();
+    expect(isParked(receipt, null, "create_tag parked apr_0a1b")).toBe(true);
+    expect(isParked(receipt, null, "create_tag denied")).toBe(false);
+    expect(markOf(receipt, null, "create_tag parked apr_0a1b")).toBe(
+      "approval",
+    );
+    expect(markOf(receipt, null, "create_tag completed")).toBeNull();
+    expect(isApprovalFrame(receipt, "create_tag parked apr_0a1b")).toBe(true);
+    expect(isApprovalFrame(receipt, "create_tag completed")).toBe(false);
   });
 });
 
@@ -266,6 +288,53 @@ describe("matchApprovals", () => {
     const { byFrame } = matchApprovals([...frames, decision], [decided]);
     expect(byFrame.get("15")).toBe(decided);
     expect(byFrame.get("16")).toBe(decided);
+  });
+
+  it("ties the assistant's parked receipt to the approval it names, ahead of a closer instant", () => {
+    // Two parked `create_tag` calls. The receipt at 14 names the EARLY
+    // approval, so a match by instant would pair it with the wrong card.
+    const page = [
+      runFrame({
+        seq: "14",
+        cursor: "14",
+        type: "tool.engine_call_completed",
+        summary: "create_tag parked apr_early",
+        observedAt: releaseAt(14),
+      }),
+    ];
+    const late = parkedRelease({
+      id: "apr_late",
+      tool: "create_tag",
+      createdAt: releaseAt(14),
+    });
+    const early = parkedRelease({
+      id: "apr_early",
+      tool: "create_tag",
+      createdAt: releaseAt(4),
+    });
+    const { byFrame, matched } = matchApprovals(page, [late, early]);
+    expect(byFrame.get("14")?.id).toBe("apr_early");
+    expect([...matched]).toEqual(["apr_early"]);
+    // A receipt that names no approval pairs by tool and instant.
+    const unnamed = runFrame({
+      seq: "14",
+      cursor: "14",
+      type: "tool.engine_call_completed",
+      summary: "create_tag parked",
+      observedAt: releaseAt(14),
+    });
+    expect(matchApprovals([unnamed], [late, early]).byFrame.get("14")?.id).toBe(
+      "apr_late",
+    );
+    // A denied receipt is no approval frame at all.
+    const denied = runFrame({
+      seq: "14",
+      cursor: "14",
+      type: "tool.engine_call_completed",
+      summary: "create_tag denied",
+      observedAt: releaseAt(14),
+    });
+    expect(matchApprovals([denied], [late, early]).matched.size).toBe(0);
   });
 
   it("matches nothing to a frame that names no tool, or another tool (negative)", () => {

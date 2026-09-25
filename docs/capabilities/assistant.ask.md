@@ -55,9 +55,13 @@ A label is untrusted text: an agent, a model, or a person wrote it. The turn giv
 
 ## Recording
 
-`openAssistantRun` (`@oxagen/agent`) admits the turn before the engine is contacted: the workspace's managed interactive agent acting through the `oxagen.assistant` service principal, the asking person's human principal as the initiating principal, a pinned authorization snapshot and a digest-only retention policy. Every provider and tool request the host answers is recorded first as `model.engine_call_completed` or `tool.engine_call_completed`, keyed by the engine frame's `seq`; the belt meta-tools `search_tools` and `load_tools` are recorded through the tool receipt. The seal carries verdict `waived` for a completed turn, `cancelled` for an aborted one and `failed` for an engine failure.
+`openAssistantRun` (`@oxagen/agent`) admits the turn before the engine is contacted: the workspace's managed interactive agent acting through the `oxagen.assistant` service principal, the asking person's human principal as the initiating principal, a pinned authorization snapshot and a digest-only retention policy. Every provider and tool request the host answers is recorded first as `model.engine_call_completed` or `tool.engine_call_completed`, keyed by the engine frame's `seq`; the belt meta-tools `search_tools` and `load_tools` are recorded through the tool receipt. A tool receipt's outcome is `completed`, `failed`, `denied`, `cancelled` or `parked`. `denied` means a gate or a person refused the call. `parked` means the call did not run and waits on a person's approval, and the receipt names that approval's public id (`approval_public_id`, `apr_…`). The engine is told `refused_by_policy` for a parked call, because its error vocabulary has no wait. The seal carries verdict `waived` for a completed turn, `cancelled` for an aborted one and `failed` for an engine failure.
 
 The run is admitted on the `chat` (SSE) or `api-chat` (API, MCP) surface, and `list_runs`, `list_recent_runs` and `search_tools` exclude both: the assistant is Oxagen's, and its turns never appear as the customer's runs.
+
+## Steering
+
+The system prompt carries the workspace's steering after the governance baseline. The steering assembler (`@oxagen/steering-assembler`) ranks the workspace's published context records and its configured instructions, fits them to 4,096 budget tokens, and cuts what does not fit (ADR-093 §7). The instructions carry SHOULD, so every published MUST record ranks above them. Before the engine is contacted, the run records a `steering.manifest` frame that names every item as included or cut, with the reason. A turn whose record read fails runs on the instructions alone, and the frame names `record` as unavailable.
 
 ## Tools
 

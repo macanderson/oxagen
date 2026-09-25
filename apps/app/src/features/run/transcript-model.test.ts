@@ -884,6 +884,65 @@ describe("buildFeed over the release run", () => {
   });
 });
 
+describe("buildFeed, the assistant's parked call", () => {
+  /** The ledger's two halves of one engine tool call, closed with `label`. */
+  const call = (label: string, kinds: TranscriptEntry["kinds"]) => [
+    frame({
+      seq: "3",
+      kind: "tool_call",
+      type: "tool.engine_call_started",
+      label: "create_workspace",
+      callKey: "tool-1-0",
+      at: "2026-09-25T12:00:00.000Z",
+      request: transcriptBody({
+        seq: "3",
+        type: "tool.engine_call_started",
+        text: '{"name":"ops"}',
+      }),
+      kinds: ["tools"],
+    }),
+    frame({
+      seq: "4",
+      kind: "tool_call",
+      type: "tool.engine_call_completed",
+      label,
+      callKey: "tool-1-0",
+      at: "2026-09-25T12:00:00.004Z",
+      response: transcriptBody({
+        seq: "4",
+        type: "tool.engine_call_completed",
+        text: '"refused: create_workspace is waiting for approval"',
+      }),
+      kinds,
+    }),
+  ];
+
+  it("parks the call on its receipt, names the approval, and does not fail it", () => {
+    const [row] = tools(
+      buildFeed(
+        call("create_workspace parked apr_0a1b2c3d4e5f6g7h8j9k0m", ["tools"]),
+      ),
+    );
+    expect(row?.failed).toBe(false);
+    expect(row?.call.parked).toEqual({
+      seq: "4",
+      type: "tool.engine_call_completed",
+      chainRef: null,
+    });
+    expect(row?.call.approvalId).toBe("apr_0a1b2c3d4e5f6g7h8j9k0m");
+    expect(row?.call.pending).toBe(false);
+  });
+
+  it("still reads a denied receipt as a refusal that parks nothing (negative)", () => {
+    const [row] = tools(
+      buildFeed(call("create_workspace denied", ["tools", "errors"])),
+    );
+    expect(row?.failed).toBe(true);
+    expect(row?.call.parked).toBeNull();
+    expect(row?.call.approvalId).toBeNull();
+  });
+});
+
 describe("buildFeed, a reply's own shapes", () => {
   const reply = (over: Partial<TranscriptEntry>) =>
     frame({

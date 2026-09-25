@@ -201,6 +201,11 @@ async function ensureListener(): Promise<void> {
 
 export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
   approvalId: string;
+  /**
+   * The row's public id (`apr_…`): the form Fleet and the Run page show, and
+   * the one a parked call's ledger receipt records.
+   */
+  approvalPublicId: string;
   resolution?: string | null;
   resumeStatus?: string | null;
   expiresAt?: Date;
@@ -226,7 +231,7 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
       digest = null;
     }
   }
-  const approvalId = await withTenantDb(async (tx) => {
+  const approval = await withTenantDb(async (tx) => {
     // One live approval per parked call. `approvalMode: "park"` throws rather
     // than blocking, so the model sees a failed tool call and may ask again for
     // the same call — without this, each retry writes a fresh approval and
@@ -260,7 +265,10 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
         inputDigest: digest,
         expiresAt,
       })
-      .returning({ id: schema.approvalRequests.id });
+      .returning({
+        id: schema.approvalRequests.id,
+        publicId: schema.approvalRequests.publicId,
+      });
     if (!row) throw new Error("approval insert failed");
 
     // MC spec §7.7 approval.requested, written with the approval so neither
@@ -274,9 +282,9 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
       riskLevel: args.riskLevel,
       expiresAt,
     });
-    return row.id;
+    return row;
   });
-  return { approvalId };
+  return { approvalId: approval.id, approvalPublicId: approval.publicId };
 }
 
 async function createResumableApproval(args: CreateApprovalArgs) {
@@ -336,6 +344,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
     if (existing)
       return {
         approvalId: existing.id,
+        approvalPublicId: existing.publicId,
         resolution: existing.resolution,
         resumeStatus: existing.resumeStatus,
         expiresAt: existing.expiresAt,
@@ -357,7 +366,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
         resumePayload: payload,
         resumeStatus: "waiting",
       })
-      .returning({ approvalId: a.id });
+      .returning({ approvalId: a.id, approvalPublicId: a.publicId });
     if (!row) throw new ApprovalResumeError("approval_not_recorded");
     await notifyApprovalRequested(tx, {
       orgId: args.orgId,
@@ -380,10 +389,10 @@ type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
 async function findLiveApproval(
   tx: Tx,
   args: CreateApprovalArgs,
-): Promise<string | null> {
+): Promise<{ id: string; publicId: string } | null> {
   const a = schema.approvalRequests;
   const [row] = await tx
-    .select({ id: a.id })
+    .select({ id: a.id, publicId: a.publicId })
     .from(a)
     .where(
       and(
@@ -402,7 +411,7 @@ async function findLiveApproval(
       ),
     )
     .limit(1);
-  return row?.id ?? null;
+  return row ?? null;
 }
 
 // Pauses execution until the approval resolves (via PG NOTIFY) or the
