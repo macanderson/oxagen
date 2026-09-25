@@ -52,6 +52,7 @@ import {
 import { parseProviderUrl } from "@/shared/provider-url";
 import { FormAlert } from "@/ui/form-feedback";
 import { ProviderLink, useNavigate } from "@/ui/navigation";
+import { ProviderIcon } from "@/ui/provider-icon";
 import { RecordMultiPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
@@ -60,7 +61,6 @@ import {
   type AuthorizationDraft,
   providerRedirectUrl,
 } from "./provider-auth-actions";
-import { ProviderIcon } from "./provider-icon";
 import { RegistryBrowser } from "./registry-browser";
 import { type OAuthPhase, useProviderOAuth } from "./use-provider-oauth";
 import { parseMeasureLines, textValue, type ToolsAt } from "./view";
