@@ -25,6 +25,20 @@ function enrolledPaths() {
   return paths;
 }
 
+const CODEX_START = JSON.stringify({
+  session_id: "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b",
+  hook_event_name: "SessionStart",
+  cwd: "/repo",
+  source: "startup",
+});
+
+const CODEX_PROMPT = JSON.stringify({
+  session_id: "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b",
+  hook_event_name: "UserPromptSubmit",
+  cwd: "/repo",
+  prompt: "fix the build",
+});
+
 const CODEX_PRE = JSON.stringify({
   session_id: "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b",
   hook_event_name: "PreToolUse",
@@ -69,14 +83,27 @@ async function sentEnv(
 }
 
 describe("the harness pid on a hook", () => {
-  it("names the Codex process, so the sweep can seal the session when it exits", async () => {
-    expect(await sentEnv("codex", CODEX_PRE, () => 4242)).toEqual({
+  it("names the Codex process at the session's start and at each prompt, so the sweep can seal the session when it exits", async () => {
+    expect(await sentEnv("codex", CODEX_START, () => 4242)).toEqual({
+      TACHO_HARNESS_PID: "4242",
+    });
+    expect(await sentEnv("codex", CODEX_PROMPT, () => 4242)).toEqual({
       TACHO_HARNESS_PID: "4242",
     });
   });
 
+  it("does not walk the process tree on a Codex tool call, because the registry already holds the pid", async () => {
+    let asked = false;
+    const env = await sentEnv("codex", CODEX_PRE, () => {
+      asked = true;
+      return 4242;
+    });
+    expect(env).toEqual({});
+    expect(asked).toBe(false);
+  });
+
   it("is left off a Codex hook when the walk finds no per-session Codex process", async () => {
-    expect(await sentEnv("codex", CODEX_PRE, () => undefined)).toEqual({});
+    expect(await sentEnv("codex", CODEX_START, () => undefined)).toEqual({});
   });
 
   it("is never put on a Cursor hook, whatever a walk would find", async () => {

@@ -163,8 +163,11 @@ The daemon also seals a session when its harness process exits, within one
 sweep (30 s). Claude Code exports its pid as `CLAUDE_PID`. For Stella and
 Codex, `tacho-hook` walks up from its parent with `ps` to the harness process
 and passes it as `TACHO_HARNESS_PID`. An operator's `cancel` sends that pid
-`SIGTERM`. A Codex hook under `codex app-server`, which runs every thread of
-the Codex GUI in one process, carries no pid. A Cursor hook carries none
+`SIGTERM`. The Codex walk runs at `SessionStart` and at each prompt, stops
+after 500 ms, and takes only a process named `codex` or `codex-<target>`.
+A Codex hook carries no pid on Windows, or under a Codex process that serves
+many threads: `app-server`, which the Codex GUI drives, `exec-server`, and
+the MCP server modes. A Cursor hook carries none
 either, because the process that runs Cursor's hooks serves many
 conversations and outlives each of them. Those sessions end on the harness's
 own `SessionEnd`, or after six idle hours.

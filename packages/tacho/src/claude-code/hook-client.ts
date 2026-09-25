@@ -256,7 +256,8 @@ export interface HookRunDeps {
    * (whose payload names no session either) and Codex. Defaults to walking
    * up from this process's parent with `ps` (`stellaHarnessPid`,
    * `codexHarnessPid`). Undefined means no pid names this one session, and
-   * the daemon falls back to its idle bound. Cursor never asks.
+   * the daemon falls back to its idle bound. Codex asks only at
+   * `SessionStart` and `UserPromptSubmit`. Cursor never asks.
    */
   harnessPid?: () => number | undefined;
   /**
@@ -315,6 +316,12 @@ const RESPONSE_BUDGET_MS: Record<string, number> = {
   // accepts the connection and never answers still leaves time to spool.
   SessionEnd: SESSION_END_TIMEOUT_S * 1_000 - HARNESS_TIMEOUT_MARGIN_MS,
 };
+
+/** The Codex hooks that look for the Codex process (`codexHarnessPid`). */
+const CODEX_PID_EVENTS: ReadonlySet<string> = new Set([
+  "SessionStart",
+  "UserPromptSubmit",
+]);
 
 type HostStatus = HostFile["host_status"];
 
@@ -774,12 +781,6 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     )(pid);
     raw = translateStellaPayload(raw, pid, instance);
   }
-  // Codex exports no pid, and without one a session that exits without its
-  // SessionEnd waits out the daemon's six-hour idle bound (#3989).
-  if (codex)
-    harnessPid = (
-      deps.harnessPid ?? (() => codexHarnessPid(process.ppid, platform))
-    )();
   // Cursor issues both the session id and the tool-use id, so its adapter
   // only renames. It gets no harness pid, on purpose (#3989). In Cursor
   // 3.22.7 the one code path that runs a command hook is the agent-host
@@ -834,6 +835,15 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     };
   }
   const input = parsed.data;
+  // Codex exports no pid, and without one a session that exits without its
+  // SessionEnd waits out the daemon's six-hour idle bound (#3989). The walk
+  // runs at the session's start and at each prompt, not on every tool call:
+  // the registry keeps a pid once a hook has carried it, and the prompt is
+  // the fallback for a session first seen mid-run.
+  if (codex && CODEX_PID_EVENTS.has(input.hook_event_name))
+    harnessPid = (
+      deps.harnessPid ?? (() => codexHarnessPid(process.ppid, platform))
+    )();
   // Stella reads `{"action": ...}` decisions and takes SessionStart stdout
   // as prompt text; Cursor reads a flat permission object whose shape differs
   // per event; every other harness reads Claude Code's answer as is.
