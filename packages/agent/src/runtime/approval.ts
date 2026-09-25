@@ -202,11 +202,8 @@ async function ensureListener(): Promise<void> {
 export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
   /** The row uuid, which waiters and NOTIFY are keyed by. */
   approvalId: string;
-  /**
-   * The public id (`apr_…`) that list reads, Fleet and a parked card show.
-   * Absent only from a test double that returns no public id.
-   */
-  publicId?: string;
+  /** The public id (`apr_…`) that list reads, Fleet and a parked card show. */
+  approvalPublicId: string;
   resolution?: string | null;
   resumeStatus?: string | null;
   expiresAt?: Date;
@@ -285,7 +282,7 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
     });
     return row;
   });
-  return { approvalId: recorded.id, publicId: recorded.publicId };
+  return { approvalId: recorded.id, approvalPublicId: recorded.publicId };
 }
 
 async function createResumableApproval(args: CreateApprovalArgs) {
@@ -345,7 +342,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
     if (existing)
       return {
         approvalId: existing.id,
-        publicId: existing.publicId,
+        approvalPublicId: existing.publicId,
         resolution: existing.resolution,
         resumeStatus: existing.resumeStatus,
         expiresAt: existing.expiresAt,
@@ -367,7 +364,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
         resumePayload: payload,
         resumeStatus: "waiting",
       })
-      .returning({ approvalId: a.id, publicId: a.publicId });
+      .returning({ approvalId: a.id, approvalPublicId: a.publicId });
     if (!row) throw new ApprovalResumeError("approval_not_recorded");
     await notifyApprovalRequested(tx, {
       orgId: args.orgId,

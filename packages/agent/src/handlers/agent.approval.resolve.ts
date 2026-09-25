@@ -53,6 +53,7 @@ import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import { runOutsideGovernedAction } from "@oxagen/oxagen/kernel";
 import { lockMandate, parseMandateRow, release } from "@oxagen/rules";
 import { and, eq, sql } from "drizzle-orm";
+import pino from "pino";
 import { notifyResolution, raisedByCallingRun } from "../runtime/approval";
 import { APPROVAL_RESOLVER_ROLES } from "@oxagen/rules/approval-notify";
 import { approvalIdCondition } from "../runtime/approval-id";
