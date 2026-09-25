@@ -80,7 +80,7 @@
       },
       "seq": {
         "type": "integer",
-        "minimum": 0,
+        "exclusiveMinimum": 0,
         "description": "This entry's position in the record's chain"
       },
       "chainDigest": {

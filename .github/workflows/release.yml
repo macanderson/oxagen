@@ -114,7 +114,10 @@ jobs:
           FROM_REF: ${{ inputs.from }}
         run: |
           set -euo pipefail
-          args=("$BUMP" --no-git --no-npm)
+          # release.ts lists every file it writes in $RUNNER_TEMP, and the next
+          # step stages exactly those. With --written-list it also fails on a
+          # dirty tree before its first write (#2978).
+          args=("$BUMP" --no-git --no-npm --written-list "$RUNNER_TEMP/release-files.txt")
           if [ -n "$HIGHLIGHT" ]; then args+=(--highlight "$HIGHLIGHT"); fi
           if [ -n "$FROM_REF" ]; then args+=(--from "$FROM_REF"); fi
           if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
@@ -136,7 +139,14 @@ jobs:
           git config user.name "oxagen-release"
           git config user.email "release@oxagen.sh"
           git switch -c "$branch"
-          git add -A
+          # Only the files release.ts wrote, never `git add -A`, so nothing
+          # else in the checkout can ride along with the release (#2978).
+          mapfile -t files < "$RUNNER_TEMP/release-files.txt"
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::release.ts listed no written files"
+            exit 1
+          fi
+          git add -- "${files[@]}"
           git commit -m "chore(release): v$VERSION"
           git push -u origin "$branch"
           {

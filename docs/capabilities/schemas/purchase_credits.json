@@ -26,6 +26,7 @@
     "properties": {
       "amountUsd": {
         "type": "number",
+        "exclusiveMinimum": 0,
         "minimum": 5
       },
       "successUrl": {
@@ -52,11 +53,11 @@
       },
       "grantCents": {
         "type": "integer",
-        "minimum": 0
+        "exclusiveMinimum": 0
       },
       "priceCents": {
         "type": "integer",
-        "minimum": 0
+        "exclusiveMinimum": 0
       },
       "percent": {
         "type": "number",

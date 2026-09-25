@@ -17,7 +17,7 @@
  * via the pidfile.
  */
 import { execa } from "execa";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import kleur from "kleur";
 import {
   existsSync,
@@ -45,17 +45,57 @@ async function stripeInstalled(): Promise<boolean> {
   }
 }
 
-function tunnelAlreadyRunning(): boolean {
-  if (!existsSync(STRIPE_PID_FILE)) return false;
-  const pid = Number(readFileSync(STRIPE_PID_FILE, "utf8").trim());
-  if (!Number.isInteger(pid) || pid <= 0) return false;
+/**
+ * Returns the command line of a live process, or null when no process
+ * holds that pid. `ps -p <pid> -o command=` prints nothing and exits non-zero
+ * for a pid that is gone.
+ */
+export type ReadCommandLine = (pid: number) => string | null;
+
+const readCommandLine: ReadCommandLine = (pid) => {
   try {
-    process.kill(pid, 0); // signal 0 == liveness probe, throws if gone
-    return true;
+    const out = execFileSync("ps", ["-p", String(pid), "-o", "command="], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return out.length > 0 ? out : null;
   } catch {
-    rmSync(STRIPE_PID_FILE, { force: true }); // stale pidfile
-    return false;
+    return null;
   }
+};
+
+/**
+ * True only when `pid` is a live `stripe listen` process. The pidfile outlives
+ * the tunnel after a reboot or a crash, and the operating system reuses pids,
+ * so a bare liveness probe can name an unrelated process. `stopStripeTunnel`
+ * signals the whole process group, so it must confirm the pid first.
+ */
+export function isStripeTunnelPid(
+  pid: number,
+  readCmd: ReadCommandLine = readCommandLine,
+): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  const command = readCmd(pid);
+  if (!command) return false;
+  const [program = "", ...args] = command.split(/\s+/);
+  const name = program.split("/").pop();
+  return (
+    (name === "stripe" || name === "stripe.exe") && args.includes("listen")
+  );
+}
+
+function readPidFile(pidFile: string): number {
+  return Number(readFileSync(pidFile, "utf8").trim());
+}
+
+export function tunnelAlreadyRunning(
+  pidFile: string = STRIPE_PID_FILE,
+  readCmd: ReadCommandLine = readCommandLine,
+): boolean {
+  if (!existsSync(pidFile)) return false;
+  if (isStripeTunnelPid(readPidFile(pidFile), readCmd)) return true;
+  rmSync(pidFile, { force: true }); // stale pidfile: gone, or a reused pid
+  return false;
 }
 
 /**
@@ -131,12 +171,16 @@ export async function startStripeTunnel(): Promise<void> {
 
 /**
  * Stop the Stripe webhook tunnel started by `startStripeTunnel`. Best-effort,
- * never throws.
+ * never throws. It signals nothing unless the pidfile still names a live
+ * `stripe listen` process, and it removes the pidfile either way.
  */
-export async function stopStripeTunnel(): Promise<void> {
-  if (!existsSync(STRIPE_PID_FILE)) return;
-  const pid = Number(readFileSync(STRIPE_PID_FILE, "utf8").trim());
-  if (Number.isInteger(pid) && pid > 0) {
+export async function stopStripeTunnel(
+  pidFile: string = STRIPE_PID_FILE,
+  readCmd: ReadCommandLine = readCommandLine,
+): Promise<void> {
+  if (!existsSync(pidFile)) return;
+  const pid = readPidFile(pidFile);
+  if (isStripeTunnelPid(pid, readCmd)) {
     // detached child is its own process-group leader; negative pid kills the
     // whole group. Fall back to the bare pid if that fails.
     try {
@@ -150,5 +194,5 @@ export async function stopStripeTunnel(): Promise<void> {
     }
     console.log(kleur.cyan(`[kill] stopped stripe listen (pid ${pid})`));
   }
-  rmSync(STRIPE_PID_FILE, { force: true });
+  rmSync(pidFile, { force: true });
 }

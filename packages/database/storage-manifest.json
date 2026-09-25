@@ -1070,6 +1070,16 @@
       "writes": []
     },
     {
+      "domain": "conversation",
+      "name": "get_conversation",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "get_data_plane",
       "reads": [],
@@ -4098,7 +4108,7 @@
       "writes": []
     }
   ],
-  "contentHash": "5783c0b60742dff94e754b60204e1d4d7c39db820ab6f1d9af274add045c6619",
+  "contentHash": "cef601806444e51e654e41db0a82950b6efa9976a973a06e1ea87538e0a0de31",
   "domains": [
     {
       "name": "agent",
@@ -6087,7 +6097,7 @@
       },
       "name": "EntityNode",
       "store": "neo4j",
-      "tenantScoped": false
+      "tenantScoped": true
     },
     {
       "columns": [

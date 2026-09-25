@@ -28,10 +28,9 @@ export const NodeLabels = {
   SkillVersion: "SkillVersion",
   BackgroundTask: "BackgroundTask",
   Plan: "Plan",
-  // Subagent fanout (docs/specs/graph-mediated-fanout-phase2 §2): the origin
-  // node terminal fanout children hang off via [:ORIGINATED_FROM], so "what
-  // did this fanout produce?" is one traversal.
-  Fanout: "Fanout",
+  // No code writes the message-based :Fanout projection, so it has no label
+  // here and its BRANCHED_TO_SUBAGENT and ORIGINATED_FROM edges have no edge
+  // types. schema.cypher still declares the :Fanout constraint and index.
   // Ingestion pipeline — fixed system nodes (not customer ontology types).
   // SourceConnection: one node per registered data source connection.
   SourceConnection: "SourceConnection",
@@ -43,9 +42,8 @@ export const NodeLabels = {
   // Fleet lineage graph projection: an idempotent MERGE projection of
   // agent.subagent_fanouts / agent.subagent_runs rows — the authoritative
   // Postgres chain-of-custody — into first-class graph nodes so the dispatch
-  // tree is queryable as graph data. Separate from the :Fanout/BRANCHED_TO_SUBAGENT
-  // pair above (a different, message-based projection); these labels are keyed
-  // on the subagent_fanouts/subagent_runs row ids instead.
+  // tree is queryable as graph data. These labels are keyed on the
+  // subagent_fanouts/subagent_runs row ids.
   SubagentFanout: "SubagentFanout",
   SubagentRun: "SubagentRun",
 } as const;
@@ -69,9 +67,7 @@ export const EdgeTypes = {
   // Agent runtime epic (spec §6).
   INVOKED: "INVOKED",
   LOADED_SKILL: "LOADED_SKILL",
-  BRANCHED_TO_SUBAGENT: "BRANCHED_TO_SUBAGENT",
   APPROVED_BY: "APPROVED_BY",
-  ORIGINATED_FROM: "ORIGINATED_FROM",
   CALLED_TOOL: "CALLED_TOOL",
   // Two-axis memory lifecycle. schema.cypher documented both edge types from
   // the start; the registry only caught up on 2026-09-15.

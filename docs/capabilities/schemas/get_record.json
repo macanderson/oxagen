@@ -304,7 +304,7 @@
                 },
                 "version": {
                   "type": "integer",
-                  "minimum": 0
+                  "exclusiveMinimum": 0
                 },
                 "checksum": {
                   "type": "string"

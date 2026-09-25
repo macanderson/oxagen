@@ -25,6 +25,7 @@ import type {
   ProviderDeltaIn as GeneratedProviderDeltaIn,
   RequeryResultIn as GeneratedRequeryResultIn,
   ToolResultIn as GeneratedToolResultIn,
+  AgentEvent,
   BudgetMode,
   CompletionMessage,
   CompletionResult,
@@ -256,7 +257,15 @@ export interface ToolContractWire {
  */
 export type WireTool = ToolContractWire | ToolSchema;
 
-/** `GoalSpec` in `routes.rs` — a judged multi-round run. */
+/**
+ * `GoalSpec` in `routes.rs`: a judged multi-round run (#1297). The server
+ * runs working rounds until a verifier judges `goal` met, or `max_rounds`
+ * (default 8, clamped to 32) runs out. Each round's verdict arrives as a
+ * `goal_verdict` event ({@link GoalVerdictEvent}); the verifier's own model
+ * calls arrive as `provider_request` frames with `role: "verdict"`, which a
+ * host answers on a different model from the worker's. A blank `goal` runs an
+ * ordinary turn.
+ */
 export interface GoalSpec {
   goal: string;
   max_rounds?: number | null;
@@ -264,6 +273,13 @@ export interface GoalSpec {
   verifier_transcript_chars?: number | null;
   verifier_provider_id?: string | null;
 }
+
+/**
+ * One verifier round of a goal run (`AgentEvent::GoalVerdict`, emitted by
+ * `stella-serve/src/goal.rs` after each working round). `met: true` ends the
+ * run completed, with the verifier's reasoning as the outcome's text.
+ */
+export type GoalVerdictEvent = Extract<AgentEvent, { type: "goal_verdict" }>;
 
 /** `SubAgentsSpec` in `routes.rs`. */
 export interface SubAgentsSpec {
