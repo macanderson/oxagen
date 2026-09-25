@@ -298,13 +298,22 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     // The named module without the directive is not an action (ADR-167).
     { at: "src/features/shell/choice-actions.ts", expect: "layer" },
     { at: "src/features/shell/engine-actions.ts", expect: "layer" },
+    {
+      at: "src/features/shell/assistant-approval-actions.ts",
+      expect: "layer",
+    },
   ],
-  // ADR-167: the record picker's actions and the flyout's engine read reach
-  // the port by name. Any other "use server" feature module reads on demand
-  // through the kernel seam.
+  // ADR-167: the record picker's actions, the flyout's engine read and its
+  // parked approval cards reach the port by name. Any other "use server"
+  // feature module reads on demand through the kernel seam.
   "data-source-use-server.ts": [
     { at: "src/features/shell/choice-actions.ts", expect: null },
     { at: "src/features/shell/engine-actions.ts", expect: null },
+    // #4162: the parked cards read their approval rows through the port.
+    {
+      at: "src/features/shell/assistant-approval-actions.ts",
+      expect: null,
+    },
     { at: "src/features/shell/account-actions.ts", expect: "layer" },
     { at: "src/features/tools/actions.ts", expect: "layer" },
   ],
@@ -368,6 +377,10 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/features/shell/source.ts", expect: "layer" },
   ],
   "shell-client.ts": [{ at: "src/features/fleet/board.tsx", expect: null }],
+  // #4162: the flyout's parked cards decide through Fleet's client entry.
+  "fleet-client.ts": [
+    { at: "src/features/shell/assistant-parked-approvals.tsx", expect: null },
+  ],
   "kernel-write-use-server.ts": [
     { at: "src/features/fleet/actions.ts", expect: null },
   ],

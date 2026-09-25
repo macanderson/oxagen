@@ -127,6 +127,7 @@ import {
   ASSISTANT_ENGINE_REASON_ID,
   AssistantEngineNotice,
 } from "./assistant-engine-notice";
+import { AssistantParkedApprovals } from "./assistant-parked-approvals";
 import { AssistantStreamingText } from "./assistant-streaming-text";
 import { AssistantSuggestions } from "./assistant-suggestions";
 import { AssistantThinking } from "./assistant-thinking";
@@ -500,6 +501,9 @@ export function AssistantFlyout({
       ? EMPTY_THREAD
       : (threadOf(shownScope) ?? EMPTY_THREAD);
   const { entries, draft, pending } = thread;
+  // The workspace whose thread is on screen, which is where its parked writes
+  // were recorded, even on an organization page. Slugs hold no "/".
+  const [threadOrg, threadWs] = shownScope?.split("/") ?? [];
 
   useEffect(() => {
     const receiveDraft = (event: Event) => {
@@ -734,9 +738,9 @@ export function AssistantFlyout({
         // A parked write is a new approval on the record, created after Fleet
         // and the shell's waiting count were server-rendered
         // (`features/fleet/fleet.tsx` reads `approvals.pending` once per
-        // render, and there is no poll). The sentence beside this sends the
-        // person to Fleet to approve them and they expire, so a stale view has
-        // a deadline on it. `navigate.refresh()` re-renders the server
+        // render, and there is no poll). The person can decide each one here
+        // or on Fleet, and they expire, so a stale Fleet view has a deadline
+        // on it. `navigate.refresh()` re-renders the server
         // components at the URL already showing, without a history entry —
         // only when something actually parked, because an ordinary turn
         // changes nothing either surface reads.
@@ -923,6 +927,17 @@ export function AssistantFlyout({
                       >
                         {t("parked", { count: entry.parked.length })}
                       </p>
+                    )}
+                    {/* Each parked write as a card with Approve and Deny (#4162). */}
+                    {entry.parked.length === 0 ||
+                    threadOrg === undefined ||
+                    threadWs === undefined ? null : (
+                      <AssistantParkedApprovals
+                        org={threadOrg}
+                        ws={threadWs}
+                        runId={entry.runId}
+                        cards={entry.parked}
+                      />
                     )}
                   </div>
                 ) : (
