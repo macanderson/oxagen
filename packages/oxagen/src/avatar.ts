@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 /**
- * Canonical avatar-value validation, shared by every contract that carries an
- * agent or workspace avatar (agent.definition.create/update,
- * workspace.settings.read/write).
+ * Canonical avatar-value validation, shared by every contract that carries a
+ * person, agent, workspace, or organization avatar (user.profile.update,
+ * agent.definition.create/update, workspace.settings.write, and
+ * org.settings.write).
  *
  * An avatar value is a nullable text field that is EITHER:
  *  - an `https://` URL to a hosted image (the `photo` kind), OR
@@ -13,8 +14,9 @@ import { z } from "zod";
  *      `{"kind":"initials","text":"MB","font":"sans","tone":"soft"}`
  *    `icon` is a name from the Lucide set the app ships, `text` is up to six
  *    letters, `font` is `sans | serif | mono`, and `tone` is `solid | soft |
- *    line`: three relations to the theme from the house scale, never a free
- *    colour. The app's parser and constants are apps/app/src/ui/avatar-spec.ts.
+ *    line | gold | gold-deep`: three relations to the theme and the brand
+ *    gold in two shades, never a free colour. The app's parser and constants
+ *    are apps/app/src/ui/avatar-spec.ts.
  *
  * Capped at 512 chars — long enough for the spec string, short enough to keep it
  * out of "store a blob in a text column" territory. Validation here is a cheap

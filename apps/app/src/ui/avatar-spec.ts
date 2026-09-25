@@ -7,11 +7,12 @@
 // URL and is not a spec string at all: it is stored as the bare URL, the
 // form every avatar-carrying contract already accepts.
 //
-// Tone is the only colour choice, and it is not a colour: solid, soft and line
-// are three relations to the theme (the foreground ink as a disc, a lifted
-// panel, a hairline), each fixing its own glyph colour, so the three stay
-// distinct on ink and on paper alike and there is no combination that fails.
-// No free colour and no gradient: the house scale and nothing else.
+// Tone is the only colour choice. Solid, soft and line are three relations to
+// the theme (the foreground ink as a disc, a lifted panel, a hairline). Gold
+// and gold-deep are the brand gold (#D4AF37) and its deep shade (#8A7223),
+// the same in both themes. Each tone fixes its own glyph colour, so the five
+// stay legible on ink and on paper alike and there is no combination that
+// fails. No free colour and no gradient: the house scale and nothing else.
 //
 // This module is dependency-free on purpose: the renderer and the editor both
 // import it into client bundles, and the contract's zod schema stays on the
@@ -57,7 +58,13 @@ export type AvatarIcon = (typeof AVATAR_ICONS)[number];
 export const AVATAR_FONTS = ["sans", "serif", "mono"] as const;
 export type AvatarFont = (typeof AVATAR_FONTS)[number];
 
-export const AVATAR_TONES = ["solid", "soft", "line"] as const;
+export const AVATAR_TONES = [
+  "solid",
+  "soft",
+  "line",
+  "gold",
+  "gold-deep",
+] as const;
 export type AvatarTone = (typeof AVATAR_TONES)[number];
 
 /** A monogram is at most six letters; the tile scales its type down to fit. */
