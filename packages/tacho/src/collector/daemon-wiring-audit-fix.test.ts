@@ -255,6 +255,57 @@ describe("the daemon's audit wiring", () => {
     ).toEqual(["received", "received", "applied"]);
   });
 
+  it("keeps a steer queued and unacknowledged when its delivery frame fails to reach the WAL", async () => {
+    const { handle, plane } = await boot();
+    await handle.api.handleHook(hook("SessionStart"));
+    const record = handle.registry.get(SESSION)!;
+    plane.queue(
+      command({
+        id: "cmd_lost",
+        command: "steer",
+        session_uuid: record.recorder.sessionUuid,
+        payload: { text: "Stop after this file." },
+      }),
+    );
+    await handle.tick();
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_lost"]);
+
+    const append = handle.wal.append.bind(handle.wal);
+    handle.wal.append = () => {
+      throw new Error("ENOSPC: no space left on device");
+    };
+    await expect(
+      handle.api.handleHook(hook("UserPromptSubmit", { prompt: "go on" })),
+    ).rejects.toThrow(/ENOSPC/);
+    handle.wal.append = append;
+
+    // The failed write took the delivery frame back, so the steer waits for
+    // the next boundary and the plane hears nothing claiming it applied.
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_lost"]);
+    await handle.tick();
+    expect(
+      plane.acks
+        .filter((a) => a.command_id === "cmd_lost")
+        .map((a) => a.status),
+    ).toEqual(["received"]);
+
+    const response = await handle.api.handleHook(
+      hook("UserPromptSubmit", { prompt: "go on" }),
+    );
+    expect(response).toMatchObject({
+      hookSpecificOutput: { additionalContext: "Stop after this file." },
+    });
+    await handle.tick();
+    const applied = plane.acks.find(
+      (a) => a.command_id === "cmd_lost" && a.status === "applied",
+    );
+    expect(applied?.applied_at_seq).toBeDefined();
+    const frame = handle.wal
+      .read(record.recorder.sessionUuid)
+      .find((event) => event.seq === applied?.applied_at_seq);
+    expect(frame?.attrs?.["command.id"]).toBe("cmd_lost");
+  });
+
   it("acknowledges a message whose session sealed before a boundary as expired", async () => {
     const { handle, plane } = await boot();
     await handle.api.handleHook(hook("SessionStart"));

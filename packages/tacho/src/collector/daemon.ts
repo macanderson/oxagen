@@ -842,6 +842,48 @@ async function initializeDaemon(
   }
 
   /**
+   * Every session's queued operator messages and owed resume, taken before a
+   * hook that may drain them. A hook seals each delivery as it takes the item
+   * off the queue, so a WAL write that then fails rolls the frame back while
+   * the item is already gone. Without this, a steer lost to a full disk was
+   * never delivered and never retried (#3944).
+   */
+  function markEveryQueue(): Array<{
+    session: SessionRecord;
+    messages: SessionRecord["control"]["messages"];
+    resumeOwed: string | undefined;
+  }> {
+    return registry.list().map((session) => ({
+      session,
+      messages: [...session.control.messages],
+      resumeOwed: session.control.resumeOwed,
+    }));
+  }
+
+  /**
+   * Put each marked queue back ahead of anything queued while the hook ran.
+   * A command applied during the hook's awaits stays behind the ones it
+   * found, in the order it arrived, and an item already put back is not
+   * queued twice.
+   */
+  function restoreEveryQueue(marks: ReturnType<typeof markEveryQueue>): void {
+    for (const { session, messages, resumeOwed } of marks) {
+      const held = new Set(messages.map((message) => message.id));
+      const arrived = session.control.messages.filter(
+        (message) => !held.has(message.id),
+      );
+      session.control.messages.splice(
+        0,
+        session.control.messages.length,
+        ...messages,
+        ...arrived,
+      );
+      if (session.control.resumeOwed === undefined && resumeOwed !== undefined)
+        session.control.resumeOwed = resumeOwed;
+    }
+  }
+
+  /**
    * Run `seal`, record what it sealed, and roll every chain back to where
    * this call found it if the WAL write throws.
    *
@@ -2137,6 +2179,13 @@ async function initializeDaemon(
     // sealing on one chain and before finishing another, and that failure
     // has no rollback of its own.
     const marks = markEveryChain();
+    // A hook takes a queued message off its session's queue and acknowledges
+    // it `applied` as it seals the delivery. Both wait here until the
+    // delivery frame is durable: a failed write puts the message back on its
+    // queue for the next boundary and sends no acknowledgement, where it used
+    // to report a steer applied at a seq the WAL never held (#3944).
+    const queues = markEveryQueue();
+    const acks: CommandAcknowledgement[] = [];
     let outcome: Awaited<ReturnType<typeof handleHookEvent>>;
     try {
       outcome = await handleHookEvent(
@@ -2149,7 +2198,7 @@ async function initializeDaemon(
             await refreshBundle();
           },
           acknowledge: (ack) => {
-            pendingAcks.push(ack);
+            acks.push(ack);
           },
           now,
           pushCredentialBasis: (command, cwd) =>
@@ -2166,6 +2215,7 @@ async function initializeDaemon(
       );
     } catch (error) {
       rollbackEveryChain(marks);
+      restoreEveryQueue(queues);
       throw error;
     }
     if (pending !== undefined) {
@@ -2203,6 +2253,9 @@ async function initializeDaemon(
         if (before !== undefined) registry.restore(before);
         throw error;
       }
+      // The journal now holds the delivery frames, and a failed flush below
+      // is retried from it, so the acknowledgements stand from here.
+      pendingAcks.push(...acks);
       // A sealed registry flag means its terminal event is durable. The
       // journal preserves the exact event bytes and recorder cursor until
       // then, so `sealed` reports `false` for this window. That must not
@@ -2220,6 +2273,7 @@ async function initializeDaemon(
         record(outcome.events, outcome.bodies);
       } catch (error) {
         rollbackEveryChain(marks);
+        restoreEveryQueue(queues);
         // The chain rollback does not reach the hook-id ledger, which lives
         // on the session record. Left in place, the key would make the
         // client's spool replay of this same hook look like a repeat, and
@@ -2229,6 +2283,7 @@ async function initializeDaemon(
         }
         throw error;
       }
+      pendingAcks.push(...acks);
       if (outcome.hookKey !== undefined && outcome.record !== undefined) {
         journalHookKey(outcome.record, outcome.hookKey, outcome.events);
       }
