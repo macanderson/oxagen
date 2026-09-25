@@ -1,7 +1,7 @@
 // The frame player bar (mockup `fpBar`, engine.css `.fp-bar`): step to the
-// first and previous frame, play, pause or replay, step to the next and last
-// frame, scrub across the page, where the open frame sits, what the run had
-// spent by it, and the playback speed.
+// first, previous, next and last frame, play and pause at a chosen speed,
+// scrub across the page, where the open frame sits, and what the run had
+// spent by it.
 //
 // The steps are links, so each is a frame a reader can share. "By here" is the
 // transcript's own running total at the open frame (`cumulativeCost`), set
@@ -17,10 +17,10 @@ import { Money } from "@/ui/money";
 import { formatCount, ratioWidth } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import {
-  FramePlayback,
   PlayButton,
+  PlayerPlayback,
   PlayerScrub,
-  SpeedSegment,
+  PlaySpeed,
   type StepTargets,
 } from "./frame-player";
 import { MARK_HUE } from "./player-hues";
@@ -113,7 +113,6 @@ export function PlayerBar({
   open,
   steps,
   hrefs,
-  gaps,
   marks,
   spent,
   total,
@@ -124,8 +123,6 @@ export function PlayerBar({
   steps: StepTargets;
   /** Each frame on the page as the link that opens it, in order. */
   hrefs: readonly SafePath[];
-  /** How long playback holds each frame at 1×, from `playbackGaps`. */
-  gaps: readonly number[];
   /** Each frame's scrub hue, null where it carries none. */
   marks: readonly (Mark | null)[];
   /** The run's running total at the open frame, from the transcript. */
@@ -163,81 +160,80 @@ export function PlayerBar({
         ];
   });
   return (
-    // `.fp-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel) }`
-    <div
-      role="group"
-      aria-label={t("label")}
-      data-testid="player-bar"
+    <PlayerPlayback
+      hrefs={hrefs}
+      times={frames.map((frame) => Date.parse(frame.observedAt))}
+      index={open.index}
+      steps={steps}
+      label={t("label")}
+      // `.fp-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel) }`
       className="flex flex-wrap items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 py-2.5"
     >
-      <FramePlayback hrefs={hrefs} gaps={gaps} index={open.index}>
-        <StepLink
-          to={steps.first}
-          label={t("first")}
-          className={barButton}
-          testId="player-first"
-        >
-          <span aria-hidden="true">⏮</span>
-        </StepLink>
-        <StepLink
-          to={steps.prev}
-          label={t("previous")}
-          className={barButton}
-          testId="player-previous"
-        >
-          <span aria-hidden="true">◀</span>
-        </StepLink>
-        <PlayButton />
-        <StepLink
-          to={steps.next}
-          label={t("next")}
-          className={barButton}
-          testId="player-next"
-        >
-          <span aria-hidden="true">▶</span>
-        </StepLink>
-        <StepLink
-          to={steps.last}
-          label={t("last")}
-          className={barButton}
-          testId="player-last"
-        >
-          <span aria-hidden="true">⏭</span>
-        </StepLink>
-        <PlayerScrub
-          key={open.seq}
-          hrefs={hrefs}
-          index={open.index}
-          steps={steps}
-          marks={ticks}
-        />
-        <span data-testid="player-position" className={count}>
-          {open.index < 0
-            ? t("positionOff", {
-                seq: open.seq,
-                shown: formatCount(shown, locale),
-              })
-            : t.rich(time === null ? "positionUntimed" : "position", {
-                index: formatCount(open.index + 1, locale),
-                shown: formatCount(shown, locale),
-                seq: open.seq,
-                time: time ?? "",
-                b: (chunks) => <b>{chunks}</b>,
-              })}
-        </span>
-        <Spent spent={spent} total={total} />
-        <SpeedSegment />
-        {/* `.fp-keys { display:inline-flex; gap:6px; font-size:11px; color:var(--dim); margin-left:auto }`, `kbd { font-family:var(--mono); font-size:10px; border:1px solid var(--border); border-radius:4px; padding:0 4px; color:var(--muted); background:var(--void) }` */}
-        <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-dim max-md:hidden">
-          {t.rich("keys", {
-            k: (chunks) => (
-              <kbd className="rounded border border-border bg-void px-1 font-mono text-[10px] text-muted-foreground">
-                {chunks}
-              </kbd>
-            ),
-          })}
-        </span>
-      </FramePlayback>
-    </div>
+      <StepLink
+        to={steps.first}
+        label={t("first")}
+        className={barButton}
+        testId="player-first"
+      >
+        <span aria-hidden="true">⏮</span>
+      </StepLink>
+      <StepLink
+        to={steps.prev}
+        label={t("previous")}
+        className={barButton}
+        testId="player-previous"
+      >
+        <span aria-hidden="true">◀</span>
+      </StepLink>
+      <PlayButton />
+      <StepLink
+        to={steps.next}
+        label={t("next")}
+        className={barButton}
+        testId="player-next"
+      >
+        <span aria-hidden="true">▶</span>
+      </StepLink>
+      <StepLink
+        to={steps.last}
+        label={t("last")}
+        className={barButton}
+        testId="player-last"
+      >
+        <span aria-hidden="true">⏭</span>
+      </StepLink>
+      <PlayerScrub
+        key={open.seq}
+        hrefs={hrefs}
+        index={open.index}
+        marks={ticks}
+      />
+      <span data-testid="player-position" className={count}>
+        {open.index < 0
+          ? t("positionOff", {
+              seq: open.seq,
+              shown: formatCount(shown, locale),
+            })
+          : t.rich(time === null ? "positionUntimed" : "position", {
+              index: formatCount(open.index + 1, locale),
+              shown: formatCount(shown, locale),
+              seq: open.seq,
+              time: time ?? "",
+              b: (chunks) => <b>{chunks}</b>,
+            })}
+      </span>
+      <Spent spent={spent} total={total} />
+      <PlaySpeed />
+      {/* `.fp-keys { display:inline-flex; gap:6px; font-size:11px; color:var(--dim); margin-left:auto }`, `kbd { font-family:var(--mono); font-size:10px; border:1px solid var(--border); border-radius:4px; padding:0 4px; color:var(--muted); background:var(--void) }` */}
+      <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-dim max-md:hidden">
+        {t.rich("keys", {
+          k: (chunks) => (
+            <kbd className="rounded border border-border bg-void px-1 font-mono text-[10px] text-muted-foreground">
+              {chunks}
+            </kbd>
+          ),
+        })}
+      </span>
+    </PlayerPlayback>
   );
 }

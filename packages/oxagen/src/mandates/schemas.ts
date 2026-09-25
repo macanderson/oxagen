@@ -119,8 +119,11 @@ export const CALLS_MEASURE = "calls";
  * `Intl.supportedValuesOf("currency")` on the pinned Node 24 runtime for
  * codes ICU already recognizes (including `ZWG`, added in 2024) so an
  * omission does not silently become a declaration refusal (Codex round 3 on
- * #3484). Independent of apps/app's own `isCurrencyCode`
- * (`data/contracts/money.ts`) rather than imported from it: §2 deliberately
+ * #3484). `XCG`, the Caribbean guilder that replaced `ANG` in Curacao and
+ * Sint Maarten in March 2025, is included as well (#3492). `ANG` stays
+ * listed because stored declarations may still name it. Independent of
+ * apps/app's own `isCurrencyCode` (`data/contracts/money.ts`), which reads
+ * `Intl` and already knows `XCG`, rather than imported from it: §2 deliberately
  * keeps this module out of the app, so the two stay two call sites of the
  * same platform fact rather than one importing the other. If this list
  * changes, mirror the change there too.
@@ -303,6 +306,7 @@ const ISO_4217_CODES: ReadonlySet<string> = new Set([
   "XBC",
   "XBD",
   "XCD",
+  "XCG",
   "XDR",
   "XOF",
   "XPD",

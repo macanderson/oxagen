@@ -301,6 +301,9 @@
               },
               "publishedAt": {
                 "type": "string"
+              },
+              "searchable": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -468,6 +471,9 @@
             },
             "publishedAt": {
               "type": "string"
+            },
+            "searchable": {
+              "type": "boolean"
             }
           },
           "required": [

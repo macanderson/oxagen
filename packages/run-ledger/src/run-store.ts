@@ -2178,21 +2178,20 @@ export function createPostgresRunStore(
             `run ${input.runId} is a preserved legacy row and cannot take attempts`,
           );
         }
-        // The three refusals below are states a caller can race into (a
-        // cancel that wins the run lock while `fork_run` prepares its
-        // attempt), so they are `RunNotWritableError`, which a surface
-        // answers as a conflict, not a store fault (#3665).
+        // A cancel, a pause and the attempt ceiling are run states a caller
+        // meets in ordinary use, and a cancel can land between the caller's
+        // read and this lock. They are typed so a surface answers 409, not 500.
         if (run.cancel_requested)
           throw new RunNotWritableError(
             input.runId,
             "cancelled",
-            "was cancelled",
+            `run ${input.runId} was cancelled`,
           );
         if (run.ingress_paused)
           throw new RunNotWritableError(
             input.runId,
             "paused",
-            "evidence ingress is paused",
+            `run ${input.runId} evidence ingress is paused`,
           );
         const maxAttempts = Number(run.max_attempts);
         const attemptNumber = Number(run.attempt_count) + 1;
@@ -2200,7 +2199,7 @@ export function createPostgresRunStore(
           throw new RunNotWritableError(
             input.runId,
             "attempts_exhausted",
-            `has exhausted its pinned max_attempts (${maxAttempts})`,
+            `run ${input.runId} has exhausted its pinned max_attempts (${maxAttempts})`,
           );
         }
 

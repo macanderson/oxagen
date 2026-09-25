@@ -46,7 +46,7 @@ export async function agentMemoryUpdateHandler(
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
         surface: ctx.surface,
-        executionStepId: ctx.messageId ?? ctx.requestId,
+        executionStepId: ctx.executionStepId ?? null,
       },
     });
   }

@@ -18,9 +18,9 @@
 //   5. Every frame up to the branch point that carried content kept its body
 //      (`conflict`, `gap_before_from_seq`): the cassette would otherwise have
 //      a hole before the fork.
-//   6. The run still takes an attempt once `createAttempt` holds its lock
-//      (`conflict`, `run_not_writable` for a cancel or pause that won the
-//      lock, `run_attempts_exhausted` at the pinned ceiling).
+//   6. The run still takes a new attempt once its row is locked (`conflict`,
+//      `run_not_writable` for a cancel or a pause that won the lock,
+//      `run_attempts_exhausted` at the pinned `max_attempts`).
 // The attempt is minted with the sealed attempt's engine identity and
 // provenance, and `forked_from_run_seq` records the branch point. No recorder
 // in this revision seals a ledger attempt at `fork` (`gradeSealedAttempt`
@@ -30,11 +30,8 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { runFork, type RunForkOutput } from "@oxagen/oxagen/contracts/run.fork";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import {
-  isRunNotWritableError,
-  type AttemptRecord,
-  type RunStore,
-} from "@oxagen/run-ledger";
+import type { AttemptRecord, RunStore } from "@oxagen/run-ledger";
+import { isRunNotWritableError } from "@oxagen/run-ledger/run-errors";
 import {
   gradeAllows,
   isContentBearingFrame,
@@ -130,18 +127,14 @@ export function createRunForkHandler(
         forkedFromRunSeq: input.fromSeq,
       })
       .catch((err: unknown) => {
-        // The run lock is taken only inside `createAttempt`, so a cancel or a
-        // pause can win it after every check above passed. That race is an
-        // expected state, answered like any other unwritable run rather than
-        // as a server fault (#3665).
-        if (isRunNotWritableError(err)) {
-          throw conflict(
-            err.reason === "attempts_exhausted"
-              ? "run_attempts_exhausted"
-              : "run_not_writable",
-          );
-        }
-        throw err;
+        // A cancel or a pause can win the run lock after the reads above, and
+        // a run can reach its attempt ceiling. Each is the caller's conflict.
+        if (!isRunNotWritableError(err)) throw err;
+        throw conflict(
+          err.reason === "attempts_exhausted"
+            ? "run_attempts_exhausted"
+            : "run_not_writable",
+        );
       });
     return {
       attemptId: created.attemptPublicId,

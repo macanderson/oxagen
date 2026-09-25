@@ -281,35 +281,6 @@ export function stepsOf(frames: readonly RunFrame[], open: OpenFrame): Steps {
   };
 }
 
-/** `FP_SPEEDS`: the speeds the frame player plays at. */
-export const PLAYBACK_SPEEDS = [1, 4, 16] as const;
-export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
-
-/**
- * `fpTick`'s bounds on a recorded gap: a burst of frames recorded in the same
- * instant still reads one at a time, and a long wait for a model does not
- * stall the playback.
- */
-export const PLAYBACK_MIN_MS = 250;
-const PLAYBACK_MAX_MS = 5000;
-
-/**
- * How long playback holds each frame at 1× before it steps to the next: the
- * recorded gap to the next frame, held between 250 ms and 5 s. The last frame
- * has no next, so the list is one shorter than the page. An instant that does
- * not parse, or frames recorded out of order, hold the floor rather than a
- * guessed gap.
- */
-export function playbackGaps(frames: readonly RunFrame[]): number[] {
-  return frames.slice(1).map((next, i) => {
-    const gap =
-      Date.parse(next.observedAt) - Date.parse(frames[i]?.observedAt ?? "");
-    return Number.isFinite(gap)
-      ? Math.min(PLAYBACK_MAX_MS, Math.max(PLAYBACK_MIN_MS, gap))
-      : PLAYBACK_MIN_MS;
-  });
-}
-
 /** The run as the list panel names it: live, paused, sealed, or halted, as recorded. */
 export type RunState = "live" | "paused" | "sealed" | "halted";
 

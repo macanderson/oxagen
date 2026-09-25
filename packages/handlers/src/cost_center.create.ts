@@ -5,7 +5,7 @@
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import type { costCenterCreate } from "@oxagen/oxagen/contracts/cost_center.create";
-import { schema, withTenantDb } from "@oxagen/database";
+import { isUniqueViolation, schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { toCostCenter } from "./cost_center.shared";
 
@@ -64,6 +64,18 @@ export const costCenterCreateHandler: CapabilityHandler<
       })
       .returning();
     return inserted;
+  }).catch((err: unknown) => {
+    // Two creates of one label can both read no row and both insert. The
+    // unique index turns the second insert into a 23505, which aborts its
+    // transaction, so the conflict is answered here, outside it.
+    if (isUniqueViolation(err, "cost_centers_org_label_idx")) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "cost_center_exists",
+        message: `The cost center ${input.label} is already on the list`,
+      });
+    }
+    throw err;
   });
   if (!row) throw new Error("create_cost_center: the label was not stored");
   return { costCenter: toCostCenter(row, { agents: 0, workspaces: 0 }) };

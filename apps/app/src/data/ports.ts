@@ -141,9 +141,11 @@ export interface DataSource {
     /**
      * list_notifications, the viewer's newest rows and the unread count the
      * bell's dot reads; callers: features/shell/workspace-activity.tsx and
-     * features/shell/source.ts.
+     * features/shell/source.ts. A WsCtx reads the organization's rows and that
+     * workspace's. An OrgCtx reads the organization's rows alone, which is the
+     * whole feed for a viewer who can open no workspace (#3806).
      */
-    notifications(ctx: WsCtx): Promise<Read<NotificationFeed>>;
+    notifications(ctx: OrgCtx): Promise<Read<NotificationFeed>>;
   };
   /**
    * The Billing page's six noBillingGate reads, each Owner, Admin or Billing

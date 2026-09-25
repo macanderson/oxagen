@@ -13,16 +13,18 @@ The strict input contains 1 to 200 `events`. Each carries `attemptSeq`,
 existing ledger validates event kinds, dense sequences, replay digests,
 redaction, and the run's pinned retention policy.
 
-An event the ledger refuses as malformed answers 400 with `bad_request`: an
-unknown event type, a payload that fails its event type's schema or carries a
-raw content field, an oversized payload, or both or neither of `payload` and
-`encryptedPayloadRef`. Nothing in the batch is written.
+A malformed frame is refused with a 400 and writes nothing. That covers an
+event with both or neither of `payload` and `encryptedPayloadRef`, an event
+type outside the registry, a payload that fails its event schema, a raw
+content field, and an inline payload over the byte cap. A batch that skips a
+sequence answers 409 `run_event_sequence_gap`. A replay whose digest differs
+from the recorded event answers 409 `run_event_integrity_conflict`.
 
 The response returns accepted event receipts, the last attempt and run
 sequences, and the refreshed `expiresAt`. Each receipt carries `attemptSeq`,
-`runSeq`, `eventDigest` and `idempotent`. A producer names an event by its
-sequence. The receipt has no event id, because the event row's id is internal
-and the event table has no public id. The call refreshes the existing bearer
+`runSeq`, `eventDigest`, and `idempotent`. It does not carry the ledger's
+internal event row id. Earlier responses included that id as `eventId`, and
+it was removed on 2026-09-25 (#3665). It refreshes the existing bearer
 credential rather than replacing its secret. The credential is rechecked
 under the run lock before any evidence write. Revocation, expiry, a changed
 attempt binding, a sealed attempt, or cancellation refuses the append.

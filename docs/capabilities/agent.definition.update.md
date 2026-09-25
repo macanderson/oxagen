@@ -21,6 +21,7 @@ Update an agent definition by snapshotting a NEW unpublished version with the up
 | `config.graph` | `GraphAccess` | Ontology binding, retrieval strategy, and traversal budget. |
 | `config.agentTools` | `AgentTool[]` | Platform functions and MCP servers. Default `[]`. |
 | `config.instructions` | `string?` | Optional system prompt baked into the definition. |
+| `config.budget` | `object?` | Optional spend ceilings: `per_run_micros` and `per_day_micros`, each a positive safe integer in micros. Other keys in the table are kept. |
 
 ## Output
 

@@ -20,6 +20,7 @@ import type { AgentDetail } from "@/data/contracts/agents";
 import { isEffective } from "@/data/contracts/mandates";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
+import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { ActivitySection } from "./activity";
@@ -120,6 +121,9 @@ export async function Agent({
   });
   return (
     <div className="flex flex-col gap-5" data-testid="agent-page">
+      {/* The agent the assistant is asked about, by the id the URL names and
+          the name it was registered with. */}
+      <PageRecord route="agents" id={agent} label={identity.name} />
       <AgentHeader
         identity={identity}
         lastRun={lastRun}
@@ -237,6 +241,9 @@ function tabBody({
           here={routes.agent(place.org, place.ws, place.agent, {
             tab: "runtime",
           })}
+          // create_enrollment_token and revoke_host_enrollment admit an org
+          // Owner or Admin only.
+          canManageHosts={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
         />
       );
     case "permissions":

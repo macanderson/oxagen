@@ -11,6 +11,7 @@ import { releaseTranscript } from "./transcript.builders";
 import {
   buildFeed,
   buildTranscript,
+  closedLine,
   decisionSubject,
   entryKey,
   type FeedRow,
@@ -18,6 +19,7 @@ import {
   frameCost,
   type Frames,
   isOperatorPrompt,
+  LINE_CAP,
   mergeEntries,
   rebaseEntries,
   stepDigest,
@@ -1008,6 +1010,75 @@ describe("buildFeed, a reply's own shapes", () => {
       pending: false,
     });
     expect(tool?.failed).toBe(true);
+  });
+
+  it("prints the call as it was made on the first line when its arguments have no headline", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: null,
+          blocks: [
+            {
+              kind: "tool_use",
+              name: "mcp__linear__update_issue",
+              input: { filter: { state: "open" }, patch: { labels: ["a"] } },
+              callKey: "toolu_1",
+            },
+          ],
+        }),
+      }),
+    ]);
+    expect(tools(rows)[0]?.call.arg).toBe(
+      '{"filter":{"state":"open"},"patch":{"labels":["a"]}}',
+    );
+  });
+
+  it("prints the name alone for a call made with no arguments (negative)", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: null,
+          blocks: [
+            {
+              kind: "tool_use",
+              name: "mcp__linear__list_teams",
+              input: {},
+              callKey: "toolu_1",
+            },
+          ],
+        }),
+      }),
+    ]);
+    expect(tools(rows)[0]?.call).toMatchObject({
+      name: "linear__list_teams",
+      arg: null,
+    });
+  });
+
+  it("cuts a long argument at the closed line's cap and keeps the call whole", () => {
+    const command = `echo ${"x".repeat(LINE_CAP)}`;
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: null,
+          blocks: [
+            {
+              kind: "tool_use",
+              name: "Bash",
+              input: { command },
+              callKey: "toolu_1",
+            },
+          ],
+        }),
+      }),
+    ]);
+    const call = tools(rows)[0]?.call;
+    expect(call?.arg).toHaveLength(LINE_CAP);
+    expect(call?.arg?.endsWith("…")).toBe(true);
+    expect(call?.raw).toBe(command);
   });
 
   it("names a call by the tool step of the same name when neither side kept a key", () => {
@@ -2439,5 +2510,28 @@ describe("a call whose step opens on Oxagen's gate", () => {
       type: "tool_requested",
       chainRef: null,
     });
+  });
+});
+
+describe("closedLine", () => {
+  it("puts text on one line, each run of whitespace a single space", () => {
+    expect(closedLine("  First line.\n\n\tSecond  line.\n")).toBe(
+      "First line. Second line.",
+    );
+  });
+
+  it("keeps text of exactly the cap whole (negative)", () => {
+    const text = "a".repeat(LINE_CAP);
+    expect(closedLine(text)).toBe(text);
+  });
+
+  it("cuts text one past the cap to the cap, ending in an ellipsis", () => {
+    const line = closedLine("a".repeat(LINE_CAP + 1));
+    expect(line).toHaveLength(LINE_CAP);
+    expect(line).toBe(`${"a".repeat(LINE_CAP - 1)}…`);
+  });
+
+  it("returns nothing for text that is only whitespace", () => {
+    expect(closedLine(" \n\t ")).toBe("");
   });
 });

@@ -106,6 +106,7 @@ import {
   RunEventIntegrityError,
   RunEventPayloadTooLargeError,
   RunEventSequenceGapError,
+  RunNotWritableError,
   RunSpecIdentityMismatchError,
   RunEventShapeError,
   RunNotWritableError,
@@ -120,6 +121,7 @@ import {
   isRunEventIntegrityError,
   isRunEventPayloadTooLargeError,
   isRunEventSequenceGapError,
+  isRunNotWritableError,
   isRunStoreStateError,
   isUnknownRunEventTypeError,
 } from "./run-errors";
@@ -1486,9 +1488,14 @@ describe("createAttempt", () => {
       { match: LOCK_RUN, rows: lockedRunRows({ cancel_requested: true }) },
     ]);
     useTx(tx);
-    await expect(createPostgresRunStore().createAttempt(input)).rejects.toThrow(
-      /was cancelled/,
-    );
+    const err = await createPostgresRunStore()
+      .createAttempt(input)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/was cancelled/);
+    // Typed, so a surface answers 409 rather than 500 (#3665).
+    expect(isRunNotWritableError(err)).toBe(true);
+    expect((err as RunNotWritableError).reason).toBe("cancelled");
     expect(ranSql(executed, INSERT_ATTEMPT)).toBe(false);
   });
 
@@ -1519,9 +1526,12 @@ describe("createAttempt", () => {
       { match: LOCK_RUN, rows: lockedRunRows({ attempt_count: 3 }) },
     ]);
     useTx(tx);
-    await expect(createPostgresRunStore().createAttempt(input)).rejects.toThrow(
-      /exhausted its pinned max_attempts/,
-    );
+    const err = await createPostgresRunStore()
+      .createAttempt(input)
+      .catch((e: unknown) => e);
+    expect((err as Error).message).toMatch(/exhausted its pinned max_attempts/);
+    expect(isRunNotWritableError(err)).toBe(true);
+    expect((err as RunNotWritableError).reason).toBe("attempts_exhausted");
   });
 
   it("throws when the attempt insert returns no row", async () => {

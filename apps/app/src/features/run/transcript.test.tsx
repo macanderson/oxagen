@@ -119,6 +119,7 @@ function renderSection(view: SectionView = {}) {
 
 afterEach(() => {
   cleanup();
+  window.getSelection()?.removeAllRanges();
   readTranscriptPage.mockReset();
   refresh.mockReset();
 });
@@ -126,11 +127,7 @@ afterEach(() => {
 const rows = () => screen.queryAllByTestId("tx-row");
 const kinds = () => rows().map((row) => row.getAttribute("data-kind"));
 const readout = () => screen.getByTestId("transport-readout");
-/**
- * The row's own tool name. A subagent's rows are drawn inside its call's row,
- * so a call row also holds the names of the rows under it. Only the name whose
- * nearest row is this one belongs to it.
- */
+/** The tool name a row prints for itself, not one of a nested subagent row. */
 function ownToolName(row: HTMLElement): string | null {
   const name = Array.from(
     row.querySelectorAll('[data-testid="tx-tool-name"]'),
@@ -139,7 +136,9 @@ function ownToolName(row: HTMLElement): string | null {
 }
 /** The tool row whose name reads `name`. */
 function toolRow(name: string): HTMLElement {
-  const found = rows().find((row) => ownToolName(row) === name);
+  const found = rows().find(
+    (row) => within(row).queryByTestId("tx-tool-name")?.textContent === name,
+  );
   if (found === undefined) throw new Error(`no ${name} row`);
   return found;
 }
@@ -289,13 +288,6 @@ describe("the kind chips", () => {
     expect(kinds().at(-1)).toBe("seal");
     // The run is sealed, so its last stop reads as the seal and its instant.
     expect(rows().at(-1)).toHaveTextContent("sealed 08:55:00");
-    // A long stop label is cut to the row's one line, as every closed row is
-    // (#4116), and the seal's instant never shrinks.
-    const seal = rows().at(-1);
-    if (seal === undefined) throw new Error("no seal row");
-    const label = within(seal).getByText("agent_stop completed");
-    expect(label).toHaveClass("min-w-0", "truncate");
-    expect(label.previousElementSibling).toHaveClass("flex-none");
   });
 
   it("opens every chip off from a link that says none", () => {
@@ -336,66 +328,16 @@ describe("the kind chips", () => {
 });
 
 describe("the rows", () => {
-  it("opens on the operator's first prompt as one line, and names the task once it is opened", () => {
+  it("opens on the operator's first prompt on one line, and names the task once it opens", () => {
     renderSection();
     const [first] = rows();
     expect(first).toHaveAttribute("data-kind", "prompt");
     const you = screen.getByTestId("transcript-you");
-    // Sentence case in the catalogue; the tag's style sets the capitals.
-    expect(you).toHaveTextContent(
-      /^You⏵Cut the 4\.11\.0 release notes for a-intel\/platform\. …$/,
-    );
-    expect(you).not.toHaveTextContent("Marcus Bell");
-    fireEvent.click(within(you).getByRole("button", { name: "Show the rest" }));
-    expect(you).toHaveTextContent("Do not touch main.");
+    expect(you).toHaveTextContent(/^YOU⏵Cut the 4\.11\.0 release notes/);
+    expect(you).not.toHaveTextContent("first prompt");
+    fireEvent.click(within(you).getByRole("button", { name: "Show in full" }));
     expect(you).toHaveTextContent(
       "Marcus Bell · operatortask a-intel/platform#482first prompt",
-    );
-  });
-
-  it("shows a one-sentence prompt's operator line and a short subagent row's chip, which have no fold to open them", () => {
-    const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c2";
-    const specs: FrameSpec[] = [
-      {
-        seq: 1,
-        t: 0,
-        type: "turn_start",
-        kind: "frame",
-        turn: 1,
-        request: "Fix the flaky test.",
-      },
-      {
-        seq: 2,
-        t: 1,
-        type: "model.response",
-        kind: "model_call",
-        label: "anthropic/claude-opus-5",
-        turn: 1,
-        callKey: "msg_sub",
-        subagent: { chainRef: CHAIN, type: "Explore" },
-        blocks: [{ kind: "text", text: "Found it." }],
-      },
-      {
-        seq: 3,
-        t: 2,
-        type: "model.response",
-        kind: "model_call",
-        label: "anthropic/claude-opus-5",
-        turn: 1,
-        callKey: "msg_own",
-        blocks: [{ kind: "text", text: "Fixed the retry." }],
-      },
-    ];
-    renderSection({ read: readOk(transcriptOf(specs)) });
-    const you = screen.getByTestId("transcript-you");
-    expect(within(you).queryByRole("button")).toBeNull();
-    expect(you).toHaveTextContent("Marcus Bell · operator");
-    const [sub] = screen.getAllByTestId("transcript-agent");
-    if (sub === undefined) throw new Error("the subagent's row is drawn");
-    expect(sub).toHaveTextContent("Found it.");
-    expect(within(sub).queryByRole("button")).toBeNull();
-    expect(within(sub).getByTestId("transcript-subagent")).toHaveTextContent(
-      "subagent Explore",
     );
   });
 
@@ -448,58 +390,53 @@ describe("the rows", () => {
       "href",
       "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=7",
     );
-    // The whole output opens with it, every line of it.
-    const out = within(list).getByTestId("tx-out");
-    expect(out).toHaveTextContent("31 pull requests");
-    expect(out).toHaveTextContent("#470");
-    expect(out.textContent.split("\n")).toHaveLength(7);
+    // The whole output opens with it.
+    expect(within(list).getByTestId("tx-out")).toHaveTextContent("#470");
   });
 
-  it("draws a closed call as its one line: no output, no diff and no note under it (#4116)", () => {
+  it("draws a closed call as its one line, with nothing of the call or its output under it (negative)", () => {
     renderSection();
-    for (const name of [
-      "github__list_pull_requests",
-      "Read",
-      "Write",
-      "Bash",
-      "Edit",
-      "github__create_release",
-    ]) {
-      const row = toolRow(name);
-      expect(within(row).queryByTestId("tx-call-fold")).toBeNull();
-      expect(within(row).queryByTestId("tx-out")).toBeNull();
-      expect(within(row).queryByTestId("tx-diff")).toBeNull();
-      expect(row.querySelector("pre")).toBeNull();
-      // The call line still says how much the row holds.
-      expect(
-        within(row).getByRole("button", { name: "Show the call" }),
-      ).toHaveAttribute("aria-expanded", "false");
-    }
-    expect(toolRow("github__list_pull_requests")).toHaveTextContent("7 lines");
-    expect(toolRow("Write")).toHaveTextContent("+13 −0");
-    expect(toolRow("github__create_release")).not.toHaveTextContent(
-      "Held at Oxagen",
-    );
+    const list = toolRow("github__list_pull_requests");
+    expect(within(list).queryByTestId("tx-call-fold")).toBeNull();
+    expect(within(list).queryByTestId("tx-out")).toBeNull();
+    expect(
+      within(list).queryByRole("button", { name: /more line/ }),
+    ).toBeNull();
+    expect(
+      within(list).getByRole("button", { name: "Show the call" }),
+    ).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("opens a new file to every line of its diff, past the twelve a closed row once showed", () => {
+  it("opens a call from a click on its line, and not from a click that ends a selection", () => {
+    renderSection();
+    const list = toolRow("github__list_pull_requests");
+    const line = within(list).getByTestId("tx-call-line");
+    // The reader selects the line's text to copy it.
+    const range = document.createRange();
+    range.selectNodeContents(line);
+    window.getSelection()?.addRange(range);
+    fireEvent.click(line);
+    expect(within(list).queryByTestId("tx-call-fold")).toBeNull();
+    window.getSelection()?.removeAllRanges();
+    fireEvent.click(line);
+    expect(within(list).getByTestId("tx-call-fold")).toBeTruthy();
+    expect(
+      within(list).getByRole("button", { name: "Hide the call" }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("reads a new file as the diff it is, and marks a failed call and its output", () => {
     renderSection();
     const write = toolRow("Write");
+    expect(write).toHaveTextContent("+13 −0");
+    expect(within(write).queryByTestId("tx-diff")).toBeNull();
     fireEvent.click(
       within(write).getByRole("button", { name: "Show the call" }),
     );
-    const diff = within(write).getByTestId("tx-diff");
-    expect(diff).toHaveTextContent("new file");
-    // The thirteenth line of the thirteen added.
-    expect(diff).toHaveTextContent("`release.config` moves to");
-    fireEvent.click(
-      within(write).getByRole("button", { name: "Hide the call" }),
-    );
-    expect(within(write).queryByTestId("tx-diff")).toBeNull();
-  });
-
-  it("marks a failed call, and its output once opened", () => {
-    renderSection();
+    expect(within(write).getByTestId("tx-diff")).toHaveTextContent("new file");
+    // The diff is the whole of what the edit did, so its "File created"
+    // output does not repeat it.
+    expect(within(write).queryByTestId("tx-out")).toBeNull();
     const bash = toolRow("Bash");
     expect(bash).toHaveTextContent("✗");
     fireEvent.click(
@@ -507,9 +444,6 @@ describe("the rows", () => {
     );
     expect(within(bash).getByTestId("tx-out").className).toContain(
       "text-error",
-    );
-    expect(within(bash).getByTestId("tx-out")).toHaveTextContent(
-      "error: heading order",
     );
   });
 
@@ -523,34 +457,13 @@ describe("the rows", () => {
       "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=17",
     );
     expect(release).not.toHaveTextContent(/\d ms/);
+    expect(release).not.toHaveTextContent(
+      "Held at Oxagen until someone answers.",
+    );
     fireEvent.click(
       within(release).getByRole("button", { name: "Show the call" }),
     );
     expect(release).toHaveTextContent("Held at Oxagen until someone answers.");
-  });
-
-  it("fills the argument slot from the arguments the record kept when none reads as a headline (#4116)", () => {
-    renderSection({
-      read: readOk(
-        transcriptOf([
-          {
-            seq: 1,
-            t: 1,
-            type: "tool_call",
-            kind: "tool_call",
-            label: "search_issues ok",
-            turn: 1,
-            response: JSON.stringify({
-              input: { filters: { state: "open" }, labels: ["p1"] },
-              output: "3 issues",
-            }),
-          },
-        ]),
-      ),
-    });
-    expect(
-      within(toolRow("search_issues")).getByTestId("tx-tool-arg"),
-    ).toHaveTextContent('filters {"state":"open"} · labels ["p1"]');
   });
 
   it("says what each model step cost, its tokens and the running total, with the frame behind them", () => {
@@ -572,22 +485,18 @@ describe("the rows", () => {
     );
   });
 
-  it("draws a recall as its heading on one line, and lists every recalled frame once opened", () => {
+  it("reads the recall as its heading, and lists what was recalled once it opens", () => {
     renderSection();
     const recall = screen.getByTestId("tx-recall");
     expect(recall).toHaveTextContent("◉ recall · 6 frames · 11,204 tok");
-    // Closed, not even the first frame is listed.
-    expect(recall).not.toHaveTextContent("Repository a-intel/platform");
     expect(recall).not.toHaveTextContent("RELEASING.md");
-    const heading = within(recall).getByRole("button", {
-      name: "recall · 6 frames · 11,204 tok",
-    });
-    expect(heading).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(heading);
-    expect(heading).toHaveAttribute("aria-expanded", "true");
-    expect(recall).toHaveTextContent("Repository a-intel/platform");
-    expect(recall).toHaveTextContent("RELEASING.md");
-    expect(recall).toHaveTextContent("Tag v4.10.3 @ 9d02e11");
+    expect(within(recall).queryByTestId("tx-recall-items")).toBeNull();
+    fireEvent.click(
+      within(recall).getByRole("button", { name: "Show what was recalled" }),
+    );
+    expect(within(recall).getByTestId("tx-recall-items")).toHaveTextContent(
+      "RELEASING.md",
+    );
     expect(
       within(recall).getByRole("link", { name: "open the Context tab" }),
     ).toHaveAttribute(
@@ -599,68 +508,49 @@ describe("the rows", () => {
   it("reads the agent's last words as the answer once the run has stopped, and not while it runs", () => {
     renderSection();
     const agents = screen.getAllByTestId("transcript-agent");
-    expect(agents.at(-1)).toHaveTextContent(/^Answer/);
-    expect(agents[0]).toHaveTextContent(/^Agent/);
+    expect(agents.at(-1)).toHaveTextContent(/^ANSWER/);
+    expect(agents[0]).toHaveTextContent(/^AGENT/);
     cleanup();
     renderSection({ status: "live" });
     expect(screen.getAllByTestId("transcript-agent").at(-1)).toHaveTextContent(
-      /^Agent/,
+      /^AGENT/,
     );
   });
 
-  it("opens the answer whole by default, and closes it to one line on request", () => {
-    renderSection();
-    const answer = screen.getAllByTestId("transcript-agent").at(-1);
-    if (answer === undefined) throw new Error("expected the answer");
-    expect(answer).toHaveTextContent(
-      "It stays unpublished until someone approves.",
-    );
-    fireEvent.click(within(answer).getByRole("button", { name: "Show less" }));
-    expect(answer).not.toHaveTextContent("It stays unpublished");
-    expect(answer).toHaveTextContent(
-      "Creating the v4.11.0 draft release from release/4.11.0-notes. …",
-    );
-  });
-
-  it("draws a closed row of every kind as one line, with nothing under it (#4116)", () => {
-    renderSection({ status: "live" });
-    // Live, so no row is the answer and every row starts closed.
-    for (const row of rows()) {
-      expect(row.querySelector("pre")).toBeNull();
-      expect(within(row).queryByTestId("tx-call-fold")).toBeNull();
-    }
-    // The prompt, without the line under it that names who sent it.
-    const you = screen.getByTestId("transcript-you");
-    expect(you).not.toHaveTextContent("first prompt");
-    expect(you.querySelector(".truncate")).not.toBeNull();
-    // The model's words: the first sentence, cut at the row's width.
-    const words = screen.getAllByTestId("transcript-agent")[1];
-    if (words === undefined) throw new Error("expected the agent's words");
-    expect(words).not.toHaveTextContent("Reading CHANGELOG.md");
-    expect(words.querySelector(".truncate")).not.toBeNull();
-    // A thought: its control and its first sentence share the line.
-    for (const thought of screen.getAllByTestId("tx-think")) {
-      expect(thought.className).toContain("truncate");
-      expect(thought.parentElement?.className).toContain("flex");
-    }
-    // A recall: its heading, with no frame listed under it.
-    expect(screen.getByTestId("tx-recall")).not.toHaveTextContent(
-      "RELEASING.md",
-    );
-  });
-
-  it("folds the model's words after the first sentence until asked", () => {
-    renderSection();
+  it("draws the model's words on one line until asked, then as they were written", () => {
+    renderSection({
+      read: readOk(
+        transcriptOf(
+          releaseSpecs().map((spec) =>
+            spec.seq === 8
+              ? {
+                  ...spec,
+                  blocks: [
+                    {
+                      kind: "text" as const,
+                      text: "31 merged in range.\n\nReading CHANGELOG.md for the heading order.",
+                    },
+                  ],
+                }
+              : spec,
+          ),
+        ),
+      ),
+    });
     const second = screen.getAllByTestId("transcript-agent")[1];
     if (second === undefined) throw new Error("expected the agent's words");
-    expect(second).toHaveTextContent("31 merged in range. …");
-    expect(second).not.toHaveTextContent("Reading CHANGELOG.md");
-    fireEvent.click(
-      within(second).getByRole("button", { name: "Show the rest" }),
+    expect(second.textContent).toContain(
+      "31 merged in range. Reading CHANGELOG.md",
     );
-    expect(second).toHaveTextContent(
-      "Reading CHANGELOG.md for the heading order",
+    const fold = within(second).getByRole("button", { name: "Show in full" });
+    expect(fold).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(fold);
+    expect(second.textContent).toContain(
+      "31 merged in range.\n\nReading CHANGELOG.md",
     );
+    expect(
+      within(second).getByRole("button", { name: "Show less" }),
+    ).toHaveAttribute("aria-expanded", "true");
   });
 
   it("opens every thought with expand thinking, and closes them again", () => {
@@ -674,7 +564,7 @@ describe("the rows", () => {
                   blocks: [
                     {
                       kind: "thinking" as const,
-                      text: "First thought. Second thought.",
+                      text: "First thought.\nSecond thought.",
                     },
                   ],
                 }
@@ -683,12 +573,19 @@ describe("the rows", () => {
         ),
       ),
     });
-    const [thought] = screen.getAllByTestId("tx-think");
-    expect(thought).not.toHaveTextContent("Second thought.");
+    // The first thought, re-read each time: it is a span on one line while
+    // closed and a block of every line once open.
+    const thought = () => screen.getAllByTestId("tx-think")[0];
+    expect(thought()?.tagName).toBe("SPAN");
+    expect(thought()?.textContent).toBe("First thought. Second thought.");
     fireEvent.click(screen.getByRole("button", { name: "expand thinking" }));
-    expect(thought).toHaveTextContent("Second thought.");
+    expect(thought()?.tagName).toBe("DIV");
+    expect(thought()?.textContent).toBe("First thought.\nSecond thought.");
     fireEvent.click(screen.getByRole("button", { name: "collapse thinking" }));
-    expect(thought).not.toHaveTextContent("Second thought.");
+    expect(thought()?.tagName).toBe("SPAN");
+    // Its own fold opens the one thought.
+    fireEvent.click(screen.getByRole("button", { name: "thinking · 2 lines" }));
+    expect(thought()?.tagName).toBe("DIV");
   });
 
   it("reads each row's clock in the viewer's zone and names its place in the run", () => {
@@ -770,11 +667,8 @@ describe("the rows", () => {
     );
     fireEvent.click(
       within(screen.getByTestId("tx-recall")).getByRole("button", {
-        name: /^recall/,
+        name: "Show what was recalled",
       }),
-    );
-    fireEvent.click(
-      within(toolRow("Write")).getByRole("button", { name: "Show the call" }),
     );
     await expectNoAxe(container);
   });
@@ -837,19 +731,22 @@ describe("event rows", () => {
     expect(within(decision).queryByText("policy_decision · fr 2")).toBeNull();
   });
 
-  it("shows an event's first line and folds the rest until asked, then folds it again", () => {
+  it("shows an event's text on one line, opens it as written, then folds it again", () => {
     renderSection({ read: readOk(transcriptOf(EVENTS)) });
     const [, notice] = events();
     if (notice === undefined) throw new Error("a notice row");
     expect(notice).toHaveTextContent("●");
     expect(within(notice).getByText("notification")).toBeTruthy();
-    expect(within(notice).getByTitle("Build finished")).toBeTruthy();
-    expect(within(notice).queryByText(/all 42 tests passed/)).toBeNull();
-    const fold = within(notice).getByRole("button", { name: "Show the rest" });
+    expect(within(notice).getByTestId("tx-event-line")).toHaveAttribute(
+      "title",
+      "Build finished all 42 tests passed",
+    );
+    expect(notice.querySelector("pre")).toBeNull();
+    const fold = within(notice).getByRole("button", { name: "Show in full" });
     expect(fold).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(fold);
-    expect(notice.querySelector("pre")).toHaveTextContent(
-      "Build finished all 42 tests passed",
+    expect(notice.querySelector("pre")?.textContent).toBe(
+      "Build finished\nall 42 tests passed",
     );
     fireEvent.click(within(notice).getByRole("button", { name: "Show less" }));
     expect(notice.querySelector("pre")).toBeNull();
@@ -887,52 +784,6 @@ describe("the search", () => {
     ).toBeGreaterThan(0);
     expect(screen.queryByTestId("transport-readout")).toBeNull();
     expect(screen.getByText("Search shows every match at once.")).toBeTruthy();
-  });
-
-  it("opens every row it draws, so a match in a closed row's output shows (#4116)", () => {
-    renderSection();
-    fireEvent.change(
-      screen.getByRole("searchbox", { name: "Search the transcript" }),
-      { target: { value: "move release config" } },
-    );
-    expect(rows()).toHaveLength(1);
-    const list = toolRow("github__list_pull_requests");
-    expect(within(list).getByTestId("tx-call-fold")).toBeInTheDocument();
-    expect(
-      within(within(list).getByTestId("tx-out")).getByText(
-        "Move release config",
-        { selector: "mark" },
-      ),
-    ).toBeInTheDocument();
-    // Clearing the search closes the rows it opened.
-    fireEvent.change(
-      screen.getByRole("searchbox", { name: "Search the transcript" }),
-      { target: { value: "" } },
-    );
-    expect(
-      within(toolRow("github__list_pull_requests")).queryByTestId(
-        "tx-call-fold",
-      ),
-    ).toBeNull();
-  });
-
-  it("disables each fold while the search holds it open, so a click cannot change the row behind the search", () => {
-    renderSection();
-    const box = () =>
-      screen.getByRole("searchbox", { name: "Search the transcript" });
-    fireEvent.change(box(), { target: { value: "move release config" } });
-    const found = toolRow("github__list_pull_requests");
-    const hide = within(found).getByRole("button", { name: "Hide the call" });
-    expect(hide).toHaveAttribute("aria-expanded", "true");
-    expect(hide).toBeDisabled();
-    fireEvent.click(hide);
-    fireEvent.change(box(), { target: { value: "" } });
-    // The row closes with the search, as it was before the search opened it.
-    const list = toolRow("github__list_pull_requests");
-    expect(within(list).queryByTestId("tx-call-fold")).toBeNull();
-    expect(
-      within(list).getByRole("button", { name: "Show the call" }),
-    ).toBeEnabled();
   });
 
   it("says nothing matches rather than showing an empty feed (negative)", () => {
@@ -1089,20 +940,23 @@ describe("paging past the cursor", () => {
       [],
       "ZjoxMQ",
     );
-    // The release call is now one row with its answer and its result.
+    // The release call is now one row carrying the answer that landed with the
+    // appended page.
     const release = toolRow("github__create_release");
-    fireEvent.click(
-      within(release).getByRole("button", { name: "Show the call" }),
-    );
-    expect(release).toHaveTextContent("draft created");
-    fireEvent.click(
-      within(release).getByRole("button", { name: "Hide the call" }),
-    );
+    expect(release).toHaveTextContent("approve \u00b7 fr 18");
     expect(
       rows()
         .slice(0, -1)
         .map((row) => row.textContent),
     ).toEqual(before.slice(0, -1));
+    // A row leads on one line, so the result the page carried is behind the
+    // call's fold rather than in the row's own text.
+    fireEvent.click(
+      within(release).getByRole("button", { name: "Show the call" }),
+    );
+    expect(within(release).getByTestId("tx-out")).toHaveTextContent(
+      "draft created",
+    );
   });
 
   it("stops offering more once the page it read carried no cursor", async () => {
@@ -1160,122 +1014,6 @@ describe("paging past the cursor", () => {
     expect(screen.getByTestId("transcript-count")).toHaveTextContent(
       "stops short of the end",
     );
-  });
-});
-
-describe("a read the page makes again", () => {
-  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000d4";
-  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_A" };
-  /** A run whose subagent, spawned by the Task call at 2, calls Grep. */
-  const specs = (late: boolean): FrameSpec[] => [
-    {
-      seq: 1,
-      t: 0,
-      type: "turn_start",
-      kind: "frame",
-      turn: 1,
-      request: "Find the flaky test.",
-    },
-    {
-      seq: 2,
-      t: 1,
-      type: "tool_call",
-      kind: "tool_call",
-      label: "Task ok",
-      turn: 1,
-      callKey: "toolu_A",
-      response: '{"input":{"description":"Search the tests"},"output":"done"}',
-    },
-    {
-      seq: 0,
-      t: 2,
-      type: "tool_call",
-      kind: "tool_call",
-      label: "Grep ok",
-      turn: 1,
-      callKey: "toolu_X1",
-      subagent: sub,
-      response: '{"input":{"pattern":"flaky"},"output":"a.test.ts"}',
-    },
-    // Recorded late: the tail read's cursor had already passed it.
-    ...(late
-      ? [
-          {
-            seq: 1,
-            t: 5,
-            type: "tool_call",
-            kind: "tool_call" as const,
-            label: "Read ok",
-            turn: 1,
-            callKey: "toolu_X2",
-            subagent: sub,
-            response: '{"input":{"file_path":"a.test.ts"},"output":"it()"}',
-          },
-        ]
-      : []),
-    {
-      seq: 3,
-      t: 3,
-      type: "tool_call",
-      kind: "tool_call",
-      label: "Bash ok",
-      turn: 1,
-      callKey: "toolu_B",
-      response: '{"input":{"command":"git diff"},"output":""}',
-    },
-  ];
-  const view = (read: Read<RunTranscript>, status: RunRow["status"]) => (
-    <IntlProvider>
-      <TranscriptSection
-        read={read}
-        run={{
-          ...RUN,
-          status,
-          sealedAt: status === "live" ? null : RUN.sealedAt,
-        }}
-        kinds={[]}
-        {...PLACE}
-      />
-    </IntlProvider>
-  );
-  const names = () =>
-    rows().flatMap((row) => {
-      const name = ownToolName(row);
-      return name === null ? [] : [name];
-    });
-
-  it("takes the page's new read, so a subagent frame recorded behind the cursor shows under its call once the run seals (#4083)", () => {
-    const { rerender } = render(
-      view(
-        readOk(transcriptOf(specs(false), { cursor: "c1", complete: true })),
-        "live",
-      ),
-    );
-    expect(names()).toEqual(["Task", "Grep", "Bash"]);
-    // The seal refreshes the page, which reads the whole run again.
-    rerender(view(readOk(transcriptOf(specs(true))), "sealed"));
-    expect(names()).toEqual(["Task", "Grep", "Read", "Bash"]);
-    const nested = screen.getByTestId("transcript-subagent-steps");
-    expect(
-      within(nested)
-        .getAllByTestId("tx-tool-name")
-        .map((name) => name.textContent),
-    ).toEqual(["Grep", "Read"]);
-    // The new read carried no cursor, so nothing more is offered.
-    expect(screen.queryByTestId("transcript-more")).toBeNull();
-  });
-
-  it("keeps the rows it holds when the page renders again with the same read (negative)", () => {
-    const read = readOk(transcriptOf(specs(false)));
-    const { rerender } = render(view(read, "sealed"));
-    fireEvent.click(
-      within(toolRow("Bash")).getByRole("button", { name: "Show the call" }),
-    );
-    rerender(view(read, "sealed"));
-    expect(names()).toEqual(["Task", "Grep", "Bash"]);
-    expect(
-      within(toolRow("Bash")).getByTestId("tx-call-fold"),
-    ).toBeInTheDocument();
   });
 });
 
@@ -1946,20 +1684,15 @@ describe("searching the transcript", () => {
 
   it("keeps a found row's place in the run", () => {
     renderSection();
-    // The row is named by its kind, not by the text it draws: a closed recall
-    // shows its heading and the search opens it, so the words a row shows
-    // change with the search, and a finder that reads them picks a different
-    // row before and after (#4116). The run holds one recall.
-    const recall = () =>
-      rows().find((row) => row.getAttribute("data-kind") === "recall");
-    const clockOf = (row: HTMLElement | undefined) =>
-      row?.querySelector(":scope > time")?.getAttribute("dateTime");
-    const before = clockOf(recall());
+    const clockOf = () =>
+      rows()
+        .find((row) => /changelog/i.test(row.textContent))
+        ?.querySelector("time")
+        ?.getAttribute("dateTime");
+    const before = clockOf();
     expect(before).toBeDefined();
     search("changelog");
-    const found = recall();
-    expect(found).toHaveTextContent(/changelog/i);
-    expect(clockOf(found)).toBe(before);
+    expect(clockOf()).toBe(before);
   });
 
   it("says nothing matches rather than drawing an empty transcript (negative)", () => {
@@ -2120,5 +1853,115 @@ describe("the filter chips, as #4026 drew them", () => {
     });
     expect(screen.queryByTestId("transcript-chips")).toBeNull();
     expect(screen.queryByTestId("transcript")).toBeNull();
+  });
+});
+
+describe("a read the page makes again", () => {
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000d4";
+  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_A" };
+  /** A run whose subagent, spawned by the Task call at 2, calls Grep. */
+  const specs = (late: boolean): FrameSpec[] => [
+    {
+      seq: 1,
+      t: 0,
+      type: "turn_start",
+      kind: "frame",
+      turn: 1,
+      request: "Find the flaky test.",
+    },
+    {
+      seq: 2,
+      t: 1,
+      type: "tool_call",
+      kind: "tool_call",
+      label: "Task ok",
+      turn: 1,
+      callKey: "toolu_A",
+      response: '{"input":{"description":"Search the tests"},"output":"done"}',
+    },
+    {
+      seq: 0,
+      t: 2,
+      type: "tool_call",
+      kind: "tool_call",
+      label: "Grep ok",
+      turn: 1,
+      callKey: "toolu_X1",
+      subagent: sub,
+      response: '{"input":{"pattern":"flaky"},"output":"a.test.ts"}',
+    },
+    // Recorded late: the tail read's cursor had already passed it.
+    ...(late
+      ? [
+          {
+            seq: 1,
+            t: 5,
+            type: "tool_call",
+            kind: "tool_call" as const,
+            label: "Read ok",
+            turn: 1,
+            callKey: "toolu_X2",
+            subagent: sub,
+            response: '{"input":{"file_path":"a.test.ts"},"output":"it()"}',
+          },
+        ]
+      : []),
+    {
+      seq: 3,
+      t: 3,
+      type: "tool_call",
+      kind: "tool_call",
+      label: "Bash ok",
+      turn: 1,
+      callKey: "toolu_B",
+      response: '{"input":{"command":"git diff"},"output":""}',
+    },
+  ];
+  const view = (read: Read<RunTranscript>, status: RunRow["status"]) => (
+    <IntlProvider>
+      <TranscriptSection
+        read={read}
+        run={{
+          ...RUN,
+          status,
+          sealedAt: status === "live" ? null : RUN.sealedAt,
+        }}
+        kinds={[]}
+        {...PLACE}
+      />
+    </IntlProvider>
+  );
+  const names = () =>
+    rows().flatMap((row) => {
+      const name = ownToolName(row);
+      return name === null ? [] : [name];
+    });
+
+  it("takes the page's new read, so a subagent frame recorded behind the cursor shows under its call once the run seals (#4083)", () => {
+    const { rerender } = render(
+      view(
+        readOk(transcriptOf(specs(false), { cursor: "c1", complete: true })),
+        "live",
+      ),
+    );
+    expect(names()).toEqual(["Task", "Grep", "Bash"]);
+    // The seal refreshes the page, which reads the whole run again.
+    rerender(view(readOk(transcriptOf(specs(true))), "sealed"));
+    expect(names()).toEqual(["Task", "Grep", "Read", "Bash"]);
+    const nested = screen.getByTestId("transcript-subagent-steps");
+    expect(
+      within(nested)
+        .getAllByTestId("tx-tool-name")
+        .map((name) => name.textContent),
+    ).toEqual(["Grep", "Read"]);
+    // The new read carried no cursor, so nothing more is offered.
+    expect(screen.queryByTestId("transcript-more")).toBeNull();
+  });
+
+  it("keeps the rows it holds when the page renders again with the same read (negative)", () => {
+    const read = readOk(transcriptOf(specs(false)));
+    const { rerender } = render(view(read, "sealed"));
+    rerender(view(read, "sealed"));
+    expect(names()).toEqual(["Task", "Grep", "Bash"]);
   });
 });

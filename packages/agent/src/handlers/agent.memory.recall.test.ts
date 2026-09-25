@@ -46,7 +46,11 @@ vi.mock("@oxagen/telemetry", () => ({
 
 import { agentMemoryRecallHandler } from "./agent.memory.recall";
 
-import { TEST_CTX as CTX } from "../test-utils/fixtures";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { TEST_CTX as CTX, makeCTX } from "../test-utils/fixtures";
 
 describe("agent.memory.recall handler", () => {
   beforeEach(() => {
@@ -69,7 +73,8 @@ describe("agent.memory.recall handler", () => {
         orgId: "org_1",
         workspaceId: "ws_1",
         surface: "runner",
-        executionStepId: "req_1",
+        // TEST_CTX carries no executionStepId, so the key is absent, not the request id.
+        executionStepId: null,
       },
     });
     expect(mocks.recallMemoriesMock).toHaveBeenCalledTimes(1);
@@ -88,6 +93,52 @@ describe("agent.memory.recall handler", () => {
     expect(res.memories[0]!.id).toBe("m_1");
     expect(res.memories[0]!.memoryClass).toBe("RULE");
     expect(res.memories[0]!.enforcementScore).toBe(80);
+  });
+
+  it("stamps the embed with the run's executionStepId, never the message or request id", async () => {
+    await agentMemoryRecallHandler(
+      { query: "find me", limit: 5 },
+      makeCTX({ executionStepId: "run_9", messageId: "msg_1" }),
+    );
+    const opts = mocks.embedTextMock.mock.calls[0]?.[1] as {
+      telemetry: { executionStepId: string | null };
+    };
+    expect(opts.telemetry.executionStepId).toBe("run_9");
+  });
+
+  it("writes a null executionStepId when the call has none, even with a message id", async () => {
+    await agentMemoryRecallHandler(
+      { query: "find me", limit: 5 },
+      makeCTX({ messageId: "msg_1" }),
+    );
+    const opts = mocks.embedTextMock.mock.calls[0]?.[1] as {
+      telemetry: { executionStepId: string | null };
+    };
+    expect(opts.telemetry.executionStepId).toBeNull();
+  });
+
+  it("no memory handler derives executionStepId from the message or request id", () => {
+    // The CapabilityContext contract forbids substituting another id for an
+    // absent executionStepId, because a fabricated key joins to nothing (#2972).
+    const handlers = [
+      "agent.memory.recall.ts",
+      "agent.memory.remember.ts",
+      "agent.memory.update.ts",
+      "agent.memory.write.ts",
+      "agent.memory_import.commit.ts",
+    ];
+    for (const file of handlers) {
+      const source = readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), file),
+        "utf8",
+      );
+      expect(source, file).toContain(
+        "executionStepId: ctx.executionStepId ?? null",
+      );
+      expect(source, file).not.toMatch(
+        /executionStepId:\s*ctx\.(messageId|requestId)/,
+      );
+    }
   });
 
   it("fire-and-forgets a fixed +5 reinforcement per recalled memory", async () => {

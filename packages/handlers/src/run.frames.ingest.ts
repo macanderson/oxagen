@@ -4,12 +4,16 @@ import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { runFramesIngest } from "@oxagen/oxagen/contracts/run.frames.ingest";
 import { withTenantDb } from "@oxagen/database";
-import {
-  createPostgresRunStore,
-  isAttemptNotWritableError,
-  isRunEventInputError,
-} from "@oxagen/run-ledger";
+import { createPostgresRunStore } from "@oxagen/run-ledger";
 import { deferredEvidenceBodies } from "@oxagen/run-ledger/evidence-store";
+import {
+  isForbiddenEventPayloadFieldError,
+  isRunEventIntegrityError,
+  isRunEventPayloadTooLargeError,
+  isRunEventSequenceGapError,
+  isRunSpecValidationError,
+  isUnknownRunEventTypeError,
+} from "@oxagen/run-ledger/run-errors";
 import { readRunToken, refreshRunToken, tokenRefused } from "./lib/run-token";
 import { runScope } from "./run.list";
 
@@ -59,9 +63,8 @@ export const runFramesIngestHandler: CapabilityHandler<
     });
     if (!expiresAt) throw new Error("Run credential refresh was not recorded");
     return {
-      // The receipt names each event by its attempt and run sequence and its
-      // digest. The row's own uuid stays inside: `agent_run_events` has no
-      // public id, and a producer addresses an event by sequence (#3665).
+      // Copy only the public receipt fields. The ledger's eventId is the bare
+      // row id of agent.agent_run_events, which the producer has no use for.
       events: result.events.map(
         ({ attemptSeq, runSeq, eventDigest, idempotent }) => ({
           attemptSeq,
@@ -75,22 +78,45 @@ export const runFramesIngestHandler: CapabilityHandler<
       expiresAt: expiresAt.toISOString(),
     };
   } catch (error) {
-    // An event the producer got wrong (an unknown type, a payload off its
-    // schema, both or neither of `payload` and `encryptedPayloadRef`) is
-    // refused before any SQL runs. It is the caller's fault, so it answers
-    // 400 rather than the 500 an unmapped ledger error becomes (#3665).
-    if (isRunEventInputError(error))
-      throw new CapabilityError(
-        runFramesIngest.name,
-        "invalid_input",
-        (error as Error).message,
-      );
-    if (isAttemptNotWritableError(error))
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "run_attempt_not_writable"
+    )
       throw new HandlerError({
         code: "conflict",
         reason: "run_not_writable",
         message:
           "The attempt is sealed, or its evidence ingress is paused or cancelled",
+      });
+    // The ledger refuses a frame it cannot record as evidence: an event type
+    // outside the registry, a payload that fails its schema, a raw content
+    // field, or a payload over the inline cap. Each is the producer's input,
+    // so it is answered as invalid input (400), not as a server fault.
+    if (
+      isUnknownRunEventTypeError(error) ||
+      isRunSpecValidationError(error) ||
+      isForbiddenEventPayloadFieldError(error) ||
+      isRunEventPayloadTooLargeError(error)
+    )
+      throw new CapabilityError(
+        runFramesIngest.name,
+        "invalid_input",
+        error.message,
+      );
+    // A batch that skips a sequence, or that rewrites one already recorded
+    // with different content, conflicts with the attempt's durable stream.
+    if (isRunEventSequenceGapError(error))
+      throw new HandlerError({
+        code: "conflict",
+        reason: "run_event_sequence_gap",
+        message: error.message,
+      });
+    if (isRunEventIntegrityError(error))
+      throw new HandlerError({
+        code: "conflict",
+        reason: "run_event_integrity_conflict",
+        message: error.message,
       });
     throw error;
   }

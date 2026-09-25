@@ -355,8 +355,9 @@ export {
   isRunEventIntegrityError,
   isRunEventSequenceGapError,
   isAttemptNotWritableError,
+  isRunNotWritableError,
   isRunStoreStateError,
   type RunSpecIssue,
   type AttemptRejectionReason,
-  type RunRejectionReason,
+  type RunNotWritableReason,
 } from "./run-errors";

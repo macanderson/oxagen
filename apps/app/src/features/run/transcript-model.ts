@@ -922,7 +922,7 @@ export type FeedGate = { decision: string; frame: FrameRef };
 export type FeedCall = {
   name: string;
   group: ToolGroup;
-  /** What the call acted on, on one line; null when the record says nothing more than the name. */
+  /** What the call acted on, on one line and cut at `LINE_CAP`; null when the record says nothing more than the name. */
   arg: string | null;
   /** First frame of the call to its last; null for a call recorded in one frame. */
   durationMs: number | null;
@@ -1259,6 +1259,48 @@ function argOf(detail: ToolDetail | null): string | null {
   return parts.length === 0 ? null : parts.join(" · ");
 }
 
+/**
+ * The longest text a closed row carries, in characters. At the row's 12.5px
+ * mono that is about 2,400px, wider than the argument's slot on a 2,560px
+ * screen, so the cap never cuts text a reader could see. It keeps a heredoc
+ * or an inline file out of every closed row. The open row shows it whole.
+ *
+ * @internal Exported for its test.
+ */
+export const LINE_CAP = 320;
+
+/**
+ * Text as a closed row prints it: each run of whitespace, newlines included,
+ * becomes one space, and the text is cut at `LINE_CAP` with an ellipsis.
+ */
+export function closedLine(text: string): string {
+  const line = text.replace(/\s+/g, " ").trim();
+  return line.length > LINE_CAP ? `${line.slice(0, LINE_CAP - 1)}…` : line;
+}
+
+/** The call as it was made, as compact JSON; null when it holds nothing. */
+function compactRaw(raw: string | null): string | null {
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== "object") return raw;
+    return Object.keys(parsed).length === 0 ? null : JSON.stringify(parsed);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * What a closed row prints after the tool's name: the reading's headline, or
+ * the call as it was made when the reading found none, as `closedLine` cuts
+ * it. A call whose arguments are all objects has no headline, and its row
+ * would otherwise print the name alone.
+ */
+function callArg(arg: string | null, raw: string | null): string | null {
+  const line = closedLine(arg ?? compactRaw(raw) ?? "");
+  return line === "" ? null : line;
+}
+
 function toolRow(step: TranscriptStep): FeedRow {
   const digest = stepDigest(step);
   const detail = stepTool(step);
@@ -1282,7 +1324,10 @@ function toolRow(step: TranscriptStep): FeedRow {
     digest.node === "deny" ||
     step.frames.some((frame) => frame.kinds.includes("errors"));
   const name = detail?.name ?? digest.name;
-  const arg = detail === null ? digest.arg : argOf(detail);
+  const arg = callArg(
+    detail === null ? digest.arg : argOf(detail),
+    detail?.raw ?? null,
+  );
   const call: FeedCall = {
     name,
     group: detail?.group ?? "tool",
@@ -1344,7 +1389,7 @@ function blockToolRow(
     output: result?.summary ?? null,
   });
   const name = detail?.name ?? block.name;
-  const arg = argOf(detail);
+  const arg = callArg(argOf(detail), detail?.raw ?? null);
   const call: FeedCall = {
     name,
     group: detail?.group ?? "tool",
