@@ -158,6 +158,45 @@ describe("a chain reopened over its own WAL", () => {
     ).toMatchObject({ ok: true });
   });
 
+  it("puts a chain resumed from its tombstone back where the WAL ends when its first write fails", async () => {
+    const paths = scratchPaths();
+    const handle = await boot(paths);
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    const record = handle.registry.get(SESSION)!;
+    const uuid = record.recorder.sessionUuid;
+    handle.registry.seal(record);
+    expect(handle.registry.forgetSealed(-1)).toEqual([SESSION]);
+    const onDisk = handle.wal.read(uuid);
+    const tail = onDisk.at(-1)!;
+
+    const append = handle.wal.append.bind(handle.wal);
+    handle.wal.append = () => {
+      throw new Error("ENOSPC: no space left on device");
+    };
+    await expect(
+      handle.api.handleHook(hook("UserPromptSubmit", { prompt: "again" })),
+    ).rejects.toThrow(/ENOSPC/);
+    handle.wal.append = append;
+
+    // The resumed recorder is neither new to the WAL nor opened over it
+    // without state, and it still goes back to where it was born.
+    const resumed = handle.registry.get(SESSION)!.recorder;
+    expect(resumed.bornRestored).toBe(true);
+    expect(resumed.chainCursor).toEqual({
+      seq: tail.seq + 1,
+      prevHash: tail.hash,
+    });
+
+    await handle.api.handleHook(hook("UserPromptSubmit", { prompt: "again" }));
+    const chain = handle.wal.read(uuid);
+    expect(chain.slice(0, onDisk.length)).toEqual(onDisk);
+    expect(chain[onDisk.length]?.seq).toBe(tail.seq + 1);
+    expect(verifyChain(chain, { expectGenesis: true })).toMatchObject({
+      ok: true,
+    });
+  });
+
   it("continues a subagent's chain, with no second genesis and no gap on its parent", async () => {
     const paths = scratchPaths();
     const first = await boot(paths);

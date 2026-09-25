@@ -26,12 +26,17 @@
  */
 
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
-import { createAgentRunAuthorizationSnapshot } from "@oxagen/iam";
+import {
+  createAgentRunAuthorizationSnapshot,
+  readActiveKillSwitches,
+  resourceScopeDigestOf,
+} from "@oxagen/iam";
 import { INTERACTIVE_AGENT_SLUG } from "@oxagen/oxagen/interactive-agent";
 import { digestJcs } from "@oxagen/run-evidence";
 import {
   canonicalJson,
   createPostgresRunStore,
+  digestOfCanonicalJson,
   parseRunSpecV2,
   RETENTION_CONTENT_CLASSES,
   TERMINAL_EVENT_TYPE,
@@ -49,7 +54,7 @@ import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
-import type { WorkspaceInstructionsFrame } from "./workspace-instructions";
+import type { AssistantSteeringFrame } from "./assistant-steering";
 import type {
   TurnLedger,
   TurnLedgerModelCall,
@@ -191,9 +196,6 @@ export type AssistantRunReceipt =
   | ({ kind: "model" } & TurnLedgerModelCall)
   | ({ kind: "tool" } & TurnLedgerToolCall);
 
-/** Where the checked instructions came from, as the frame's payload names it. */
-export const WORKSPACE_INSTRUCTIONS_PROVIDER = "workspace_prompt_config";
-
 /** A recorded assistant run: the ledger hook the turn writes through, plus its ids. */
 export interface AssistantRunRecorder extends TurnLedger {
   readonly runId: string;
@@ -212,11 +214,11 @@ export interface AssistantRunRecorder extends TurnLedger {
    */
   readonly receipts: readonly AssistantRunReceipt[];
   /**
-   * The workspace instructions this turn's prompt carried, or the ones it
-   * refused (#3303). Written before the engine is asked anything, so the
+   * What the steering assembler put in this turn's prompt and what it cut
+   * (ADR-093, #4158). Written before the engine is asked anything, so the
    * record states what the model was told even when the turn then fails.
    */
-  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void>;
+  steeringManifest(frame: AssistantSteeringFrame): Promise<void>;
 }
 
 /** What admission resolved about who acts and under which retention policy. */
@@ -227,6 +229,58 @@ export interface AssistantRunIdentity {
   agentVersionChecksum: string;
   initiatingPrincipalId: string;
   retention: { rowId: string; publicId: string; digest: string };
+}
+
+/**
+ * The workspace's assistant agent as a kill switch names it, and the `agent`
+ * switch that stops it, if one is on.
+ */
+export interface AssistantAgentState {
+  /** Public id (`agt_…`): the id an `agent` switch is flipped on. */
+  agentId: string;
+  /** The `oxagen.assistant` principal, once a first turn provisioned it. */
+  principalId: string | null;
+  /** The active `agent` switch on the assistant, or null when none is on. */
+  stoppedBy: { publicId: string; reason: string } | null;
+}
+
+/**
+ * Read the assistant agent and whether an operator switched it off. Read only:
+ * a workspace with no assistant agent answers null here and is refused later,
+ * by `openAssistantRun`, as `assistant_agent_missing`. The turn refuses a
+ * stopped assistant before it writes anything (assistant-turn.ts) and passes
+ * the rest to `materializeTools` as the agent the turn acts as.
+ */
+export async function readAssistantAgentState(
+  tx: Tx,
+  scope: AssistantRunScope,
+): Promise<AssistantAgentState | null> {
+  const [agent] = await tx
+    .select({
+      publicId: schema.agents.publicId,
+      principalId: schema.agents.principalId,
+    })
+    .from(schema.agents)
+    .where(
+      and(
+        eq(schema.agents.orgId, scope.orgId),
+        eq(schema.agents.workspaceId, scope.workspaceId),
+        eq(schema.agents.slug, INTERACTIVE_AGENT_SLUG),
+        isNull(schema.agents.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!agent) return null;
+  // `set_kill_switch` writes an `agent` switch as a resource-scope deny over
+  // this digest (kill_switch.set.ts), so the digest is what identifies it.
+  const digest = resourceScopeDigestOf({ kind: "agent", id: agent.publicId });
+  const switches = await readActiveKillSwitches(tx, scope);
+  const hit = switches.find((s) => s.resourceScopeDigest === digest);
+  return {
+    agentId: agent.publicId,
+    principalId: agent.principalId,
+    stoppedBy: hit ? { publicId: hit.publicId, reason: hit.reason } : null,
+  };
 }
 
 /**
@@ -759,25 +813,35 @@ class Recorder implements AssistantRunRecorder {
   }
 
   /**
-   * The workspace's standing instructions as a context frame: the digest of
-   * the exact text, its length against the budget it was checked under, and
-   * whether the prompt carried it. The text itself is the frame's body, so a
-   * reader of the run can see what the workspace told the agent without the
-   * payload carrying content.
+   * The assembler's manifest as a `steering.manifest` frame, the kind a
+   * wrapped agent's host seals for the same account. The payload is the
+   * manifest's summary and digests: the text the model read, the manifest
+   * itself, and the workspace instructions when they were a candidate. The
+   * manifest, one item per candidate with its outcome and the reason for a
+   * cut, is the frame's body, which the Run page's Context tab reads.
    */
-  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void> {
-    const eventType = "context.instructions_applied";
+  steeringManifest(frame: AssistantSteeringFrame): Promise<void> {
+    const eventType = "steering.manifest";
+    const { manifest } = frame;
     return this.append({
       eventType,
       payload: {
-        provider: WORKSPACE_INSTRUCTIONS_PROVIDER,
-        outcome: frame.outcome,
-        instructions_digest: frame.digest,
-        instructions_chars: frame.chars,
-        budget_chars: frame.budgetChars,
-        ...(frame.reasonCode ? { reason_code: frame.reasonCode } : {}),
+        schema: manifest.schema,
+        delivers: manifest.delivers,
+        budget_tokens: manifest.budget_tokens,
+        spent_tokens: manifest.spent_tokens,
+        included: manifest.included,
+        cut: manifest.cut,
+        text_digest: manifest.text_digest,
+        manifest_digest: digestOfCanonicalJson(manifest),
+        ...(frame.instructionsDigest
+          ? { instructions_digest: frame.instructionsDigest }
+          : {}),
+        ...(frame.unavailableKinds.length > 0
+          ? { unavailable_kinds: [...frame.unavailableKinds] }
+          : {}),
       },
-      body: jsonBody(eventType, frame.text),
+      body: jsonBody(eventType, manifest),
     });
   }
 

@@ -793,11 +793,12 @@ async function initializeDaemon(
    * Every currently known session's chain position, so a caller that is
    * about to seal events it may not be able to write can put every chain
    * back if the write fails. `checkpoint` and `recordReconciliation` already
-   * do this by hand for the one or few sessions they touch; this covers a
-   * caller — `applyCommands`, `handleHookEvent`, OTel ingestion, the
-   * detector, the registry's sweep — whose sealing runs inside a call this
-   * file does not own, and so does not know in advance which sessions (out
-   * of everything the registry currently holds) it will touch. Marking and
+   * do this by hand for the one or few sessions they touch, and so does the
+   * registry's sweep. This covers a caller (`applyCommands`,
+   * `handleHookEvent`, OTel ingestion, the detector) whose sealing runs
+   * inside a call this file does not own, and so does not know in advance
+   * which sessions (out of everything the registry currently holds) it will
+   * touch. Marking and
    * rolling back a chain the call never reaches costs nothing: the mark
    * matches the chain's position exactly and the rollback is a no-op.
    */
@@ -819,8 +820,10 @@ async function initializeDaemon(
     // A session with a WAL file is left alone: the model proxy runs off the
     // serial queue, and it may have opened and written that session while
     // the failed call was awaiting. The exception is a session born on a
-    // WAL file it continues (`continueFromDisk`): it goes back too, as long
-    // as that file still ends where it was born.
+    // WAL file it continues, either opened over it (`continueFromDisk`) or
+    // resumed from restored state such as a tombstone: it goes back too, as
+    // long as that file still ends where it was born. Left alone, a resumed
+    // chain keeps a cursor past the WAL's tail and the retry seals a gap.
     const marked = new Set(marks.map(({ session }) => session));
     const unmarked = registry.list().filter((session) => !marked.has(session));
     if (unmarked.length > 0) {
@@ -831,7 +834,7 @@ async function initializeDaemon(
           recorder.rollbackToBirth();
           continue;
         }
-        if (!recorder.bornOnDisk) continue;
+        if (!recorder.bornOnDisk && !recorder.bornRestored) continue;
         const born = recorder.birthCursor;
         const tail = context.chainTail?.(recorder.sessionUuid);
         if (
@@ -844,6 +847,77 @@ async function initializeDaemon(
     }
     for (const { session, mark } of [...marks].reverse())
       session.recorder.rollbackChain(mark);
+  }
+
+  /**
+   * Every session's queued operator messages and owed resume, taken before a
+   * hook that may drain them. A hook seals each delivery as it takes the item
+   * off the queue, so a WAL write that then fails rolls the frame back while
+   * the item is already gone. Without this, a steer lost to a full disk was
+   * never delivered and never retried (#3944).
+   */
+  function markEveryQueue(): Array<{
+    session: SessionRecord;
+    messages: SessionRecord["control"]["messages"];
+    resumeOwed: string | undefined;
+    sealed: boolean;
+  }> {
+    return registry.list().map((session) => ({
+      session,
+      messages: [...session.control.messages],
+      resumeOwed: session.control.resumeOwed,
+      sealed: session.sealed,
+    }));
+  }
+
+  /**
+   * Withdraw the `expired` acknowledgements a failed hook's seal queued for
+   * the marked messages. A SessionEnd seals its record inside
+   * `handleHookEvent`, and the seal turns every queued message into an
+   * `expired` ack before the terminal frame is written. When that write
+   * fails the messages go back on their queues, so the acks must not ship:
+   * the plane would record the steer expired and then hear a later boundary
+   * report it `applied`. The ack may already have moved to `pendingAcks` if
+   * a tick drained the registry during the hook's awaits, so it is taken
+   * from there too.
+   */
+  function withdrawExpiredAcks(marks: ReturnType<typeof markEveryQueue>): void {
+    const ids = new Set(
+      marks.flatMap(({ messages }) => messages.map((message) => message.id)),
+    );
+    if (ids.size === 0) return;
+    registry.withdrawExpiredOnSeal(ids);
+    const kept = pendingAcks.filter(
+      (ack) => !(ack.status === "expired" && ids.has(ack.command_id)),
+    );
+    pendingAcks.splice(0, pendingAcks.length, ...kept);
+  }
+
+  /**
+   * Put each marked queue back ahead of anything queued while the hook ran.
+   * A command applied during the hook's awaits stays behind the ones it
+   * found, in the order it arrived, and an item already put back is not
+   * queued twice. A record the hook sealed is unsealed, since its terminal
+   * frame never landed, and the `expired` acks the seal queued are
+   * withdrawn.
+   */
+  function restoreEveryQueue(marks: ReturnType<typeof markEveryQueue>): void {
+    withdrawExpiredAcks(marks);
+    for (const { session, messages, resumeOwed, sealed } of marks) {
+      if (session.sealed && !sealed) session.sealed = false;
+      const held = new Set(messages.map((message) => message.id));
+      const arrived = session.control.messages.filter(
+        (message) => !held.has(message.id),
+      );
+      session.control.messages.splice(
+        0,
+        session.control.messages.length,
+        ...messages,
+        ...arrived,
+      );
+      if (session.control.resumeOwed === undefined && resumeOwed !== undefined)
+        session.control.resumeOwed = resumeOwed;
+    }
   }
 
   /**
@@ -2142,6 +2216,13 @@ async function initializeDaemon(
     // sealing on one chain and before finishing another, and that failure
     // has no rollback of its own.
     const marks = markEveryChain();
+    // A hook takes a queued message off its session's queue and acknowledges
+    // it `applied` as it seals the delivery. Both wait here until the
+    // delivery frame is durable: a failed write puts the message back on its
+    // queue for the next boundary and sends no acknowledgement, where it used
+    // to report a steer applied at a seq the WAL never held (#3944).
+    const queues = markEveryQueue();
+    const acks: CommandAcknowledgement[] = [];
     let outcome: Awaited<ReturnType<typeof handleHookEvent>>;
     try {
       outcome = await handleHookEvent(
@@ -2154,7 +2235,7 @@ async function initializeDaemon(
             await refreshBundle();
           },
           acknowledge: (ack) => {
-            pendingAcks.push(ack);
+            acks.push(ack);
           },
           now,
           pushCredentialBasis: (command, cwd) =>
@@ -2171,6 +2252,7 @@ async function initializeDaemon(
       );
     } catch (error) {
       rollbackEveryChain(marks);
+      restoreEveryQueue(queues);
       throw error;
     }
     if (pending !== undefined) {
@@ -2206,8 +2288,14 @@ async function initializeDaemon(
       } catch (error) {
         delete pending.terminal;
         if (before !== undefined) registry.restore(before);
+        // The restore puts the queues back, but the `expired` acks the seal
+        // queued live outside the state it restores.
+        withdrawExpiredAcks(queues);
         throw error;
       }
+      // The journal now holds the delivery frames, and a failed flush below
+      // is retried from it, so the acknowledgements stand from here.
+      pendingAcks.push(...acks);
       // A sealed registry flag means its terminal event is durable. The
       // journal preserves the exact event bytes and recorder cursor until
       // then, so `sealed` reports `false` for this window. That must not
@@ -2225,6 +2313,7 @@ async function initializeDaemon(
         record(outcome.events, outcome.bodies);
       } catch (error) {
         rollbackEveryChain(marks);
+        restoreEveryQueue(queues);
         // The chain rollback does not reach the hook-id ledger, which lives
         // on the session record. Left in place, the key would make the
         // client's spool replay of this same hook look like a repeat, and
@@ -2234,6 +2323,7 @@ async function initializeDaemon(
         }
         throw error;
       }
+      pendingAcks.push(...acks);
       if (outcome.hookKey !== undefined && outcome.record !== undefined) {
         journalHookKey(outcome.record, outcome.hookKey, outcome.events);
       }
@@ -3394,18 +3484,31 @@ async function initializeDaemon(
         await transcriptTailer.tick();
         if (t - lastSweep >= timers.sweepMs) {
           lastSweep = t;
-          const marks = markEveryChain();
-          try {
-            record(
-              registry.sweep(isProcessAlive, timers.idleSessionMs, (session) =>
-                pendingSessionEnds.has(session.recorder.sessionUuid),
-              ),
-            );
-          } catch (error) {
-            rollbackEveryChain(marks);
-            throw error;
+          // Each session is written and sealed on its own. A write that
+          // fails rolls back only that chain and leaves it open for the next
+          // sweep. Sealing every chain first and writing them together left
+          // a chain whose write failed marked sealed with no `agent_stop` on
+          // disk, and `forgetSealed` then dropped it (#3719).
+          let failure: { error: unknown } | undefined;
+          const candidates = registry.sweepCandidates(
+            isProcessAlive,
+            timers.idleSessionMs,
+            (session) => pendingSessionEnds.has(session.recorder.sessionUuid),
+          );
+          for (const candidate of candidates) {
+            const recorder = candidate.record.recorder;
+            const mark = recorder.markChain();
+            try {
+              record(registry.finalizeSwept(candidate));
+            } catch (error) {
+              recorder.rollbackChain(mark);
+              failure ??= { error };
+              continue;
+            }
+            registry.settleSwept(candidate);
           }
           registry.forgetSealed(timers.walRetainMs);
+          if (failure !== undefined) throw failure.error;
         }
         if (t - lastCheckpoint >= timers.checkpointMs) {
           lastCheckpoint = t;

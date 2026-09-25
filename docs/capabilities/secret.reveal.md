@@ -5,7 +5,7 @@
 **Scope:** tenant + workspace
 **Surfaces:** api, mcp
 **Risk level:** high
-**Requires approval:** yes (riskLevel: high)
+**Requires approval:** no, because the flag applies only on the agent surface
 
 ## Intent
 
@@ -18,6 +18,11 @@ recorded. Owner/Admin only.
 > **Surfaces deliberately exclude the in-chat `agent`.** Revealing plaintext is an
 > exfiltration risk, so this capability is reachable only via the API or an MCP
 > client holding an API key (a human-configured integration), never the chat agent.
+
+The contract sets `requiresApproval: true`, but only an agent turn reads that
+flag, so no approval card opens for an API or MCP call. IAM limits each call to
+org Owner or Admin, the workspace's decision rules apply, and every reveal is
+recorded in `environments.secret_access_log` and `security_events`.
 
 ## Input
 

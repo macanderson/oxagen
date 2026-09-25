@@ -370,8 +370,14 @@ describe("the emitted subset", () => {
     }
   });
 
-  it("names the eight the audit found", () => {
-    expect(RESERVED_SECURITY_EVENT_TYPES).toHaveLength(8);
+  it("names the six still without an emitter", () => {
+    // The audit found eight. auth.password_changed and auth.email_verified
+    // gained emitters in packages/auth/src/auth.ts (#3938).
+    expect(RESERVED_SECURITY_EVENT_TYPES).toHaveLength(6);
+    expect(RESERVED_SECURITY_EVENT_TYPES).not.toContain(
+      "auth.password_changed",
+    );
+    expect(RESERVED_SECURITY_EVENT_TYPES).not.toContain("auth.email_verified");
   });
 });
 

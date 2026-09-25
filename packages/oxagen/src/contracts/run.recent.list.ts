@@ -33,11 +33,12 @@ export const runRecentList = registerCapability({
   description:
     "The newest runs of this workspace for the command menu: id, agent key, status and start time, the in-app agent's own turns excluded.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   mutates: false,
   noBillingGate: true,
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {

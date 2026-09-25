@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { digestBytes, digestJcs } from "../digest";
 import type { TachoEvent } from "../envelope";
 import type { FetchLike } from "../host/control-client";
@@ -328,6 +328,58 @@ describe("tachod and frame bodies", () => {
       output: MCP_RESULT,
     });
     expect(frame?.content?.digest).toBe(digestBytes(new Uint8Array(bytes)));
+  });
+
+  it("reseals a gateway call whose WAL write failed with its body and no hole", async () => {
+    // The gateway call seals its frame, drains the recorder's bodies into the
+    // write, and the write throws. The rollback has to leave the host chain
+    // and its pending bodies where the call found them, so the next call
+    // takes the abandoned position and ships its own body, not a stale one.
+    const { fetch, batches } = plane();
+    const { handle } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const before = { ...handle.hostRecorder.chainCursor };
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = false;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (!failed && events.some((event) => event.kind === "tool_call")) {
+          failed = true;
+          throw Object.assign(new Error("event disk full"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    const call = (id: number) =>
+      handle.api.mcp?.(
+        {
+          jsonrpc: "2.0",
+          id,
+          method: "tools/call",
+          params: { name: "query_ontology", arguments: MCP_ARGUMENTS },
+        },
+        { sessionId: "mcp-sess-1" },
+      );
+    await expect(call(4)).rejects.toThrow("event disk full");
+    expect(failed).toBe(true);
+    expect(handle.hostRecorder.chainCursor).toEqual(before);
+    fault.mockRestore();
+
+    await call(5);
+    await handle.tick();
+    const frames = batches
+      .flatMap((b) => b.events)
+      .filter((event) => event.kind === "tool_call");
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.seq).toBe(before.seq);
+    const bodies = batches.flatMap((b) => b.bodies ?? []);
+    expect(bodies.map((body) => body.event_id_idem)).toEqual([
+      frames[0]?.event_id_idem,
+    ]);
   });
 
   it("logs a body the control plane refused, the way it logs a chain break", async () => {

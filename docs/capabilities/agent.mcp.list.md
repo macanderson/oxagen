@@ -29,6 +29,11 @@ unless `authKind` is `oauth`, and then holds `state` (`connected`,
 `needs_reauth`, `revoked` or `not_connected`), `expiresAt`, `refreshable` and
 `lastRefreshedAt`. No token or secret column is read.
 
+`endpointUrl` has any userinfo replaced with `***`, so
+`https://user:secret@host/mcp` reads `https://***@host/mcp`. Registration
+refuses such an address, but a row stored before that check can still hold
+one.
+
 ## Side effects
 
 None. It reads `mcp.mcp_servers`, joined to `plugin.installed_plugins` and

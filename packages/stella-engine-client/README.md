@@ -43,9 +43,63 @@ and optional provider deltas. This package is that conversation.
 ## Rules
 
 - Keep the package on `fetch` alone, so it stays in step with the server.
-- Bump `src/version.ts` in the same change that refreshes
-  `src/generated/serveframe.d.ts`. `src/version.ts` names the release the
-  types were copied from and the smoke test drove.
+- Write the engine's version in `src/version.ts` and nowhere else. Follow
+  [Bump the engine version](#bump-the-engine-version).
+
+## Bump the engine version
+
+`STELLA_SERVE_PINNED_VERSION` in `src/version.ts` is the one version of
+`stella-serve` in this repository. Three things read it:
+
+- `tools/scripts/package-for-node.sh stella-serve` writes the image
+  `ghcr.io/macanderson/stella-serve:<version>` into the engine's deploy
+  manifest. It takes no tag from the environment, and it refuses to package
+  the engine when it cannot read the pin.
+- Every assistant run records it as the engine version on its attempt
+  (`ASSISTANT_ENGINE` in `packages/agent/src/runtime/assistant-run.ts`).
+- The smoke test refuses a binary older than it.
+
+`docker-compose.dev.yml` cannot read TypeScript, so it writes the same
+version as the default of `STELLA_SERVE_IMAGE_TAG`.
+`tools/scripts/check-engine-version.mjs` runs in `pnpm check:contracts` and
+fails when any tracked image tag differs from the pin.
+
+To move to a new release:
+
+1. Confirm Stella published the image for both architectures. The node is
+   arm64.
+
+   ```bash
+   docker manifest inspect ghcr.io/macanderson/stella-serve:<version>
+   ```
+
+2. Set `STELLA_SERVE_PINNED_VERSION` in `src/version.ts` to the new version.
+3. Set the default tag in `docker-compose.dev.yml`,
+   `${STELLA_SERVE_IMAGE_TAG:-<version>}`, to the same version.
+4. If Stella's `docs/wire` changed since the last bump, copy the new
+   `serveframe.d.ts` into `src/generated/` and update the hand-written
+   inbound types in `src/wire.ts`. Then hold them to a Stella checkout of the
+   new release:
+
+   ```bash
+   STELLA_REPO=/path/to/stella pnpm --filter @oxagen/stella-engine-client test:unit src/wire.pin.test.ts
+   ```
+
+5. Drive the golden turn through a binary of the new release:
+
+   ```bash
+   STELLA_SERVE_BIN=/path/to/stella-serve pnpm --filter @oxagen/stella-engine-client test:smoke
+   ```
+
+6. Check every tag from the repository root. The check prints the pin when
+   every tag matches it.
+
+   ```bash
+   node tools/scripts/check-engine-version.mjs
+   ```
+
+The merge to `main` deploys the new image. `deploy-node` runs
+`package-for-node.sh`, which reads the version from `src/version.ts`.
 
 ## Tests
 
