@@ -120,6 +120,7 @@ import {
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
+import { AssistantReplyCost } from "./assistant-reply-cost";
 import { AssistantStreamingText } from "./assistant-streaming-text";
 import { AssistantThinking } from "./assistant-thinking";
 import {
@@ -876,6 +877,13 @@ export function AssistantFlyout() {
                         entry.runId
                       )}
                     </p>
+                    {/* What the run cost, from its record (#4167). */}
+                    {shownScope === null ? null : (
+                      <AssistantReplyCost
+                        scope={shownScope}
+                        runId={entry.runId}
+                      />
+                    )}
                     {entry.parked.length === 0 ? null : (
                       <p
                         data-testid="assistant-parked"

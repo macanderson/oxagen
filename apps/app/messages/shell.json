@@ -290,6 +290,15 @@
       "close": "Close stella",
       "thinking": "Working…",
       "recordedAs": "recorded as",
+      "cost": {
+        "label": "cost",
+        "pending": "pending",
+        "notRecorded": "not recorded",
+        "unread": "could not be read",
+        "basisNotRecorded": "basis not recorded",
+        "estimate": "estimate",
+        "incomplete": "some calls unpriced"
+      },
       "parked": "{count, plural, one {# write is waiting on a person} other {# writes are waiting on a person}}. Approve or deny them on Fleet.",
       "needsWorkspace": "stella works inside one workspace. Open a workspace to ask stella something.",
       "intro": {
