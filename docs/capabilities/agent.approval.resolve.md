@@ -3,14 +3,18 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent
 
-Approve or deny a pending tool-call approval request. Approving a stored built-in call from the in-app assistant queues that exact call for a fresh authorization check and a new evidence run. The worker attempts it once. A crash can leave the outcome indeterminate, which requires inspection before requesting another action. Read the execution state and new run id through `list_resolved_approvals` (ADR-118).
+Approve or deny a pending tool-call approval request. Approving a stored built-in call from the in-app assistant queues that exact call, and the same request then delivers it: the call gets a fresh authorization check and a new evidence run, and runs as the person who asked for it. The answer's `execution` says what became of it. The periodic worker (`approval/resume`) delivers a call that is still queued because the deciding process failed. Either delivery claims the row first, so the call is attempted once. A crash can leave the outcome indeterminate, which requires inspection before requesting another action. `list_resolved_approvals` reads the same execution state and run id later (ADR-118, #3127).
+
+The delivered call is its own governed action. It runs outside the decision's invocation, so it is metered and admitted the way the worker's delivery is, and the decision is still the one billed action of this capability.
 
 Legacy approvals without stored arguments keep their existing wait or caller-retry behavior. External MCP approvals do not use the stored-call worker.
+
+A person makes this decision. The contract is not on the `agent` surface, so no model is offered it as a tool (ADR-175). People resolve from Fleet, the Run page, and the shell's approvals drawer, which invoke through the app's kernel seam.
 
 ## Input
 
@@ -27,10 +31,11 @@ Legacy approvals without stored arguments keep their existing wait or caller-ret
 | `approvalId` | `string`                                                                                               | Echoes the input id, in the form it was sent.                                                                                                                                                                                           |
 | `resolution` | `"approved" \| "denied"`                                                                               | The decision that was written.                                                                                                                                                                                                          |
 | `mandate`    | `{ mandateId, reserved: { measure, value, unitOrCurrency }[], outcome: "held" \| "released" } \| null` | The mandate settlement (ADR-059): on a row the mandate gate parked, the reservation the call holds and whether it stays `held` (approved: the agent's retry settles it on receipt) or was `released` (denied). Null on a chat gate row. |
+| `execution`  | `{ status, runId, reason } \| null` (optional)                                                          | On a row that stores the parked call (ADR-118), the row's execution after delivery: `status` is `succeeded` or `dispatched` when the call ran, `failed` or `indeterminate` when it did not or its outcome is unknown, `queued` when the worker will deliver it, and `denied` or `expired` when it never runs. `runId` is the new run; `reason` is the refusal or failure code. Null on a row with no stored call. |
 
 ## Roles
 
-Org Owner or Admin, or workspace Owner or Member, checked by the handler (`assertOrgRole`, INV-29). A row the mandate gate parked (ADR-059 decision 4) is answered by the office accountable for the consequence (MC spec §6.9): the caller also holds an org role the workspace's consequence roles name for every tag on the mandate (`assertConsequenceRole`), is one of the mandate's `approval.approvers` when the rule names any (`assertApprover`), and is not an agent principal. Every refusal comes before the ledger or the row is touched.
+Org Owner or Admin, or workspace Owner or Member, checked by the handler (`assertOrgRole`, INV-29). A row the mandate gate parked (ADR-059 decision 4) is answered by the office accountable for the consequence (MC spec §6.9): the caller also holds an org role the workspace's consequence roles name for every tag on the mandate (`assertConsequenceRole`), is one of the mandate's `approval.approvers` when the rule names any (`assertApprover`), and is not an agent principal. On any row, a call that carries the run the row records as raising the approval is refused. Every refusal comes before the ledger or the row is touched.
 
 ## Billing
 
@@ -52,6 +57,13 @@ dialog. The dialog writes through the kernel seam
 reason is refused before the kernel: the note is the whole record of why a call
 an agent was authorised to make was refused.
 
+The assistant flyout shows each call a turn parked as a card in the thread,
+with Approve and Deny. The card writes through the same Fleet action as the
+person who is signed in, never as the turn or with its run id. It reads the
+card's state from the approval row (`list_approvals` and
+`list_resolved_approvals`, narrowed to the turn's run), so a decision made on
+Fleet, by another person, or by expiry shows the same way in both places.
+
 ## Side effects
 
 - Postgres: update `agent.approvals` row; insert audit row in `agent.approval_events`.
@@ -68,6 +80,7 @@ an agent was authorised to make was refused.
 | `forbidden` | `no_role_covers_all_tags` | On a row a mandate parked: no single org role is named for all of the mandate's consequence tags (403). |
 | `forbidden` | `not_an_approver` | On a row a mandate parked whose approval rule names `approvers`: the acting user is neither a `user:` entry nor holds a `role:` entry (403). |
 | `forbidden` | `agent_cannot_resolve_own_mandate` | On a row a mandate parked: the caller is an agent principal. A person answers (403). |
+| `forbidden` | `run_cannot_resolve_own_approval` | The call carries the run that raised the approval (`run_public_id` on the row, matched by the run's internal or public id). A person approves or denies it on Fleet (403). |
 | `conflict`  | `approval_expired`  | No pending row matched: unknown id, expired, already resolved, or another workspace (409). The call is not a governed action and is never billed. |
 
 ## SPEC references

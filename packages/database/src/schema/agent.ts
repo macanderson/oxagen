@@ -204,6 +204,13 @@ export const approvalRequests = agentSchema.table(
     capabilityName: text("capability_name").notNull(),
     inputPreview: jsonb("input_preview").notNull(),
     riskLevel: text("risk_level").notNull(),
+    // What the row asks a person for (ADR-175): `approval` of a parked call,
+    // or first-use `consent` to an external MCP tool. The writer records it,
+    // because an external tool's rule-driven approval carries the same
+    // `mcp.<server>.<tool>` name as its consent request. `resolve_mcp_consent`
+    // answers only a `consent` row, and a writer that does not say gets
+    // `approval`.
+    kind: text("kind").notNull().default("approval"),
     // The four-hop chain (MC spec App. A.6, ADR-059 decision 4): the mandate
     // the parked call drew on, the rule ids that required a person, and the
     // sha256 of the call's canonical input so an approved call can be retried
@@ -278,6 +285,10 @@ export const approvalRequests = agentSchema.table(
     riskLevelCheck: check(
       "approval_requests_risk_level_check",
       sql`${t.riskLevel} IN ('low', 'medium', 'high', 'critical')`,
+    ),
+    kindCheck: check(
+      "approval_requests_kind_check",
+      sql`${t.kind} IN ('approval', 'consent')`,
     ),
     // The rule-hit counters list_approval_rules reports over a 30-day window.
     autoRuleIdx: index("approval_requests_auto_rule_idx")
