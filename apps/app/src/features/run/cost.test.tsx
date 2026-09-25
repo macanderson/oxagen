@@ -795,6 +795,27 @@ describe("CostTab", () => {
     }
   });
 
+  it("marks the last turn live only on a live run, never on a halted run with no seal (#3375)", async () => {
+    await renderTab(props());
+    expect(screen.getByTestId("inst-cost")).toHaveTextContent("turn 7 · live");
+    cleanup();
+    await renderTab(
+      props({
+        run: runRow({
+          ...RELEASE_RUN,
+          status: "halted",
+          outcome: "cancelled",
+          sealedAt: null,
+        }),
+      }),
+    );
+    for (const id of ["inst-cost", "inst-shape"]) {
+      const tile = screen.getByTestId(id);
+      expect(tile).toHaveTextContent("turn 7");
+      expect(tile).not.toHaveTextContent("live");
+    }
+  });
+
   it("says the cache hit was not recorded, and leaves out the reasoning and per-call parts the rollup did not carry (negative)", async () => {
     await renderTab(
       props({

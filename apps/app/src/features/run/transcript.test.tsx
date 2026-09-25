@@ -742,6 +742,32 @@ describe("the rows", () => {
     );
   });
 
+  it("reads a call with no result as running only while the run is live, never on a halted run (#3375)", () => {
+    const open: StepSpec = {
+      seq: 1,
+      t: 0,
+      type: "tool.engine_call_started",
+      kind: "tool_call",
+      node: "tool",
+      turn: 1,
+      subject: "run_lint",
+      family: "shell",
+      outcome: "pending",
+      request: {
+        seq: 1,
+        type: "tool.engine_call_started",
+        text: JSON.stringify({ command: "pnpm lint" }),
+      },
+    };
+    renderSection({ read: readOk(stepsOf([open])), status: "live" });
+    expect(toolRow("run_lint")).toHaveTextContent("running…");
+    cleanup();
+    renderSection({ read: readOk(stepsOf([open])), status: "halted" });
+    const lint = toolRow("run_lint");
+    expect(lint).toHaveTextContent("no result recorded");
+    expect(lint).not.toHaveTextContent("running");
+  });
+
   it("says a body was cut at the ceiling inside the call's fold", () => {
     renderSection({
       read: readOk(

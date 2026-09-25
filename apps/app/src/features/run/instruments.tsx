@@ -865,7 +865,10 @@ export function Instruments({
   retries: number | null;
 }) {
   const t = useTranslations("run.cost.inst");
-  const live = run.sealedAt === null;
+  // Live is the run's status, as everywhere else on the page. A halted run
+  // can have no seal, and reading liveness from the seal would mark its last
+  // turn as still running (#3375).
+  const live = run.status === "live";
   return (
     <section
       aria-label={t("label")}
