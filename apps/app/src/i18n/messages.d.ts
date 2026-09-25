@@ -7579,6 +7579,38 @@ type Messages = {
         title: string;
         body: string;
       };
+      suggestions: {
+        title: string;
+        fleet: {
+          waiting: string;
+          stopped: string;
+          spend: string;
+        };
+        run: {
+          stopped: string;
+          cost: string;
+          denied: string;
+        };
+        spend: {
+          drivers: string;
+          operators: string;
+          budget: string;
+        };
+        mandate: {
+          allows: string;
+          left: string;
+          expires: string;
+        };
+        agents: {
+          cost: string;
+          waiting: string;
+        };
+        agent: {
+          runs: string;
+          cost: string;
+          mandate: string;
+        };
+      };
       composer: {
         label: string;
         placeholder: string;
