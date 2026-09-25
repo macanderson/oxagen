@@ -288,7 +288,10 @@ vi.mock("./mcp-snapshots", async (importOriginal) => {
 });
 
 const mocks = vi.hoisted(() => ({
-  createApprovalRequest: vi.fn(async () => ({ approvalId: "appr_x" })),
+  createApprovalRequest: vi.fn(async () => ({
+    approvalId: "appr_x",
+    publicId: "apr_x",
+  })),
   waitForApproval: vi.fn(
     async (): Promise<{
       approvalId: string;
@@ -612,6 +615,12 @@ describe("materializeTools", () => {
     expect(mocks.waitForApproval).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
     expect(events).toHaveLength(1);
+    // The row uuid keys waiters; the public id is what the parked card shows
+    // and what the list reads answer.
+    expect(events[0]).toMatchObject({
+      approvalId: "appr_x",
+      approvalPublicId: "apr_x",
+    });
   });
 
   it("attaches a parked approval to the run set on runIdRef AFTER materialization, not the run captured at materialize time (finding 9, negative)", async () => {

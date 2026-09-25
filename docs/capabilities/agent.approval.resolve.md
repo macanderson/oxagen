@@ -8,7 +8,9 @@
 
 ## Intent
 
-Approve or deny a pending tool-call approval request. Approving a stored built-in call from the in-app assistant queues that exact call for a fresh authorization check and a new evidence run. The worker attempts it once. A crash can leave the outcome indeterminate, which requires inspection before requesting another action. Read the execution state and new run id through `list_resolved_approvals` (ADR-118).
+Approve or deny a pending tool-call approval request. Approving a stored built-in call from the in-app assistant queues that exact call, and the same request then delivers it: the call gets a fresh authorization check and a new evidence run, and runs as the person who asked for it. The answer's `execution` says what became of it. The periodic worker (`approval/resume`) delivers a call that is still queued because the deciding process failed. Either delivery claims the row first, so the call is attempted once. A crash can leave the outcome indeterminate, which requires inspection before requesting another action. `list_resolved_approvals` reads the same execution state and run id later (ADR-118, #3127).
+
+The delivered call is its own governed action. It runs outside the decision's invocation, so it is metered and admitted the way the worker's delivery is, and the decision is still the one billed action of this capability.
 
 Legacy approvals without stored arguments keep their existing wait or caller-retry behavior. External MCP approvals do not use the stored-call worker.
 
@@ -27,6 +29,7 @@ Legacy approvals without stored arguments keep their existing wait or caller-ret
 | `approvalId` | `string`                                                                                               | Echoes the input id, in the form it was sent.                                                                                                                                                                                           |
 | `resolution` | `"approved" \| "denied"`                                                                               | The decision that was written.                                                                                                                                                                                                          |
 | `mandate`    | `{ mandateId, reserved: { measure, value, unitOrCurrency }[], outcome: "held" \| "released" } \| null` | The mandate settlement (ADR-059): on a row the mandate gate parked, the reservation the call holds and whether it stays `held` (approved: the agent's retry settles it on receipt) or was `released` (denied). Null on a chat gate row. |
+| `execution`  | `{ status, runId, reason } \| null` (optional)                                                          | On a row that stores the parked call (ADR-118), the row's execution after delivery: `status` is `succeeded` or `dispatched` when the call ran, `failed` or `indeterminate` when it did not or its outcome is unknown, `queued` when the worker will deliver it, and `denied` or `expired` when it never runs. `runId` is the new run; `reason` is the refusal or failure code. Null on a row with no stored call. |
 
 ## Roles
 
@@ -51,6 +54,13 @@ dialog. The dialog writes through the kernel seam
 (`apps/app/src/features/fleet/actions.ts` → `kernelWrite`), and a denial with no
 reason is refused before the kernel: the note is the whole record of why a call
 an agent was authorised to make was refused.
+
+The assistant flyout shows each call a turn parked as a card in the thread,
+with Approve and Deny. The card writes through the same Fleet action as the
+person who is signed in, never as the turn or with its run id. It reads the
+card's state from the approval row (`list_approvals` and
+`list_resolved_approvals`, narrowed to the turn's run), so a decision made on
+Fleet, by another person, or by expiry shows the same way in both places.
 
 ## Side effects
 

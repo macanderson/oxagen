@@ -713,6 +713,40 @@ describe("the prepared turn", () => {
     expect(events).toHaveLength(2);
   });
 
+  it("names a parked card by the approval's public id, not its row uuid", async () => {
+    mocks.materializeTools.mockImplementationOnce(
+      async (
+        _ctx: unknown,
+        opts: { onApprovalRequired: (e: unknown) => void },
+      ) => {
+        opts.onApprovalRequired({
+          approvalId: "4b2f7a0e-6c1d-4e8a-9f3b-2d5c7e9a1b3c",
+          approvalPublicId: "apr_01k5rt9xq7v3m8n2p4s6t8w0",
+          capability: "set_budget",
+          inputPreview: {},
+          riskLevel: "high",
+          expiresAt: "2026-09-14T10:05:00.000Z",
+        });
+        return {
+          tools: GOVERNED_TOOLS,
+          nameMap: {},
+          mutatingToolNames: [],
+          governance: {},
+        };
+      },
+    );
+    const result = await runTurn(request);
+    // The flyout matches this id against list_approvals and
+    // list_resolved_approvals, which answer public ids only.
+    expect(result.parkedCards).toEqual([
+      {
+        approvalId: "apr_01k5rt9xq7v3m8n2p4s6t8w0",
+        capability: "set_budget",
+        expiresAt: "2026-09-14T10:05:00.000Z",
+      },
+    ]);
+  });
+
   it("does not persist a reply when the turn fails, and rejects with the failure", async () => {
     const failure = Object.assign(
       new Error("the assistant engine is unavailable"),
