@@ -27,10 +27,13 @@ services:
       timeout: 5s
       retries: 10
 
-  # The Stella engine the in-app agent runs on (ADR-053). Published by the
-  # Stella repository on every release; the tag here tracks
-  # STELLA_SERVE_IMAGE_TAG in tools/scripts/package-for-node.sh. Point the
-  # surfaces at it with STELLA_SERVE_URL=http://127.0.0.1:4300 and
+  # The Stella engine the in-app agent runs on (ADR-053). The Stella
+  # repository publishes the image on every release. The default tag must
+  # equal STELLA_SERVE_PINNED_VERSION in
+  # packages/stella-engine-client/src/version.ts, the version production runs,
+  # and `pnpm check:contracts` fails when it does not. Set
+  # STELLA_SERVE_IMAGE_TAG to try another release locally. Point the surfaces
+  # at it with STELLA_SERVE_URL=http://127.0.0.1:4300 and
   # STELLA_SERVE_TOKEN=dev-token-change-me in .env.local.
   stella-serve:
     image: ghcr.io/macanderson/stella-serve:${STELLA_SERVE_IMAGE_TAG:-0.9.414}

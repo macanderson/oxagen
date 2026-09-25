@@ -7,6 +7,16 @@ describe("notifications.mark contract", () => {
     expect(notificationsMark.domain).toBe("notification");
   });
 
+  it("declares a low-risk write on the agent surface", () => {
+    expect(notificationsMark.surfaces).toContain("agent");
+    expect(notificationsMark.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "notification",
+    });
+    expect(notificationsMark.mutates).toBe(true);
+  });
+
   it("parses valid input with read=true", () => {
     const parsed = notificationsMark.input.parse({ id: "ntf_abc", read: true });
     expect(parsed.id).toBe("ntf_abc");

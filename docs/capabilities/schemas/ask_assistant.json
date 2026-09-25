@@ -72,6 +72,19 @@
                   }
                 ],
                 "default": null
+              },
+              "entityLabel": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "required": [

@@ -12,6 +12,9 @@ export const schemaList = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "schema" },
   sensitivity: "medium",
+  // Creates the workspace's schema registry and draft version on first
+  // use.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

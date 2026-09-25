@@ -267,6 +267,13 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       const verdict = goalVerdictOf(p);
       return round && verdict ? `round ${round} ${verdict}` : event.eventType;
     }
+    case "steering.manifest": {
+      const included = field(p, "included");
+      const cut = field(p, "cut");
+      return included && cut
+        ? `included=${included} cut=${cut}`
+        : event.eventType;
+    }
     default:
       // Both spellings of each call, and both spellings of the tool's name:
       // the ledger's own event calls it `capability_name`, the assistant's

@@ -34,6 +34,15 @@ describe("get_run_cost contract", () => {
     );
   });
 
+  it("is a low-risk read the in-app agent may call without approval", () => {
+    expect(runCostGet.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(runCostGet.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "run",
+    });
+  });
+
   it("answers null until the rollup covers the run, and a full row after", () => {
     expect(
       runCostGet.output.parse({ runId: "tse_abc123", rollup: null }).rollup,

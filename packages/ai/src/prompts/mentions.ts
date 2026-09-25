@@ -15,14 +15,14 @@
  *                slug) as a chip with a type icon; hover reveals the full
  *                property bag.
  *
- * Consumed in THREE places that must never drift:
- *  1. The composer @-mention menu (apps/app — `mention-menu.tsx`), which lets
- *     the user pick a reference type and search within it.
- *  2. Message rendering (composer preview + transcript), which parses tokens
- *     back into inspectable chips via {@link splitTextByMentions}.
- *  3. Agent system prompts (`mentionGrammarPrompt`), which teach the agent
- *     what the tokens mean, so a mentioned node/file/repo is treated as
- *     first-class, already-cited context.
+ * Consumed in two places that must never drift:
+ *  1. The composer @-mention menu (apps/app_deprecated, `mention-menu.tsx`),
+ *     which lets the user pick a reference type and search within it.
+ *  2. Message rendering (composer preview and transcript), which parses
+ *     tokens back into inspectable chips via {@link splitTextByMentions}.
+ *
+ * The apps/app flyout has no mention picker, so stella's system prompt does
+ * not teach the grammar.
  *
  * Field values are percent-encoded (only `%`, `|`, `]`, and newlines) so the
  * token stays single-line and unambiguous while remaining mostly readable.
@@ -357,40 +357,4 @@ export function textWithMentionLinks(text: string): string {
       return `[${label}](${mentionToHref(segment.mention)})`;
     })
     .join("");
-}
-
-/**
- * System-prompt section teaching the agent the mention grammar. Static (no
- * per-turn data) so it is safe inside the cached system block.
- */
-export function mentionGrammarPrompt(): string {
-  const typeLines = MENTION_TYPES.map(
-    (t) => `- \`${t.type}\` — ${t.summary}`,
-  ).join("\n");
-  return [
-    "## Reference mentions",
-    "",
-    "User messages may embed structured reference tokens of the form",
-    "`[:TYPE|:SLUG|:LOCATION|:LABEL]`. Each token is a deliberate, first-class",
-    "reference the user attached to the conversation: TYPE is the kind of",
-    "thing, SLUG is its stable public identifier, LOCATION is its path or URL",
-    "(may be empty), and LABEL is its human-readable name. Fields",
-    "percent-encode `%`, `|`, `]`, and newlines.",
-    "",
-    "Reference types:",
-    typeLines,
-    "",
-    "How to treat them:",
-    "- A mention is authoritative context — prefer the mentioned entity over",
-    "  guessing. Resolve it by SLUG (public id / path / capability name), not",
-    "  by LABEL.",
-    "- A `repository` mention selects the repo to operate on; `branch`,",
-    "  `file`, and `directory` mentions scope work within it.",
-    "- `node` / `edge` mentions are knowledge-graph references and count as",
-    "  citations: ground answers in their properties and cite them like any",
-    "  retrieved graph context.",
-    "- When you reference one of these entities in your reply, you may emit",
-    "  the same token form; the UI renders it as an inspectable chip.",
-    "- Never echo raw SLUG values as user-facing names — use the LABEL.",
-  ].join("\n");
 }

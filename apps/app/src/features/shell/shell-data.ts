@@ -53,6 +53,8 @@ export type ShellData = {
     twoFactorEnabled: boolean;
     /** The IANA zone the chrome's dates render in, and the Account dialog's current choice. */
     timeZone: string;
+    /** `enter_to_submit` (ADR-075): Enter sends in the assistant composer. Off, Cmd+Enter or Ctrl+Enter sends. */
+    enterToSubmit: boolean;
   };
   context: Read<ShellContext>;
   /** The approvals drawer and the counts read off it. */
@@ -61,8 +63,10 @@ export type ShellData = {
    * The bell's feed for the organization's first workspace, the one the
    * sidebar points at on an organization page. A workspace page replaces it
    * with its own (`<ShellWorkspace>`): `list_notifications` is workspace-scoped
-   * and answers the organization's rows plus that workspace's. Null when the
-   * organization has no workspace to read it in.
+   * and answers the organization's rows plus that workspace's. When the viewer
+   * can open no workspace it is read in the organization's scope and holds the
+   * organization's rows alone. `shellSource` always reads it; the type keeps
+   * null for chrome rendered without that read.
    */
   feed: Read<NotificationFeed> | null;
   /**

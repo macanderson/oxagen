@@ -27,7 +27,9 @@
  *             → mandate_ended; a draft is declined the same way
  *   retire  — grant and request take the agent row lock retire_agent holds,
  *             so one in flight makes them wait and then refuse; a draft a
- *             concurrent grant rebinds to another agent is not revoked
+ *             concurrent grant rebinds to another agent is not revoked; an
+ *             agent already archived with an active mandate still has it
+ *             revoked, and its recorded retirement is unchanged
  *   limits  — validTo before validFrom → validity_inverted; a change over an
  *             undeclared measure is refused; a change records and emits, and
  *             a per_period changed inside the period reports remaining
@@ -1868,6 +1870,94 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ),
         ),
       ).rejects.toSatisfy(retiredAgent);
+    });
+
+    it("retire_agent on an already-archived agent revokes the mandates it still holds and leaves the retirement as recorded", async () => {
+      // An agent archived before retirement revoked mandates (#3437), or by a
+      // direct write, keeps its active mandates. A repeat retire_agent must
+      // revoke them, not answer already with nothing revoked (#3446).
+      const fourthBotPrincipal = randomUUID();
+      const [fourthAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "archived-bot",
+            name: "Archived holder bot",
+            agentType: "custom",
+            principalId: fourthBotPrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const fourthAgentId = fourthAgent!.publicId;
+      const m = await grant(billingUserId, {
+        ...body(),
+        agentId: fourthAgentId,
+      });
+      expect(m.status).toBe("active");
+
+      const archivedAt = new Date("2026-01-02T03:04:05.000Z");
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({
+            status: "archived",
+            validUntil: archivedAt,
+            updatedAt: archivedAt,
+          })
+          .where(eq(schema.agents.publicId, fourthAgentId)),
+      );
+
+      doubles.events.length = 0;
+      const out = await inScope(() =>
+        agentRetireHandler(
+          { agentId: fourthAgentId, reason: "stranded mandate" },
+          ctx(ownerUserId),
+        ),
+      );
+      expect(out.revokedMandates).toBe(1);
+      expect(out.revokedCredentials).toBe(0);
+      expect(out.revokedHosts).toBe(0);
+      expect(out.retiredAt).toBe(archivedAt.toISOString());
+      expect(doubles.events).toEqual([
+        { eventType: "mandate.revoked", capability: "retire_agent" },
+      ]);
+
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({
+            status: schema.mandates.status,
+            revokedReason: schema.mandates.revokedReason,
+          })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      expect(row).toEqual({
+        status: "revoked",
+        revokedReason: "stranded mandate",
+      });
+
+      // The agent row keeps the recorded retirement.
+      const [agentRow] = await withSystemDb((tx) =>
+        tx
+          .select({
+            status: schema.agents.status,
+            updatedAt: schema.agents.updatedAt,
+          })
+          .from(schema.agents)
+          .where(eq(schema.agents.publicId, fourthAgentId)),
+      );
+      expect(agentRow).toEqual({ status: "archived", updatedAt: archivedAt });
+
+      // A third call finds nothing left to revoke and emits nothing.
+      doubles.events.length = 0;
+      const again = await inScope(() =>
+        agentRetireHandler({ agentId: fourthAgentId }, ctx(ownerUserId)),
+      );
+      expect(again.revokedMandates).toBe(0);
+      expect(doubles.events).toEqual([]);
     });
   },
 );

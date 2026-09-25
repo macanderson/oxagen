@@ -205,7 +205,15 @@ export function findUnpricedModels(args: {
       fullyUnpriced: missedUsageBucketCount === usageBucketCount,
     });
   }
-  return out
+  return rankUnpricedModels(out);
+}
+
+/**
+ * Worst first, capped at {@link UNPRICED_MODEL_REPORT_LIMIT}: fully unpriced
+ * models before partly-priced ones, then by tokens run, then by model id.
+ */
+function rankUnpricedModels(models: UnpricedModel[]): UnpricedModel[] {
+  return models
     .sort((a, b) => {
       if (a.fullyUnpriced !== b.fullyUnpriced) return a.fullyUnpriced ? -1 : 1;
       if (a.tokens !== b.tokens) return b.tokens - a.tokens;
@@ -213,6 +221,25 @@ export function findUnpricedModels(args: {
     })
     .slice(0, UNPRICED_MODEL_REPORT_LIMIT);
 }
+
+/**
+ * Orders two model ids the way ClickHouse orders a `String`: byte by byte
+ * over UTF-8. JavaScript's `<` compares UTF-16 code units, which puts a model
+ * id holding an emoji or another character past U+FFFF before one holding a
+ * character between U+E000 and U+FFFF. The store puts it after. The paging
+ * cursor must agree with the store, or a page that did advance reads as
+ * stuck and the report fails.
+ */
+export function compareModelIds(a: string, b: string): number {
+  return Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+}
+
+/**
+ * How many observed models one page of the frame read holds. The report
+ * walks every page, so this bounds the memory and the `models` array of one
+ * class-bucket read, not which models are compared.
+ */
+export const UNPRICED_MODEL_READ_PAGE_SIZE = 1_000;
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
@@ -246,47 +273,68 @@ export async function readUnpricedModels(args: {
   at: Date;
 }): Promise<UnpricedModel[]> {
   const book = await loadPriceBook({ orgId: args.orgId });
-  // Bounded above by `at` as well as below by `since`: the book is judged
-  // as of `at`, so a model first run after `at` — and every later call and
-  // token — would otherwise be reported against a snapshot from before it
-  // ran, and read as unpriced when the book of its own time prices it.
-  const observed = await readObservedModels({
-    orgId: args.orgId,
-    workspaceId: args.workspaceId,
-    since: args.since,
-    until: args.at,
-    // The boundaries are chosen from the models the window actually holds,
-    // not from the whole book: `loadPriceBook` returns every list row's full
-    // history plus the organization's own, and that array is rescanned for
-    // every frame. An organization that ran one model paid for every other
-    // model's rate changes, and had its one model's report split into buckets
-    // whose price answer is identical on both sides of the split.
-    boundariesFor: (models) =>
-      priceBookBoundaries(book, {
-        models,
-        tokenClasses: OBSERVED_TOKEN_CLASSES,
-        since: args.since,
-        until: args.at,
-      }).map((t) => new Date(t)),
-  });
-  return findUnpricedModels({
-    observed: observed.map((row) => ({
-      model: row.model,
-      provider: row.provider,
-      calls: row.calls,
-      tokens: row.tokens,
-      firstSeen: new Date(row.firstSeen),
-      lastSeen: new Date(row.lastSeen),
-      classes: row.classes.map((c) => ({
-        tokenClass: c.tokenClass,
-        calls: c.calls,
-        tokens: c.tokens,
-        firstSeen: new Date(c.firstSeen),
-        lastSeen: new Date(c.lastSeen),
+  // Every model the window holds is compared, not the heaviest N. The ranked
+  // read stops at a volume bound, and a low-volume unpriced model past it
+  // would never reach the comparison (#3281). The pages are walked in model-id
+  // order, each page is judged on its own, and only its unpriced models are
+  // kept, so the running report never holds more than one page plus the cap.
+  let report: UnpricedModel[] = [];
+  let afterModel: string | undefined;
+  for (;;) {
+    // Bounded above by `at` as well as below by `since`: the book is judged
+    // as of `at`, so a model first run after `at` (and every later call and
+    // token) would otherwise be reported against a snapshot from before it
+    // ran, and read as unpriced when the book of its own time prices it.
+    const observed = await readObservedModels({
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      since: args.since,
+      until: args.at,
+      page: { afterModel, size: UNPRICED_MODEL_READ_PAGE_SIZE },
+      // The boundaries are chosen from the models the page actually holds,
+      // not from the whole book: `loadPriceBook` returns every list row's
+      // full history plus the organization's own, and that array is rescanned
+      // for every frame. An organization that ran one model paid for every
+      // other model's rate changes, and had its one model's report split into
+      // buckets whose price answer is identical on both sides of the split.
+      boundariesFor: (models) =>
+        priceBookBoundaries(book, {
+          models,
+          tokenClasses: OBSERVED_TOKEN_CLASSES,
+          since: args.since,
+          until: args.at,
+        }).map((t) => new Date(t)),
+    });
+    const unpriced = findUnpricedModels({
+      observed: observed.map((row) => ({
+        model: row.model,
+        provider: row.provider,
+        calls: row.calls,
+        tokens: row.tokens,
+        firstSeen: new Date(row.firstSeen),
+        lastSeen: new Date(row.lastSeen),
+        classes: row.classes.map((c) => ({
+          tokenClass: c.tokenClass,
+          calls: c.calls,
+          tokens: c.tokens,
+          firstSeen: new Date(c.firstSeen),
+          lastSeen: new Date(c.lastSeen),
+        })),
       })),
-    })),
-    book,
-    orgId: args.orgId,
-    at: args.at,
-  });
+      book,
+      orgId: args.orgId,
+      at: args.at,
+    });
+    report = rankUnpricedModels([...report, ...unpriced]);
+    if (observed.length < UNPRICED_MODEL_READ_PAGE_SIZE) return report;
+    const last = observed.at(-1)!.model;
+    // The store returns a page in model-id order after `afterModel`, so the
+    // cursor always moves forward. A page that does not move it would repeat
+    // forever, and that is a store defect to surface, not to loop on.
+    if (afterModel !== undefined && compareModelIds(last, afterModel) <= 0)
+      throw new Error(
+        `readUnpricedModels: observed-model page did not advance past ${JSON.stringify(afterModel)}`,
+      );
+    afterModel = last;
+  }
 }

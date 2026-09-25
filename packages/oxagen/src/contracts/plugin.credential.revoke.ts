@@ -12,6 +12,7 @@ export const pluginCredentialRevoke = registerCapability({
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({

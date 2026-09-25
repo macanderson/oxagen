@@ -1,5 +1,5 @@
 /**
- * `runGovernedTurn` — the in-app governance agent's turn, run on Stella's
+ * `runGovernedTurn`: a turn of stella, the in-app agent, run on Stella's
  * headless engine (ADR-053 §1; ADR-043 §2 for what the agent is for).
  *
  * Oxagen governs agents; it does not run them. The loop that runs this turn

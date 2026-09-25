@@ -12,6 +12,8 @@ export const pluginCatalogBrowse = registerCapability({
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   sensitivity: "low",
+  // Seeds the workspace's default MCP registry row on the first browse.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({

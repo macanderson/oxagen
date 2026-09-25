@@ -4,7 +4,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** org + workspace (the tenant scope the caller enters)
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`; a console read is never a governed action, ADR-052 exclusion 2)
 
@@ -73,6 +73,7 @@ None. Read-only; audit-exempt.
 
 - `POST /api/v1/{org}/{ws}/agents`
 - MCP tool `list_agents`
+- Agent: one of the in-app assistant's seven pins, offered on every turn (`INTERACTIVE_AGENT_CAPABILITIES`). Low risk, no approval.
 
 ## Errors
 

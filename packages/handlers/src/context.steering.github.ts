@@ -451,6 +451,34 @@ export function assertProductionBase(
 }
 
 /**
+ * A Context PR that GitHub merged at a commit the checks never ran on.
+ *
+ * Someone merged it on the host instead of from Oxagen, after the head moved:
+ * a merge of `main` into the branch, or a review bot's suggestion accepted
+ * into the record file. Oxagen publishes only the commit its checks passed
+ * on, so this merge published nothing to the registry, and the record file
+ * now on the production branch may not verify. Re-running the checks cannot
+ * fix it, because the pull request is closed and its head can no longer
+ * change. The way out is to dismiss this proposal and propose the wording
+ * again in Oxagen, which writes a freshly stamped file in a new Context PR.
+ */
+export function mergedOutsideOxagen(
+  prUrl: string | null,
+  mergedHead: string | null,
+  checkedHead: string | null,
+): HandlerError {
+  const at = mergedHead ? ` at ${mergedHead}` : "";
+  const checked = checkedHead
+    ? `, and the checks ran on ${checkedHead}`
+    : ", and the checks never passed on it";
+  return new HandlerError({
+    code: "conflict",
+    reason: "merged_outside_oxagen",
+    message: `Someone merged ${prUrl ?? "this pull request"} on the repository host${at}${checked}, so Oxagen published nothing. Dismiss this proposal, then propose the wording you want in Oxagen and merge that Context PR from Oxagen.`,
+  });
+}
+
+/**
  * A proposal's PR number is read back only through the host that issued it.
  *
  * A GitHub PR number and a GitLab merge request IID are both small integers

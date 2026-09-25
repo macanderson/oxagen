@@ -8,8 +8,11 @@ The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR
 
 ## Surface
 
+**Surfaces:** api, mcp, agent
+
 - API: `POST /v1/:org_slug/:workspace_slug/runs/cost`
 - MCP: `get_run_cost`
+- Agent: one of the in-app assistant's seven pins, offered on every turn (`INTERACTIVE_AGENT_CAPABILITIES`). Low risk, no approval.
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `get_run_cost`
 - Not billed (`noBillingGate: true`): a console read is never a governed action. IAM default-deny; medium sensitivity.
