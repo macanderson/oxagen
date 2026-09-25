@@ -13,6 +13,7 @@ import {
   fallbackRunTitle,
   runNarrativeTurn,
   ENRICHMENT_CHUNK_CHARS,
+  ENRICHMENT_TEXT_CEILING_CHARS,
   uniqueRunName,
 } from "./run-enrichment";
 const scope = { orgId: "o", workspaceId: "w" };
@@ -126,6 +127,51 @@ describe("the full recorded input", () => {
     expect(
       uniqueRunName("x".repeat(100), "tse_12345678").length,
     ).toBeLessThanOrEqual(80);
+  });
+});
+
+// #4202: collectRunText read every body in the run and held all of its text,
+// with no ceiling, inside one durable step on a 256 MB heap.
+describe("the text ceiling", () => {
+  const bodyChars = ENRICHMENT_CHUNK_CHARS;
+  const perFrame = bodyChars + 64;
+  const count = Math.ceil(ENRICHMENT_TEXT_CEILING_CHARS / perFrame) + 10;
+  const bodies = Array.from(
+    { length: count + 1 },
+    (_, i) => `body-${i}:${"x".repeat(bodyChars - 12)}`,
+  );
+  const frames = bodies.map((text, i) => frame(i, text));
+  const read = async (_scope: unknown, ref: string) => ({
+    bytes: new TextEncoder().encode(bodies[Number(ref.slice(5))]!),
+  });
+
+  it("stops reading bodies once the text reaches the ceiling", async () => {
+    const get = vi.fn(read);
+    const got = await collectRunText(scope, frames.slice(0, count), get);
+    const text = got.chunks.join("");
+
+    expect(get.mock.calls.length).toBeLessThan(count);
+    expect(get.mock.calls.length).toBeLessThanOrEqual(
+      Math.ceil(ENRICHMENT_TEXT_CEILING_CHARS / bodyChars),
+    );
+    expect(text.length).toBeLessThanOrEqual(ENRICHMENT_TEXT_CEILING_CHARS + 200);
+    expect(text).toContain("The transcript stops here.");
+    expect(text).not.toContain(`body-${count - 1}:`);
+    expect(got.truncated).toBeGreaterThan(0);
+    expect(got.frames + got.truncated).toBe(count);
+    // A left-out frame is not missing evidence: it must not mark the account partial.
+    expect(got).toMatchObject({ missing: 0, unavailable: 0 });
+    expect(got.chunks.every((c) => c.length <= ENRICHMENT_CHUNK_CHARS)).toBe(
+      true,
+    );
+  });
+
+  it("keeps its fingerprint when frames arrive past the ceiling", async () => {
+    const before = await collectRunText(scope, frames.slice(0, count), read);
+    const after = await collectRunText(scope, frames, read);
+
+    expect(after.digest).toBe(before.digest);
+    expect(after.truncated).toBe(before.truncated + 1);
   });
 });
 
