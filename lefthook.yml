@@ -1,5 +1,16 @@
 pre-commit:
   parallel: true
+  # Skip while a merge or rebase is in progress. A merge stages every file its
+  # incoming commits touched, so concluding one hands every command below the
+  # whole upstream change instead of the author's edit. On 2026-09-25 a pull of
+  # 57 commits staged 833 TypeScript files: type-aware ESLint ran out of heap
+  # at 4 GB, tsc walked 26 package groups for minutes, and Biome rewrote 30
+  # files from main that nobody had touched (#4273). The incoming files already
+  # passed CI on main, and the branch's own CI run checks the resolution.
+  # `merge` means .git/MERGE_HEAD exists; `rebase` means a rebase directory does.
+  skip:
+    - merge
+    - rebase
   commands:
     atlas-validate:
       # Only run when migration files are staged — avoids the overhead on
