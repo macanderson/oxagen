@@ -1394,9 +1394,10 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     // The head each session had before this batch: events below it are
     // re-sent rows.
     const recordedHeads = new Map<string, number>();
-    // What the batch changed about spend: cost each session added, and the
-    // root sessions it sealed. Both are acted on after the transaction.
-    const spendDeltas: { micros: number; at: Date }[] = [];
+    // What the batch changed about spend: the cost its sessions added, and
+    // the root sessions it sealed. The cost goes to the spend counter at the
+    // end of this transaction. The sealed roots are acted on after it.
+    let batchSpendMicros = 0n;
     const rollupRoots: string[] = [];
     // Each sealed root session this batch touched, by session uuid. A re-send
     // that finds its frames missing from ClickHouse is the retry of an append
@@ -2117,7 +2118,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           proofsByRoot.set(event.root_session_uuid, frames);
         }
         if (delta.totalCostMicros > 0)
-          spendDeltas.push({ micros: delta.totalCostMicros, at: now });
+          batchSpendMicros += BigInt(delta.totalCostMicros);
         // A reopen asks too, whatever the batch carried: the run's row was
         // rebuilt at the close and reads final until it is rebuilt open.
         if (
@@ -2354,6 +2355,28 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       }
     }
     const seen = await touchHost(tx as never, host, input.daemon, now, true);
+    // The batch's cost reaches the spend-budget counter in this transaction
+    // (#3825). If the counter write fails, the whole batch rolls back and the
+    // host sends it again. Nothing the cost was folded from committed, so the
+    // retry computes the same cost and counts it once. A committed batch
+    // folds its re-sent frames as already recorded (`fresh = []`), which is
+    // why a counter write made after the commit, once lost, was never made
+    // again. This is the last write here, so the counter row stays locked for
+    // the shortest time. The batch counts on the UTC day of this request.
+    // For an organisation on a dedicated plane, `recordSpend` writes the
+    // shared-plane counter in its own transaction before this one commits
+    // (ADR-042 §2), so a failed write still rolls the batch back.
+    if (batchSpendMicros > 0n) {
+      await recordSpend(
+        {
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          at: now,
+          micros: batchSpendMicros,
+        },
+        tx,
+      );
+    }
     // The control envelope is NOT built here. Building it drains the host's
     // queued commands and marks them `sent`, and this transaction commits
     // before the ClickHouse append below. An append that failed after the
@@ -2365,7 +2388,6 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       verified,
       recordedHeads,
       seen,
-      spendDeltas,
       rollupRoots,
       attribution,
       sealedRoots,
@@ -2375,27 +2397,6 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     };
   });
 
-  // The spend counter is best-effort: the batch is accepted once the rows
-  // are written, and the counter write may not fail the intake.
-  for (const spend of result.spendDeltas) {
-    try {
-      // Tried more than once: a retried batch folds these frames as already
-      // recorded, so a write lost here is not written by any later request.
-      await withRetries(SPEND_WRITE_ATTEMPTS, () =>
-        recordSpend({
-          orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
-          at: spend.at,
-          micros: BigInt(spend.micros),
-        }),
-      );
-    } catch (err) {
-      logger.error(
-        { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-        "tacho.events.ingest: spend counter write failed",
-      );
-    }
-  }
   // Every event this batch re-sends below a session's recorded head is
   // compared with the frame ClickHouse holds at that seq (§8.3). The same
   // hash is a frame already landed: it is not written again, so a re-send
@@ -2623,8 +2624,6 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
 const BODY_WRITE_CONCURRENCY = 8;
 /** How long one body write may take before the batch is failed and re-sent. */
 const BODY_WRITE_TIMEOUT_MS = 30_000;
-/** Attempts at the spend counter write before it is logged as lost. */
-const SPEND_WRITE_ATTEMPTS = 3;
 
 /** Run `fn` over `items`, at most `limit` at once; rejects on the first failure. */
 async function eachConcurrently<T>(
@@ -2664,22 +2663,6 @@ async function withinTime<T>(
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
-}
-
-/** `fn`, tried up to `attempts` times; the last failure is thrown. */
-async function withRetries<T>(
-  attempts: number,
-  fn: () => Promise<T>,
-): Promise<T> {
-  let last: unknown;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      return await fn();
-    } catch (err) {
-      last = err;
-    }
-  }
-  throw last;
 }
 
 /** What `compareResent` found about a batch's re-sent events, by `event_id_idem`. */

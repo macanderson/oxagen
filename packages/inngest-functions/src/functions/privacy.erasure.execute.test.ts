@@ -9,15 +9,34 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
   loggerError: vi.fn(),
+  eraseClaudeSessionRows: vi.fn(),
+  /** What `auth.users.email` holds when the function reads it. */
+  subjectEmail: { value: "person@example.test" as string | null },
+  /** Every operation in the order it ran, across both stores. */
+  order: [] as string[],
 }));
 
 // Drizzle tx mock:
 //   tx.update(table).set(payload).where(cond) — records every set().
 //   tx.delete(table).where(cond)              — records every delete target.
+//   tx.select(cols).from(table).where().limit(): reads the subject's email.
 function makeTx() {
   return {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => {
+            mocks.order.push("read-email");
+            return mocks.subjectEmail.value === null
+              ? []
+              : [{ email: mocks.subjectEmail.value }];
+          },
+        }),
+      }),
+    }),
     update: (table: unknown) => ({
       set: (payload: unknown) => {
+        mocks.order.push(`update:${(table as { id?: string }).id}`);
         mocks.updateSet({ table, payload });
         return { where: () => Promise.resolve(undefined) };
       },
@@ -35,7 +54,7 @@ vi.mock("@oxagen/database", () => ({
   withSystemDb: async (fn: (tx: typeof fakeTx) => unknown) => fn(fakeTx),
   schema: {
     privacyErasureRequests: { id: "erasure.id" },
-    users: { id: "users.id" },
+    users: { id: "users.id", email: "users.email" },
     accounts: { userId: "accounts.userId" },
     userPreferences: { userId: "userPreferences.userId" },
   },
@@ -48,6 +67,13 @@ vi.mock("drizzle-orm", async (importOriginal) => {
     eq: (col: unknown, val: unknown) => ({ col, val }),
   };
 });
+
+vi.mock("@oxagen/telemetry", () => ({
+  eraseClaudeSessionRows: async (email: string) => {
+    mocks.order.push("erase-clickhouse-rows");
+    return mocks.eraseClaudeSessionRows(email);
+  },
+}));
 
 vi.mock("../logger", () => ({
   logger: {
@@ -105,6 +131,10 @@ describe("privacyErasureExecute Inngest handler", () => {
     mocks.loggerInfo.mockClear();
     mocks.loggerWarn.mockClear();
     mocks.loggerError.mockClear();
+    mocks.eraseClaudeSessionRows.mockReset();
+    mocks.eraseClaudeSessionRows.mockResolvedValue(undefined);
+    mocks.subjectEmail.value = "person@example.test";
+    mocks.order.length = 0;
   });
 
   const baseEvent = {
@@ -172,11 +202,122 @@ describe("privacyErasureExecute Inngest handler", () => {
     } catch (err) {
       const message = (err as Error).message;
       expect(message).toContain("OXA-1721");
-      expect(message).toContain("ClickHouse");
       expect(message).toContain("Neo4j");
       expect(message).toContain("blob");
       expect(message).toContain("org-scope");
+      // ADR-183: the rows under the account address were erased. The rows the
+      // account address cannot match stay residual, and the message says so.
+      const residual = message.slice(message.indexOf("STILL RESIDUAL"));
+      expect(residual).not.toContain("claude_telemetry");
+      expect(residual).not.toContain("was not erased");
+      expect(residual).toContain("other than the account address");
+      expect(residual).toContain("internal.claude_sessions");
+      expect(message).toContain(
+        "claude_sessions rows under the account address were deleted",
+      );
     }
+  });
+
+  it("erases the subject's claude_sessions rows by address before the address is overwritten (ADR-183)", async () => {
+    const handler = getHandler("privacy.erasure-execute");
+    await expect(
+      handler({ event: { data: baseEvent }, step: makeStep() }),
+    ).rejects.toBeInstanceOf(NonRetriableError);
+
+    expect(mocks.eraseClaudeSessionRows).toHaveBeenCalledOnce();
+    expect(mocks.eraseClaudeSessionRows).toHaveBeenCalledWith(
+      "person@example.test",
+    );
+    // The read and the ClickHouse delete both come before the users row is
+    // anonymised, because the anonymised address matches no row.
+    const erase = mocks.order.indexOf("erase-clickhouse-rows");
+    expect(mocks.order.indexOf("read-email")).toBeLessThan(erase);
+    expect(erase).toBeLessThan(mocks.order.indexOf("update:users.id"));
+  });
+
+  it("keeps the address out of the step's return value, which Inngest stores", async () => {
+    const handler = getHandler("privacy.erasure-execute");
+    const results = new Map<string, unknown>();
+    const step = {
+      run: async (name: string, fn: () => Promise<unknown>) => {
+        const result = await fn();
+        results.set(name, result);
+        return result;
+      },
+      sleep: vi.fn(async () => undefined),
+    };
+    await expect(
+      handler({ event: { data: baseEvent }, step }),
+    ).rejects.toBeInstanceOf(NonRetriableError);
+    expect(results.get("erase-clickhouse-rows")).toEqual({ erased: true });
+    expect(JSON.stringify([...results.values()])).not.toContain(
+      "person@example.test",
+    );
+  });
+
+  it("still purges credentials when the ClickHouse erase fails, and keeps the address for a re-run", async () => {
+    // The step mock runs the body once, so this throw stands for the failure
+    // Inngest throws back into the function after its retries.
+    mocks.eraseClaudeSessionRows.mockRejectedValueOnce(
+      new Error("ClickHouse refused"),
+    );
+    const handler = getHandler("privacy.erasure-execute");
+    const error = await handler({
+      event: { data: baseEvent },
+      step: makeStep(),
+    }).then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+    expect(error).toBeInstanceOf(NonRetriableError);
+
+    const updates = mocks.updateSet.mock.calls.map((c) => c[0] as UpdateCall);
+    const deletes = mocks.deleteFrom.mock.calls.map((c) => c[0] as DeleteCall);
+    // The auth purge ran: credentials and preferences are gone.
+    expect(deletes.some((c) => c.table.userId === "accounts.userId")).toBe(
+      true,
+    );
+    expect(
+      deletes.some((c) => c.table.userId === "userPreferences.userId"),
+    ).toBe(true);
+    // The identity row is scrubbed, but the address stays for the re-run.
+    const userUpdate = updates.find((c) => c.table.id === "users.id");
+    expect(userUpdate?.payload.displayName).toBe("Deleted User");
+    expect(userUpdate?.payload).not.toHaveProperty("email");
+    expect(updates.some((c) => c.payload.status === "completed")).toBe(false);
+
+    const message = (error as Error).message;
+    expect(message).not.toContain("were deleted");
+    expect(message).toContain("except the account address");
+    const residual = message.slice(message.indexOf("STILL RESIDUAL"));
+    expect(residual).toContain("the erase failed after retries");
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: "req-1", userId: "user-1" }),
+      "privacy.erasure-execute: claude_sessions erase failed, keeping the address for a re-run",
+    );
+  });
+
+  it("logs, erases nothing, and reports the rows residual when the address was already overwritten", async () => {
+    mocks.subjectEmail.value = "user-1@deleted.invalid";
+    const handler = getHandler("privacy.erasure-execute");
+    const error = await handler({
+      event: { data: baseEvent },
+      step: makeStep(),
+    }).then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+    expect(error).toBeInstanceOf(NonRetriableError);
+    expect(mocks.eraseClaudeSessionRows).not.toHaveBeenCalled();
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      { requestId: "req-1", userId: "user-1" },
+      "privacy.erasure-execute: no address left to match in claude_sessions",
+    );
+    // The audit record must not claim a deletion that did not happen.
+    const message = (error as Error).message;
+    expect(message).not.toContain("were deleted");
+    const residual = message.slice(message.indexOf("STILL RESIDUAL"));
+    expect(residual).toContain("no account address was left to match");
   });
 
   it("fails loud for org scope without touching users/accounts/preferences", async () => {
@@ -194,6 +335,7 @@ describe("privacyErasureExecute Inngest handler", () => {
     // owned rows, because org-scope semantics are undefined.
     expect(updates.some((c) => c.table.id === "users.id")).toBe(false);
     expect(deletes.length).toBe(0);
+    expect(mocks.eraseClaudeSessionRows).not.toHaveBeenCalled();
   });
 
   it("on-failure handler marks the request failed with the error message", async () => {

@@ -391,6 +391,40 @@ those four pieces together, because each is joined to the next by a string
 literal in a different file and every way of breaking the chain leaves valid
 Terraform and an alarm that sits at OK forever.
 
+## ClickHouse memory on the app node
+
+ClickHouse runs in one container on the app node.
+`infra/modules/app-node/user-data.sh.tftpl` sizes it:
+
+| Setting | Value | Where |
+|---|---|---|
+| Container `mem_limit` | 2 GiB | the compose file the bootstrap writes |
+| `max_server_memory_usage` | 1.5 GiB (1610612736 bytes) | `zz-oxagen-limits.xml` |
+| `mark_cache_size` | 256 MiB | `zz-oxagen-limits.xml` |
+| System logs | `query_log` with a seven-day TTL, and `crash_log` | `zz-oxagen-limits.xml` ([ADR-181](../docs/adr/ADR-181-clickhouse-keeps-two-system-logs.md)) |
+
+When every query on the server together passes 1.5 GiB, ClickHouse stops one
+of them with code 241, `Memory limit (total) exceeded`. The API answers a
+Tacho ingest the store refused this way with 503 and a `Retry-After` header
+(#3723), and the host waits at least that long before it sends the batch
+again.
+
+Changes, newest first:
+
+- **2026-09-25, #3662.** Every `tacho_events` insert carries its own memory
+  terms (`TACHO_EVENTS_INSERT_SETTINGS` in
+  `packages/telemetry/src/tacho-events.ts`). `max_memory_usage` bounds one
+  insert at 512 MiB. Both overcommit ratio denominators are 0, which takes the
+  insert out of the server's choice of which query to stop, so a heavy read is
+  stopped instead of the ingest write. No server setting changed.
+- **2026-09-25, #4275.** Thirteen unread system logs were turned off. Idle
+  memory fell from 830 MiB to 270 MiB. The cap and the container size did not
+  change, and a `get_run` read still reached the cap at 15:36 UTC the same day
+  (#4243).
+
+A batch that keeps failing stays on the host, with its session's bodies, until
+it lands. #3722 carries a cap on that.
+
 ## Reaching the databases
 
 **This section is `stacks/oxagen-data` — the old account's self-hosted
