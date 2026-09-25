@@ -19,7 +19,7 @@ import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import {
   assertProductionBase,
   assertSameHost,
-  mergedOutsideOxagen,
+  refuseMergedOnHost,
   type SteeringRepository,
 } from "./context.steering.github";
 import {
@@ -120,8 +120,7 @@ export function createMergeContextPrHandler(
     if (pr.headSha !== row.headSha) {
       // Merged on the host after the head moved: running the checks again
       // cannot help, because a merged pull request's head never moves again.
-      if (pr.merged)
-        throw mergedOutsideOxagen(row.prUrl, pr.headSha, row.headSha);
+      if (pr.merged) await refuseMergedOnHost(deps, scope, row, pr.headSha);
       throw new HandlerError({
         code: "conflict",
         reason: "head_moved",

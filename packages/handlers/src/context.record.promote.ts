@@ -11,6 +11,7 @@ import {
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { canonicalJson, sha256Hex } from "./registry-digest";
+import { isRepositoryRecord } from "./context.steering.sync.plan";
 
 const STATUS_BY_ACTION = {
   promote: "active",
@@ -32,6 +33,8 @@ export const contextRecordPromoteHandler: CapabilityHandler<
       .select({
         id: schema.contextRecords.id,
         publicId: schema.contextRecords.publicId,
+        slug: schema.contextRecords.slug,
+        path: schema.contextRecords.path,
         status: schema.contextRecords.status,
         validUntil: schema.contextRecords.validUntil,
       })
@@ -54,6 +57,16 @@ export const contextRecordPromoteHandler: CapabilityHandler<
         code: "not_found",
         reason: "context_record_missing",
         message: `[context.record.promote] Record "${input.record_id}" not found in this workspace.`,
+      });
+    // A record whose file lives on the production branch follows the
+    // repository (ADR-184). Retiring or pinning it here would hold only until
+    // the next sync read the file back, and then silently revert, so the
+    // change is refused and pointed at the file.
+    if (isRepositoryRecord(record.path))
+      throw new HandlerError({
+        code: "conflict",
+        reason: "record_follows_repository",
+        message: `${record.slug} lives in ${record.path} on the production branch, and Oxagen follows the repository. Change the file with a Context PR: remove it or set its status to retracted to retire the record.`,
       });
 
     let versionUuid: string | null = null;

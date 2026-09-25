@@ -1,4 +1,4 @@
-// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, and a project path label. None is a privileged mutation a person makes.
+// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, a project path label, and a repository sync request. None is a privileged mutation a person makes.
 //
 // gitlab.webhook.ts: what a GitLab project webhook delivery does (#3762).
 //
@@ -79,6 +79,11 @@ export interface GitLabWebhookDeps {
   client(token: string): GitLabClient;
   now(): Date;
   runInScope<T>(scope: WebhookScope, fn: () => Promise<T>): Promise<T>;
+  /**
+   * Ask for the repository sync (ADR-184). A push or a merge on GitLab can
+   * change the records in force, and the sync reads the branch itself.
+   */
+  requestSync?(scope: WebhookScope, reason: string): Promise<void>;
 }
 
 export interface GitLabWebhookRequest {
@@ -97,11 +102,30 @@ export type GitLabWebhookOutcome =
   | "proposal_rejected"
   | "proposal_moved"
   | "merged_awaiting_publication"
+  | "sync_requested"
   | "no_change";
 
 export interface GitLabWebhookResult {
   status: 200 | 202 | 401;
   outcome: GitLabWebhookOutcome;
+}
+
+/**
+ * Whether a GitLab push event names the project's default branch. True when
+ * the payload leaves either out, so a payload shape this does not know still
+ * asks for a sync rather than dropping one.
+ */
+function pushesDefaultBranch(body: unknown): boolean {
+  const b = (body ?? {}) as {
+    ref?: unknown;
+    project?: { default_branch?: unknown } | null;
+  };
+  const ref = typeof b.ref === "string" ? b.ref : null;
+  const branch =
+    typeof b.project?.default_branch === "string"
+      ? b.project.default_branch
+      : null;
+  return ref === null || branch === null || ref === `refs/heads/${branch}`;
 }
 
 /** Why a proposal is rejected when its merge request closes on GitLab. */
@@ -154,10 +178,25 @@ export async function handleGitLabWebhook(
       }
     }
 
+    if (event.kind === "other" && event.objectKind === "push") {
+      // Only a push to the project's default branch can move steering. A
+      // push elsewhere would only put the page into "pending" for nothing.
+      // The payload is a hint, not the truth: the sync reads the approved
+      // branch itself, and a payload that names no branch still asks.
+      if (!deps.requestSync || !pushesDefaultBranch(req.body))
+        return { status: 202, outcome: "ignored_event" };
+      await deps.requestSync(scope, "push");
+      return { status: 202, outcome: "sync_requested" };
+    }
     if (event.kind !== "merge_request")
       return { status: 202, outcome: "ignored_event" };
 
     return await deps.runInScope(scope, async () => {
+      // Any merge can change the production branch, whether or not Oxagen
+      // opened the merge request. The payload's word is enough to ask: the
+      // sync reads the branch, and finds nothing when nothing merged.
+      if (event.state === "merged" && deps.requestSync)
+        await deps.requestSync(scope, "merge_request");
       const proposal = await deps.findOpenProposal(scope, event.iid);
       if (!proposal) return { status: 202, outcome: "no_proposal" } as const;
       const mr = await gl.getMergeRequest({
@@ -165,8 +204,8 @@ export async function handleGitLabWebhook(
         iid: event.iid,
       });
       if (mr.state === "merged")
-        // Publishing is merge_context_pr's: it applies the reviewer gate and
-        // resumes a merge the host already holds.
+        // The repository sync publishes what merged (ADR-184). A merge made
+        // from Oxagen publishes itself first, and the sync finds nothing left.
         return {
           status: 202,
           outcome: "merged_awaiting_publication",
@@ -327,5 +366,22 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
     client: (token) => createGitLabClient({ token }),
     now: () => new Date(),
     runInScope: (scope, fn) => runInTenantScope(scope, fn),
+    async requestSync(scope, reason) {
+      // A request that cannot be sent must not fail the delivery: GitLab
+      // retries a 5xx and disables a hook that keeps failing, which would
+      // also stop the merge request events that reject closed proposals. The
+      // five-minute sweep syncs the workspace anyway.
+      try {
+        const { requestSteeringSync } = await import(
+          "./context.steering.sync.request"
+        );
+        await requestSteeringSync([scope], reason);
+      } catch (err) {
+        logger.error(
+          { err, workspaceId: scope.workspaceId, reason },
+          "gitlab.webhook: could not request a steering sync; the scheduled sweep will run it",
+        );
+      }
+    },
   };
 }
