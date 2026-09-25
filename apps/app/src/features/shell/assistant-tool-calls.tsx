@@ -36,6 +36,8 @@ const copyable = `${mono} select-all break-all text-foreground`;
 /**
  * A tool's name as a person reads it: `list_runs` reads "List runs".
  * The raw name stays in the call's detail.
+ *
+ * @internal Exported for its unit test.
  */
 export function toolLabel(name: string): string {
   const words = name.split(/[_.]+/).filter((word) => word.length > 0);
