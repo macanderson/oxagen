@@ -793,33 +793,33 @@ function wire(db: FakeDb): void {
                     deviceKeyFingerprint: row["deviceKeyFingerprint"],
                   }))
                 : tableName(table) === "sessions"
-                ? // The ownership read before any body is written: which
-                  // host opened each session the batch names, and its
-                  // recorded head for a successor's chain test.
-                  [...db.sessions.values()].map((row) => ({
-                    sessionUuid: row["sessionUuid"],
-                    hostId: row["hostId"],
-                    seqCount: row["seqCount"],
-                    lastHash: row["lastHash"],
-                  }))
-                : tableName(table) === "contained_launches"
-                  ? db.containedLaunches
-                  : tableName(table) === "context_promotions"
-                    ? [{ ledger: 0, steering: 0 }]
-                    : tableName(table) === "session_files"
-                      ? // The rollup reads this session's existing rows to keep
-                        // one file on one row across batches, so the fixture
-                        // holds them rather than answering with another table's
-                        // shape.
-                        db.files.map((row) => ({
-                          path: row["path"],
-                          repoRelativePath: row["repoRelativePath"],
-                        }))
-                      : db.gatewayChains.map((row) => ({
-                          chain: row.chainSessionUuid,
-                          at: row.lastSeenAt,
-                          genesisHash: row.chainGenesisHash,
-                        })),
+                  ? // The ownership read before any body is written: which
+                    // host opened each session the batch names, and its
+                    // recorded head for a successor's chain test.
+                    [...db.sessions.values()].map((row) => ({
+                      sessionUuid: row["sessionUuid"],
+                      hostId: row["hostId"],
+                      seqCount: row["seqCount"],
+                      lastHash: row["lastHash"],
+                    }))
+                  : tableName(table) === "contained_launches"
+                    ? db.containedLaunches
+                    : tableName(table) === "context_promotions"
+                      ? [{ ledger: 0, steering: 0 }]
+                      : tableName(table) === "session_files"
+                        ? // The rollup reads this session's existing rows to keep
+                          // one file on one row across batches, so the fixture
+                          // holds them rather than answering with another table's
+                          // shape.
+                          db.files.map((row) => ({
+                            path: row["path"],
+                            repoRelativePath: row["repoRelativePath"],
+                          }))
+                        : db.gatewayChains.map((row) => ({
+                            chain: row.chainSessionUuid,
+                            at: row.lastSeenAt,
+                            genesisHash: row.chainGenesisHash,
+                          })),
             leftJoin: () => ({ where: async () => [] }),
           }),
         }),
@@ -1966,24 +1966,137 @@ describe("ingest_tacho_events", () => {
     expect(db.controlCommands[0]?.["outcome"]).toBe("sent");
   });
 
-  it("tries the spend counter again before calling its write lost", async () => {
-    // A retried batch folds these frames as already recorded, so a spend
-    // write lost here is written by no later request.
-    const db = fakeDb();
-    wire(db);
-    mocks.recordSpend
-      .mockRejectedValueOnce(new Error("redis blip"))
-      .mockRejectedValueOnce(new Error("redis blip"));
-    await tachoEventsIngestHandler(batch(session()), CONTEXT);
-    expect(mocks.recordSpend).toHaveBeenCalledTimes(3);
-    expect(mocks.loggerError).not.toHaveBeenCalled();
+  describe("the spend counter (#3825)", () => {
+    /**
+     * Make the fake's transactions roll back: every table the fake holds is
+     * snapshotted when a transaction opens and restored if its callback
+     * throws. Returns the order of each transaction's writes and commits, and
+     * the transaction objects handed out.
+     */
+    function transactional(db: FakeDb): {
+      order: string[];
+      txs: unknown[];
+    } {
+      const order: string[] = [];
+      const txs: unknown[] = [];
+      const inner = mocks.withTenantDb.getMockImplementation() as (
+        fn: (tx: unknown) => Promise<unknown>,
+      ) => Promise<unknown>;
+      mocks.withTenantDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          // Rows are copied one level deep: the fake writes whole rows or
+          // top-level fields, and some values are SQL objects that cannot be
+          // cloned.
+          const rows = <T extends object>(list: T[]): T[] =>
+            list.map((row) => ({ ...row }));
+          const saved = {
+            sessions: new Map(
+              [...db.sessions].map(([key, row]) => [key, { ...row }]),
+            ),
+            models: rows(db.models),
+            files: rows(db.files),
+            fileSets: rows(db.fileSets),
+            commands: rows(db.commands),
+            controlCommands: rows(db.controlCommands),
+            updates: rows(db.updates),
+            hosts: rows(db.hosts),
+          };
+          try {
+            const result = await inner((tx) => {
+              txs.push(tx);
+              return fn(tx);
+            });
+            order.push("commit");
+            return result;
+          } catch (err) {
+            Object.assign(db, saved);
+            order.push("rollback");
+            throw err;
+          }
+        },
+      );
+      mocks.recordSpend.mockImplementation(async () => {
+        order.push("spend");
+      });
+      return { order, txs };
+    }
+
+    it("writes the batch's cost inside the ingest transaction, before it commits", async () => {
+      const db = fakeDb();
+      wire(db);
+      const { order, txs } = transactional(db);
+      await tachoEventsIngestHandler(batch(session()), CONTEXT);
+
+      expect(mocks.recordSpend).toHaveBeenCalledOnce();
+      const [args, tx] = mocks.recordSpend.mock.calls[0] ?? [];
+      expect(args).toMatchObject({
+        orgId: CONTEXT.orgId,
+        workspaceId: CONTEXT.workspaceId,
+        micros: 1200n,
+      });
+      // The counter joins the transaction the ingest writes run in, so the
+      // two commit or roll back together.
+      expect(tx).toBeDefined();
+      expect(txs).toContain(tx);
+      const spend = order.indexOf("spend");
+      expect(order.indexOf("commit", spend)).toBeGreaterThan(spend);
+    });
+
+    it("fails the batch when the counter write fails, and the retried batch counts its cost once", async () => {
+      const db = fakeDb();
+      wire(db);
+      const { order } = transactional(db);
+      mocks.recordSpend.mockRejectedValueOnce(new Error("postgres blip"));
+      const events = session();
+
+      // The write fails: the whole batch rolls back, nothing reaches
+      // ClickHouse, and the host is answered with the error it retries on.
+      await expect(
+        tachoEventsIngestHandler(batch(events), CONTEXT),
+      ).rejects.toThrow("postgres blip");
+      expect(order).toContain("rollback");
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+      expect(mocks.loggerError).not.toHaveBeenCalledWith(
+        expect.anything(),
+        "tacho.events.ingest: spend counter write failed",
+      );
+
+      // The host sends the same batch again. Nothing it was folded from
+      // committed, so the retry computes the same cost and counts it.
+      await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(mocks.recordSpend).toHaveBeenCalledTimes(2);
+      expect(mocks.recordSpend.mock.calls[1]?.[0]).toMatchObject({
+        micros: 1200n,
+      });
+      expect(mocks.insertTachoEvents).toHaveBeenCalledOnce();
+
+      // A third delivery of the same batch is a re-send of committed frames.
+      // Its cost is already counted, so it adds nothing.
+      await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(mocks.recordSpend).toHaveBeenCalledTimes(2);
+    });
+
+    it("counts a batch once when its ClickHouse append fails after the commit", async () => {
+      // The cost committed with the rows. The host re-sends after the failed
+      // append, and the re-send folds its frames as already recorded.
+      const db = fakeDb();
+      wire(db);
+      transactional(db);
+      mocks.insertTachoEvents.mockRejectedValueOnce(
+        new Error("clickhouse down"),
+      );
+      const events = session();
+      await expect(
+        tachoEventsIngestHandler(batch(events), CONTEXT),
+      ).rejects.toThrow("clickhouse down");
+      await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(mocks.recordSpend).toHaveBeenCalledOnce();
+    });
   });
 
   describe("a successor enrollment (ADR-179)", () => {
     /** The fixture's host, preceded by a revoked enrollment of the same machine. */
-    function withPredecessor(
-      overrides: Record<string, unknown> = {},
-    ): FakeDb {
+    function withPredecessor(overrides: Record<string, unknown> = {}): FakeDb {
       const db = fakeDb();
       db.hosts.push({
         ...(db.hosts[0] as Record<string, unknown>),
@@ -2055,25 +2168,31 @@ describe("ingest_tacho_events", () => {
     it.each([
       ["a live predecessor", { status: "active" }],
       ["another machine", { deviceKeyFingerprint: `sha256:${"e".repeat(64)}` }],
-      ["another workspace", { workspaceId: "33333333-3333-4333-8333-333333333333" }],
-    ])("refuses the session from %s and writes none of the batch", async (_, overrides) => {
-      const db = withPredecessor(overrides);
-      wire(db);
-      const events = resealed(() => HOST_PUBLIC);
-      heldByPredecessor(db, events);
-      await expect(
-        tachoEventsIngestHandler(
-          {
-            schema: "tacho.batch.v1",
-            host_enrollment_id: HOST_PUBLIC,
-            events: events.slice(3),
-          },
-          CONTEXT,
-        ),
-      ).rejects.toThrow(/session belongs to another host/);
-      expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
-      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
-    });
+      [
+        "another workspace",
+        { workspaceId: "33333333-3333-4333-8333-333333333333" },
+      ],
+    ])(
+      "refuses the session from %s and writes none of the batch",
+      async (_, overrides) => {
+        const db = withPredecessor(overrides);
+        wire(db);
+        const events = resealed(() => HOST_PUBLIC);
+        heldByPredecessor(db, events);
+        await expect(
+          tachoEventsIngestHandler(
+            {
+              schema: "tacho.batch.v1",
+              host_enrollment_id: HOST_PUBLIC,
+              events: events.slice(3),
+            },
+            CONTEXT,
+          ),
+        ).rejects.toThrow(/session belongs to another host/);
+        expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
+        expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+      },
+    );
 
     it("refuses frames naming an enrollment the host does not succeed", async () => {
       const db = withPredecessor({ status: "active" });
@@ -2110,7 +2229,10 @@ describe("ingest_tacho_events", () => {
     it("accepts a successor's re-sent frames and leaves the session where it is", async () => {
       const db = withPredecessor();
       wire(db);
-      heldByPredecessor(db, resealed(() => PREDECESSOR_PUBLIC));
+      heldByPredecessor(
+        db,
+        resealed(() => PREDECESSOR_PUBLIC),
+      );
       // A seq-0 frame with a valid genesis link and its own correct hash,
       // but not the frame the predecessor recorded. It carries nothing past
       // the recorded head, so it cannot prove the successor continues it.

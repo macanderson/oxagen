@@ -496,6 +496,12 @@ export interface CliDeps {
    * same, and `CursorFacts.app` is how that machine says so.
    */
   cursor: () => CursorFacts;
+  /**
+   * The Cursor editor on disk alone, without the PATH lookup `cursor` runs.
+   * `tacho status` reads it, because a login-shell lookup there would cost up
+   * to ten seconds on every call. Defaults to `cursorAppFacts`.
+   */
+  cursorEditor?: () => AppFacts;
   stella: () => HarnessFacts;
   /**
    * Whether Claude Desktop is installed. A connected app is a GUI bundle, not
@@ -1025,6 +1031,7 @@ export function defaultCliDeps(
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),
     cursor: () => cursorFacts(exec, platform, env, home),
+    cursorEditor: () => cursorAppFacts(platform, home, env),
     stella: () => harnessFacts(exec, "stella", platform, env, home),
     claudeDesktop: () => claudeDesktopFacts(platform, home, env),
     runtime: runtimeCommands(undefined, env, undefined, platform),

@@ -105,6 +105,26 @@ signal is answering its own question.
 The check would rest on another program's version output, which is the
 assumption that produced the wrong `host.json` in the first place.
 
+### A Cursor session carries no harness pid
+
+*Added 2026-09-25 (#3989).* The daemon seals a session within one sweep of
+its harness process exiting, and an operator's `cancel` sends that process
+`SIGTERM` (`collector/inbox.ts`). Codex and Stella hooks pass the harness pid
+as `TACHO_HARNESS_PID`. A Cursor hook passes none. In Cursor 3.22.7 the only
+code that runs a command hook is the agent-host daemon
+(`extensions/cursor-agent-host/dist/agent-host-daemon/dist/bin/daemon.cjs`,
+`CliHooksExecutor.executeCommandScript`, which spawns `$SHELL -c`). The
+extension starts that daemon detached, reuses one already listening on its
+socket, and one executor tracks many conversations. A pid found by walking up
+from the hook would therefore outlive every conversation it serves, and a
+`cancel` of one conversation would stop them all. A Cursor session ends on
+Cursor's own `sessionEnd`, or on the six-hour idle sweep, with ADR-159's
+twelve-hour close behind it.
+
+**Rejected: pass the daemon's pid for liveness only.** The daemon can be
+stopped and started again while its conversations continue, so its exit is
+not a conversation's end either.
+
 ### A bridge is committed as a symlink and materialized on checkout
 
 The symlinks stay the committed form, because they are the one form that keeps

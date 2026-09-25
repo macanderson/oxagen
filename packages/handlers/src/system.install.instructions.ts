@@ -97,10 +97,12 @@ function stepsForCursor(_wsSlug: string | undefined): InstallStep[] {
       label: "Generate an API key",
       command: API_KEY_URL,
     },
+    // No command: this capability takes no platform, and the file opens with
+    // a different program on macOS, Linux, and Windows. The label names the
+    // path on each so the reader opens it with whatever editor they use.
     {
       label:
-        "Open your Cursor MCP config: ~/.cursor/mcp.json for every project, or .cursor/mcp.json for this one",
-      command: "open ~/.cursor/mcp.json",
+        "Open your Cursor MCP config in any editor: ~/.cursor/mcp.json for every project (%USERPROFILE%\\.cursor\\mcp.json on Windows), or .cursor/mcp.json in the project for this one only",
     },
     {
       label: `Add the Oxagen server entry (merge into existing config) and replace ${JSON_API_KEY_PLACEHOLDER} with the key you just generated`,
@@ -147,10 +149,11 @@ function stepsForClaudeDesktop(_wsSlug: string | undefined): InstallStep[] {
       label: "Generate an API key",
       command: API_KEY_URL,
     },
+    // No command, for the reason the Cursor step gives: Claude Desktop runs
+    // on macOS and Windows, and `open` exists only on macOS.
     {
-      label: "Open your Claude Desktop config file",
-      command:
-        "open ~/Library/Application\\ Support/Claude/claude_desktop_config.json",
+      label:
+        "Open your Claude Desktop config in any editor: ~/Library/Application Support/Claude/claude_desktop_config.json on macOS, %APPDATA%\\Claude\\claude_desktop_config.json on Windows",
     },
     {
       label: `Add the Oxagen server entry (merge into existing config) and replace ${JSON_API_KEY_PLACEHOLDER} with the key you just generated`,
