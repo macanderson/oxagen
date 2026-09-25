@@ -34,10 +34,13 @@ body:
     attributes:
       label: Definition of done
       description: Checklist the closer must verify line-by-line (SCR-003). One issue carries the whole feature; add items rather than filing sub-issues.
+      # No "CI green" item (#4200). Branch protection already blocks a merge
+      # while CI is red. The `dod` check is part of CI, so a box about CI can
+      # never be ticked while `dod` reads it. `scr-dod-check.mjs` skips one if
+      # an issue still carries it.
       value: |
         - [ ] Contract registered with API, MCP, CLI and UI parity (`pnpm check:manifest` clean)
         - [ ] Scoped tests added and passing; user-facing changes have E2E coverage
-        - [ ] Full CI green
         - [ ] `docs/capabilities/` and code comments updated; an ADR for any architectural choice (SCR-002)
         - [ ] Residue fixed in the same PR, or filed with the `triage` label only
     validations:
