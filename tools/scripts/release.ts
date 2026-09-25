@@ -25,8 +25,16 @@
  *                 what the release leads with; the model opens the notes with
  *                 it, as far as the diff supports it
  *   --no-notes    skip the Anthropic release-notes generation (plain changelog)
- *   --no-git      skip the commit + tag
+ *   --no-git      skip the commit + tag. Without it, the tree must be clean
+ *                 before the run starts, and the commit stages only the files
+ *                 this script wrote, so nothing else in the tree can ride along
  *   --no-npm      skip the CLI build + npm publish (even if NPM_TOKEN is available)
+ *   --written-list <path>
+ *                 write the repo-relative paths of every file this run wrote,
+ *                 one per line, to <path> (keep it outside the tree). A caller
+ *                 that passes --no-git and commits itself stages exactly these
+ *                 with `git add -- <paths>`, never `git add -A`. The tree must
+ *                 be clean before the run starts, as it must without --no-git
  *   --install-links
  *                 end the notes with an "## Install" section that links every
  *                 installer and executable of this version by its published
@@ -68,6 +76,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { argv, env, exit } from "node:process";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import kleur from "kleur";
 import { formatError } from "./lib/format-error";
 import { npmCfg, publishCliToNpm } from "./lib/npm-cli";
@@ -93,6 +102,12 @@ import {
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const NOTES_MAX_TOKENS = 8192; // headroom so large releases don't truncate mid-section
+/**
+ * How long one gateway call may take before it is aborted. A hung gateway
+ * otherwise holds the release open indefinitely; the abort throws, and
+ * generateNotes falls back to commit-log notes.
+ */
+export const GATEWAY_TIMEOUT_MS = 120_000;
 
 type Bump = "patch" | "minor" | "major";
 
@@ -106,6 +121,7 @@ interface Options {
   git: boolean;
   npm: boolean;
   installLinks: boolean;
+  writtenList: string | null;
 }
 
 // ── small utilities ──────────────────────────────────────────────────────────
@@ -126,12 +142,77 @@ function git(args: string[]): string {
   }).trim();
 }
 
+/** Like `git`, but keeps leading whitespace, which porcelain status needs. */
+function gitRaw(args: string[]): string {
+  return execFileSync("git", args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+}
+
 function gitSafe(args: string[]): string | null {
   try {
     return git(args);
   } catch {
     return null;
   }
+}
+
+// ── the release commit's contents ───────────────────────────────────────────
+
+/**
+ * Throw when `git status --porcelain` reports anything. The release commit
+ * must carry the bump and the notes and nothing else, so a modified, staged or
+ * untracked file (a stray `.env` copy, a scratch file) stops the run before
+ * any file is written. The message names every dirty path.
+ */
+export function assertCleanTree(porcelain: string): void {
+  const dirty = porcelain
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => line.slice(3));
+  if (dirty.length === 0) return;
+  throw new Error(
+    `the tree has uncommitted changes. Commit or discard them first, because the release commit carries only the bump and the notes:\n${dirty.map((p) => `  ${p}`).join("\n")}`,
+  );
+}
+
+/**
+ * The text `--written-list` writes: the paths from `releaseFilesToStage`, one
+ * per line, ending in a newline. A path holding a newline would split into two
+ * entries, so it is refused rather than written.
+ */
+export function formatWrittenList(
+  root: string,
+  written: readonly string[],
+): string {
+  const paths = releaseFilesToStage(root, written);
+  const bad = paths.find((p) => p.includes("\n"));
+  if (bad !== undefined)
+    throw new Error(`cannot list a path that holds a newline: ${bad}`);
+  return paths.map((p) => `${p}\n`).join("");
+}
+
+/** Read a `--written-list` file back into its paths. */
+export function parseWrittenList(text: string): string[] {
+  return text.split("\n").filter((line) => line !== "");
+}
+
+/**
+ * The paths the release commit stages: the manifests the bump rewrote and the
+ * notes files, relative to the repository root, each once. Only files this
+ * script wrote are listed, so `git add` never picks up an unrelated file.
+ */
+export function releaseFilesToStage(
+  root: string,
+  written: readonly string[],
+): string[] {
+  const prefix = root.endsWith("/") ? root : `${root}/`;
+  const relative = written.map((p) =>
+    p.startsWith(prefix) ? p.slice(prefix.length) : p,
+  );
+  return [...new Set(relative)];
 }
 
 function bumpVersion(current: string, bump: Bump): string {
@@ -202,9 +283,12 @@ function collectHistory(
 
 /** Vercel AI Gateway (AI_GATEWAY_API_KEY): the platform's single AI path. Hits
  * an Anthropic Claude model (OXAGEN_LLM_BALANCED) via the gateway's
- * OpenAI-compatible endpoint. Returns null when no gateway key is configured. */
-async function completeViaGateway(
+ * OpenAI-compatible endpoint. Returns null when no gateway key is configured.
+ * The request and its body read are aborted after `timeoutMs`, which rejects
+ * with a `TimeoutError`. */
+export async function completeViaGateway(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  timeoutMs: number = GATEWAY_TIMEOUT_MS,
 ): Promise<string | null> {
   const key = deQuote(env.AI_GATEWAY_API_KEY);
   if (!key) return null;
@@ -221,6 +305,7 @@ async function completeViaGateway(
       temperature: 0.2,
       messages,
     }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`gateway ${res.status} ${await res.text()}`);
   const json = (await res.json()) as {
@@ -357,7 +442,7 @@ function writeNotes(
   version: string,
   notes: ReleaseNotes,
   install: string | null,
-): { changelog: string; release: string; page: string } {
+): { changelog: string; release: string; page: string; meta: string } {
   const entry = releaseBody(version, notes, install);
   const releasesDir = join(ROOT, "releases");
   mkdirSync(releasesDir, { recursive: true });
@@ -395,7 +480,7 @@ function writeNotes(
     meta,
     releasesMeta(existsSync(meta) ? readFileSync(meta, "utf8") : null, version),
   );
-  return { changelog: changelogFile, release: releaseFile, page };
+  return { changelog: changelogFile, release: releaseFile, page, meta };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -412,6 +497,7 @@ function parseArgs(): Options {
     git: true,
     npm: true,
     installLinks: false,
+    writtenList: null,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -428,6 +514,9 @@ function parseArgs(): Options {
     else if (a.startsWith("--set=")) opts.setVersion = a.slice("--set=".length);
     else if (a === "--from") opts.fromRef = args[++i] ?? null;
     else if (a.startsWith("--from=")) opts.fromRef = a.slice("--from=".length);
+    else if (a === "--written-list") opts.writtenList = args[++i] ?? null;
+    else if (a.startsWith("--written-list="))
+      opts.writtenList = a.slice("--written-list=".length);
     else if (a === "--highlight") opts.highlight = args[++i] ?? null;
     else if (a.startsWith("--highlight="))
       opts.highlight = a.slice("--highlight=".length);
@@ -444,7 +533,7 @@ async function main(): Promise<void> {
   if (!opts.bump && !opts.setVersion) {
     console.error(
       kleur.red(
-        "[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--highlight <text>] [--dry-run] [--no-notes|--no-git|--no-npm]",
+        "[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--highlight <text>] [--dry-run] [--no-notes|--no-git|--no-npm] [--written-list <path>]",
       ),
     );
     exit(2);
@@ -468,6 +557,20 @@ async function main(): Promise<void> {
     ),
   );
 
+  // The commit must hold only what this run writes, so check before the first
+  // write. That commit is this script's own, or, with --written-list, the
+  // caller's (release-publish.ts, release.yml). A dry run writes nothing and
+  // only warns.
+  if (opts.git || opts.writtenList !== null) {
+    try {
+      assertCleanTree(gitRaw(["status", "--porcelain"]));
+    } catch (err) {
+      if (!opts.dryRun) throw err;
+      console.log(kleur.yellow(`  ${formatError(err)} (dry run: continuing)`));
+    }
+  }
+  const toStage: string[] = [];
+
   // Every manifest, whatever its language: package.json, Cargo.toml, the
   // crate's Cargo.lock entry (tools/scripts/lib/versions.ts). CI's
   // check:versions fails when any of them drifts from the root.
@@ -482,6 +585,7 @@ async function main(): Promise<void> {
     }
   } else {
     const written = setAllVersions(ROOT, next);
+    for (const m of written) toStage.push(m.file);
     console.log(kleur.bold(`  Manifests (${written.length}):`));
     for (const m of written)
       console.log(
@@ -504,6 +608,12 @@ async function main(): Promise<void> {
     notes = await generateNotes(history);
     if (!opts.dryRun) {
       const written = writeNotes(next, notes, install);
+      toStage.push(
+        written.release,
+        written.changelog,
+        written.page,
+        written.meta,
+      );
       console.log(
         kleur.green(
           `    ✓ ${written.release.replace(ROOT + "/", "")}  +  CHANGELOG.md  +  ${written.page.replace(ROOT + "/", "")}`,
@@ -524,10 +634,14 @@ async function main(): Promise<void> {
     }
   }
 
+  if (opts.writtenList !== null && !opts.dryRun) {
+    writeFileSync(opts.writtenList, formatWrittenList(ROOT, toStage));
+  }
+
   // ── Git commit + tag ──
   if (opts.git && !opts.dryRun) {
     console.log(kleur.bold("\n  Git:"));
-    git(["add", "-A"]);
+    git(["add", "--", ...releaseFilesToStage(ROOT, toStage)]);
     git(["commit", "-m", `chore(release): v${next}`]);
     const tagBody =
       notes === null
@@ -562,9 +676,17 @@ async function main(): Promise<void> {
   );
 }
 
-main().catch((err) => {
-  console.error(
-    kleur.red(err instanceof Error ? (err.stack ?? err.message) : String(err)),
-  );
-  exit(1);
-});
+// Run only when invoked as a script, so a test can import the helpers above.
+const invokedDirectly =
+  argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(resolve(argv[1])).href;
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(
+      kleur.red(
+        err instanceof Error ? (err.stack ?? err.message) : String(err),
+      ),
+    );
+    exit(1);
+  });
+}
