@@ -68,6 +68,15 @@ describe("skill source identity", () => {
     );
   });
 
+  it("keeps a trailing comment and replaces a quoted name holding #", () => {
+    expect(renameSkillSource("---\nname: old # keep\n---\n# Body", "new")).toBe(
+      "---\nname: new # keep\n---\n# Body",
+    );
+    expect(
+      renameSkillSource('---\nname: "a # b"\nv: 1\n---\n# Body', "new"),
+    ).toBe("---\nname: new\nv: 1\n---\n# Body");
+  });
+
   it("adds a missing name inside existing frontmatter", () => {
     expect(renameSkillSource("---\nversion: 1.0.0\n---\n# Body", "new")).toBe(
       "---\nname: new\nversion: 1.0.0\n---\n# Body",

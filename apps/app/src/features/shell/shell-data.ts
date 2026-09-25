@@ -61,8 +61,10 @@ export type ShellData = {
    * The bell's feed for the organization's first workspace, the one the
    * sidebar points at on an organization page. A workspace page replaces it
    * with its own (`<ShellWorkspace>`): `list_notifications` is workspace-scoped
-   * and answers the organization's rows plus that workspace's. Null when the
-   * organization has no workspace to read it in.
+   * and answers the organization's rows plus that workspace's. When the viewer
+   * can open no workspace it is read in the organization's scope and holds the
+   * organization's rows alone. `shellSource` always reads it; the type keeps
+   * null for chrome rendered without that read.
    */
   feed: Read<NotificationFeed> | null;
   /**

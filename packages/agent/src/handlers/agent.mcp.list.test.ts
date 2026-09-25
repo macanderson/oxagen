@@ -81,6 +81,40 @@ describe("agent.mcp.list handler", () => {
     expect(s.toolCount).toBe(2);
   });
 
+  it("redacts userinfo from a stored endpoint address (#3720)", async () => {
+    // A row written before the register guard can carry a username and
+    // password in endpoint_url. The list must not return either in the clear.
+    mocks.selectResult.mockReturnValueOnce([
+      {
+        publicId: "mcp_4",
+        name: "legacy-server",
+        transportType: "streamable-http",
+        endpointUrl: "https://admin:hunter2@mcp.example.com/mcp",
+        healthStatus: "healthy",
+        lastHealthcheckAt: null,
+        discoveredTools: [],
+      },
+      {
+        publicId: "mcp_5",
+        name: "key-in-username",
+        transportType: "sse",
+        endpointUrl: "https://sk-live-secret@mcp.example.com/sse",
+        healthStatus: "unknown",
+        lastHealthcheckAt: null,
+        discoveredTools: [],
+      },
+    ]);
+    const result = await agentMcpListHandler({}, CTX);
+    const [withPassword, withKey] = result.servers;
+    expect(withPassword!.endpointUrl).toBe("https://***@mcp.example.com/mcp");
+    expect(withKey!.endpointUrl).toBe("https://***@mcp.example.com/sse");
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("admin");
+    expect(serialized).not.toContain("hunter2");
+    expect(serialized).not.toContain("sk-live-secret");
+    expect(agentMcpList.output.safeParse(result).success).toBe(true);
+  });
+
   it("returns a plugin-installed row (sse, unknown) that the contract output accepts", async () => {
     // plugin.set_enabled.ts inserts freshly enabled servers with transport
     // 'sse' and health 'unknown'. The kernel parses handler output against

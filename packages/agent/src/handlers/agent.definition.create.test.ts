@@ -168,4 +168,41 @@ describe("agent.definition.create handler", () => {
     // No principal_role_assignments insert was attempted.
     expect(fake.mutations.insert).toBe(3);
   });
+
+  it("persists config.budget into the version row (#3743)", async () => {
+    // The fake tx does not record values, so wrap insert to capture them.
+    const tx = fake.tx as { insert: (table: unknown) => unknown };
+    const realInsert = tx.insert;
+    const inserted: Array<Record<string, unknown>> = [];
+    tx.insert = (table) => {
+      const chain = realInsert(table) as object;
+      return new Proxy(chain, {
+        get(target, prop) {
+          if (prop === "values")
+            return (values: Record<string, unknown>) => {
+              inserted.push(values);
+              return chain;
+            };
+          return Reflect.get(target, prop);
+        },
+      });
+    };
+    try {
+      fake.enqueue(
+        [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }],
+        [{ id: "prn-uuid" }],
+        [],
+        [{ version: 1 }],
+      );
+      const budget = { per_run_micros: 2_500_000, per_day_micros: 10_000_000 };
+      await agentDefinitionCreateHandler(
+        { ...INPUT, config: { ...CONFIG, budget } },
+        CTX,
+      );
+      const version = inserted.find((values) => "config" in values);
+      expect(version?.["config"]).toMatchObject({ budget });
+    } finally {
+      tx.insert = realInsert;
+    }
+  });
 });

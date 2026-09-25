@@ -1,6 +1,6 @@
 # @oxagen/agent
 
-`@oxagen/agent` is the governed-agent runtime library. It turns capability contracts and registered MCP servers into tools a model may call, applies the per-call governance gates inside each tool, runs the in-app governance agent's turn on Stella's headless engine, and implements the `agent.*` capability handlers.
+`@oxagen/agent` is the governed-agent runtime library. It turns capability contracts and registered MCP servers into tools a model may call, applies the per-call governance gates inside each tool, runs a turn of stella, the in-app agent, on Stella's headless engine, and implements the `agent.*` capability handlers.
 
 ## Boundary
 

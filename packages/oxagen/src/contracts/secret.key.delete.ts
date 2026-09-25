@@ -8,7 +8,7 @@ export const secretKeyDelete = registerCapability({
     "Soft-delete a vault secret key and hard-remove all of its per-environment overrides.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "high", category: "secret" },
+  agent: { requiresApproval: true, riskLevel: "high", category: "secret" },
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "high",

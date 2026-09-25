@@ -175,7 +175,6 @@ export {
   enhancePromptIfInsufficient,
   SLASH_COMMANDS,
   matchSlashCommands,
-  slashCommandsPromptSection,
 } from "./prompts";
 export type {
   PromptKey,
