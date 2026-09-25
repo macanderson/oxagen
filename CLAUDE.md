@@ -112,33 +112,34 @@ The current assistant flyout and the retained API chat transport are separate su
 
 ## Issue titles
 
-After triage, an issue title says its priority, where it bites, and what is wrong, in
-that order, so a backlog reads without opening anything:
+After triage, an issue title gives its priority, kind, size, and area, then the problem
+in plain words, so a person can read the backlog without opening an issue:
 
 ```
-P<n> · <area>/<surface> · <what is wrong or missing>
+P<n> <Kind> <Size> (<Area>): <statement>
+P0 Bug XS (CI): Main stays red because the coverage step reads a stale lockfile
+P1 Feature L (Steering): Bulk import memories from Markdown files
 ```
 
-Before triage, use `Queued · <area>/<surface> · <what is wrong or missing>` and apply
-only `triage`. The area and surface in the title are provisional. The triage identity
-replaces `Queued` with the assigned priority and aligns the area with its label.
+Before triage, use `Queued <Kind> (<Area>): <statement>` and apply only `triage`. The
+kind and area in that title are the creator's guess. The triage pass (`/triage-issues`)
+replaces `Queued` with the priority, adds the size, and corrects the kind and area.
+Mac replaced the older `P<n> · <area>/<surface> · <statement>` shape on 2026-09-25.
 
-- **`P<n>`** repeats the issue's `P0`-`P4` label. The label is the source of truth; the
-  prefix is what a list, a search result, and a notification show. Retitle when the triage
-  identity assigns or changes the priority.
-- **`<area>`** is the `area:` label without its prefix: `app`, `surfaces`, `kernel`,
-  `auth`, `billing`, `knowledge`, `evidence`, `data`, `platform`, `ops`.
-- **`<surface>`** is where a person meets the defect: an app page (`Fleet`, `Run`,
-  `Mandates`, `Agents`, `Tools`, `Steering`, `Spend`, `Skills`, `Organization`,
-  `Repositories`, `Shell`), a wrapped surface (`API`, `MCP`, `CLI`, `Desktop`,
-  `Gateway`, `Tacho`), a store (`Postgres`, `ClickHouse`, `Neo4j`), or an operational
-  surface (`CI`, `Deploy`, `Migrations`, `Docs`). Join two with `+` when the change
-  lands on both. Omit the segment entirely when the area is the surface.
-- **The statement** is a sentence about the system, not a task name. "Approving a parked
-  tool call never runs it" beats "Fix approvals". Follow `clear-prose`.
-- **Residue issues** keep the same shape and carry their PR in a trailing
-  `(residue #<PR>)`, which replaces the older `Residue from #<PR>:` prefix. List every
-  PR when a residue issue carries more than one.
+- **Each prefix part copies a label.** The label is the source of truth. The title is
+  what a list, a search result, and a notification show. `P<n>` is the `P0`-`P4` label.
+  `<Kind>` is `Bug` (`kind:defect`), `Gap`, `Feature`, or `Debt`. `<Size>` is the
+  `size/` label. `<Area>` is the title name of the one `area:` label. Retitle whenever
+  one of those labels changes.
+- **The statement** says what goes wrong for a bug, and what a person will be able to do
+  for a gap or feature. Write it for a reader who has never opened the codebase: no
+  function names, paths, or internal terms. Aim for 80 characters and never exceed 100.
+  Follow `clear-prose`, and do not write "Mission Control" (ADR-113).
+- **Residue issues** carry their PR in a trailing `(residue #<PR>)`. List every PR when a
+  residue issue carries more than one.
+
+`.claude/commands/triage-issues.md` holds the full rules: the area table, how to choose
+each label, and the procedure. Run `/triage-issues` to work the `triage` queue.
 
 ## Issues and labels
 
@@ -172,17 +173,21 @@ its value. Keep those values current, then copy them into the fields when availa
 
 Size labels stay: they size the change, while estimated agent minutes sizes the work.
 
-The triage scheme uses one `kind:` and one `job:` per issue:
+A triaged issue carries one priority, one `kind:`, one `size/`, one `area:`, and one `job:` label:
 
 | Dimension | Values |
 |---|---|
 | Kind | `defect`, `gap`, `feature`, `debt` |
 | Job | `govern`, `ground`, `explain`, `meter`, `rate` |
-| Area | `app`, `surfaces`, `kernel`, `auth`, `billing`, `knowledge`, `evidence`, `data`, `platform`, `ops` |
-| Pillar | `stability`, `reliability`, `maintainability`, `innovation`, `efficiency`, `performance` |
-| Need | `decision`, `rig` |
+| Area | `fleet`, `runs`, `mandates`, `agents`, `tools`, `steering`, `skills`, `spend`, `billing`, `organization`, `auth`, `onboarding`, `repositories`, `stella`, `app-shell`, `tacho`, `desktop`, `gateway`, `api`, `mcp`, `cli`, `database`, `ci`, `deploy`, `docs`, `compliance` |
+| Pillar | one or two of `stability`, `reliability`, `maintainability`, `innovation`, `efficiency`, `performance` |
+| Need | `decision`, `rig`, when they apply |
 
-A missing part of an existing spec or implementation is a gap. A feature introduces new behavior with a rationale against `docs/VISION.md`. A decision belongs in an ADR; use `needs:decision` only when it blocks a concrete fix. Read `gh label list` for current labels and descriptions.
+The area names where a person meets the problem, not the package that holds the code. Add `security` when the issue involves credentials, secrets, tenant isolation, access control, or personal data.
+
+A missing part of an existing spec or implementation is a gap. A feature introduces new behavior with a rationale against `docs/VISION.md`. A decision belongs in an ADR. Use `needs:decision` only when the body asks the maintainer a specific question and the work waits on the answer. Read `gh label list` for current labels and descriptions.
+
+Retired on 2026-09-25, so do not apply them: `build-time:*`, `model:tier-*`, `schema-change` (PRs use `migration-required`), and the code-owner areas `area:app`, `area:data`, `area:evidence`, `area:kernel`, `area:knowledge`, `area:ops`, `area:platform`, and `area:surfaces`.
 
 `check:manifest:tickets` and `e2e:failure-ticket` still target Linear and no-op without `LINEAR_API_KEY`. Issue #2980 tracks their move to GitHub. `linear-release.yml` publishes release notes and is separate from issue tracking.
 
