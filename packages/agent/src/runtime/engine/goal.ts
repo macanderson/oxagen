@@ -1,6 +1,6 @@
 /**
  * A goal-shaped turn: the in-app agent works in rounds, and after each round
- * a verifier judges the transcript against a goal the caller stated (ADR-XXX;
+ * a verifier judges the transcript against a goal the caller stated (ADR-177;
  * the in-app agent spec, §6).
  *
  * The engine owns the loop. `goal` on `POST /v1/turns` makes the turn a goal

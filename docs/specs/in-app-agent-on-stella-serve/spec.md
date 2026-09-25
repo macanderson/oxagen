@@ -238,7 +238,7 @@ Shipped with #2968's backend:
 - `ask_assistant` as the turn's contract, with `POST /chat/stream` as its
   streaming adapter; `get_assistant_engine` as the engine-down read.
 
-Shipped with #4175 (ADR-XXX):
+Shipped with #4175 (ADR-177):
 
 - The goal-shaped turn. `ask_assistant` takes an optional `goal`, which the
   turn sends to the engine as `GoalSpec`. The verifier's calls arrive with the

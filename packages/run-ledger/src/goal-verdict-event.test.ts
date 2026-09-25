@@ -1,6 +1,6 @@
 /**
  * `verification.goal_verdict`: one round's verdict from the engine's goal
- * verifier, as the in-app agent's recorder writes it (ADR-XXX). The payload
+ * verifier, as the in-app agent's recorder writes it (ADR-177). The payload
  * is receipt metadata only; the goal and the reasoning ride the frame's body.
  */
 import { describe, expect, it } from "vitest";

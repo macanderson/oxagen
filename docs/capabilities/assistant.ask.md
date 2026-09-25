@@ -47,7 +47,7 @@ The run is admitted on the `chat` (SSE) or `api-chat` (API, MCP) surface, and `l
 
 ## Goal-shaped turns
 
-A turn with a `goal` is judged (ADR-XXX). The engine works in rounds, and after each round an independent verifier reads the transcript and rules whether the goal is met. The verifier's model calls arrive with the `verdict` role and are answered on a different tier from the worker's. A met goal ends the turn and the reply is the worker's last answer. An unmet goal sends the verifier's feedback back to the worker for the next round. A goal still unmet when the rounds run out fails the turn with `engine_aborted`, and nothing is saved as a reply.
+A turn with a `goal` is judged (ADR-177). The engine works in rounds, and after each round an independent verifier reads the transcript and rules whether the goal is met. The verifier's model calls arrive with the `verdict` role and are answered on a different tier from the worker's. A met goal ends the turn and the reply is the worker's last answer. An unmet goal sends the verifier's feedback back to the worker for the next round. A goal still unmet when the rounds run out fails the turn with `engine_aborted`, and nothing is saved as a reply.
 
 The caller sets the goal, never the model: this contract is not on the agent surface. The goal is capped at 2,000 characters because the engine repeats it in every round and in every verifier call, and at 4 rounds because each round is a whole turn plus a verifier and a person is waiting.
 

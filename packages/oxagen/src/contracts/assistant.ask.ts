@@ -127,7 +127,7 @@ export const assistantAsk = registerCapability({
       pageContext: assistantPageContextSchema.nullable().default(null),
       /**
        * Omitted runs one ordinary turn. Present, the engine judges the result
-       * against it (ADR-XXX). Set by the caller, never by the model: this
+       * against it (ADR-177). Set by the caller, never by the model: this
        * contract is not on the agent surface.
        */
       goal: assistantGoalSchema.optional(),

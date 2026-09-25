@@ -1,4 +1,4 @@
-# ADR-XXX: A goal-shaped assistant turn is judged on another tier, and each verdict is on the run
+# ADR-177: A goal-shaped assistant turn is judged on another tier, and each verdict is on the run
 
 - **Status:** Accepted
 - **Date:** 2026-09-25

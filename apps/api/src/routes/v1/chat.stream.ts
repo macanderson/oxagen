@@ -7,6 +7,7 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { CHAT_CONTENT_MAX_CHARS } from "@oxagen/oxagen/contracts/chat.message.send";
 import {
   assistantAsk,
+  assistantGoalSchema,
   assistantPageContextSchema,
 } from "@oxagen/oxagen/contracts/assistant.ask";
 import { capabilityContext } from "../../lib/context";
@@ -30,6 +31,9 @@ const BodySchema = z.object({
   conversationId: z.string().uuid().nullable().default(null),
   // Where the person is (the app's flyout); null for a caller with no page.
   pageContext: assistantPageContextSchema.nullable().default(null),
+  // A goal-shaped turn: the engine's verifier judges each round against it
+  // (ADR-177). Omitted for an ordinary turn, as in ask_assistant's input.
+  goal: assistantGoalSchema.optional(),
   // Per-turn MCP server allowlist. When non-empty, only those servers' tools
   // are loaded for this turn. Omit or pass [] to load all workspace MCPs.
   activeServerIds: z.array(z.string()).optional().default([]),
@@ -151,6 +155,7 @@ chatStreamRoute.post("/", async (c) => {
           conversationId: body.conversationId,
           content: body.content,
           pageContext: body.pageContext,
+          ...(body.goal ? { goal: body.goal } : {}),
         },
         ctx,
         { surface: "api" },
