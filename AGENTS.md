@@ -220,7 +220,7 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 - **The count does not license a worse fix.** A finding you can fix correctly in the fourth round is still better fixed than filed.
 - **Why three.** An automated reviewer reports on each push, so a PR that fixes everything it is told generates new findings by fixing them, and a green, tested change can sit behind cosmetic notes while production carries the defects it fixes. Mac set this bound on 2026-09-19, at three rounds, replacing a first draft of two.
 
-**This rule is repo-local.** SCR-004 still requires fixing findings that can ride the PR. The severity and round rules above define the exception at merge time. This file owns those rules, and `CLAUDE.md` imports them. The standing-decisions block below is the record of those decisions in this repository (ADR-181). Connected repositories are steered from the workspace. They do not carry a copy.
+**This rule is repo-local.** SCR-004 still requires fixing findings that can ride the PR. The severity and round rules above define the exception at merge time. This file owns those rules, and `CLAUDE.md` imports them. The standing-decisions block below is the record of those decisions in this repository. Connected repositories are steered from the workspace. They do not carry a copy.
 
 **Review main integrations for lost fixes (#3237, ADR-110).** A clean three-way squash merge normally preserves changes made only on `main`. In the #3222/#3178 incident, the PR branch had already merged the fix from `main`, but that integration commit discarded the CLI exemption. The squash then landed the damaged branch. Before merging, integrate current `main`, review the resolutions, and check the behavior both sides changed. `pipeline.yml` runs `tools/scripts/check-stale-merge-base.mjs` as an advisory overlap scan for branches behind `main`. Its exact-line signals can include formatting, and an up-to-date result does not inspect earlier integrations. Requiring up-to-date branches remains a maintainer setting decision. It cannot prevent a bad integration resolution. The historical audit and retained evidence are linked from ADR-110. Separately, `pnpm check:contracts` asserts that `packages/iam/src/machine-key-scope.ts` branches on every scope purpose value a live key can carry.
 
@@ -310,10 +310,10 @@ Four harnesses are first-class here: Claude Code, Codex, Cursor and Stella (ADR-
 
 ## Standing decisions — apply without asking
 
-This block is the record of each standing decision in this repository. The
-repository carries no `.oxagen/` directory (ADR-181). A workspace linked to
-it holds the same decisions as context records and steers every connected
-repository from them. A connected repository does not carry a copy.
+This block is the record of each standing decision in this repository. A
+workspace linked to it holds the same decisions as context records and
+steers every connected repository from them. A connected repository does
+not carry a copy.
 
 - **SCR-001 — Tests/builds
   (inner loop):** Never compile or run the full test suite while developing.
