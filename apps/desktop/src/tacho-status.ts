@@ -194,8 +194,10 @@ function tiers(value: unknown): Partial<Record<string, TachoTier>> | undefined {
 /**
  * How a harness gets its model credential (ADR-143). `brokered`: it holds a
  * run token and the gateway supplies the vendor key from custody. Otherwise
- * its own credential crosses the proxy, and `reason` says why when the file
- * said so (a ChatGPT login, a symlinked file, no file yet, nothing to take).
+ * it keeps its own credential, and `reason` says why when the file said so
+ * (a ChatGPT login, a symlinked file, no file yet, nothing to take). Either
+ * one crosses the proxy only while the harness's base URL is routed there
+ * (`TachoModelBaseUrl`).
  */
 export interface TachoModelCredential {
   harness: string;
