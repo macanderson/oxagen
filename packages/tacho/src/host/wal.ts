@@ -531,7 +531,9 @@ export class Wal {
     try {
       this.reportBodyFailure({ session_uuid: session, operation, code });
     } catch {
-      // A diagnostic sink cannot prevent persistence of the sealed event.
+      // A sink that throws must not change what the caller does next. A
+      // failed body append still throws its own error, not the sink's
+      // (ADR-185).
     }
   }
 
