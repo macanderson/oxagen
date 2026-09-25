@@ -329,6 +329,34 @@ export interface SealAttemptInput {
 }
 
 /**
+ * An open run its producer stopped writing to, as the caller read it. The
+ * ledger closes the run only if nothing moved since that read (#3988).
+ */
+export interface AbandonRunInput {
+  runId: string;
+  /** The run's open attempt, or null when the run never got one. */
+  attemptId: string | null;
+  /**
+   * `agent_runs.next_run_seq` as the caller read it, in decimal. Every append
+   * advances it, so an unchanged value means no event landed since the read.
+   */
+  expectedNextRunSeq: string;
+  /** Recorded on the seal as `reason_code`. */
+  reasonCode: string;
+  /** Recorded on `agent_runs.error`. */
+  error: string;
+  /** Identity of the process recording the seal (`sealer_worker_id`). */
+  sealerId: string;
+}
+
+/** A run `abandonRun` closed. */
+export interface AbandonedRun {
+  runId: string;
+  /** The attempt's `abandoned` seal, or null when the run had no attempt. */
+  seal: SealedAttemptHandle | null;
+}
+
+/**
  * Where a same-sequence/different-digest conflict is reported. Injected rather
  * than imported so this package keeps its narrow dependency set and so the sink
  * can be a real @oxagen/compliance writer, an Inngest emit, or a test spy.
@@ -480,6 +508,19 @@ export interface RunStore {
    * and returns the SAME handle, above all the same `submission_id`.
    */
   sealAttempt(input: SealAttemptInput): Promise<SealedAttemptHandle>;
+
+  /**
+   * Close a run whose producer stopped writing to it (#3988): fail the run
+   * and seal its open attempt `abandoned` from the rows already on the
+   * ledger, with no terminal event, because nothing observed the end.
+   *
+   * The run's UPDATE is the compare-and-set. It matches only while the run
+   * is still open, still points at `attemptId`, and still holds the
+   * `next_run_seq` the caller read. A producer that appended or sealed since
+   * the read has moved one of those, so it wins and this answers null. A
+   * second sweep of the same run finds it closed and answers null too.
+   */
+  abandonRun(input: AbandonRunInput): Promise<AbandonedRun | null>;
 
   /**
    * Drive a run straight to a terminal status without a seal, for the one
@@ -1539,6 +1580,40 @@ export function buildFinishRunSql(
 }
 
 /**
+ * Fail a run its producer abandoned, only if it is exactly as the caller read
+ * it: still open, still pointing at the same attempt (or at none), and still
+ * at the same `next_run_seq`. An append moves `next_run_seq` and a seal moves
+ * `status`, both on this row, so a write that committed while this statement
+ * waited on the row lock fails the re-check Postgres makes on the new row
+ * version, and no row returns.
+ *
+ * The statement also takes the run row's lock, the one every append and seal
+ * waits on, so the seal written after it in the same transaction cannot race
+ * either of them.
+ */
+export function buildAbandonRunSql(input: {
+  runId: string;
+  attemptId: string | null;
+  expectedNextRunSeq: string;
+  error: string;
+}): SQL {
+  return sql`
+    UPDATE agent.agent_runs SET
+      status = ${runStatusForTerminal("abandoned")},
+      error = ${input.error},
+      active_attempt_id = NULL,
+      completed_at = now(),
+      updated_at = now()
+    WHERE id = ${input.runId}::uuid
+      AND spec_version = 2
+      AND status IN ('pending', 'running')
+      AND active_attempt_id IS NOT DISTINCT FROM ${input.attemptId}::uuid
+      AND next_run_seq = ${input.expectedNextRunSeq}::bigint
+    RETURNING id
+  `;
+}
+
+/**
  * Look up the public status projection by `public_id`. No org/workspace filter —
  * RLS scopes the read from the caller's tenant session.
  */
@@ -2389,6 +2464,44 @@ export function createPostgresRunStore(
         );
 
         return handle;
+      });
+    },
+
+    async abandonRun(input) {
+      return withTenantDb(async (tx: Tx) => {
+        const moved = (await tx.execute(
+          buildAbandonRunSql(input),
+        )) as unknown as Array<{ id: string }>;
+        // The run moved since the caller read it: its producer appended or
+        // sealed, or another sweep closed it first. Nothing was written.
+        if (moved.length === 0) return null;
+        if (input.attemptId === null) return { runId: input.runId, seal: null };
+
+        // The UPDATE above holds the run row, so no append or seal can land
+        // between it and the seal below.
+        const attempt = assertAttemptWritable(
+          input.attemptId,
+          await lockAttemptInTx(tx, input.attemptId),
+        );
+        const { state, rows } = await readAttemptStateInTx(tx, input.attemptId);
+        const hasEvents = state.eventCount > 0;
+        const seal = await sealAttemptInTx(tx, {
+          attempt,
+          terminalStatus: "abandoned",
+          reasonCode: input.reasonCode,
+          eventCount: state.eventCount,
+          // The seal commits to the head as recorded. No producer observed
+          // the end, so no terminal event is invented for it, and the gaps
+          // carry `unobserved_tail`.
+          finalRunSeq: hasEvents ? state.lastRunSeq : null,
+          finalAttemptSeq: hasEvents ? state.lastAttemptSeq : null,
+          finalEventDigest: hasEvents ? state.finalEventDigest : null,
+          eventStreamDigest: state.eventStreamDigest,
+          sealerId: input.sealerId,
+          rows,
+          archive,
+        });
+        return { runId: input.runId, seal };
       });
     },
 

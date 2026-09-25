@@ -279,6 +279,7 @@ function fakeStore(
       seals.push(input);
       return {} as never;
     },
+    abandonRun: async () => null,
     getRunByPublicId: async () => null,
     listRunAttempts: async () => [],
     readAttemptState: async () => ({}) as never,
