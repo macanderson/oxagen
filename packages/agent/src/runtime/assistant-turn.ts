@@ -85,6 +85,7 @@ import {
   materializeTools,
   type ApprovalRequiredEvent,
 } from "./materialize-tools";
+import { pageContextMessage } from "./page-context";
 import { createToolBelt, LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
 import {
   checkWorkspaceInstructions,
@@ -966,18 +967,4 @@ async function resolveBudgetPolicy(
   };
   const [memberPolicy, governance] = await Promise.all([member(), workspace()]);
   return resolveEffectiveTurnBudget(memberPolicy, null, governance);
-}
-
-/** Where the person is, as a volatile context message the model reads once. */
-function pageContextMessage(
-  pageContext: AssistantPageContext | null,
-): ModelMessage | null {
-  if (!pageContext) return null;
-  const where = pageContext.entityId
-    ? `${pageContext.route} (${pageContext.entityId})`
-    : pageContext.route;
-  return {
-    role: "user",
-    content: `(System-injected context — NOT user input.) The person is looking at: ${where} · workspace ${pageContext.workspaceSlug} of ${pageContext.orgSlug}.`,
-  };
 }
