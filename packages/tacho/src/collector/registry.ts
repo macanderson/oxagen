@@ -17,6 +17,7 @@ import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import { isSha256Digest } from "../digest";
 import type { TachoEvent, TachoRuntime } from "../envelope";
+import type { PreexistingPaths } from "./git-facts";
 import { COMMAND_HOOK_TIMEOUTS_S } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -147,8 +148,9 @@ export interface SessionFacts {
    */
   lastHookEvent?: string;
   /**
-   * The commit this session was first observed at in its current worktree,
-   * and the ref every later reconciliation measures from.
+   * The commit this session was first observed at in its current worktree.
+   * A reconciliation counts the session's own commits after it and measures
+   * the files they touched against it (`readSessionChanges`).
    *
    * Without it a reconciliation compares the worktree with the current
    * `HEAD`, which answers what is uncommitted now rather than what this
@@ -182,6 +184,28 @@ export interface SessionFacts {
    * another root and back finds the first one again (see `rememberBaseline`).
    */
   baselines?: Record<string, string>;
+  /**
+   * When the git lane first read a worktree for this session, in epoch ms. A
+   * commit made before it is not the session's (see `readSessionChanges`).
+   *
+   * Absent on a session restored from a state file written before it was
+   * kept. Such a session keeps the old measure, every change since its
+   * baseline commit, for the rest of its life: setting this on its next read
+   * would call every commit it made before the upgrade someone else's.
+   */
+  gitFirstReadAt?: number;
+  /**
+   * The uncommitted edits each repository root held at this session's first
+   * read of it, which a reconciliation leaves out until their content
+   * changes (see `readPreexistingPaths`). Bounded like `baselines`.
+   */
+  preexistingPaths?: Record<string, PreexistingPaths>;
+  /**
+   * The commits a reconciliation counted as this session's, per repository
+   * root. Kept so a commit stays counted after `HEAD` moves off it, as when
+   * a squash merge comes back through a pull. Bounded like `baselines`.
+   */
+  sessionCommits?: Record<string, string[]>;
   /**
    * The directory of the file the agent last wrote. The session's `cwd` is
    * where it started. An agent working in a git worktree often keeps that
@@ -1150,6 +1174,16 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
     ...(facts.baselines !== undefined
       ? { baselines: { ...facts.baselines } }
       : {}),
+    ...(typeof facts.gitFirstReadAt === "number" &&
+    Number.isFinite(facts.gitFirstReadAt)
+      ? { gitFirstReadAt: facts.gitFirstReadAt }
+      : {}),
+    ...(isRecord(facts.preexistingPaths)
+      ? { preexistingPaths: { ...facts.preexistingPaths } }
+      : {}),
+    ...(isRecord(facts.sessionCommits)
+      ? { sessionCommits: { ...facts.sessionCommits } }
+      : {}),
     ...(facts.workDir !== undefined ? { workDir: facts.workDir } : {}),
     ...(facts.closedIdle === true ? { closedIdle: true } : {}),
   };
@@ -1193,6 +1227,33 @@ function isTombstone(value: unknown): value is ChainTombstone {
 
 /** The most repositories one session keeps a baseline for. */
 export const MAX_SESSION_BASELINES = 16;
+
+/** A plain object, as a hand-edited or older state file may not hold one. */
+function isRecord(value: unknown): boolean {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A copy of `map` with `value` under `root`, keeping the
+ * `MAX_SESSION_BASELINES` roots set most recently. The same bound as
+ * `rememberBaseline`, for the facts a session keeps beside its baselines.
+ */
+export function rememberForRoot<T>(
+  map: Readonly<Record<string, T>> | undefined,
+  root: string,
+  value: T,
+): Record<string, T> {
+  const next = { ...map };
+  delete next[root];
+  next[root] = value;
+  const roots = Object.keys(next);
+  for (const old of roots.slice(
+    0,
+    Math.max(0, roots.length - MAX_SESSION_BASELINES),
+  ))
+    delete next[old];
+  return next;
+}
 
 /**
  * Make the baseline for the repository root `repoRoot` the session's

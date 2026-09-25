@@ -861,8 +861,13 @@ describe("the daemon's git seam", () => {
     expect(
       calls.some((call) => call.join(" ").includes("rev-parse HEAD")),
     ).toBe(true);
+    // One whole-tree status, at the first read, records the edits already in
+    // the worktree (ADR-186). No read after it lists or diffs the tree.
     expect(
-      calls.some((call) => call.join(" ").includes("--porcelain=v1 -z")),
+      calls.filter((call) => call.join(" ").includes("--porcelain=v1 -z")),
+    ).toHaveLength(1);
+    expect(
+      calls.some((call) => /diff --(numstat|name-status)/.test(call.join(" "))),
     ).toBe(false);
   });
 
@@ -926,6 +931,7 @@ describe("the daemon's git seam", () => {
           // that proof. No tracked file exists yet, so it reports nothing;
           // the untracked create below still comes from `status`.
           "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904": "",
+          "diff --name-status -z 4b825dc642cb6eb9a060e54bf8d69288fbee4904": "",
         }),
         [],
       ),

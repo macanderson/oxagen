@@ -18,14 +18,16 @@ import type { TachoEvent } from "../envelope";
 import type { ExecAsync } from "../host/service";
 import {
   type GitFacts,
-  type GitWorkingTreeChange,
   readGitFacts,
   readGitRoot,
-  readWorkingTreeChanges,
+  readPreexistingPaths,
+  readSessionChanges,
+  type SessionChanges,
   worktreeReconciledBody,
 } from "./git-facts";
 import {
   rememberBaseline,
+  rememberForRoot,
   type SessionRecord,
   type SessionRegistry,
 } from "./registry";
@@ -34,6 +36,37 @@ import {
   readWorktreeSnapshot,
   type WorktreeSnapshot,
 } from "./worktree-snapshot";
+
+/**
+ * The `pre_session_changes` attr of a reconciliation frame: whether the
+ * uncommitted edits a worktree held before the session are in its list.
+ */
+const PRE_SESSION_CHANGES: Record<SessionChanges["preexisting"], string> = {
+  complete: "excluded",
+  partial: "partly_excluded",
+  none: "included",
+};
+
+/**
+ * Whether a session holds a baseline commit, which a session restored from
+ * an older state file does without holding `gitFirstReadAt`.
+ */
+function holdsBaseline(session: SessionRecord): boolean {
+  return (
+    session.baselineCommit !== undefined ||
+    Object.keys(session.baselines ?? {}).length > 0
+  );
+}
+
+/**
+ * When the session started, in epoch ms, for deciding whether a dirty file
+ * predates it. The registry's first sight of the session, and never later
+ * than the read happening now.
+ */
+function startedAtOf(session: SessionRecord, at: number): number {
+  const started = Date.parse(session.startedAt);
+  return Number.isFinite(started) ? Math.min(started, at) : at;
+}
 
 /** What the lane needs from the daemon. */
 export interface GitLaneDeps {
@@ -238,7 +271,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
       // Absent for a repository with no commit yet, which has no HEAD to
       // describe but does have a worktree to reconcile.
       facts?: GitFacts;
-      changes?: GitWorkingTreeChange[];
+      reading?: SessionChanges;
       snapshot?: WorktreeSnapshot;
     }> = [];
     for (const harnessSessionId of work) {
@@ -286,8 +319,36 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
       // Every read runs at the worktree root, so an edit in a subdirectory and
       // one at the top describe the same checkout, and the baseline is
       // switched only when the work moves to another root.
-      const cwd = (await readGitRoot(execAsync, dir)) ?? dir;
+      const root = await readGitRoot(execAsync, dir);
+      const cwd = root ?? dir;
       const facts = await gitFactsFor(cwd, want.force);
+      // The session's first git read starts the clock its own commits are
+      // measured from (see `readSessionChanges`). A session that already
+      // holds a baseline was restored from a state file written before this
+      // clock was kept, and keeps the old measure.
+      if (session.gitFirstReadAt === undefined && !holdsBaseline(session))
+        session.gitFirstReadAt = at;
+      // The first read of each repository root records the uncommitted edits
+      // already there, so a reconciliation can leave them out. Only in a
+      // root: a directory in no repository has nothing to record, and a
+      // status read there would fail on every hook.
+      if (
+        root !== undefined &&
+        session.gitFirstReadAt !== undefined &&
+        session.preexistingPaths?.[root] === undefined
+      ) {
+        const preexisting = await readPreexistingPaths(
+          execAsync,
+          root,
+          startedAtOf(session, at),
+        );
+        if (preexisting !== undefined)
+          session.preexistingPaths = rememberForRoot(
+            session.preexistingPaths,
+            root,
+            preexisting,
+          );
+      }
       // Undefined means `rev-parse HEAD` did not answer, which covers a
       // directory that is not a repository AND a repository whose first
       // commit has not been made. The second is a real worktree full of real
@@ -296,8 +357,9 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
       // is what tells the two apart: a non-repository answers nothing and
       // seals no frame. There is simply no git context to note for either.
       // The first read that answers in this worktree fixes the session's
-      // baseline. Later reads measure from it rather than from a `HEAD`
-      // that the session's own commits keep moving. The baseline is held
+      // baseline. Later reads find the session's own commits after it rather
+      // than measuring from a `HEAD` those commits keep moving
+      // (`readSessionChanges`). The baseline is held
       // per repository root: `rememberBaseline` puts back the one the
       // session holds for this root, so a `cd` inside one repository keeps
       // it and a move to another root captures that tree's HEAD, or finds
@@ -318,19 +380,25 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
         // behind it.
         ...(due
           ? await (async () => {
-              const changes = await readWorkingTreeChanges(
-                execAsync,
-                cwd,
-                session.baselineCommit,
-              );
-              return changes === undefined
+              const reading = await readSessionChanges(execAsync, cwd, {
+                baseline: session.baselineCommit,
+                firstReadAt: session.gitFirstReadAt,
+                ownCommits: session.sessionCommits?.[cwd],
+                preexisting: session.preexistingPaths?.[cwd],
+              });
+              return reading === undefined
                 ? {}
                 : {
-                    changes,
+                    reading,
                     snapshot: await readWorktreeSnapshot(
                       execAsync,
                       cwd,
                       session.baselineCommit,
+                      reading.basis === "session"
+                        ? reading.changes.map(
+                            (change) => change.repo_relative_path,
+                          )
+                        : undefined,
                     ),
                   };
             })()
@@ -344,7 +412,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
         cwd,
         dir,
         facts,
-        changes,
+        reading,
         snapshot,
         ending,
       } of found) {
@@ -367,8 +435,18 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
             ...gitContextOf(facts),
             worktree_path: cwd,
           });
-        if (changes !== undefined)
-          recordReconciliation(session, changes, snapshot);
+        if (reading !== undefined) {
+          recordReconciliation(session, reading, snapshot);
+          if (
+            reading.ownCommits.length > 0 ||
+            session.sessionCommits?.[cwd] !== undefined
+          )
+            session.sessionCommits = rememberForRoot(
+              session.sessionCommits,
+              cwd,
+              reading.ownCommits,
+            );
+        }
         if (
           ending !== undefined &&
           pendingSessionEnds.get(session.recorder.sessionUuid) === ending
@@ -398,7 +476,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
    */
   function recordReconciliation(
     session: SessionRecord,
-    changes: GitWorkingTreeChange[],
+    reading: SessionChanges,
     snapshot?: WorktreeSnapshot,
   ): void {
     const mark = session.recorder.markChain();
@@ -406,24 +484,33 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
       record([
         session.recorder.sealCollectorEvent(
           "oxagen:worktree_reconciled",
-          worktreeReconciledBody(changes),
-          snapshot
-            ? {
-                attrs: {
-                  worktree_root: snapshot.root,
-                  ...(snapshot.repository
-                    ? { repository_url: snapshot.repository }
-                    : {}),
-                  ...(snapshot.baseline
-                    ? { diff_base_sha: snapshot.baseline }
-                    : {}),
-                  ...(snapshot.head ? { diff_head_sha: snapshot.head } : {}),
-                  diff_complete: String(snapshot.complete),
-                  diff_limitations: snapshot.limitations.join(","),
-                },
-                content: jsonContent(JSON.stringify(snapshot)),
-              }
-            : {},
+          worktreeReconciledBody(reading.changes),
+          {
+            attrs: {
+              // What the list measures, so a reader can tell a list that
+              // leaves out pulled commits and earlier edits from one that
+              // does not (ADR-186).
+              changes_basis: reading.basis,
+              pre_session_changes: PRE_SESSION_CHANGES[reading.preexisting],
+              ...(snapshot
+                ? {
+                    worktree_root: snapshot.root,
+                    ...(snapshot.repository
+                      ? { repository_url: snapshot.repository }
+                      : {}),
+                    ...(snapshot.baseline
+                      ? { diff_base_sha: snapshot.baseline }
+                      : {}),
+                    ...(snapshot.head ? { diff_head_sha: snapshot.head } : {}),
+                    diff_complete: String(snapshot.complete),
+                    diff_limitations: snapshot.limitations.join(","),
+                  }
+                : {}),
+            },
+            ...(snapshot
+              ? { content: jsonContent(JSON.stringify(snapshot)) }
+              : {}),
+          },
         ),
       ]);
     } catch (error) {
