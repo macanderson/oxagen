@@ -3,7 +3,9 @@ import {
   apiLayerSatisfied,
   buildApiRouteIndex,
   cliLayerSatisfied,
+  dispatchesByName,
   manifestContentChanged,
+  stripComments,
   buildUiProofIndex,
 } from "./check_manifest.mjs";
 
@@ -95,6 +97,46 @@ describe("apiLayerSatisfied", () => {
     expect(ok).toBe(true);
   });
 
+  it("does not pass a capability named only in a comment, a log string, or an error", () => {
+    // Before #2978 any quoted mention satisfied the layer, so a route that
+    // logged or explained a capability counted as wiring it.
+    const routeIndex = buildApiRouteIndex([
+      {
+        name: "run.stream.ts",
+        content: `
+          // The turn is \`invoke("list_mandates")\`, exactly as on the list route.
+          /* invoke('list_mandates', body, ctx) */
+          logger.info("list_mandates", { at: "stream" });
+          throw new Error(\`list_mandates is not routed here\`);
+          const doc = { see: "list_mandates" };
+        `,
+      },
+    ]);
+    const ok = apiLayerSatisfied({
+      stems: ["list_mandates", "mandate.list"],
+      capName: "list_mandates",
+      hasDirectFile: false,
+      routeIndex,
+    });
+    expect(ok).toBe(false);
+  });
+
+  it("passes when route code dispatches the capability by name", () => {
+    const routeIndex = buildApiRouteIndex([
+      {
+        name: "mandate.ts",
+        content: `const out = await invoke(\n  "list_mandates",\n  body,\n  capabilityContext(c),\n);`,
+      },
+    ]);
+    const ok = apiLayerSatisfied({
+      stems: ["list_mandates", "mandate.list"],
+      capName: "list_mandates",
+      hasDirectFile: false,
+      routeIndex,
+    });
+    expect(ok).toBe(true);
+  });
+
   it("still fails a capability with no evidence anywhere (no blanket suppression)", () => {
     const routeIndex = buildApiRouteIndex([
       {
@@ -109,6 +151,34 @@ describe("apiLayerSatisfied", () => {
       routeIndex,
     });
     expect(ok).toBe(false);
+  });
+});
+
+describe("dispatchesByName", () => {
+  it("matches invoke with the name as the first argument in any quote style", () => {
+    expect(dispatchesByName(`invoke("get_run", b, c)`, "get_run")).toBe(true);
+    expect(dispatchesByName(`invoke( 'get_run' )`, "get_run")).toBe(true);
+    expect(dispatchesByName("invoke(`get_run`, b)", "get_run")).toBe(true);
+  });
+
+  it("does not match a longer name, a later argument, or another call", () => {
+    expect(dispatchesByName(`invoke("get_run_export", b)`, "get_run")).toBe(
+      false,
+    );
+    expect(dispatchesByName(`invoke(name, "get_run")`, "get_run")).toBe(false);
+    expect(dispatchesByName(`reinvoke("get_run", b)`, "get_run")).toBe(false);
+    expect(dispatchesByName(`log("get_run")`, "get_run")).toBe(false);
+  });
+});
+
+describe("stripComments", () => {
+  it("removes line and block comments and keeps a URL inside a string", () => {
+    const out = stripComments(
+      `const u = "https://oxagen.sh"; // invoke("get_run")\n/* invoke("x") */ f();`,
+    );
+    expect(out).toContain(`"https://oxagen.sh"`);
+    expect(out).toContain("f();");
+    expect(out).not.toContain("invoke");
   });
 });
 
