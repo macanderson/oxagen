@@ -549,9 +549,10 @@ export class Wal {
    *
    * A line that will not parse is reported and skipped rather than thrown:
    * one torn write (a crash mid-append, before `repairTail` runs at the next
-   * startup) must not turn every reader of this session — `unshipped`,
-   * `stats`, `head`, `compact` all reach the file through here — into a
-   * daemon that stops shipping every session on the host.
+   * startup) must not stop every reader of this session. `head`, `compact`,
+   * `lastSeqOf`, `appendRecovered`, and the retention sweep read through
+   * here. `unshipped` and `stats` read through `eventsAfterShipped`, which
+   * skips a bad line the same way.
    */
   read(sessionUuid: string): TachoEvent[] {
     const path = this.fileFor(sessionUuid);
