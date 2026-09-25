@@ -3,7 +3,7 @@
 // that host is not the app's own; a sign-in URL that is not https is refused;
 // a started flow is recorded in a cookie scoped to the callback path, newest
 // first and at most four; and nothing a credential touches comes back.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   viewer: vi.fn(),
@@ -38,15 +38,31 @@ const {
 } = await import("./provider-auth-actions");
 
 const CTX = { orgId: "org-1" };
-const CALLBACK = "https://app.oxagen.sh/api/v1/mcp/oauth/callback";
+/**
+ * The origin `callbackUrl` falls back to, pinned rather than inherited.
+ *
+ * `appBaseUrl` takes `NEXT_PUBLIC_APP_URL` ahead of everything else, in every
+ * environment, and `pipeline.yml` sets it to the dev origin for the whole
+ * workflow. So this file read `http://localhost:3000` on a runner and the
+ * production origin on a laptop with the variable unset, and four of its cases
+ * asserted the second. One `const` feeds the stub and the expectation, so the
+ * origin the code resolves and the origin the test wants cannot drift apart.
+ */
+const APP_ORIGIN = "https://app.oxagen.sh";
+const CALLBACK = `${APP_ORIGIN}/api/v1/mcp/oauth/callback`;
 const STATE = "q".repeat(32);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", APP_ORIGIN);
   mocks.headers.clear();
   mocks.headers.set("host", "app.oxagen.sh");
   mocks.viewer.mockResolvedValue(CTX);
   mocks.cookieGet.mockReturnValue(undefined);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("searchRegistry", () => {
