@@ -838,6 +838,7 @@
         }
       },
       "runtime": {
+        "needsRole": "Enrolling and unenrolling a host needs an organization Owner or Admin role.",
         "empty": {
           "title": "No runtime is enrolled for this agent",
           "body": "Until a host enrolls, this agent has an identity and a toolbelt but no hook is installed. Its runs would be graded observe, and no report could say more.",

@@ -897,6 +897,7 @@ type Messages = {
         };
       };
       runtime: {
+        needsRole: string;
         empty: {
           title: string;
           body: string;
