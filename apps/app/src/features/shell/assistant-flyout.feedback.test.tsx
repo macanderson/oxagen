@@ -32,7 +32,13 @@ const mocks = vi.hoisted(() => ({
   recordReplyFeedback: vi.fn(),
   pathname: vi.fn(() => "/acme/core-platform"),
 }));
-vi.mock("./assistant-actions", () => ({ askAssistant: mocks.askAssistant }));
+// The cost line under each reply has its own file
+// (assistant-flyout.reply-cost.test.tsx). Here its read never answers, so the
+// line holds "pending" and the votes are the only thing under test.
+vi.mock("./assistant-actions", () => ({
+  askAssistant: mocks.askAssistant,
+  readReplyCost: () => new Promise(() => undefined),
+}));
 // The engine read has its own file (assistant-flyout.engine-health.test.tsx).
 // Here it never answers, so its notice draws nothing and holds nothing.
 vi.mock("./engine-actions", () => ({
@@ -353,6 +359,13 @@ describe("reply feedback in the flyout", () => {
     const { user, answer } = await answered();
 
     expect(within(answer).getByTestId("assistant-stopped")).toBeTruthy();
+    // The stopped reply keeps its cost line (#4167) too, and the line sits
+    // with the run it reads, above the votes.
+    const cost = within(answer).getByTestId("assistant-reply-cost");
+    const votes = within(answer).getByTestId("assistant-feedback");
+    expect(
+      cost.compareDocumentPosition(votes) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     await user.click(within(answer).getByTestId("assistant-feedback-wrong"));
     await user.click(screen.getByTestId("assistant-feedback-send"));
 

@@ -48,6 +48,7 @@ describe("openAssistantRun: the default run store", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       userId: "user-1",
+      originMessageId: null,
       surface: "chat",
       instruction: "anything",
       maxSteps: 4,

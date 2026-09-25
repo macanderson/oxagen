@@ -622,7 +622,8 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       chunks.push(new TextDecoder().decode(body.bytes));
     }
     let level = 0;
-    // Each reduction consumes every chunk, in order. No turn prefix or body truncation.
+    // Each reduction consumes every chunk, in order. The text itself stops at
+    // ENRICHMENT_TEXT_CEILING_CHARS (collectRunText), which bounds the chunks.
     while (chunks.join("\n").length > ENRICHMENT_CHUNK_CHARS) {
       const reduced: string[] = [];
       for (let i = 0; i < chunks.length; i += 1) {

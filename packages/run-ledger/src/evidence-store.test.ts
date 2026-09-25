@@ -2,12 +2,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { createLocalKmsAdapter } from "@oxagen/crypto/kms";
-import { createFsAdapter } from "@oxagen/storage";
+import { createFsAdapter, type StorageAdapter } from "@oxagen/storage";
 import { digestBytes } from "@oxagen/tacho";
 import {
   createEvidenceStore,
+  evidenceAssemblyKey,
   evidenceBodyKey,
   evidenceBodyRef,
   parseEvidenceBodyRef,
@@ -181,5 +182,127 @@ describe("evidence body store", () => {
     expect(bundle.ref).toBe(
       `evidence/${scope.orgId}/${scope.workspaceId}/exports/rexp_1/${digest.slice(7)}.zip`,
     );
+  });
+});
+
+// #4202: keys are content-addressed, and tacho ingest wrote the same key
+// again whenever a batch repeated a body. The store now writes a key once per
+// process while it remembers the key.
+describe("evidence store write memory", () => {
+  function countingStore(rememberedWriteKeys?: number) {
+    const put = vi.fn((input: Parameters<StorageAdapter["put"]>[0]) =>
+      fs.put(input),
+    );
+    const counted: StorageAdapter = { ...fs, put };
+    const counting = createEvidenceStore({
+      storage: counted,
+      writeCrypto: () => crypto,
+      readCrypto: () => crypto,
+      ...(rememberedWriteKeys === undefined ? {} : { rememberedWriteKeys }),
+    });
+    return { counting, put };
+  }
+  function body(text: string) {
+    const bytes = enc.encode(text);
+    return {
+      ...scope,
+      runId,
+      digest: digestBytes(bytes),
+      contentType: "text/plain",
+      bytes,
+    };
+  }
+
+  it("writes a body key once and answers the same reference after", async () => {
+    const { counting, put } = countingStore();
+    const input = body("written once");
+
+    const first = await counting.put(input);
+    const second = await counting.put(input);
+
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(second.ref).toBe(first.ref);
+    const back = await counting.getBody(scope, second.ref);
+    expect(new TextDecoder().decode(back.bytes)).toBe("written once");
+  });
+
+  it("shares one write between concurrent puts of the same body", async () => {
+    const { counting, put } = countingStore();
+    const input = body("in flight twice");
+
+    const [a, b] = await Promise.all([counting.put(input), counting.put(input)]);
+
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(a.ref).toBe(b.ref);
+  });
+
+  it("writes an assembly key once", async () => {
+    const { counting, put } = countingStore();
+    const input = body("stream wire");
+    const { ref } = await counting.put(input);
+    const assembly = {
+      ...scope,
+      runId,
+      bodyRef: ref,
+      bytes: enc.encode('{"blocks":[]}'),
+    };
+
+    await counting.putAssembly(assembly);
+    await counting.putAssembly(assembly);
+
+    const keys = put.mock.calls.map((call) => call[0].key);
+    const digestHex = input.digest.slice(7);
+    expect(keys).toEqual([
+      evidenceBodyKey(scope, crypto.keyId, digestHex),
+      evidenceAssemblyKey(scope, crypto.keyId, digestHex),
+    ]);
+    expect(await counting.getAssembly(scope, ref)).toEqual(
+      enc.encode('{"blocks":[]}'),
+    );
+  });
+
+  it("keeps each tenant's key apart, so one tenant's write does not skip another's", async () => {
+    const { counting, put } = countingStore();
+    const input = body("same bytes, two tenants");
+
+    await counting.put(input);
+    await counting.put({
+      ...input,
+      workspaceId: "66666666-6666-4666-8666-666666666666",
+    });
+
+    expect(put).toHaveBeenCalledTimes(2);
+  });
+
+  it("forgets a write that failed, so the next put writes the key", async () => {
+    const { counting, put } = countingStore();
+    const input = body("first attempt fails");
+    put.mockRejectedValueOnce(new Error("store unavailable"));
+
+    await expect(counting.put(input)).rejects.toThrow("store unavailable");
+    await counting.put(input);
+
+    expect(put).toHaveBeenCalledTimes(2);
+    const back = await counting.getBody(
+      scope,
+      evidenceBodyRef(crypto.keyId, input.digest.slice(7)),
+    );
+    expect(new TextDecoder().decode(back.bytes)).toBe("first attempt fails");
+  });
+
+  it("remembers a bounded number of keys and writes an evicted key again", async () => {
+    const { counting, put } = countingStore(2);
+    const [a, b, c] = ["lru a", "lru b", "lru c"].map(body);
+
+    await counting.put(a!);
+    await counting.put(b!);
+    await counting.put(a!); // a is now the most recent
+    await counting.put(c!); // evicts b, the least recent
+    expect(put).toHaveBeenCalledTimes(3);
+
+    await counting.put(a!);
+    expect(put).toHaveBeenCalledTimes(3);
+    await counting.put(b!);
+    expect(put).toHaveBeenCalledTimes(4);
   });
 });
