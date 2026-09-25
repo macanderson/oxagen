@@ -6,7 +6,12 @@
  * Postgres in packages/handlers/src/lib/proof.pg.test.ts.
  */
 import { describe, expect, it, vi } from "vitest";
-import type { RunMeta, RunTotalsRecord } from "./cost-rollup";
+import {
+  ZERO_TOKENS,
+  type ModelCallFrame,
+  type RunMeta,
+  type RunTotalsRecord,
+} from "./cost-rollup";
 import {
   rebuildRunTotals,
   reviveBreakdown,
@@ -45,6 +50,7 @@ function deps(over: {
   runs: Record<string, RunMeta>;
   verdict?: RunTotalsRecord["verdict"];
   witnessed?: Record<string, string>;
+  modelCalls?: ModelCallFrame[];
 }) {
   const written: RunTotalsRecord[] = [];
   const scopes: unknown[] = [];
@@ -55,9 +61,9 @@ function deps(over: {
         ? { meta: m, frames: { kind: "tacho", rootSessionUuid: publicId } }
         : null;
     },
-    readModelCalls: async () => [],
+    readModelCalls: async () => over.modelCalls ?? [],
     readToolCalls: async () => [],
-    loadPriceBook: async () => [],
+    loadPriceBook: vi.fn(async () => []),
     readCarried: async () => ({ accepted: null, productiveRatio: 0.5 }),
     readVerdict: vi.fn(async (scope) => {
       scopes.push(scope);
@@ -127,6 +133,54 @@ describe("rebuildRunTotals", () => {
     expect((await rebuildRunTotals(WITNESS, d))?.operatorKey).toBe(
       "prn_runner_host",
     );
+  });
+});
+
+describe("the price rows a rollup loads (#4202)", () => {
+  // The rollup loaded the whole price book, 28,246 rows in production, for
+  // every run it priced, and four or five of those steps at once ran the API
+  // out of heap. It must ask only for the run's models over the run's span.
+  const call = (at: string, model: string): ModelCallFrame => ({
+    at: new Date(at),
+    model,
+    provider: "anthropic",
+    tokens: { ...ZERO_TOKENS, input_uncached: 10, output: 5 },
+    reportedCostMicros: null,
+    basis: "client_attested",
+  });
+
+  it("asks for the run's distinct models from its first call to its last", async () => {
+    const { d } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      modelCalls: [
+        call("2026-09-24T17:05:00.000Z", "claude-sonnet-5"),
+        call("2026-09-24T16:55:00.000Z", "anthropic/claude-haiku-4.5"),
+        call("2026-09-24T17:40:00.000Z", "claude-sonnet-5"),
+      ],
+    });
+
+    await rebuildRunTotals(WORKER, d);
+
+    expect(d.loadPriceBook).toHaveBeenCalledTimes(1);
+    expect(d.loadPriceBook).toHaveBeenCalledWith({
+      orgId: SCOPE.orgId,
+      models: ["claude-sonnet-5", "anthropic/claude-haiku-4.5"],
+      from: new Date("2026-09-24T16:55:00.000Z"),
+      to: new Date("2026-09-24T17:40:00.000Z"),
+    });
+  });
+
+  it("asks for no models when the run made no model call, and still writes its row", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+
+    await rebuildRunTotals(WORKER, d);
+
+    expect(d.loadPriceBook).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: SCOPE.orgId, models: [] }),
+    );
+    expect(written).toHaveLength(1);
   });
 });
 

@@ -105,6 +105,14 @@ export const runFramePageSchema = z
   })
   .strict();
 
+/** Why a read answered the run header without its frames. */
+export const runFramesErrorSchema = z
+  .object({
+    code: z.literal("frames_unavailable"),
+    message: z.string(),
+  })
+  .strict();
+
 export const runGet = registerCapability({
   name: "get_run",
   domain: "run",
@@ -147,6 +155,12 @@ export const runGet = registerCapability({
        * witness run renders its own tab set. Null for every other run.
        */
       witnessFor: runPublicIdSchema.nullable(),
+      /**
+       * Set when the frame store refused the read, so `frames` is empty
+       * whatever the run recorded. The header still answers. Absent when the
+       * frames were read (#4243).
+       */
+      framesError: runFramesErrorSchema.optional(),
     })
     .strict(),
 });
