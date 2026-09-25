@@ -49,6 +49,7 @@ const RECORDED: AssistantThread = {
       text: "what is live?",
       runId: null,
       parked: [],
+      stopped: false,
     },
     {
       id: "msg_a2",
@@ -62,6 +63,7 @@ const RECORDED: AssistantThread = {
           expiresAt: "2026-09-25T10:05:00.000Z",
         },
       ],
+      stopped: false,
     },
   ],
   truncated: false,
@@ -157,6 +159,8 @@ describe("the assistant's thread across a reload", () => {
       "recorded as arun_01k9",
     );
     expect(screen.getByTestId("assistant-parked")).toBeTruthy();
+    // A reply that ran to the end carries no Stopped mark (#4164).
+    expect(screen.queryByTestId("assistant-stopped")).toBeNull();
     expect(screen.queryByTestId("assistant-intro")).toBeNull();
   });
 

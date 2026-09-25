@@ -3,7 +3,8 @@
 // is Stop, and a press posts the turn's id to the workspace's stop route. The
 // turn then comes back with whatever it had written, marked Stopped. While an
 // answer types itself out, Stop keeps what is already on screen. Closing the
-// flyout stops nothing (ADR-092, #3292).
+// flyout stops nothing (ADR-092, #3292). A stopped reply keeps its mark after
+// a reload.
 //
 // The turn action, the thread read and `fetch` are fakes. Which turn the
 // server stops, and that its run records cancelled, is proved where the turn
@@ -21,6 +22,7 @@ import {
   it,
   vi,
 } from "vitest";
+import type { AssistantThread } from "@/data/contracts/conversations";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { ShellStateProvider, useShellState } from "./shell-state";
@@ -391,5 +393,57 @@ describe("Stop while an answer types itself out", () => {
       "Two agents are idle.",
     );
     expect(screen.queryByTestId("assistant-stopped")).toBeNull();
+  });
+});
+
+describe("A stopped reply after a reload", () => {
+  // The thread as get_conversation reads it back: the partial reply was
+  // saved with its stop, and the read says so (#4164).
+  const STOPPED_THREAD: AssistantThread = {
+    id: "cnv_01k9x2",
+    messages: [
+      {
+        id: "msg_a1",
+        role: "user",
+        text: "what is live?",
+        runId: null,
+        parked: [],
+        stopped: false,
+      },
+      {
+        id: "msg_a2",
+        role: "assistant",
+        text: "Two agents are",
+        runId: "arun_01k9",
+        parked: [],
+        stopped: true,
+      },
+    ],
+    truncated: false,
+  };
+
+  it("shows the words the turn reached, whole and marked Stopped, with Send ready", async () => {
+    loadAssistantThread.mockResolvedValue({
+      ok: true,
+      value: {
+        workspaceKey: "7b000000-0000-4000-8000-000000000001",
+        thread: STOPPED_THREAD,
+      },
+    });
+    await openFlyout();
+
+    const answer = await screen.findByTestId("assistant-answer");
+    expect(answer).toHaveTextContent("Two agents are");
+    expect(answer.querySelector("[inert]")).toBeNull();
+    expect(screen.getByTestId("assistant-stopped")).toHaveTextContent(
+      "Stopped",
+    );
+    expect(screen.getByTestId("assistant-recorded-as")).toHaveTextContent(
+      "recorded as arun_01k9",
+    );
+    // The turn ended before the reload, so there is nothing to stop.
+    expect(screen.getByTestId("assistant-send")).toBeTruthy();
+    expect(screen.queryByTestId("assistant-stop")).toBeNull();
+    expect(fetchStop).not.toHaveBeenCalled();
   });
 });

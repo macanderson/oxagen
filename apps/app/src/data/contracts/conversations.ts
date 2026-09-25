@@ -1,7 +1,8 @@
 // The assistant's thread as the flyout reopens it (#4163): the viewer's
 // latest conversation in a workspace, read back through `get_conversation`,
 // and the turns on it. Only what the flyout draws is carried: the question,
-// the reply with the run it was recorded as, and the writes it parked.
+// the reply with the run it was recorded as, the writes it parked, and
+// whether the person stopped it.
 import { z } from "zod";
 import { PublicId } from "./common";
 
@@ -22,6 +23,8 @@ export const ThreadMessage = z.object({
   text: z.string(),
   runId: PublicId.nullable(),
   parked: z.array(ParkedWrite),
+  /** The person stopped the turn, so `text` is what it reached (#4164). */
+  stopped: z.boolean(),
 });
 export type ThreadMessage = z.infer<typeof ThreadMessage>;
 
