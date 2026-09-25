@@ -2,7 +2,8 @@
 // producer stopped reporting (#3988, ADR-173).
 //
 // The scan (`listIdleLedgerAttempts`, @oxagen/run-ledger) finds an open
-// attempt with no event for twelve hours. This seals it through the ledger's
+// attempt with no event and no operator resume for twelve hours. It never
+// lists a run an operator paused. This seals it through the ledger's
 // own `sealAttempt`, so the seal, its archive segment, its grade and its
 // finalization grant are the ones any producer's seal would write:
 //

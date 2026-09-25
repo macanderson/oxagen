@@ -9,6 +9,7 @@ import {
   createPostgresRunStore,
   ledgerIdleCutoff,
   listIdleLedgerAttempts,
+  setRunIngressPaused,
   type IdleLedgerAttempt,
   type RunArchiveStore,
 } from "@oxagen/run-ledger";
@@ -33,7 +34,14 @@ describe.skipIf(!enabled)("the ledger idle close against Postgres", () => {
   const recently = new Date(now.getTime() - 60 * 60 * 1000);
   const digest = `sha256:${"a".repeat(64)}`;
 
-  const names = ["quiet", "recent", "raced", "sealed"] as const;
+  const names = [
+    "quiet",
+    "recent",
+    "raced",
+    "sealed",
+    "paused",
+    "resumed",
+  ] as const;
   type Name = (typeof names)[number];
   const ids = Object.fromEntries(
     names.map((name) => [
@@ -64,8 +72,8 @@ describe.skipIf(!enabled)("the ledger idle close against Postgres", () => {
   const store = createPostgresRunStore({ archive });
   const scoped = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
 
-  const scan = async () =>
-    (await listIdleLedgerAttempts({ cutoff, limit: 10_000 })).filter(
+  const scan = async (at = cutoff) =>
+    (await listIdleLedgerAttempts({ cutoff: at, limit: 10_000 })).filter(
       (attempt) => attempt.orgId === scope.orgId,
     );
   const scanned = async (name: Name): Promise<IdleLedgerAttempt> => {
@@ -119,6 +127,10 @@ describe.skipIf(!enabled)("the ledger idle close against Postgres", () => {
           maxAttempts: 3,
           attemptCount: 1,
           activeAttemptId: ids[name].attempt,
+          // The scan counts silence from the row's last write too, so each
+          // fixture's row was last written when its attempt was claimed.
+          createdAt: claimedAt,
+          updatedAt: claimedAt,
         });
         await tx.insert(schema.agentRunAttempts).values({
           id: ids[name].attempt,
@@ -132,6 +144,11 @@ describe.skipIf(!enabled)("the ledger idle close against Postgres", () => {
           claimedAt,
         });
       }
+      // An operator paused this run long ago and never resumed it.
+      await setRunIngressPaused(tx, ids.paused.run, true, longAgo);
+      // An operator paused this run long ago and resumed it an hour ago.
+      await setRunIngressPaused(tx, ids.resumed.run, true, longAgo);
+      await setRunIngressPaused(tx, ids.resumed.run, false, recently);
     });
   });
 
@@ -168,6 +185,31 @@ describe.skipIf(!enabled)("the ledger idle close against Postgres", () => {
       runPublicId: ids.quiet.publicId,
       lastAttemptSeq: 0,
     });
+  });
+
+  it("never lists a run an operator paused, however long it has been silent", async () => {
+    expect((await scan()).map((a) => a.attemptId)).not.toContain(
+      ids.paused.attempt,
+    );
+    const muchLater = ledgerIdleCutoff(
+      new Date(now.getTime() + 48 * 60 * 60 * 1000),
+    );
+    expect((await scan(muchLater)).map((a) => a.attemptId)).not.toContain(
+      ids.paused.attempt,
+    );
+  });
+
+  it("counts silence from a resume, so a resumed run waits twelve more hours", async () => {
+    expect((await scan()).map((a) => a.attemptId)).not.toContain(
+      ids.resumed.attempt,
+    );
+    // Twelve hours and a minute after the resume, the run is idle again.
+    const afterResume = ledgerIdleCutoff(
+      new Date(recently.getTime() + 12 * 60 * 60 * 1000 + 60_000),
+    );
+    expect((await scan(afterResume)).map((a) => a.attemptId)).toContain(
+      ids.resumed.attempt,
+    );
   });
 
   it("seals a silent attempt abandoned with an unobserved tail and fails its run", async () => {

@@ -53,8 +53,15 @@ const ORG = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const WS = "0192d4a8-7c1e-7a00-8000-0000000000a2";
 
 function idle(runPublicId: string) {
-  return { runPublicId, orgId: ORG, workspaceId: WS };
+  return {
+    runPublicId,
+    attemptId: `attempt-${runPublicId}`,
+    orgId: ORG,
+    workspaceId: WS,
+  };
 }
+
+type Listed = { cutoff: Date; limit: number; exclude: string[] };
 
 describe("run.ledger-idle-close (#3988)", () => {
   beforeEach(() => {
@@ -80,10 +87,11 @@ describe("run.ledger-idle-close (#3988)", () => {
     );
     const out = await handler!({ event: { data: {} }, step });
 
-    const [listed] = mocks.listIdleLedgerAttempts.mock.calls[0] as [
-      { cutoff: Date; limit: number },
-    ];
+    const [listed] = mocks.listIdleLedgerAttempts.mock.calls[0] as [Listed];
     expect(listed.limit).toBe(500);
+    expect(listed.exclude).toEqual([]);
+    // A short page ends the pass: nothing idle is left to scan for.
+    expect(mocks.listIdleLedgerAttempts).toHaveBeenCalledTimes(1);
     expect(Date.now() - listed.cutoff.getTime()).toBeGreaterThanOrEqual(
       12 * 60 * 60 * 1000,
     );
@@ -98,7 +106,7 @@ describe("run.ledger-idle-close (#3988)", () => {
         data: { runId: "arun_b", orgId: ORG, workspaceId: WS },
       },
     ]);
-    expect(out).toEqual({ found: 2, closed: 2 });
+    expect(out).toEqual({ found: 2, failed: 0, closed: 2 });
   });
 
   it("sends nothing for an attempt that moved since the scan", async () => {
@@ -106,7 +114,7 @@ describe("run.ledger-idle-close (#3988)", () => {
     mocks.closeIdleLedgerAttempt.mockResolvedValue(null);
     const out = await handler!({ event: { data: {} }, step });
     expect(sendEvent).not.toHaveBeenCalled();
-    expect(out).toEqual({ found: 1, closed: 0 });
+    expect(out).toEqual({ found: 1, failed: 0, closed: 0 });
   });
 
   it("logs an attempt that fails to close and carries on with the rest", async () => {
@@ -125,6 +133,66 @@ describe("run.ledger-idle-close (#3988)", () => {
         data: { runId: "arun_ok", orgId: ORG, workspaceId: WS },
       },
     ]);
-    expect(out).toEqual({ found: 2, closed: 1 });
+    expect(out).toEqual({ found: 2, failed: 1, closed: 1 });
+  });
+
+  // F10: the scan is oldest first, so attempts whose close always fails
+  // would fill every batch. The pass scans again past the ones it tried.
+  it("scans past attempts it could not close, so they cannot fill every batch", async () => {
+    const broken = Array.from({ length: 500 }, (_, i) => idle(`arun_bad${i}`));
+    mocks.listIdleLedgerAttempts
+      .mockResolvedValueOnce(broken)
+      .mockResolvedValueOnce([idle("arun_ok")]);
+    mocks.closeIdleLedgerAttempt.mockImplementation(
+      async (attempt: ReturnType<typeof idle>) => {
+        if (attempt.runPublicId === "arun_ok") return attempt;
+        throw new Error("sequence hole");
+      },
+    );
+    const out = await handler!({ event: { data: {} }, step });
+
+    expect(mocks.listIdleLedgerAttempts).toHaveBeenCalledTimes(2);
+    const [second] = mocks.listIdleLedgerAttempts.mock.calls[1] as [Listed];
+    expect(second.limit).toBe(500);
+    expect(second.exclude).toEqual(broken.map((a) => a.attemptId));
+    expect(sendEvent).toHaveBeenCalledWith("request-rollups", [
+      {
+        name: "cost/run.sealed",
+        data: { runId: "arun_ok", orgId: ORG, workspaceId: WS },
+      },
+    ]);
+    expect(out).toEqual({ found: 501, failed: 500, closed: 1 });
+  });
+
+  it("stops after a bounded number of scans when every close fails", async () => {
+    let page = 0;
+    mocks.listIdleLedgerAttempts.mockImplementation(async () => {
+      page += 1;
+      return Array.from({ length: 500 }, (_, i) => idle(`arun_p${page}_${i}`));
+    });
+    mocks.closeIdleLedgerAttempt.mockRejectedValue(new Error("archive down"));
+    const out = await handler!({ event: { data: {} }, step });
+
+    expect(mocks.listIdleLedgerAttempts).toHaveBeenCalledTimes(4);
+    expect(sendEvent).not.toHaveBeenCalled();
+    expect(out).toEqual({ found: 2000, failed: 2000, closed: 0 });
+  });
+
+  it("asks only for what is left of the batch on a later scan", async () => {
+    const first = Array.from({ length: 500 }, (_, i) => idle(`arun_${i}`));
+    mocks.listIdleLedgerAttempts
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce([]);
+    mocks.closeIdleLedgerAttempt.mockImplementation(
+      async (attempt: ReturnType<typeof idle>) => {
+        if (attempt.runPublicId === "arun_0") throw new Error("lock timeout");
+        return attempt;
+      },
+    );
+    const out = await handler!({ event: { data: {} }, step });
+
+    const [second] = mocks.listIdleLedgerAttempts.mock.calls[1] as [Listed];
+    expect(second.limit).toBe(1);
+    expect(out).toEqual({ found: 500, failed: 1, closed: 499 });
   });
 });

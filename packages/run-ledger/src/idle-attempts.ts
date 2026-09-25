@@ -39,7 +39,10 @@ export interface IdleLedgerAttempt {
   attemptPublicId: string;
   /** The attempt's last `attempt_seq`, 0 when it has no event. */
   lastAttemptSeq: number;
-  /** The last event's recorded time, or the claim time when it has none. */
+  /**
+   * The later of the last event's recorded time (the claim time when it has
+   * none) and the run row's last write, which a resume stamps.
+   */
   lastActivityAt: Date;
 }
 
@@ -49,17 +52,40 @@ export function ledgerIdleCutoff(now: Date): Date {
 }
 
 /**
- * The open attempts of evidence-grade (V2) runs whose last event, or whose
- * claim when they have none, is older than `cutoff`. Oldest first, at most
- * `limit`.
+ * The open attempts of evidence-grade (V2) runs whose last activity is older
+ * than `cutoff`. Oldest first, at most `limit`, leaving out the attempts
+ * named in `exclude`.
  *
  * An attempt is open while its run names it as `active_attempt_id` and no
  * seal row exists for it. The run filter matches the partial index
  * `agent_runs_v2_claim_idx`, and the last event is read through the
  * `(attempt_id, attempt_seq)` unique index, highest first. Appends serialize
  * on the run lock, so the highest sequence is also the latest recorded.
+ *
+ * Two rules keep the close off a run an operator is holding (ADR-173):
+ *
+ * - A run whose evidence ingress is paused is never listed. The pause refuses
+ *   every append, so the silence is the operator's doing, not a sign that
+ *   the producer is gone.
+ * - Silence counts from the later of the last event (or the claim) and the
+ *   run row's `updated_at`. `setRunIngressPaused` stamps `updated_at`, so a
+ *   resume starts a fresh twelve hours instead of closing the run at the next
+ *   pass. Every append stamps it too. Any other write to the row, such as a
+ *   cancel or a requested summary, can only make the close later.
+ *
+ * `exclude` lets one pass skip the attempts it has already tried, so an
+ * attempt whose close fails every time cannot hold the head of every page.
  */
-export function buildListIdleAttemptsSql(cutoff: Date, limit: number): SQL {
+export function buildListIdleAttemptsSql(
+  cutoff: Date,
+  limit: number,
+  exclude: readonly string[] = [],
+): SQL {
+  const lastActivity = sql`greatest(coalesce(e.created_at, a.claimed_at), r.updated_at)`;
+  const notTried =
+    exclude.length === 0
+      ? sql``
+      : sql`AND a.id <> ALL(${`{${exclude.join(",")}}`}::uuid[])`;
   return sql`
     SELECT
       r.id            AS run_id,
@@ -69,7 +95,7 @@ export function buildListIdleAttemptsSql(cutoff: Date, limit: number): SQL {
       a.id            AS attempt_id,
       a.public_id     AS attempt_public_id,
       coalesce(e.attempt_seq, 0) AS last_attempt_seq,
-      coalesce(e.created_at, a.claimed_at) AS last_activity_at
+      ${lastActivity} AS last_activity_at
     FROM agent.agent_runs r
     JOIN agent.agent_run_attempts a ON a.id = r.active_attempt_id
     LEFT JOIN LATERAL (
@@ -81,11 +107,13 @@ export function buildListIdleAttemptsSql(cutoff: Date, limit: number): SQL {
     ) e ON true
     WHERE r.spec_version = 2
       AND r.status IN ('pending', 'running')
+      AND NOT r.ingress_paused
       AND NOT EXISTS (
         SELECT 1 FROM agent.agent_run_attempt_seals s WHERE s.attempt_id = a.id
       )
-      AND coalesce(e.created_at, a.claimed_at) < ${cutoff.toISOString()}::timestamptz
-    ORDER BY coalesce(e.created_at, a.claimed_at) ASC
+      AND ${lastActivity} < ${cutoff.toISOString()}::timestamptz
+      ${notTried}
+    ORDER BY ${lastActivity} ASC
     LIMIT ${limit}
   `;
 }
@@ -125,6 +153,8 @@ export function mapIdleLedgerAttemptRow(
 export async function listIdleLedgerAttempts(args: {
   cutoff: Date;
   limit: number;
+  /** Attempt ids to leave out, such as the ones this pass already tried. */
+  exclude?: readonly string[];
 }): Promise<IdleLedgerAttempt[]> {
   // tenancy: a scheduled cross-tenant scan by design, like the wrapped-session
   // idle close. It reads ids and timestamps only; each seal is then scoped to
@@ -132,7 +162,7 @@ export async function listIdleLedgerAttempts(args: {
   const rows = await withSystemDb(
     async (tx: Tx) =>
       (await tx.execute(
-        buildListIdleAttemptsSql(args.cutoff, args.limit),
+        buildListIdleAttemptsSql(args.cutoff, args.limit, args.exclude),
       )) as unknown as IdleLedgerAttemptRow[],
   );
   return rows.map(mapIdleLedgerAttemptRow);
