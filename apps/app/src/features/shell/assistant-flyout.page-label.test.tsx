@@ -36,6 +36,11 @@ type SentInput = Parameters<typeof AskAssistantAction>[2];
 const askAssistant =
   vi.fn<(org: string, ws: string, input: SentInput) => Promise<unknown>>();
 vi.mock("./assistant-actions", () => ({ askAssistant }));
+// The engine read has its own file (assistant-flyout.engine-health.test.tsx).
+// Here it never answers, so nothing but a turn in flight holds Send.
+vi.mock("./engine-actions", () => ({
+  readAssistantEngine: () => new Promise(() => undefined),
+}));
 
 const pathname = vi.fn(() => "/acme/core-platform");
 vi.mock("next/navigation", () => ({

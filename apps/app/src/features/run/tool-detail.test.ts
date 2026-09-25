@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  compactArgs,
   groupOf,
   parseBody,
   shortName,
@@ -471,10 +472,53 @@ describe("toolDetail", () => {
       expect(detail?.multiline).toBe(true);
     });
 
+    it("fills the headline from every argument when none is a scalar, rather than leave it blank (#4116)", () => {
+      const detail = toolDetail(
+        "mcp__linear__search",
+        body({
+          input: { filter: { state: "open", team: "core" }, ids: [1, 2] },
+        }),
+      );
+      expect(detail).toMatchObject({
+        headline: 'filter {"state":"open","team":"core"} · ids [1,2]',
+        multiline: false,
+      });
+    });
+
+    it("fills the headline of a shaped tool whose reading found nothing, from what it kept", () => {
+      expect(toolDetail("Read", body({ input: { limit: 20 } }))?.headline).toBe(
+        "limit 20",
+      );
+      expect(
+        toolDetail("Task", body({ input: { prompt: "Look\ncloser" } }))
+          ?.headline,
+      ).toBe("prompt Look");
+    });
+
     it("has no headline and no call for an input that carried nothing (negative)", () => {
       const detail = toolDetail("run_query", body({ input: {} }));
       expect(detail?.headline).toBeNull();
       expect(detail?.raw).toBeNull();
     });
+  });
+});
+
+describe("compactArgs", () => {
+  it("names every argument it kept, on one line, in the order the call gave them", () => {
+    expect(
+      compactArgs({ repo: "a/b", page: 2, opts: { draft: true }, tags: [] }),
+    ).toBe('repo a/b · page 2 · opts {"draft":true}');
+  });
+
+  it("cuts a long line so a huge argument never reaches the page whole", () => {
+    const line = compactArgs({ blob: "x".repeat(1000) });
+    expect(line).toHaveLength(240);
+    expect(line?.endsWith("…")).toBe(true);
+  });
+
+  it("is null for an input that carried nothing (negative)", () => {
+    expect(compactArgs(null)).toBeNull();
+    expect(compactArgs({})).toBeNull();
+    expect(compactArgs({ empty: "", none: {}, list: [] })).toBeNull();
   });
 });

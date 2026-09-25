@@ -338,6 +338,7 @@ export function runWork(overrides: Partial<RunWork> = {}): RunWork {
         state: "open",
         headSha: "3f2a9c1d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a39",
         headRef: "release/4.11.0-notes",
+        baseRef: "main",
         association: "recorded",
         closingIssues: null,
         checkoutRefs: ["co_1"],
