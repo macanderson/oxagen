@@ -223,6 +223,18 @@ function rankUnpricedModels(models: UnpricedModel[]): UnpricedModel[] {
 }
 
 /**
+ * Orders two model ids the way ClickHouse orders a `String`: byte by byte
+ * over UTF-8. JavaScript's `<` compares UTF-16 code units, which puts a model
+ * id holding an emoji or another character past U+FFFF before one holding a
+ * character between U+E000 and U+FFFF. The store puts it after. The paging
+ * cursor must agree with the store, or a page that did advance reads as
+ * stuck and the report fails.
+ */
+export function compareModelIds(a: string, b: string): number {
+  return Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+}
+
+/**
  * How many observed models one page of the frame read holds. The report
  * walks every page, so this bounds the memory and the `models` array of one
  * class-bucket read, not which models are compared.
@@ -319,7 +331,7 @@ export async function readUnpricedModels(args: {
     // The store returns a page in model-id order after `afterModel`, so the
     // cursor always moves forward. A page that does not move it would repeat
     // forever, and that is a store defect to surface, not to loop on.
-    if (afterModel !== undefined && !(last > afterModel))
+    if (afterModel !== undefined && compareModelIds(last, afterModel) <= 0)
       throw new Error(
         `readUnpricedModels: observed-model page did not advance past ${JSON.stringify(afterModel)}`,
       );

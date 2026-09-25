@@ -838,6 +838,7 @@ describe("readUnpricedModels", () => {
         ),
       );
       expect(out.every((m) => m.fullyUnpriced)).toBe(true);
+      expect(new Set(out.map((m) => m.model)).size).toBe(out.length);
     } finally {
       loadSpy.mockRestore();
     }
@@ -883,6 +884,59 @@ describe("readUnpricedModels", () => {
       });
       expect(out.map((m) => m.model)).toEqual(["z-light"]);
       expect(readObservedModelsMock).toHaveBeenCalledTimes(2);
+    } finally {
+      loadSpy.mockRestore();
+    }
+  });
+
+  // #3641. ClickHouse orders a String by its UTF-8 bytes, and JavaScript's
+  // `>` orders by UTF-16 code units. An emoji sorts after U+FF5E in the store
+  // and before it in JavaScript, so a cursor check written with `>` read a
+  // page that did advance as stuck and failed the whole report.
+  it("walks pages whose ids cross from the BMP past U+FFFF in store order", async () => {
+    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([]);
+    const row = (model: string) => ({
+      model,
+      provider: null,
+      calls: 1,
+      tokens: 1,
+      firstSeen: "2026-09-02T00:00:00.000Z",
+      lastSeen: "2026-09-02T00:00:00.000Z",
+      classes: [
+        {
+          tokenClass: "output",
+          calls: 1,
+          tokens: 1,
+          firstSeen: "2026-09-02T00:00:00.000Z",
+          lastSeen: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+    });
+    const fullPage = (prefix: string, last: string) => [
+      ...Array.from({ length: UNPRICED_MODEL_READ_PAGE_SIZE - 1 }, (_, i) =>
+        row(`${prefix}-${String(i).padStart(5, "0")}`),
+      ),
+      row(last),
+    ];
+    const bmp = "m-\uFF5E";
+    const astral = "m-\u{1F600}";
+    const pages: Array<string | undefined> = [];
+    readObservedModelsMock.mockImplementation(async (args) => {
+      const { page } = args as { page: { afterModel?: string } };
+      pages.push(page.afterModel);
+      if (page.afterModel === undefined) return fullPage("a", bmp);
+      if (page.afterModel === bmp) return fullPage("m-\uFF5F", astral);
+      return [row("z-last")];
+    });
+    try {
+      const out = await readUnpricedModels({
+        orgId: ORG,
+        since: SINCE,
+        at: AT,
+      });
+      expect(pages).toEqual([undefined, bmp, astral]);
+      expect(out).toHaveLength(UNPRICED_MODEL_REPORT_LIMIT);
+      expect(new Set(out.map((m) => m.model)).size).toBe(out.length);
     } finally {
       loadSpy.mockRestore();
     }
