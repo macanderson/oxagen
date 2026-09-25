@@ -11,6 +11,13 @@ import { ledgerStore } from "../lib/run-record";
 const CLOSE_BATCH = 500;
 
 /**
+ * Scans per pass. A pass that meets attempts it cannot close scans again past
+ * them, up to this many times, so they cannot fill every batch. It also bounds
+ * the step when every close fails.
+ */
+const MAX_SCANS = 4;
+
+/**
  * Every fifteen minutes: seal the ledger attempts with no event for twelve
  * hours as `abandoned`, and roll up each closed run's cost (#3988, ADR-173).
  *
@@ -20,7 +27,11 @@ const CLOSE_BATCH = 500;
  * `../lib/ledger-idle-close.ts`.
  *
  * Each attempt is sealed in its own transaction and tenant scope, so one that
- * fails is logged and left for the next pass. Each closed run sends
+ * fails is logged and left for the next pass. The scan is oldest first, so an
+ * attempt that fails every pass would stay at the head of every batch. Each
+ * further scan in a pass leaves out the attempts the pass already tried, and
+ * the completion log counts the failures, so such a backlog shows in
+ * monitoring rather than only as one warning per attempt. Each closed run sends
  * `cost/run.sealed`, the event a wrapped session's seal sends, so its cost
  * reads final rather than as an estimate.
  */
@@ -34,21 +45,34 @@ export const [runLedgerIdleClose] = createFunction(
   async ({ step }) => {
     const closed = await step.run("close-idle-attempts", async () => {
       const cutoff = ledgerIdleCutoff(new Date());
-      const idle = await listIdleLedgerAttempts({ cutoff, limit: CLOSE_BATCH });
       const store = ledgerStore();
       const out: ClosedLedgerRun[] = [];
-      for (const attempt of idle) {
-        try {
-          const done = await closeIdleLedgerAttempt(attempt, store);
-          if (done) out.push(done);
-        } catch (err) {
-          logger.warn(
-            { err, runId: attempt.runPublicId },
-            "run.ledger-idle-close: close failed; the next pass retries it",
-          );
+      const tried: string[] = [];
+      let failed = 0;
+      for (let scan = 0; scan < MAX_SCANS && out.length < CLOSE_BATCH; scan++) {
+        const limit = CLOSE_BATCH - out.length;
+        const idle = await listIdleLedgerAttempts({
+          cutoff,
+          limit,
+          exclude: [...tried],
+        });
+        for (const attempt of idle) {
+          tried.push(attempt.attemptId);
+          try {
+            const done = await closeIdleLedgerAttempt(attempt, store);
+            if (done) out.push(done);
+          } catch (err) {
+            failed += 1;
+            logger.warn(
+              { err, runId: attempt.runPublicId },
+              "run.ledger-idle-close: close failed; the next pass retries it",
+            );
+          }
         }
+        // A short page means nothing idle is left beyond what was tried.
+        if (idle.length < limit) break;
       }
-      return { found: idle.length, closed: out };
+      return { found: tried.length, failed, closed: out };
     });
 
     if (closed.closed.length > 0) {
@@ -66,9 +90,17 @@ export const [runLedgerIdleClose] = createFunction(
     }
 
     logger.info(
-      { found: closed.found, closed: closed.closed.length },
+      {
+        found: closed.found,
+        failed: closed.failed,
+        closed: closed.closed.length,
+      },
       "run.ledger-idle-close complete",
     );
-    return { found: closed.found, closed: closed.closed.length };
+    return {
+      found: closed.found,
+      failed: closed.failed,
+      closed: closed.closed.length,
+    };
   },
 );

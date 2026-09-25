@@ -354,10 +354,11 @@ describe("a step the producer wrote in two halves", () => {
     expect(collected.steps[0]).toMatchObject({
       input: '{"path":"README.md"}',
       text: null,
+      unfinished: false,
     });
-    expect(summaryPrompt("tse_0a1b2c", collected)).toContain(
-      "(body not retained)",
-    );
+    const prompt = summaryPrompt("tse_0a1b2c", collected);
+    expect(prompt).toContain("(body not retained)");
+    expect(prompt).not.toContain("never completed");
   });
 
   // #3370 finding 10: an attempt that failed or was abandoned mid-call leaves
@@ -372,9 +373,13 @@ describe("a step the producer wrote in two halves", () => {
     expect(collected.steps[0]).toMatchObject({
       input: '{"path":"README.md"}',
       text: null,
+      unfinished: true,
     });
     const prompt = summaryPrompt("tse_0a1b2c", collected);
     expect(prompt).toContain('called with: {"path":"README.md"}');
-    expect(prompt).toContain("(body not retained)");
+    // A call that never completed has no result. Calling its body "not
+    // retained" would read as a finished call whose output was not kept.
+    expect(prompt).toContain("(no result: the call never completed)");
+    expect(prompt).not.toContain("(body not retained)");
   });
 });

@@ -59,7 +59,7 @@ Claude Code's own permission check (`tool_decision` and `tool.blocked_on_user` i
 | `recall` | what was pulled into the model's context |
 | `usage` | a frame that carried a cost record |
 | `seal` | a frame that records the chain's own integrity: a `checkpoint`, a `telemetry_gap`, or the ledger event that closes an attempt |
-| `errors` | a call whose recorded outcome is failed, denied, cancelled, error, timeout or refused |
+| `errors` | a call whose recorded outcome is failed, denied, cancelled, error, timeout, refused or rejected |
 
 The filter selects frames and the fold runs over what is left, so a filtered transcript is the transcript of those frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
 

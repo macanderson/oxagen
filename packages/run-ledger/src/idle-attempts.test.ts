@@ -76,10 +76,45 @@ describe("buildListIdleAttemptsSql", () => {
 
   it("measures silence from the last event, or from the claim when there is none", () => {
     expect(text).toContain(
-      "coalesce(e.created_at, a.claimed_at) < $1::timestamptz",
+      "greatest(coalesce(e.created_at, a.claimed_at), r.updated_at) < $1::timestamptz",
     );
-    expect(text).toContain("ORDER BY coalesce(e.created_at, a.claimed_at) ASC");
+    expect(text).toContain(
+      "ORDER BY greatest(coalesce(e.created_at, a.claimed_at), r.updated_at) ASC",
+    );
     expect(params).toEqual([CUTOFF.toISOString(), 500]);
+  });
+
+  // ADR-173: an operator pause refuses every append, so a paused run is
+  // silent by design and must never be sealed as abandoned.
+  it("never lists a run whose evidence ingress an operator paused", () => {
+    expect(text).toContain("AND NOT r.ingress_paused");
+  });
+
+  // ADR-173: a resume stamps the run row's updated_at (setRunIngressPaused),
+  // so silence counts from the resume and a run resumed after twelve hours is
+  // not sealed at the next pass.
+  it("counts silence from a resume as well as from the last event", () => {
+    expect(text).toContain(
+      "greatest(coalesce(e.created_at, a.claimed_at), r.updated_at) AS last_activity_at",
+    );
+  });
+
+  it("leaves out no attempt unless the caller names some", () => {
+    expect(text).not.toContain("<> ALL");
+  });
+
+  it("leaves out the attempts a pass already tried", () => {
+    const tried = [
+      "44444444-4444-4444-8444-444444444444",
+      "55555555-5555-4555-8555-555555555555",
+    ];
+    const excluded = compile(buildListIdleAttemptsSql(CUTOFF, 3, tried));
+    expect(oneLine(excluded.sql)).toContain("AND a.id <> ALL($2::uuid[])");
+    expect(excluded.params).toEqual([
+      CUTOFF.toISOString(),
+      `{${tried.join(",")}}`,
+      3,
+    ]);
   });
 });
 
@@ -96,6 +131,23 @@ describe("listIdleLedgerAttempts", () => {
       10,
     ]);
     expect(found).toEqual([mapIdleLedgerAttemptRow(row)]);
+  });
+
+  it("passes the attempts to leave out to the scan", async () => {
+    const execute = vi.fn(async (_query: unknown) => []);
+    mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn({ execute }),
+    );
+    await listIdleLedgerAttempts({
+      cutoff: CUTOFF,
+      limit: 10,
+      exclude: [row.attempt_id],
+    });
+    expect(compile(execute.mock.calls[0]?.[0] as SQL).params).toEqual([
+      CUTOFF.toISOString(),
+      `{${row.attempt_id}}`,
+      10,
+    ]);
   });
 
   it("maps sequences and times from their wire forms", () => {

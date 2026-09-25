@@ -69,6 +69,12 @@ interface SummaryStep {
   input: string | null;
   /** The response half's body — the result the summary describes. */
   text: string | null;
+  /**
+   * The call was made and never completed: a request with no response. It
+   * has no result, which the prompt says, so the model cannot read the
+   * missing body as a result that was not kept.
+   */
+  unfinished: boolean;
 }
 
 /**
@@ -114,10 +120,14 @@ export async function collectSummarySteps(
       label: opening.summary,
       input: await bodyText(fold.request),
       text: await bodyText(result),
+      unfinished: fold.request !== null && fold.response === null,
     });
   }
   return { steps, total: folds.length };
 }
+
+/** What the prompt says in place of the result of a call that never completed. */
+const UNFINISHED_CALL = "(no result: the call never completed)";
 
 export function summaryPrompt(
   runPublicId: string,
@@ -127,7 +137,11 @@ export function summaryPrompt(
     [
       `[${step.seq}] ${step.kind} ${step.label}`,
       ...(step.input === null ? [] : [`called with: ${step.input}`]),
-      step.text === null ? "(body not retained)" : step.text,
+      step.unfinished
+        ? UNFINISHED_CALL
+        : step.text === null
+          ? "(body not retained)"
+          : step.text,
     ].join("\n"),
   );
   const cut =

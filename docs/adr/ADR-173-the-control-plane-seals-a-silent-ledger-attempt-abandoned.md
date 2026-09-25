@@ -34,8 +34,9 @@ Before this decision no production code passed it.
 `run.ledger-idle-close` runs every 15 minutes. It lists the open attempts of
 evidence-grade (V2) runs: the run is `pending` or `running`, its
 `active_attempt_id` names the attempt, and no seal row exists for it. It
-takes those whose last event, or whose claim when there is no event, is older
-than `LEDGER_IDLE_CLOSE_AFTER_MS`, twelve hours. That is the silence ADR-159
+takes those whose last activity is older than `LEDGER_IDLE_CLOSE_AFTER_MS`,
+twelve hours. Last activity is the last event, or the claim when there is no
+event, or a later operator resume (§4). That is the silence ADR-159
 allows a wrapped session. An assistant turn records a frame at every model
 and tool call and parks no longer than an approval's five minutes. A producer
 on `/v1/run-ingest` refreshes a fifteen-minute credential with every batch.
@@ -94,11 +95,31 @@ A cancelled run whose producer died is closed the same way. Its seal reads
 `abandoned` and its run `failed`, because no producer observed the end. The
 cancel's applied receipt stays on the run.
 
+### 4. An operator's pause or resume holds off the close
+
+An operator can pause a ledger run's evidence ingress (`dispatch_command`
+with `pause`). While it is paused, every append is refused, so the run is
+silent because the operator asked for it, not because the producer is gone.
+Two rules follow:
+
+- **A paused run is never closed.** The scan leaves out every run whose
+  `ingress_paused` is set, however long the pause lasts. Sealing it would end
+  a run the operator means to resume, record the operator's pause as the
+  producer's failure, and leave nothing to resume, because a resume refuses a
+  run that has ended.
+- **A resume is activity.** Silence counts from the later of the last event
+  (or the claim) and the run row's `updated_at`. `setRunIngressPaused` stamps
+  `updated_at`, so a resume starts a fresh twelve hours. Without this, a run
+  resumed after a pause of twelve hours or more would be closed at the next
+  pass, before its producer could append. Every append stamps `updated_at`
+  as well. Other writes to the row, such as a cancel or a requested summary,
+  stamp it too. They can only make the close later, never earlier.
+
 ## Consequences
 
 - A ledger run whose producer died reads as ended on Fleet and the Run page
   within twelve hours and fifteen minutes, and its cost reads as final.
-- A producer that is silent for twelve hours and then resumes loses its
+- A producer that is silent for twelve hours and then comes back loses its
   attempt. That trades a rare, long pause for a record that never stays open
   for good.
 - The scan reads every organization's open attempts through `withSystemDb`,
@@ -107,6 +128,14 @@ cancel's applied receipt stays on the run.
   learns planes.
 - The first passes close the backlog of attempts that never sealed, 500 each
   quarter hour, oldest first. Each closed run sends `cost/run.sealed`.
+- An attempt whose close fails is left for the next pass. Within one pass,
+  each further scan leaves out the attempts the pass already tried, up to
+  four scans, so attempts that fail every time cannot fill every batch. The
+  completion log counts the failures.
+- The scan reads the pause flag outside the run lock, and a seal with no
+  terminal event does not check it. A pause that lands in the moment between
+  the scan and the seal of a run already silent for twelve hours does not
+  stop that close.
 - A run admitted with no attempt behind it (a crash between `createRun` and
   `createAttempt`) is not an attempt and is not closed here.
 
