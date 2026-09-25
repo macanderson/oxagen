@@ -256,6 +256,7 @@ import { workspaceArchiveRoute } from "./workspace.archive";
 import { tachoIncidentListRoute } from "./tacho.incident.list";
 import { assistantAsk } from "@oxagen/oxagen/contracts/assistant.ask";
 import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.get";
+import { assistantReplyFeedbackRecord } from "@oxagen/oxagen/contracts/assistant.reply_feedback.record";
 import { toolsSearch } from "@oxagen/oxagen/contracts/tools.search";
 import { toolsLoad } from "@oxagen/oxagen/contracts/tools.load";
 import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
@@ -263,6 +264,7 @@ import { runRecentList } from "@oxagen/oxagen/contracts/run.recent.list";
 import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
 import { assistantAskRoute } from "./assistant.ask";
 import { assistantEngineGetRoute } from "./assistant.engine.get";
+import { assistantReplyFeedbackRecordRoute } from "./assistant.reply_feedback.record";
 import { toolsSearchRoute } from "./tools.search";
 import { toolsLoadRoute } from "./tools.load";
 import { shellNavCountsGetRoute } from "./shell.nav_counts.get";
@@ -1189,6 +1191,31 @@ const ROUTES: ThinRoute[] = [
     method: "GET",
     capability: assistantEngineGet.name,
     body: {},
+    status: 200,
+  },
+  {
+    file: "assistant.reply_feedback.record",
+    route: assistantReplyFeedbackRecordRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: assistantReplyFeedbackRecord.name,
+    body: {
+      conversationId: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+      runId: "arun_0123456789abcdef012345",
+      verdict: "wrong",
+    },
+    expectedInput: {
+      conversationId: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+      runId: "arun_0123456789abcdef012345",
+      verdict: "wrong",
+      note: null,
+    },
+    invalidBody: {
+      conversationId: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+      runId: "arun_0123456789abcdef012345",
+      verdict: "wrong",
+      note: "x".repeat(501),
+    },
+    jsonGuard: true,
     status: 200,
   },
   {
