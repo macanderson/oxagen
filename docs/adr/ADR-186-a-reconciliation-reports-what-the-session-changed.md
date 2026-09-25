@@ -55,8 +55,10 @@ A path is in a reconciliation when the session changed it. The rule lives in
    `baseline`. `pre_session_changes` is `excluded`, `partly_excluded` (a bound
    cut the record short), or `included` (no record was taken for the
    worktree).
-5. **The captured diff agrees.** The patch sealed beside a reconciliation
-   covers the reported paths and no others.
+5. **The captured diff covers the same paths.** The patch sealed beside a
+   reconciliation covers the reported paths and no others. It is taken
+   against the baseline, so its hunks can differ from a row's line counts
+   (see Known limits).
 6. **Older sessions keep the old measure.** A session restored from a state
    file written before `gitFirstReadAt` existed is measured against its
    baseline for the rest of its life, with `changes_basis: baseline`. Setting
@@ -140,9 +142,15 @@ each case as named.
   configuration, for example through `GIT_COMMITTER_EMAIL` in its own
   environment. Its commits read as someone else's and are not reported. The
   hook forwards only an allowlist of environment variables, and `GIT_*` is
-  not on it, so the daemon cannot see that email today.
+  not on it, so the daemon cannot see that email today. Issue #4320 tracks
+  the fix.
 - **An amendment to a commit written before the session.** The amended
   commit keeps the older author date and is not counted.
+- **A row and its hunk can measure different intervals.** A row for an
+  uncommitted edit carries line counts against `HEAD`. The captured patch
+  takes every path against the baseline, so after a pull that also changed
+  the path, the patch holds the upstream hunk the row's counts leave out.
+  Issue #4320 tracks the fix.
 - **An upstream change to a path the session also committed** is counted with
   it, because that path is measured against the baseline.
 - **A commit made before the first read of a worktree**, including the first
