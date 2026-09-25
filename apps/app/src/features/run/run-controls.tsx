@@ -94,9 +94,13 @@ export const HALT_FOLLOW_READS = 15;
  */
 function useFollowHalt(paused: boolean): (expected: boolean) => void {
   const navigate = useNavigate();
-  // Read through a ref so a new router object does not restart the count.
-  const refresh = useRef(navigate.refresh);
-  refresh.current = navigate.refresh;
+  // Read through a ref so a new router object does not restart the count. The
+  // write sits in an effect rather than in the body: React does not promise a
+  // render-phase ref write survives, and `react-hooks/refs` refuses one.
+  const refreshRef = useRef(navigate.refresh);
+  useEffect(() => {
+    refreshRef.current = navigate.refresh;
+  }, [navigate.refresh]);
   const [expected, setExpected] = useState<boolean | null>(null);
   // The status caught up, so stop following. Setting state while rendering is
   // React's pattern for state that tracks a prop.
@@ -107,7 +111,7 @@ function useFollowHalt(paused: boolean): (expected: boolean) => void {
     let reads = 0;
     const timer = setInterval(() => {
       reads += 1;
-      refresh.current();
+      refreshRef.current();
       if (reads >= HALT_FOLLOW_READS) clearInterval(timer);
     }, HALT_FOLLOW_EVERY_MS);
     return () => {

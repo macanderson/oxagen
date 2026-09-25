@@ -18,21 +18,21 @@ import type { PullRequestUrl } from "@/shared/pull-request-url";
 import type { SafePath } from "@/shared/safe-path";
 
 export function useNavigate(): {
-  push(path: SafePath): void;
+  push: (path: SafePath) => void;
   /** Replaces the entry and re-renders the server components, for a navigation after the session or a membership changed. */
-  replace(path: SafePath): void;
+  replace: (path: SafePath) => void;
   /**
    * Re-renders the server components at the URL already showing, for a re-read
    * that is not a navigation. A poll uses this rather than `replace`, which
    * would push a history entry and fetch the same route twice.
    */
-  refresh(): void;
+  refresh: () => void;
   /**
    * Replaces the entry and keeps the scroll where it is, for a playback that
    * walks the frames: one history entry for the whole playback, and the page
    * does not jump to its top at every frame.
    */
-  advance(path: SafePath): void;
+  advance: (path: SafePath) => void;
 } {
   const router = useRouter();
   // Memoised on the router: an effect that navigates has to list this object,

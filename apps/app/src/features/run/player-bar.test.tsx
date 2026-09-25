@@ -26,9 +26,11 @@ import { IntlProvider } from "@/test/intl";
 import { runFrame } from "./run.builders";
 
 const router = vi.hoisted(() => ({
-  push: vi.fn(),
-  replace: vi.fn(),
-  refresh: vi.fn(),
+  push: vi.fn<(path: string) => void>(),
+  // `advance` replaces with `scroll: false`, so the options argument is typed
+  // here too: untyped, `mock.calls` is `any[][]` and reading a call is unsafe.
+  replace: vi.fn<(path: string, options?: { scroll?: boolean }) => void>(),
+  refresh: vi.fn<() => void>(),
 }));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (

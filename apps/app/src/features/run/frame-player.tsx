@@ -133,8 +133,8 @@ type Playback = {
   /** Fewer than two frames shown: there is nothing to play through. */
   disabled: boolean;
   speed: PlaybackSpeed;
-  toggle(): void;
-  setSpeed(speed: PlaybackSpeed): void;
+  toggle: () => void;
+  setSpeed: (speed: PlaybackSpeed) => void;
 };
 
 const PlaybackContext = createContext<Playback | null>(null);
