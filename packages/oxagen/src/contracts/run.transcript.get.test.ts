@@ -133,6 +133,7 @@ describe("get_run_transcript contract", () => {
           decision: "route",
           type: "policy_decision",
           at: "2026-09-11T10:00:04.000Z",
+          harness: false,
         },
       }).success,
     ).toBe(true);
@@ -200,6 +201,7 @@ describe("what the fold states about an entry (ADR-182)", () => {
         type: "approval_request",
         source: "bundle",
         at: "2026-09-11T10:00:04.000Z",
+        harness: false,
       },
     ],
     subject: "Write",
@@ -279,7 +281,17 @@ describe("what the fold states about an entry (ADR-182)", () => {
 
   it("answers the run's counts beside the page", () => {
     const counts = {
-      kinds: { prompt: 1, tools: 2 },
+      kinds: {
+        prompt: 1,
+        responses: 0,
+        thinking: 0,
+        tools: 2,
+        policy: 0,
+        usage: 0,
+        recall: 0,
+        seal: 0,
+        errors: 0,
+      },
       entries: 3,
       errors: 0,
       policy: 1,
@@ -298,7 +310,16 @@ describe("what the fold states about an entry (ADR-182)", () => {
     expect(
       runTranscriptGet.output.safeParse({
         ...out,
-        counts: { ...counts, kinds: { nonsense: 1 } },
+        counts: { ...counts, kinds: { ...counts.kinds, nonsense: 1 } },
+      }).success,
+    ).toBe(false);
+    // Every chip is counted on every read, so an answer missing one is refused
+    // rather than read as a zero.
+    const { seal: _seal, ...missingSeal } = counts.kinds;
+    expect(
+      runTranscriptGet.output.safeParse({
+        ...out,
+        counts: { ...counts, kinds: missingSeal },
       }).success,
     ).toBe(false);
   });

@@ -21,7 +21,7 @@ vi.mock("next/link", () => ({
 }));
 
 const { PolicyDecisions } = await import("./policy-tab");
-const { entriesOf } = await import("./sections");
+const { entriesOf } = await import("./recorded-entries");
 
 afterEach(cleanup);
 
