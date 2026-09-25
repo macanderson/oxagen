@@ -1071,7 +1071,10 @@ describe("buildFeed, a reply's own shapes", () => {
     expect(tool?.failed).toBe(true);
   });
 
-  it("prints every argument on the first line when none of them is a headline", () => {
+  // A call whose arguments are all objects has no reading of its own. Its row
+  // prints every argument as `key value` (compactArgs, #4116) rather than the
+  // tool's name over a blank argument slot.
+  it("prints every argument as key and value when the call's arguments have no headline", () => {
     const rows = buildFeed([
       reply({
         response: transcriptBody({
@@ -1088,9 +1091,6 @@ describe("buildFeed, a reply's own shapes", () => {
         }),
       }),
     ]);
-    // Arguments that are all objects give the generic reading no headline, so
-    // `compactArgs` (tool-detail.ts, #4138) prints each as `key value`. The
-    // row never shows the tool's name alone.
     expect(tools(rows)[0]?.call.arg).toBe(
       'filter {"state":"open"} · patch {"labels":["a"]}',
     );
