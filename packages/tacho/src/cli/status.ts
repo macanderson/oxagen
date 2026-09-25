@@ -152,6 +152,14 @@ export function shippingHealth(
       detail:
         "the daemon is not answering, so nothing is recorded or shipped (restart the service, or run `tacho enroll` again)",
     };
+  // A revoked host ships nothing again, so an empty WAL is no comfort
+  // (#3944, S-04).
+  if (daemon["host_status"] === "revoked")
+    return {
+      healthy: false,
+      detail:
+        "an operator revoked this host, so nothing more ships (run `tacho unenroll` to remove the hooks and the service)",
+    };
   if (wal.unshipped === 0)
     return { healthy: true, detail: "every recorded event has shipped" };
   const lastError =

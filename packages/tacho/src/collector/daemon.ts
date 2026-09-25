@@ -58,6 +58,7 @@ import {
   type HostFile,
   hostStatusInForce,
   readHostFile,
+  readHostFileLenient,
   mcpEndpointFor,
   modelProxyPortFor,
   sessionScopeOf,
@@ -1370,7 +1371,25 @@ async function initializeDaemon(
     // A revoked host fetches no control envelope, so the revoked status
     // arrives only as the refusal. Recorded here, the hooks and the model
     // proxy refuse from it and `tacho status` shows it (#3944).
+    //
+    // Only for a revoke this machine did not start. `reassign`, `unenroll`
+    // and a harness add revoke first and mark host.json `revoked_at` (or
+    // write the next enrollment over it), then replace or remove this
+    // daemon. Until they do, live sessions still call through it, and a
+    // harness-only reassign keeps them (ADR-179), so the shipper stops and
+    // the hooks and the model proxy carry on.
     onHostRevoked: () => {
+      const disk = readHostFileLenient(paths.hostFile).host;
+      if (
+        disk === undefined ||
+        disk.revoked_at !== null ||
+        disk.host_enrollment_id !== host.host_enrollment_id
+      ) {
+        log(
+          "enrollment revoked from this machine (host.json is marked or replaced): shipping stopped, and live sessions carry on until the service is replaced",
+        );
+        return;
+      }
       host = applyControlFacts(paths.hostFile, host, {
         host_status: "revoked",
       });

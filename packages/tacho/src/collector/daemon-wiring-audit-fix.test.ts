@@ -615,6 +615,48 @@ describe("the daemon's audit wiring", () => {
     });
   });
 
+  it("stops shipping but keeps serving live sessions when this machine started the revoke", async () => {
+    // `tacho reassign`, `unenroll` and a harness add revoke first and mark
+    // host.json `revoked_at`, then replace or remove this daemon. Until then
+    // the harnesses still call through it, and a harness-only reassign keeps
+    // their sessions (ADR-179), so the old key's refusal must not refuse
+    // their tools and model calls.
+    const log: string[] = [];
+    const { handle, plane, paths } = await boot({ log });
+    await handle.api.handleHook(hook("SessionStart"));
+    writeHostFile(paths.hostFile, {
+      ...handle.host(),
+      revoked_at: "2026-09-25T20:00:00.000Z",
+    });
+    plane.revoke();
+    await handle.tick();
+    expect(handle.shipper.hostRevoked).toBe(true);
+    // The status the hooks and the model proxy read is unchanged, in memory
+    // and on disk.
+    expect(handle.host().host_status).toBe("active");
+    expect(
+      (
+        JSON.parse(readFileSync(paths.hostFile, "utf8")) as Record<
+          string,
+          unknown
+        >
+      )["host_status"],
+    ).toBe("active");
+    expect(log.some((line) => line.includes("revoked from this machine"))).toBe(
+      true,
+    );
+    const response = await handle.api.handleHook(
+      hook("PreToolUse", {
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/README.md" },
+        tool_use_id: "toolu_local_revoke",
+      }),
+    );
+    expect(response).not.toMatchObject({
+      hookSpecificOutput: { permissionDecision: "deny" },
+    });
+  });
+
   it("learns the revocation from a refused command poll too, and stops shipping", async () => {
     // A host with nothing to ship still polls for commands, so it hears the
     // refusal there instead of waiting for its next ingest.
