@@ -450,7 +450,15 @@ export class MemoryStore implements SteeringStore {
     const latest = this.versions
       .filter((v) => v.recordId === record.id)
       .sort((a, b) => b.version - a.version)[0];
-    const version = {
+    // As the Postgres store does: bytes the repository sync already
+    // published are reused, not written again (ADR-182).
+    const reused = existing
+      ? this.versions.find(
+          (v) =>
+            v.id === existing.activeVersionId && v.checksum === input.checksum,
+        )
+      : undefined;
+    const version = reused ?? {
       id: uuid(),
       publicId: nextId("crv"),
       recordId: record.id,
@@ -499,8 +507,10 @@ export class MemoryStore implements SteeringStore {
     )
       throw alreadyMerged(proposal.publicId);
     if (!existing) this.records.push(record);
-    if (latest) latest.isLatest = false;
-    this.versions.push(version);
+    if (!reused) {
+      if (latest) latest.isLatest = false;
+      this.versions.push(version);
+    }
     Object.assign(record, classification, {
       activeVersionId: version.id,
       version: version.version,
@@ -1019,6 +1029,7 @@ export class MemorySyncStore implements SyncStore {
         repository: null,
         branch: null,
         headSha: null,
+        rulesSha: null,
         status: "pending" as const,
         findings: [],
         error: null,

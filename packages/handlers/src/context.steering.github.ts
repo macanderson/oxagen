@@ -18,7 +18,6 @@ import {
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { resolveGitHubToken } from "./lib/github-token";
-import type { SteeringStore } from "./context.steering.store";
 
 /**
  * The repository hosts steering can publish through. A Context PR on GitHub is
@@ -473,58 +472,45 @@ export function assertProductionBase(
  * into the record file. Running the checks again cannot help, because a
  * merged pull request's head never moves again. The production branch now
  * holds whatever merged, and the repository sync (ADR-182) publishes that:
- * the record file is the record. This refusal says so; the handlers run the
- * sync before they throw it, and `reason` carries what the sync decided when
- * it could not publish the file.
+ * the record file is the record. This refusal says so, and the handlers ask
+ * for the sync before they throw it.
  */
 export function mergedOutsideOxagen(
   prUrl: string | null,
   mergedHead: string | null,
-  reason?: string | null,
 ): HandlerError {
   const at = mergedHead ? ` at ${mergedHead}` : "";
   return new HandlerError({
     code: "conflict",
     reason: "merged_outside_oxagen",
-    message: reason
-      ? `Someone merged ${prUrl ?? "this pull request"} on the repository host${at}. ${reason}.`
-      : `Someone merged ${prUrl ?? "this pull request"} on the repository host${at}. Oxagen publishes what the production branch holds, and this proposal shows the result once the sync finishes.`,
+    message: `Someone merged ${prUrl ?? "this pull request"} on the repository host${at}. Oxagen is reading the production branch now, and this proposal shows what it published within a minute.`,
   });
 }
 
 /**
- * Run the repository sync for a Context PR the host already merged, then
- * refuse with what it found. A merge the sync published answers
- * `already_merged`; one it could not publish answers `merged_outside_oxagen`
- * with the sync's reason.
+ * Ask for the repository sync for a Context PR the host already merged, then
+ * refuse. The sync runs through its queue (one per workspace at a time), not
+ * inside this request: run here, it could write an older branch head over a
+ * newer one the queue had already written.
  */
 export async function refuseMergedOnHost(
   deps: {
-    store: Pick<SteeringStore, "findProposal">;
-    sync?: (scope: { orgId: string; workspaceId: string }) => Promise<unknown>;
+    requestSync?: (scope: {
+      orgId: string;
+      workspaceId: string;
+    }) => Promise<unknown>;
   },
   scope: { orgId: string; workspaceId: string },
   row: { publicId: string; prUrl: string | null },
   mergedHead: string | null,
 ): Promise<never> {
-  if (deps.sync) {
-    try {
-      await deps.sync(scope);
-    } catch (err) {
-      logger.warn(
-        { err, proposal: row.publicId },
-        "context.steering: the sync after a merge on the host failed; the scheduled sync retries it",
-      );
-    }
-    const after = await deps.store.findProposal(scope, row.publicId);
-    if (after?.status === "merged")
-      throw new HandlerError({
-        code: "conflict",
-        reason: "already_merged",
-        message: `${row.prUrl ?? row.publicId} was merged on the repository host, and Oxagen published it from the production branch`,
-      });
-    if (after?.status === "rejected")
-      throw mergedOutsideOxagen(row.prUrl, mergedHead, after.dismissedReason);
+  try {
+    await deps.requestSync?.(scope);
+  } catch (err) {
+    logger.warn(
+      { err, proposal: row.publicId },
+      "context.steering: could not request a sync after a merge on the host; the scheduled sweep runs it",
+    );
   }
   throw mergedOutsideOxagen(row.prUrl, mergedHead);
 }
@@ -841,6 +827,7 @@ export function createSteeringGitHub(
           owner: repo.owner,
           repo: repo.repo,
           ref,
+          path: dir,
         });
         return paths.filter((path) => path.startsWith(`${dir}/`));
       } catch (err) {

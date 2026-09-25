@@ -37,6 +37,8 @@ export interface SyncState {
   branch: string | null;
   /** The production-branch commit the registry last matched. */
   headSha: string | null;
+  /** The newest commit at that head that changed `.oxagen/rules/`. */
+  rulesSha: string | null;
   status: SyncStatus;
   findings: SyncFinding[];
   error: string | null;
@@ -120,6 +122,7 @@ function toState(row: typeof schema.contextSyncState.$inferSelect): SyncState {
     repository: row.repository,
     branch: row.branch,
     headSha: row.headSha,
+    rulesSha: row.rulesSha,
     status: row.status as SyncStatus,
     findings: Array.isArray(row.findings)
       ? (row.findings as SyncFinding[])
@@ -163,6 +166,7 @@ export const postgresSyncStore: SyncStore = {
       repository: state.repository,
       branch: state.branch,
       headSha: state.headSha,
+      rulesSha: state.rulesSha,
       status: state.status,
       findings: state.findings,
       error: state.error,

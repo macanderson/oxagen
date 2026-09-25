@@ -77,9 +77,10 @@ function rig(files: Record<string, string> = {}): Rig {
     steering: h.store,
     now: h.now,
   };
-  // The merge handler runs the same sync when it finds a PR merged on the
-  // host, as `steeringDeps()` wires it in production.
-  h.sync = (scope) => syncWorkspaceSteering(deps, scope, { force: true });
+  // The merge handler asks for a sync when it finds a PR merged on the host,
+  // as `steeringDeps()` wires it in production. The request is recorded
+  // here, and a test runs the sync itself the way the queue would.
+  h.requestSync = vi.fn(async () => undefined);
   return {
     h,
     sync,
@@ -238,6 +239,51 @@ describe("syncWorkspaceSteering", () => {
     });
   });
 
+  // Most pushes to main never touch `.oxagen/rules/`. They must not list the
+  // rules or post a check: the newest commit that changed the rules is the
+  // one the last sync read.
+  it("lists nothing more when a push leaves the rules alone", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
+    await r.run();
+    const rulesSha = r.sync.state?.rulesSha;
+    r.h.github.commit("main", "src/index.ts", "export {};\n");
+    const listFiles = vi.spyOn(r.h.github, "listFiles");
+    const out = await r.run();
+    expect(out.outcome).toBe("current");
+    expect(listFiles).not.toHaveBeenCalled();
+    expect(r.sync.state).toMatchObject({
+      headSha: r.h.github.heads.get("main"),
+      rulesSha,
+    });
+    expect(r.h.github.checkRuns).toHaveLength(1);
+  });
+
+  // A file the tree listed that then reads back empty is a failed read.
+  // Planning without it would retire its record, so the sync stops.
+  it("stops rather than plan a tree it could not read in full", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
+    await r.run();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.two.toml`,
+      recordText("ctx.a.two"),
+    );
+    vi.spyOn(r.h.github, "readFile").mockResolvedValue(null);
+    await expect(r.run()).rejects.toThrow("could not read");
+    expect(active(r)).toHaveLength(1);
+    expect(r.sync.state?.status).toBe("failed");
+  });
+
   it("records a failure and keeps the last good head when the branch is gone", async () => {
     const r = rig();
     r.h.github.commit(
@@ -346,7 +392,10 @@ describe("Context PRs on the host", () => {
   // The same #4118 sequence reached through the Merge button: the handler
   // runs the sync and answers with what it found instead of telling the
   // person to start over.
-  it("runs the sync when Merge is pressed on a PR already merged on GitHub", async () => {
+  // The same #4118 sequence reached through the Merge button: the handler
+  // asks for the sync through its queue and says so, instead of telling the
+  // person to start over. The queue's sync then publishes it.
+  it("asks for the sync when Merge is pressed on a PR already merged on GitHub", async () => {
     const r = rig();
     const id = await openedAndPassed(r);
     const path = proposal(r, id).path!;
@@ -362,9 +411,77 @@ describe("Context PRs on the host", () => {
         { proposalId: id },
         ctx({ userId: REVIEWER }),
       ),
-    ).rejects.toMatchObject({ reason: "already_merged" });
+    ).rejects.toMatchObject({
+      reason: "merged_outside_oxagen",
+      message: expect.stringContaining("reading the production branch now"),
+    });
+    expect(r.h.requestSync).toHaveBeenCalledWith(SCOPE);
+    await r.run();
     expect(proposal(r, id).status).toBe("merged");
     expect(active(r)[0]?.statement).toBe("Edited on the PR.");
+  });
+
+  // A sync's publication and the merge's can land in either order. When the
+  // sync's push wins the lock, the merge adds its reviewer to that version
+  // rather than writing the same bytes twice.
+  it("reuses a version the sync already published when Oxagen's merge lands second", async () => {
+    const r = rig();
+    const id = await openedAndPassed(r);
+    // The sync reads the PR as open, then a head that already holds the
+    // merge: it publishes the lineage without deferring it.
+    const merge = createMergeContextPrHandler(r.h);
+    const realGet = r.h.github.getPullRequest.bind(r.h.github);
+    const open = await realGet(
+      r.h.github.repository!,
+      r.h.github.pulls[0]!.number,
+    );
+    r.h.github.mergeOnHost(r.h.github.pulls[0]!.number);
+    const spy = vi
+      .spyOn(r.h.github, "getPullRequest")
+      .mockResolvedValueOnce(open);
+    await r.run(true);
+    spy.mockRestore();
+    expect(r.h.store.versions).toHaveLength(1);
+    await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(r.h.store.versions).toHaveLength(1);
+    expect(proposal(r, id)).toMatchObject({
+      status: "merged",
+      mergedByUserId: REVIEWER,
+    });
+    expect(r.h.store.ledger.at(-1)?.approverUserId).toBe(REVIEWER);
+  });
+
+  // A reviewer on GitHub accepted a suggestion that put a credential into
+  // the record, then merged. The sync refuses the file, so the proposal must
+  // not read merged: it says why nothing was published.
+  it("rejects a PR merged on GitHub whose file the sync refused", async () => {
+    const r = rig();
+    // The lineage is already in force, so a link would find a record and a
+    // promotion to point at: the old version, which is the wrong answer.
+    r.h.github.commit(
+      "main",
+      `${RULES}/${LINEAGE}.toml`,
+      recordText(LINEAGE, "The version in force."),
+    );
+    await r.run();
+    const id = await openedAndPassed(r);
+    const path = proposal(r, id).path!;
+    r.h.github.commit(
+      `context/${LINEAGE}`,
+      path,
+      recordText(LINEAGE, "Push with ghp_0123456789abcdefghijklmnopqrstuvwx."),
+    );
+    r.h.github.mergeOnHost(r.h.github.pulls[0]!.number);
+    pastGrace(r);
+    const out = await r.run();
+    expect(out.proposals).toMatchObject({ merged: 0, rejected: 1 });
+    expect(proposal(r, id).status).toBe("rejected");
+    expect(proposal(r, id).dismissedReason).toContain(
+      "Oxagen could not publish it",
+    );
+    expect(active(r).map((x) => x.statement)).toEqual([
+      "The version in force.",
+    ]);
   });
 
   it("rejects a proposal whose PR was closed on GitHub without merging", async () => {

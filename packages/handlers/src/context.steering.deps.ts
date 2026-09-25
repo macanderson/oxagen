@@ -13,7 +13,6 @@ import {
   postgresSteeringStore,
   type SteeringStore,
 } from "./context.steering.store";
-import { syncDeps, syncWorkspaceSteering } from "./context.steering.sync";
 
 interface RoleReader {
   orgRole(orgId: string, userId: string): Promise<string | null>;
@@ -31,12 +30,15 @@ export interface SteeringDeps {
   now: () => Date;
   emit: (event: SecurityEventInput) => void;
   /**
-   * Run the repository sync now (ADR-182). A Context PR the host merged at a
-   * commit Oxagen never checked is published from the production branch by
-   * the sync, and a person pressing Merge on it should not wait for the
-   * webhook. Absent in tests that do not exercise it.
+   * Ask for the repository sync now (ADR-182). A Context PR the host merged
+   * at a commit Oxagen never checked is published from the production branch
+   * by the sync, and a person pressing Merge on it should not wait for the
+   * sweep. Absent in tests that do not exercise it.
    */
-  sync?: (scope: { orgId: string; workspaceId: string }) => Promise<unknown>;
+  requestSync?: (scope: {
+    orgId: string;
+    workspaceId: string;
+  }) => Promise<unknown>;
 }
 
 export function steeringDeps(): SteeringDeps {
@@ -49,6 +51,12 @@ export function steeringDeps(): SteeringDeps {
     },
     now: () => new Date(),
     emit: emitSecurityEvent,
-    sync: (scope) => syncWorkspaceSteering(syncDeps(), scope, { force: true }),
+    // Loaded on first use: the request module pulls in the event client.
+    requestSync: async (scope) => {
+      const { requestSteeringSync } = await import(
+        "./context.steering.sync.request"
+      );
+      return requestSteeringSync([scope], "merge_on_host");
+    },
   };
 }

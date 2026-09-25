@@ -39,4 +39,5 @@ Inserts one `agent.context_promotions` row and updates `context_records.status` 
 
 - Unknown record, or a version that does not belong to the record → error.
 - `promote` without `version_id` → error.
+- A record whose file lives under `.oxagen/rules/` → `conflict: record_follows_repository`. The repository sync (ADR-182) follows the file, so a change made here would revert on the next sync. Change the file with a Context PR instead.
 - A racing double-append trips the `(record_id, seq)` unique index rather than forking the chain.

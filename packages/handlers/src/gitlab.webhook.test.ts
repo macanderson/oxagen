@@ -267,6 +267,22 @@ describe("GitLab webhook: the repository sync (ADR-182)", () => {
     expect(state.mrReads).toBe(0);
   });
 
+  // Only the default branch can move steering. A feature-branch push would
+  // put the page into "pending" for nothing.
+  it("asks only for a push to the project's default branch", async () => {
+    const { deps } = world({});
+    const requestSync = vi.fn(async () => {});
+    deps.requestSync = requestSync;
+    const project = { ...PUSH.project, default_branch: "main" };
+    await expect(
+      deliver(deps, { ...PUSH, ref: "refs/heads/feature/x", project }),
+    ).resolves.toMatchObject({ outcome: "ignored_event" });
+    await expect(
+      deliver(deps, { ...PUSH, ref: "refs/heads/main", project }),
+    ).resolves.toMatchObject({ outcome: "sync_requested" });
+    expect(requestSync).toHaveBeenCalledTimes(1);
+  });
+
   it("ignores a push when no sync can be requested", async () => {
     const { deps } = world({});
     await expect(deliver(deps, PUSH)).resolves.toEqual({

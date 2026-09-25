@@ -46,7 +46,14 @@ export function githubDeliveryBranch(
   }
   if (eventName === "pull_request") {
     if (!PULL_REQUEST_ACTIONS.has(str(body.action) ?? "")) return null;
-    const pr = body.pull_request as { base?: { ref?: unknown } } | undefined;
+    const pr = body.pull_request as
+      | { base?: { ref?: unknown }; head?: { ref?: unknown } }
+      | undefined;
+    // Only a Context PR has a proposal to settle. Any other PR that merges
+    // into the production branch arrives as that branch's push, which is
+    // what changes records; asking on every PR edit would put the page into
+    // "pending" for nothing.
+    if (!str(pr?.head?.ref)?.startsWith("context/")) return null;
     return str(pr?.base?.ref);
   }
   return null;

@@ -97,6 +97,23 @@ describe("githubDeliveryBranch", () => {
     },
   );
 
+  // Only a Context PR has a proposal to settle. Any other PR that merges into
+  // the production branch arrives as its push, so its own events ask nothing.
+  it.each(["closed", "synchronize", "reopened", "edited"])(
+    "ignores a %s pull request that is not a Context PR",
+    (action) => {
+      expect(
+        githubDeliveryBranch("pull_request", {
+          action,
+          pull_request: {
+            base: { ref: "main" },
+            head: { ref: "feature/login" },
+          },
+        }),
+      ).toBeNull();
+    },
+  );
+
   it("ignores a pull request delivery with no base branch", () => {
     expect(
       githubDeliveryBranch("pull_request", {

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS agent.context_sync_state (
   repository text,
   branch text,
   head_sha text,
+  rules_sha text,
   status text NOT NULL DEFAULT 'pending',
   findings jsonb NOT NULL DEFAULT '[]'::jsonb,
   error text,

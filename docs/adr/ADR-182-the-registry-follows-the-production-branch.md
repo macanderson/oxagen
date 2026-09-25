@@ -55,36 +55,51 @@ never change cannot be enforced against that.
    takes the new lineage as its slug. A lineage that changes in the same
    commit as a move is a new record, and the old one retires. This supersedes
    ADR-178 decision 4. A label still changes without a new version.
-4. **What triggers a sync.** The GitHub webhook routes `push` and
-   `pull_request` deliveries by GitHub's repository id to every workspace
-   whose main binding head names that repository and whose approved branch
-   the delivery touched, and sends `steering/sync.requested`. The GitLab
-   webhook does the same for a merged merge request and, for projects
-   attached after this change, a push. A sweep every five minutes requests a
-   sync for every workspace with a main repository. A sync whose branch head
-   has not moved reads nothing more, so the sweep costs about three API calls
-   per workspace.
+4. **What triggers a sync.** The GitHub webhook routes a `push` to the
+   production branch, and a `pull_request` event on a Context PR's
+   `context/*` branch, by GitHub's repository id to every workspace whose main
+   binding head names that repository. It sends `steering/sync.requested`.
+   The GitLab webhook does the same for a merged merge request and, for
+   projects attached after this change, a push to the default branch. A sweep
+   every five minutes requests a sync for every workspace with a main
+   repository. A sync reads nothing more when the branch head has not moved,
+   and lists `.oxagen/rules/` only when the newest commit that touched it has
+   changed, so a push that leaves the rules alone costs two API calls.
 5. **A merge on the host publishes.** A Context PR merged on GitHub or GitLab
    points at the record the sync published for its lineage, with no reviewer
    on the ledger and the policy version `repository:sync`. Review on the host
    is the host's branch protection, as ADR-061 already says for `team`. A PR
-   closed without merging is rejected. A PR whose branch moved has its checks
-   reset to pending.
+   merged on the host whose file the sync refused is rejected with the reason,
+   not linked to the version still in force. A PR closed without merging is
+   rejected. A PR whose branch moved has its checks reset to pending. Pressing
+   Merge in Oxagen on a PR the host already merged asks for a sync through the
+   queue and says so; the sync never runs inside that request, where it could
+   write an older head over a newer one.
 6. **A merge from Oxagen keeps its reviewer.** For 90 seconds after a Context
    PR merges at the commit its checks passed on, the sync leaves that lineage
    to `merge_context_pr`, which records the reviewer. Both paths take one
    advisory lock per workspace and write versions and ledger links through the
-   same functions, so the second one finds the content already published.
+   same functions. When the sync lands first anyway, `merge_context_pr` finds
+   the same bytes already in force and adds the reviewer's promotion to that
+   version instead of writing a second one.
 7. **A file that fails validation publishes nothing, and says so.** The record
-   it held keeps its last good version. The problem is written to
-   `agent.context_sync_state`, shown on the Steering page's freshness panel,
-   and posted as the `Oxagen steering sync` check on the commit. A record with
-   no stamps, or a stamp its content no longer matches, publishes with a
-   warning, because a person editing by hand cannot compute a SHA-256.
+   it held keeps its last good version, and while any file's lineage is
+   unknown nothing retires, since that file may be the record moved and broken
+   in one commit. The problem is written to `agent.context_sync_state`, shown
+   on the Steering page's freshness panel, and posted as the `Oxagen steering
+   sync` check on the commit. A TOML error names its line and column, never
+   the file's text. A record with no stamps, or a stamp its content no longer
+   matches, publishes with a warning, because a person editing by hand cannot
+   compute a SHA-256.
 8. **A constraint's effect stays on the registry.** The record file has no
    field for require or forbid. An existing constraint keeps its effect. A
    constraint the registry has never held is refused, and the finding says to
    create it in Oxagen.
+9. **A registry-only change to a repository record is refused.**
+   `promote_context_record` refuses to retire, supersede or pin a record whose
+   file lives under `.oxagen/rules/`, with `record_follows_repository`. The
+   next sync would read the file back and silently undo it. The change goes
+   through the file: a Context PR that removes it or marks it retracted.
 
 ## Consequences
 

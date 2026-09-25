@@ -323,11 +323,16 @@ export interface GitHubClient {
    * the repository default branch). The ref may be a branch name, a tag or a
    * commit SHA; name the commit when two reads have to agree on one. The
    * returned paths are relative to the repository root (e.g. `"src/index.ts"`).
+   *
+   * With `path`, only the blobs under that directory, found by descending to
+   * it one level at a time rather than listing the whole repository. A path
+   * the tree does not hold answers no blobs.
    */
   getTree(args: {
     owner: string;
     repo: string;
     ref?: string;
+    path?: string;
   }): Promise<string[]>;
 
   /**

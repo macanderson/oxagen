@@ -4136,7 +4136,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d2d5efa07e2a4b95e485e58fd6c28970ee4041786edf4d7fcdb32832c9e14048",
+  "contentHash": "2b59c09c49b92808d9a0766d7400a18d055963becd1c6283f3624ae1717f83c0",
   "domains": [
     {
       "name": "agent",
@@ -9205,6 +9205,12 @@
         },
         {
           "name": "head_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "rules_sha",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

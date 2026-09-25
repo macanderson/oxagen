@@ -217,6 +217,44 @@ describe("planSync", () => {
       expect(plan.publish).toEqual([]);
     });
 
+    // The parser quotes the lines around the error. A finding is shown to
+    // every member and rides every freshness read, so it carries the place,
+    // never the text.
+    it("names where the TOML broke without copying any line of it", () => {
+      const plan = planSync({
+        files: [
+          file(`${RULES}/x.toml`, 'token = "ghp_secretvalue123456"\nbad = [\n'),
+        ],
+        records: [],
+      });
+      expect(plan.findings[0]?.message).toMatch(/at line \d+, column \d+/);
+      expect(plan.findings[0]?.message).not.toContain("ghp_");
+    });
+
+    // An edit that puts an invalid lineage into a record's file must not
+    // retire the record the file held.
+    it("keeps a record whose file now carries an invalid lineage", () => {
+      const rec = registered("ctx.a.one");
+      const text = rec.body!.replace(
+        'lineage_id = "ctx.a.one"',
+        'lineage_id = "ctx_a_ONE"',
+      );
+      const plan = planSync({ files: [file(rec.path!, text)], records: [rec] });
+      expect(plan.findings[0]).toMatchObject({ code: "lineage_invalid" });
+      expect(plan.retire).toEqual([]);
+    });
+
+    // A move and a break in one commit leave the old path empty and the new
+    // one unreadable. The file's lineage is unknown, so nothing retires.
+    it("retires nothing while any file's lineage is unknown", () => {
+      const rec = registered("ctx.a.one");
+      const plan = planSync({
+        files: [file(`${RULES}/team/moved.toml`, "schema = [broken")],
+        records: [rec],
+      });
+      expect(plan.retire).toEqual([]);
+    });
+
     it("reports a schema problem and keeps the record it held", () => {
       const rec = registered("ctx.a.one");
       const plan = planSync({

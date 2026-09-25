@@ -85,7 +85,7 @@ function setIdFor(repo: SteeringRepository): string {
 }
 
 export function createOpenContextPrHandler(
-  deps: Pick<SteeringDeps, "store" | "github" | "now">,
+  deps: Pick<SteeringDeps, "store" | "github" | "now" | "requestSync">,
 ): CapabilityHandler<typeof contextPrOpen> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);

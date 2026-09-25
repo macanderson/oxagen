@@ -1797,6 +1797,10 @@ export const contextSyncState = agentSchema.table(
     repository: text("repository"),
     branch: text("branch"),
     headSha: text("head_sha"),
+    // The newest commit at that head that changed `.oxagen/rules/`. A push
+    // that leaves it where it was changes no record, and the sync reads
+    // nothing more.
+    rulesSha: text("rules_sha"),
     status: text("status").notNull().default("pending"),
     findings: jsonb("findings").notNull().default(sql`'[]'::jsonb`),
     error: text("error"),

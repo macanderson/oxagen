@@ -130,7 +130,14 @@ async function readAll(
     );
     batch.forEach((path, j) => {
       const text = texts[j];
-      if (text !== null && text !== undefined) out.push({ path, text });
+      // The tree listed this path at this commit, so an empty read is a read
+      // that failed. Planning without the file would retire its record, so
+      // the whole sync stops and runs again.
+      if (text === null || text === undefined)
+        throw new Error(
+          `[context.sync] could not read ${path} at ${ref}; the sync will run again`,
+        );
+      out.push({ path, text });
     });
   }
   return out;
@@ -146,6 +153,29 @@ function checkSummary(findings: SyncFinding[]): string {
         `- ${f.level === "error" ? "Not published" : "Warning"}: ${f.message}`,
     )
     .join("\n");
+}
+
+/** The most findings one sync keeps; past it, one more finding says how many were cut. */
+const MAX_FINDINGS = 50;
+
+/**
+ * The findings a sync stores. They ride every freshness read and every check
+ * summary (GitHub caps a summary at 65,535 characters), so a tree with
+ * thousands of broken files keeps the first fifty and a count.
+ */
+function capFindings(findings: SyncFinding[]): SyncFinding[] {
+  if (findings.length <= MAX_FINDINGS) return findings;
+  const cut = findings.length - MAX_FINDINGS + 1;
+  return [
+    ...findings.slice(0, MAX_FINDINGS - 1),
+    {
+      level: findings.some((f) => f.level === "error") ? "error" : "warning",
+      path: RULES_DIR,
+      lineageId: null,
+      code: "schema",
+      message: `${cut} more record file problems are not listed. Fix the ones above and the next sync lists the rest.`,
+    },
+  ];
 }
 
 function sameFindings(a: SyncFinding[], b: SyncFinding[]): boolean {
@@ -240,10 +270,23 @@ export async function syncWorkspaceSteering(
       });
     outcome.headSha = head;
 
-    // 4. The record files at that head, planned and written.
+    // 4. The record files at that head, planned and written. A push that
+    // left `.oxagen/rules/` alone changes no record: the newest commit that
+    // touched it is the one the last sync read, and nothing more is listed.
     let findings = prior?.findings ?? [];
-    const moved = prior?.headSha !== head || prior?.status === "failed";
-    if (options.force || moved || merged.length > 0 || defer.size > 0) {
+    const failedBefore = prior?.status === "failed";
+    const settling = merged.length > 0 || defer.size > 0;
+    const headMoved = prior?.headSha !== head;
+    const last =
+      options.force || failedBefore || settling || headMoved
+        ? await deps.github.lastCommitForPath(repo, RULES_DIR, head)
+        : null;
+    let rulesSha = headMoved ? (last?.sha ?? null) : (prior?.rulesSha ?? null);
+    const rulesMoved =
+      prior === null || (headMoved && rulesSha !== prior.rulesSha);
+    const readTree = options.force || failedBefore || settling || rulesMoved;
+    if (readTree) {
+      rulesSha = last?.sha ?? null;
       const paths = await deps.github.listFiles(repo, head, RULES_DIR);
       if (paths.length > SYNC_MAX_FILES)
         throw new HandlerError({
@@ -252,7 +295,6 @@ export async function syncWorkspaceSteering(
           message: `${RULES_DIR}/ holds ${paths.length} files at ${head.slice(0, 7)}. The sync reads at most ${SYNC_MAX_FILES}.`,
         });
       const files = await readAll(deps.github, repo, head, paths);
-      const last = await deps.github.lastCommitForPath(repo, RULES_DIR, head);
       const applied = await deps.store.apply(
         scope,
         {
@@ -264,7 +306,7 @@ export async function syncWorkspaceSteering(
         },
         (records) => planSync({ files, records, defer }),
       );
-      findings = applied.plan.findings;
+      findings = capFindings(applied.plan.findings);
       Object.assign(outcome, {
         created: applied.created,
         revised: applied.revised,
@@ -321,21 +363,28 @@ export async function syncWorkspaceSteering(
       }
     }
     for (const { row, pr } of merged) {
-      const linked = await deps.store.linkMergedProposal(scope, row.id, {
-        lineageId: row.lineageId,
-        mergedCommit: pr.mergeCommitSha ?? head,
-        mergedAt: pr.mergedAt ?? now,
-      });
+      // A file the sync refused did not publish, so the record still holds
+      // its last good version. Linking the proposal to that version would
+      // report the merge as published when it was not.
+      const refused = findings.find(
+        (f) =>
+          f.level === "error" &&
+          (f.lineageId?.toLowerCase() === row.lineageId.toLowerCase() ||
+            (row.path !== null && f.path === row.path)),
+      );
+      const linked =
+        !refused &&
+        (await deps.store.linkMergedProposal(scope, row.id, {
+          lineageId: row.lineageId,
+          mergedCommit: pr.mergeCommitSha ?? head,
+          mergedAt: pr.mergedAt ?? now,
+        }));
       if (linked) {
         outcome.proposals.merged += 1;
         continue;
       }
       const why =
-        findings.find(
-          (f) =>
-            f.level === "error" &&
-            f.lineageId?.toLowerCase() === row.lineageId.toLowerCase(),
-        )?.message ??
+        refused?.message ??
         `no record file on ${repo.defaultBranch} holds ${row.lineageId}`;
       if (
         await reject(
@@ -349,8 +398,10 @@ export async function syncWorkspaceSteering(
     }
 
     // 6. The state, and the check on the head.
+    // One check per change to the rules, not per push: a commit that left
+    // `.oxagen/rules/` alone gets no check of its own.
     const changedFindings = !sameFindings(findings, prior?.findings ?? []);
-    if (prior?.headSha !== head || changedFindings) {
+    if ((readTree && rulesMoved) || changedFindings) {
       const errors = findings.filter((f) => f.level === "error").length;
       await deps.github
         .reportCheckRun(repo, {
@@ -377,6 +428,7 @@ export async function syncWorkspaceSteering(
       repository: repo.fullName,
       branch: repo.defaultBranch,
       headSha: head,
+      rulesSha,
       status: findings.length > 0 ? "problems" : "synced",
       findings,
       error: null,
@@ -452,6 +504,7 @@ async function recordFailure(
       repository: repo?.fullName ?? prior?.repository ?? null,
       branch: repo?.defaultBranch ?? prior?.branch ?? null,
       headSha: prior?.headSha ?? null,
+      rulesSha: prior?.rulesSha ?? null,
       status: "failed",
       findings: prior?.findings ?? [],
       error: err instanceof Error ? err.message : String(err),

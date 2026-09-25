@@ -832,6 +832,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     owner: string;
     repo: string;
     ref?: string;
+    path?: string;
   }): Promise<string[]> {
     const ref = args.ref ?? "main";
     const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
@@ -844,7 +845,34 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       "GET",
       `${repoPath}/commits/${encodeURIComponent(ref)}`,
     );
-    const treeSha = commit.commit.tree.sha;
+    let treeSha = commit.commit.tree.sha;
+    // With a path, descend to that directory one non-recursive listing at a
+    // time, so a caller that wants one directory of a large repository does
+    // not page through all of it.
+    const prefix = (args.path ?? "").replace(/^\/+|\/+$/g, "");
+    if (prefix) {
+      for (const part of prefix.split("/")) {
+        const level = await request<GHTreeResponse>(
+          "GET",
+          `${repoPath}/git/trees/${seg(treeSha)}`,
+        );
+        const next = level.tree.find(
+          (item) => item.type === "tree" && item.path === part,
+        );
+        if (!next) return [];
+        treeSha = next.sha;
+      }
+      const under = await request<GHTreeResponse>(
+        "GET",
+        `${repoPath}/git/trees/${seg(treeSha)}?recursive=1`,
+      );
+      const paths = under.truncated
+        ? await walkTree(repoPath, treeSha)
+        : under.tree
+            .filter((item) => item.type === "blob")
+            .map((item) => item.path);
+      return paths.map((p) => `${prefix}/${p}`);
+    }
     // Step 2 — fetch the recursive tree.
     const treeData = await request<GHTreeResponse>(
       "GET",

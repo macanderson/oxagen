@@ -947,6 +947,7 @@ export const postgresSteeringStore: SteeringStore = {
           id: schema.contextRecords.id,
           publicId: schema.contextRecords.publicId,
           label: schema.contextRecords.label,
+          activeVersionId: schema.contextRecords.activeVersionId,
         })
         .from(schema.contextRecords)
         .where(
@@ -1011,32 +1012,53 @@ export const postgresSteeringStore: SteeringStore = {
         recordPublicId = created.publicId;
       }
 
+      // The repository sync can publish this same merge first, when its push
+      // reaches the lock before this call does (ADR-182). The bytes are then
+      // already the version in force, and this publication adds the
+      // reviewer's promotion to it rather than a second copy of them.
+      let reused: { id: string; version: number } | null = null;
+      if (existing?.activeVersionId) {
+        const [active] = await tx
+          .select({
+            id: schema.contextRecordVersions.id,
+            versionNumber: schema.contextRecordVersions.versionNumber,
+            checksum: schema.contextRecordVersions.checksum,
+          })
+          .from(schema.contextRecordVersions)
+          .where(eq(schema.contextRecordVersions.id, existing.activeVersionId))
+          .limit(1);
+        if (active?.checksum === input.checksum)
+          reused = { id: active.id, version: active.versionNumber };
+      }
+
       // The version carries what its body says. A later promote of this
       // version copies these four back onto the record row (#3312).
-      const version = await appendVersion(tx, {
-        scope,
-        recordId,
-        body: input.body,
-        checksum: input.checksum,
-        publishedAt: input.mergedAt,
-        classification: {
-          kind: proposal.kind,
-          force: proposal.force,
-          constraintEffect: proposal.constraintEffect,
-          statement: proposal.statement,
-        },
-        classificationReady: versionClassificationReady,
-        provenance: [
-          {
-            type: "commit",
-            uri: `${proposal.repository ?? ""}@${input.commitSha}:${input.path}`,
-            digest: input.checksum,
-            method: "context_pr",
-            by: proposal.publicId,
+      const version =
+        reused ??
+        (await appendVersion(tx, {
+          scope,
+          recordId,
+          body: input.body,
+          checksum: input.checksum,
+          publishedAt: input.mergedAt,
+          classification: {
+            kind: proposal.kind,
+            force: proposal.force,
+            constraintEffect: proposal.constraintEffect,
+            statement: proposal.statement,
           },
-        ],
-        byUserId: input.mergedByUserId,
-      });
+          classificationReady: versionClassificationReady,
+          provenance: [
+            {
+              type: "commit",
+              uri: `${proposal.repository ?? ""}@${input.commitSha}:${input.path}`,
+              digest: input.checksum,
+              method: "context_pr",
+              by: proposal.publicId,
+            },
+          ],
+          byUserId: input.mergedByUserId,
+        }));
 
       await tx
         .update(schema.contextRecords)

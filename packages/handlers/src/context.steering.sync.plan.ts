@@ -188,11 +188,26 @@ function withStamps(
 }
 
 /** Whether a record's path puts it under the sync's care. */
-export function isRepositoryRecord(path: string | null): boolean {
-  return path !== null && path.startsWith(`${RULES_DIR}/`);
+export function isRepositoryRecord(path: string | null | undefined): boolean {
+  return typeof path === "string" && path.startsWith(`${RULES_DIR}/`);
 }
 
 const key = (lineage: string) => lineage.toLowerCase();
+
+/**
+ * Where a TOML parse failed, as ` at line L, column C`, or nothing.
+ *
+ * Never the parser's message: smol-toml quotes the lines around the error,
+ * and a finding is shown to every member of the workspace and rides every
+ * freshness read. A line that held a secret would be copied out of the file
+ * before the secret scan ever ran.
+ */
+function where(err: unknown): string {
+  const at = err as { line?: unknown; column?: unknown } | null;
+  return typeof at?.line === "number" && typeof at.column === "number"
+    ? ` at line ${at.line}, column ${at.column}`
+    : "";
+}
 
 /** A record file's own findings and candidates. */
 function readFile(file: RepoFile): {
@@ -215,10 +230,7 @@ function readFile(file: RepoFile): {
     return {
       candidates: [],
       findings: [
-        finding(
-          "not_toml",
-          `${file.path} is not valid TOML: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        finding("not_toml", `${file.path} is not valid TOML${where(err)}.`),
       ],
       readable: false,
     };
@@ -351,10 +363,20 @@ export function planSync(input: {
   const files = input.files
     .filter((f) => f.path.endsWith(".toml") && !NOT_RECORDS.has(f.path))
     .sort((a, b) => a.path.localeCompare(b.path));
+  /**
+   * True when some file could not be read as records at all, so the lineage
+   * it holds is unknown. It may be a record moved and broken in one commit,
+   * and then the record at its old path must not retire.
+   */
+  let unknownLineage = false;
   for (const file of files) {
     const read = readFile(file);
     findings.push(...read.findings);
-    if (!read.readable) unreadable.add(file.path);
+    if (!read.readable) unknownLineage = true;
+    // A path with any error keeps whatever it held: an edit that broke the
+    // file, or put an invalid lineage in it, must not retire the record.
+    if (!read.readable || read.findings.some((f) => f.level === "error"))
+      unreadable.add(file.path);
     for (const f of read.findings)
       if (f.level === "error" && f.lineageId) blocked.add(key(f.lineageId));
     candidates.push(...read.candidates);
@@ -536,9 +558,13 @@ export function planSync(input: {
   // A record the repository no longer holds retires. Records written before
   // the repository was the source (no path under `.oxagen/rules/`) are not
   // the sync's, and a record whose file could not be read keeps its version.
+  // While any file's lineage is unknown, nothing retires: that file may be
+  // the record, moved and broken in one commit.
+  for (const f of findings) if (f.level === "error") unreadable.add(f.path);
   for (const rec of input.records) {
     const k = key(rec.slug);
     if (
+      unknownLineage ||
       rec.deleted ||
       rec.status !== "active" ||
       !isRepositoryRecord(rec.path) ||
@@ -546,7 +572,7 @@ export function planSync(input: {
       seen.has(k) ||
       blocked.has(k) ||
       defer.has(k) ||
-      unreadable.has(rec.path!)
+      unreadable.has(rec.path ?? "")
     )
       continue;
     plan.retire.push({

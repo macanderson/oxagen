@@ -110,6 +110,24 @@ export interface GitLabWebhookResult {
   outcome: GitLabWebhookOutcome;
 }
 
+/**
+ * Whether a GitLab push event names the project's default branch. True when
+ * the payload leaves either out, so a payload shape this does not know still
+ * asks for a sync rather than dropping one.
+ */
+function pushesDefaultBranch(body: unknown): boolean {
+  const b = (body ?? {}) as {
+    ref?: unknown;
+    project?: { default_branch?: unknown } | null;
+  };
+  const ref = typeof b.ref === "string" ? b.ref : null;
+  const branch =
+    typeof b.project?.default_branch === "string"
+      ? b.project.default_branch
+      : null;
+  return ref === null || branch === null || ref === `refs/heads/${branch}`;
+}
+
 /** Why a proposal is rejected when its merge request closes on GitLab. */
 export const CLOSED_ON_GITLAB = "Merge request closed on GitLab";
 
@@ -161,9 +179,12 @@ export async function handleGitLabWebhook(
     }
 
     if (event.kind === "other" && event.objectKind === "push") {
-      // A push can land on the production branch. The sync reads the
-      // branch and finds nothing to do when it was another one.
-      if (!deps.requestSync) return { status: 202, outcome: "ignored_event" };
+      // Only a push to the project's default branch can move steering. A
+      // push elsewhere would only put the page into "pending" for nothing.
+      // The payload is a hint, not the truth: the sync reads the approved
+      // branch itself, and a payload that names no branch still asks.
+      if (!deps.requestSync || !pushesDefaultBranch(req.body))
+        return { status: 202, outcome: "ignored_event" };
       await deps.requestSync(scope, "push");
       return { status: 202, outcome: "sync_requested" };
     }
