@@ -7,10 +7,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
 
-vi.mock("@oxagen/database", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@oxagen/database")>()),
-  withTenantDb: mocks.withTenantDb,
-}));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const dbMock = {
+    ...(await importOriginal<typeof import("@oxagen/database")>()),
+    withTenantDb: mocks.withTenantDb,
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 import { schema } from "@oxagen/database";
 import { drizzle } from "drizzle-orm/pg-proxy";
