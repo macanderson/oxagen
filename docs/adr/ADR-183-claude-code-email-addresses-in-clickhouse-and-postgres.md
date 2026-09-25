@@ -42,9 +42,9 @@ the #3173 rollback window no longer matters.
 
 ## Decision
 
-### 1. The two tacho columns are dropped now
+### 1. The two tacho columns
 
-ClickHouse migration `0031_drop_tacho_events_anthropic_user_email.sql` drops
+Both are dropped now. ClickHouse migration `0031_drop_tacho_events_anthropic_user_email.sql` drops
 the column from `tacho_events`, and Atlas migration
 `20260925230100_drop_tacho_sessions_anthropic_user_email.sql` drops it from
 `tacho.sessions`. `migration-gate` applies both when the change merges. The
@@ -56,9 +56,10 @@ leaves it out of the live column set every writer projects onto. A cluster
 bootstrapped today creates the column in 0027 and drops it in 0031, so it ends
 where an older cluster ends.
 
-### 2. `claude_sessions` keeps the address for two years and erases it on request
+### 2. The `claude_sessions` address
 
-The column stays, under the table's existing two-year TTL. A digest is not an
+The column stays, under the table's existing two-year TTL, and a privacy
+erasure deletes a person's rows on request. A digest is not an
 improvement: ADR-084 records why any stable value computed from an address is
 a dictionary oracle, and the digest would cost a table rebuild.
 
