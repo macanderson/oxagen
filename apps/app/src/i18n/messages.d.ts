@@ -5926,13 +5926,11 @@ type Messages = {
       firstPrompt: string;
       laterPrompt: string;
       turn: string;
-      showRest: string;
+      showFull: string;
       showLess: string;
       thinkingLines: string;
       showCall: string;
       hideCall: string;
-      moreLines: string;
-      collapse: string;
       lines: string;
       running: string;
       noResult: string;
@@ -5951,8 +5949,8 @@ type Messages = {
       recallItems: string;
       recallTokens: string;
       recallCut: string;
-      recallMore: string;
-      recallMoreTokens: string;
+      showRecall: string;
+      hideRecall: string;
       openContext: string;
       stopped: string;
       sealedAt: string;
@@ -6059,6 +6057,11 @@ type Messages = {
         previous: string;
         next: string;
         last: string;
+        play: string;
+        pause: string;
+        replay: string;
+        speed: string;
+        speedLabel: string;
         scrub: string;
         scrubValue: string;
         position: string;
