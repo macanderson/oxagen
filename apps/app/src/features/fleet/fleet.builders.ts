@@ -166,6 +166,7 @@ export function fleetSource(reads: FleetReads) {
       preferences: refuse,
       counts: refuse,
       notifications: refuse,
+      assistantEngine: refuse,
     },
     runs: {
       list: (...args) => {

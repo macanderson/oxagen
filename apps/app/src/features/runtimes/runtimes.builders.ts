@@ -119,6 +119,7 @@ export function runtimesSource(reads: {
       preferences: refuse,
       counts: refuse,
       notifications: refuse,
+      assistantEngine: refuse,
     },
     billing: {
       plan: refuse,

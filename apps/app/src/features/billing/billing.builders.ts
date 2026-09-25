@@ -208,6 +208,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       preferences: refuse,
       counts: refuse,
       notifications: refuse,
+      assistantEngine: refuse,
     },
     runs: {
       list: refuse,

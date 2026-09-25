@@ -33,6 +33,7 @@ const source = {
     preferences: vi.fn(),
     counts: vi.fn(),
     notifications: vi.fn(),
+    assistantEngine: vi.fn(),
   },
   billing: {
     plan: vi.fn(),

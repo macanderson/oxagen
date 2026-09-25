@@ -229,6 +229,7 @@ describe("auditWindow", () => {
       preferences,
       counts: () => Promise.reject(new Error("not a window read")),
       notifications: () => Promise.reject(new Error("not a window read")),
+      assistantEngine: () => Promise.reject(new Error("not a window read")),
     },
   });
 

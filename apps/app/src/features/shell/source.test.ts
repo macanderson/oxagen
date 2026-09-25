@@ -39,13 +39,14 @@ const context = vi.fn();
 const preferences = vi.fn();
 const notifications = vi.fn();
 const counts = vi.fn();
+const assistantEngine = vi.fn();
 const pending = vi.fn();
 const resolvedSince = vi.fn<DataSource["approvals"]["resolvedSince"]>();
 const mandatesList = vi.fn();
 const source = {
   runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context, preferences, counts, notifications },
+  shell: { context, preferences, counts, notifications, assistantEngine },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
