@@ -55,7 +55,7 @@ function literal(node: MdNode): void {
 }
 
 /** A remark plugin: every raw HTML node becomes a text node with the same source. */
-export function htmlAsText() {
+function htmlAsText() {
   return (tree: MdNode) => {
     literal(tree);
   };

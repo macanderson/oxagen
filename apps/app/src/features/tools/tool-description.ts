@@ -9,7 +9,7 @@
 // Nothing is dropped: a body that is not JSON is kept as written, and a tag
 // this file does not know stays in the prose, where it renders as text.
 
-export interface ToolExample {
+interface ToolExample {
   /** The tag's `description` attribute, or null when it has none. */
   title: string | null;
   /** Pretty-printed when it parses as JSON, the source as written otherwise. */
