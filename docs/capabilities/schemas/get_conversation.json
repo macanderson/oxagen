@@ -140,6 +140,55 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "toolCalls": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "toolCallId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "toolName": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "completed",
+                              "failed",
+                              "denied",
+                              "cancelled",
+                              "parked"
+                            ]
+                          },
+                          "durationMs": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "approvalId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "toolCallId",
+                          "toolName",
+                          "outcome",
+                          "durationMs",
+                          "approvalId"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -148,7 +197,8 @@
                     "content",
                     "createdAt",
                     "runId",
-                    "parkedCards"
+                    "parkedCards",
+                    "toolCalls"
                   ],
                   "additionalProperties": false
                 }

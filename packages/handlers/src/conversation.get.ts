@@ -10,17 +10,26 @@
 // the read confirms nothing about someone else's conversation. The person is
 // the signed-in user or, for an API key, its creator (resolveActingUserId),
 // the same person `ask_assistant` records a key's turns under.
-import type { CapabilityHandler } from "@oxagen/oxagen";
+//
+// Each reply's `toolCalls` is read from its run in the ledger, the one record
+// of what the turn called, with the builder `ask_assistant` uses. Nothing is
+// copied onto the message. One ledger read answers every reply returned.
+import type { CapabilityHandler, CheckedContext } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import { assistantParkedCardSchema } from "@oxagen/oxagen/contracts/assistant.ask";
 import {
   conversationGet,
+  type ConversationGetInput,
+  type ConversationGetOutput,
   type ConversationMessage,
 } from "@oxagen/oxagen/contracts/conversation.get";
+import { toolCallsFromLedger } from "@oxagen/agent/runtime/assistant-tool-calls";
 import { schema, withTenantDb } from "@oxagen/database";
 import { resolveActingUserId } from "@oxagen/iam/org-role";
+import type { RunStore, RunToolCallRecord } from "@oxagen/run-ledger";
 import { and, asc, desc, eq, isNull, type SQL } from "drizzle-orm";
 import { walkActiveBranch } from "./lib/conversation-markdown";
+import { ledgerStore } from "./lib/run-read";
 import { logger } from "./logger";
 
 const ROLES = new Set<ConversationMessage["role"]>([
@@ -39,9 +48,25 @@ type MessageRow = {
   createdAt: Date;
 };
 
-export const conversationGetHandler: CapabilityHandler<
-  typeof conversationGet
-> = async (input, ctx) => {
+/** A message as the conversation store holds it, before its tool calls. */
+type StoredMessage = Omit<ConversationMessage, "toolCalls">;
+
+export interface ConversationGetDeps {
+  /** The run ledger's read of many runs' tool calls in one query. */
+  readToolCallsForRuns: RunStore["readToolCallsForRuns"];
+}
+
+export function createConversationGetHandler(
+  deps: ConversationGetDeps,
+): CapabilityHandler<typeof conversationGet> {
+  return (input, ctx) => getConversation(deps, input, ctx);
+}
+
+async function getConversation(
+  deps: ConversationGetDeps,
+  input: ConversationGetInput,
+  ctx: CheckedContext,
+): Promise<ConversationGetOutput> {
   const userId = await resolveActingUserId(ctx);
   if (!userId) {
     throw new HandlerError({ code: "forbidden", reason: "no_principal" });
@@ -120,9 +145,20 @@ export const conversationGetHandler: CapabilityHandler<
   const { conversation, rows } = result;
   const thread = walkActiveBranch(rows, conversation.activeLeafMessageId)
     .map(toMessage)
-    .filter((m): m is ConversationMessage => m !== null);
-  const messages = thread.slice(-input.limit);
-  const truncated = messages.length < thread.length;
+    .filter((m): m is StoredMessage => m !== null);
+  const page = thread.slice(-input.limit);
+  const truncated = page.length < thread.length;
+  const callsByRun = await readReplyToolCalls(deps, page, ctx);
+  const messages: ConversationMessage[] = page.map((message) => ({
+    ...message,
+    toolCalls:
+      message.role === "assistant" && message.runId !== null
+        ? toolCallsFromLedger(
+            callsByRun.get(message.runId) ?? [],
+            message.parkedCards,
+          )
+        : [],
+  }));
 
   logger.info(
     {
@@ -148,14 +184,57 @@ export const conversationGetHandler: CapabilityHandler<
       truncated,
     },
   };
-};
+}
+
+const ledger = ledgerStore();
+
+export const conversationGetHandler = createConversationGetHandler({
+  readToolCallsForRuns: (runPublicIds) =>
+    ledger.readToolCallsForRuns(runPublicIds),
+});
+
+/**
+ * The ledger's tool calls for every reply returned, in one read. A
+ * failed read answers no calls rather than failing the thread: the messages
+ * are still the person's to read, and a reply with an empty list shows as it
+ * did before replies listed their calls. The failure is logged with its
+ * error so it is not silent.
+ */
+async function readReplyToolCalls(
+  deps: ConversationGetDeps,
+  messages: readonly StoredMessage[],
+  ctx: { orgId: string; workspaceId: string },
+): Promise<ReadonlyMap<string, RunToolCallRecord[]>> {
+  const runIds = [
+    ...new Set(
+      messages.flatMap((m) =>
+        m.role === "assistant" && m.runId !== null ? [m.runId] : [],
+      ),
+    ),
+  ];
+  if (runIds.length === 0) return new Map();
+  try {
+    return await deps.readToolCallsForRuns(runIds);
+  } catch (err) {
+    logger.warn(
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        runCount: runIds.length,
+      },
+      "conversation.get: could not read the replies' tool calls from the run ledger; each reply lists none",
+    );
+    return new Map();
+  }
+}
 
 /**
  * One row as the contract states it, or null for a role no thread carries (a
  * `tool` row the deprecated chat wrote). The assistant's own history loader
  * skips the same rows, so the reader sees the transcript the model saw.
  */
-function toMessage(row: MessageRow): ConversationMessage | null {
+function toMessage(row: MessageRow): StoredMessage | null {
   if (!ROLES.has(row.role as ConversationMessage["role"])) return null;
   const metadata = isRecord(row.metadata) ? row.metadata : {};
   return {

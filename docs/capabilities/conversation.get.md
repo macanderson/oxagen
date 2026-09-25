@@ -41,10 +41,28 @@ or `system` are left out, as the assistant's own transcript leaves them out.
 `conversation` carries the `list_conversations` summary fields (`publicId`,
 `title`, `status`, `archivedAt`, `createdAt`, `updatedAt`) and:
 
-| Field       | Type                                                                  | Notes                                                        |
-| ----------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `messages`  | `Array<{ publicId, role, content, createdAt, runId, parkedCards }>`   | Oldest first. `runId` is the `arun_` run an assistant turn was recorded as, or null. `parkedCards` are the governed writes that turn parked for a person, each `{ approvalId, capability, expiresAt }`. |
-| `truncated` | `boolean`                                                             | True when `limit` left earlier messages out.                 |
+| Field       | Type                                                                             | Notes                                                        |
+| ----------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `messages`  | `Array<{ publicId, role, content, createdAt, runId, parkedCards, toolCalls }>`   | Oldest first. `runId` is the `arun_` run an assistant turn was recorded as, or null. `parkedCards` are the governed writes that turn parked for a person, each `{ approvalId, capability, expiresAt }`. `toolCalls` are the tool calls behind a reply, in the shape `ask_assistant` returns them. |
+| `truncated` | `boolean`                                                                        | True when `limit` left earlier messages out.                 |
+
+### Tool calls
+
+Each reply's `toolCalls` is read from its run in the run ledger, the record of
+what the turn called. It is never copied onto the message, so a restored reply
+lists what the live reply listed (#4161). Each entry is
+`{ toolCallId, toolName, outcome, durationMs, approvalId }`, in the order the
+run recorded the calls. `outcome` is `completed`, `failed`, `denied`,
+`cancelled` or `parked`. `approvalId` is the public id of the approval a
+parked call waits on, the same id as that reply's parked card, and is null on
+every other call.
+
+One ledger read answers every reply returned, however many there are. Only
+the runs of the replies inside `limit` are read.
+
+`toolCalls` is empty on a `user` or `system` message and on a reply with no
+run. If the ledger cannot be read, the conversation is still returned: every
+reply lists no calls, and the handler logs the failure as a warning.
 
 ## Surfaces
 
@@ -60,7 +78,8 @@ model's transcript, and no assistant task needs to read another one.
 
 ## Side effects
 
-None. Read-only against PostgreSQL. The billing gate is skipped
+None. Read-only against PostgreSQL: the conversation store, and the run
+ledger for the replies' tool calls. The billing gate is skipped
 (`noBillingGate`), because reading your own history uses no model.
 
 ## Errors

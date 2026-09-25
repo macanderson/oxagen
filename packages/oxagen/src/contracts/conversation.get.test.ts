@@ -15,6 +15,22 @@ const MESSAGE = {
       expiresAt: "2026-09-25T10:05:00.000Z",
     },
   ],
+  toolCalls: [
+    {
+      toolCallId: "tc-1",
+      toolName: "list_runs",
+      outcome: "completed" as const,
+      durationMs: 12,
+      approvalId: null,
+    },
+    {
+      toolCallId: "tc-2",
+      toolName: "set_budget",
+      outcome: "parked" as const,
+      durationMs: 3,
+      approvalId: "apr_01k5rt9xq7v3m8n2p4s6t8w0",
+    },
+  ],
 };
 
 const CONVERSATION = {
@@ -92,5 +108,24 @@ describe("get_conversation contract", () => {
         conversation: { ...CONVERSATION, messages: [parked] },
       }).success,
     ).toBe(false);
+  });
+
+  it("requires each message's tool calls and holds each call to the ask_assistant shape (negative)", () => {
+    const withoutCalls: Record<string, unknown> = { ...MESSAGE };
+    delete withoutCalls.toolCalls;
+    const [call] = MESSAGE.toolCalls;
+    const refused = [
+      withoutCalls,
+      { ...MESSAGE, toolCalls: [{ ...call, outcome: "skipped" }] },
+      { ...MESSAGE, toolCalls: [{ ...call, durationMs: -1 }] },
+      { ...MESSAGE, toolCalls: [{ ...call, alias: "list_runs_2" }] },
+    ];
+    for (const message of refused) {
+      expect(
+        conversationGet.output.safeParse({
+          conversation: { ...CONVERSATION, messages: [message] },
+        }).success,
+      ).toBe(false);
+    }
   });
 });

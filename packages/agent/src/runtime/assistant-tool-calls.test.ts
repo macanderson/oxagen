@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { AssistantRunReceipt } from "./assistant-run";
-import { toolCallsFromReceipts } from "./assistant-tool-calls";
+import type { RunToolCallRecord } from "@oxagen/run-ledger";
+import {
+  toolCallsFromLedger,
+  toolCallsFromReceipts,
+} from "./assistant-tool-calls";
 
 const PUBLIC_ID = "apr_01k5rt9xq7v3m8n2p4s6t8w0";
 const ROW_ID = "0a1b2c3d-0000-4000-8000-00000000a001";
@@ -201,5 +205,75 @@ describe("toolCallsFromReceipts", () => {
       ["denied", null],
       ["failed", null],
     ]);
+  });
+});
+
+function ledgerCall(over: Partial<RunToolCallRecord>): RunToolCallRecord {
+  return {
+    runSeq: "4",
+    toolCallId: "tc-1",
+    toolName: "list_runs",
+    outcome: "completed",
+    durationMs: 12,
+    approvalPublicId: null,
+    ...over,
+  };
+}
+
+describe("toolCallsFromLedger", () => {
+  it("lists the calls read back from the run as the live reply listed them", () => {
+    const records = [
+      ledgerCall({ toolCallId: "tc-1", toolName: "list_runs" }),
+      ledgerCall({
+        toolCallId: "tc-2",
+        toolName: "set_budget",
+        outcome: "parked",
+        durationMs: 3,
+        approvalPublicId: PUBLIC_ID,
+      }),
+    ];
+    const restored = toolCallsFromLedger(records, [card(PUBLIC_ID)]);
+    const live = toolCallsFromReceipts(
+      [
+        tool({ requestId: "tc-1", toolName: "list_runs" }),
+        tool({
+          requestId: "tc-2",
+          toolName: "set_budget",
+          outcome: "parked",
+          durationMs: 3,
+          approvalPublicId: PUBLIC_ID,
+        }),
+      ],
+      [card(PUBLIC_ID)],
+    );
+    expect(restored).toEqual(live);
+    expect(restored).toEqual([
+      {
+        toolCallId: "tc-1",
+        toolName: "list_runs",
+        outcome: "completed",
+        durationMs: 12,
+        approvalId: null,
+      },
+      {
+        toolCallId: "tc-2",
+        toolName: "set_budget",
+        outcome: "parked",
+        durationMs: 3,
+        approvalId: PUBLIC_ID,
+      },
+    ]);
+  });
+
+  it("reads null for a parked call whose frame names no approval, since the ledger keeps no error text to match (negative)", () => {
+    const calls = toolCallsFromLedger(
+      [ledgerCall({ outcome: "parked" })],
+      [card(ROW_ID)],
+    );
+    expect(calls[0]).toMatchObject({ outcome: "parked", approvalId: null });
+  });
+
+  it("lists nothing for a run with no calls", () => {
+    expect(toolCallsFromLedger([], [card(PUBLIC_ID)])).toEqual([]);
   });
 });
