@@ -29,6 +29,12 @@
  *                 before the run starts, and the commit stages only the files
  *                 this script wrote, so nothing else in the tree can ride along
  *   --no-npm      skip the CLI build + npm publish (even if NPM_TOKEN is available)
+ *   --written-list <path>
+ *                 write the repo-relative paths of every file this run wrote,
+ *                 one per line, to <path> (keep it outside the tree). A caller
+ *                 that passes --no-git and commits itself stages exactly these
+ *                 with `git add -- <paths>`, never `git add -A`. The tree must
+ *                 be clean before the run starts, as it must without --no-git
  *   --install-links
  *                 end the notes with an "## Install" section that links every
  *                 installer and executable of this version by its published
@@ -115,6 +121,7 @@ interface Options {
   git: boolean;
   npm: boolean;
   installLinks: boolean;
+  writtenList: string | null;
 }
 
 // ── small utilities ──────────────────────────────────────────────────────────
@@ -169,6 +176,27 @@ export function assertCleanTree(porcelain: string): void {
   throw new Error(
     `the tree has uncommitted changes. Commit or discard them first, because the release commit carries only the bump and the notes:\n${dirty.map((p) => `  ${p}`).join("\n")}`,
   );
+}
+
+/**
+ * The text `--written-list` writes: the paths from `releaseFilesToStage`, one
+ * per line, ending in a newline. A path holding a newline would split into two
+ * entries, so it is refused rather than written.
+ */
+export function formatWrittenList(
+  root: string,
+  written: readonly string[],
+): string {
+  const paths = releaseFilesToStage(root, written);
+  const bad = paths.find((p) => p.includes("\n"));
+  if (bad !== undefined)
+    throw new Error(`cannot list a path that holds a newline: ${bad}`);
+  return paths.map((p) => `${p}\n`).join("");
+}
+
+/** Read a `--written-list` file back into its paths. */
+export function parseWrittenList(text: string): string[] {
+  return text.split("\n").filter((line) => line !== "");
 }
 
 /**
@@ -469,6 +497,7 @@ function parseArgs(): Options {
     git: true,
     npm: true,
     installLinks: false,
+    writtenList: null,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -485,6 +514,9 @@ function parseArgs(): Options {
     else if (a.startsWith("--set=")) opts.setVersion = a.slice("--set=".length);
     else if (a === "--from") opts.fromRef = args[++i] ?? null;
     else if (a.startsWith("--from=")) opts.fromRef = a.slice("--from=".length);
+    else if (a === "--written-list") opts.writtenList = args[++i] ?? null;
+    else if (a.startsWith("--written-list="))
+      opts.writtenList = a.slice("--written-list=".length);
     else if (a === "--highlight") opts.highlight = args[++i] ?? null;
     else if (a.startsWith("--highlight="))
       opts.highlight = a.slice("--highlight=".length);
@@ -501,7 +533,7 @@ async function main(): Promise<void> {
   if (!opts.bump && !opts.setVersion) {
     console.error(
       kleur.red(
-        "[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--highlight <text>] [--dry-run] [--no-notes|--no-git|--no-npm]",
+        "[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--highlight <text>] [--dry-run] [--no-notes|--no-git|--no-npm] [--written-list <path>]",
       ),
     );
     exit(2);
@@ -525,9 +557,11 @@ async function main(): Promise<void> {
     ),
   );
 
-  // The commit this run makes must hold only what it writes, so check before
-  // the first write. A dry run writes nothing and only warns.
-  if (opts.git) {
+  // The commit must hold only what this run writes, so check before the first
+  // write. That commit is this script's own, or, with --written-list, the
+  // caller's (release-publish.ts, release.yml). A dry run writes nothing and
+  // only warns.
+  if (opts.git || opts.writtenList !== null) {
     try {
       assertCleanTree(gitRaw(["status", "--porcelain"]));
     } catch (err) {
@@ -598,6 +632,10 @@ async function main(): Promise<void> {
         ),
       );
     }
+  }
+
+  if (opts.writtenList !== null && !opts.dryRun) {
+    writeFileSync(opts.writtenList, formatWrittenList(ROOT, toStage));
   }
 
   // ── Git commit + tag ──

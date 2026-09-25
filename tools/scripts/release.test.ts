@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertCleanTree,
   completeViaGateway,
+  formatWrittenList,
   GATEWAY_TIMEOUT_MS,
+  parseWrittenList,
   releaseFilesToStage,
 } from "./release";
 
@@ -71,6 +73,31 @@ describe("releaseFilesToStage", () => {
     expect(
       releaseFilesToStage(ROOT, ["package.json", `${ROOT}/package.json`]),
     ).toEqual(["package.json"]);
+  });
+});
+
+describe("--written-list", () => {
+  // release-publish.ts and release.yml commit with --no-git and stage only
+  // the paths in this list, so the list must round-trip exactly.
+  it("round-trips the files the release wrote, relative to the root", () => {
+    const text = formatWrittenList(ROOT, [
+      "package.json",
+      `${ROOT}/releases/v1.2.3.md`,
+      `${ROOT}/package.json`,
+    ]);
+    expect(text).toBe("package.json\nreleases/v1.2.3.md\n");
+    expect(parseWrittenList(text)).toEqual([
+      "package.json",
+      "releases/v1.2.3.md",
+    ]);
+  });
+
+  it("reads an empty list as no files", () => {
+    expect(parseWrittenList(formatWrittenList(ROOT, []))).toEqual([]);
+  });
+
+  it("refuses a path that would split into two entries", () => {
+    expect(() => formatWrittenList(ROOT, ["a\nsecret.env"])).toThrow(/newline/);
   });
 });
 
