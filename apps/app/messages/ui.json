@@ -260,9 +260,9 @@
       "describePhotoNone": "photo · none chosen yet",
       "notes": {
         "user": "Saved with <code>update_profile</code>, like any change to your account.",
-        "agent": "Saved with <code>update_agent</code> on the agent's record.",
-        "workspace": "Saved with <code>update_workspace</code> on the workspace's record.",
-        "organization": "Saved with <code>update_org</code> on the organization's record."
+        "agent": "Part of the agent's definition, so a change rides a pull request.",
+        "workspace": "Saved with <code>update_workspace_settings</code> on the workspace's record.",
+        "organization": "Saved with <code>update_org_settings</code> on the organization's record."
       },
       "noPhoto": "Paste an https link to a photo first, or switch to an icon or initials.",
       "noLetters": "Type at least one letter.",

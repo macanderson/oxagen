@@ -76,6 +76,7 @@ export const workspaceListHandler: CapabilityHandler<
         slug: true,
         namespace: true,
         name: true,
+        avatarUrl: true,
       },
     });
     if (!org) throw notAMember();
@@ -97,6 +98,7 @@ export const workspaceListHandler: CapabilityHandler<
         slug: schema.workspaces.slug,
         namespace: schema.workspaces.namespace,
         name: schema.workspaces.name,
+        avatarUrl: schema.workspaces.avatarUrl,
         role: schema.workspaceUsers.role,
         archivedAt: schema.workspaces.archivedAt,
         costCenter: schema.workspaces.costCenter,
@@ -125,6 +127,7 @@ export const workspaceListHandler: CapabilityHandler<
         slug: org.slug,
         namespace: org.namespace,
         name: org.name,
+        avatarUrl: org.avatarUrl ?? null,
       },
       workspaces: rows.map((r) => ({
         id: r.id,
@@ -132,6 +135,7 @@ export const workspaceListHandler: CapabilityHandler<
         slug: r.slug,
         namespace: r.namespace,
         name: r.name,
+        avatarUrl: r.avatarUrl ?? null,
         role: r.role ?? null,
         archivedAt: r.archivedAt ? r.archivedAt.toISOString() : null,
         costCenter: r.costCenter ?? null,

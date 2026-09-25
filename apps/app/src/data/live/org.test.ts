@@ -269,6 +269,7 @@ const workspacesOut = {
     slug: "acme",
     namespace: "acme",
     name: "Acme Robotics",
+    avatarUrl: "https://cdn.example.test/acme.png",
   },
   workspaces: [
     {
@@ -277,6 +278,7 @@ const workspacesOut = {
       slug: "core-platform",
       namespace: "core",
       name: "Core platform",
+      avatarUrl: null,
       role: "Owner",
       archivedAt: null,
       costCenter: null,
@@ -290,12 +292,14 @@ describe("org.workspaces", () => {
     expect(await org.workspaces(ctx)).toEqual(
       readOk({
         orgId: "org_1",
+        orgAvatarUrl: "https://cdn.example.test/acme.png",
         workspaces: [
           {
             id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
             slug: "core-platform",
             namespace: "core",
             name: "Core platform",
+            avatarUrl: null,
             role: "Owner",
             archivedAt: null,
             costCenter: null,

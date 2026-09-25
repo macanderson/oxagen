@@ -114,6 +114,14 @@ function isAvatarTone(value: unknown): value is AvatarTone {
   return typeof value === "string" && TONES.includes(value);
 }
 
+/** Two-letter initials for an avatar: first and last word, uppercased. */
+export function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const first = words[0]?.[0] ?? "";
+  const last = words.length > 1 ? (words.at(-1)?.[0] ?? "") : "";
+  return `${first}${last}`.toLocaleUpperCase();
+}
+
 /** The letters a monogram keeps: trimmed, upper-cased, cut at INITIALS_MAX. */
 export function monogram(text: string): string {
   return text.trim().toUpperCase().slice(0, INITIALS_MAX);

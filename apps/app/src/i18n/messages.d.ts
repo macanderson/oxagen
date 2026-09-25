@@ -4893,6 +4893,9 @@ type Messages = {
       modelKeySaved: string;
       modelKeyRemoved: string;
     };
+    avatar: {
+      open: string;
+    };
   };
   record: {
     loading: string;
@@ -7771,50 +7774,6 @@ type Messages = {
         failed: string;
       };
     };
-    avatar: {
-      title: string;
-      cancel: string;
-      save: string;
-      remove: string;
-      removeHint: string;
-      saving: string;
-      kind: string;
-      kinds: {
-        icon: string;
-        initials: string;
-        photo: string;
-      };
-      icon: string;
-      iconHint: string;
-      letters: string;
-      lettersHint: string;
-      typeface: string;
-      fonts: {
-        sans: string;
-        serif: string;
-        mono: string;
-      };
-      photo: string;
-      photoHint: string;
-      tone: string;
-      tones: {
-        solid: string;
-        soft: string;
-        line: string;
-      };
-      toneHint: string;
-      describeIcon: string;
-      describeInitials: string;
-      describePhoto: string;
-      describePhotoNone: string;
-      note: string;
-      noPhoto: string;
-      noLetters: string;
-      invalid: string;
-      denied: string;
-      failed: string;
-      photoPlaceholder: string;
-    };
     approvals: {
       title: string;
       waiting: string;
@@ -10628,6 +10587,72 @@ type Messages = {
       useTyped: string;
       remove: string;
       failedFreeform: string;
+    };
+    avatarEditor: {
+      titles: {
+        user: string;
+        agent: string;
+        workspace: string;
+        organization: string;
+      };
+      cancel: string;
+      save: string;
+      remove: string;
+      removeHints: {
+        user: string;
+        agent: string;
+        workspace: string;
+        organization: string;
+      };
+      saving: string;
+      kind: string;
+      kinds: {
+        icon: string;
+        initials: string;
+        photo: string;
+      };
+      icon: string;
+      iconHint: string;
+      letters: string;
+      lettersHint: string;
+      typeface: string;
+      fonts: {
+        sans: string;
+        serif: string;
+        mono: string;
+      };
+      photo: string;
+      photoHint: string;
+      tone: string;
+      tones: {
+        solid: string;
+        soft: string;
+        line: string;
+        gold: string;
+        "gold-deep": string;
+      };
+      toneHint: string;
+      describeIcon: string;
+      describeInitials: string;
+      describePhoto: string;
+      describePhotoNone: string;
+      notes: {
+        user: string;
+        agent: string;
+        workspace: string;
+        organization: string;
+      };
+      noPhoto: string;
+      noLetters: string;
+      invalid: string;
+      denied: {
+        user: string;
+        agent: string;
+        workspace: string;
+        organization: string;
+      };
+      failed: string;
+      photoPlaceholder: string;
     };
   };
 };

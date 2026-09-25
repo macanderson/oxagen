@@ -151,6 +151,7 @@ describe("workspaceListHandler", () => {
       slug: "acme",
       namespace: "acme",
       name: "Acme Corp",
+      avatarUrl: null as string | null,
     };
 
     function runInTx(found: {
@@ -193,6 +194,77 @@ describe("workspaceListHandler", () => {
         asc(schema.workspaces.createdAt),
         asc(schema.workspaces.slug),
       );
+    });
+
+    // One row as the select answers it, without the avatar column, which each
+    // test adds.
+    const row = {
+      id: "ws_1",
+      publicId: "wpub_1",
+      slug: "core",
+      namespace: "core",
+      name: "Core",
+      role: "owner",
+      archivedAt: null,
+      costCenter: null,
+    };
+
+    it("returns the stored avatar of the organization and of each workspace, and null where the column is null", async () => {
+      const { schema } = await import("@oxagen/database");
+      const link = "https://cdn.example.test/acme.png";
+      const designed = 'avatar:v1:{"glyph":"C","tone":"gold"}';
+      const orderBy = vi.fn().mockResolvedValue([
+        { ...row, avatarUrl: designed },
+        {
+          ...row,
+          id: "ws_2",
+          publicId: "wpub_2",
+          slug: "labs",
+          namespace: "labs",
+          name: "Labs",
+          avatarUrl: null,
+        },
+      ]);
+      const tx = runInTx({
+        org: { ...org, avatarUrl: link },
+        membership: { role: "owner" },
+      });
+      tx.select.mockReturnValue({
+        from: () => ({ leftJoin: () => ({ where: () => ({ orderBy }) }) }),
+      });
+      const result = await workspaceListHandler(
+        { includeArchived: false, orgSlug: "acme" },
+        session,
+      );
+      expect(result.organization.avatarUrl).toBe(link);
+      expect(result.workspaces.map((w) => w.avatarUrl)).toEqual([
+        designed,
+        null,
+      ]);
+      // The fakes answer whatever the test hands them, so the reads must also
+      // be shown to ask for the column.
+      expect(tx.query.organizations.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          columns: expect.objectContaining({ avatarUrl: true }),
+        }),
+      );
+      expect(tx.select).toHaveBeenCalledWith(
+        expect.objectContaining({ avatarUrl: schema.workspaces.avatarUrl }),
+      );
+    });
+
+    it("returns null for an organization whose avatar column is null", async () => {
+      const orderBy = vi.fn().mockResolvedValue([{ ...row, avatarUrl: null }]);
+      const tx = runInTx({ org, membership: { role: "owner" } });
+      tx.select.mockReturnValue({
+        from: () => ({ leftJoin: () => ({ where: () => ({ orderBy }) }) }),
+      });
+      const result = await workspaceListHandler(
+        { includeArchived: false, orgSlug: "acme" },
+        session,
+      );
+      expect(result.organization.avatarUrl).toBeNull();
+      expect(result.workspaces[0]?.avatarUrl).toBeNull();
     });
 
     it("refuses an organization the caller is not a member of as forbidden, listing nothing (negative)", async () => {

@@ -247,6 +247,7 @@ const workspacesSample = {
     slug: "acme",
     namespace: "acme",
     name: "Acme Robotics",
+    avatarUrl: null,
   },
   workspaces: [
     {
@@ -255,6 +256,7 @@ const workspacesSample = {
       slug: "core-platform",
       namespace: "core",
       name: "Core platform",
+      avatarUrl: null,
       role: "Owner",
       archivedAt: null,
       costCenter: null,
@@ -265,6 +267,7 @@ const workspacesSample = {
       slug: "research",
       namespace: "research",
       name: "Research",
+      avatarUrl: null,
       role: null,
       archivedAt: "2026-09-01T08:00:00.000Z",
       costCenter: null,
@@ -278,12 +281,14 @@ describe("toWorkspaceList", () => {
       toWorkspaceList(workspaceList.output.parse(workspacesSample)),
     );
     expect(view.orgId).toBe("org_1");
+    expect(view.orgAvatarUrl).toBeNull();
     expect(view.workspaces).toEqual([
       {
         id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
         slug: "core-platform",
         namespace: "core",
         name: "Core platform",
+        avatarUrl: null,
         role: "Owner",
         archivedAt: null,
         costCenter: null,
@@ -293,11 +298,45 @@ describe("toWorkspaceList", () => {
         slug: "research",
         namespace: "research",
         name: "Research",
+        avatarUrl: null,
         role: null,
         archivedAt: "2026-09-01T08:00:00.000Z",
         costCenter: null,
       },
     ]);
+  });
+
+  it("carries the stored avatars of the organization and of each workspace, a link and a designed avatar alike", () => {
+    const link = "https://cdn.example.test/acme.png";
+    const designed = 'avatar:v1:{"glyph":"C","tone":"gold"}';
+    const [core, research] = workspacesSample.workspaces;
+    const view = WorkspaceList.parse(
+      toWorkspaceList(
+        workspaceList.output.parse({
+          organization: { ...workspacesSample.organization, avatarUrl: link },
+          workspaces: [
+            { ...core, avatarUrl: designed },
+            { ...research, avatarUrl: null },
+          ],
+        }),
+      ),
+    );
+    expect(view.orgAvatarUrl).toBe(link);
+    expect(view.workspaces.map((w) => w.avatarUrl)).toEqual([designed, null]);
+  });
+
+  it("reads an empty avatar string as none, for the organization and a workspace (negative)", () => {
+    const [core] = workspacesSample.workspaces;
+    const view = WorkspaceList.parse(
+      toWorkspaceList(
+        workspaceList.output.parse({
+          organization: { ...workspacesSample.organization, avatarUrl: "" },
+          workspaces: [{ ...core, avatarUrl: "" }],
+        }),
+      ),
+    );
+    expect(view.orgAvatarUrl).toBeNull();
+    expect(view.workspaces[0]?.avatarUrl).toBeNull();
   });
 
   it("carries the database uuid nowhere: the row's id and the organization's are public ids (negative)", () => {

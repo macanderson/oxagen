@@ -20,7 +20,6 @@ import {
   useAccountAvatar,
   useAccountOperation,
 } from "./account-operations";
-import { initials as initialsOf } from "./format";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 
@@ -58,7 +57,6 @@ export function AvatarDialog({ data }: { data: ShellData }) {
       name={shown}
       subtitle={viewer.email}
       value={currentAvatar}
-      letters={initialsOf(shown)}
       removable={Boolean(viewer.avatarUrl)}
       save={save}
       onSaved={() => {

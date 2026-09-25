@@ -39,6 +39,8 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: { mfaPolicy } }));
 vi.mock("./actions", () => ({
   sendInvitation: vi.fn(),
   createWorkspace: vi.fn(),
+  setOrgAvatar: vi.fn(),
+  setWorkspaceAvatar: vi.fn(),
 }));
 
 const { OrgCtx } = await import("@/server/viewer");
@@ -122,6 +124,7 @@ const loaded = {
   ),
   workspaces: readOk({
     orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+    orgAvatarUrl: null,
     workspaces: [
       workspaceRow(),
       workspaceRow({
@@ -311,6 +314,7 @@ describe("empty", () => {
       ...loaded,
       workspaces: readOk({
         orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+        orgAvatarUrl: null,
         workspaces: [workspaceRow({ archivedAt: "2026-01-01T00:00:00.000Z" })],
       }),
     });

@@ -17,8 +17,8 @@
 // The editor owns the draft and its validation. The caller owns the write:
 // `save` receives the stored form ("" clears the avatar) and answers with the
 // outcome, and `onSaved` runs when a save lands with no edit made since it was
-// sent. A caller whose writes must outlive the dialog passes its own `gate`;
-// otherwise the dialog serializes saves itself.
+// sent. A caller whose writes must outlive the dialog passes its own `gate`.
+// Otherwise the dialog serializes saves itself.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useId, useRef, useState } from "react";
 import { Avatar, AVATAR_GLYPHS, type AvatarShape } from "./avatar";
@@ -31,6 +31,7 @@ import {
   type AvatarTone,
   type DesignedAvatar,
   INITIALS_MAX,
+  initialsOf,
   monogram,
   parseAvatarValue,
   serializeAvatar,
@@ -46,15 +47,9 @@ import { FormAlert } from "./form-feedback";
 import { SheetDialog } from "./sheet-dialog";
 
 /** The four records that carry an avatar. */
-export const AVATAR_SUBJECTS = [
-  "user",
-  "agent",
-  "workspace",
-  "organization",
-] as const;
-export type AvatarSubject = (typeof AVATAR_SUBJECTS)[number];
+export type AvatarSubject = "user" | "agent" | "workspace" | "organization";
 
-/** What a write answered. The editor shows the refusal; the caller does the rest. */
+/** What a write answered. The editor shows a refusal, and the caller does the rest. */
 export type AvatarSaveResult =
   | { ok: true }
   | { ok: false; reason: "invalid" | "denied" | "failed" };
@@ -80,7 +75,7 @@ export function avatarSaveResult(
  * Serializes saves. `begin` answers false while one is in flight, so a second
  * press does not send a second write.
  */
-export type AvatarSaveGate = {
+type AvatarSaveGate = {
   pending: boolean;
   begin: () => boolean;
   end: () => void;
@@ -182,12 +177,15 @@ function useDialogGate(): AvatarSaveGate {
   };
 }
 
-export type AvatarEditorProps = {
+type AvatarEditorProps = {
   subject: AvatarSubject;
   /** The stored avatar the draft opens on. It is re-read until the first edit. */
   value: string | null;
-  /** The letters a monogram draft starts from and the fallback tile shows. */
-  letters: string;
+  /**
+   * The letters a monogram draft starts from and the fallback tile shows;
+   * defaults to the initials of `name`.
+   */
+  letters?: string;
   /** Whether a stored avatar exists to remove; defaults to whether `value` is set. */
   removable?: boolean;
   /** Writes the stored form. An empty string clears the avatar. */
@@ -244,6 +242,7 @@ export function AvatarEditorDialog({
       {open ? (
         <AvatarEditor
           {...editor}
+          letters={editor.letters ?? initialsOf(name)}
           formId={formId}
           gate={gate ?? dialogGate}
         />
@@ -261,7 +260,11 @@ function AvatarEditor({
   onSaved,
   gate,
   formId,
-}: AvatarEditorProps & { gate: AvatarSaveGate; formId: string }) {
+}: AvatarEditorProps & {
+  letters: string;
+  gate: AvatarSaveGate;
+  formId: string;
+}) {
   const t = useTranslations("ui.avatarEditor");
   const lettersId = useId();
   const urlId = useId();

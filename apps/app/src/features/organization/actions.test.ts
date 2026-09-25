@@ -41,7 +41,9 @@ const {
   sendInvitation,
   resendInvitation,
   revokeInvitation,
+  setOrgAvatar,
   setRolePermissions,
+  setWorkspaceAvatar,
 } = await import("./actions");
 
 const ctx = unsafeMint(OrgCtx, {
@@ -502,6 +504,99 @@ describe("editWorkspace", () => {
       value: { governance: { ok: false, reason: "invalid" } },
     });
     expect(invoke).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** A gold icon, the form the avatar editor stores for a drawn avatar. */
+const GOLD_ICON = 'avatar:v1:{"kind":"icon","icon":"rocket","tone":"gold"}';
+
+describe("setWorkspaceAvatar", () => {
+  it("writes the avatar alone to the workspace the row names", async () => {
+    invoke.mockResolvedValue({ ...SETTINGS, avatarUrl: GOLD_ICON });
+    expect(await setWorkspaceAvatar("acme", "wrk_1", GOLD_ICON)).toEqual({
+      ok: true,
+      value: { avatarUrl: GOLD_ICON },
+    });
+    // No name or slug rides along, so a rename saved since the editor opened
+    // is not reverted.
+    expect(invoke).toHaveBeenCalledWith(
+      "update_workspace_settings",
+      { workspaceId: "wrk_1", avatarUrl: GOLD_ICON },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("clears the avatar when the editor sends an empty string", async () => {
+    invoke.mockResolvedValue(SETTINGS);
+    expect(await setWorkspaceAvatar("acme", "wrk_1", "")).toEqual({
+      ok: true,
+      value: { avatarUrl: null },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_workspace_settings",
+      { workspaceId: "wrk_1", avatarUrl: null },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses a value that is not an avatar before the kernel runs (negative)", async () => {
+    expect(
+      await setWorkspaceAvatar("acme", "wrk_1", "http://cdn.example/a.png"),
+    ).toMatchObject({ ok: false, reason: "invalid", field: "avatarUrl" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("setOrgAvatar", () => {
+  const ORG_SETTINGS = {
+    name: "Acme Robotics",
+    slug: "acme",
+    avatarUrl: GOLD_ICON,
+    website: null,
+    industry: null,
+    employeeSize: null,
+    type: "business" as const,
+  };
+
+  it("writes the avatar alone through update_org_settings", async () => {
+    invoke.mockResolvedValue(ORG_SETTINGS);
+    expect(await setOrgAvatar("acme", GOLD_ICON)).toEqual({
+      ok: true,
+      value: { avatarUrl: GOLD_ICON },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_org_settings",
+      { avatarUrl: GOLD_ICON },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("clears the avatar when the editor sends an empty string", async () => {
+    invoke.mockResolvedValue({ ...ORG_SETTINGS, avatarUrl: null });
+    expect(await setOrgAvatar("acme", "")).toEqual({
+      ok: true,
+      value: { avatarUrl: null },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_org_settings",
+      { avatarUrl: null },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("answers denied when the kernel refuses the role (negative)", async () => {
+    invoke.mockRejectedValue(denied("update_org_settings"));
+    expect(await setOrgAvatar("acme", GOLD_ICON)).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
+  });
+
+  it("refuses a value that is not an avatar before the kernel runs (negative)", async () => {
+    expect(await setOrgAvatar("acme", "data:image/png;base64,AAAA")).toMatchObject(
+      { ok: false, reason: "invalid", field: "avatarUrl" },
+    );
+    expect(invoke).not.toHaveBeenCalled();
   });
 });
 
