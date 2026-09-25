@@ -143,8 +143,8 @@
       "sort": "Sort",
       "sorts": {
         "shown": "Shown order",
-        "az": "Statement A–Z",
-        "za": "Statement Z–A"
+        "az": "Label A–Z",
+        "za": "Label Z–A"
       },
       "rows": "Rows",
       "nothing": "Nothing matches.",

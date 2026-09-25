@@ -132,12 +132,12 @@ function publishedByLastMerge(
   return head.startsWith(commit) || commit.startsWith(head);
 }
 
-/** Newest first, then the reader's sort by statement; the order is stable. */
+/** Newest first, then the reader's sort by label; the order is stable. */
 function sortRecords(
   records: readonly PublishedRecord[],
   sort: Sort,
 ): PublishedRecord[] {
-  const statementOf = (r: PublishedRecord) => r.statement ?? r.title;
+  const labelOf = (r: PublishedRecord) => r.label ?? r.title;
   const shown = [...records].sort((a, b) => {
     // A record with no publication date sorts after every dated one.
     if (a.publishedAt === b.publishedAt) return 0;
@@ -149,7 +149,7 @@ function sortRecords(
   const dir = sort === "asc" ? 1 : -1;
   return shown.sort(
     (a, b) =>
-      statementOf(a).localeCompare(statementOf(b), undefined, {
+      labelOf(a).localeCompare(labelOf(b), undefined, {
         sensitivity: "base",
       }) * dir,
   );
@@ -326,9 +326,23 @@ function RecordShelfCard({
             </SafeLink>
           </span>
         </div>
-        <p className="text-[14px] text-foreground">
-          {record.statement ?? record.title}
+        {/* The label names the record and the statement says what it asks
+            (ADR-173). A record no Context PR wrote carries no statement, and
+            its title stands in as the label. */}
+        <p
+          data-term="label"
+          className="text-[14px] font-semibold text-foreground"
+        >
+          {record.label ?? record.title}
         </p>
+        {record.statement === null ? null : (
+          <p
+            data-term="statement"
+            className="text-[13.5px] text-muted-foreground"
+          >
+            {record.statement}
+          </p>
+        )}
         <div className={meta} data-term="meta">
           <b className="font-semibold text-foreground" data-term="scope">
             {ui(`scopes.${record.sharingScope}`)}

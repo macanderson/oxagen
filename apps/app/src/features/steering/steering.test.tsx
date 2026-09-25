@@ -529,7 +529,14 @@ describe("the Library, All shelf", () => {
       "ctx.b.info",
     ]);
     const [must, should] = rows;
-    expect(must).toHaveTextContent("A must record.");
+    // The item leads with the label (the title stands in until the record
+    // declares one), then the statement, then the slug (ADR-173).
+    expect(must?.querySelector('[data-term="label"]')).toHaveTextContent(
+      /^Read CHANGELOG.md once per run$/,
+    );
+    expect(must?.querySelector('[data-term="statement"]')).toHaveTextContent(
+      /^A must record.$/,
+    );
     expect(
       within(must ?? table).getByRole("link", { name: "ctx.a.must" }),
     ).toHaveAttribute("href", `${BASE}/records/ctx.a.must`);
@@ -877,6 +884,22 @@ describe("Records", () => {
     ).toBeVisible();
   });
 
+  it("leads a card with the record's label and prints its statement under it (ADR-173)", async () => {
+    await renderSteering("/records", {
+      records: readOk({
+        records: [publishedRecord({ label: "Read the changelog once" })],
+        total: 1,
+      }),
+    });
+    const card = within(section("Published records")).getByRole("article");
+    expect(card.querySelector('[data-term="label"]')).toHaveTextContent(
+      /^Read the changelog once$/,
+    );
+    expect(card.querySelector('[data-term="statement"]')).toHaveTextContent(
+      /^Do not re-read CHANGELOG.md after the first read in a run.$/,
+    );
+  });
+
   it("prints unclassified and the title for a record no Context PR wrote, with no fact it lacks", async () => {
     await renderSteering("/records", {
       records: readOk({
@@ -897,7 +920,10 @@ describe("Records", () => {
     });
     const card = within(section("Published records")).getByRole("article");
     expect(card).toHaveAttribute("data-kind", "unclassified");
-    expect(card).toHaveTextContent("Read CHANGELOG.md once per run");
+    expect(card.querySelector('[data-term="label"]')).toHaveTextContent(
+      /^Read CHANGELOG.md once per run$/,
+    );
+    expect(card.querySelector('[data-term="statement"]')).toBeNull();
     expect(card.querySelector('[data-term="force"]')).toBeNull();
     expect(card.querySelector('[data-term="tokens"]')).toBeNull();
     expect(card.querySelector('[data-term="commit"]')).toBeNull();

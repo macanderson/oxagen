@@ -400,8 +400,8 @@
       "sort": "Sort",
       "sorts": {
         "shown": "Shown order",
-        "asc": "Statement A\u2013Z",
-        "desc": "Statement Z\u2013A"
+        "asc": "Label A\u2013Z",
+        "desc": "Label Z\u2013A"
       },
       "forceTitle": "Steering force",
       "effectTitle": "Constraint effect",

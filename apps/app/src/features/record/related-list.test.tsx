@@ -23,6 +23,7 @@ const item = (overrides: Partial<RelatedItem>): RelatedItem => ({
   force: "must",
   constraintEffect: "forbid",
   scope: "workspace",
+  label: "Protect main",
   statement: "Never push to main.",
   commit: "4d5e6f7a8b9c",
   publishedAt: "2026-09-12T09:16:40.000Z",
@@ -82,6 +83,43 @@ describe("RelatedList", () => {
     expect(list).toHaveTextContent("require");
     expect(list).toHaveTextContent("forbid");
     expect(list).toHaveTextContent("4d5e6f7");
+  });
+
+  it("leads each card with its label, prints the statement under it, and sorts by the label (ADR-173)", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <RelatedList
+          items={[
+            item({ lineage: "ctx.a.zeta", label: "Zeta", statement: "Aaa." }),
+            item({ lineage: "ctx.a.alpha", label: "Alpha", statement: null }),
+          ]}
+        />
+      </IntlProvider>,
+    );
+    const labels = () =>
+      Array.from(
+        screen
+          .getByTestId("record-related-list")
+          .querySelectorAll('[data-term="label"]'),
+      ).map((node) => node.textContent);
+    expect(labels()).toEqual(["Zeta", "Alpha"]);
+    const statements = screen
+      .getByTestId("record-related-list")
+      .querySelectorAll('[data-term="statement"]');
+    expect(Array.from(statements).map((node) => node.textContent)).toEqual([
+      "Aaa.",
+    ]);
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Sort" }),
+      "az",
+    );
+    expect(labels()).toEqual(["Alpha", "Zeta"]);
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search records" }),
+      "alpha",
+    );
+    expect(labels()).toEqual(["Alpha"]);
   });
 
   it("says nothing matches when a search hides every record (negative)", async () => {

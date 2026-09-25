@@ -24,7 +24,9 @@ export type RelatedItem = {
   force: RecordForce | null;
   constraintEffect: ConstraintEffect | null;
   scope: SharingScope;
-  statement: string;
+  /** The record's name (ADR-173), or its title while it declares none. */
+  label: string;
+  statement: string | null;
   commit: string | null;
   publishedAt: string | null;
   href: SafePath;
@@ -37,16 +39,17 @@ export function RelatedList({ items }: { items: RelatedItem[] }) {
     {
       value: "az",
       label: t("sorts.az"),
-      compare: (a, b) => a.statement.localeCompare(b.statement),
+      compare: (a, b) => a.label.localeCompare(b.label),
     },
     {
       value: "za",
       label: t("sorts.za"),
-      compare: (a, b) => b.statement.localeCompare(a.statement),
+      compare: (a, b) => b.label.localeCompare(a.label),
     },
   ];
   const list = useList(items, {
-    text: (item) => `${item.statement} ${item.lineage} ${item.scope}`,
+    text: (item) =>
+      `${item.label} ${item.statement ?? ""} ${item.lineage} ${item.scope}`,
     sorts,
   });
   return (
@@ -115,9 +118,20 @@ function RelatedCard({ item }: { item: RelatedItem }) {
             {t("open")}
           </SafeLink>
         </div>
-        <p className="text-[15px] leading-snug text-foreground">
-          {item.statement}
+        <p
+          data-term="label"
+          className="text-[15px] font-semibold leading-snug text-foreground"
+        >
+          {item.label}
         </p>
+        {item.statement === null ? null : (
+          <p
+            data-term="statement"
+            className="text-[13.5px] leading-snug text-muted-foreground"
+          >
+            {item.statement}
+          </p>
+        )}
         <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-dim">
           <b className="font-semibold text-muted-foreground">
             {term(`scopes.${item.scope}`)}
