@@ -346,6 +346,52 @@ describe("the rows", () => {
     );
   });
 
+  it("shows a one-sentence prompt's operator line and a short subagent row's chip, which have no fold to open them", () => {
+    const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c2";
+    const specs: FrameSpec[] = [
+      {
+        seq: 1,
+        t: 0,
+        type: "turn_start",
+        kind: "frame",
+        turn: 1,
+        request: "Fix the flaky test.",
+      },
+      {
+        seq: 2,
+        t: 1,
+        type: "model.response",
+        kind: "model_call",
+        label: "anthropic/claude-opus-5",
+        turn: 1,
+        callKey: "msg_sub",
+        subagent: { chainRef: CHAIN, type: "Explore" },
+        blocks: [{ kind: "text", text: "Found it." }],
+      },
+      {
+        seq: 3,
+        t: 2,
+        type: "model.response",
+        kind: "model_call",
+        label: "anthropic/claude-opus-5",
+        turn: 1,
+        callKey: "msg_own",
+        blocks: [{ kind: "text", text: "Fixed the retry." }],
+      },
+    ];
+    renderSection({ read: readOk(transcriptOf(specs)) });
+    const you = screen.getByTestId("transcript-you");
+    expect(within(you).queryByRole("button")).toBeNull();
+    expect(you).toHaveTextContent("Marcus Bell · operator");
+    const [sub] = screen.getAllByTestId("transcript-agent");
+    if (sub === undefined) throw new Error("the subagent's row is drawn");
+    expect(sub).toHaveTextContent("Found it.");
+    expect(within(sub).queryByRole("button")).toBeNull();
+    expect(within(sub).getByTestId("transcript-subagent")).toHaveTextContent(
+      "subagent Explore",
+    );
+  });
+
   it("leads each call with the tool's short name and its arguments on the first line", () => {
     renderSection();
     const list = toolRow("github__list_pull_requests");
@@ -861,6 +907,25 @@ describe("the search", () => {
         "tx-call-fold",
       ),
     ).toBeNull();
+  });
+
+  it("disables each fold while the search holds it open, so a click cannot change the row behind the search", () => {
+    renderSection();
+    const box = () =>
+      screen.getByRole("searchbox", { name: "Search the transcript" });
+    fireEvent.change(box(), { target: { value: "move release config" } });
+    const found = toolRow("github__list_pull_requests");
+    const hide = within(found).getByRole("button", { name: "Hide the call" });
+    expect(hide).toHaveAttribute("aria-expanded", "true");
+    expect(hide).toBeDisabled();
+    fireEvent.click(hide);
+    fireEvent.change(box(), { target: { value: "" } });
+    // The row closes with the search, as it was before the search opened it.
+    const list = toolRow("github__list_pull_requests");
+    expect(within(list).queryByTestId("tx-call-fold")).toBeNull();
+    expect(
+      within(list).getByRole("button", { name: "Show the call" }),
+    ).toBeEnabled();
   });
 
   it("says nothing matches rather than showing an empty feed (negative)", () => {
