@@ -98,13 +98,31 @@ are gone.
 - Threads live in the flyout's component state. They survive a workspace switch,
   because the shell persists across one, but not a full reload. The conversation
   itself is persisted server-side, so reading it back on reload is additive work
-  on top of this decision, not a change to it.
+  on top of this decision, not a change to it. (Superseded 2026-09-25 by the
+  amendment below: the thread is now read back on reload.)
 - **The spend on an abandoned turn is now a stated cost rather than a hidden
   one.** A turn nobody returns to still runs to completion. That is the price of
   never half-finishing a governed action. Until #2953 ships its cancel, a
   person has no way to stop paying for a turn they have asked. This decision
   does not change that. It was true before this decision too, because the old
   behaviour hid the reply but never stopped the turn.
+
+## Amendment, 2026-09-25: the key and the reload (#4163, #3313)
+
+"One thread per workspace" means one thread per workspace **id**, not per
+`org/ws` slug pair. The flyout used to key its threads by the slugs in the URL,
+so renaming a workspace stranded its thread, and any reply still in flight,
+under a slug the shell would never compute again. `assistant-threads.ts` now
+files each thread under the workspace's id, which `loadAssistantThread`
+answers. Until that read answers, the slugs stand in, and anything written to
+the stand-in moves with it to the id.
+
+The same read restores the thread after a reload: it is the viewer's latest
+active conversation in the workspace, read through `get_conversation`. "New
+thread" empties the thread on screen and the next question opens a new
+conversation. The old conversation stays on the record. Everything above about
+routing a turn to the thread it was asked in is unchanged. Only the key it
+routes by changed, to the id.
 
 ## Verification
 

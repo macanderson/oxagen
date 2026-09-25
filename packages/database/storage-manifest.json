@@ -1070,6 +1070,16 @@
       "writes": []
     },
     {
+      "domain": "conversation",
+      "name": "get_conversation",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "get_data_plane",
       "reads": [],
@@ -4100,7 +4110,7 @@
       "writes": []
     }
   ],
-  "contentHash": "40e59402a361255c98bb46b4d87d8e1be975ee29b2b75d4f23a11a61d7fbcf84",
+  "contentHash": "c319f874b436e828081f5834dd4935426d6b918c34405029cacfcce1f5522609",
   "domains": [
     {
       "name": "agent",
