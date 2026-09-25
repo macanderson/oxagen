@@ -152,6 +152,14 @@ export function bodyColumnType(schema: z.ZodTypeAny): string {
   return "String";
 }
 
+/** A column 0027 created that the producer column sets no longer carry. */
+export interface FormerColumn {
+  readonly name: string;
+  readonly type: string;
+  /** The column it followed when the table was created. */
+  readonly after: string;
+}
+
 /**
  * Columns the table still carries that nothing writes any more.
  *
@@ -166,19 +174,36 @@ export function bodyColumnType(schema: z.ZodTypeAny): string {
  * Retiring a column names it here instead: it stays in the DDL, in its original
  * position, so the generated file still describes what was applied, while the
  * producer column sets (`ENVELOPE_COLUMNS`, `BODY_MEMBER_NAMES`) no longer carry
- * it and nothing writes it. Actually removing the column from the table is a
- * separate forward migration, taken once no supported release still writes it.
+ * it and nothing writes it. Removing the column from the table is a separate
+ * forward migration, taken once no supported release still writes it. When
+ * that migration lands, the entry moves to `DROPPED_COLUMNS`.
+ *
+ * Empty today: the one column ever retired here was dropped by 0031.
  */
-export const RETIRED_COLUMNS: ReadonlyArray<{
-  readonly name: string;
-  readonly type: string;
-  /** The column it followed when the table was created. */
-  readonly after: string;
-}> = [
+export const RETIRED_COLUMNS: ReadonlyArray<FormerColumn> = [];
+
+/**
+ * Columns 0027 created that a later forward migration dropped.
+ *
+ * 0027 keeps creating them, in their original position, so the committed file
+ * still matches what every cluster applied. The migration named in `droppedBy`
+ * then removes them on every cluster, whether it was bootstrapped before the
+ * drop or after it. They are not columns of the live table, so no writer may
+ * name them.
+ */
+export const DROPPED_COLUMNS: ReadonlyArray<
+  FormerColumn & {
+    /** The forward migration that drops the column. */
+    readonly droppedBy: string;
+  }
+> = [
   {
+    // The Claude Code user's readable email address. #3173 stopped writing it,
+    // and 0031 removes the stored addresses (#3072, ADR-084).
     name: "anthropic_user_email",
     type: "String",
     after: "anthropic_user_id_hash",
+    droppedBy: "0031_drop_tacho_events_anthropic_user_email.sql",
   },
 ];
 
@@ -187,8 +212,25 @@ export interface TachoEventsColumn {
   type: string;
 }
 
-/** Every column of `tacho_events`, in DDL order. */
-export function tachoEventsColumns(): TachoEventsColumn[] {
+/** Put each former column back after the column it followed. */
+function withFormerColumns(
+  columns: TachoEventsColumn[],
+  former: ReadonlyArray<FormerColumn>,
+): TachoEventsColumn[] {
+  for (const { name, type, after } of former) {
+    const at = columns.findIndex((column) => column.name === after);
+    if (at < 0) {
+      throw new Error(
+        `former column ${name} follows ${after}, which is not in the table`,
+      );
+    }
+    columns.splice(at + 1, 0, { name, type });
+  }
+  return columns;
+}
+
+/** The envelope, body, and server columns, with no former column among them. */
+function producedColumns(): TachoEventsColumn[] {
   const columns: TachoEventsColumn[] = SERVER_COLUMN_TYPES.slice(0, 2).map(
     ([name, type]) => ({ name, type }),
   );
@@ -201,21 +243,31 @@ export function tachoEventsColumns(): TachoEventsColumn[] {
   for (const [name, type] of SERVER_COLUMN_TYPES.slice(2)) {
     columns.push({ name, type });
   }
-  for (const { name, type, after } of RETIRED_COLUMNS) {
-    const at = columns.findIndex((column) => column.name === after);
-    if (at < 0) {
-      throw new Error(
-        `retired column ${name} follows ${after}, which is not in the table`,
-      );
-    }
-    columns.splice(at + 1, 0, { name, type });
-  }
   return columns;
+}
+
+/**
+ * Every column the live `tacho_events` table has, in DDL order: what 0027
+ * creates, less what a later migration dropped. Writers project onto this set.
+ */
+export function tachoEventsColumns(): TachoEventsColumn[] {
+  return withFormerColumns(producedColumns(), RETIRED_COLUMNS);
+}
+
+/**
+ * Every column 0027 creates, in DDL order, including the ones a later
+ * migration dropped. Only the generated migration reads this.
+ */
+export function tachoEventsCreatedColumns(): TachoEventsColumn[] {
+  return withFormerColumns(producedColumns(), [
+    ...RETIRED_COLUMNS,
+    ...DROPPED_COLUMNS,
+  ]);
 }
 
 /** The CREATE TABLE statement the migration carries. */
 export function tachoEventsCreateTable(): string {
-  const lines = tachoEventsColumns().map(
+  const lines = tachoEventsCreatedColumns().map(
     ({ name, type }) => `  ${name} ${type}`,
   );
   return [

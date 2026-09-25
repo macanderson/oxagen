@@ -17,6 +17,22 @@ export const COMMAND_HOOK_EVENTS = [
   "Stop",
 ] as const;
 
+/**
+ * Telemetry events that also run `tacho-hook` as a command hook, so the event
+ * is spooled when the daemon is down and replayed when it starts. It answers
+ * `{}` either way (fail open). `SessionEnd` is the one: as an http hook it was
+ * lost while the daemon was down, and the session then stayed open until the
+ * sweep closed it as idle hours later (#3989).
+ */
+export const SPOOLED_HOOK_EVENTS = ["SessionEnd"] as const;
+
+/**
+ * The command timeout for `SessionEnd`. Claude Code waits for SessionEnd hooks
+ * for the largest timeout configured on them, at least 1.5 s and at most 60 s
+ * (checked in Claude Code 2.1.282), so this is the wait it honours.
+ */
+export const SESSION_END_TIMEOUT_S = 10;
+
 /** Telemetry-only events post straight to the daemon (fail open, gap chained). */
 export const HTTP_HOOK_EVENTS = [
   "PostToolUse",
@@ -29,7 +45,6 @@ export const HTTP_HOOK_EVENTS = [
   "PermissionDenied",
   "Notification",
   "ConfigChange",
-  "SessionEnd",
   "InstructionsLoaded",
   "UserPromptExpansion",
   "MessageDisplay",
@@ -63,6 +78,7 @@ export const RETIRED_HOOK_EVENTS = [
 
 export const ALL_HOOK_EVENTS = [
   ...COMMAND_HOOK_EVENTS,
+  ...SPOOLED_HOOK_EVENTS,
   ...HTTP_HOOK_EVENTS,
 ] as const;
 
@@ -183,6 +199,9 @@ export function tachoHookEntries(
     out[event] = [
       { hooks: [commandHookEntry(config, COMMAND_HOOK_TIMEOUTS_S[event])] },
     ];
+  }
+  for (const event of SPOOLED_HOOK_EVENTS) {
+    out[event] = [{ hooks: [commandHookEntry(config, SESSION_END_TIMEOUT_S)] }];
   }
   for (const event of HTTP_HOOK_EVENTS) {
     out[event] = [
@@ -415,8 +434,23 @@ export interface HookPresence {
   complete: boolean;
   present: HookEventName[];
   missing: HookEventName[];
+  /**
+   * Present events whose Tacho entry has another hook type than this build
+   * writes: the http `SessionEnd` an enrollment before #3989 wrote, which is
+   * lost while the daemon is down. They stay in `present` and leave
+   * `complete` alone, because the detector raises `hooks_removed` whenever
+   * `complete` is false. `tacho enroll` rewrites them.
+   */
+  stale: HookEventName[];
   envOk: boolean;
   disabledByFlag: boolean;
+}
+
+/** The hook type Tacho writes for an event: `http` for telemetry, else `command`. */
+function writtenHookType(event: HookEventName): HookEntry["type"] {
+  return (HTTP_HOOK_EVENTS as readonly string[]).includes(event)
+    ? "http"
+    : "command";
 }
 
 /** Which of Tacho's hooks are installed for this enrollment. */
@@ -430,10 +464,17 @@ export function tachoHookPresence(
       : {};
   const present: HookEventName[] = [];
   const missing: HookEventName[] = [];
+  const stale: HookEventName[] = [];
   for (const event of ALL_HOOK_EVENTS) {
     const groups = settings.hooks?.[event] ?? [];
-    if (groups.some((group) => isTachoGroup(group, enrollmentId))) {
+    const ours = groups.filter((group) => isTachoGroup(group, enrollmentId));
+    if (ours.length > 0) {
       present.push(event);
+      const type = writtenHookType(event);
+      if (
+        ours.some((group) => group.hooks.some((entry) => entry.type !== type))
+      )
+        stale.push(event);
     } else {
       missing.push(event);
     }
@@ -448,6 +489,7 @@ export function tachoHookPresence(
     complete: missing.length === 0 && envOk && !disabledByFlag,
     present,
     missing,
+    stale,
     envOk,
     disabledByFlag,
   };

@@ -9,7 +9,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const chInsert = vi.fn(
-  async (_table: string, _rows: readonly Record<string, unknown>[]) => {},
+  async (
+    _table: string,
+    _rows: readonly Record<string, unknown>[],
+    _settings?: Record<string, unknown>,
+  ) => {},
 );
 const chSelect = vi.fn(
   async (_q: { query: string; params?: Record<string, unknown> }) => ({
@@ -18,14 +22,19 @@ const chSelect = vi.fn(
 );
 
 vi.mock("./tenant", () => ({
-  chInsert: (table: string, rows: readonly Record<string, unknown>[]) =>
-    chInsert(table, rows),
+  chInsert: (
+    table: string,
+    rows: readonly Record<string, unknown>[],
+    settings?: Record<string, unknown>,
+  ) => chInsert(table, rows, settings),
   chSelect: (q: { query: string; params?: Record<string, unknown> }) =>
     chSelect(q),
 }));
 
 import {
   insertTachoEvents,
+  TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES,
+  TACHO_EVENTS_INSERT_SETTINGS,
   selectAgentDaySpend,
   selectTachoEventRecords,
   selectTachoEvents,
@@ -109,6 +118,25 @@ describe("insertTachoEvents", () => {
       chain_verified: false,
       received_at: RECEIVED_AT.toISOString(),
     });
+  });
+
+  it("bounds the insert's memory and keeps the node from stopping it for another query's memory (#3662)", async () => {
+    await insertTachoEvents([{ event: genesis(), chainVerified: true }]);
+    const [, , settings] = chInsert.mock.calls[0] ?? [];
+    expect(settings).toBe(TACHO_EVENTS_INSERT_SETTINGS);
+    expect(settings).toEqual({
+      max_memory_usage: "536870912",
+      memory_overcommit_ratio_denominator: "0",
+      memory_overcommit_ratio_denominator_for_user: "0",
+    });
+    // The bound sits well above the largest batch a host may send (4 MiB of
+    // JSON) and well below the app node's 1.5 GiB server cap.
+    expect(TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES).toBeGreaterThan(
+      100 * 4 * 1_048_576,
+    );
+    expect(TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES).toBeLessThan(
+      1_610_612_736 / 2,
+    );
   });
 
   it("drops a column the table does not have even if a caller smuggles it", () => {

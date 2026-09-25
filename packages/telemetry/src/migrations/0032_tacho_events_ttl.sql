@@ -1,0 +1,22 @@
+-- 0032_tacho_events_ttl.sql
+--
+-- Give tacho_events a retention period (#3944, audit finding S-11). The table
+-- had no TTL, so every wrapped-run frame was kept forever.
+--
+-- The period is thirteen months, the hot window ADR-058 sets for a run's
+-- frame rows (docs/compliance/data-retention.md). tacho_events holds the
+-- frame rows of wrapped sessions, as agent.agent_run_events holds them for
+-- ledger runs. Unlike the ledger, a wrapped session has no archive segment
+-- yet, so a frame that expires here is gone. The session row in Postgres
+-- (tacho.sessions: totals, seal, final hash, grade) is kept.
+--
+-- The clock is received_at, the time the control plane wrote the row. ts is
+-- the producer's clock, and a host whose clock ran thirteen months slow would
+-- see its frames expire on arrival. The table still partitions by ts. Moving
+-- the partition key needs a table rebuild, which #4297 carries.
+--
+-- materialize_ttl_after_modify = 0: existing parts take the TTL when they
+-- next merge, and new parts carry it from the start. Materializing now would
+-- rewrite every part of the table at once, and on the app node that holds
+-- memory at the 1.5 GiB cap (ADR-181).
+ALTER TABLE tacho_events MODIFY TTL toDateTime(received_at) + INTERVAL 13 MONTH SETTINGS materialize_ttl_after_modify = 0;

@@ -4136,7 +4136,7 @@
       "writes": []
     }
   ],
-  "contentHash": "2b59c09c49b92808d9a0766d7400a18d055963becd1c6283f3624ae1717f83c0",
+  "contentHash": "e2f8d216b37ccba4f55bdfbd961c0604c99d6096a7cd465926a24ead19539352",
   "domains": [
     {
       "name": "agent",
@@ -21557,7 +21557,7 @@
           "name": "duration_ms",
           "nullable": true,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "status",
@@ -21847,7 +21847,7 @@
           "name": "requests",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "input_tokens",
@@ -21883,7 +21883,7 @@
           "name": "web_search_requests",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "cost_micros",
@@ -21895,7 +21895,7 @@
           "name": "api_duration_ms",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         }
       ],
       "domain": "tacho",
@@ -22193,7 +22193,7 @@
           "name": "permission_mode_changes",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "analytics_disabled",
@@ -22493,85 +22493,85 @@
           "name": "num_turns",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_prompts",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_model_calls",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_api_errors",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_api_retries",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_tool_calls",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_tool_errors",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_tool_rejections",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_tool_asks",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_subagents",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_compactions",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_model_switches",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_notifications",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "num_elicitations",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "input_tokens",
@@ -22619,13 +22619,13 @@
           "name": "web_search_requests",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "web_fetch_requests",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "total_cost_micros",
@@ -22649,97 +22649,97 @@
           "name": "duration_ms",
           "nullable": true,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "api_duration_ms",
           "nullable": true,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "api_duration_without_retries_ms",
           "nullable": true,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "tool_duration_ms",
           "nullable": true,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "active_time_s",
           "nullable": true,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "ttft_first_ms",
           "nullable": true,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "lines_added",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "lines_removed",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "files_read",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "files_written",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "files_deleted",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "commands_run",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "network_calls",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "commits",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "pushes",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "pull_requests",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "subagent_stats",
@@ -22787,49 +22787,49 @@
           "name": "policy_decisions",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "policy_denies",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "elevations_requested",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "elevations_approved",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "elevations_denied",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "elevations_expired",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "tokens_issued",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "tokens_used",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "seq_count",
@@ -22859,7 +22859,7 @@
           "name": "checkpoint_count",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "last_checkpoint_id",
@@ -22883,7 +22883,7 @@
           "name": "telemetry_gap_count",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "unobserved_tail",
@@ -22913,19 +22913,19 @@
           "name": "content_frames",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "body_frames",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "tool_body_frames",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "title",
