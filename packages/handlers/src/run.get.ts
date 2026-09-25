@@ -164,15 +164,31 @@ export function createRunGetHandler(
     // A sealed run whose page had nothing behind it answers no cursor, because
     // nothing will ever lie past it; a live run keeps its resume point, since
     // the next frame may still arrive.
-    const [[title, config], batch] = await Promise.all([
+    //
+    // A frame read the store refuses leaves the header standing. ClickHouse
+    // refuses under its server-wide memory cap whichever query it picks, and a
+    // small bounded read was the one it picked for the Run stream and the
+    // assistant alike (#4243). The page comes back empty and says why, with no
+    // cursor, so a caller keeps its own and nobody reads the run as sealed.
+    const [[title, config], read] = await Promise.all([
       header,
       poll(
         run,
         cursor ?? startCursorSeq(run),
         input.frameLimit + 1,
         input.waitMs,
+      ).then(
+        (batch) => ({ batch, failed: false }),
+        (err: unknown) => {
+          logger.warn(
+            { err, runId: input.runId },
+            "get_run: the run's frames could not be read; the header stands alone",
+          );
+          return { batch: [] as RunFrame[], failed: true };
+        },
       ),
     ]);
+    const { batch } = read;
     const frames = batch.slice(0, input.frameLimit);
     const last = frames.at(-1);
     const ended =
@@ -193,6 +209,15 @@ export function createRunGetHandler(
         cursor: last && !ended ? encodeFrameCursor(last.seq) : null,
       },
       witnessFor: run.witnessFor,
+      ...(read.failed
+        ? {
+            framesError: {
+              code: "frames_unavailable" as const,
+              message:
+                "The run's frames could not be read. The header is current. Read the run again to retry.",
+            },
+          }
+        : {}),
     };
   };
 }
