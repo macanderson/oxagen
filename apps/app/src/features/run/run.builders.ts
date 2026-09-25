@@ -13,7 +13,9 @@ import type {
   RunTranscript,
   RunTurns,
   TranscriptBody,
+  TranscriptCounts,
   TranscriptEntry,
+  TranscriptFigures,
   TranscriptKind,
   TranscriptZoom,
 } from "@/data/contracts/run";
@@ -198,10 +200,15 @@ export function transcriptBody(
   };
 }
 
+/**
+ * One transcript entry: by default a model step that answered, with the facts
+ * the server's fold states about it. The entry's key follows its opening
+ * frame, as the server names it (`frameKey`), unless a test names it.
+ */
 export function transcriptEntry(
   overrides: Partial<TranscriptEntry> = {},
 ): TranscriptEntry {
-  return {
+  const entry: Omit<TranscriptEntry, "key"> = {
     seq: "11",
     endSeq: "14",
     at: at(-3000),
@@ -222,7 +229,28 @@ export function transcriptEntry(
       currency: "USD",
       basis: "gateway_observed",
     },
+    parentKey: null,
+    node: "model",
+    quiet: false,
+    outcome: "ok",
+    approvalId: null,
+    gates: [],
+    subject: null,
+    family: null,
+    model: "anthropic/claude-opus-5",
+    durationMs: null,
+    echoOf: null,
+    recall: null,
+    matches: [],
     ...overrides,
+  };
+  return {
+    ...entry,
+    key:
+      overrides.key ??
+      (entry.subagent === undefined
+        ? entry.seq
+        : `${entry.subagent.chainRef}:${entry.seq}`),
   };
 }
 
@@ -355,13 +383,13 @@ export function mockupTranscript(
   ];
   /**
    * The chips a frame answers to, as `frameKinds` in `@oxagen/run-ledger`
-   * assigns them: `prompt` is the request half of a model call, not the
-   * operator's words, and a decision adds `policy` to the entry it rides.
+   * assigns them: `prompt` is the operator's words, and a decision adds
+   * `policy` to the entry it rides.
    */
   const kindsOf = (spec: Spec, request: boolean): TranscriptKind[] => {
     const kinds: TranscriptKind[] = [];
-    if (spec.kind === "model_call")
-      kinds.push(request ? "prompt" : "responses");
+    if (spec.type === "turn_start") kinds.push("prompt");
+    if (spec.kind === "model_call" && !request) kinds.push("responses");
     if (spec.kind === "tool_call") kinds.push("tools");
     if (spec.type === "policy_decision" || spec.decision !== undefined)
       kinds.push("policy");
@@ -385,7 +413,43 @@ export function mockupTranscript(
       bytesRef: fidelity === "digest_only" ? null : "evb:v1:k:abc",
     });
     const request = REQUEST_TYPES.has(spec.type);
+    // What the server's fold states about each frame read as its own entry.
+    const tool = spec.kind === "tool_call";
+    const [head] = spec.label.split(" ");
+    const facts: Partial<TranscriptEntry> =
+      spec.kind === "model_call"
+        ? {
+            node: "model",
+            outcome: request ? "pending" : "ok",
+            model: spec.label,
+          }
+        : tool
+          ? {
+              node: "tool",
+              subject: head ?? spec.label,
+              family: "tool",
+              outcome: request ? "pending" : "ok",
+              model: null,
+            }
+          : {
+              node:
+                spec.type === "turn_start"
+                  ? "prompt"
+                  : spec.type === "turn_end"
+                    ? "reply"
+                    : spec.type === "context.assembled"
+                      ? "recall"
+                      : spec.type === "policy_decision"
+                        ? "policy"
+                        : "control",
+              quiet: spec.type === "agent_start",
+              outcome: spec.decision === "deny" ? "denied" : null,
+              // The mockup's gates (`policy allow`) name no call.
+              subject: null,
+              model: null,
+            };
     return transcriptEntry({
+      ...facts,
       kinds: kindsOf(spec, request),
       seq: String(spec.seq),
       endSeq: String(spec.seq),
@@ -431,7 +495,77 @@ export function mockupTranscript(
     entries,
     cursor: null,
     complete: true,
+    counts: null,
+    figures: transcriptFigures(),
+    search: null,
     ...overrides,
+  };
+}
+
+/**
+ * The run's figures as the server counts them over the mockup run's steps
+ * (`transcriptFigures`, ADR-182): two model steps, two tool calls in two
+ * batches, one of them refused, and the time each part took.
+ */
+export function transcriptFigures(
+  overrides: Partial<TranscriptFigures> = {},
+): TranscriptFigures {
+  return {
+    steps: { model: 2, tool: 2 },
+    prompts: 2,
+    calls: {
+      count: 2,
+      failed: 1,
+      tools: [
+        { name: "create_tag", calls: 1 },
+        { name: "list_pull_requests", calls: 1 },
+      ],
+      families: [
+        { family: "tool", calls: 2, share: 1, ms: 2000, failed: 1, tools: 2 },
+      ],
+      batches: {
+        count: 2,
+        parallel: 0,
+        widest: 1,
+        fanOut: 1,
+        serialMs: 2000,
+        togetherMs: 2000,
+        histogram: [{ width: 1, batches: 2 }],
+      },
+    },
+    wall: { modelMs: 2000, toolMs: 2000, waitingMs: 0 },
+    ...overrides,
+  };
+}
+
+/**
+ * The run's entries as the server counts them, by default over the one model
+ * step `runTranscript` holds: a reply that carried a cost record.
+ */
+export function transcriptCounts(
+  overrides: {
+    kinds?: Partial<TranscriptCounts["kinds"]>;
+    entries?: number;
+    errors?: number;
+    policy?: number;
+  } = {},
+): TranscriptCounts {
+  return {
+    kinds: {
+      prompt: 0,
+      responses: 1,
+      thinking: 0,
+      tools: 0,
+      policy: 0,
+      usage: 1,
+      recall: 0,
+      seal: 0,
+      errors: 0,
+      ...overrides.kinds,
+    },
+    entries: overrides.entries ?? 1,
+    errors: overrides.errors ?? 0,
+    policy: overrides.policy ?? 0,
   };
 }
 
@@ -444,6 +578,9 @@ export function runTranscript(
     entries: [transcriptEntry()],
     cursor: null,
     complete: true,
+    counts: transcriptCounts(),
+    figures: null,
+    search: null,
     ...overrides,
   };
 }
@@ -616,10 +753,10 @@ type RunReads = {
   /** Only read when the Governed actions tab has a frame body open; refused when absent. */
   frameBody?: Read<RunFrameBody>;
   /**
-   * The whole-run transcript at `everything`, read with the page: the
-   * figures, the Policy and Context tabs and the tab counts all derive from
-   * it. The Transcript tab reads it again only through
-   * pressed chips. A function answers per zoom level, for a test that needs
+   * The transcript reads the page makes: the whole run at `steps`, whose
+   * counts and figures the page draws and whose entries the Transcript tab
+   * draws, and the run at `everything` for the tabs that list frames and
+   * their counts. A function answers per zoom level, for a test that needs
    * to tell the reads apart. A test that says nothing about it gets one step.
    */
   transcript?:
@@ -746,7 +883,12 @@ export function runSource(reads: RunReads) {
       frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost ?? readOk(runCost())),
       transcript: (ctx, runId, zoom, q) => {
-        calls.transcript.push([ctx, runId, zoom, { kinds: q?.kinds ?? [] }]);
+        calls.transcript.push([
+          ctx,
+          runId,
+          zoom,
+          { ...q, kinds: q?.kinds ?? [] },
+        ]);
         const asked = reads.transcript ?? readOk(runTranscript());
         return Promise.resolve(
           typeof asked === "function" ? asked(zoom) : asked,

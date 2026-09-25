@@ -262,6 +262,9 @@ export function releaseTranscript(): RunTranscript {
     entries,
     cursor: null,
     complete: true,
+    counts: null,
+    figures: null,
+    search: null,
   };
 }
 

@@ -256,6 +256,9 @@ function toTranscriptBody(
                   name: block.name,
                   input: block.input,
                   callKey: block.callKey,
+                  stepKey: block.stepKey ?? null,
+                  result: block.result ?? null,
+                  family: block.family ?? null,
                 };
               case "tool_result":
                 return {
@@ -270,14 +273,55 @@ function toTranscriptBody(
   };
 }
 
-function toTranscriptDecision(
-  decision: RunTranscriptOutput["entries"][number]["decision"],
-): z.input<typeof RunTranscript>["entries"][number]["decision"] {
-  if (decision === null) return null;
+type DecisionOut = NonNullable<
+  RunTranscriptOutput["entries"][number]["decision"]
+>;
+
+function toDecisionView(
+  decision: DecisionOut,
+): z.input<typeof RunTranscript>["entries"][number]["gates"][number] {
   const { sessionUuid, ...rest } = decision;
   return sessionUuid === undefined ? rest : { ...rest, chainRef: sessionUuid };
 }
 
+function toTranscriptDecision(
+  decision: DecisionOut | null,
+): z.input<typeof RunTranscript>["entries"][number]["decision"] {
+  return decision === null ? null : toDecisionView(decision);
+}
+
+/**
+ * The run's counts, with every chip. The server counts each chip, and one it
+ * left out is one nothing answered.
+ */
+function countsOf(
+  counts: RunTranscriptOutput["counts"],
+): z.input<typeof RunTranscript>["counts"] {
+  if (counts === undefined) return null;
+  const { kinds } = counts;
+  return {
+    ...counts,
+    kinds: {
+      prompt: kinds.prompt ?? 0,
+      responses: kinds.responses ?? 0,
+      thinking: kinds.thinking ?? 0,
+      tools: kinds.tools ?? 0,
+      policy: kinds.policy ?? 0,
+      usage: kinds.usage ?? 0,
+      recall: kinds.recall ?? 0,
+      seal: kinds.seal ?? 0,
+      errors: kinds.errors ?? 0,
+    },
+  };
+}
+
+/**
+ * `get_run_transcript` to the page's transcript. Each entry carries what the
+ * server's fold states about it (ADR-182), and the page derives none of it.
+ * The contract declares those fields optional only so an older answer still
+ * parses; the handler always sends them, and a field it left out reads as the
+ * fold's "nothing to say": no parent, no outcome, no gates, no matches.
+ */
 export function toRunTranscript(
   out: RunTranscriptOutput,
 ): z.input<typeof RunTranscript> {
@@ -313,9 +357,32 @@ export function toRunTranscript(
       turn: entry.turn,
       cost: toCost(entry.cost),
       cumulativeCost: toCost(entry.cumulativeCost),
+      // An answer from before ADR-182 carries no key; the entry is then named
+      // the way the fold names it, by its opening frame on its chain.
+      key:
+        entry.key ??
+        (entry.subagent === undefined
+          ? entry.seq
+          : `${entry.subagent.sessionUuid}:${entry.seq}`),
+      parentKey: entry.parentKey ?? null,
+      node: entry.node ?? null,
+      quiet: entry.quiet ?? false,
+      outcome: entry.outcome ?? null,
+      approvalId: entry.approvalId ?? null,
+      gates: (entry.gates ?? []).map(toDecisionView),
+      subject: entry.subject ?? null,
+      family: entry.family ?? null,
+      model: entry.model ?? null,
+      durationMs: entry.durationMs ?? null,
+      echoOf: entry.echoOf ?? null,
+      recall: entry.recall ?? null,
+      matches: entry.matches ?? [],
     })),
     cursor: out.cursor,
     complete: out.complete,
+    counts: countsOf(out.counts),
+    figures: out.figures ?? null,
+    search: out.search ?? null,
   };
 }
 
