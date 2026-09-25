@@ -262,6 +262,11 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       if (provider && outcome) return `${provider} ${outcome}`;
       return outcome ?? event.eventType;
     }
+    case "verification.goal_verdict": {
+      const round = field(p, "round");
+      const verdict = goalVerdictOf(p);
+      return round && verdict ? `round ${round} ${verdict}` : event.eventType;
+    }
     case "context.history_summarized": {
       const outcome = field(p, "outcome");
       const covered = field(p, "covered_message_count");
@@ -344,6 +349,18 @@ function intentionsOpening(kind: RunStepKind): string[] {
     .map(([type]) => type);
 }
 
+/**
+ * A goal round's verdict in the words the transcript prints: `met` or
+ * `not_met`. Null when the payload carries no boolean, which a strict schema
+ * refuses at append, so a reader never guesses a verdict.
+ */
+function goalVerdictOf(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const met = (payload as Record<string, unknown>).met;
+  if (typeof met !== "boolean") return null;
+  return met ? "met" : "not_met";
+}
+
 /** The called tool, under either payload's name for it. */
 function toolNameOf(payload: unknown): string | null {
   return field(payload, "capability_name") ?? field(payload, "tool_name");
@@ -376,6 +393,8 @@ function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
       return { ...NO_IDENTITY, policy: field(p, "decision") };
     case "verification.completed":
       return { ...NO_IDENTITY, verdict: field(p, "verdict") };
+    case "verification.goal_verdict":
+      return { ...NO_IDENTITY, verdict: goalVerdictOf(p) };
     case "context.frames_selected":
       return { ...NO_IDENTITY, contextRows: numberField(p, "frame_count") };
     default:

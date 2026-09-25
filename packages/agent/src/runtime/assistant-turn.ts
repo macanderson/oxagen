@@ -53,6 +53,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { invoke } from "@oxagen/oxagen/kernel";
 import {
   assistantAsk,
+  type AssistantGoal,
   type AssistantPageContext,
   type AssistantParkedCard,
 } from "@oxagen/oxagen/contracts/assistant.ask";
@@ -64,7 +65,7 @@ import {
 import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { INTERACTIVE_AGENT_CAPABILITIES } from "@oxagen/oxagen/interactive-agent";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
@@ -136,6 +137,8 @@ export interface AssistantTurnRequest {
   conversationId: string | null;
   content: string;
   pageContext: AssistantPageContext | null;
+  /** Makes the turn goal-shaped: a verifier judges each round against it. */
+  goal?: AssistantGoal;
   /** Per-turn MCP server allowlist; empty loads every workspace server. */
   activeServerIds?: readonly string[];
   tier?: "fast" | "balanced" | "precise" | null;
@@ -549,6 +552,7 @@ async function runPreparedTurn(
     // Every model call of the turn is metered on the person's message, so
     // the run names it and the cost rollup finds the calls (#4167).
     originMessageId: messageId,
+    ...(request.goal ? { goal: request.goal.statement } : {}),
     maxSteps: DEFAULT_GOVERNED_TURN_MAX_STEPS,
     // The spec's tool policy is the set this turn holds: the capabilities
     // materializeTools resolved, plus the belt's two meta-tools, which are
@@ -635,6 +639,7 @@ async function runPreparedTurn(
       toolNameMap: materialised.nameMap,
       ...(p.effort ? { effort: p.effort } : {}),
       ...(budgetGuard !== undefined ? { budgetGuard } : {}),
+      ...(request.goal ? { goal: request.goal } : {}),
       fundedBy: funding.fundedBy,
       ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
       ledger: run,
