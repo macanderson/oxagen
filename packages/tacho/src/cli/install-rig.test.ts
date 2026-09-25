@@ -17,11 +17,12 @@ import {
   chmodSync,
   existsSync,
   lstatSync,
+  mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { codexHookPresence } from "../host/codex-writer";
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
@@ -42,6 +43,7 @@ import {
   RigKill,
   type RigPlatform,
   rigClaudeDesktopConfig,
+  rigManagedSettings,
   seedHome,
   snapshotTree,
   USER_CLAUDE_SETTINGS,
@@ -435,6 +437,53 @@ describe("install rig: the gateway's model base URLs", () => {
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });
 
+  it("leave the credential with a harness whose managed settings override the base URL", async () => {
+    // A managed file names another base URL, so Claude Code's calls never
+    // reach the proxy. A brokered credential there would send a run token to
+    // that URL and fail every call, so the vendor key stays where it was.
+    const seed = seedHome();
+    const settingsPath = join(seed.home, ".claude", "settings.json");
+    const own = JSON.parse(readFileSync(settingsPath, "utf8")) as {
+      env: Record<string, string>;
+    };
+    own.env["ANTHROPIC_API_KEY"] = "sk-ant-api03-FAKE-RIG-MANAGED-0001";
+    writeFileSync(settingsPath, `${JSON.stringify(own, null, 4)}\n`);
+    const managed = rigManagedSettings(seed.home).claude;
+    mkdirSync(dirname(managed), { recursive: true });
+    writeFileSync(
+      managed,
+      `${JSON.stringify({ env: { ANTHROPIC_BASE_URL: "https://llm.corp.example" } })}\n`,
+    );
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    const result = await enroll(
+      { harnesses: ["claude-code", "codex"] },
+      rig.deps,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.warnings.join("\n")).toContain(
+      `${managed} also sets env.ANTHROPIC_BASE_URL`,
+    );
+    const settings = rig.deps.readSettings() as {
+      apiKeyHelper?: string;
+      env: Record<string, string>;
+    };
+    expect(settings.apiKeyHelper).toBeUndefined();
+    expect(settings.env["ANTHROPIC_API_KEY"]).toBe(
+      "sk-ant-api03-FAKE-RIG-MANAGED-0001",
+    );
+    expect(rig.lines.join("\n")).not.toContain(
+      "Claude Code model calls go through",
+    );
+    const report = await status({ json: true }, rig.deps);
+    expect(
+      report.modelCredentials?.find((c) => c.harness === "claude-code")
+        ?.brokered,
+    ).toBe(false);
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
   it("are restored before the daemon is stopped", async () => {
     const seed = seedHome();
     let urlPresentAtBootout: boolean | undefined;
@@ -529,12 +578,26 @@ describe("install rig: Linux, systemd", () => {
     expect(urlPresentAtDisable).toBe(false);
   });
 
-  it("refuses Claude Desktop, which has no Linux build, and writes none of its config", async () => {
+  it("reports Claude Desktop as not hooked, since it has no Linux build, and writes none of its config", async () => {
     const seed = seedHome({ platform: "linux" });
     const before = snapshotTree(seed.home);
     const rig = buildRig(seed);
-    await enroll({ harnesses: ALL }, rig.deps);
-    expect(rig.deps.paths.claudeDesktopConfig).toBeUndefined();
+    const result = await enroll({ harnesses: ALL }, rig.deps);
+    // The other four are hooked. Enroll still reports failure, because the
+    // operator asked for a harness it could not hook.
+    expect(result.ok).toBe(false);
+    expect(result.unhooked).toEqual(["claude-desktop"]);
+    expect(result.warnings.join("\n")).toContain(
+      "Claude Desktop was not hooked: Anthropic ships no Claude Desktop build for this platform",
+    );
+    expect(
+      tachoHookPresence(rig.deps.readSettings(), TEST_ENROLLMENT).missing,
+    ).toEqual([]);
+    const added = diffTrees(before, snapshotTree(seed.home)).added;
+    expect(added).toContain(".config/systemd/user/tachod.service");
+    expect(
+      added.filter((path) => /(^|\/)Claude(\/|$)|claude_desktop/.test(path)),
+    ).toEqual([]);
     expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
     expect(rig.serviceLoaded()).toBe(false);
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
@@ -992,7 +1055,12 @@ describe("install rig: failure injection", () => {
   const PLATFORM_KILLS: Array<[RigPlatform, KillPoint]> = [
     ...KILL_POINTS.map((point): [RigPlatform, KillPoint] => ["darwin", point]),
     ["linux", "fetch"],
-    ["linux", "systemctl --user"],
+    ["linux", "systemctl show-environment"],
+    // The unit file is on disk from here on: before the reload, before the
+    // enable, and loaded and running before the restart.
+    ["linux", "systemctl daemon-reload"],
+    ["linux", "systemctl enable"],
+    ["linux", "systemctl restart"],
     ["linux", "readCodexHooks"],
     ["linux", "readCursorHooks"],
     ["linux", "readStellaHooks"],
@@ -1005,6 +1073,12 @@ describe("install rig: failure injection", () => {
     ["win32", "writeClaudeDesktopConfig"],
     ["win32", "daemonGet"],
   ];
+  // Where the dead install left tachod.service on disk for unenroll to find.
+  const UNIT_WRITTEN = new Set<KillPoint>([
+    "systemctl daemon-reload",
+    "systemctl enable",
+    "systemctl restart",
+  ]);
   for (const [platform, killAt] of PLATFORM_KILLS) {
     it(`${platform}: killed at ${killAt}: removable, then resumable`, async () => {
       const seed = seedHome({ platform });
@@ -1012,6 +1086,12 @@ describe("install rig: failure injection", () => {
 
       // Removable.
       await dieAt(seed, killAt);
+      if (UNIT_WRITTEN.has(killAt))
+        expect(
+          existsSync(
+            join(seed.home, ".config", "systemd", "user", "tachod.service"),
+          ),
+        ).toBe(true);
       const clean = buildRig(seed);
       const removed = await unenroll({ purge: true }, clean.deps);
       expect(removed.ok).toBe(true);

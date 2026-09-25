@@ -238,6 +238,21 @@ function idleMachine(): RigMachine {
 }
 
 /**
+ * Where the rig's Claude Code and Stella read managed settings. Both are
+ * under the scratch home, so a rig run never reads the managed settings of
+ * the machine it runs on. Nothing is there unless a test writes it.
+ */
+export function rigManagedSettings(home: string): {
+  claude: string;
+  stella: string;
+} {
+  return {
+    claude: join(home, "managed", "claude-code", "managed-settings.json"),
+    stella: join(home, "managed", "stella", "stella.toml"),
+  };
+}
+
+/**
  * Where Claude Desktop keeps its MCP config under the scratch HOME on
  * `platform`, relative to it. Undefined on Linux, where Anthropic ships no
  * build. The Windows path is `%APPDATA%`, which the rig leaves unset so it
@@ -408,7 +423,10 @@ export interface Rig {
 export type KillPoint =
   | "fetch"
   | "launchctl bootstrap"
-  | "systemctl --user"
+  | "systemctl show-environment"
+  | "systemctl daemon-reload"
+  | "systemctl enable"
+  | "systemctl restart"
   | "schtasks /Create"
   | "schtasks /Run"
   | "readCodexHooks"
@@ -479,7 +497,11 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
     }
   };
   const exec: Exec = (command, args) => {
-    pulse(`${command} ${args[0] ?? ""}`.trim());
+    // Every systemctl call starts with `--user`, so its kill point is named
+    // by the subcommand after it.
+    const verb =
+      command === "systemctl" && args[0] === "--user" ? args[1] : args[0];
+    pulse(`${command} ${verb ?? ""}`.trim());
     options.onExec?.(command, args);
     execs.push({ command, args });
     if (command === "launchctl") {
@@ -608,68 +630,71 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
   const tacho = join(bin, platform === "win32" ? "tacho.exe" : "tacho");
   // Windows quotes a command-line path with double quotes, the others with single.
   const quoted = platform === "win32" ? `"${tacho}"` : `'${tacho}'`;
-  const real = defaultCliDeps({
-    home,
-    env:
-      platform === "win32"
-        ? { USERPROFILE: home, HOME: home, PATH: "C:\\Windows\\System32" }
-        : {
-            HOME: home,
-            PATH: "/usr/bin:/bin",
-            SHELL: "/bin/zsh",
-          },
-    platform,
-    exec,
-    fetch,
-    out: (line) => lines.push(line),
-    err: (line) => errors.push(line),
-    now: () => Date.parse("2026-09-18T12:00:00.000Z"),
-    hostname: "rig-laptop",
-    osUser: "dev",
-    claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
-    codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
-    cursor: () => ({
-      path: "/usr/local/bin/cursor-agent",
-      version: "2026.09.16",
-    }),
-    stella: () => ({ path: "/usr/local/bin/stella", version: "0.9.423" }),
-    claudeDesktop: () => ({
-      installed: true,
-      path: "/Applications/Claude.app",
-    }),
-    runtime: {
-      hookCommand: `${quoted} hook`,
-      credentialHelperCommand: `${quoted} credential issue --harness claude-code`,
-      daemonCommand: [tacho, "daemon"],
-      mcpStdioCommand: [tacho, "mcp-stdio"],
-      binDir: bin,
-    },
-    daemonGet: async (path) =>
-      machine.loaded && path === "/status"
-        ? {
-            uptime_s: 1,
-            spool_depth: 0,
-            last_control_at: "2026-01-01T00:00:00.000Z",
-            last_ingest_at: null,
-            last_error: null,
-          }
-        : machine.loaded && path === "/health"
+  const real = defaultCliDeps(
+    {
+      home,
+      env:
+        platform === "win32"
+          ? { USERPROFILE: home, HOME: home, PATH: "C:\\Windows\\System32" }
+          : {
+              HOME: home,
+              PATH: "/usr/bin:/bin",
+              SHELL: "/bin/zsh",
+            },
+      platform,
+      exec,
+      fetch,
+      out: (line) => lines.push(line),
+      err: (line) => errors.push(line),
+      now: () => Date.parse("2026-09-18T12:00:00.000Z"),
+      hostname: "rig-laptop",
+      osUser: "dev",
+      claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
+      codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
+      cursor: () => ({
+        path: "/usr/local/bin/cursor-agent",
+        version: "2026.09.16",
+      }),
+      stella: () => ({ path: "/usr/local/bin/stella", version: "0.9.423" }),
+      claudeDesktop: () => ({
+        installed: true,
+        path: "/Applications/Claude.app",
+      }),
+      runtime: {
+        hookCommand: `${quoted} hook`,
+        credentialHelperCommand: `${quoted} credential issue --harness claude-code`,
+        daemonCommand: [tacho, "daemon"],
+        mcpStdioCommand: [tacho, "mcp-stdio"],
+        binDir: bin,
+      },
+      daemonGet: async (path) =>
+        machine.loaded && path === "/status"
           ? {
-              ok: true,
-              gateway: {
-                listening: options.gatewayListening !== false,
-                port: RIG_GATEWAY_PORT,
-                routes: ["/anthropic", "/backend-api/codex"],
-                calls_observed: 0,
-              },
+              uptime_s: 1,
+              spool_depth: 0,
+              last_control_at: "2026-01-01T00:00:00.000Z",
+              last_ingest_at: null,
+              last_error: null,
             }
-          : undefined,
-    findFreePort: async () => 47123,
-    randomToken: () => "local-token-0123456789abcdef",
-    sleep: async () => undefined,
-    wrapperVersion: TACHO_VERSION,
-    ...options.overrides,
-  });
+          : machine.loaded && path === "/health"
+            ? {
+                ok: true,
+                gateway: {
+                  listening: options.gatewayListening !== false,
+                  port: RIG_GATEWAY_PORT,
+                  routes: ["/anthropic", "/backend-api/codex"],
+                  calls_observed: 0,
+                },
+              }
+            : undefined,
+      findFreePort: async () => 47123,
+      randomToken: () => "local-token-0123456789abcdef",
+      sleep: async () => undefined,
+      wrapperVersion: TACHO_VERSION,
+      ...options.overrides,
+    },
+    rigManagedSettings(home),
+  );
   const codexServer = fakeCodexAppServer(real.paths.codexHooks);
   const guarded =
     <A extends unknown[], R>(point: string, port: (...args: A) => R) =>
