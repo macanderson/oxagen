@@ -454,23 +454,43 @@ describe("pairing a model call's halves", () => {
   });
 });
 
+/**
+ * `frames`, each behind a proxy that counts every field read on it, and the
+ * running count. The fold reads a frame's fields each time it compares that
+ * frame, so the reads measure the work it did without a clock.
+ */
+function counted(frames: readonly RunFrame[]): {
+  frames: RunFrame[];
+  reads: () => number;
+} {
+  let reads = 0;
+  const handler: ProxyHandler<RunFrame> = {
+    get(target, field, receiver) {
+      reads += 1;
+      return Reflect.get(target, field, receiver) as unknown;
+    },
+  };
+  return {
+    frames: frames.map((frame) => new Proxy(frame, handler)),
+    reads: () => reads,
+  };
+}
+
 // Finding P3-8 of the ADR-182 review: rule 2 rescanned a key's every frame
 // for each request, so a key sealed many times folded in quadratic time. A
 // read holds up to 10,000 frames (TRANSCRIPT_FRAME_CAP).
 describe("a key sealed on every frame of a full read", () => {
   it("pairs each request with the next response no other request took, in linear time", () => {
     const half = 5_000;
-    const frames = [
+    const { frames, reads } = counted([
       ...Array.from({ length: half }, (_, i) =>
         w(i, "model.request", { model: "m", toolUseId: "m1" }),
       ),
       ...Array.from({ length: half }, (_, i) =>
         w(half + i, "model.response", { model: "m", toolUseId: "m1" }),
       ),
-    ];
-    const started = performance.now();
+    ]);
     const folded = stepFolds(frames);
-    const ms = performance.now() - started;
     expect(folded).toHaveLength(half);
     expect(
       folded.every(
@@ -479,10 +499,11 @@ describe("a key sealed on every frame of a full read", () => {
           fold.members[1]?.seq === String(half + i),
       ),
     ).toBe(true);
-    // Measured on 2026-09-25: the quadratic scan took about 600 ms here and
-    // the linear one about 100 ms. The bound is loose so a slow runner does
-    // not fail it; the pairing above is what the test pins.
-    expect(ms).toBeLessThan(1_500);
+    // Work, not time, so a slow or instrumented runner cannot fail it (P3-6
+    // of the re-review). A scan of the key's frames for each request reads
+    // at least half × half = 25,000,000 fields. The linear fold reads a
+    // bounded number per frame: 42 when this was written.
+    expect(reads()).toBeLessThan(frames.length * 100);
   });
 });
 

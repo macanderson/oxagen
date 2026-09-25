@@ -392,7 +392,13 @@ export function mockupTranscript(
   const kindsOf = (spec: Spec, request: boolean): TranscriptKind[] => {
     const kinds: TranscriptKind[] = [];
     if (spec.type === "turn_start") kinds.push("prompt");
-    if (spec.kind === "model_call" && !request) kinds.push("responses");
+    // A model response answers `responses` only when its body was kept.
+    if (
+      spec.kind === "model_call" &&
+      !request &&
+      (spec.fidelity ?? "full") !== "digest_only"
+    )
+      kinds.push("responses");
     if (spec.kind === "tool_call") kinds.push("tools");
     if (spec.type === "policy_decision" || spec.decision !== undefined)
       kinds.push("policy");
@@ -416,14 +422,19 @@ export function mockupTranscript(
       bytesRef: fidelity === "digest_only" ? null : "evb:v1:k:abc",
     });
     const request = REQUEST_TYPES.has(spec.type);
+    const kinds = kindsOf(spec, request);
     // What the server's fold states about each frame read as its own entry.
+    // A call's request frame says nothing about how the call ended, so the
+    // server states no outcome for it at `everything` (`frameFolds`), and a
+    // model frame that draws no row, no kept reply and no figures, is quiet.
     const tool = spec.kind === "tool_call";
     const [head] = spec.label.split(" ");
     const facts: Partial<TranscriptEntry> =
       spec.kind === "model_call"
         ? {
             node: "model",
-            outcome: request ? "pending" : "ok",
+            quiet: !kinds.includes("responses") && !kinds.includes("usage"),
+            outcome: request ? null : "ok",
             model: spec.label,
           }
         : tool
@@ -431,7 +442,7 @@ export function mockupTranscript(
               node: "tool",
               subject: head ?? spec.label,
               family: "tool",
-              outcome: request ? "pending" : "ok",
+              outcome: request ? null : "ok",
               model: null,
             }
           : {
@@ -453,7 +464,7 @@ export function mockupTranscript(
             };
     return transcriptEntry({
       ...facts,
-      kinds: kindsOf(spec, request),
+      kinds,
       seq: String(spec.seq),
       endSeq: String(spec.seq),
       at: at(-3600 + spec.seq * 2),
