@@ -148,6 +148,10 @@ describe("stamp", () => {
     }
     const cask = readFileSync(join(out, "homebrew/oxagen.rb"), "utf8");
     expect(cask).not.toMatch(/^\s*sha256 :no_check/m);
+    // macOS 15 removed the Control-click Open override, so the caveat gives
+    // the Privacy & Security route instead (#4252).
+    expect(cask).toContain("click Open Anyway");
+    expect(cask).not.toMatch(/(right|control|ctrl)[- ]click/i);
     expect(cask).toContain(
       `  sha256 arm:   "${hex("Oxagen_2.1.1_aarch64.dmg")}",\n         intel: "${hex("Oxagen_2.1.1_x64.dmg")}"\n`,
     );

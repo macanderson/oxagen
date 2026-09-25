@@ -10527,6 +10527,7 @@ type Messages = {
         linuxRpm: string;
         linuxAppImage: string;
       };
+      macosFirstLaunch: string;
       all: string;
     };
     picker: {
