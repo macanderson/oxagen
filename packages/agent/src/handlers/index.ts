@@ -92,7 +92,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   get_assistant_engine: () => import("./assistant.engine.get"),
   get_assistant_reply: () => import("./assistant.reply.get"),
   // A rule authored across two sources, as one goal-shaped ask_assistant turn
-  // (ADR-183).
+  // (ADR-186).
   author_graph_rule: () => import("./graph.rule.author"),
   search_tools: () => import("./tools.search"),
   load_tools: () => import("./tools.load"),

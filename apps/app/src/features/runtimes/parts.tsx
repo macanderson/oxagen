@@ -193,7 +193,10 @@ export function isEnrolled(host: RuntimeEnrollment, now: number): boolean {
  * The five command hooks Tacho writes into Claude Code's settings, in the
  * order the design prints them (`COMMAND_HOOK_EVENTS`,
  * packages/tacho/src/host/settings-writer.ts). They are event names, printed
- * as the harness spells them.
+ * as the harness spells them. `SessionEnd` also runs as a command hook on a
+ * host enrolled since #3989, and the list leaves it out: `hooksOk` holds for
+ * an older host whose `SessionEnd` is still an http hook, so the page cannot
+ * say which one a host has.
  */
 export const COMMAND_HOOKS =
   "SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop";

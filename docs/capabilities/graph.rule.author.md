@@ -14,7 +14,7 @@ MCP: `author_graph_rule`
 
 ## Intent
 
-Ask the in-app agent to author a relationship rule between nodes from two sources, such as a `Person` from `hubspot` who owns an `Account` from `stripe` (ADR-183). You name the rule as data. The server builds the instruction the model reads and the goal the verifier judges, and asks one [`ask_assistant`](assistant.ask.md) turn with both.
+Ask the in-app agent to author a relationship rule between nodes from two sources, such as a `Person` from `hubspot` who owns an `Account` from `stripe` (ADR-186). You name the rule as data. The server builds the instruction the model reads and the goal the verifier judges, and asks one [`ask_assistant`](assistant.ask.md) turn with both.
 
 The goal is the proof that the rule works: a `query_ontology` traversal over the relationship type, from a node of the first source, returns a node of the second (`ruleAuthoringGoal` in `@oxagen/agent`, ADR-177). The engine works in rounds, and a verifier on another tier rules after each one whether the goal is met. The call returns when it is met, and refuses when the rounds run out first.
 

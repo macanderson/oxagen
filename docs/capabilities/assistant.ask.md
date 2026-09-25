@@ -82,7 +82,7 @@ A turn with a `goal` is judged (ADR-177). The engine works in rounds, and after 
 
 The caller sets the goal, never the model: this contract is not on the agent surface. The goal is capped at 2,000 characters because the engine repeats it in every round and in every verifier call, and at 4 rounds because each round is a whole turn plus a verifier and a person is waiting.
 
-Rule authoring is the first caller: [`author_graph_rule`](graph.rule.author.md) takes the rule as data and asks this turn with the goal `ruleAuthoringGoal` (`@oxagen/agent`) builds from it on the server (ADR-183). The goal is a `query_ontology` traversal over the rule's relationship type, from a node of the first source, that returns a node of the second. The API route, the MCP tool and `POST /chat/stream` all carry a `goal` their caller sends. The app's flyout sends none, because the rev1 app has no rule-authoring control.
+Rule authoring is the first caller: [`author_graph_rule`](graph.rule.author.md) takes the rule as data and asks this turn with the goal `ruleAuthoringGoal` (`@oxagen/agent`) builds from it on the server (ADR-186). The goal is a `query_ontology` traversal over the rule's relationship type, from a node of the first source, that returns a node of the second. The API route, the MCP tool and `POST /chat/stream` all carry a `goal` their caller sends. The app's flyout sends none, because the rev1 app has no rule-authoring control.
 
 ## Steering
 

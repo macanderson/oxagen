@@ -7333,7 +7333,6 @@ type Messages = {
         connected: string;
         offline: string;
         reachable: string;
-        notBacked: string;
       };
       countNotRecorded: string;
       countNotRecordedShort: string;

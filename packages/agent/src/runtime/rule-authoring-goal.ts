@@ -12,7 +12,7 @@
  * reaches a node of the second. The verifier judges the transcript against
  * that sentence and can call the graph reads itself to check it.
  *
- * The caller is `author_graph_rule` (ADR-183). Its handler builds both texts
+ * The caller is `author_graph_rule` (ADR-186). Its handler builds both texts
  * here from the rule the caller named and sends them on one `ask_assistant`
  * turn, so the goal is written in one place and on the server. Rule authoring
  * has no page in the rev1 app, so the API and MCP reach it through that

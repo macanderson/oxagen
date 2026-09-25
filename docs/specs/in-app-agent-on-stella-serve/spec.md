@@ -238,7 +238,7 @@ Shipped with #2968's backend:
 - `ask_assistant` as the turn's contract, with `POST /chat/stream` as its
   streaming adapter; `get_assistant_engine` as the engine-down read.
 
-Shipped with #4175 (ADR-177, ADR-183):
+Shipped with #4175 (ADR-177, ADR-186):
 
 - The goal-shaped turn. `ask_assistant` takes an optional `goal`, which the
   turn sends to the engine as `GoalSpec`. The verifier's calls arrive with the
@@ -247,7 +247,7 @@ Shipped with #4175 (ADR-177, ADR-183):
   The witness is `packages/agent/src/runtime/goal-turn.test.ts`: a rule
   authored across two sources is answered by a graph query, with the engine,
   the models and the graph simulated as that file's header names.
-- Rule authoring sends a goal (ADR-183). `author_graph_rule`, on the API and
+- Rule authoring sends a goal (ADR-186). `author_graph_rule`, on the API and
   MCP, takes the rule as data, builds the instruction and the goal
   (`ruleAuthoringGoal`) on the server, and asks one `ask_assistant` turn with
   both. `packages/agent/src/handlers/graph.rule.author.test.ts` proves the
@@ -256,7 +256,7 @@ Shipped with #4175 (ADR-177, ADR-183):
 
 Left, each its own change:
 
-- A goal-shaped caller for the schema builder, in the shape ADR-183 sets
+- A goal-shaped caller for the schema builder, in the shape ADR-186 sets
   for rules: a capability that takes the schema as data and builds its goal
   on the server.
 - A control in the app that asks for a rule or a schema. It waits on a graph

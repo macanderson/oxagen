@@ -1201,7 +1201,7 @@ const ROUTES: ThinRoute[] = [
     jsonGuard: true,
     status: 200,
   },
-  // A rule authored across two sources as one goal-shaped turn (ADR-183).
+  // A rule authored across two sources as one goal-shaped turn (ADR-186).
   {
     file: "graph.rule.author",
     route: graphRuleAuthorRoute as unknown as Hono<never>,
