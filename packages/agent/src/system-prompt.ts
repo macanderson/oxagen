@@ -32,9 +32,11 @@
  * The apps/app flyout has no slash-command menu and no mention picker, so the
  * prompt teaches neither grammar.
  *
- * Call sites that hold a workspace PromptConfig use
- * `resolvePrompt({ key: "chat.system", baseline: buildChatSystemPrompt(ctx), config })`
- * rather than concatenating strings of their own.
+ * The in-app turn does not pass this through `resolvePrompt`. It appends the
+ * workspace's assembled steering under its own heading
+ * (`assistantSystemPrompt` in runtime/assistant-steering.ts, ADR-093 §7).
+ * Only apps/app_deprecated's chat route still resolves it with
+ * `resolvePrompt({ key: "chat.system", baseline, config })`.
  */
 
 /** Scope the prompt is rendered for. */
