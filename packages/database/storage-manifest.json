@@ -154,6 +154,16 @@
     },
     {
       "domain": "agent",
+      "name": "authorize_mcp_server",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "bind_agent_environment",
       "reads": [],
       "surfaces": [
@@ -3204,6 +3214,16 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "search_mcp_registry",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "graph",
       "name": "search_nodes",
       "reads": [],
@@ -3570,6 +3590,16 @@
       "reads": [],
       "surfaces": [
         "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "start_mcp_authorization",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -4060,7 +4090,7 @@
       "writes": []
     }
   ],
-  "contentHash": "888fa0b8c71092b95995168a594c7660e72b1cadd2a5a12ce3238d70bfe76f71",
+  "contentHash": "5eec96dbd037b4920a6e9860923fa286a7ebde0ddd1b32a695ac85862c9933c6",
   "domains": [
     {
       "name": "agent",

@@ -68,6 +68,14 @@ const actions = vi.hoisted(() => ({
   removeProvider: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
+vi.mock("./provider-auth-actions", () => ({
+  searchRegistry: vi.fn(),
+  startProviderAuthorization: vi.fn(),
+  providerRedirectUrl: vi.fn().mockResolvedValue({
+    ok: true,
+    value: { redirectUrl: "https://app.oxagen.sh/api/v1/mcp/oauth/callback" },
+  }),
+}));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -644,17 +652,23 @@ describe("Tools › providers tab", () => {
     ).toBeVisible();
     expect(stripe.getByText("12 pinned at last check")).toBeVisible();
     expect(stripe.getByText("ok")).toBeVisible();
-    // Toolbelts, Agents, Connection, Authorization, Last import.
-    expect(stripe.getAllByText("not recorded")).toHaveLength(5);
+    // Toolbelts, Agents, Last import. Connection is the status light and
+    // Authorization how the provider authenticates.
+    expect(stripe.getAllByText("not recorded")).toHaveLength(3);
+    expect(stripe.getByTestId("provider-status-mcs_01k5s1")).toHaveAttribute(
+      "data-light",
+      "green",
+    );
+    expect(stripe.getByText("No auth")).toBeVisible();
     // No heading, column or button on the tab calls a provider a server.
     expect(document.body.textContent).not.toMatch(/MCP servers?|Tool server/);
   });
 
-  it("says it cannot count connections needing attention, and keeps the transport note", async () => {
+  it("counts the providers needing attention, and keeps the transport note", async () => {
     await renderTools({}, "providers");
-    expect(screen.getByTestId("tools-providers-attention")).toHaveAttribute(
-      "data-gap",
-      "#3918",
+    // GitHub has never been health checked: yellow, not green.
+    expect(screen.getByTestId("tools-providers-attention")).toHaveTextContent(
+      "1 provider needs a look.",
     );
     expect(
       screen.getByText(/MCP is one transport among several/),
@@ -678,9 +692,9 @@ describe("Tools › providers tab", () => {
       expect(dialog.getByText(term)).toBeVisible();
     }
     expect(dialog.getByText("Authorization")).toBeVisible();
-    expect(
-      dialog.getByRole("button", { name: "Connect with OAuth" }),
-    ).toBeVisible();
+    expect(dialog.getByTestId("provider-auth-mcs_01k5s1")).toHaveTextContent(
+      "No auth",
+    );
     expect(dialog.getByText("Create payment")).toBeVisible();
     expect(dialog.queryByText("Get file contents")).not.toBeInTheDocument();
   });
@@ -699,6 +713,9 @@ describe("Tools › providers tab", () => {
                 healthStatus: "degraded",
                 lastHealthcheckAt: null,
                 toolCount: 1,
+                authKind: "none",
+                iconUrl: null,
+                authorization: null,
               },
             ],
           }),

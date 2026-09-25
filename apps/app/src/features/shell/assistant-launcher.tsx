@@ -9,16 +9,18 @@
 // flyout and the drawer share a stacking level, so a drawer left open would
 // cover the panel the tap just opened.
 //
-// It reads "Ask stella*" over "oxagen’s in-app AI agent". Both names are set
-// as text in the wordmark face (`.ox-wordmark`), and the asterisk takes
-// `.ox-wordmark-accent`, whose `--ember-ink` is the kit's deep gold on the
-// light theme and the metal on the dark one, so the launcher follows the app's
-// theme switch. The asterisk is hidden from assistive technology: the button's
-// name is "Ask stella", not "Ask stella star".
+// It reads "Ask stella*" on one line, after the stella mark (`StellaIcon`) at
+// 28px. "stella*" is set as text in the wordmark face (`.ox-wordmark`), and the
+// asterisk takes `.ox-wordmark-accent`, whose `--ember-ink` is the kit's deep
+// gold on the light theme and the metal on the dark one, so the launcher
+// follows the app's theme switch. The mark and the asterisk are hidden from
+// assistive technology: the button's name is "Ask stella", not "Ask stella
+// star".
 //
-// It used to carry the stella icon and a mono line saying the model and the
-// engine state are not read here (#2968). The icon repeated the asterisk the
-// text now carries, and the line described a gap rather than the control.
+// #4090 took the icon out, because the text asterisk repeated it, and set
+// "oxagen’s in-app AI agent" on a second line. At 13px the asterisk was too
+// small to read as stella's mark, and the second line named a category rather
+// than the control, so the icon is back and the second line is gone (#4139).
 //
 // A reply that lands while the flyout is closed marks the launcher unread
 // (`noteAssistantReply` in `shell-state.tsx`). It then shines gold around its
@@ -27,6 +29,7 @@
 import { ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import { StellaIcon } from "@/ui/stella-mark";
 import { useShellState } from "./shell-state";
 
 export const ASSISTANT_PANEL_ID = "shell-assistant";
@@ -74,12 +77,10 @@ export function AssistantLauncher({
         assistantOpen ? "border-gold" : "border-border"
       } ${assistantUnread ? "ox-launcher-unread" : ""}`}
     >
+      <StellaIcon className="size-7 flex-none" />
       <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-semibold">
+        <span className="block text-sm font-semibold">
           {t.rich("launcher", { wordmark, accent })}
-        </span>
-        <span className="mt-0.5 block text-[11px] text-sidebar-nav-label-fg">
-          {t.rich("launcherHint", { wordmark })}
         </span>
         {assistantUnread ? (
           <span className="sr-only" data-testid="assistant-launcher-unread">

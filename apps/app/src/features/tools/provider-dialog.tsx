@@ -7,9 +7,11 @@
 //
 // Every row in the roster is an MCP server today, so the transport is `mcp`
 // and the wire is the one the row records. What the record does not hold is
-// said, not filled: the system's description, the last import, the belts and
-// agents it reaches (#3852, #3917), and its authorization, which has no token
-// lifecycle behind it yet (#3918).
+// said, not filled: the system's description, the last import, and the belts
+// and agents it reaches (#3852, #3917). Its authorization is the provider's
+// status light, how it authenticates and, for OAuth, the token's expiry and a
+// Reconnect that re-runs the sign-in in a popup (#4132). Review dates and who
+// authorized it are not recorded yet (#3918).
 //
 // The footer's writes: Remove is `delete_mcp_server`, Re-import tools is
 // `import_tools` on this provider. Edit has no write (#3917) and says so.
@@ -30,6 +32,11 @@ import { gapRef } from "./gaps";
 import { NotBackedValue } from "./not-backed";
 import { NotCarried, StateDot } from "./parts";
 import { GateDot, HazardCell } from "./registry-cells";
+import {
+  ProviderAuthorization,
+  ProviderStatusLight,
+  ReconnectProvider,
+} from "./provider-status";
 import { StubAction, StubField } from "./stub-action";
 import { ToolDialog } from "./tool-dialog";
 import { type ToolsAt, versionLabel } from "./view";
@@ -270,33 +277,6 @@ function EditProvider({ server }: { server: McpServer }) {
   );
 }
 
-/** The OAuth dialog (`oauth`): what authorizing would take, with its refusal rule. */
-function OAuthDialog({ server }: { server: McpServer }) {
-  const t = useTranslations("tools.providers.oauth");
-  return (
-    <StubAction
-      label={t("open")}
-      tone="secondary"
-      title={t("title", { name: server.name })}
-      gap="oauth"
-      note={t("note")}
-      confirm={t("confirm", { name: server.name })}
-      testId={`provider-oauth-${server.id}`}
-    >
-      <StubField id={`oauth-client-${server.id}`} label={t("clientId")} />
-      <StubField id={`oauth-secret-${server.id}`} label={t("clientSecret")} />
-      <StubField id={`oauth-url-${server.id}`} label={t("authUrl")} />
-      <StubField id={`oauth-scopes-${server.id}`} label={t("scopes")} />
-      <StubField
-        id={`oauth-redirect-${server.id}`}
-        label={t("redirect")}
-        hint={t("redirectHint")}
-      />
-      <p className="text-xs text-muted-foreground">{t("refusal")}</p>
-    </StubAction>
-  );
-}
-
 const HEALTH_TONE = {
   healthy: "ok",
   degraded: "warn",
@@ -429,16 +409,23 @@ export function ProviderDialog({
           <h3 id="provider-auth" className="text-[13.5px] font-semibold">
             {t("authTitle")}
           </h3>
+          <div
+            data-testid={`provider-auth-${server.id}`}
+            className="flex flex-wrap items-start gap-6 rounded-lg border border-border px-3 py-2.5"
+          >
+            <ProviderStatusLight server={server} />
+            <ProviderAuthorization server={server} />
+          </div>
           <p
             data-state="not-backed"
             data-gap={gapRef("oauth")}
-            className="rounded-lg border border-dashed border-border px-3 py-2.5 text-muted-foreground"
+            className="text-xs text-muted-foreground"
           >
-            {t("authNotBacked")}
+            {t("reviewNotBacked")}
           </p>
           {canAdminister ? (
             <div className="flex flex-wrap gap-2">
-              <OAuthDialog server={server} />
+              <ReconnectProvider at={at} server={server} />
               <StubAction
                 label={t("keyInstead")}
                 title={t("keyTitle")}
