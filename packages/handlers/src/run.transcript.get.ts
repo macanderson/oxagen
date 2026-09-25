@@ -40,7 +40,6 @@ import {
   filterFramesByKind,
   foldTranscript,
   frameKey,
-  frameKinds,
   type RunFrame,
   type TranscriptFold,
   type TranscriptKind,
@@ -50,8 +49,9 @@ import {
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import {
-  loadPriceBookInTenantScope,
+  loadPriceBookSliceInTenantScope,
   type PriceBook,
+  type PriceBookSlice,
   resolvePriceEntry,
 } from "@oxagen/billing";
 import { assemblyView, readAssembly } from "./lib/transcript-assembly";
@@ -84,10 +84,14 @@ const TACHO_START = "-1";
 export type RunTranscriptGetDeps = RunReadDeps & {
   bodies: Pick<EvidenceStore, "getBody" | "getAssembly">;
   /**
-   * The organization's price book, read once per transcript. A block's cost
-   * is its share of the message's output tokens at the model's output rate;
-   * a model the book prices no output for leaves every block's cost null
-   * rather than drawing a zero.
+   * The rows of the organization's price book that could price the page's
+   * frames, read once per page. A block's cost is its share of the message's
+   * output tokens at the model's output rate; a model the book prices no
+   * output for leaves every block's cost null rather than drawing a zero.
+   *
+   * The slice is the page's models over the page's span, never the whole
+   * book: the whole history is tens of thousands of rows, and a transcript
+   * page is one of the reads that ran the API out of heap (#4202).
    *
    * `get_run_transcript` is a scoped capability serving one organization, so
    * the default reads the book inside the caller's tenant scope. It used to
@@ -95,7 +99,7 @@ export type RunTranscriptGetDeps = RunReadDeps & {
    * unscoped access in the record for a read that is as ordinary as a page
    * view (#3526).
    */
-  priceBook: (orgId: string) => Promise<PriceBook>;
+  priceBook: (slice: PriceBookSlice) => Promise<PriceBook>;
 };
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -416,6 +420,35 @@ export function boundaryHalves(fold: TranscriptFold): {
 }
 
 /**
+ * The part of the price book a page's blocks are priced from: the models of
+ * the frames `outputRate` is asked about, which are the request and response
+ * halves of each fold, from the earliest of those frames to the latest.
+ */
+export function pagePriceSlice(
+  orgId: string,
+  page: readonly TranscriptFold[],
+): PriceBookSlice {
+  let from = Number.POSITIVE_INFINITY;
+  let to = Number.NEGATIVE_INFINITY;
+  const models = new Set<string>();
+  for (const fold of page) {
+    const { request, response } = boundaryHalves(fold);
+    for (const frame of [request, response]) {
+      if (frame === null || frame.identity.model === null) continue;
+      models.add(frame.identity.model);
+      const at = frame.observedAt.getTime();
+      if (at < from) from = at;
+      if (at > to) to = at;
+    }
+  }
+  if (models.size === 0) {
+    const epoch = new Date(0);
+    return { orgId, models: [], from: epoch, to: epoch };
+  }
+  return { orgId, models: [...models], from: new Date(from), to: new Date(to) };
+}
+
+/**
  * The reasoning effort the fold's model call ran at: the first of its frames
  * that recorded one. Null where none did, which is every ledger frame and
  * every wrapped frame from a harness that does not report it.
@@ -428,13 +461,13 @@ function entryEffort(fold: TranscriptFold): string | null {
   return null;
 }
 
-/** The chips an entry answers to: the union over the frames it folds. */
+/**
+ * The chips an entry answers to: the union over every frame it folds, which
+ * the fold collects as it absorbs them (#3370), not only its opening and its
+ * two halves.
+ */
 function entryKinds(fold: TranscriptFold): TranscriptKind[] {
-  const kinds = new Set<TranscriptKind>();
-  for (const frame of [fold.opening, fold.request, fold.response]) {
-    if (frame === null) continue;
-    for (const kind of frameKinds(frame)) kinds.add(kind);
-  }
+  const kinds = new Set<TranscriptKind>(fold.kinds);
   if (fold.decision !== null) kinds.add("policy");
   return [...kinds];
 }
@@ -541,7 +574,7 @@ export function createRunTranscriptGetHandler(
     const textMax = transcriptTextMax(input.zoom as TranscriptZoom);
     // Read once for the page, not once per block: a block's cost is the
     // model's output rate applied to its apportioned share.
-    const book = await deps.priceBook(ctx.orgId);
+    const book = await deps.priceBook(pagePriceSlice(ctx.orgId, page));
     const outputRate = (frame: RunFrame): number | null => {
       const model = frame.identity.model;
       if (model === null) return null;
@@ -627,5 +660,5 @@ export const runTranscriptGetHandler = createRunTranscriptGetHandler({
   get bodies() {
     return evidenceStore();
   },
-  priceBook: (orgId) => loadPriceBookInTenantScope({ orgId }),
+  priceBook: loadPriceBookSliceInTenantScope,
 });

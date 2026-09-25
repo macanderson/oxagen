@@ -64,7 +64,7 @@ export async function readParkedApprovals(
         expiresAt: item.expiresAt,
       }),
     ),
-    ...resolved.value.map(
+    ...resolved.value.items.map(
       (item): ParkedApprovalRow => ({
         id: item.id,
         state: item.resolution,

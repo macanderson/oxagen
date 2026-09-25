@@ -48,6 +48,7 @@ async function renderUnder(read: unknown) {
         preferences,
         counts: vi.fn(),
         notifications: vi.fn(),
+        assistantEngine: vi.fn(),
       },
     },
     children: <Clock />,

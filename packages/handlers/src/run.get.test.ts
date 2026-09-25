@@ -490,6 +490,40 @@ describe("get_run", () => {
     });
     expect(out.frames).toEqual({ frames: [], cursor: null });
   });
+
+  // #4112: a wrapped run's pause is applied by its host, so get_run reads it
+  // from the last pause or resume the host acknowledged `applied`, which the
+  // session query selects as `paused`.
+  it("answers a live wrapped run paused while the last applied halt is a pause, and not once a resume lands", async () => {
+    const live = (paused: boolean) =>
+      tachoSession({
+        publicId: TACHO_ID,
+        session: { outcome: "running", sealedAt: null, paused },
+      });
+    const pausedRun = await harness({ tacho: [live(true)] }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
+    expect(runGet.output.parse(pausedRun)).toEqual(pausedRun);
+    expect(pausedRun.run).toMatchObject({
+      status: "live",
+      ingressPaused: true,
+    });
+    const resumed = await harness({ tacho: [live(false)] }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
+    expect(resumed.run.ingressPaused).toBe(false);
+  });
+
+  it("answers a sealed wrapped run not paused, whatever its host last applied (negative)", async () => {
+    const { get } = harness({
+      tacho: [tachoSession({ publicId: TACHO_ID, session: { paused: true } })],
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.status).toBe("sealed");
+    expect(out.run.ingressPaused).toBe(false);
+  });
 });
 
 describe("frame cursor", () => {
