@@ -1186,11 +1186,17 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     // the predecessor: the enrollment id sits inside the hashed event, so the
     // host cannot restate it. Those frames are accepted from a successor
     // (ADR-179) and from no other host.
+    const named = input.events.map((event) => event.agent.host_enrollment_id);
+    // An event that names no host has no predecessor to check, so it is
+    // refused as the pre-succession check refused it.
+    if (named.some((id) => id === undefined)) {
+      throw tachoDenied(capability, "Forbidden: event names another host");
+    }
     const foreign = [
       ...new Set(
-        input.events
-          .map((event) => event.agent.host_enrollment_id)
-          .filter((id) => id !== host.publicId),
+        named.filter(
+          (id): id is string => id !== undefined && id !== host.publicId,
+        ),
       ),
     ];
     if (foreign.length > 0) {
