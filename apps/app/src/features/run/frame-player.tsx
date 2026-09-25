@@ -75,17 +75,23 @@ type Playback = {
   speed: number;
   toggle: () => void;
   setSpeed: (speed: number) => void;
-  /** A scrub keeps play running (`fpSeek(i, true)`), unless play had already run out. */
-  seek: () => void;
+  /** A scrub to the frame at `to` keeps play running (`fpSeek(i, true)`). A paused player stays paused. */
+  seek: (to: number) => void;
 };
+
+/**
+ * Play while it runs: the frame it left and the frame it opened. They are the
+ * same frame while play holds one.
+ */
+type Run = { from: number; to: number };
 
 const PlaybackContext = createContext<Playback | null>(null);
 
 /**
  * `.fp-bar`, and the playback the bar's controls share. ← and → step, Home
  * and End jump, and each of those stops play (`fpStep`, `fpSeek`), as does a
- * click on a step link. Space plays and pauses. Play at the last frame starts
- * over from the first.
+ * click on a step link or any frame play did not open. Space plays and
+ * pauses. Play at the last frame starts over from the first.
  */
 export function PlayerPlayback({
   hrefs,
@@ -108,32 +114,42 @@ export function PlayerPlayback({
   children: ReactNode;
 }) {
   const navigate = useNavigate();
-  const [playing, setPlaying] = useState(false);
+  const [run, setRun] = useState<Run | null>(null);
   const [speed, setSpeed] = useState<number>(SPEEDS[0]);
   const done = index >= hrefs.length - 1;
-  const running = playing && !done;
+  // Play stops once the last frame it opened lands, and at any frame it did
+  // not open: a row of the frame list or the browser's Back (`fpSeek(i)`).
+  // While the frame it opened is still landing, the one it left stays open.
+  if (run !== null && (index === run.to ? done : index !== run.from))
+    setRun(null);
+  const running = run !== null;
   const toggle = () => {
     if (running) {
-      setPlaying(false);
+      setRun(null);
       return;
     }
-    setPlaying(true);
     const first = hrefs[0];
-    if ((index < 0 || done) && first !== undefined) navigate.push(first);
+    if (index >= 0 && !done) {
+      setRun({ from: index, to: index });
+    } else if (first !== undefined) {
+      setRun({ from: index, to: 0 });
+      navigate.push(first);
+    }
   };
   // The next frame and the hold before it. The timer is set again only when
-  // the open frame lands, so one read is in flight at a time.
-  const next = playing && index >= 0 ? hrefs[index + 1] : undefined;
+  // the frame play opened lands, so one read is in flight at a time.
+  const next = run?.to === index ? hrefs[index + 1] : undefined;
   const wait = stepMs(times[index], times[index + 1], speed);
   useEffect(() => {
     if (next === undefined) return;
     const timer = setTimeout(() => {
+      setRun({ from: index, to: index + 1 });
       navigate.push(next);
     }, wait);
     return () => {
       clearTimeout(timer);
     };
-  }, [next, wait, navigate]);
+  }, [next, index, wait, navigate]);
   const onKey = useEffectEvent((event: KeyboardEvent) => {
     if (!isStepKey(event)) return;
     if (event.key === " ") {
@@ -156,7 +172,7 @@ export function PlayerPlayback({
     }[event.key];
     if (to === undefined || to === null) return;
     event.preventDefault();
-    setPlaying(false);
+    setRun(null);
     navigate.push(to);
   });
   useEffect(() => {
@@ -175,8 +191,8 @@ export function PlayerPlayback({
     speed,
     toggle,
     setSpeed,
-    seek: () => {
-      if (done) setPlaying(false);
+    seek: (to) => {
+      if (running) setRun({ from: index, to });
     },
   };
   return (
@@ -189,7 +205,7 @@ export function PlayerPlayback({
         onClickCapture={(event) => {
           // A step link is a step (`fpStep`), and a step stops play.
           if (event.target instanceof Element && event.target.closest("a"))
-            setPlaying(false);
+            setRun(null);
         }}
       >
         {children}
@@ -278,7 +294,7 @@ export function PlayerScrub({
   const commit = () => {
     const to = hrefs[pos];
     if (pos === index || to === undefined) return;
-    playback?.seek();
+    playback?.seek(pos);
     navigate.push(to);
   };
   return (

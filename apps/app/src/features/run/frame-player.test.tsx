@@ -217,6 +217,41 @@ describe("play", () => {
     expect(push).toHaveBeenCalledTimes(1);
   });
 
+  it("does not start again when a frame opens after play ran out (negative)", () => {
+    const view = render(bar(2));
+    fireEvent.click(play());
+    advance(250);
+    expect(push).toHaveBeenLastCalledWith(HREFS[3]);
+    view.rerender(bar(3));
+    expect(play()).toHaveAccessibleName("replay");
+    // A row of the frame list, or the browser's Back, opens an earlier frame.
+    view.rerender(bar(1));
+    expect(play()).toHaveAccessibleName("play");
+    advance(10_000);
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops at a frame it did not open, and stays stopped on a return to the frame it left (negative)", () => {
+    const view = render(bar(0));
+    fireEvent.click(play());
+    view.rerender(bar(2));
+    expect(play()).toHaveAccessibleName("play");
+    view.rerender(bar(0));
+    expect(play()).toHaveAccessibleName("play");
+    advance(10_000);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("starts from the first frame when the page does not hold the open one", () => {
+    const view = render(bar(-1));
+    fireEvent.click(play());
+    expect(push).toHaveBeenLastCalledWith(HREFS[0]);
+    expect(play()).toHaveAccessibleName("pause");
+    view.rerender(bar(0));
+    advance(1000);
+    expect(push).toHaveBeenLastCalledWith(HREFS[1]);
+  });
+
   it("has nothing to play on a page of one frame (negative)", () => {
     render(bar(0, HREFS.slice(0, 1)));
     expect(play()).toBeDisabled();

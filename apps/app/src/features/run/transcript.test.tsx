@@ -119,6 +119,7 @@ function renderSection(view: SectionView = {}) {
 
 afterEach(() => {
   cleanup();
+  window.getSelection()?.removeAllRanges();
   readTranscriptPage.mockReset();
   refresh.mockReset();
 });
@@ -426,6 +427,9 @@ describe("the rows", () => {
       within(write).getByRole("button", { name: "Show the call" }),
     );
     expect(within(write).getByTestId("tx-diff")).toHaveTextContent("new file");
+    // The diff is the whole of what the edit did, so its "File created"
+    // output does not repeat it.
+    expect(within(write).queryByTestId("tx-out")).toBeNull();
     const bash = toolRow("Bash");
     expect(bash).toHaveTextContent("✗");
     fireEvent.click(
