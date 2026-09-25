@@ -41,7 +41,11 @@ const SCAN_CHUNK_BYTES = 256 * 1024;
 
 const SIDECAR_SUFFIX = ".bodies.index";
 const SIDECAR_HEADER = "tacho/bodies-index";
-const SIDECAR_VERSION = 1;
+/**
+ * Version 2 keeps the last line for an event id (see `collect`). A version 1
+ * sidecar recorded only the first, so it is rebuilt rather than trusted.
+ */
+const SIDECAR_VERSION = 2;
 
 /** How many sessions keep their entries in memory. */
 const DEFAULT_CACHED_SESSIONS = 8;
@@ -181,9 +185,14 @@ class LineSplitter {
  * not itself a line: the line it closes is what this answers, marked
  * `terminated: true`. A file with no other newline is entirely one line,
  * terminated or not depending on whether that trailing byte was there.
+ *
+ * `size` reads the file as if it ended there, so a caller can walk back one
+ * line at a time (`Wal.repairOrphanBodies`).
  */
-export function readTailLine(path: string): IndexedLine | undefined {
-  const size = statSync(path).size;
+export function readTailLine(
+  path: string,
+  size: number = statSync(path).size,
+): IndexedLine | undefined {
   if (size === 0) return undefined;
   const fd = openSync(path, "r");
   try {

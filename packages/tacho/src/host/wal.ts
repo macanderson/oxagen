@@ -331,10 +331,10 @@ export class Wal {
    * file is cut back to its size before this call. The rolled-back seal hands
    * the same seq, and so the same `event_id_idem`, to the next event, and a
    * body left behind under that id was served in place of the next event's
-   * own, which ingest then refused as a digest mismatch (#3372). Only a crash
-   * between the two writes can still leave an orphan. The body index keeps
-   * the last line for an event id (`wal-index.ts`), so the next event's body
-   * wins, and retention sweeps remove the orphan.
+   * own, which ingest then refused as a digest mismatch (#3372). A crash
+   * between the two writes can still leave an orphan, and the daemon cuts it
+   * at its next startup (`repairOrphanBodies`), before any event takes its
+   * seq.
    *
    * Every event is also checked against this session's last known seq
    * before anything is written. A seq at or behind it is refused rather than
@@ -492,8 +492,10 @@ export class Wal {
         if (size === undefined) unlinkSync(path);
         else truncateSync(path, size);
       } catch (error) {
-        // The append already failed. An orphan left here is served only if
-        // no later body for its event id follows it (`wal-index.ts`).
+        // The append already failed. An orphan left here is served for the
+        // event that takes its seq only if that event writes no body of its
+        // own, because the index keeps the last line for an event id
+        // (`wal-index.ts`).
         this.bodyFailure(session, "cleanup", error);
       }
     }
@@ -890,6 +892,87 @@ export class Wal {
     this.resume.delete(sessionUuid);
     this.dirtyPaths.add(path);
     return "truncated";
+  }
+
+  /**
+   * Cut the bodies a crash left with no event from the tail of every body
+   * file, and report how many lines went.
+   *
+   * `append` writes a batch's bodies just before its events. A process that
+   * dies between the two writes leaves bodies with no event. The restarted
+   * recorder takes its cursor from the event file, so the next event gets
+   * the same seq and the same `event_id_idem`. When that event wrote no body
+   * of its own, `bodiesFor` served the orphan for it, and ingest refused it.
+   * Retention kept the orphan too, because `keeps` holds any body whose event
+   * id is on the chain, and the later event put it there (#3372).
+   *
+   * Only the batch in flight can be caught between the two writes, so a crash
+   * orphan is always at the end of its file: a line whose seq is past the
+   * session's last event, or a line torn part way. The walk reads back from
+   * the end one line at a time and stops at the first body whose event is on
+   * disk, so it costs the orphans rather than the file. A body file with no
+   * event file beside it is all orphans, and it goes.
+   *
+   * Only the daemon calls this, once at startup after `repairTail`, for the
+   * reason `repairTail` gives.
+   */
+  repairOrphanBodies(): number {
+    let cut = 0;
+    for (const session of this.sessionsWithBodies()) {
+      try {
+        cut += this.cutOrphanBodies(session);
+      } catch (error) {
+        this.bodyFailure(session, "cleanup", error);
+      }
+    }
+    return cut;
+  }
+
+  private cutOrphanBodies(sessionUuid: string): number {
+    const lastSeq = this.lastWrittenSeq(sessionUuid);
+    // A tail that cannot be read says nothing about which bodies are orphans.
+    if (lastSeq === undefined) return 0;
+    const path = this.bodyFileFor(sessionUuid);
+    const size = statSync(path).size;
+    let keep = size;
+    let cut = 0;
+    while (keep > 0) {
+      const line = readTailLine(path, keep);
+      // What is left is one newline.
+      if (line === undefined) {
+        keep = 0;
+        break;
+      }
+      if (line.text.trim().length > 0) {
+        const stored = parseStoredBody(line.text);
+        // A whole line that is not a body was not torn by a crash, so it stays.
+        if (stored === undefined ? line.terminated : stored.seq <= lastSeq)
+          break;
+        cut += 1;
+      }
+      keep = line.offset;
+    }
+    // Blank lines alone are batch separators, not orphans.
+    if (cut === 0) return 0;
+    if (keep === 0) unlinkSync(path);
+    else {
+      truncateSync(path, keep);
+      this.dirtyPaths.add(path);
+    }
+    // Offsets past the cut describe bytes that are gone.
+    this.bodyIndexes.invalidate(sessionUuid);
+    return cut;
+  }
+
+  /**
+   * The seq of the last event in a session's file, read from its tail: -1
+   * when the session has no event on disk, undefined when the tail does not
+   * parse.
+   */
+  private lastWrittenSeq(sessionUuid: string): number | undefined {
+    const path = this.fileFor(sessionUuid);
+    if (!existsSync(path) || statSync(path).size === 0) return -1;
+    return this.lastEvent(sessionUuid)?.seq;
   }
 
   /** The highest seq in a session's file, or -1 when it holds none. */

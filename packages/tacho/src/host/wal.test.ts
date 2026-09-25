@@ -916,6 +916,123 @@ describe("orphan bodies", () => {
     // The persisted index answers the same way after another restart.
     expect(served(new Wal(paths.wal), second)).toEqual(["the resealed call"]);
   });
+
+  it("rebuilds a sidecar an earlier build wrote, which kept the orphan's line", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const [first, second] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    const wal = new Wal(paths.wal);
+    wal.append([first]);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    const stored = (text: string) =>
+      JSON.stringify({
+        event_id_idem: second.event_id_idem,
+        seq: second.seq,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: Buffer.from(text).toString("base64"),
+      });
+    // An orphan, then the body of the event that took its seq.
+    writeFileSync(
+      bodyPath,
+      `${stored("the orphan")}\n${stored("the resealed call")}\n`,
+    );
+    wal.append([second]);
+    // Version 1 kept the first line for an event id, and its `through`
+    // covered both, so a load that trusted it served the orphan.
+    writeFileSync(
+      join(paths.wal, `${first.session_uuid}.bodies.index`),
+      [
+        JSON.stringify(["tacho/bodies-index", 1]),
+        JSON.stringify([
+          second.event_id_idem,
+          0,
+          Buffer.byteLength(stored("the orphan")),
+        ]),
+        JSON.stringify(["through", statSync(bodyPath).size]),
+        "",
+      ].join("\n"),
+    );
+    expect(served(new Wal(paths.wal), second)).toEqual(["the resealed call"]);
+  });
+
+  // A crash between the body write and the event write left the body behind.
+  // The restarted recorder seals its next event at the same seq, and when
+  // that event wrote no body, the orphan was served for it. Retention kept
+  // it too, because its event id is then on the chain.
+  const crashOrphan = (
+    walDir: string,
+    event: { event_id_idem: string; session_uuid: string; seq: number },
+    text: string,
+    { torn = false } = {},
+  ) => {
+    const line = JSON.stringify({
+      event_id_idem: event.event_id_idem,
+      seq: event.seq,
+      content_type: "text/plain; charset=utf-8",
+      bytes_base64: Buffer.from(text).toString("base64"),
+    });
+    appendFileSync(
+      join(walDir, `${event.session_uuid}.bodies.jsonl`),
+      torn ? `\n${line.slice(0, 40)}` : `\n${line}\n`,
+    );
+  };
+
+  it("cuts a crash orphan at startup, so the event that takes its seq serves no body", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const [first, second, third] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    new Wal(paths.wal).append([first], [bodyFor(first, "the first prompt")]);
+    crashOrphan(paths.wal, second, "the orphan");
+    crashOrphan(paths.wal, third, "a torn write", { torn: true });
+    const restarted = new Wal(paths.wal);
+    expect(restarted.repairOrphanBodies()).toBe(2);
+    restarted.append([second]);
+    expect(served(restarted, second)).toEqual([]);
+    expect(served(restarted, first)).toEqual(["the first prompt"]);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    expect(readFileSync(bodyPath, "utf8")).not.toContain(
+      Buffer.from("the orphan").toString("base64"),
+    );
+  });
+
+  it("keeps every body whose event is on disk, including a retried batch's", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const [first, second] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    const wal = new Wal(paths.wal);
+    wal.append([first, second], [bodyFor(second, "the second call")]);
+    // A journal retry writes a body for an event already on disk, after the
+    // bodies of later batches.
+    wal.appendRecovered([first], [bodyFor(first, "the first prompt")]);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    const before = readFileSync(bodyPath, "utf8");
+    expect(new Wal(paths.wal).repairOrphanBodies()).toBe(0);
+    expect(readFileSync(bodyPath, "utf8")).toBe(before);
+  });
+
+  it("removes a body file whose session has no event on disk", () => {
+    const paths = scratchPaths();
+    const [first] = minimalSession() as [ReturnType<typeof minimalSession>[0]];
+    new Wal(paths.wal);
+    crashOrphan(paths.wal, first, "the only body");
+    const wal = new Wal(paths.wal);
+    expect(wal.repairOrphanBodies()).toBe(1);
+    expect(
+      existsSync(join(paths.wal, `${first.session_uuid}.bodies.jsonl`)),
+    ).toBe(false);
+    wal.append([first]);
+    expect(served(wal, first)).toEqual([]);
+  });
 });
 
 describe("group commit", () => {
