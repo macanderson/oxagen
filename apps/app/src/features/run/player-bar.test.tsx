@@ -8,7 +8,9 @@
 // The rules: each frame is held for its recorded gap to the next, between
 // 250 ms and 5 s, divided by the speed; playback stops on the last frame and
 // plays again from the first; space plays and pauses unless focus is on a
-// field or a control; a step by key stops it; and no timer outlives the bar.
+// field or a control, and is left to scroll the page when there is nothing to
+// play; a step taken by hand (a key, a frame's link, the scrub) stops it; and
+// no timer outlives the bar.
 import {
   act,
   cleanup,
@@ -33,8 +35,26 @@ const router = vi.hoisted(() => ({
   refresh: vi.fn<() => void>(),
 }));
 vi.mock("next/link", () => ({
-  default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
-    <a {...rest}>{children}</a>
+  // Next's link navigates on the client: it cancels the browser's own
+  // navigation and pushes the route, which the test reads off `router.push`.
+  default: ({
+    children,
+    href,
+    ...rest
+  }: {
+    children: ReactNode;
+    href: string;
+  }) => (
+    <a
+      href={href}
+      {...rest}
+      onClick={(event) => {
+        event.preventDefault();
+        router.push(href);
+      }}
+    >
+      {children}
+    </a>
   ),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -42,6 +62,7 @@ vi.mock("@/features/shell/client", () => ({ openApprovals: vi.fn() }));
 
 const { PlayerBar } = await import("./player-bar");
 const { openFrameOf, playbackGaps, stepsOf } = await import("./player-model");
+const { SafeLink } = await import("@/ui/navigation");
 
 const T0 = Date.parse("2026-09-24T10:00:00.000Z");
 const frameAt = (seq: string, ms: number): RunFrame =>
@@ -226,7 +247,8 @@ describe("the player bar's playback", () => {
 
   it("plays and pauses on space, but not while focus is in a field or on a control", () => {
     renderBar("0");
-    fireEvent.keyDown(document.body, { key: " " });
+    // The toggle takes the key, so the page does not scroll as well.
+    expect(fireEvent.keyDown(document.body, { key: " " })).toBe(false);
     expect(playButton()).toHaveTextContent("pause");
     fireEvent.keyDown(document.body, { key: " " });
     expect(playButton()).toHaveTextContent("play");
@@ -257,6 +279,86 @@ describe("the player bar's playback", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
+  it("stops when a step button is clicked, and does not step again once that frame lands", () => {
+    const { land } = renderBar("0");
+    fireEvent.click(playButton());
+    advance(600);
+    fireEvent.click(screen.getByTestId("player-next"));
+    expect(router.push).toHaveBeenLastCalledWith(hrefOf("1"));
+    expect(playButton()).toHaveTextContent("▶play");
+    // The gap that was running when the step was clicked asks for nothing.
+    advance(10_000);
+    land("1");
+    advance(10_000);
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(playButton()).toHaveTextContent("▶play");
+  });
+
+  it("stops when a link to one of the page's frames is followed outside the bar, and not for any other link", () => {
+    const page = (body: string) => (
+      <>
+        <Bar body={body} />
+        {/* The frame list's link to a frame on this page. */}
+        <SafeLink to={hrefOf("2")}>frame 2</SafeLink>
+        <SafeLink
+          to={routes.run("acme", "core", "tse_other", {
+            tab: "actions",
+            body: "2",
+          })}
+        >
+          another run
+        </SafeLink>
+      </>
+    );
+    const { rerender } = render(page("0"));
+    fireEvent.click(playButton());
+    advance(600);
+
+    fireEvent.click(screen.getByRole("link", { name: "another run" }));
+    expect(playButton()).toHaveTextContent("pause");
+    // A link opened in a new tab leaves this one playing.
+    fireEvent.click(screen.getByRole("link", { name: "frame 2" }), {
+      metaKey: true,
+    });
+    expect(playButton()).toHaveTextContent("pause");
+
+    fireEvent.click(screen.getByRole("link", { name: "frame 2" }));
+    expect(router.push).toHaveBeenLastCalledWith(hrefOf("2"));
+    expect(playButton()).toHaveTextContent("▶play");
+    advance(10_000);
+    rerender(page("2"));
+    advance(10_000);
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("stops when a person takes hold of the scrub, so a step never lands under the drag", () => {
+    renderBar("0");
+    fireEvent.click(playButton());
+    advance(600);
+    const range = screen.getByRole("slider", { name: "Frame" });
+    fireEvent.pointerDown(range);
+    expect(playButton()).toHaveTextContent("▶play");
+    fireEvent.change(range, { target: { value: "2" } });
+    // The gap that was running asks for nothing, so the range stays under the pointer.
+    advance(10_000);
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(range).toHaveValue("2");
+    fireEvent.pointerUp(range);
+    expect(router.push).toHaveBeenLastCalledWith(hrefOf("2"));
+  });
+
+  it("stops on a key that moves the scrub, and not on one that leaves it", () => {
+    renderBar("0");
+    fireEvent.click(playButton());
+    const range = screen.getByRole("slider", { name: "Frame" });
+    fireEvent.keyDown(range, { key: "Tab" });
+    expect(playButton()).toHaveTextContent("pause");
+    fireEvent.keyDown(range, { key: "ArrowRight" });
+    expect(playButton()).toHaveTextContent("▶play");
+    advance(10_000);
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
   it("leaves no timer behind when the bar goes", () => {
     const { unmount } = renderBar("0");
     fireEvent.click(playButton());
@@ -268,7 +370,8 @@ describe("the player bar's playback", () => {
   it("has nothing to play with one frame shown (negative)", () => {
     render(<Bar body="0" frames={[frameAt("0", 0)]} />);
     expect(playButton()).toBeDisabled();
-    fireEvent.keyDown(document.body, { key: " " });
+    // Space is not taken, so it still scrolls the page.
+    expect(fireEvent.keyDown(document.body, { key: " " })).toBe(true);
     advance(10_000);
     expect(router.replace).not.toHaveBeenCalled();
   });
