@@ -265,7 +265,7 @@ export async function resumeApprovedCall(
             switched ? "kill_switch_active" : "tool_authorization_changed",
           );
         }
-        const budgets = await getSpendBudgetStatuses();
+        const budgets = await getSpendBudgetStatuses({ orgId: ctx.orgId });
         if (budgets.some((status) => status.budget.enabled && status.overLimit))
           throw new ApprovalResumeError("budget_exhausted");
         // invoke owns the fresh decision-rule check and its approval receipt.
