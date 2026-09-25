@@ -14,9 +14,11 @@ name: Desktop
 #            APPLE_SIGNING_IDENTITY makes tauri run `codesign -s ""`, which fails
 #            with "no identity found" instead of skipping. Without the
 #            certificate the next step signs ad-hoc ("-") instead, which seals
-#            the bundle so it verifies and can be opened through the
-#            unidentified-developer prompt. Notarization still needs the secrets;
-#            until they exist, macOS downloads carry that prompt.
+#            the bundle so it verifies. Gatekeeper still refuses it: on macOS 15
+#            and later the only way past is System Settings > Privacy & Security
+#            > Open Anyway, since Apple removed the Control-click Open override.
+#            Until the secrets exist, every macOS download meets that refusal
+#            (#4249).
 #   Windows  not signed yet. tauri-bundler signs only through
 #            bundle.windows.certificateThumbprint or signCommand, neither of
 #            which is configured, and no signing tool is installed here;
@@ -277,6 +279,10 @@ jobs:
           security create-keychain -p actions build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p actions build.keychain
+          # A new keychain locks after 300 idle seconds. The Rust compile between
+          # this step and tauri's codesign takes longer, and codesign then fails
+          # on the locked key. Six hours outlasts the job's 60-minute limit.
+          security set-keychain-settings -lut 21600 build.keychain
           security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
           rm certificate.p12
@@ -292,13 +298,13 @@ jobs:
       # ad-hoc signature and no Contents/_CodeSignature seal. That app is not
       # merely unsigned — `codesign --verify` rejects it with "code has no
       # resources but signature indicates they must be present", and macOS
-      # refuses a quarantined copy outright as damaged, which the right-click
-      # Open override cannot rescue. Signing with the explicit ad-hoc identity
-      # "-" writes the seal, so the bundle verifies, the sidecars are sealed as
-      # nested code, and Gatekeeper's refusal becomes the ordinary
-      # unidentified-developer prompt a user can accept. It is not a substitute
-      # for notarization; it is the difference between a build a determined user
-      # can open and one nobody can.
+      # refuses a quarantined copy outright as damaged, and no override opens
+      # it. Signing with the explicit ad-hoc identity "-" writes the seal, so
+      # the bundle verifies and the sidecars are sealed as nested code.
+      # Gatekeeper still refuses the quarantined app. On macOS 15 and later the
+      # dialog offers only Move to Trash or Done, and the one way past is System
+      # Settings > Privacy & Security > Open Anyway. The ad-hoc seal is what
+      # makes Open Anyway work. It does not replace notarization (#4249).
       #
       # "-" is required rather than an empty value: an empty APPLE_SIGNING_IDENTITY
       # makes tauri run `codesign -s ""`, which fails with "no identity found".
@@ -306,7 +312,7 @@ jobs:
         if: runner.os == 'macOS' && env.HAS_APPLE_CERT != 'true'
         run: |
           echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
-          echo "::notice::No Apple Developer ID secrets; ad-hoc signing the bundle so it verifies and can be opened via the unidentified-developer prompt. Not notarized."
+          echo "::notice::No Apple Developer ID secrets; ad-hoc signing the bundle so it verifies. Not notarized: Gatekeeper refuses the download until the person chooses Open Anyway in Privacy & Security (#4249)."
 
       # Updater signing is all-or-nothing: with the key, sign and publish
       # latest.json; without it, switch updater artifacts off for this build.
