@@ -1,4 +1,4 @@
-# ADR-XXX: An assistant run that stops recording is sealed abandoned
+# ADR-173: An assistant run that stops recording is sealed abandoned
 
 - **Status:** Accepted
 - **Date:** 2026-09-25

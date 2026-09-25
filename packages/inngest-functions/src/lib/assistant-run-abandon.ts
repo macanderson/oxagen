@@ -16,7 +16,7 @@
 // from the rows already on the ledger, with no terminal event and an
 // unobserved tail, and the run fails with `producer_silent` as the seal's
 // reason. The seal is final. A late append is refused and a late seal gets
-// the abandoned seal back (ADR-XXX).
+// the abandoned seal back (ADR-173).
 import type { AssistantRunSurface } from "@oxagen/agent/runtime/assistant-run";
 import { ENGINE_REVERSE_REQUEST_TIMEOUT_MS } from "@oxagen/agent/runtime/governed-turn";
 import { schema, type Tx, withSystemDb, withTenantDb } from "@oxagen/database";

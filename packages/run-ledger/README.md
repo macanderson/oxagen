@@ -127,7 +127,7 @@ run          trusted RunSpecV2 identity — principals, agent version,
   seal since the read moves one of those, so the producer wins and nothing is
   written. The attempt then seals `abandoned` from its recorded rows, with no
   terminal event and an `unobserved_tail` gap. The seal is final like any
-  other, so a late append is refused (ADR-XXX).
+  other, so a late append is refused (ADR-173).
 - **Seal, grant and obligation are one transaction.** A seal without its grant
   would be evidence nobody may finalize; a grant without its obligation would be
   authority nobody is scheduled to use. A duplicate seal returns the *same*

@@ -185,7 +185,7 @@ close, not the end.
   until its next frame lands.
 - Ledger runs (`arun_…`) get no running rollup. The in-app assistant seals
   its run when the turn settles. A run whose process died mid-turn stayed
-  open until ADR-XXX: `evidence.assistant-run-abandon` now seals it
+  open until ADR-173: `evidence.assistant-run-abandon` now seals it
   `abandoned` once it records nothing for twelve minutes, and that seal is
   final (#3988).
 - The daemon's gaps stay. A root `SessionEnd` still does not finalize open
