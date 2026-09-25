@@ -894,7 +894,7 @@ describe("the prepared turn", () => {
         });
         // What a governed write that parks leaves behind: the gate opens the
         // approval, and the engine records the call as parked with the
-        // approval's public id (#4196). The error still names the row uuid.
+        // approval's public id (#4196). The error names the same public id.
         approvalRequired?.({
           approvalId: ROW_ID,
           approvalPublicId: PUBLIC_ID,
@@ -910,7 +910,7 @@ describe("the prepared turn", () => {
           outcome: "parked",
           approvalPublicId: PUBLIC_ID,
           input: {},
-          error: `refused: set_budget is waiting for approval ${ROW_ID} until 2026-09-14T10:05:00.000Z`,
+          error: `refused: set_budget is waiting for approval ${PUBLIC_ID} until 2026-09-14T10:05:00.000Z`,
           durationMs: 4,
         });
         return fakeTurn({});

@@ -261,11 +261,12 @@ async function parkWrite(turn: Awaited<ReturnType<typeof openTurn>>) {
   const parked = turn.call(WRITE, { keyPublicId: KEY_PUBLIC_ID }, "call_park");
   const err = await parked.catch((e: unknown) => e);
   expect(err).toBeInstanceOf(ApprovalPendingError);
-  // The refusal the engine hands back to the model names the approval.
+  // The refusal the engine hands back to the model names the approval by its
+  // public id, the id the person sees on Fleet, not the row uuid.
   const approvalId = /waiting for approval (\S+) until/.exec(
     (err as Error).message,
   )?.[1];
-  expect(approvalId).toBe(ROW_ID);
+  expect(approvalId).toBe(APPROVAL_PUBLIC_ID);
   return approvalId!;
 }
 
@@ -408,6 +409,8 @@ describe("resolve_approval: a turn answering its own parked write", () => {
       approvalId: APPROVAL_PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      // The parked call is queued to run once the person approves (ADR-118).
+      execution: { status: "queued", runId: null, reason: null },
     });
     expect(store.row).toMatchObject({
       resolution: "approved",

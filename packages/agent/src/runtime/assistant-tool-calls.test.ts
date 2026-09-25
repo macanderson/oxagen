@@ -12,9 +12,12 @@ const card = (approvalId: string, capability = "set_budget") => ({
   expiresAt: "2026-09-24T10:05:00.000Z",
 });
 
-/** The error `ApprovalPendingError` carries onto the receipt of a parked call. */
-const parkedError = (capability: string, rowId: string) =>
-  `refused: ${capability} is waiting for approval ${rowId} until 2026-09-24T10:05:00.000Z`;
+/**
+ * The error `ApprovalPendingError` carries onto the receipt of a parked call.
+ * It names the public id, or the row uuid when the writer returned none.
+ */
+const parkedError = (capability: string, approvalId: string) =>
+  `refused: ${capability} is waiting for approval ${approvalId} until 2026-09-24T10:05:00.000Z`;
 
 type ToolReceipt = Extract<AssistantRunReceipt, { kind: "tool" }>;
 
@@ -109,7 +112,7 @@ describe("toolCallsFromReceipts", () => {
           toolName: "set_budget",
           outcome: "parked",
           approvalPublicId: PUBLIC_ID,
-          error: parkedError("set_budget", ROW_ID),
+          error: parkedError("set_budget", PUBLIC_ID),
         }),
       ],
       [card(PUBLIC_ID)],
@@ -131,7 +134,7 @@ describe("toolCallsFromReceipts", () => {
         tool({
           outcome: "parked",
           approvalPublicId: PUBLIC_ID,
-          error: parkedError("set_budget", ROW_ID),
+          error: parkedError("set_budget", PUBLIC_ID),
         }),
       ],
       [],

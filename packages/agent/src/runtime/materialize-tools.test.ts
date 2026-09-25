@@ -594,7 +594,7 @@ describe("materializeTools", () => {
     mocks.createApprovalRequest.mockClear();
     mocks.createApprovalRequest.mockResolvedValueOnce({
       approvalId: "appr_x",
-      approvalPublicId: "apr_x",
+      publicId: "apr_x",
     });
     mocks.waitForApproval.mockClear();
     vi.mocked(invoke).mockClear();
@@ -630,7 +630,11 @@ describe("materializeTools", () => {
         e.capability === FIXTURE[2]!.name &&
         // The public id rides the park, so the turn's ledger can name the
         // approval the call waits on.
-        e.approvalPublicId === "apr_x",
+        e.approvalPublicId === "apr_x" &&
+        // The message is what the model reads: it names the public id, the
+        // id the person sees on the card, never the row uuid.
+        e.message.includes("waiting for approval apr_x until") &&
+        !e.message.includes("appr_x"),
     );
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     expect(mocks.waitForApproval).not.toHaveBeenCalled();
