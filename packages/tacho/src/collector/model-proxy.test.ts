@@ -1508,8 +1508,48 @@ describe("the loopback model proxy", () => {
     // the last duplicate, not the first one the old read returned.
     expect(decisions[0]!.attrs).toMatchObject({
       "oxagen.model": "claude-sonnet-5",
+      "oxagen.model_ambiguous": "true",
     });
     await first.handle.stop();
+  });
+
+  it("forwards a body that names two models when no models clause is armed, and marks its frame ambiguous", async () => {
+    // With no `models` clause there is no list for a duplicate to slip past,
+    // so the call is forwarded. The frame still records and prices one of the
+    // two names, so it says the request did not pin a single model (#3726).
+    const fake = await vendor(streamingAnthropic(1));
+    const host = await boot(fake.url, {
+      paths: scratchPaths(),
+      bundle: { budget: { mode: "enforced" as const } },
+    });
+    const uuid = await host.session("sess-dup-open");
+    const ask = (body: string) =>
+      call(host.port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-dup-open",
+        ],
+        body,
+      });
+
+    const twice = await ask(
+      '{"model":"claude-opus-5-20260101","model":"claude-sonnet-5","stream":true}',
+    );
+    expect(twice.status).toBe(200);
+    expect(
+      await ask('{"model":"claude-sonnet-5","stream":true}'),
+    ).toMatchObject({ status: 200 });
+    expect(fake.requests).toHaveLength(2);
+
+    const calls = host.frames(uuid);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.attrs["oxagen.model_ambiguous"]).toBe("true");
+    // A body naming one model is pinned, and its frame carries no mark.
+    expect(calls[1]!.attrs["oxagen.model_ambiguous"]).toBeUndefined();
+    await host.handle.stop();
   });
 
   it.each([true, false])(

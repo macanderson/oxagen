@@ -14,9 +14,26 @@ import {
 } from "./skill-config.store";
 import { readSkillRepositoryBinding } from "./skill-config.repository";
 
-export function publicSkillConfig(row: PublishedSkillConfig) {
-  const { repositoryBindingId: _binding, ...publicRow } = row;
-  return publishedSkillConfigSchema.parse(publicRow);
+/**
+ * The public form of a stored version. The internal binding id stays out of
+ * the result. When the caller passes the workspace's current binding, each row
+ * says whether it was published under it, which is what `searchable` means.
+ */
+export function publicSkillConfig(
+  row: PublishedSkillConfig,
+  current?: { bindingId: string | null },
+) {
+  const { repositoryBindingId, ...publicRow } = row;
+  return publishedSkillConfigSchema.parse(
+    current
+      ? {
+          ...publicRow,
+          searchable:
+            current.bindingId !== null &&
+            repositoryBindingId === current.bindingId,
+        }
+      : publicRow,
+  );
 }
 export function createSkillConfigGetHandler(
   store: SkillConfigStore,
@@ -28,16 +45,20 @@ export function createSkillConfigGetHandler(
       { org: ["Owner", "Admin", "Member"], workspace: ["Owner", "Member"] },
     );
     const rows = await store.list(ctx);
-    const currentBinding = input.version ? undefined : await binding(ctx);
+    // The binding is read even when a version is named, so every row can say
+    // whether `preview_skill_search` will accept it (#3666).
+    const active = { bindingId: (await binding(ctx))?.bindingId ?? null };
     const selected = input.version
       ? rows.find(
           (row) => row.id === input.version || row.version === input.version,
         )
       : rows.find(
-          (row) => row.repositoryBindingId === currentBinding?.bindingId,
+          (row) =>
+            active.bindingId !== null &&
+            row.repositoryBindingId === active.bindingId,
         );
-    const versions = rows.map(publicSkillConfig);
-    const current = selected ? publicSkillConfig(selected) : undefined;
+    const versions = rows.map((row) => publicSkillConfig(row, active));
+    const current = selected ? publicSkillConfig(selected, active) : undefined;
     if (input.version && !current)
       throw new HandlerError({
         code: "not_found",

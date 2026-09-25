@@ -1,12 +1,19 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { avatarUrlSchema } from "../avatar";
-import { graphAccessSchema, agentToolSchema } from "../agent-schema";
+import {
+  agentDefinitionBudgetSchema,
+  agentToolSchema,
+  graphAccessSchema,
+} from "../agent-schema";
 
 const definitionConfigInput = z.object({
   graph: graphAccessSchema,
   agentTools: z.array(agentToolSchema).default([]),
   instructions: z.string().optional(),
+  // Without this key the object parse strips a caller's budget, and the
+  // mandate signs no ceiling for the version (#3743).
+  budget: agentDefinitionBudgetSchema.optional(),
 });
 
 export const agentDefinitionUpdate = registerCapability({
@@ -20,6 +27,7 @@ export const agentDefinitionUpdate = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "mutation" },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

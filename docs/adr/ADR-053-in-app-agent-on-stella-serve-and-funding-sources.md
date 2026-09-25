@@ -8,7 +8,8 @@
   ADR-052 (governed action as the billable unit — amended for one case),
   ADR-042 (organisation data planes — the envelope pattern the customer key
   reuses), ADR-050 (secret access in the main audit log), ADR-033 (the
-  Rust engine as agent core — Option B is what this ADR adopts),
+  Rust engine as agent core; this ADR adopts the "Rust sidecar service"
+  alternative it lists),
   `macanderson/stella` `docs/spec/serve-surface.md` (the engine side),
   `packages/agent/src/runtime/governed-turn.ts` (the loop this replaces),
   `packages/ai/src/models.ts` (the model seam)

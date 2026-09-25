@@ -21,6 +21,9 @@ export const agentMemoryPromotionRationales = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "low",
+  // Reads the memory and asks a model for rationale drafts. It stores
+  // nothing.
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

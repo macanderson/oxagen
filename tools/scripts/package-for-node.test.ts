@@ -22,6 +22,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { STELLA_SERVE_PINNED_VERSION } from "../../packages/stella-engine-client/src/version";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
@@ -100,14 +101,41 @@ describe("package-for-node.sh app", () => {
   });
 });
 
-function engineManifest(prefix: string): { config_prefix: string } {
+const engineVersionFile = join(
+  "packages",
+  "stella-engine-client",
+  "src",
+  "version.ts",
+);
+const engineVersionSource = readFileSync(join(root, engineVersionFile), "utf8");
+
+interface EngineManifest {
+  config_prefix: string;
+  image: string;
+}
+
+/**
+ * Package the engine in a scratch tree that holds the script and, unless
+ * `versionSource` is null, that text as the engine client's version.ts.
+ */
+function engineManifest(
+  prefix: string,
+  {
+    env = {},
+    versionSource = engineVersionSource,
+  }: { env?: Record<string, string>; versionSource?: string | null } = {},
+): EngineManifest {
   const tree = mkdtempSync(join(tmpdir(), "node-manifest-"));
   const target = join(tree, "tools", "scripts", "package-for-node.sh");
   try {
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, script);
+    if (versionSource !== null) {
+      mkdirSync(dirname(join(tree, engineVersionFile)), { recursive: true });
+      writeFileSync(join(tree, engineVersionFile), versionSource);
+    }
     execFileSync("bash", [target, "stella-serve"], {
-      env: { ...process.env, PARAMETER_PREFIX: prefix },
+      env: { ...process.env, PARAMETER_PREFIX: prefix, ...env },
       stdio: "pipe",
     });
     return JSON.parse(
@@ -115,11 +143,56 @@ function engineManifest(prefix: string): { config_prefix: string } {
         join(tree, "dist-deploy", "stella-serve", "oxagen-run.json"),
         "utf8",
       ),
-    ) as { config_prefix: string };
+    ) as EngineManifest;
   } finally {
     rmSync(tree, { recursive: true, force: true });
   }
 }
+
+/**
+ * The engine's image tag is STELLA_SERVE_PINNED_VERSION and nothing else.
+ * Every assistant run records that constant as its engine version, so a tag
+ * from anywhere else would make the run ledger name an engine that is not
+ * running. #2833 pinned the client at one release and deployed another.
+ */
+describe("package-for-node.sh stella-serve image", () => {
+  const pin = (version: string) =>
+    `export const STELLA_SERVE_PINNED_VERSION = "${version}";\n`;
+
+  it("names the image tagged with the engine client's pinned version", () => {
+    expect(engineManifest("").image).toBe(
+      `ghcr.io/macanderson/stella-serve:${STELLA_SERVE_PINNED_VERSION}`,
+    );
+  });
+
+  it("follows a bump of version.ts with no other change", () => {
+    expect(
+      engineManifest("", {
+        versionSource: `/** A doc comment. */\n${pin("9.8.7")}`,
+      }).image,
+    ).toBe("ghcr.io/macanderson/stella-serve:9.8.7");
+  });
+
+  it("takes no tag from the environment", () => {
+    expect(
+      engineManifest("", { env: { STELLA_SERVE_IMAGE_TAG: "0.0.1" } }).image,
+    ).toBe(`ghcr.io/macanderson/stella-serve:${STELLA_SERVE_PINNED_VERSION}`);
+  });
+
+  it("refuses to package the engine without a readable pin", () => {
+    for (const versionSource of [
+      null,
+      "",
+      pin("latest"),
+      pin("0.9"),
+      `${pin("0.9.1")}${pin("0.9.2")}`,
+    ]) {
+      expect(() => engineManifest("", { versionSource })).toThrow(
+        "cannot read STELLA_SERVE_PINNED_VERSION",
+      );
+    }
+  });
+});
 
 describe("artifact configuration isolation", () => {
   it("preserves the production default for existing deploys", () => {

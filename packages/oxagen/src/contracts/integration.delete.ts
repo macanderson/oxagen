@@ -12,6 +12,7 @@ export const integrationDelete = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "plugin" },
   sensitivity: "destructive",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

@@ -94,7 +94,7 @@ export const agentGet = registerCapability({
   description:
     "Read one agent identity: principal, harness, operator and status; its long-lived credentials; the roles on its principal; the hosts enrolled under it; and the definition of record the last commit cached.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

@@ -14,6 +14,8 @@
 // discovery_failed, invalid_saml_response …), distinct from the social ones.
 // SSO_REQUIRED is Oxagen's own code: the password sign-in hook in
 // packages/auth refuses an email whose organization requires SSO (ADR-145).
+// PASSWORD_TOO_WEAK is Oxagen's too: the server refuses a new password that
+// misses the policy in packages/auth/src/password-policy.ts (#3888).
 
 export type AuthOutcomeKey =
   | "wrongCredentials"
@@ -21,6 +23,7 @@ export type AuthOutcomeKey =
   | "suspended"
   | "rateLimited"
   | "alreadyRegistered"
+  | "passwordTooWeak"
   | "codeWrong"
   | "linkExpired"
   | "oauthCancelled"
@@ -54,6 +57,9 @@ const BY_CODE: ReadonlyArray<readonly [RegExp, AuthOutcomeKey]> = [
     /INVALID_PROVIDER|DISCOVERY_FAILED|INVALID_SAML_RESPONSE|UNSOLICITED_RESPONSE|REPLAY_DETECTED/,
     "ssoFailed",
   ],
+  // Before wrongCredentials: a new password the server refuses is not a wrong
+  // one. PASSWORD_TOO_SHORT and PASSWORD_TOO_LONG are Better Auth's own bounds.
+  [/PASSWORD_TOO_(WEAK|SHORT|LONG)/, "passwordTooWeak"],
   [
     /INVALID_EMAIL_OR_PASSWORD|INVALID_PASSWORD|USER_NOT_FOUND|CREDENTIAL_ACCOUNT_NOT_FOUND/,
     "wrongCredentials",

@@ -66,6 +66,33 @@ describe("agent.definition.create capability", () => {
     ).toThrow();
   });
 
+  it("keeps a caller's config.budget through the parse (#3743)", () => {
+    const parsed = agentDefinitionCreate.input.parse({
+      slug: "my-agent",
+      name: "My Agent",
+      config: {
+        ...VALID_CONFIG,
+        budget: { per_run_micros: 2_500_000, per_day_micros: 10_000_000 },
+      },
+    });
+    expect(parsed.config.budget).toEqual({
+      per_run_micros: 2_500_000,
+      per_day_micros: 10_000_000,
+    });
+  });
+
+  it("rejects a budget ceiling that is not a positive integer", () => {
+    for (const per_run_micros of [0, -1, 1.5, "100"]) {
+      expect(() =>
+        agentDefinitionCreate.input.parse({
+          slug: "my-agent",
+          name: "My Agent",
+          config: { ...VALID_CONFIG, budget: { per_run_micros } },
+        }),
+      ).toThrow();
+    }
+  });
+
   it("is registered in the capability registry", () => {
     expect(getCapability("create_agent_def")).toBe(agentDefinitionCreate);
   });

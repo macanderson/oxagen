@@ -3,10 +3,13 @@
 // and the `.tx-*` rules in engine.css; pages/run.md, Transcript).
 //
 // The feed is the run as its operator saw it: the prompt, the model's words
-// and thinking, each tool call as one row with the output it read, what each
-// model step cost, what was recalled, and the stop. Oxagen's own frames sit
-// behind the chips: a ⚖ chip opens the decision's frame on the Governed
-// actions tab, and a frame chip opens a reply's or a call's.
+// and thinking, each tool call with the output it read, what each model step
+// cost, what was recalled, and the stop. Every row is one line until it is
+// opened. A tool row's line is the tool's name and its arguments, cut at
+// `LINE_CAP`; opening it shows the full arguments, every diff line, and the
+// output. Oxagen's own frames sit behind the chips: a ⚖ chip opens the
+// decision's frame on the Governed actions tab, and a frame chip opens a
+// reply's or a call's.
 //
 // The kind chips, the search and the errors toggle filter the rows in the
 // browser, over the whole-run transcript the page already read, so a count on
@@ -54,6 +57,7 @@ import { Note } from "./parts";
 import type { ToolDiff, ToolGroup } from "./tool-detail";
 import {
   buildFeed,
+  closedLine,
   FEED_GROUPS,
   type FeedCall,
   type FeedGate,
@@ -102,51 +106,14 @@ export function paceMs(gapMs: number, speed: number): number {
   );
 }
 
-/** How many output lines a tool row shows before its fold (`budget=6`). */
-const OUTPUT_BUDGET = 6;
-/** How many diff lines a closed row shows (`cap=12`). */
-const DIFF_CAP = 12;
-/** How many recalled items a closed recall row lists (`CTXF.slice(0,3)`). */
-const RECALL_CAP = 3;
-
 /**
- * `TX_SALIENT` and `txSalient`: the line an output window opens at. The first
- * line that reads as a failure, when one does; otherwise the first line with
- * anything on it.
+ * A click on a closed row's line opens it, the way its fold button does. A
+ * click that ends a text selection is the reader copying, not asking to open.
  */
-const SALIENT = [
-  "error",
-  "warning",
-  "failed",
-  "failure",
-  "panic",
-  "assert",
-  "fatal",
-  "exception",
-];
-function salientLine(lines: readonly string[]): number {
-  let first = -1;
-  for (const [index, line] of lines.entries()) {
-    const trimmed = line.trimStart();
-    if (first === -1 && trimmed !== "") first = index;
-    const lower = trimmed.toLowerCase();
-    for (const mark of SALIENT) {
-      if (lower.startsWith(mark)) return index;
-      const at = lower.indexOf(`${mark}:`);
-      if (at >= 0 && at <= 12) return index;
-    }
-  }
-  return Math.max(0, first);
-}
-
-/** `txFold`: a passage as its first sentence and the rest. */
-function foldText(text: string): { head: string; rest: string } {
-  const match = /^[\s\S]*?[.!?](?=\s|$)/.exec(text);
-  if (match === null || match[0].length >= text.length - 1)
-    return { head: text, rest: "" };
-  return {
-    head: match[0],
-    rest: text.slice(match[0].length).replace(/^\s+/, ""),
+function lineClick(open: () => void): () => void {
+  return () => {
+    if ((window.getSelection()?.toString() ?? "") !== "") return;
+    open();
   };
 }
 
@@ -227,12 +194,13 @@ const txPlay = "ml-auto flex flex-wrap items-center gap-1 max-md:ml-0";
 /**
  * `.btn.sm` inside `.tx-play { padding:3px 8px; font-size:11.5px;
  * min-width:30px; justify-content:center }` over `.btn { border:1px solid
- * var(--border); background:var(--panel); border-radius:7px }` and
- * `.btn:hover { border-color:var(--rule); background:var(--hl) }`; `.ghost`
- * drops the fill, and the play button is `min-width:74px`.
+ * var(--border); background:var(--panel); border-radius:7px; font-weight:500;
+ * gap:7px }`, `.btn:hover { border-color:var(--rule); background:var(--hl) }`
+ * and `.tx-play .btn.sm[aria-pressed="true"]` the same; `.ghost` drops the
+ * fill, and the play button is `min-width:74px`.
  */
 const buttonShape =
-  "inline-flex items-center justify-center gap-1 rounded-[7px] border border-border px-2 py-[3px] font-mono text-[11.5px] text-foreground transition-colors hover:border-rule hover:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
+  "inline-flex items-center justify-center gap-[7px] rounded-[7px] border border-border px-2 py-[3px] font-mono text-[11.5px] font-medium text-foreground transition-colors hover:border-rule hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
 const txButton = `${buttonShape} min-w-[30px] bg-card`;
 const txGhost = `${buttonShape} min-w-[30px] bg-transparent`;
 const txPlayButton = `${buttonShape} min-w-[74px] bg-card`;
@@ -245,7 +213,7 @@ const txPlayButton = `${buttonShape} min-w-[74px] bg-card`;
 const txSeg =
   "ml-1 inline-flex gap-0.5 rounded-lg border border-border bg-void p-0.5";
 const txSegButton =
-  "inline-flex min-w-[30px] items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-[3px] font-mono text-[11.5px] text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
+  "inline-flex min-w-[30px] items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-[3px] font-mono text-[11.5px] font-medium text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
 /** `.tx-play .cnt { font-size:10.5px; color:var(--dim); margin-left:4px }` */
 const txCount = "ml-1 whitespace-nowrap text-[10.5px] tabular-nums text-dim";
 /**
@@ -308,17 +276,23 @@ const txRoleGut = "pr-3.5 text-right max-md:p-0 max-md:text-left";
  */
 const txRoleTag =
   "rounded px-[7px] py-px text-[10px] font-bold tracking-[0.14em] text-background";
-/** `.tx-prose { max-width:72ch; white-space:pre-wrap; color:var(--body) }` */
+/**
+ * `.tx-prose { max-width:72ch; white-space:pre-wrap; color:var(--body) }`,
+ * open. Closed, the same column holds one line, cut with an ellipsis. The ink
+ * is the row's, so the prompt and the answer can carry `--fg`.
+ */
 const txProse =
-  "max-w-[72ch] whitespace-pre-wrap [overflow-wrap:anywhere] text-(color:--body)";
+  "min-w-0 max-w-[72ch] whitespace-pre-wrap [overflow-wrap:anywhere]";
+const txProseLine = "min-w-0 max-w-[72ch] truncate";
 /** `.tx-answer { border-left:2px solid var(--tx-agent); padding-left:14px; color:var(--fg) }` */
-const txAnswer = "border-l-2 border-foreground pl-3.5 text-foreground";
+const txAnswer = "border-l-2 border-foreground pl-3.5";
 /** `.tx-sub { font-size:10.5px; color:var(--dim); margin-top:5px; gap:6px }` */
 const txSub =
   "mt-[5px] flex flex-wrap items-baseline gap-1.5 text-[10.5px] text-dim";
-/** `.tx-think { color:var(--dim); font-style:italic; max-width:72ch }` */
+/** `.tx-think { color:var(--dim); font-style:italic; max-width:72ch }`, open and closed. */
 const txThink =
   "max-w-[72ch] whitespace-pre-wrap [overflow-wrap:anywhere] italic text-dim";
+const txThinkLine = "min-w-0 max-w-[72ch] truncate italic text-dim";
 /** `.tx-fold { border:0; background:none; font-size:10.5px; color:var(--dim) }` */
 const txFold =
   "border-0 bg-transparent p-0 font-mono text-[10.5px] text-dim hover:text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring";
@@ -536,60 +510,46 @@ function SubagentChip({ row }: { row: FeedRow }) {
   );
 }
 
-/** The fold under a closed output: how many lines it holds back. */
-function MoreLines({
-  hidden,
+/**
+ * The control that opens and closes one row. A prose row leads with it
+ * (`⏵`/`⏶`); a call row ends its chips with it (`⋯`/`⏶`).
+ */
+function Fold({
   open,
+  label,
+  closedGlyph,
   onToggle,
+  className = "",
 }: {
-  hidden: number;
   open: boolean;
+  label: string;
+  closedGlyph: "⏵" | "⋯";
   onToggle: () => void;
+  className?: string;
 }) {
-  const t = useTranslations("run.transcript");
-  if (hidden <= 0 && !open) return null;
   return (
     <button
       type="button"
-      className={`${txFold} ml-5`}
+      className={`${txFold} ${className}`}
       aria-expanded={open}
+      aria-label={label}
       onClick={onToggle}
     >
-      {open ? (
-        <>
-          <span aria-hidden="true">⏶ </span>
-          {t("collapse")}
-        </>
-      ) : (
-        <>
-          <span aria-hidden="true">⋯ </span>
-          {t("moreLines", { count: hidden })}
-        </>
-      )}
+      {open ? "⏶" : closedGlyph}
     </button>
   );
 }
 
-/** `txDiffBlock`: the path, the stat, and the changed lines, twelve until the row opens. */
-function DiffBlock({
-  change,
-  open,
-  q,
-}: {
-  change: ToolDiff;
-  open: boolean;
-  q: string;
-}) {
+/** `txDiffBlock`: the path, the stat, and every changed line, scrolled past 320px. */
+function DiffBlock({ change, q }: { change: ToolDiff; q: string }) {
   const t = useTranslations("run.transcript");
   type Line = DiffLine | { op: "gap"; key: string };
-  const all: Line[] = change.diff.hunks.flatMap((hunk, index) => [
+  const shown: Line[] = change.diff.hunks.flatMap((hunk, index) => [
     ...(index === 0
       ? []
       : [{ op: "gap" as const, key: `gap-${String(index)}` }]),
     ...hunk.lines,
   ]);
-  const shown = open ? all : all.slice(0, DIFF_CAP);
-  const hidden = all.length - shown.length;
   return (
     <div data-testid="tx-diff" className="mt-1 mb-1.5 ml-5 min-w-0">
       <div className={txDiffPath}>
@@ -624,16 +584,6 @@ function DiffBlock({
             </div>
           ),
         )}
-        {hidden > 0 ? (
-          <div className={txDiffLine}>
-            <span className={txDiffNum} />
-            <span className={txDiffNum} />
-            <span className="px-2.5 text-center text-dim">
-              <span aria-hidden="true">⋯ </span>
-              {t("moreLines", { count: hidden })}
-            </span>
-          </div>
-        ) : null}
       </div>
     </div>
   );
@@ -649,13 +599,53 @@ type RowProps = {
   place: Place;
 };
 
+/**
+ * A prose row's words: one line cut at the column's edge while the row is
+ * closed, every line as it was written once it opens. Every prose row can
+ * open, because whether its line overflowed is the browser's to know.
+ */
+function Prose({
+  text,
+  q,
+  open,
+  onToggle,
+  className,
+}: {
+  text: string;
+  q: string;
+  open: boolean;
+  onToggle: () => void;
+  className: string;
+}) {
+  const t = useTranslations("run.transcript");
+  return (
+    <div className={`${open ? txProse : txProseLine} ${className}`}>
+      <Fold
+        open={open}
+        label={open ? t("showLess") : t("showFull")}
+        closedGlyph="⏵"
+        onToggle={onToggle}
+        className="pr-1.5"
+      />
+      {open ? (
+        <Hi text={text} q={q} />
+      ) : (
+        <span className="cursor-pointer" onClick={lineClick(onToggle)}>
+          <Hi text={closedLine(text)} q={q} />
+        </span>
+      )}
+    </div>
+  );
+}
+
 function PromptRow({
   row,
   q,
+  open,
+  onToggle,
   run,
-}: {
+}: Omit<RowProps, "row" | "place"> & {
   row: Extract<FeedRow, { kind: "prompt" }>;
-  q: string;
   run: TranscriptRun;
 }) {
   const t = useTranslations("run.transcript");
@@ -664,25 +654,33 @@ function PromptRow({
       <div className={txRoleGut}>
         <span className={`${txRoleTag} bg-muted-foreground`}>{t("you")}</span>
       </div>
-      <div>
-        <div className={`${txProse} text-foreground`}>
-          <Hi text={row.text} q={q} />
-        </div>
-        <div className={txSub}>
-          {run.operatorName === null ? null : (
-            <span>{t("operator", { name: run.operatorName })}</span>
-          )}
-          {row.first && run.taskRef !== null ? (
-            <span>{t("task", { ref: run.taskRef })}</span>
-          ) : null}
-          <span>
-            {row.first
-              ? t("firstPrompt")
-              : row.turn === null
-                ? t("laterPrompt")
-                : t("turn", { n: row.turn })}
-          </span>
-        </div>
+      <div className="min-w-0">
+        <Prose
+          text={row.text}
+          q={q}
+          open={open}
+          onToggle={() => {
+            onToggle(row.key);
+          }}
+          className="text-foreground"
+        />
+        {open ? (
+          <div className={txSub}>
+            {run.operatorName === null ? null : (
+              <span>{t("operator", { name: run.operatorName })}</span>
+            )}
+            {row.first && run.taskRef !== null ? (
+              <span>{t("task", { ref: run.taskRef })}</span>
+            ) : null}
+            <span>
+              {row.first
+                ? t("firstPrompt")
+                : row.turn === null
+                  ? t("laterPrompt")
+                  : t("turn", { n: row.turn })}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -699,9 +697,6 @@ function TextRow({
   answer: boolean;
 }) {
   const t = useTranslations("run.transcript");
-  const { head, rest } = foldText(row.text);
-  const foldable = !answer && rest.length > 0;
-  const folded = foldable && !open;
   return (
     <div data-testid="transcript-agent" className={txRole}>
       <div className={txRoleGut}>
@@ -709,29 +704,19 @@ function TextRow({
           {answer ? t("answer") : t("agent")}
         </span>
       </div>
-      <div className="min-w-0">
-        <div className={`${txProse} ${answer ? txAnswer : ""}`}>
-          {foldable ? (
-            <button
-              type="button"
-              className={`${txFold} pr-1.5`}
-              aria-expanded={!folded}
-              aria-label={folded ? t("showRest") : t("showLess")}
-              onClick={() => {
-                onToggle(row.key);
-              }}
-            >
-              {folded ? "⏵" : "⏶"}
-            </button>
-          ) : null}
-          <Hi text={folded ? head : row.text} q={q} />
-          {folded ? <span className="text-dim"> …</span> : null}
-        </div>
-        {row.subagent === undefined ? null : (
-          <div className={txSub}>
-            <SubagentChip row={row} />
-          </div>
-        )}
+      <div className="flex min-w-0 items-baseline gap-2">
+        <Prose
+          text={row.text}
+          q={q}
+          open={open}
+          onToggle={() => {
+            onToggle(row.key);
+          }}
+          className={
+            answer ? `${txAnswer} text-foreground` : "text-(color:--body)"
+          }
+        />
+        <SubagentChip row={row} />
       </div>
     </div>
   );
@@ -748,32 +733,50 @@ function ThinkingRow({
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   if (row.text === null) {
+    const unkept = t("thinkingUnkept", {
+      count: formatCount(row.tokens ?? 0, locale),
+    });
     return (
-      <div data-testid="step-thinking-unkept" className={txThink}>
-        {t("thinkingUnkept", { count: formatCount(row.tokens ?? 0, locale) })}
+      <div
+        data-testid="step-thinking-unkept"
+        className="min-w-0 truncate italic text-dim"
+        title={unkept}
+      >
+        {unkept}
       </div>
     );
   }
   const lines = row.text.split("\n").length;
-  const { head, rest } = foldText(row.text);
-  const folded = !open && rest.length > 0;
+  const toggle = () => {
+    onToggle(row.key);
+  };
   return (
     <div>
-      <button
-        type="button"
-        className={txFold}
-        aria-expanded={open}
-        onClick={() => {
-          onToggle(row.key);
-        }}
-      >
-        <span aria-hidden="true">{open ? "⏶ " : "⏵ "}</span>
-        {t("thinkingLines", { count: lines })}
-      </button>
-      <div data-testid="tx-think" className={txThink}>
-        <Hi text={folded ? head : row.text} q={q} />
-        {folded ? " …" : null}
+      <div className="flex min-w-0 items-baseline gap-2">
+        <button
+          type="button"
+          className={`${txFold} flex-none`}
+          aria-expanded={open}
+          onClick={toggle}
+        >
+          <span aria-hidden="true">{open ? "⏶ " : "⏵ "}</span>
+          {t("thinkingLines", { count: lines })}
+        </button>
+        {open ? null : (
+          <span
+            data-testid="tx-think"
+            className={`${txThinkLine} cursor-pointer`}
+            onClick={lineClick(toggle)}
+          >
+            <Hi text={closedLine(row.text)} q={q} />
+          </span>
+        )}
       </div>
+      {open ? (
+        <div data-testid="tx-think" className={txThink}>
+          <Hi text={row.text} q={q} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -791,16 +794,15 @@ function ToolRow({
   const locale = useLocale();
   const failed = row.failed;
   const kind = CALL_CLASS[call.group];
-  const diff = call.diffs[0] ?? null;
-  const lines = call.output?.split("\n") ?? [];
-  const anchor = Math.min(
-    salientLine(lines),
-    Math.max(0, lines.length - OUTPUT_BUDGET),
-  );
-  const shown = open ? lines : lines.slice(anchor, anchor + OUTPUT_BUDGET);
+  const lines = call.output === null ? 0 : call.output.split("\n").length;
+  // An edit's diff is the whole of what it did; its output only restates it,
+  // unless the edit failed and the output says why.
+  const output = call.diffs.length === 0 || failed ? call.output : null;
   const added = call.diffs.reduce((sum, each) => sum + each.diff.added, 0);
   const removed = call.diffs.reduce((sum, each) => sum + each.diff.removed, 0);
-  const foldable = call.raw !== null || call.truncated;
+  const toggle = () => {
+    onToggle(row.key);
+  };
   return (
     <div>
       <div className={txCall}>
@@ -811,16 +813,22 @@ function ToolRow({
           {failed ? "✗" : "●"}
         </span>
         <span
-          data-testid="tx-tool-name"
-          className={`${txName} ${failed ? "text-error" : CALL_INK[kind]}`}
+          data-testid="tx-call-line"
+          className="flex min-w-0 flex-1 cursor-pointer items-baseline gap-2"
+          onClick={lineClick(toggle)}
         >
-          <Hi text={call.name} q={q} />
-        </span>
-        {call.arg === null ? null : (
-          <span data-testid="tx-tool-arg" className={txArg} title={call.arg}>
-            <Hi text={call.arg} q={q} />
+          <span
+            data-testid="tx-tool-name"
+            className={`${txName} ${failed ? "text-error" : CALL_INK[kind]}`}
+          >
+            <Hi text={call.name} q={q} />
           </span>
-        )}
+          {call.arg === null ? null : (
+            <span data-testid="tx-tool-arg" className={txArg} title={call.arg}>
+              <Hi text={call.arg} q={q} />
+            </span>
+          )}
+        </span>
         <span className={txChips}>
           <SubagentChip row={row} />
           {call.diffs.length > 0 ? (
@@ -834,9 +842,9 @@ function ToolRow({
               {formatDuration(call.durationMs, locale)}
             </span>
           )}
-          {diff === null && lines.length > 1 ? (
+          {call.diffs.length === 0 && lines > 1 ? (
             <span className={failed ? CHIP.err : CHIP.plain}>
-              {t("lines", { count: formatCount(lines.length, locale) })}
+              {t("lines", { count: formatCount(lines, locale) })}
             </span>
           ) : null}
           {call.parked !== null ? (
@@ -856,27 +864,38 @@ function ToolRow({
               place={place}
             />
           ))}
-          {foldable ? (
-            <button
-              type="button"
-              className={txFold}
-              aria-expanded={open}
-              aria-label={open ? t("hideCall") : t("showCall")}
-              onClick={() => {
-                onToggle(row.key);
-              }}
-            >
-              {open ? "⏶" : "⋯"}
-            </button>
-          ) : null}
+          <Fold
+            open={open}
+            label={open ? t("hideCall") : t("showCall")}
+            closedGlyph="⋯"
+            onToggle={toggle}
+          />
         </span>
       </div>
-      {open && foldable ? (
+      {open ? (
         <div data-testid="tx-call-fold">
           {call.raw === null ? null : (
-            <pre className={txArgs}>
+            <pre data-testid="tx-args" className={txArgs}>
               <Hi text={call.raw} q={q} />
             </pre>
+          )}
+          {call.diffs.map((change, index) => (
+            <DiffBlock
+              key={`${change.path}-${String(index)}`}
+              change={change}
+              q={q}
+            />
+          ))}
+          {output === null ? null : (
+            <pre
+              data-testid="tx-out"
+              className={`${txOut} ${failed ? "text-error" : "text-muted-foreground"}`}
+            >
+              <Hi text={output} q={q} />
+            </pre>
+          )}
+          {call.parked === null ? null : (
+            <div className={`${txSub} ml-5`}>{t("parkedNote")}</div>
           )}
           <div className={`${txSub} ml-5`}>
             <FrameChip frame={call.frame} place={place}>
@@ -886,34 +905,6 @@ function ToolRow({
           </div>
         </div>
       ) : null}
-      {call.diffs.map((change, index) => (
-        <DiffBlock
-          key={`${change.path}-${String(index)}`}
-          change={change}
-          open={open}
-          q={q}
-        />
-      ))}
-      {diff === null && lines.length > 0 ? (
-        <>
-          <pre
-            data-testid="tx-out"
-            className={`${txOut} ${failed ? "text-error" : "text-muted-foreground"}`}
-          >
-            <Hi text={shown.join("\n")} q={q} />
-          </pre>
-          <MoreLines
-            hidden={lines.length - shown.length}
-            open={open && lines.length > OUTPUT_BUDGET}
-            onToggle={() => {
-              onToggle(row.key);
-            }}
-          />
-        </>
-      ) : null}
-      {call.parked === null ? null : (
-        <div className={`${txSub} ml-5`}>{t("parkedNote")}</div>
-      )}
     </div>
   );
 }
@@ -1004,13 +995,6 @@ function RecallRow({
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const { recall } = row;
-  const shown = open ? recall.items : recall.items.slice(0, RECALL_CAP);
-  const held = recall.items.slice(shown.length);
-  // The tokens held back are summed only when every held item recorded its
-  // count; a partial sum would read as the whole.
-  const heldTokens = held.every((item) => item.tokens !== null)
-    ? held.reduce((sum, item) => sum + (item.tokens ?? 0), 0)
-    : null;
   const heading = [
     t("recall"),
     recall.count === null
@@ -1027,32 +1011,48 @@ function RecallRow({
   ]
     .filter((part): part is string => part !== null)
     .join(" · ");
-  // `color:var(--st-proven); font-weight:600; font-size:12.5px` on the fold.
-  const headingClass =
-    "border-0 bg-transparent p-0 font-mono text-[12.5px] font-semibold text-proven";
+  // `color:var(--st-proven); font-weight:600; font-size:12.5px` on the heading.
+  // Closed, the heading is the whole row; the manifest opens under it.
+  const foldable = recall.items.length > 0;
+  const toggle = () => {
+    onToggle(row.key);
+  };
   return (
     <div data-testid="tx-recall">
-      {recall.items.length > RECALL_CAP ? (
-        <button
-          type="button"
-          className={headingClass}
-          aria-expanded={open}
-          onClick={() => {
-            onToggle(row.key);
-          }}
+      <div className={txCall}>
+        <span
+          data-testid="tx-recall-heading"
+          className={`min-w-0 flex-1 truncate text-[12.5px] font-semibold text-proven ${foldable ? "cursor-pointer" : ""}`}
+          onClick={foldable ? lineClick(toggle) : undefined}
         >
           <span aria-hidden="true">◉ </span>
           {heading}
-        </button>
-      ) : (
-        <span className={headingClass}>
-          <span aria-hidden="true">◉ </span>
-          {heading}
         </span>
-      )}
-      {shown.length === 0 ? null : (
-        <div className={txRecall}>
-          {shown.map((item, index) => (
+        <span className={txChips}>
+          <FrameChip frame={row.frame} place={place}>
+            {t("frame", { type: row.frame.type, seq: row.frame.seq })}
+          </FrameChip>
+          <SafeLink
+            to={routes.run(place.org, place.ws, place.runId, {
+              tab: "context",
+            })}
+            className={CHIP.link}
+          >
+            {t("openContext")}
+          </SafeLink>
+          {foldable ? (
+            <Fold
+              open={open}
+              label={open ? t("hideRecall") : t("showRecall")}
+              closedGlyph="⋯"
+              onToggle={toggle}
+            />
+          ) : null}
+        </span>
+      </div>
+      {open && foldable ? (
+        <div data-testid="tx-recall-items" className={txRecall}>
+          {recall.items.map((item, index) => (
             <RecallItem
               // A manifest names each item once; the index keeps two
               // unnamed items apart.
@@ -1062,36 +1062,7 @@ function RecallRow({
             />
           ))}
         </div>
-      )}
-      {held.length === 0 ? null : (
-        <button
-          type="button"
-          className={`${txFold} ml-5`}
-          aria-expanded={false}
-          onClick={() => {
-            onToggle(row.key);
-          }}
-        >
-          <span aria-hidden="true">⋯ </span>
-          {heldTokens === null
-            ? t("recallMore", { count: formatCount(held.length, locale) })
-            : t("recallMoreTokens", {
-                count: formatCount(held.length, locale),
-                tokens: formatCount(heldTokens, locale),
-              })}
-        </button>
-      )}
-      <div className={`${txSub} ml-5`}>
-        <FrameChip frame={row.frame} place={place}>
-          {t("frame", { type: row.frame.type, seq: row.frame.seq })}
-        </FrameChip>
-        <SafeLink
-          to={routes.run(place.org, place.ws, place.runId, { tab: "context" })}
-          className={CHIP.link}
-        >
-          {t("openContext")}
-        </SafeLink>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -1136,7 +1107,7 @@ function SealRow({
   const format = useFormatter();
   return (
     <div className="flex min-w-0 items-baseline gap-2">
-      <span className="font-semibold text-success">
+      <span className="flex-none font-semibold text-success">
         {sealedAt === null
           ? t("stopped")
           : t("sealedAt", {
@@ -1149,8 +1120,8 @@ function SealRow({
             })}
       </span>
       {row.label === null ? null : (
-        <span className="text-dim">
-          <Hi text={row.label} q={q} />
+        <span className="min-w-0 truncate text-dim" title={row.label}>
+          <Hi text={closedLine(row.label)} q={q} />
         </span>
       )}
       <span className={txChips}>
@@ -1170,9 +1141,11 @@ function EventRow({
   place,
 }: Omit<RowProps, "row"> & { row: Extract<FeedRow, { kind: "event" }> }) {
   const t = useTranslations("run.transcript");
-  const lines = row.text?.split("\n") ?? [];
-  const [head] = lines;
-  const foldable = lines.length > 1;
+  const line = row.text === null ? "" : closedLine(row.text);
+  const foldable = line !== "";
+  const toggle = () => {
+    onToggle(row.key);
+  };
   return (
     <div>
       <div className={txCall}>
@@ -1183,15 +1156,20 @@ function EventRow({
           {row.failed ? "✗" : "●"}
         </span>
         <span
-          className={`${txName} ${row.failed ? "text-error" : "text-muted-foreground"}`}
+          className={`flex min-w-0 flex-1 items-baseline gap-2 ${foldable ? "cursor-pointer" : ""}`}
+          onClick={foldable ? lineClick(toggle) : undefined}
         >
-          <Hi text={row.name} q={q} />
-        </span>
-        {head === undefined ? null : (
-          <span className={txArg} title={head}>
-            <Hi text={head} q={q} />
+          <span
+            className={`${txName} ${row.failed ? "text-error" : "text-muted-foreground"}`}
+          >
+            <Hi text={row.name} q={q} />
           </span>
-        )}
+          {foldable ? (
+            <span data-testid="tx-event-line" className={txArg} title={line}>
+              <Hi text={line} q={q} />
+            </span>
+          ) : null}
+        </span>
         <span className={txChips}>
           <SubagentChip row={row} />
           {row.gates.map((gate) => (
@@ -1207,22 +1185,18 @@ function EventRow({
             </FrameChip>
           )}
           {foldable ? (
-            <button
-              type="button"
-              className={txFold}
-              aria-expanded={open}
-              aria-label={open ? t("showLess") : t("showRest")}
-              onClick={() => {
-                onToggle(row.key);
-              }}
-            >
-              {open ? "⏶" : "⋯"}
-            </button>
+            <Fold
+              open={open}
+              label={open ? t("showLess") : t("showFull")}
+              closedGlyph="⋯"
+              onToggle={toggle}
+            />
           ) : null}
         </span>
       </div>
       {open && foldable && row.text !== null ? (
         <pre
+          data-testid="tx-event-text"
           className={`${txOut} ${row.failed ? "text-error" : "text-muted-foreground"}`}
         >
           <Hi text={row.text} q={q} />
@@ -2002,7 +1976,9 @@ function FeedRowView({
 }) {
   switch (row.kind) {
     case "prompt":
-      return <PromptRow row={row} q={q} run={run} />;
+      return (
+        <PromptRow row={row} q={q} open={open} onToggle={onToggle} run={run} />
+      );
     case "text":
       return (
         <TextRow
