@@ -14,14 +14,15 @@
  * capability that moves on or off the agent surface, a gate that is added,
  * dropped or reordered, or a refusal that changes class fails a fixture.
  *
- * What is faked is everything with a store behind it: the kill-switch
- * snapshot, the approval row, the IAM decision, the billing and budget gates,
- * the tool-invocation telemetry and each capability's handler. The fakes log
- * every call, and that log is the `gates` a fixture pins.
+ * What is faked is everything with a store behind it: the emergency-deny
+ * read, the kill-switch gate, the approval row, the IAM decision, the billing
+ * and budget gates, the tool-invocation telemetry and each capability's
+ * handler. The fakes log every call, and that log is the `gates` a fixture
+ * pins.
  *
  * The fixtures are hand-authored in the frame shape the fake replays, not
- * recorded from `stella-serve`. README.md in this folder says how to record
- * one and how to add a turn.
+ * recorded from `stella-serve`. README.md in this folder says how to add a
+ * turn and what recording one from the real binary would take.
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
