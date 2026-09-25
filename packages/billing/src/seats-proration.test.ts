@@ -147,6 +147,8 @@ function makeActiveSubRow(overrides: Partial<Record<string, unknown>> = {}) {
     billingInterval: "month",
     stripePriceId: "price_build_mo",
     status: "active",
+    // The row version the seat-change key carries (#2976).
+    updatedAt: new Date(1_700_000_000_000),
     ...overrides,
   };
 }
@@ -361,7 +363,51 @@ describe("setSubscriptionSeats — direction-aware proration", () => {
     ];
     expect(callArgs[1].prorationBehavior).toBe("always_invoice");
     expect(callArgs[1].seats).toBe(5);
-    expect(callArgs[1].idempotencyKey).toBe("seats:sub_test:5");
+    expect(callArgs[1].idempotencyKey).toBe(
+      "seats:sub_test:3->5@1700000000000",
+    );
+  });
+
+  it("keys A->B->A->B apart with no request id, so no change is replayed (#2976)", async () => {
+    // The only production caller passes no request id. Each applied change
+    // re-syncs the row and moves `updatedAt`, which the key carries.
+    const t0 = 1_700_000_000_000;
+    const steps: Array<[prior: number, next: number, version: number]> = [
+      [5, 8, t0],
+      [8, 5, t0 + 5_000],
+      [5, 8, t0 + 11_000],
+      [8, 5, t0 + 17_000],
+    ];
+    for (const [prior, next, version] of steps) {
+      subscriptionsFindFirstMock.mockResolvedValueOnce(
+        makeActiveSubRow({ seatCount: prior, updatedAt: new Date(version) }),
+      );
+      await setSubscriptionSeats("org-001", next);
+    }
+
+    const keys = setSubscriptionSeatsMock.mock.calls.map(
+      (c) => (c as [string, { idempotencyKey: string }])[1].idempotencyKey,
+    );
+    expect(keys).toEqual([
+      `seats:sub_test:5->8@${t0}`,
+      `seats:sub_test:8->5@${t0 + 5_000}`,
+      `seats:sub_test:5->8@${t0 + 11_000}`,
+      `seats:sub_test:8->5@${t0 + 17_000}`,
+    ]);
+    expect(new Set(keys).size).toBe(4);
+  });
+
+  it("gives a double submit read off one row the same key", async () => {
+    subscriptionsFindFirstMock.mockResolvedValue(
+      makeActiveSubRow({ seatCount: 5 }),
+    );
+    await setSubscriptionSeats("org-001", 8);
+    await setSubscriptionSeats("org-001", 8);
+
+    const keys = setSubscriptionSeatsMock.mock.calls.map(
+      (c) => (c as [string, { idempotencyKey: string }])[1].idempotencyKey,
+    );
+    expect(keys[0]).toBe(keys[1]);
   });
 
   it("decrease — passes prorationBehavior create_prorations", async () => {

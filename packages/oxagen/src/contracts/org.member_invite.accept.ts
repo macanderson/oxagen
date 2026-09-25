@@ -21,6 +21,7 @@ export const orgMemberInviteAccept = registerCapability({
     category: "organization",
   },
   sensitivity: "medium",
+  mutates: true,
   // The invitee (authenticated as themselves) can accept their own invite.
   // defaultEffect allow on Member covers the case after they're provisioned;
   // but at accept-time they have no principal yet — the handler trusts that

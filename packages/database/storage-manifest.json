@@ -880,6 +880,7 @@
       "name": "get_agent",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -1063,6 +1064,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "get_conversation",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1264,6 +1275,7 @@
       "name": "get_nav_counts",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1460,6 +1472,7 @@
       "name": "get_run",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1480,6 +1493,7 @@
       "name": "get_run_cost",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1598,6 +1612,7 @@
       "name": "get_spend",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1620,6 +1635,7 @@
       "name": "get_spend_drill",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1894,6 +1910,7 @@
       "name": "list_agents",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1924,6 +1941,7 @@
       "name": "list_approvals",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2330,6 +2348,7 @@
       "name": "list_recent_runs",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2384,6 +2403,7 @@
       "name": "list_runs",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2981,7 +3001,6 @@
       "name": "resolve_approval",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2992,7 +3011,6 @@
       "name": "resolve_mcp_consent",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -4090,7 +4108,7 @@
       "writes": []
     }
   ],
-  "contentHash": "5eec96dbd037b4920a6e9860923fa286a7ebde0ddd1b32a695ac85862c9933c6",
+  "contentHash": "cef601806444e51e654e41db0a82950b6efa9976a973a06e1ea87538e0a0de31",
   "domains": [
     {
       "name": "agent",
@@ -6079,7 +6097,7 @@
       },
       "name": "EntityNode",
       "store": "neo4j",
-      "tenantScoped": false
+      "tenantScoped": true
     },
     {
       "columns": [
@@ -8203,6 +8221,12 @@
         },
         {
           "name": "risk_level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "kind",
           "nullable": false,
           "primaryKey": false,
           "type": "text"
@@ -12397,6 +12421,12 @@
         },
         {
           "name": "code_binding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "history_summary",
           "nullable": true,
           "primaryKey": false,
           "type": "jsonb"

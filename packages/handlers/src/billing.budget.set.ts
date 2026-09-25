@@ -41,7 +41,7 @@ export const billingBudgetSetHandler: CapabilityHandler<
   const workspaceId = input.scope === "workspace" ? ctx.workspaceId : null;
 
   // Read the current ceiling first so the audit row can carry previous → new.
-  const previous = await getSpendBudget({ workspaceId });
+  const previous = await getSpendBudget({ orgId: ctx.orgId, workspaceId });
 
   await setSpendBudget({
     orgId: ctx.orgId,
@@ -91,7 +91,7 @@ export const billingBudgetSetHandler: CapabilityHandler<
   invalidateSpendBudgetScope({ orgId: ctx.orgId });
 
   // Re-read the saved scope's live status (fresh spend) for the panel.
-  const statuses = await getSpendBudgetStatuses();
+  const statuses = await getSpendBudgetStatuses({ orgId: ctx.orgId });
   const saved = statuses.find((s) => s.budget.scope === input.scope);
   if (!saved) {
     throw new Error(

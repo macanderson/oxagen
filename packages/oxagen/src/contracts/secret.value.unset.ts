@@ -8,10 +8,14 @@ export const secretValueUnset = registerCapability({
     "Remove a secret's per-environment override so it falls back to the key's default value.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "medium", category: "secret" },
+  // Rated as high as set_secret_value. Removing an override changes the value
+  // the environment resolves, and the handler records it as the same
+  // `secret.value_changed` event.
+  agent: { requiresApproval: true, riskLevel: "high", category: "secret" },
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({

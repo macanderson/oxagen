@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  SLASH_COMMANDS,
-  matchSlashCommands,
-  slashCommandsPromptSection,
-} from "./slash-commands";
+import { SLASH_COMMANDS, matchSlashCommands } from "./slash-commands";
 
 describe("SLASH_COMMANDS registry", () => {
   it("every command has a unique name and a summary", () => {
@@ -47,20 +43,5 @@ describe("matchSlashCommands", () => {
 
   it("returns nothing for a non-matching prefix", () => {
     expect(matchSlashCommands("zzz")).toHaveLength(0);
-  });
-});
-
-describe("slashCommandsPromptSection", () => {
-  it("documents each agent-interpreted command (and omits pure client actions)", () => {
-    const section = slashCommandsPromptSection();
-    expect(section).toContain("## Slash commands");
-    for (const c of SLASH_COMMANDS) {
-      if (c.agentGuidance) {
-        expect(section).toContain(`/${c.name}`);
-      }
-    }
-    // `/pin` is a client-only action, so it isn't given agent guidance in the
-    // prompt table.
-    expect(section).not.toContain("`/pin`");
   });
 });

@@ -46,6 +46,11 @@
  * validation. Treat a failing vector as a merge blocker, never as a test to
  * update.
  */
+import {
+  STEERING_MANIFEST_SCHEMA,
+  steeringForceSchema,
+  steeringItemKindSchema,
+} from "@oxagen/tacho";
 import { z } from "zod";
 import {
   canonicalJson,
@@ -262,6 +267,10 @@ const contextFramesSelectedSchema = z
  * steering that changes how the agent behaves, which the record has to name
  * or a reader cannot tell what the model was told. The digest identifies the
  * exact text; the text itself rides the frame's body, never this payload.
+ *
+ * No producer writes this type since the in-app agent's steering went through
+ * the assembler (`steering.manifest` below, #4158). It stays registered so
+ * the runs sealed before that change still validate.
  */
 const contextInstructionsAppliedSchema = z
   .object({
@@ -273,6 +282,79 @@ const contextInstructionsAppliedSchema = z
     budget_chars: countSchema,
     /** Set when the outcome is `refused`; why the prompt carries none. */
     reason_code: reasonCodeSchema.optional(),
+  })
+  .strict();
+
+/**
+ * A summary of the conversation older than the turn's verbatim window,
+ * carried in the turn's context in place of those messages (#4171). The
+ * in-app agent writes one when a thread outgrows its history window, so a
+ * reader of the run can tell the model saw a summary and not the messages
+ * themselves. The digest identifies the exact summary; its text rides the
+ * frame's body, never this payload.
+ *
+ * `applied` means the turn carried a summary that covers every message older
+ * than the window. `stale` means a new summary could not be written in time,
+ * so the turn carried the previous one and the messages between it and the
+ * window were left out. `unavailable` means there was no summary to carry and
+ * the turn ran on the window alone.
+ */
+const contextHistorySummarizedSchema = z
+  .object({
+    /** Which history was summarised, e.g. `conversation_history`. */
+    provider: shortLabelSchema,
+    outcome: z.enum(["applied", "stale", "unavailable"]),
+    /** Set when a summary reached the turn. */
+    summary_digest: sha256DigestSchema.optional(),
+    summary_chars: countSchema.optional(),
+    /** Messages the carried summary stands in for. */
+    covered_message_count: countSchema,
+    /** Messages the turn carried word for word. */
+    window_message_count: countSchema,
+    /** True when this turn wrote the summary it carried. */
+    regenerated: z.boolean(),
+    /** Set when the outcome is not `applied`: why the summary is old or gone. */
+    reason_code: reasonCodeSchema.optional(),
+  })
+  .strict();
+
+/**
+ * What the steering assembler (`@oxagen/steering-assembler`, ADR-093) put in
+ * front of the model, and what it cut. The in-app agent writes one before the
+ * engine is asked anything. A wrapped agent's host seals a frame of the same
+ * kind into its own chain, so a reader asks one question of both kinds of
+ * run.
+ *
+ * The payload is the manifest's summary. The manifest itself, one item per
+ * candidate with its outcome and the reason for a cut, rides the frame's
+ * body, and `manifest_digest` commits the chain to it, so a body that was
+ * redacted or not retained can still be checked against the record.
+ */
+const steeringManifestRecordedSchema = z
+  .object({
+    schema: z.literal(STEERING_MANIFEST_SCHEMA),
+    /** The forces this injection point delivers; the rest are cut for tier. */
+    delivers: z.array(steeringForceSchema).max(4),
+    budget_tokens: countSchema,
+    spent_tokens: countSchema,
+    included: countSchema,
+    cut: countSchema,
+    /** Digest of the text the model read; null when nothing was included. */
+    text_digest: sha256DigestSchema.nullable(),
+    /** Digest of the manifest's canonical JSON, the frame's body. */
+    manifest_digest: sha256DigestSchema,
+    /** The workspace instructions that were a candidate, by digest. */
+    instructions_digest: sha256DigestSchema.optional(),
+    /**
+     * Source families whose read failed, so the turn ran without their
+     * items. Absent when every source answered: "the registry was
+     * unreachable" must not read as "the workspace published nothing".
+     */
+    unavailable_kinds: z
+      .array(steeringItemKindSchema)
+      .min(1)
+      .max(7)
+      .optional(),
   })
   .strict();
 
@@ -389,24 +471,64 @@ const modelEngineCallStartedSchema = z
   .strict();
 
 /**
+ * An approval's public id (`apr_…`), as `idMixin("apr")` mints it: lowercase
+ * Crockford base32. This is the id Fleet and the Run page show an approval
+ * by, so a receipt that names one can be joined to the card a person decides.
+ */
+const approvalPublicIdSchema = z
+  .string()
+  .regex(/^apr_[0-9a-z]{1,64}$/, "expected an approval public id (apr_…)");
+
+/**
+ * How the host answered one engine tool call. `denied` is a gate or a person
+ * refusing it. `parked` is a call that did not run because it waits on a
+ * person's approval: the engine is told `refused_by_policy`, since its error
+ * vocabulary has no wait, but the record says what happened.
+ *
+ * Adding `parked` leaves every sealed receipt valid: a sealed payload never
+ * named it, and its digest is over the bytes it was written with.
+ */
+export const TOOL_ENGINE_CALL_OUTCOMES = [
+  "completed",
+  "failed",
+  "denied",
+  "cancelled",
+  "parked",
+] as const;
+export type ToolEngineCallOutcome = (typeof TOOL_ENGINE_CALL_OUTCOMES)[number];
+
+/**
  * A tool call the host answered for the in-app agent's engine (`tool_request`
  * frame with a `seq`): the tool's model-facing name, how it ended and the
  * digests of what went in and came out. `search_tools` and `load_tools`, the
  * two belt meta-tools of MC spec §6.6, are recorded through this same type,
  * so the record shows what the model looked for and what it was shown.
+ *
+ * A `parked` receipt may name the approval it waits on in
+ * `approval_public_id`. No other outcome may carry one: a completed or
+ * refused call waits on nothing.
  */
 const toolEngineCallCompletedSchema = z
   .object({
     engine_seq: countSchema,
     tool_call_id: shortLabelSchema,
     tool_name: shortLabelSchema,
-    outcome: z.enum(["completed", "failed", "denied", "cancelled"]),
+    outcome: z.enum(TOOL_ENGINE_CALL_OUTCOMES),
+    approval_public_id: approvalPublicIdSchema.optional(),
     input_digest: sha256DigestSchema,
     output_digest: sha256DigestSchema.optional(),
     error_digest: sha256DigestSchema.optional(),
     duration_ms: countSchema,
   })
-  .strict();
+  .strict()
+  .refine(
+    (payload) =>
+      payload.approval_public_id === undefined || payload.outcome === "parked",
+    {
+      message: "only a parked call names the approval it waits on",
+      path: ["approval_public_id"],
+    },
+  );
 
 /**
  * Write-ahead intention: the host is about to invoke a tool. Appended BEFORE
@@ -482,6 +604,38 @@ const verificationCompletedSchema = z
       "unavailable",
       "inconclusive",
     ]),
+  })
+  .strict();
+
+/**
+ * One round's verdict from the engine's goal verifier (`goal_verdict` on the
+ * `stella-serve` event stream, `stella-serve/src/goal.rs`). A goal-shaped
+ * turn of the in-app agent works in rounds, and after each one a verifier on
+ * a different model tier from the worker judges the transcript against the
+ * goal. This is that judgment as a receipt: which round, whether the goal was
+ * met, and the digests of the goal and of the verifier's reasoning. The goal
+ * and the reasoning ride the frame's body.
+ *
+ * It is not `verification.completed`. That type is one verification of the
+ * attempt; a goal turn can have several rounds, each with its own verdict,
+ * and only the last can say `met`. A round whose verdict is `met: false` is
+ * the verifier sending the worker back, not a failed verification.
+ */
+const verificationGoalVerdictSchema = z
+  .object({
+    /** The engine frame's `seq`, what a replay asks the engine for. */
+    engine_seq: countSchema,
+    /** 1-based; the engine clamps a goal run at 32 rounds. */
+    round: z.number().int().min(1).max(32),
+    met: z.boolean(),
+    goal_digest: sha256DigestSchema,
+    reasoning_digest: sha256DigestSchema,
+    /**
+     * What the verifier's calls cost this round, in integer micro-dollars
+     * (`canonicalJson` refuses a float). Capped at $1,000, far past any
+     * verifier call, so a corrupt figure is refused rather than recorded.
+     */
+    verifier_cost_usd_micros: z.number().int().min(0).max(1_000_000_000),
   })
   .strict();
 
@@ -580,6 +734,16 @@ export const EVENT_TYPE_REGISTRY = {
     contentClass: "context_selection",
     schema: contextInstructionsAppliedSchema,
   },
+  "context.history_summarized": {
+    stage: "context",
+    contentClass: "context_selection",
+    schema: contextHistorySummarizedSchema,
+  },
+  "steering.manifest": {
+    stage: "context",
+    contentClass: "context_selection",
+    schema: steeringManifestRecordedSchema,
+  },
   "model.call_completed": {
     stage: "model",
     contentClass: "model_call",
@@ -628,6 +792,11 @@ export const EVENT_TYPE_REGISTRY = {
     stage: "verification",
     contentClass: "verification_receipt",
     schema: verificationCompletedSchema,
+  },
+  "verification.goal_verdict": {
+    stage: "verification",
+    contentClass: "verification_receipt",
+    schema: verificationGoalVerdictSchema,
   },
   "provider_publish.commit_created": {
     stage: "provider_publish",

@@ -171,7 +171,7 @@
                 "anyOf": [
                   {
                     "type": "integer",
-                    "minimum": 0
+                    "exclusiveMinimum": 0
                   },
                   {
                     "type": "null"
@@ -301,6 +301,9 @@
               },
               "publishedAt": {
                 "type": "string"
+              },
+              "searchable": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -338,7 +341,7 @@
               "anyOf": [
                 {
                   "type": "integer",
-                  "minimum": 0
+                  "exclusiveMinimum": 0
                 },
                 {
                   "type": "null"
@@ -468,6 +471,9 @@
             },
             "publishedAt": {
               "type": "string"
+            },
+            "searchable": {
+              "type": "boolean"
             }
           },
           "required": [

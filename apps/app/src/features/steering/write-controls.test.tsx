@@ -306,6 +306,10 @@ describe("the sentence for each refusal", () => {
       "GitHub has not said when, so nothing was published. Merge again",
     ],
     [
+      { reason: "conflict", code: "merged_outside_oxagen" },
+      "so Oxagen published nothing. Running the checks again cannot fix it.",
+    ],
+    [
       { reason: "conflict", code: "already_merged" },
       "This proposal changed after the page loaded.",
     ],

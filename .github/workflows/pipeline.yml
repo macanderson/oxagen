@@ -314,7 +314,14 @@ jobs:
     # run cold — run 28684991013 passed every unit test but hit the 30m
     # ceiling mid-coverage. Warm (remote-cached) runs stay minutes-fast; the
     # ceiling only matters on whole-repo-affected pushes.
-    timeout-minutes: 60
+    #
+    # 90m (was 60m): a push to main is always whole-repo, and the warm run
+    # for eace53664 already took 46 of the 60 minutes. With the Turbo remote
+    # cache answering 402 from 2026-09-25 (#4233) every package builds and
+    # tests cold, and the Build step below runs at --concurrency=2 with the
+    # deprecated app on its own. A timeout here fails the gate for code that
+    # is fine and holds every deploy behind it.
+    timeout-minutes: 90
     services:
       postgres:
         image: postgres:16-alpine
@@ -421,7 +428,25 @@ jobs:
           # tools/scripts/check-coverage-gates.mjs (under check:contracts in
           # the checks job) refuses a package with a test:unit script and no
           # test:coverage script, which is what keeps that sentence true.
-          pnpm turbo run build --concurrency=3 $TURBO_FILTER
+          #
+          # --concurrency=2, and apps/app_deprecated built on its own (#4233):
+          # apps/app and apps/app_deprecated each run `next build` with a 5GB
+          # V8 heap. At --concurrency=3 turbo can run both at once, and on a
+          # cold cache it does. Four PR runs on 2026-09-25 lost the runner
+          # that way (exit 137, "The runner has received a shutdown signal").
+          # The e2e job's Build step already runs at 2 and leaves the
+          # deprecated app out. Here the deprecated app keeps its one build
+          # gate, but only after everything else has finished, so at most one
+          # 5GB heap is live. It builds only when $TURBO_FILTER selects it.
+          # Its dependencies are in the local turbo cache by then. The dry run
+          # is read into a variable so a turbo or jq error fails this step
+          # rather than skipping the deprecated build unseen.
+          pnpm turbo run build --concurrency=2 $TURBO_FILTER --filter=!@oxagen/app-deprecated
+          selected=$(pnpm exec turbo run build $TURBO_FILTER --dry=json)
+          deprecated=$(printf '%s' "$selected" | jq '.packages | index("@oxagen/app-deprecated") != null')
+          if [ "$deprecated" = true ]; then
+            pnpm turbo run build --concurrency=1 --filter=@oxagen/app-deprecated
+          fi
 
       - name: Coverage thresholds
         run: |
@@ -793,7 +818,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - name: Package the production platform seed
         run: |
           pnpm install --frozen-lockfile
@@ -984,7 +1009,7 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Install
         run: pnpm install --frozen-lockfile

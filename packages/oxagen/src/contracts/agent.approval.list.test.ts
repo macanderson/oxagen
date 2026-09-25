@@ -26,7 +26,12 @@ describe("list_approvals contract", () => {
       workspace: { Owner: "allow", Member: "allow" },
     });
     expect(agentApprovalList.layers).not.toContain("e2e");
-    expect(agentApprovalList.surfaces).toEqual(["api", "mcp"]);
+    expect(agentApprovalList.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(agentApprovalList.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "approval",
+    });
   });
 
   it("keeps resolve_approval as the governed action it pairs with", () => {

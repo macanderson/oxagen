@@ -16,6 +16,7 @@ export const environmentDelete = registerCapability({
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({ environmentId: z.string().min(1) }),

@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - run: pnpm install --frozen-lockfile --filter @oxagen/tacho...
       # GitHub's runner user is unprivileged and in the docker group, which
       # is what the launcher requires.
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - run: pnpm install --frozen-lockfile --filter @oxagen/tacho...
 
       - name: Build the contained image

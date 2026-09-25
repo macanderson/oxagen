@@ -5,6 +5,9 @@ const client = {
   signIn: { email: vi.fn(), social: vi.fn(), sso: vi.fn() },
   signUp: { email: vi.fn() },
   twoFactor: { verifyTotp: vi.fn(), verifyBackupCode: vi.fn() },
+  requestPasswordReset: vi.fn(),
+  sendVerificationEmail: vi.fn(),
+  resetPassword: vi.fn(),
 };
 vi.mock("@oxagen/auth/client", () => ({ authClient: client }));
 
@@ -18,6 +21,9 @@ beforeEach(() => {
   client.signUp.email.mockReset();
   client.twoFactor.verifyTotp.mockReset();
   client.twoFactor.verifyBackupCode.mockReset();
+  client.requestPasswordReset.mockReset();
+  client.sendVerificationEmail.mockReset();
+  client.resetPassword.mockReset();
   sessionStorage.clear();
 });
 
@@ -196,6 +202,141 @@ describe("liveSignInSocial", () => {
         callbackURL: routes.root(),
       }),
     ).resolves.toEqual({ ok: false, outcome: "oauthCancelled" });
+  });
+});
+
+// #4042: these three calls go to Better Auth over HTTP, where its rate
+// limiter runs. A 429 from it is the one failure the forms show; every other
+// failure of a mail request reads as sent, so the reply never says whether an
+// account exists.
+const LIMITED = {
+  data: null,
+  error: { code: "TOO_MANY_REQUESTS", status: 429, message: "Too many" },
+};
+
+describe("liveRequestPasswordReset", () => {
+  it("asks Better Auth for a reset link to /reset-password", async () => {
+    client.requestPasswordReset.mockResolvedValue({
+      data: { status: true },
+      error: null,
+    });
+    await expect(
+      auth.liveRequestPasswordReset({ email: "m@acme.example" }),
+    ).resolves.toEqual({ ok: true });
+    expect(client.requestPasswordReset).toHaveBeenCalledWith({
+      email: "m@acme.example",
+      redirectTo: "/reset-password",
+    });
+  });
+
+  it("reports the rate limit when Better Auth refuses with 429", async () => {
+    client.requestPasswordReset.mockResolvedValue(LIMITED);
+    await expect(
+      auth.liveRequestPasswordReset({ email: "m@acme.example" }),
+    ).resolves.toEqual({ ok: false, outcome: "rateLimited" });
+  });
+
+  it("answers sent for any other failure, so no address is revealed (negative)", async () => {
+    client.requestPasswordReset.mockResolvedValue({
+      data: null,
+      error: { code: "USER_NOT_FOUND", status: 400 },
+    });
+    await expect(
+      auth.liveRequestPasswordReset({ email: "nobody@acme.example" }),
+    ).resolves.toEqual({ ok: true });
+    client.requestPasswordReset.mockResolvedValue({
+      data: null,
+      error: { status: 500 },
+    });
+    await expect(
+      auth.liveRequestPasswordReset({ email: "m@acme.example" }),
+    ).resolves.toEqual({ ok: true });
+  });
+});
+
+describe("liveResendVerification", () => {
+  it("sends a verification link that lands on a safe next, or on the new-organization step", async () => {
+    client.sendVerificationEmail.mockResolvedValue({
+      data: { status: true },
+      error: null,
+    });
+    await expect(
+      auth.liveResendVerification({
+        email: "m@acme.example",
+        next: "/acme/ws",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(client.sendVerificationEmail).toHaveBeenLastCalledWith({
+      email: "m@acme.example",
+      callbackURL: "/acme/ws",
+    });
+    await auth.liveResendVerification({
+      email: "m@acme.example",
+      next: "https://evil.example/x",
+    });
+    expect(client.sendVerificationEmail).toHaveBeenLastCalledWith({
+      email: "m@acme.example",
+      callbackURL: routes.newOrganization(),
+    });
+  });
+
+  it("reports the rate limit when Better Auth refuses with 429", async () => {
+    client.sendVerificationEmail.mockResolvedValue(LIMITED);
+    await expect(
+      auth.liveResendVerification({ email: "m@acme.example" }),
+    ).resolves.toEqual({ ok: false, outcome: "rateLimited" });
+  });
+
+  it("answers sent for any other failure (negative)", async () => {
+    client.sendVerificationEmail.mockResolvedValue({
+      data: null,
+      error: { status: 400, code: "USER_NOT_FOUND" },
+    });
+    await expect(
+      auth.liveResendVerification({ email: "nobody@acme.example" }),
+    ).resolves.toEqual({ ok: true });
+  });
+});
+
+describe("liveResetPassword", () => {
+  const input = { token: "rst_live", newPassword: "Rq7!mesa-lattice" };
+
+  it("sets the password through Better Auth", async () => {
+    client.resetPassword.mockResolvedValue({
+      data: { status: true },
+      error: null,
+    });
+    await expect(auth.liveResetPassword(input)).resolves.toEqual({
+      ok: true,
+    });
+    expect(client.resetPassword).toHaveBeenCalledWith(input);
+  });
+
+  it("reports the rate limit when Better Auth refuses with 429", async () => {
+    client.resetPassword.mockResolvedValue(LIMITED);
+    await expect(auth.liveResetPassword(input)).resolves.toEqual({
+      ok: false,
+      outcome: "rateLimited",
+    });
+  });
+
+  it("maps a spent token to linkExpired and an unrecognised failure to unavailable", async () => {
+    client.resetPassword.mockResolvedValueOnce({
+      data: null,
+      error: { code: "INVALID_TOKEN", status: 400 },
+    });
+    await expect(auth.liveResetPassword(input)).resolves.toEqual({
+      ok: false,
+      outcome: "linkExpired",
+    });
+    client.resetPassword.mockResolvedValueOnce({
+      data: null,
+      error: { status: 400, message: "mystery" },
+    });
+    await expect(auth.liveResetPassword(input)).resolves.toEqual({
+      ok: false,
+      outcome: "unavailable",
+    });
   });
 });
 

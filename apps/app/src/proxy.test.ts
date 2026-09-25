@@ -85,6 +85,22 @@ describe("proxy", () => {
     expect(target.searchParams.get("next")).toBeNull();
   });
 
+  it("lifts an OAuth error on / even when a stale session cookie is present (#3409)", () => {
+    const res = proxy(
+      request("/?error=access_denied", "better-auth.session_token=stale"),
+    );
+    expect(res.status).toBe(307);
+    const target = new URL(res.headers.get("location") ?? "");
+    expect(target.pathname).toBe("/login");
+    expect(target.searchParams.get("error")).toBe("access_denied");
+    expect(target.searchParams.get("next")).toBeNull();
+  });
+
+  it("passes / with a session cookie and an empty error through (negative)", () => {
+    const res = proxy(request("/?error=", "better-auth.session_token=abc"));
+    expect(res.headers.get("location")).toBeNull();
+  });
+
   it("accepts a Better Auth session cookie, secure prefix included", () => {
     expect(
       proxy(request("/acme", "better-auth.session_token=abc")).headers.get(

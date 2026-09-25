@@ -93,6 +93,7 @@ const HANDLER_REASONS = [
   ["skill_config_missing", "missingVersion"],
   ["skill_catalog_invalid", "catalogInvalid"],
   ["skill_catalog_too_large", "catalogTooLarge"],
+  ["skill_catalog_unsafe", "catalogUnsafe"],
 ] as const;
 
 // Every classification that falls through to the handler-reason switch.

@@ -298,12 +298,22 @@ const ROLE_PAGE = 200;
  * plain Error with `agent_role_not_assignable` in `code`, which the kernel seam
  * cannot classify, so the dialog would name it `kernel_failure` and the person
  * would learn nothing.
+ *
+ * Only an org Owner or Admin may read it. The catalogue names every role's
+ * scope and the organization's enforcement tier, which only the people who
+ * assign roles need. The picker is offered to those two roles alone. This
+ * check holds the same line before the kernel call (#3525), and the
+ * `list_iam_roles` handler asserts its contract's roles (Owner, Admin,
+ * Compliance) on every surface as the gate that decides.
  */
 export async function readAssignableRoles(
   org: string,
   ws: string,
 ): Promise<ActionResult<RoleOffer>> {
   const ctx = await requireViewer(org, ws);
+  if (ctx.orgRole !== "owner" && ctx.orgRole !== "admin") {
+    return { ok: false, reason: "denied", code: "org_role_required" };
+  }
   const read = await kernelRead(ctx, {
     contract: iamRoleList,
     input: { includeGrants: false, limit: ROLE_PAGE, offset: 0 },

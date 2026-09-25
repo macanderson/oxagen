@@ -283,9 +283,39 @@ export class AttemptNotWritableError extends Error {
 }
 
 /**
+ * Why a run refused a new attempt. `cancelled` and `paused` are operator
+ * controls on the run; `attempts_exhausted` is the run's pinned
+ * `max_attempts` ceiling. Each is a state a caller meets in ordinary use, not a
+ * store fault.
+ */
+export type RunNotWritableReason =
+  | "cancelled"
+  | "paused"
+  | "attempts_exhausted";
+
+/**
+ * `createAttempt` found the run in a state that takes no new attempt. The check
+ * runs under the run's row lock, so a caller that read the run as writable can
+ * still lose the race to a cancel or a pause. Surfaces map this to a 409, not
+ * a 500.
+ */
+export class RunNotWritableError extends Error {
+  readonly code = "run_not_writable";
+  readonly runId: string;
+  readonly reason: RunNotWritableReason;
+
+  constructor(runId: string, reason: RunNotWritableReason, detail: string) {
+    super(`Run ${runId} takes no new attempt: ${detail}`);
+    this.name = "RunNotWritableError";
+    this.runId = runId;
+    this.reason = reason;
+  }
+}
+
+/**
  * A ledger write could not proceed because trusted state was missing or
  * self-inconsistent (an absent run row, a hole in an attempt's durable event
- * log, an attempt past the run's pinned `max_attempts`). Always fail-closed:
+ * log, a preserved legacy run row). Always fail-closed:
  * the record is not written.
  */
 export class RunStoreStateError extends Error {
@@ -404,6 +434,13 @@ export function isAttemptNotWritableError(
     err instanceof AttemptNotWritableError ||
     hasCode(err, "run_attempt_not_writable")
   );
+}
+
+/** Structural type guard. See isRunSpecValidationError for the rationale. */
+export function isRunNotWritableError(
+  err: unknown,
+): err is RunNotWritableError {
+  return err instanceof RunNotWritableError || hasCode(err, "run_not_writable");
 }
 
 /** Structural type guard — see isRunSpecValidationError for the rationale. */

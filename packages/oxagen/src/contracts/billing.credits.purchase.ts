@@ -53,6 +53,9 @@ export const billingCreditsPurchase = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "billing" },
   sensitivity: "high",
+  // Opens a Stripe Checkout session, and creates the org's Stripe customer
+  // first when it has none.
+  mutates: true,
   // INV-27 (ADR-052 exclusion 2, ARCHITECTURE.md §1.5, §3.9 the second meter):
   // topping up is never refused for lack of governed action units. Without the
   // flag a credit top-up is itself a governed action, so a prepaid org whose
