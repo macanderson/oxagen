@@ -50,7 +50,7 @@ Kong solves the same shape for APIs and MCP. Its control plane is a service. Its
 - Custody moves off the laptop. `credentials.json`, the local HMAC signing key, and the local model proxy go away for brokered harnesses. The local relay stays only for stdio servers that need the machine.
 - One platform variable, `AUTH_TOKEN_ENCRYPTION_KEY`, encrypts every workspace's MCP credentials today (`packages/plugins/src/credentials/kms.ts:4-5`). That becomes one KMS key per organization.
 - The in-app agent is not a customer agent and is outside this record. #4310 removes the workspace toolbelt and rules from it.
-- Stella reads MCP servers only from each workspace's `.stella/mcp.toml` and from plugins. The gateway entries reach that file through a pull request. Stella skips it in an untrusted checkout, and an admin cannot pin Stella's server set until it gains a managed server list (`macanderson/stella#6564`).
+- Stella reads MCP servers only from each workspace's `.stella/mcp.toml` and from plugins. The gateway entries reach that file through a pull request. Stella skips it in an untrusted checkout, and it has no managed server list an admin could pin.
 
 ## ADR-094 objections
 
