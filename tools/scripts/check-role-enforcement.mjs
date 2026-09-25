@@ -230,6 +230,14 @@ export function declaredCapabilityName(src) {
  * Capability name → handler module path, from the two registries: the
  * `registerHandler` calls in `register.ts` and the `LOADERS` entries in the
  * agent package's `index.ts`. Either source may be null.
+ *
+ * @param {{
+ *   registerSrc?: string | null,
+ *   registerDir?: string,
+ *   agentIndexSrc?: string | null,
+ *   agentDir?: string,
+ * }} [sources]
+ * @returns {Map<string, string>}
  */
 export function handlerModules({
   registerSrc = null,
