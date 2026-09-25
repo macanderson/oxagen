@@ -23,6 +23,8 @@ vi.mock("./tenant", () => ({
 }));
 
 import {
+  EVAL_ITEM_RESULTS_MAX_ROWS,
+  EVAL_ITEM_TEXT_MAX_CHARS,
   insertEvalItemResults,
   selectEvalItemResults,
   selectEvalRunCostRollup,
@@ -101,7 +103,31 @@ describe("selectEvalItemResults", () => {
     };
     expect(call.query).toContain("FROM eval_item_results");
     expect(call.query).toContain("run_id = {runId:String}");
-    expect(call.params).toEqual({ runId: "run-1" });
+    expect(call.params).toEqual({
+      runId: "run-1",
+      limit: EVAL_ITEM_RESULTS_MAX_ROWS,
+      textMax: EVAL_ITEM_TEXT_MAX_CHARS,
+    });
+  });
+
+  it("caps the row count and the length of the free-text columns", async () => {
+    // A run writes one row per dataset item, and output and rationale hold
+    // text of any length. Without these caps one read returned the whole run.
+    await selectEvalItemResults("run-1");
+    const call = chSelect.mock.calls[0]![0] as {
+      query: string;
+      params?: Record<string, unknown>;
+    };
+    expect(call.query).toMatch(/LIMIT \{limit:UInt32\}\s*$/);
+    expect(call.query).toContain(
+      "substringUTF8(output, 1, {textMax:UInt32}) AS output",
+    );
+    expect(call.query).toContain(
+      "substringUTF8(rationale, 1, {textMax:UInt32}) AS rationale",
+    );
+    expect(call.query).not.toMatch(/,\s*output,|,\s*rationale\s*\n/);
+    expect(call.params?.limit).toBe(1000);
+    expect(call.params?.textMax).toBe(8000);
   });
 
   it("returns an empty array when the run has no results", async () => {

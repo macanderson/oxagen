@@ -57,8 +57,16 @@ const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
  * reaching the port stops the picker's actions from copying eight mappers into
  * a feature lane.
  *
- * The module resolves its own viewer first (INV-19, actions.test.ts) and
- * answers in `ActionResult`. The list is exact: a second module needs its own
+ * `assistant-thread-actions` reads the assistant's thread when the flyout
+ * opens (#4163). The workspace layout could read it as it renders, but that
+ * layout renders on every full load, every first visit to a workspace and
+ * every refresh a governed write ends with, so the thread would be read on
+ * page loads where the flyout never opens. The `conversations` port maps the
+ * record and checks that every id is a public id (INV-11), which the action
+ * would otherwise have to copy.
+ *
+ * Each module resolves its own viewer first (INV-19, actions.test.ts) and
+ * answers in `ActionResult`. The list is exact: another module needs its own
  * reason here and in ADR-167.
  *
  * `engine-actions` reads `shell.assistantEngine` when the assistant flyout
@@ -72,6 +80,7 @@ const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
 const PORT_READING_ACTIONS: readonly string[] = [
   "features/shell/choice-actions",
   "features/shell/engine-actions",
+  "features/shell/assistant-thread-actions",
 ];
 
 const isVocabulary = (target: string): boolean =>

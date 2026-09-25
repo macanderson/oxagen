@@ -22,7 +22,7 @@
 //
 // NOT tenant-scoped: a counter keys on workspace OR org OR client IP, so there
 // is no single (org_id, workspace_id) it belongs to. Access is exclusively
-// through the audited withSystemDb bypass, and the migration gives the table a
+// through the withSystemDb bypass, and the migration gives the table a
 // bypass-only RLS policy — a tenant query can never read another org's counters.
 
 import {

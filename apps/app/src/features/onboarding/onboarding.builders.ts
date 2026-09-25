@@ -130,6 +130,7 @@ export function onboardingSource(reads: Reads): {
       list: refuse("runtimes.list"),
       agents: refuse("runtimes.agents"),
     },
+    conversations: { latest: refuse("conversations.latest") },
     onboarding: {
       state: (...args: Parameters<DataSource["onboarding"]["state"]>) => {
         calls.state.push(args);

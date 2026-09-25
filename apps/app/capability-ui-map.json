@@ -394,6 +394,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_conversation": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "The shell's assistant flyout reads the viewer's latest thread in the workspace when it opens, so a reload or a workspace rename shows the same thread, and New thread starts a fresh one (features/shell/assistant-threads.ts, features/shell/assistant-thread-actions.ts)",
+      "testid": "assistant-new-thread",
+      "proof": "apps/app/src/features/shell/assistant-flyout.threads.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
+    },
     "get_data_plane": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
