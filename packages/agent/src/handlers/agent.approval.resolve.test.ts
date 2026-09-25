@@ -1169,6 +1169,7 @@ describe("resolve_approval: a run and the approval it raised", () => {
       approvalId: PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      execution: null,
     });
     expect(captured.set).toMatchObject({
       resolution: "approved",
