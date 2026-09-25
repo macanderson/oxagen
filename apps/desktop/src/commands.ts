@@ -194,16 +194,20 @@ export function pendingChange(
  * `tacho enroll` for a machine that is not enrolled yet. `--org` never
  * travels without `--workspace`: tacho would fill the workspace from the
  * CLI's config.json, which names the previously signed-in org's workspace.
+ * No agent is picked for the operator: no harness is the default (ADR-101),
+ * and an empty pick would reach tacho as `--harness ""`.
  */
 export function enrollArgs(picks: Picks): string[] {
   if (picks.org !== null && picks.workspace === null)
     throw new Error(`pick a workspace in ${picks.org} first`);
+  if (picks.harnesses === null || picks.harnesses.length === 0)
+    throw new Error("pick at least one agent to register");
   return [
     "enroll",
     ...(picks.org ? ["--org", picks.org] : []),
     ...(picks.workspace ? ["--workspace", picks.workspace] : []),
     "--harness",
-    (picks.harnesses ?? ["claude-code"]).join(","),
+    picks.harnesses.join(","),
   ];
 }
 

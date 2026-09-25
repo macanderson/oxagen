@@ -310,8 +310,15 @@ function harnessRow(
         : `hooks missing: ${presence.missing.join(", ")}`,
     );
   }
+  // Both credential lines say where the credential goes on a model call,
+  // and a call only reaches the proxy when the harness's base URL names it
+  // and no managed file overrides it. Anything else (not ours, shadowed, or
+  // not reported) is a route the harness does not take, and ADR-095 claims
+  // no model proxy until traffic is routed.
+  const baseUrl = tacho?.modelBaseUrls?.find((b) => b.harness === h);
+  const routed = baseUrl?.ours === true && !baseUrl.shadowed;
   const credential = tacho?.modelCredentials?.find((c) => c.harness === h);
-  if (credential) details.push(credentialDetail(credential));
+  if (credential && routed) details.push(credentialDetail(credential));
 
   if (!wrapped) {
     return {

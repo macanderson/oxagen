@@ -1,10 +1,11 @@
 /**
  * The Oxagen app, one pane on paper.
  *
- * First run (no enrollment on this machine): a five-step wizard — sign in,
+ * First run (no enrollment on this machine): a five-step wizard. Sign in,
  * pick the org and workspace the operator can see, register the agents the
- * machine has (Claude Code, Codex, Cursor; detected, all ticked by default), the
- * outcome, then a recorded first run and the door to the workspace in Oxagen.
+ * machine has (Claude Code, Codex, Cursor, Stella and Claude Desktop; detected,
+ * all ticked by default), the outcome, then a recorded first run and the door
+ * to the workspace in Oxagen.
  *
  * Every later run (the machine is enrolled): the management pane — what the
  * host reports to, one de-register per wrapped agent, change of workspace,

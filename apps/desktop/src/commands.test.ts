@@ -48,7 +48,17 @@ describe("sidecar argv", () => {
   });
 
   it("enrolls with the picked org, workspace, and harness list", () => {
-    expect(enrollArgs(NONE)).toEqual(["enroll", "--harness", "claude-code"]);
+    expect(enrollArgs({ ...NONE, harnesses: ["cursor", "stella"] })).toEqual([
+      "enroll",
+      "--harness",
+      "cursor,stella",
+    ]);
+    // No agent is registered on the operator's behalf (ADR-101), and an
+    // empty pick never reaches tacho as `--harness ""`.
+    expect(() => enrollArgs(NONE)).toThrow(/pick at least one agent/);
+    expect(() => enrollArgs({ ...NONE, harnesses: [] })).toThrow(
+      /pick at least one agent/,
+    );
     // An org without a workspace never reaches tacho: it would fill the
     // workspace from config.json, the previous org's.
     expect(() =>

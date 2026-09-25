@@ -312,7 +312,10 @@ if (has("--enroll") && status?.enrolled) {
   );
 }
 
-if (has("--cleanup") && status?.enrolled) {
+// Whether or not status says enrolled: an enroll that failed part way can
+// leave hooks on the machine with no host.json, and `unenroll` strips those
+// too. Skipping it left the test machine half installed.
+if (has("--cleanup")) {
   const un = run("tacho", ["unenroll", "--purge"]);
   record(
     "tacho unenroll --purge",
