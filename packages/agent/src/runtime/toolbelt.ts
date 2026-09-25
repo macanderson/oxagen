@@ -76,6 +76,39 @@ export interface CapabilityBeltEnv {
    * failed (every plugin-claimed contract is then denied, fail closed).
    */
   entitledPluginIds: ReadonlySet<string> | "unavailable";
+  /**
+   * The person's IAM role names, read once per materialization (#4194).
+   * Absent for an agent run, whose delegation ceiling already bounds it by
+   * the invoking person's roles, and for a caller that reads none, such as
+   * `get_agent_toolbelt`. `"unavailable"` when the read failed: every
+   * capability is then out of the belt (fail closed).
+   */
+  callerRoles?: CallerRoles | "unavailable";
+}
+
+/** The org-wide and workspace role names a person holds. */
+export interface CallerRoles {
+  org: readonly string[];
+  workspace: readonly string[];
+}
+
+/**
+ * Whether the contract's `defaultRoles` grants `"allow"` to any role the
+ * caller holds: an org role on the org side, or a workspace role on the
+ * workspace side. This is the question the handler's role gate asks
+ * (`assertOrgRole` over the contract's allowed roles), so the belt offers a
+ * tool exactly when the handler would run it for this person.
+ */
+export function contractGrantsCaller(
+  cap: RegistryCapability,
+  roles: CallerRoles,
+): boolean {
+  const grants = cap.defaultRoles;
+  if (!grants) return false;
+  return (
+    roles.org.some((role) => grants.org[role] === "allow") ||
+    roles.workspace.some((role) => grants.workspace[role] === "allow")
+  );
 }
 
 const RISK_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2 };
@@ -122,6 +155,27 @@ export function decideCapabilityForBelt(
     (RISK_ORDER[riskLevel] ?? 0) > (RISK_ORDER[env.riskCeiling] ?? 0)
   )
     return deny("risk_ceiling");
+
+  // Role (#4194): a person's turn is offered only what their roles are
+  // granted. The kernel's IAM check allows every capability for a
+  // non-enterprise org, and each handler asks for the contract's roles
+  // itself, so a tool outside them is one the person cannot run. Leaving it
+  // on the belt offers stella a call that can only be refused. An agent run
+  // keeps the delegation ceiling below instead.
+  // A structural view with no role map has nothing to compare. Every
+  // registered contract declares one, because `CapabilityDeclaration`
+  // requires `defaultRoles`.
+  if (
+    env.agentRun === null &&
+    env.callerRoles !== undefined &&
+    cap.defaultRoles !== undefined
+  ) {
+    if (
+      env.callerRoles === "unavailable" ||
+      !contractGrantsCaller(cap, env.callerRoles)
+    )
+      return deny("role");
+  }
 
   let outcome: BeltOutcome = "allow";
   let rule = "contract_default";

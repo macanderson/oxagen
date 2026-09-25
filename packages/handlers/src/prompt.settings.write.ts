@@ -4,6 +4,7 @@ import { promptSettingsWrite } from "@oxagen/oxagen/contracts/prompt.settings.wr
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq, sql } from "drizzle-orm";
 import { resolveOrgTier, requireTier } from "@oxagen/billing";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -27,6 +28,9 @@ export const promptSettingsWriteHandler: CapabilityHandler<
     );
     throw new Error("prompt.settings.write requires a workspace context");
   }
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(promptSettingsWrite, ctx);
 
   const hasOverrides =
     input.overrides !== undefined &&

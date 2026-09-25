@@ -5,6 +5,7 @@ import {
   capabilityRegistryGet,
   type CapabilityFieldSpec,
 } from "@oxagen/oxagen/contracts/capability.registry.get";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { projectCapabilitySummary } from "./capability.registry.list";
 import { logger } from "./logger";
 
@@ -112,6 +113,9 @@ export function describeSchemaFields(
 export const capabilityRegistryGetHandler: CapabilityHandler<
   typeof capabilityRegistryGet
 > = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(capabilityRegistryGet, ctx);
   const cap = getCapability(input.name);
   if (!cap) {
     logger.info(

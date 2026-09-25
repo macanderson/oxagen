@@ -101,7 +101,7 @@ The current assistant flyout and the retained API chat transport are separate su
 ## Runtime checks that matter
 
 - Register handlers before calling `invoke()`. A missing handler throws `CapabilityError` with code `no_handler`. Handler registration does not install IAM, billing, or entitlement gates. Bootstrap those at the surface entry point.
-- `apps/app/instrumentation.ts` boots the gates. `packages/iam/src/check-iam.ts` fast-paths non-enterprise human principals, so a handler that must enforce an organization role still calls `assertOrgRole`.
+- `apps/app/instrumentation.ts` boots the gates. `packages/iam/src/check-iam.ts` fast-paths non-enterprise human principals, so a handler that must enforce an organization role still calls `assertOrgRole`, or `assertContractRole`, which reads the contract's own `defaultRoles`. stella's tool belt leaves off a capability the person's roles do not grant, but the handler check is the enforcement.
 - Route LLM calls through `@oxagen/ai` and resolve models with `modelIdOf()`. Do not import generation functions directly from `ai`, use `ai/rsc`, or hard-code provider slugs.
 - Resolve organization stores through `resolveDataPlane()` in `@oxagen/tenancy` (ADR-042). Platform tables and `withSystemDb` stay on the shared plane. Read `DATABASE_URL`, `NEO4J_URI`, and `CLICKHOUSE_URL` only inside their store clients.
 - Use `withTenantDb` or `withSystemDb` for Postgres. Raw `db()` is banned. Confirm scope and principal at the data boundary.

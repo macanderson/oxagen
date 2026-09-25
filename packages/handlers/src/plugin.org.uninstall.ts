@@ -3,6 +3,8 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertNoActiveKillSwitch } from "@oxagen/iam/kill-switch-guard";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { pluginOrgUninstall } from "@oxagen/oxagen/contracts/plugin.org.uninstall";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
@@ -11,6 +13,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       "[plugin.org.uninstall] workspaceId is required (scoped capability)",
     );
   }
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(pluginOrgUninstall, ctx);
   const { orgListingId } = input as { orgListingId: string };
 
   try {

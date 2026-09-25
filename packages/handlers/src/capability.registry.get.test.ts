@@ -6,6 +6,12 @@
  * accountability projection, and the clean null not-found path.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// The handler's role gate (#4194) runs for real against a role fixture. The
+// default caller is an org Owner; a case that needs another sets roleGate.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
 import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({
@@ -23,6 +29,7 @@ import {
   describeSchemaFields,
 } from "./capability.registry.get";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -135,5 +142,20 @@ describe("capabilityRegistryGetHandler", () => {
   it("yields [] for a non-object schema instead of throwing", () => {
     expect(describeSchemaFields(z.string())).toEqual([]);
     expect(describeSchemaFields(z.array(z.string()))).toEqual([]);
+  });
+});
+
+// Witness for the role gate (#4194). The kernel's IAM check allows every
+// capability for a non-enterprise org, so without the handler's
+// assertContractRole call this Member would get through and the test fails.
+describe("get_capability_registry role gate", () => {
+  beforeEach(() => resetRoleGate());
+
+  it("refuses a workspace Member as forbidden and reads no tenant data", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      capabilityRegistryGetHandler({ name: "get_capability_registry" }, CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.pluginForContract).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceBudgetPolicyWrite } from "@oxagen/oxagen/contracts/workspace.budget_policy.write";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 type BudgetMode = "grace" | "prompt" | "enforce";
@@ -27,6 +28,9 @@ export const workspaceBudgetPolicyWriteHandler: CapabilityHandler<
       "workspace.budget.policy.write requires a workspace context",
     );
   }
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(workspaceBudgetPolicyWrite, ctx);
 
   const workspaceId = ctx.workspaceId;
 

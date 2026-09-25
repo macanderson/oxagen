@@ -140,6 +140,7 @@ import {
 } from "./assistant-engine-notice";
 import { AssistantMarkdown } from "./assistant-markdown";
 import { AssistantParkedApprovals } from "./assistant-parked-approvals";
+import { AssistantReplyCost } from "./assistant-reply-cost";
 import {
   askAssistantStream,
   type AssistantRefusal,
@@ -1160,6 +1161,13 @@ export function AssistantFlyout({
                         entry.runId
                       )}
                     </p>
+                    {/* What the run cost, from its record (#4167). */}
+                    {shownScope === null ? null : (
+                      <AssistantReplyCost
+                        scope={shownScope}
+                        runId={entry.runId}
+                      />
+                    )}
                     {entry.parked.length === 0 ? null : (
                       <p
                         data-testid="assistant-parked"

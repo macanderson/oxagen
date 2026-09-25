@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { pluginOrgInstall } from "@oxagen/oxagen/contracts/plugin.org.install";
 import type { CapabilityContext } from "@oxagen/oxagen/types";
 import { getOxagenPlugin } from "@oxagen/oxagen/plugins";
 import {
@@ -13,6 +14,7 @@ import {
 import type { AuthKind } from "@oxagen/plugins/registry";
 import { detectOAuthProtected } from "@oxagen/plugins";
 import { upsertCapabilityInstall } from "./capability-install";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 export interface InstallOneInput {
@@ -299,6 +301,9 @@ export async function installOne(
 }
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(pluginOrgInstall, ctx);
   const typed = input as InstallOneInput;
   let installed: InstallOneResult;
   try {

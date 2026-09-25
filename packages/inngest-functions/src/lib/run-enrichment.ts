@@ -8,9 +8,25 @@ import { digestBytes } from "@oxagen/tacho";
 import type { RunScope } from "./run-record";
 
 export const ENRICHMENT_CHUNK_CHARS = 24_000;
+/** One step holds the whole text and each chunk costs a summary call, so a run's text stops here (#4202). */
+export const ENRICHMENT_TEXT_CEILING_CHARS = 40 * ENRICHMENT_CHUNK_CHARS;
+const CEILING_NOTE =
+  "\n[The transcript stops here. It reached its length limit, and later frames were not read. Do not infer what they contain.]\n";
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
-/** Every retained frame participates, including prompts and messages outside tool steps. */
+/**
+ * Every retained frame participates, including prompts and messages outside
+ * tool steps, until the text reaches {@link ENRICHMENT_TEXT_CEILING_CHARS}.
+ * Past that point no body is read and no frame is added. The text ends with a
+ * note that it stops, `frames` counts the frames the text covers, and
+ * `truncated` counts the frames left out.
+ *
+ * The fingerprint covers only what the text covers, plus a fixed mark when
+ * the ceiling was reached. A run that keeps recording past the ceiling feeds
+ * the model the same text, so its digest stays put and the job does not pay
+ * for the same account again. A run under the ceiling fingerprints exactly as
+ * it did before the ceiling existed.
+ */
 export async function collectRunText(
   scope: RunScope,
   frames: readonly RunFrame[],
@@ -18,6 +34,9 @@ export async function collectRunText(
 ) {
   const chunks: string[] = [];
   let buffer = "";
+  let written = 0;
+  let stopped = false;
+  let truncated = 0;
   let retained = 0;
   let missing = 0;
   let unavailable = 0;
@@ -26,7 +45,7 @@ export async function collectRunText(
   // The run's own first prompt, kept for the fallback title. A subagent's
   // prompt is written by the parent agent, not by the operator, so it is skipped.
   let firstPrompt: string | null = null;
-  function append(text: string) {
+  function chunk(text: string) {
     while (text.length > 0) {
       const room = ENRICHMENT_CHUNK_CHARS - buffer.length;
       buffer += text.slice(0, room);
@@ -37,7 +56,20 @@ export async function collectRunText(
       }
     }
   }
+  function append(text: string) {
+    const room = ENRICHMENT_TEXT_CEILING_CHARS - written;
+    if (text.length > room) stopped = true;
+    const kept = text.slice(0, Math.max(0, room));
+    written += kept.length;
+    chunk(kept);
+  }
+  const full = () => written >= ENRICHMENT_TEXT_CEILING_CHARS;
   for (const frame of frames) {
+    if (full()) {
+      stopped = true;
+      truncated += 1;
+      continue;
+    }
     fingerprint.update(
       JSON.stringify([
         frame.seq,
@@ -50,6 +82,11 @@ export async function collectRunText(
     const { bodyRef, bodyDigest } = frame.body;
     if (bodyRef === null || bodyDigest === null) {
       if (bodyDigest !== null) missing += 1;
+      continue;
+    }
+    // The frame's own line filled the text, so its body is never read.
+    if (full()) {
+      stopped = true;
       continue;
     }
     try {
@@ -75,13 +112,18 @@ export async function collectRunText(
       append("[Body unavailable; do not infer its contents.]\n");
     }
   }
+  if (stopped) {
+    fingerprint.update("ceiling");
+    chunk(CEILING_NOTE);
+  }
   if (buffer.length) chunks.push(buffer);
   return {
     chunks,
     retained,
     missing,
     unavailable,
-    frames: frames.length,
+    frames: frames.length - truncated,
+    truncated,
     digest: fingerprint.digest("hex"),
     firstPrompt,
   };

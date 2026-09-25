@@ -47,25 +47,27 @@ function rowsFor(
   throw new Error("the role gate read a table the double does not answer");
 }
 
-/** A `withTenantDb` implementation answering the role gate from `roles`. */
-export function roleTenantDb(roles: RoleFixture) {
-  return (fn: (tx: unknown) => unknown) =>
-    Promise.resolve(
-      fn({
-        select: () => ({
-          from: (table: unknown) => {
-            let where: unknown;
-            const chain = {
-              innerJoin: () => chain,
-              where: (cond: unknown) => {
-                where = cond;
-                return chain;
-              },
-              limit: () => Promise.resolve(rowsFor(table, where, roles)),
-            };
+/** A transaction double answering the role gate's reads from `roles`. */
+export function roleTx(roles: RoleFixture) {
+  return {
+    select: () => ({
+      from: (table: unknown) => {
+        let where: unknown;
+        const chain = {
+          innerJoin: () => chain,
+          where: (cond: unknown) => {
+            where = cond;
             return chain;
           },
-        }),
-      }),
-    );
+          limit: () => Promise.resolve(rowsFor(table, where, roles)),
+        };
+        return chain;
+      },
+    }),
+  };
+}
+
+/** A `withTenantDb` implementation answering the role gate from `roles`. */
+export function roleTenantDb(roles: RoleFixture) {
+  return (fn: (tx: unknown) => unknown) => Promise.resolve(fn(roleTx(roles)));
 }

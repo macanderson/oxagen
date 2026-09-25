@@ -291,6 +291,15 @@
       "close": "Close stella",
       "thinking": "Working…",
       "recordedAs": "recorded as",
+      "cost": {
+        "label": "cost",
+        "pending": "pending",
+        "notRecorded": "not recorded",
+        "unread": "could not be read",
+        "basisNotRecorded": "basis not recorded",
+        "estimate": "estimate",
+        "incomplete": "some calls unpriced"
+      },
       "stopped": "Stopped",
       "parked": "{count, plural, one {This turn parked # write for a person to decide} other {This turn parked # writes for a person to decide}}. Approve or deny each one here or on Fleet.",
       "parkedCard": {

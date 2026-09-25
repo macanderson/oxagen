@@ -252,6 +252,7 @@ export async function resumeApprovedCall(
           allowlist: new Set([cap.name]),
           riskCeiling: payload.riskLevel,
           serverAllowlist: new Set(),
+          callerRoles: { org: orgRoles, workspace: workspaceRoles },
         });
         if (!Object.values(tools.nameMap).includes(cap.name)) {
           // The listing leaves out a tool a kill switch names (toolbelt.ts,
@@ -279,6 +280,10 @@ export async function resumeApprovedCall(
           instruction: `Resume approval ${row.publicId} from run ${row.runPublicId ?? "unrecorded"}`,
           maxSteps: 1,
           toolAllowlist: [cap.name],
+          // The message belongs to the turn that parked the call, and that
+          // turn's run is priced on it. Naming it here too would price the
+          // same calls twice (#4167).
+          originMessageId: null,
         });
         await withTenantDb((tx) =>
           tx

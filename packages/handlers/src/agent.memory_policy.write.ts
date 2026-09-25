@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { agentMemoryPolicyWrite } from "@oxagen/oxagen/contracts/agent.memory_policy.write";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 export const agentMemoryPolicyWriteHandler: CapabilityHandler<
@@ -14,6 +15,9 @@ export const agentMemoryPolicyWriteHandler: CapabilityHandler<
     );
     throw new Error("agent.memory.policy.write requires a workspace context");
   }
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(agentMemoryPolicyWrite, ctx);
 
   // UPSERT the policy row. We read first so we can return the merged result.
   const existing = await withTenantDb((tx) =>

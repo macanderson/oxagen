@@ -57,7 +57,7 @@ Tool name: `update_environment`
 ## Errors
 
 - `validation_error` — bad input (e.g. empty `name`/`slug`).
-- `unauthorized` — caller is not org Owner/Admin.
+- `forbidden` (`org_role_required`): the caller is not an org Owner or Admin.
 - `not_found` — no environment with that id in the active workspace.
 - `conflict` — new `slug` collides with another environment, or attempting to
   deactivate the current default environment.
