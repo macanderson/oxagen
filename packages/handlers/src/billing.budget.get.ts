@@ -6,7 +6,7 @@ import { toSpendBudgetDto } from "./lib/spend-budget-dto";
 
 /**
  * get_spend_budget — the active scope's configured spend ceilings with their
- * live burn. Runs inside the kernel-established tenant scope; getScopeBudgets'
+ * live burn. Runs inside the kernel-established tenant scope; listSpendBudgets'
  * RLS (`workspace_nullable`) returns the org-default row AND this workspace's
  * own row, so the panel sees both scopes in one read. Spend is read FRESH
  * (getSpendBudgetStatuses bypasses the gate's short-TTL cache) so the panel is
@@ -15,7 +15,7 @@ import { toSpendBudgetDto } from "./lib/spend-budget-dto";
  */
 export const billingBudgetGetHandler: CapabilityHandler<
   typeof billingBudgetGet
-> = async () => {
-  const statuses = await getSpendBudgetStatuses();
+> = async (_input, ctx) => {
+  const statuses = await getSpendBudgetStatuses({ orgId: ctx.orgId });
   return { budgets: statuses.map(toSpendBudgetDto) };
 };

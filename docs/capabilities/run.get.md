@@ -8,8 +8,11 @@ The Run page's header and one page of its frames (`apps/app/ARCHITECTURE.md` §1
 
 ## Surface
 
+**Surfaces:** api, mcp, agent
+
 - API: `POST /v1/:org_slug/:workspace_slug/runs/get`
 - MCP: `get_run`
+- Agent: one of the in-app assistant's seven pins, offered on every turn (`INTERACTIVE_AGENT_CAPABILITIES`). Low risk, no approval.
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `get_run`
 - Not billed (`noBillingGate: true`): an SSE poll is not a governed action (ADR-052 exclusion 2). IAM default-deny; medium sensitivity.

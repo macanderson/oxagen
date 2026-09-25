@@ -27,7 +27,7 @@ const selectChain = {
 const writeChain = {
   values: vi.fn(() => writeChain),
   set: vi.fn(() => writeChain),
-  where: vi.fn(() => writeChain),
+  where: vi.fn((_predicate?: unknown) => writeChain),
   returning: vi.fn(),
 };
 
@@ -58,10 +58,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 const {
   getScopeBudgets,
+  getSpendBudget,
   listSpendBudgets,
   setSpendBudget,
   claimBudgetThreshold,
 } = await import("./spend-budget-store");
+
+/** Render a captured where() predicate to SQL text and params. */
+function renderWhere(predicate: unknown) {
+  return new PgDialect().sqlToQuery(predicate as import("drizzle-orm").SQL);
+}
 
 function row(over: Partial<Record<string, unknown>> = {}) {
   return {
@@ -89,7 +95,10 @@ describe("getScopeBudgets — the enforcement read", () => {
   it("filters to enabled ceilings only", async () => {
     selectChain.where.mockReturnValueOnce([row()]);
 
-    const budgets = await getScopeBudgets();
+    const budgets = await getScopeBudgets({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
 
     expect(selectChain.where).toHaveBeenCalledTimes(1);
     expect(budgets).toHaveLength(1);
@@ -99,34 +108,35 @@ describe("getScopeBudgets — the enforcement read", () => {
 
 describe("listSpendBudgets — the panel read", () => {
   it("applies no enabled filter, so a disabled ceiling is still returned", async () => {
-    selectChain.from.mockReturnValueOnce([row({ enabled: false })]);
+    selectChain.where.mockReturnValueOnce([row({ enabled: false })]);
 
-    const budgets = await listSpendBudgets();
+    const budgets = await listSpendBudgets({ orgId: "org-1" });
 
-    // No .where() — a disabled ceiling must survive to reach the panel that
-    // is the only surface capable of re-enabling it.
-    expect(selectChain.where).not.toHaveBeenCalled();
+    // The only predicate is the org: a disabled ceiling must survive to reach
+    // the panel that is the only surface capable of re-enabling it.
+    const query = renderWhere(selectChain.where.mock.calls[0]?.[0]);
+    expect(query.sql).not.toContain('"enabled"');
     expect(budgets).toHaveLength(1);
     expect(budgets[0]?.enabled).toBe(false);
   });
 
   it("orders the org-level ceiling before the workspace ceiling", async () => {
-    selectChain.from.mockReturnValueOnce([
+    selectChain.where.mockReturnValueOnce([
       row({ id: "bdg-ws", publicId: "sb_ws", workspaceId: "ws-1" }),
       row({ id: "bdg-org", publicId: "sb_org", workspaceId: null }),
     ]);
 
-    const budgets = await listSpendBudgets();
+    const budgets = await listSpendBudgets({ orgId: "org-1" });
 
     expect(budgets.map((b) => b.scope)).toEqual(["org", "workspace"]);
   });
 
   it("maps a null workspaceId to org scope and a set one to workspace scope", async () => {
-    selectChain.from.mockReturnValueOnce([
+    selectChain.where.mockReturnValueOnce([
       row({ workspaceId: "ws-9", limitMicros: "125000000" }),
     ]);
 
-    const budgets = await listSpendBudgets();
+    const budgets = await listSpendBudgets({ orgId: "org-1" });
 
     expect(budgets[0]).toMatchObject({
       scope: "workspace",
@@ -185,6 +195,7 @@ describe("budget notification write scope", () => {
       expect(
         await claimBudgetThreshold({
           budgetId: "bdg-1",
+          orgId: "org-1",
           workspaceId,
           threshold: 80,
           periodStart: new Date(),
@@ -194,4 +205,73 @@ describe("budget notification write scope", () => {
       expect(withTenantDb).toHaveBeenCalledTimes(workspaceId === null ? 0 : 1);
     },
   );
+});
+
+/**
+ * Every read and write names its organization in the WHERE clause. RLS is the
+ * primary boundary; the predicate keeps a query inside its org on a connection
+ * that runs without RLS (#2976).
+ */
+describe("explicit org predicate on every query", () => {
+  function expectOrgPredicate(predicate: unknown, orgId: string) {
+    const query = renderWhere(predicate);
+    expect(query.sql).toContain('"org_id" =');
+    expect(query.params).toContain(orgId);
+  }
+
+  it("getScopeBudgets filters by org in a workspace scope", async () => {
+    selectChain.where.mockReturnValueOnce([]);
+    await getScopeBudgets({ orgId: "org-a", workspaceId: "ws-1" });
+    expectOrgPredicate(selectChain.where.mock.calls[0]?.[0], "org-a");
+  });
+
+  it("listSpendBudgets filters by org", async () => {
+    selectChain.where.mockReturnValueOnce([]);
+    await listSpendBudgets({ orgId: "org-a" });
+    expectOrgPredicate(selectChain.where.mock.calls[0]?.[0], "org-a");
+  });
+
+  it.each([null, "ws-1"])(
+    "getSpendBudget filters by org and scope: %s",
+    async (workspaceId) => {
+      selectChain.limit.mockResolvedValueOnce([]);
+      await getSpendBudget({ orgId: "org-a", workspaceId });
+      const query = renderWhere(selectChain.where.mock.calls[0]?.[0]);
+      expect(query.sql).toContain('"org_id" =');
+      expect(query.params).toContain("org-a");
+      if (workspaceId === null) {
+        expect(query.sql).toContain('"workspace_id" is null');
+      } else {
+        expect(query.params).toContain(workspaceId);
+      }
+    },
+  );
+
+  it("setSpendBudget filters its existing-row read and its update by org", async () => {
+    selectChain.limit.mockResolvedValueOnce([row()]);
+    writeChain.returning.mockResolvedValueOnce([row()]);
+    await setSpendBudget({
+      orgId: "org-a",
+      workspaceId: null,
+      enabled: true,
+      period: "monthly",
+      windowDays: null,
+      limitMicros: 500n,
+      actorUserId: null,
+    });
+    expectOrgPredicate(selectChain.where.mock.calls[0]?.[0], "org-a");
+    expectOrgPredicate(writeChain.where.mock.calls[0]?.[0], "org-a");
+  });
+
+  it("claimBudgetThreshold filters by org", async () => {
+    writeChain.returning.mockResolvedValueOnce([]);
+    await claimBudgetThreshold({
+      budgetId: "bdg-1",
+      orgId: "org-a",
+      workspaceId: null,
+      threshold: 80,
+      periodStart: new Date("2026-07-01T00:00:00Z"),
+    });
+    expectOrgPredicate(writeChain.where.mock.calls[0]?.[0], "org-a");
+  });
 });

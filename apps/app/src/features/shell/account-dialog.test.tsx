@@ -178,7 +178,12 @@ beforeEach(() => {
   readPreferences.mockReset();
   readPreferences.mockResolvedValue({
     ok: true,
-    value: { locale: "en", timezone: "UTC", theme: "system" },
+    value: {
+      locale: "en",
+      timezone: "UTC",
+      theme: "system",
+      enterToSubmit: false,
+    },
   });
   savePreferences.mockReset();
   savePreferences.mockImplementation((_org: string, draft: unknown) =>
@@ -574,7 +579,7 @@ describe("Preferences", () => {
     });
   });
 
-  it("reads the stored preferences on open and writes the three fields on save", async () => {
+  it("reads the stored preferences on open and writes the four fields on save", async () => {
     const { user } = await openDialog("preferences");
     expect(readPreferences).toHaveBeenCalledWith("acme");
     const zone = await screen.findByTestId("account-timezone");
@@ -590,6 +595,7 @@ describe("Preferences", () => {
       locale: "en",
       timezone: "America/Los_Angeles",
       theme: "dark",
+      enterToSubmit: false,
     });
     expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
   });
@@ -609,6 +615,7 @@ describe("Preferences", () => {
       locale: "en",
       timezone: "Europe/London",
       theme: "system",
+      enterToSubmit: false,
     });
     expect(refresh).toHaveBeenCalledTimes(1);
   });
@@ -620,6 +627,7 @@ describe("Preferences", () => {
         locale: "en",
         timezone: shellData().viewer.timeZone,
         theme: "system",
+        enterToSubmit: shellData().viewer.enterToSubmit,
       },
     });
     const { user } = await openDialog("preferences");
@@ -675,6 +683,72 @@ describe("Preferences", () => {
       .map((option) => option.textContent);
     expect(offered).toEqual(["Mars/Olympus", "UTC", ...ENGINE_ZONES]);
     expect(zone).toHaveValue("Mars/Olympus");
+  });
+
+  // enter_to_submit decides what Enter does in the assistant composer, which
+  // the chrome reads on the server (source.ts). Saving a value the page did
+  // not render with re-renders the server tree, so the composer follows it
+  // without a reload. The zone is held at the page's, so the refresh can only
+  // come from this setting.
+  it("writes enter_to_submit on through set_preferences and re-renders the server tree", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: {
+        locale: "en",
+        timezone: shellData().viewer.timeZone,
+        theme: "system",
+        enterToSubmit: false,
+      },
+    });
+    const { user } = await openDialog("preferences");
+    const control = await screen.findByRole("checkbox", {
+      name: "Enter sends a message",
+    });
+    expect(control).not.toBeChecked();
+    expect(control).toHaveAccessibleDescription(
+      "In the stella composer. When this is off, Enter adds a line and Cmd+Enter or Ctrl+Enter sends.",
+    );
+
+    await user.click(control);
+    await user.click(screen.getByTestId("account-preferences-save"));
+
+    expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
+    expect(savePreferences).toHaveBeenCalledWith("acme", {
+      locale: "en",
+      timezone: shellData().viewer.timeZone,
+      theme: "system",
+      enterToSubmit: true,
+    });
+    expect(control).toBeChecked();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a stored enter_to_submit and writes it off as false", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: {
+        locale: "en",
+        timezone: "UTC",
+        theme: "system",
+        enterToSubmit: true,
+      },
+    });
+    const { user } = await openDialog("preferences");
+    const control = await screen.findByRole("checkbox", {
+      name: "Enter sends a message",
+    });
+    expect(control).toBeChecked();
+
+    await user.click(control);
+    await user.click(screen.getByTestId("account-preferences-save"));
+
+    expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
+    expect(savePreferences).toHaveBeenCalledWith("acme", {
+      locale: "en",
+      timezone: "UTC",
+      theme: "system",
+      enterToSubmit: false,
+    });
   });
 
   // The engine's list has no UTC, so offering exactly what it reports would

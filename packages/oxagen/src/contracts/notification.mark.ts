@@ -17,7 +17,17 @@ export const notificationsMark = registerCapability({
   // Marking your own notification read is a settings write, never a governed
   // action (ADR-052 exclusion 2). The write is the record of the mark.
   noBillingGate: true,
+  // Low risk, no approval, the same grade as archive_conversation. The call
+  // changes only the calling person's own notification, and both flags take
+  // false, so the person can undo it. The approval a notice announces stays
+  // in Fleet's queue whatever the notice says.
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "notification",
+  },
   sensitivity: "low",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: {

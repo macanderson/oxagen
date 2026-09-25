@@ -19,6 +19,7 @@ function setup() {
       mergedAt: "2026-09-20T10:00:00.000Z",
       baseRef: "release",
     }),
+    listPathCommits: vi.fn().mockResolvedValue([{ sha: "c".repeat(40) }]),
     listPullRequestFiles: vi
       .fn()
       .mockResolvedValue([{ path: ".oxagen/skills.toml", status: "modified" }]),
@@ -129,7 +130,30 @@ describe("skill configuration publication", () => {
     expect(
       github.getFileContent.mock.calls.map(([input]) => input.ref),
     ).toEqual([sha, current]);
+    expect(
+      github.listPathCommits.mock.calls.map(([input]) => input.ref).sort(),
+    ).toEqual([sha, current].sort());
     expect(store.publish).toHaveBeenCalledOnce();
+  });
+  it("refuses a pull request a later revert superseded with the same bytes", async () => {
+    // PR 1 set the file to A, PR 2 changed it to B, and PR 3 reverted it to A.
+    // The production head holds PR 1's bytes again, but PR 3 is the latest
+    // change to the file, so PR 1 is not the authority to publish.
+    const { service, github, store } = setup();
+    const head = "b".repeat(40);
+    const revert = "d".repeat(40);
+    const pr1Change = "e".repeat(40);
+    github.getBranch.mockResolvedValue({ name: "release", sha: head });
+    github.listPathCommits.mockImplementation(async ({ ref }) =>
+      ref === head ? [{ sha: revert }] : [{ sha: pr1Change }],
+    );
+    await expect(service.publish(scope, 12)).rejects.toMatchObject({
+      reason: "skill_config_superseded",
+    });
+    expect(github.listPathCommits).toHaveBeenCalledWith(
+      expect.objectContaining({ path: ".oxagen/skills.toml", ref: sha }),
+    );
+    expect(store.publish).not.toHaveBeenCalled();
   });
   it.each(["enabled = false", null])(
     "refuses a superseded or removed configuration: %s",

@@ -12,6 +12,7 @@ export const integrationInstall = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "plugin" },
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

@@ -59,6 +59,9 @@ export const agentApprovalResolve = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
+  // Writes the resolution onto the approval row and, on a mandate row that
+  // is denied, releases the reservation.
+  mutates: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "approval" },
   sensitivity: "medium",
   defaultEffect: "deny",

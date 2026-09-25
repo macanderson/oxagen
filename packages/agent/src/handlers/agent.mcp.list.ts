@@ -1,3 +1,4 @@
+import { redactUrlCredentials } from "@oxagen/config/public-url";
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { z } from "zod";
@@ -159,7 +160,11 @@ export async function agentMcpListHandler(
           "transport_type",
           r.transportType,
         ),
-        endpointUrl: r.endpointUrl,
+        // The register guard refuses an address with userinfo, but a row
+        // written before that guard can still hold one. The list is a read
+        // surface, so it never returns the password or key in the clear.
+        // agent.mcp.resolve still reads the raw column for the connection.
+        endpointUrl: redactUrlCredentials(r.endpointUrl),
         healthStatus: narrow(
           mcpServerHealthStatus,
           r.publicId,

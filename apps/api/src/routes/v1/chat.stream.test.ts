@@ -255,6 +255,7 @@ describe("POST chat/stream — the turn on the wire", () => {
           orgSlug: "acme",
           workspaceSlug: "main",
           entityId: null,
+          entityLabel: null,
         },
       },
       CTX,
