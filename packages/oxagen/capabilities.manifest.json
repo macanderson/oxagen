@@ -1356,6 +1356,22 @@
       }
     },
     {
+      "name": "get_assistant_reply",
+      "file": "assistant.reply.get.ts",
+      "domain": "assistant",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
       "name": "export_audit_events",
       "file": "audit.events.export.ts",
       "domain": "audit",

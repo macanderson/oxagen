@@ -149,6 +149,7 @@ import { runRecentList } from "./run.recent.list";
 // sidebar counts and the account preferences.
 import { assistantAsk } from "./assistant.ask";
 import { assistantEngineGet } from "./assistant.engine.get";
+import { assistantReplyGet } from "./assistant.reply.get";
 import { toolsSearch } from "./tools.search";
 import { toolsLoad } from "./tools.load";
 import { shellNavCountsGet } from "./shell.nav_counts.get";
@@ -762,6 +763,7 @@ export {
   runRecentList,
   assistantAsk,
   assistantEngineGet,
+  assistantReplyGet,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
@@ -1165,6 +1167,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runRecentList,
   assistantAsk,
   assistantEngineGet,
+  assistantReplyGet,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,

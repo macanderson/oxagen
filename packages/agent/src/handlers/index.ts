@@ -86,9 +86,11 @@ const LOADERS: Record<string, LoaderEntry> = {
   list_agent_roles: () => import("./agent.role.list"),
   get_agent_role: () => import("./agent.role.get"),
   // The in-app agent on stella-serve (#2968, ADR-053): the turn, the engine
-  // probe, and the two belt meta-tools outside a turn.
+  // probe, the reply a turn left on the record (ADR-XXX), and the two belt
+  // meta-tools outside a turn.
   ask_assistant: () => import("./assistant.ask"),
   get_assistant_engine: () => import("./assistant.engine.get"),
+  get_assistant_reply: () => import("./assistant.reply.get"),
   search_tools: () => import("./tools.search"),
   load_tools: () => import("./tools.load"),
 };

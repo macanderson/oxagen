@@ -80,6 +80,7 @@ import "./contracts/approval_rule.set";
 import "./contracts/asset.upload";
 import "./contracts/assistant.ask";
 import "./contracts/assistant.engine.get";
+import "./contracts/assistant.reply.get";
 import "./contracts/audit.events.export";
 import "./contracts/audit.log.query";
 import "./contracts/auth.cli.authorize";

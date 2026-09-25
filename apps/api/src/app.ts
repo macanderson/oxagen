@@ -45,6 +45,7 @@ import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
 import { chatStreamRoute } from "./routes/v1/chat.stream";
 import { assistantAskRoute } from "./routes/v1/assistant.ask";
 import { assistantEngineGetRoute } from "./routes/v1/assistant.engine.get";
+import { assistantReplyGetRoute } from "./routes/v1/assistant.reply.get";
 import { toolsSearchRoute } from "./routes/v1/tools.search";
 import { toolsLoadRoute } from "./routes/v1/tools.load";
 import { shellNavCountsGetRoute } from "./routes/v1/shell.nav_counts.get";
@@ -851,10 +852,12 @@ orgScoped.route("/billing/evidence/retention", billingEvidenceRetentionRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
-// The shell (#2968): the in-app agent's turn and engine probe, the command
-// menu's search, belt definitions and recent runs, the sidebar counts.
+// The shell (#2968): the in-app agent's turn and engine probe, the reply a
+// dropped stream left on the record (ADR-XXX), the command menu's search,
+// belt definitions and recent runs, the sidebar counts.
 orgScoped.route("/assistant/ask", assistantAskRoute);
 orgScoped.route("/assistant/engine", assistantEngineGetRoute);
+orgScoped.route("/assistant/reply", assistantReplyGetRoute);
 orgScoped.route("/tools/search", toolsSearchRoute);
 orgScoped.route("/tools/load", toolsLoadRoute);
 orgScoped.route("/shell/nav-counts", shellNavCountsGetRoute);
