@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { isHandlerError } from "@oxagen/oxagen";
-import { CapabilityError, invoke } from "@oxagen/oxagen/kernel";
+import {
+  CapabilityError,
+  type CapabilityErrorCode,
+  invoke,
+} from "@oxagen/oxagen/kernel";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -135,6 +139,10 @@ runStreamRoute.get("/", async (c) => {
       }
     } catch (err) {
       // The stream is open, so a failure is a typed event and not a status.
+      // A refusal the person can act on travels with its code and message.
+      // Anything else is a server fault: it is logged here, and the browser
+      // gets `stream_unavailable` with a fixed message, never the kernel's
+      // diagnostics (#3652).
       const code = streamErrorCode(err);
       if (code === undefined) {
         logger.error(
@@ -149,6 +157,8 @@ runStreamRoute.get("/", async (c) => {
               ? err.message
               : "Run stream unavailable",
           code: code ?? "stream_unavailable",
+          // A handler refusal's sub-code, as the error middleware sends it.
+          reason: isHandlerError(err) ? err.reason : undefined,
           cursor: cursor ?? null,
         })}\n\n`,
       );
@@ -174,15 +184,48 @@ runStreamRoute.get("/", async (c) => {
 });
 
 /**
+ * The kernel codes that are a refusal the caller can act on, which are the
+ * ones `middleware/error.ts` answers with a 4xx before the stream is open:
+ * access (`authz_denied`, `surface_denied`, `pending_approval`), a capability
+ * this surface does not have (`unknown_capability`, `no_handler`), and input
+ * the contract refused (`invalid_input`, which is how `get_run` answers a
+ * cursor it did not write). Every other code, `invalid_output` first among
+ * them, is a server fault that middleware answers 500, so mid-stream it is
+ * logged and sent as `stream_unavailable` rather than forwarded (#3652).
+ *
+ * Listed rather than derived because the middleware maps each code in its own
+ * branch; `run.stream.test.ts` holds the two to the same answer.
+ */
+export const CLIENT_FACING_CAPABILITY_CODES: ReadonlySet<CapabilityErrorCode> =
+  new Set<CapabilityErrorCode>([
+    "authz_denied",
+    "surface_denied",
+    "pending_approval",
+    "unknown_capability",
+    "no_handler",
+    "invalid_input",
+  ]);
+
+/**
  * The stable code a client shows for a failure mid-stream: a handler refusal's
- * reason, or a kernel refusal's code. `get_run` answers a stale cursor with the
- * latter (`invalid_input`), which is the failure a resuming client is most
- * likely to hit, so reading only the former would leave exactly that case
- * uncoded.
+ * reason, or a kernel refusal's code when it is one the caller can act on.
+ * `get_run` answers a stale cursor with the latter (`invalid_input`), which is
+ * the failure a resuming client is most likely to hit, so reading only the
+ * former would leave exactly that case uncoded. Undefined means a server
+ * fault, which the caller logs and does not describe.
+ *
+ * A handler's `forbidden` refusal is sent as `forbidden`, not as its reason.
+ * Whatever the reason (`session_required`, `run_token_invalid`), it means the
+ * viewer may no longer read the run, and the client keys that case on the
+ * code. The reason still travels in the event's `reason` field.
  */
 function streamErrorCode(err: unknown): string | undefined {
-  if (isHandlerError(err)) return err.reason;
-  return err instanceof CapabilityError ? err.code : undefined;
+  if (isHandlerError(err))
+    return err.code === "forbidden" ? "forbidden" : err.reason;
+  return err instanceof CapabilityError &&
+    CLIENT_FACING_CAPABILITY_CODES.has(err.code)
+    ? err.code
+    : undefined;
 }
 
 /** One read of the run, waiting inside the handler for a frame past the cursor. */

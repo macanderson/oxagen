@@ -104,6 +104,25 @@ export function mergeEntries(
   return out;
 }
 
+/**
+ * A fresh read of the whole run laid over what a reader holds: the fresh
+ * read's entries in the fresh read's order, then each held entry it does not
+ * carry, which a reader paged in past that read's bound.
+ *
+ * `mergeEntries` appends what is new, which is right for a tail page and
+ * wrong here. A subagent frame recorded late is placed by the server after
+ * the call that spawned it, before entries the reader already holds (#4083).
+ * Appended, it would draw at the foot of the run, away from its call.
+ */
+export function rebaseEntries(
+  fresh: Frames,
+  held: readonly TranscriptEntry[],
+): Frames {
+  const known = new Set(fresh.map(entryKey));
+  const past = held.filter((entry) => !known.has(entryKey(entry)));
+  return past.length === 0 ? fresh : [...fresh, ...past];
+}
+
 /** The spine's dot: what kind of thing a step was. */
 type StepNode = "model" | "tool" | "policy" | "control" | "deny";
 
@@ -274,16 +293,26 @@ function indexByCallKey(frames: readonly TranscriptEntry[]): ByCallKey {
   return byKey;
 }
 
-/** The first frame of `type` after `i` that carries `callKey`, or null. */
+/**
+ * The first frame of `type` after `i` that carries `callKey` and no earlier
+ * step has claimed, or null.
+ *
+ * Skipping the claimed frames is what keeps one result in one step. A
+ * producer that seals the same request twice under one key (a PreToolUse hook
+ * delivered twice) wrote requests 0 and 1 and calls 2 and 3; without the
+ * check both requests paired with call 2, and it drew twice (#3994). Each
+ * request now takes the next call no other request took, in order.
+ */
 function closeOf(
   frames: readonly TranscriptEntry[],
   byKey: ByCallKey,
+  claimed: ReadonlySet<number>,
   i: number,
   callKey: string,
   type: string,
 ): number | null {
   for (const j of byKey.get(callKey) ?? []) {
-    if (j <= i) continue;
+    if (j <= i || claimed.has(j)) continue;
     if (frames[j]?.type === type) return j;
   }
   return null;
@@ -292,6 +321,7 @@ function closeOf(
 function stepPair(
   frames: readonly TranscriptEntry[],
   byKey: ByCallKey,
+  claimed: ReadonlySet<number>,
   i: number,
   frame: TranscriptEntry,
 ): { indices: number[]; kind: TranscriptStep["kind"] } {
@@ -302,7 +332,7 @@ function stepPair(
         : MODEL_RESPONSE;
     const callKey = frame.callKey;
     if (callKey !== null) {
-      const j = closeOf(frames, byKey, i, callKey, close);
+      const j = closeOf(frames, byKey, claimed, i, callKey, close);
       return { indices: j === null ? [i] : [i, j], kind: "model" };
     }
     const paired = frames[i + 1]?.type === close;
@@ -313,7 +343,7 @@ function stepPair(
       frame.type === TOOL_ENGINE_STARTED ? TOOL_ENGINE_COMPLETED : TOOL_CALL;
     const callKey = frame.callKey;
     if (callKey !== null) {
-      const j = closeOf(frames, byKey, i, callKey, close);
+      const j = closeOf(frames, byKey, claimed, i, callKey, close);
       // The decisions about this call, keyed to it, belong to it as they do
       // when the pairing is by adjacency: a policy decision or an approval
       // request between the request and the call, or after a request that
@@ -322,6 +352,7 @@ function stepPair(
         (k) =>
           k > i &&
           (j === null || k < j) &&
+          !claimed.has(k) &&
           TOOL_GATE.has(frames[k]?.type ?? ""),
       );
       return {
@@ -445,7 +476,7 @@ function stepsOf(
     if (first === undefined) continue;
     const { indices, kind } =
       callFold(frames, byKey, claimed, i, first) ??
-      stepPair(frames, byKey, i, first);
+      stepPair(frames, byKey, claimed, i, first);
     for (const index of indices) {
       if (index !== i) claimed.add(index);
     }
@@ -780,19 +811,34 @@ export function stepTool(step: TranscriptStep): ToolDetail | null {
     ) ?? close;
   const receiptText = receipt?.response?.text ?? null;
   const parsed = parseBody(receiptText);
-  if (isExchange(parsed)) return toolDetailOf(known, parsed);
   // The input is the first request half that kept text.
   const requested = parseBody(
     step.frames
       .map((frame) => frame.request)
       .find((half) => (half?.text ?? null) !== null)?.text ?? null,
   );
-  const output = parsed ?? receiptText;
+  // A receipt that holds both halves is read as it is. One that kept only the
+  // result (`{output}`) beside a request that kept the input is read from
+  // both, each half by name: the request is what the call was made with, the
+  // response what came back (#3375).
+  const outputOnly =
+    isRecord(parsed) && !("input" in parsed) && !("tool_use" in parsed);
+  if (isExchange(parsed) && !(outputOnly && requested !== null))
+    return toolDetailOf(known, parsed);
+  // Rewrapped beside the request, a `{output}` receipt passes on its result,
+  // not the wrapper, and a `name` it kept still names the tool. A bare result
+  // is passed on whole, and its fields never name the tool.
+  const wrapper =
+    isRecord(parsed) && outputOnly && "output" in parsed ? parsed : null;
+  const output =
+    wrapper === null ? (parsed ?? receiptText) : (wrapper["output"] ?? null);
+  const wrapperName = wrapper === null ? undefined : wrapper["name"];
+  const tool = known ?? (typeof wrapperName === "string" ? wrapperName : null);
   if (isRecord(requested) && isRecord(requested["tool_use"]))
-    return toolDetailOf(known, { ...requested, tool_result: output });
+    return toolDetailOf(tool, { ...requested, tool_result: output });
   if (isExchange(requested))
-    return toolDetailOf(known, { ...requested, output });
-  const detail = toolDetailOf(known, { input: requested, output });
+    return toolDetailOf(tool, { ...requested, output });
+  const detail = toolDetailOf(tool, { input: requested, output });
   const target = stepTarget(step);
   if (detail === null || requested !== null || target === null) return detail;
   // No input was kept, but the gate recorded what the call acted on. That is

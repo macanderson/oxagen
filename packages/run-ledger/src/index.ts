@@ -14,6 +14,17 @@ export {
   cancelRunInTransaction,
   setRunIngressPaused,
 } from "./run-control";
+// The control plane's close of an attempt whose producer went silent (#3988).
+export {
+  LEDGER_IDLE_CLOSE_AFTER_MS,
+  LEDGER_IDLE_CLOSE_REASON,
+  buildListIdleAttemptsSql,
+  ledgerIdleCutoff,
+  listIdleLedgerAttempts,
+  mapIdleLedgerAttemptRow,
+  type IdleLedgerAttempt,
+  type IdleLedgerAttemptRow,
+} from "./idle-attempts";
 export { type PlatformSurface } from "./surface";
 
 // Reassembly (spec §14): a recorded model stream folded ONCE, where the frame
@@ -141,11 +152,13 @@ export {
   buildInsertAttemptSql,
   buildMarkRunAttemptedSql,
   buildLockAttemptForWriteSql,
+  buildLockRunOfAttemptSql,
   buildSelectAttemptEventStateSql,
   buildAllocateRunSeqSql,
   buildInsertAttemptEventsSql,
   buildInsertAttemptSealSql,
   buildFinishRunSql,
+  buildAbandonRunSql,
   buildGetRunByPublicIdSql,
   buildListRunAttemptsSql,
   buildListAttemptIdentitySql,
@@ -172,6 +185,8 @@ export {
   type AttemptEventState,
   type AttemptTerminalStatus,
   type SealAttemptInput,
+  type AbandonRunInput,
+  type AbandonedRun,
   type RunSummary,
   type AttemptRecord,
   type AttemptSealRecord,
@@ -328,8 +343,14 @@ export {
   RunEventIntegrityError,
   RunEventSequenceGapError,
   AttemptNotWritableError,
+  AttemptAdvancedError,
+  RunEventShapeError,
   RunNotWritableError,
   RunStoreStateError,
+  isAttemptAdvancedError,
+  isRunEventInputError,
+  isRunEventShapeError,
+  isRunNotWritableError,
   isRunSpecValidationError,
   isRunSpecDigestMismatchError,
   isRunSpecIdentityMismatchError,
@@ -340,7 +361,6 @@ export {
   isRunEventIntegrityError,
   isRunEventSequenceGapError,
   isAttemptNotWritableError,
-  isRunNotWritableError,
   isRunStoreStateError,
   type RunSpecIssue,
   type AttemptRejectionReason,

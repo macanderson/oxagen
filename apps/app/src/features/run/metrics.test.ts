@@ -7,8 +7,17 @@
 import { describe, expect, it } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { sumMoney } from "@/data/contracts/money";
-import type { RunCostRollup, TranscriptEntry } from "@/data/contracts/run";
-import { runMetrics, TOKEN_CLASSES, turnFigures } from "./metrics";
+import type {
+  RunCost,
+  RunCostRollup,
+  TranscriptEntry,
+} from "@/data/contracts/run";
+import {
+  provisionalCost,
+  runMetrics,
+  TOKEN_CLASSES,
+  turnFigures,
+} from "./metrics";
 import {
   mockupTranscript,
   runCost,
@@ -28,6 +37,9 @@ const usd = (micros: string) => ({
   currency: "USD",
   basis: "gateway_observed" as const,
 });
+
+/** One model's row of `get_run_cost`'s provisional figures. */
+type ProvisionalRow = NonNullable<RunCost["provisional"]>["byModel"][number];
 
 describe("runMetrics", () => {
   it("splits the tokens into in and out that sum to the total of the classes", () => {
@@ -945,5 +957,134 @@ describe("runMetrics over a partial record", () => {
       harness: 60_000,
     });
     expect(m.wall.lead).toBe("harness");
+  });
+});
+
+describe("provisional spend (#4032)", () => {
+  /** What ingest folded from a live wrapped run's `llm_call` frames so far. */
+  const provisional = (byModel: ProvisionalRow[]) =>
+    readOk(
+      runCost({
+        rollup: null,
+        provisional: {
+          byModel,
+          toolCalls: 9,
+          asOf: "2026-09-15T08:59:00.000Z",
+        },
+      }),
+    );
+  const reported = (micros: string) => ({
+    micros,
+    currency: "USD",
+    basis: "client_attested" as const,
+  });
+  const model = (
+    name: string,
+    calls: number,
+    cost: ProvisionalRow["cost"],
+  ): ProvisionalRow => ({
+    model: name,
+    provider: "anthropic",
+    calls,
+    cost,
+  });
+  const live = runRow({ status: "live", sealedAt: null, cost: null });
+
+  it("sums what each model reported, dearest first, before the rollup reaches the run", () => {
+    const m = runMetrics({
+      run: live,
+      cost: provisional([
+        model("claude-haiku-5", 3, reported("20000")),
+        model("claude-opus-5", 12, reported("1200000")),
+      ]),
+      transcript: readOk(mockupTranscript()),
+    });
+    expect(m.provisional?.byModel.map((row) => row.model)).toEqual([
+      "claude-opus-5",
+      "claude-haiku-5",
+    ]);
+    expect(m.provisional?.total).toEqual({
+      micros: "1220000",
+      currency: "USD",
+    });
+    expect(m.provisional?.partial).toBe(false);
+    expect(m.provisional?.toolCalls).toBe(9);
+    // Nothing metered the run, so the sum is the cost the page prints.
+    expect(provisionalCost(live, m)).toEqual({
+      value: { micros: "1220000", currency: "USD" },
+      floor: false,
+    });
+  });
+
+  it("sums only the models that reported a cost, and marks the sum as a floor (negative)", () => {
+    const m = runMetrics({
+      run: live,
+      cost: provisional([
+        model("local-llama", 4, null),
+        model("claude-opus-5", 12, reported("1200000")),
+      ]),
+      transcript: readOk(mockupTranscript()),
+    });
+    // A model with no reported cost sorts after every model with one.
+    expect(m.provisional?.byModel.map((row) => row.model)).toEqual([
+      "claude-opus-5",
+      "local-llama",
+    ]);
+    expect(m.provisional?.partial).toBe(true);
+    expect(provisionalCost(live, m)).toEqual({
+      value: { micros: "1200000", currency: "USD" },
+      floor: true,
+    });
+  });
+
+  it("prefers the agent's own report on the run row to the per-model sum", () => {
+    const run = runRow({
+      status: "live",
+      sealedAt: null,
+      cost: null,
+      reportedCost: reported("2500000"),
+    });
+    const m = runMetrics({
+      run,
+      cost: provisional([model("claude-opus-5", 12, reported("1200000"))]),
+      transcript: readOk(mockupTranscript()),
+    });
+    expect(provisionalCost(run, m)).toEqual({
+      value: reported("2500000"),
+      floor: false,
+    });
+  });
+
+  it("drops the provisional figures once the rollup has a row, and prints nothing provisional over a metered cost (negative)", () => {
+    const m = runMetrics({
+      run: runRow(),
+      cost: readOk(
+        runCost({
+          provisional: {
+            byModel: [model("claude-opus-5", 12, reported("1200000"))],
+            toolCalls: 0,
+            asOf: "2026-09-15T08:59:00.000Z",
+          },
+        }),
+      ),
+      transcript: readOk(mockupTranscript()),
+    });
+    expect(m.provisional).toBeNull();
+    expect(provisionalCost(runRow(), m)).toBeNull();
+  });
+
+  it("carries nothing when the cost read failed or sent no provisional figures (negative)", () => {
+    for (const cost of [
+      readError("clickhouse_unreachable", 502),
+      readOk(runCost({ rollup: null })),
+    ]) {
+      const m = runMetrics({
+        run: live,
+        cost,
+        transcript: readOk(mockupTranscript()),
+      });
+      expect(m.provisional).toBeNull();
+      expect(provisionalCost(live, m)).toBeNull();
+    }
   });
 });

@@ -26,6 +26,11 @@ import { ShellStateProvider, useShellState } from "./shell-state";
 
 const askAssistant = vi.fn();
 vi.mock("./assistant-actions", () => ({ askAssistant }));
+// The engine read has its own file (assistant-flyout.engine-health.test.tsx).
+// Here it never answers, so nothing but a turn in flight holds Send.
+vi.mock("./engine-actions", () => ({
+  readAssistantEngine: () => new Promise(() => undefined),
+}));
 
 const pathname = vi.fn(() => "/acme/core-platform");
 vi.mock("next/navigation", () => ({

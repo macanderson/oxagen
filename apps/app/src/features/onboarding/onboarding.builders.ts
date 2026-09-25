@@ -167,6 +167,7 @@ export function onboardingSource(reads: Reads): {
       preferences: refuse("shell.preferences"),
       counts: refuse("shell.counts"),
       notifications: refuse("shell.notifications"),
+      assistantEngine: refuse("shell.assistantEngine"),
     },
     runs: {
       list: (...args: Parameters<DataSource["runs"]["list"]>) => {
