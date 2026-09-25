@@ -25,6 +25,7 @@ import type {
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   snapshot: vi.fn(),
+  killSwitches: vi.fn(async (): Promise<unknown[]> => []),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -50,9 +51,16 @@ vi.mock("@oxagen/run-ledger", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/iam", () => ({
-  createAgentRunAuthorizationSnapshot: mocks.snapshot,
-}));
+vi.mock("@oxagen/iam", async () => {
+  const scopes = await vi.importActual<
+    typeof import("@oxagen/iam/resource-scope")
+  >("@oxagen/iam/resource-scope");
+  return {
+    createAgentRunAuthorizationSnapshot: mocks.snapshot,
+    readActiveKillSwitches: mocks.killSwitches,
+    resourceScopeDigestOf: scopes.resourceScopeDigestOf,
+  };
+});
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
 }));
@@ -69,8 +77,10 @@ import {
   AssistantRunNotRecordedError,
   HISTORY_SUMMARY_PROVIDER,
   openAssistantRun,
+  readAssistantAgentState,
   resolveAssistantRunIdentity,
 } from "./assistant-run";
+import { resourceScopeDigestOf } from "@oxagen/iam";
 
 const dialect = new PgDialect();
 const render = (q: SQL) => dialect.sqlToQuery(q);
@@ -81,6 +91,7 @@ const SCOPE = { orgId: "org-1", workspaceId: "ws-1" };
 const USER = "user-1";
 const AGENT = {
   id: "11111111-1111-4111-8111-111111111111",
+  publicId: "agt_assistant",
   versionId: "22222222-2222-4222-8222-222222222222",
 };
 
@@ -108,7 +119,9 @@ function makeTx(world: World, captured: Captured) {
       // pins the id alone.
       if (!/"slug" = \$/.test(sql))
         return [{ principalId: world.linkedByOther }];
-      return world.agent ? [{ id: AGENT.id, ...world.agent }] : [];
+      return world.agent
+        ? [{ id: AGENT.id, publicId: AGENT.publicId, ...world.agent }]
+        : [];
     }
     if (table === schema.agentVersions)
       return [{ id: AGENT.versionId, config: { graph: { mode: "read" } } }];
@@ -311,6 +324,69 @@ const UUIDS = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.snapshot.mockResolvedValue(SNAPSHOT);
+});
+
+// ── the assistant agent and its kill switch ───────────────────────────────────
+
+describe("readAssistantAgentState", () => {
+  /** An active switch as `readActiveKillSwitches` returns it. */
+  const switchOn = (kind: string, id: string) => ({
+    publicId: `edn_${kind}`,
+    targetKind: kind,
+    targetId: id,
+    resourceScopeDigest: resourceScopeDigestOf({ kind, id }),
+    reason: `${kind} incident`,
+  });
+
+  it("names the assistant agent by its public id and principal, and is not stopped with no switch on", async () => {
+    const { captured } = setup();
+    const state = await mocks.withTenantDb((tx: never) =>
+      readAssistantAgentState(tx, SCOPE),
+    );
+    expect(state).toEqual({
+      agentId: AGENT.publicId,
+      principalId: "asst-principal",
+      stoppedBy: null,
+    });
+    const agentRead = captured.selects.find((s) => s.table === schema.agents)!;
+    expect(agentRead.where).toMatch(/"slug" = \$/);
+    expect(agentRead.where).toMatch(/"workspace_id" = \$/);
+    expect(mocks.killSwitches).toHaveBeenCalledWith(expect.anything(), SCOPE);
+  });
+
+  it("is stopped by an agent switch on the assistant, and by nothing else", async () => {
+    setup();
+    mocks.killSwitches.mockResolvedValueOnce([
+      switchOn("agent", "agt_someone_else"),
+      switchOn("workspace", SCOPE.workspaceId),
+      switchOn("agent", AGENT.publicId),
+    ]);
+    const stopped = await mocks.withTenantDb((tx: never) =>
+      readAssistantAgentState(tx, SCOPE),
+    );
+    expect(stopped.stoppedBy).toEqual({
+      publicId: "edn_agent",
+      reason: "agent incident",
+    });
+
+    mocks.killSwitches.mockResolvedValueOnce([
+      switchOn("agent", "agt_someone_else"),
+      switchOn("workspace", SCOPE.workspaceId),
+    ]);
+    const open = await mocks.withTenantDb((tx: never) =>
+      readAssistantAgentState(tx, SCOPE),
+    );
+    expect(open.stoppedBy).toBeNull();
+  });
+
+  it("answers null for a workspace with no assistant agent, and reads no switch (negative)", async () => {
+    setup({ agent: null });
+    const state = await mocks.withTenantDb((tx: never) =>
+      readAssistantAgentState(tx, SCOPE),
+    );
+    expect(state).toBeNull();
+    expect(mocks.killSwitches).not.toHaveBeenCalled();
+  });
 });
 
 // ── identity ──────────────────────────────────────────────────────────────────

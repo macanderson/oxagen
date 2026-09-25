@@ -38,8 +38,8 @@ The taxonomy in `packages/compliance/src/security-event-types.ts` defines the ev
 | `auth.sign_in_failed` | Failed login |
 | `auth.sign_out` | Explicit logout or revoked login |
 | `auth.token_refreshed` | Reserved, not emitted yet |
-| `auth.password_changed` | Reserved, not emitted yet |
-| `auth.email_verified` | Reserved, not emitted yet |
+| `auth.password_changed` | A completed password reset. Every existing session for the user ends with it |
+| `auth.email_verified` | A verified email address, from a verification link or a confirmed change of address |
 
 ### API key lifecycle
 

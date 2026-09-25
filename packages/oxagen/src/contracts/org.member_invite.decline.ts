@@ -20,6 +20,7 @@ export const orgMemberInviteDecline = registerCapability({
     category: "organization",
   },
   sensitivity: "low",
+  mutates: true,
   defaultEffect: "allow",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Member: "allow" },

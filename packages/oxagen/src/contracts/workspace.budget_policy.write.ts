@@ -19,6 +19,7 @@ export const workspaceBudgetPolicyWrite = registerCapability({
     category: "workspace",
   },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

@@ -12,6 +12,8 @@ export const agentDefinitionSummarize = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "mutation" },
   sensitivity: "low",
+  // Stores the generated summary and its checksum on the agent row.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

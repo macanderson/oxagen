@@ -26,7 +26,11 @@
  */
 
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
-import { createAgentRunAuthorizationSnapshot } from "@oxagen/iam";
+import {
+  createAgentRunAuthorizationSnapshot,
+  readActiveKillSwitches,
+  resourceScopeDigestOf,
+} from "@oxagen/iam";
 import { INTERACTIVE_AGENT_SLUG } from "@oxagen/oxagen/interactive-agent";
 import { digestJcs } from "@oxagen/run-evidence";
 import {
@@ -249,6 +253,58 @@ export interface AssistantRunIdentity {
   agentVersionChecksum: string;
   initiatingPrincipalId: string;
   retention: { rowId: string; publicId: string; digest: string };
+}
+
+/**
+ * The workspace's assistant agent as a kill switch names it, and the `agent`
+ * switch that stops it, if one is on.
+ */
+export interface AssistantAgentState {
+  /** Public id (`agt_…`): the id an `agent` switch is flipped on. */
+  agentId: string;
+  /** The `oxagen.assistant` principal, once a first turn provisioned it. */
+  principalId: string | null;
+  /** The active `agent` switch on the assistant, or null when none is on. */
+  stoppedBy: { publicId: string; reason: string } | null;
+}
+
+/**
+ * Read the assistant agent and whether an operator switched it off. Read only:
+ * a workspace with no assistant agent answers null here and is refused later,
+ * by `openAssistantRun`, as `assistant_agent_missing`. The turn refuses a
+ * stopped assistant before it writes anything (assistant-turn.ts) and passes
+ * the rest to `materializeTools` as the agent the turn acts as.
+ */
+export async function readAssistantAgentState(
+  tx: Tx,
+  scope: AssistantRunScope,
+): Promise<AssistantAgentState | null> {
+  const [agent] = await tx
+    .select({
+      publicId: schema.agents.publicId,
+      principalId: schema.agents.principalId,
+    })
+    .from(schema.agents)
+    .where(
+      and(
+        eq(schema.agents.orgId, scope.orgId),
+        eq(schema.agents.workspaceId, scope.workspaceId),
+        eq(schema.agents.slug, INTERACTIVE_AGENT_SLUG),
+        isNull(schema.agents.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!agent) return null;
+  // `set_kill_switch` writes an `agent` switch as a resource-scope deny over
+  // this digest (kill_switch.set.ts), so the digest is what identifies it.
+  const digest = resourceScopeDigestOf({ kind: "agent", id: agent.publicId });
+  const switches = await readActiveKillSwitches(tx, scope);
+  const hit = switches.find((s) => s.resourceScopeDigest === digest);
+  return {
+    agentId: agent.publicId,
+    principalId: agent.principalId,
+    stoppedBy: hit ? { publicId: hit.publicId, reason: hit.reason } : null,
+  };
 }
 
 /**

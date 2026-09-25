@@ -22,6 +22,10 @@
 // small to read as stella's mark, and the second line named a category rather
 // than the control, so the icon is back and the second line is gone (#4139).
 //
+// The phone's More sheet has a second control that opens the assistant. Its
+// tile leads with the same mark at the same size and reads its name through
+// `AskStella`, so the two never name stella differently.
+//
 // A reply that lands while the flyout is closed marks the launcher unread
 // (`noteAssistantReply` in `shell-state.tsx`). It then shines gold around its
 // border until the flyout opens, and says "New reply" to a screen reader, so
@@ -46,6 +50,16 @@ function accent(chunks: ReactNode) {
       {chunks}
     </span>
   );
+}
+
+/**
+ * "Ask stella*", with "stella*" in the wordmark face. The launcher and the
+ * phone's More tile both read it, so the two controls that open the assistant
+ * carry one name.
+ */
+export function AskStella() {
+  const t = useTranslations("shell.assistant");
+  return <>{t.rich("launcher", { wordmark, accent })}</>;
 }
 
 export function AssistantLauncher({
@@ -80,7 +94,7 @@ export function AssistantLauncher({
       <StellaIcon className="size-7 flex-none" />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">
-          {t.rich("launcher", { wordmark, accent })}
+          <AskStella />
         </span>
         {assistantUnread ? (
           <span className="sr-only" data-testid="assistant-launcher-unread">

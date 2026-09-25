@@ -4,7 +4,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 **Billing:** `noBillingGate: true` — a console read is outside the metering surface (ADR-052 exclusion 2)
 **Mutates:** no
@@ -15,6 +15,9 @@ List the workspace's pending tool-call approvals, soonest expiry first,
 cursor-paged. This is the read behind the Fleet approvals panel and the Run
 approvals strip (`apps/app/ARCHITECTURE.md` §1.2). `resolve_approval` is the
 write that answers an item.
+
+The in-app assistant pins this read (`INTERACTIVE_AGENT_CAPABILITIES`), so
+every turn can say which tool calls wait on a person. It needs no approval.
 
 ## Input
 

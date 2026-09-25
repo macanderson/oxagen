@@ -5,6 +5,10 @@
  * workspace scope returns BOTH the org-level ceiling (workspace_id IS NULL) and
  * that workspace's own ceiling.
  *
+ * Every query also carries an explicit `org_id = :orgId` predicate. RLS stays the
+ * primary boundary, and the predicate keeps a query inside its organization when
+ * a connection runs without RLS (a BYPASSRLS role, or a policy regression) (#2976).
+ *
  * The pure evaluator + types live in ./spend-budget; the kernel gate that calls
  * getScopeBudgets lives in ./spend-budget-gate; the get_spend_budget /
  * set_spend_budget handlers call getSpendBudget / setSpendBudget here.
@@ -56,11 +60,11 @@ function rowToBudgetRow(row: Row): SpendBudgetRow {
  * org-first so the gate reports the broader ceiling first. Runs inside the
  * caller's active tenant scope (the kernel gate already holds one).
  */
-export async function getScopeBudgets(scope?: {
+export async function getScopeBudgets(scope: {
   orgId: string;
   workspaceId: string | null;
 }): Promise<SpendBudgetRow[]> {
-  const orgOnly = scope?.workspaceId === null;
+  const orgOnly = scope.workspaceId === null;
   const read = orgOnly ? withOrgDb : withTenantDb;
   const rows = await read((tx) =>
     tx
@@ -69,7 +73,7 @@ export async function getScopeBudgets(scope?: {
       .where(
         and(
           eq(schema.spendBudgets.enabled, true),
-          scope ? eq(schema.spendBudgets.orgId, scope.orgId) : undefined,
+          eq(schema.spendBudgets.orgId, scope.orgId),
           orgOnly ? isNull(schema.spendBudgets.workspaceId) : undefined,
         ),
       ),
@@ -84,23 +88,31 @@ function orgFirst(rows: Row[]): SpendBudgetRow[] {
     .sort((a, b) => (a.scope === "org" ? 0 : 1) - (b.scope === "org" ? 0 : 1));
 }
 
+/** One scope's row: the org-level ceiling when workspaceId is null, else that
+ *  workspace's own, and always inside `orgId`. */
+function scopeRowPredicate(orgId: string, workspaceId: string | null) {
+  return and(
+    eq(schema.spendBudgets.orgId, orgId),
+    workspaceId === null
+      ? isNull(schema.spendBudgets.workspaceId)
+      : eq(schema.spendBudgets.workspaceId, workspaceId),
+  );
+}
+
 /**
  * The single ceiling for one scope (org-level when workspaceId is null), or null
  * when none is configured. Used by get_spend_budget and set_spend_budget's
  * read-modify-write.
  */
 export async function getSpendBudget(args: {
+  orgId: string;
   workspaceId: string | null;
 }): Promise<SpendBudgetRow | null> {
   const rows = await withTenantDb((tx) =>
     tx
       .select()
       .from(schema.spendBudgets)
-      .where(
-        args.workspaceId === null
-          ? isNull(schema.spendBudgets.workspaceId)
-          : eq(schema.spendBudgets.workspaceId, args.workspaceId),
-      )
+      .where(scopeRowPredicate(args.orgId, args.workspaceId))
       .limit(1),
   );
   const row = rows[0];
@@ -114,9 +126,14 @@ export async function getSpendBudget(args: {
  * and the panel is the only surface that can turn one back on, so filtering it out
  * would strand the row. Enforcement must keep using {@link getScopeBudgets}.
  */
-export async function listSpendBudgets(): Promise<SpendBudgetRow[]> {
+export async function listSpendBudgets(args: {
+  orgId: string;
+}): Promise<SpendBudgetRow[]> {
   const rows = await withTenantDb((tx) =>
-    tx.select().from(schema.spendBudgets),
+    tx
+      .select()
+      .from(schema.spendBudgets)
+      .where(eq(schema.spendBudgets.orgId, args.orgId)),
   );
   return orgFirst(rows);
 }
@@ -150,11 +167,7 @@ export async function setSpendBudget(
       await tx
         .select()
         .from(schema.spendBudgets)
-        .where(
-          input.workspaceId === null
-            ? isNull(schema.spendBudgets.workspaceId)
-            : eq(schema.spendBudgets.workspaceId, input.workspaceId),
-        )
+        .where(scopeRowPredicate(input.orgId, input.workspaceId))
         .limit(1)
     )[0];
 
@@ -173,7 +186,12 @@ export async function setSpendBudget(
           updatedById: input.actorUserId,
           updatedAt: new Date(),
         })
-        .where(eq(schema.spendBudgets.id, existing.id))
+        .where(
+          and(
+            eq(schema.spendBudgets.id, existing.id),
+            eq(schema.spendBudgets.orgId, input.orgId),
+          ),
+        )
         .returning();
       return updated!;
     }
@@ -206,6 +224,7 @@ export async function setSpendBudget(
  */
 export async function claimBudgetThreshold(args: {
   budgetId: string;
+  orgId: string;
   workspaceId: string | null;
   threshold: number;
   periodStart: Date;
@@ -221,6 +240,7 @@ export async function claimBudgetThreshold(args: {
       .where(
         and(
           eq(schema.spendBudgets.id, args.budgetId),
+          eq(schema.spendBudgets.orgId, args.orgId),
           or(
             // Period rolled over → any threshold is new.
             sql`${schema.spendBudgets.notifiedPeriodStart} IS NULL`,

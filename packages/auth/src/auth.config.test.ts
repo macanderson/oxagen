@@ -27,6 +27,7 @@
  * and inspect the config object passed to it.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { PASSWORD_MIN } from "./password-policy";
 
 // ---------------------------------------------------------------------------
 // useSecureCookies logic — extracted from auth.ts for unit testing
@@ -115,14 +116,15 @@ describe("rateLimit.enabled derivation", () => {
 // Email + password policy constants
 // ---------------------------------------------------------------------------
 
-// These mirror the values hard-coded in auth.ts and must not drift.
-const EXPECTED_MIN_PASSWORD_LENGTH = 8;
+// These mirror the values in auth.ts and must not drift. The minimum is the
+// shared policy's, the one the app's sign-up and reset screens enforce (#3888).
+const EXPECTED_MIN_PASSWORD_LENGTH = PASSWORD_MIN;
 const EXPECTED_AUTO_SIGN_IN = true;
 const EXPECTED_EMAIL_AND_PASSWORD_ENABLED = true;
 
 describe("email and password policy", () => {
-  it("minimum password length is at least 8 characters", () => {
-    expect(EXPECTED_MIN_PASSWORD_LENGTH).toBeGreaterThanOrEqual(8);
+  it("minimum password length is 12 characters", () => {
+    expect(EXPECTED_MIN_PASSWORD_LENGTH).toBe(12);
   });
 
   it("autoSignIn is enabled after password sign-up", () => {
@@ -175,7 +177,7 @@ function buildMockAuthConfig(
     emailAndPassword: {
       enabled: true,
       autoSignIn: true,
-      minPasswordLength: 8,
+      minPasswordLength: PASSWORD_MIN,
     },
     session: {
       expiresIn: 60 * 60 * 24 * 30,

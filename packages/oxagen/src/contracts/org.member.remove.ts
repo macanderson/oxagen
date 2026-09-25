@@ -29,6 +29,7 @@ export const orgMemberRemove = registerCapability({
     category: "organization",
   },
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

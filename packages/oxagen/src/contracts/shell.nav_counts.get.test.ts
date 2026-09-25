@@ -11,6 +11,15 @@ describe("get_nav_counts contract", () => {
     );
   });
 
+  it("is a low-risk read the in-app agent may call without approval", () => {
+    expect(shellNavCountsGet.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(shellNavCountsGet.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "introspection",
+    });
+  });
+
   it("carries each count as a nullable non-negative integer", () => {
     const counts = { approvals: 3, proposals: null, incidents: null };
     expect(shellNavCountsGet.output.parse(counts)).toEqual(counts);

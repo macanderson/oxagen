@@ -13,6 +13,7 @@ export const agentMemoryWrite = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

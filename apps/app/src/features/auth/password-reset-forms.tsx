@@ -7,9 +7,12 @@ import { Inbox, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
-import { requestPasswordReset, resetPassword } from "./actions";
 import type { AuthOutcomeKey } from "./auth-errors";
-import { rememberNotice } from "./auth-client";
+import {
+  liveRequestPasswordReset,
+  liveResetPassword,
+  rememberNotice,
+} from "./auth-client";
 import {
   type AuthErrorKey,
   type FieldErrors,
@@ -32,6 +35,7 @@ export function ForgotPasswordForm({ header = null, footer = null }: Frame) {
   const t = useTranslations("auth");
   const [error, setError] = useState<AuthErrorKey | null>(null);
   const [failed, setFailed] = useState(false);
+  const [limited, setLimited] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -42,6 +46,7 @@ export function ForgotPasswordForm({ header = null, footer = null }: Frame) {
       email: formText(new FormData(event.currentTarget), "email"),
     });
     setFailed(false);
+    setLimited(false);
     if (!parsed.success) {
       setError(fieldErrors(parsed.error).email ?? "emailInvalid");
       return;
@@ -49,9 +54,10 @@ export function ForgotPasswordForm({ header = null, footer = null }: Frame) {
     setError(null);
     setPending(true);
     try {
-      const result = await requestPasswordReset(parsed.data);
+      // Any address reads as sent. Only Better Auth's rate limit shows.
+      const result = await liveRequestPasswordReset(parsed.data);
       if (result.ok) setSentTo(parsed.data.email);
-      else setError(result.fields?.email ?? "emailInvalid");
+      else setLimited(true);
     } catch {
       setFailed(true);
     } finally {
@@ -85,6 +91,12 @@ export function ForgotPasswordForm({ header = null, footer = null }: Frame) {
       <AuthPanel>
         {failed ? (
           <AuthAlert testId="forgot-failed" message={t("forgot.failed")} />
+        ) : null}
+        {limited ? (
+          <AuthAlert
+            testId="forgot-outcome"
+            message={t("outcomes.rateLimited")}
+          />
         ) : null}
         <form
           noValidate
@@ -150,7 +162,10 @@ export function ResetPasswordForm({
     setErrors({});
     setPending(true);
     try {
-      const result = await resetPassword(parsed.data);
+      const result = await liveResetPassword({
+        token: parsed.data.token,
+        newPassword: parsed.data.newPassword,
+      });
       if (result.ok) {
         // Log in toasts "Password set. Every other device was logged out." once.
         rememberNotice("passwordSet");
@@ -158,8 +173,7 @@ export function ResetPasswordForm({
         return;
       }
       if (result.outcome === "linkExpired") setExpired(true);
-      else if (result.fields) setErrors(result.fields);
-      else setOutcome(result.outcome ?? "unknown");
+      else setOutcome(result.outcome);
     } catch {
       setOutcome("unavailable");
     } finally {

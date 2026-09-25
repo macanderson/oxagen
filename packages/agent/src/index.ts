@@ -51,6 +51,6 @@ export {
   ExecutionNotFoundError,
   isExecutionNotFoundError,
 } from "./handlers/execution-errors";
-// The governance agent's system prompt (no coding, no shell, no sandbox).
+// stella's system prompt (no coding, no shell, no sandbox).
 export { buildChatSystemPrompt } from "./system-prompt";
 export type { SystemPromptContext } from "./system-prompt";

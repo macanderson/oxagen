@@ -23,6 +23,15 @@ describe("get_spend_drill contract", () => {
     ).toBe(false);
   });
 
+  it("is a low-risk read the in-app agent may call without approval", () => {
+    expect(spendDrill.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(spendDrill.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "billing",
+    });
+  });
+
   it("takes an operator key as a principal public id and any bounded string for an agent or a tool", () => {
     // The key an operator row of get_spend and a run of list_runs carry; the
     // store filters on that column, so an agent key or a uuid is refused here.
