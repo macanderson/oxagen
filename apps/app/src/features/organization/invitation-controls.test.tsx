@@ -41,6 +41,9 @@ function show(allowed = true) {
     </IntlProvider>,
   );
 }
+// The row's buttons name the recipient, so every row reads differently.
+const RESEND = "Resend invitation to ada@acme.example";
+const REVOKE = "Revoke invitation to ada@acme.example";
 const dialog = () => screen.getByTestId("revoke-invitation-invi_abc");
 const confirmButton = () =>
   within(dialog()).getByRole("button", { name: "Revoke" });
@@ -48,8 +51,8 @@ const confirmButton = () =>
 describe("invitation controls", () => {
   it("renders readable disabled controls without authority", async () => {
     const { container } = show(false);
-    expect(screen.getByRole("button", { name: "Resend" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Revoke" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: RESEND })).toBeDisabled();
+    expect(screen.getByRole("button", { name: REVOKE })).toBeDisabled();
     await expectNoAxe(container);
   });
   it("keeps a refused resend retryable and refreshes only after success", async () => {
@@ -60,10 +63,10 @@ describe("invitation controls", () => {
       reason: "unavailable",
       code: "offline",
     });
-    await user.click(screen.getByRole("button", { name: "Resend" }));
+    await user.click(screen.getByRole("button", { name: RESEND }));
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(mocks.refresh).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Resend" }));
+    await user.click(screen.getByRole("button", { name: RESEND }));
     await waitFor(() => {
       expect(mocks.refresh).toHaveBeenCalledOnce();
     });
@@ -80,31 +83,31 @@ describe("invitation controls", () => {
     );
     const user = userEvent.setup();
     const { container } = show();
-    await user.click(screen.getByRole("button", { name: "Revoke" }));
+    await user.click(screen.getByRole("button", { name: REVOKE }));
     expect(mocks.revoke).not.toHaveBeenCalled();
     await user.click(confirmButton());
     expect(
-      screen.getByRole("button", { name: "Resend", hidden: true }),
+      screen.getByRole("button", { name: RESEND, hidden: true }),
     ).toBeDisabled();
     await expectNoAxe(container);
     finish?.({ ok: true, value: {} });
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("revoked"),
     );
-    expect(screen.getByRole("button", { name: "Resend" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: RESEND })).toBeDisabled();
     expect(mocks.resend).not.toHaveBeenCalled();
   });
   it("reports a thrown write and leaves the row usable", async () => {
     mocks.revoke.mockRejectedValueOnce(new Error("offline"));
     const user = userEvent.setup();
     const { container } = show();
-    await user.click(screen.getByRole("button", { name: "Revoke" }));
+    await user.click(screen.getByRole("button", { name: REVOKE }));
     expect(mocks.revoke).not.toHaveBeenCalled();
     await user.click(confirmButton());
     // The refusal is named in the dialog, which stays open to retry or cancel.
     expect(await within(dialog()).findByRole("alert")).toBeTruthy();
     await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
-    expect(screen.getByRole("button", { name: "Revoke" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: REVOKE })).toBeEnabled();
     await expectNoAxe(container);
   });
 });
@@ -116,17 +119,17 @@ it("reports renewed expiry when mail delivery fails and keeps resend available",
   });
   const user = userEvent.setup();
   show();
-  await user.click(screen.getByRole("button", { name: "Resend" }));
+  await user.click(screen.getByRole("button", { name: RESEND }));
   expect(screen.getByRole("status")).toHaveTextContent(
     "now expires in seven days, but its email could not be sent",
   );
   expect(mocks.refresh).toHaveBeenCalledOnce();
-  expect(screen.getByRole("button", { name: "Resend" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: RESEND })).toBeEnabled();
 });
 it("allows cancelling invitation revocation without a write", async () => {
   const user = userEvent.setup();
   show();
-  await user.click(screen.getByRole("button", { name: "Revoke" }));
+  await user.click(screen.getByRole("button", { name: REVOKE }));
   await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
   expect(mocks.revoke).not.toHaveBeenCalled();
   expect(screen.queryByTestId("revoke-invitation-invi_abc")).toBeNull();
@@ -135,7 +138,7 @@ it("allows cancelling invitation revocation without a write", async () => {
 it("opens the design's revoke dialog: the email, its body, and Cancel then a red Revoke", async () => {
   const user = userEvent.setup();
   show();
-  const opener = screen.getByRole("button", { name: "Revoke" });
+  const opener = screen.getByRole("button", { name: REVOKE });
   // The row's Revoke is the design's `btn sm danger`.
   expect(opener.className).toContain("text-error-ink");
   await user.click(opener);
@@ -157,4 +160,35 @@ it("opens the design's revoke dialog: the email, its body, and Cancel then a red
   expect(confirmButton().className).not.toContain("bg-button-primary-bg");
   expect(shown.querySelector("[data-header-close]")).not.toBeNull();
   await expectNoAxe(document.body);
+});
+
+it("names the recipient in each row's Resend and Revoke, so two rows differ", () => {
+  render(
+    <IntlProvider>
+      <InvitationControls
+        org="acme"
+        invitationId="invi_abc"
+        email="ada@acme.example"
+        allowed
+      />
+      <InvitationControls
+        org="acme"
+        invitationId="invi_def"
+        email="grace@acme.example"
+        allowed
+      />
+    </IntlProvider>,
+  );
+  for (const email of ["ada@acme.example", "grace@acme.example"]) {
+    const resend = screen.getByRole("button", {
+      name: `Resend invitation to ${email}`,
+    });
+    const revoke = screen.getByRole("button", {
+      name: `Revoke invitation to ${email}`,
+    });
+    // The accessible name keeps the visible word, so voice control still works.
+    expect(resend).toHaveTextContent(/^Resend$/);
+    expect(revoke).toHaveTextContent(/^Revoke$/);
+  }
+  expect(screen.queryByRole("button", { name: "Resend" })).toBeNull();
 });

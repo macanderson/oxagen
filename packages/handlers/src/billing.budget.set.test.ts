@@ -137,6 +137,14 @@ describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
     expect(mocks.invalidateSpendBudgetScope).toHaveBeenCalledWith({
       orgId: "org_1",
     });
+    // Both reads name the caller's org rather than trusting RLS alone (#2976).
+    expect(mocks.getSpendBudget).toHaveBeenCalledWith({
+      orgId: "org_1",
+      workspaceId: null,
+    });
+    expect(mocks.getSpendBudgetStatuses).toHaveBeenCalledWith({
+      orgId: "org_1",
+    });
     expect(out.scope).toBe("org");
     expect(out.limit).toEqual({ micros: "500000000", currency: "USD" });
   });

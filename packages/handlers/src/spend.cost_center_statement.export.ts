@@ -7,9 +7,10 @@
 // line traces to the runs a finance reader can open, and every run lands on
 // exactly one line at its full cost: the lines' micros sum to the total's.
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import {
   COST_CENTER_STATEMENT_COLUMNS,
+  COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT,
   type CostCenterStatementLine,
   type spendCostCenterStatementExport,
   type SpendCostCenterStatementExportOutput,
@@ -18,7 +19,6 @@ import {
   dayBounds,
   foldBasis,
   microsToCentsHalfEven,
-  runTotalsRowToRecord,
   UNASSIGNED_COST_CENTER_KEY,
   type CostBasis,
   type RunTotalsRecord,
@@ -28,12 +28,22 @@ import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { cost } from "./spend.shared";
 import { csvField, monthBounds } from "./spend.statement.export";
 
+/** The columns of a run row the statement reads. The rest, `breakdown` included, it never needs. */
+export type StatementRun = Pick<
+  RunTotalsRecord,
+  "runId" | "startedAt" | "costCenter" | "costMicros" | "costBasis" | "currency"
+>;
+
 export type CostCenterStatementDeps = {
-  /** Every run row of the organization, across its workspaces, that started in [from, to]. */
+  /**
+   * The organization's run rows, across its workspaces, that started in
+   * [from, to], oldest first by (startedAt, runId), with only the columns the
+   * statement reads.
+   */
   readRunTotals: (
     orgId: string,
     q: { from: string; to: string },
-  ) => Promise<RunTotalsRecord[]>;
+  ) => Promise<StatementRun[]>;
 };
 
 const totals = schema.runTotals;
@@ -41,17 +51,33 @@ const totals = schema.runTotals;
 /** Who may read the organization-wide statement: the people accountable for the bill. */
 const STATEMENT_READERS = { org: ["Owner", "Admin", "Billing"] } as const;
 
+/**
+ * One ordered read of the month, not keyset pages. No index on run_totals
+ * leads with org_id, so each page of an org-wide keyset read scanned and
+ * sorted the whole org-month again, and the read grew with the square of
+ * the run count. Paging saved little memory besides: the statement keeps
+ * every run id to build the CSV. What made the old single read heavy was
+ * `select *` carrying the `breakdown` jsonb, and the six-column select
+ * below drops that.
+ */
 async function readOrgRunTotals(
   orgId: string,
   q: { from: string; to: string },
-): Promise<RunTotalsRecord[]> {
+): Promise<StatementRun[]> {
   const { start } = dayBounds(q.from);
   const { next } = dayBounds(q.to);
   // An organization-wide read: withOrgDb widens the SELECT to every workspace
   // of the organization and RLS still fences org_id (ADR-086).
   const rows = await withOrgDb((tx) =>
     tx
-      .select()
+      .select({
+        runId: totals.runId,
+        startedAt: totals.startedAt,
+        costCenter: totals.costCenter,
+        costMicros: totals.costMicros,
+        costBasis: totals.costBasis,
+        currency: totals.currency,
+      })
       .from(totals)
       .where(
         and(
@@ -62,7 +88,10 @@ async function readOrgRunTotals(
       )
       .orderBy(asc(totals.startedAt), asc(totals.runId)),
   );
-  return rows.map(runTotalsRowToRecord);
+  return rows.map((r) => ({
+    ...r,
+    costBasis: r.costBasis as CostBasis | null,
+  }));
 }
 
 interface LineAccumulator {
@@ -70,29 +99,48 @@ interface LineAccumulator {
   unpriced: number;
   micros: bigint | null;
   basis: CostBasis | null;
-  currency: string;
-  runIds: string[];
+  /** The currency of the line's priced runs, null until one is priced. */
+  currency: string | null;
+  /** The line's run ids, oldest first. Null on the total, which lists none. */
+  runIds: string[] | null;
 }
 
-function accumulate(into: LineAccumulator, run: RunTotalsRecord): void {
+/**
+ * Fold one run into a line or the total. Micros only add within one
+ * currency, so a priced run in a currency other than the one the figure
+ * already carries refuses the statement rather than sum across currencies
+ * and label the sum with whichever came last. An unpriced run adds no
+ * figure, so its currency is not checked.
+ */
+function accumulate(
+  into: LineAccumulator,
+  run: StatementRun,
+  label: string,
+): void {
   into.runs += 1;
-  into.runIds.push(run.runId);
-  into.currency = run.currency;
+  into.runIds?.push(run.runId);
   if (run.costMicros === null || run.costBasis === null) {
     into.unpriced += 1;
     return;
   }
+  if (into.currency !== null && into.currency !== run.currency)
+    throw new HandlerError({
+      code: "conflict",
+      reason: "statement_mixed_currency",
+      message: `The ${label} holds runs priced in ${into.currency} and in ${run.currency}. A statement figure sums one currency, so no statement was built.`,
+    });
+  into.currency = run.currency;
   into.micros = (into.micros ?? 0n) + run.costMicros;
   into.basis = foldBasis(into.basis, run.costBasis);
 }
 
-const empty = (): LineAccumulator => ({
+const empty = (listsRunIds: boolean): LineAccumulator => ({
   runs: 0,
   unpriced: 0,
   micros: null,
   basis: null,
-  currency: "USD",
-  runIds: [],
+  currency: null,
+  runIds: listsRunIds ? [] : null,
 });
 
 /** Largest cost first, unpriced lines after priced ones, the unassigned line last. */
@@ -142,29 +190,42 @@ export function createCostCenterStatementHandler(
     // non-enterprise humans, so the org role is enforced here (INV-29).
     const userId = await resolveActingUserId(ctx);
     await assertOrgRole({ ...ctx, userId }, STATEMENT_READERS);
-    const runs = await deps.readRunTotals(ctx.orgId, monthBounds(input.month));
     const byCenter = new Map<string, LineAccumulator>();
-    const all = empty();
+    // The total line lists no run ids, so the total keeps none.
+    const all = empty(false);
+    const runs = await deps.readRunTotals(ctx.orgId, monthBounds(input.month));
     for (const run of runs) {
       const key = run.costCenter ?? UNASSIGNED_COST_CENTER_KEY;
-      const acc = byCenter.get(key) ?? empty();
-      accumulate(acc, run);
+      const acc = byCenter.get(key) ?? empty(true);
+      accumulate(acc, run, `cost center ${key}`);
       byCenter.set(key, acc);
-      accumulate(all, run);
+      accumulate(all, run, "organization total");
     }
+    // The CSV lists every run id. The data lists the oldest few per line and
+    // counts the rest, so one response does not carry every id twice.
+    const allRunIds = new Map<string, readonly string[]>();
     const lines: CostCenterStatementLine[] = [...byCenter.entries()]
-      .map(([costCenter, acc]) => ({
-        costCenter,
-        runs: acc.runs,
-        unpricedRuns: acc.unpriced,
-        cost: cost(acc.micros, acc.currency, acc.basis),
-        runIds: acc.runIds,
-      }))
+      .map(([costCenter, acc]) => {
+        const runIds = acc.runIds ?? [];
+        allRunIds.set(costCenter, runIds);
+        const listed = runIds.slice(
+          0,
+          COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT,
+        );
+        return {
+          costCenter,
+          runs: acc.runs,
+          unpricedRuns: acc.unpriced,
+          cost: cost(acc.micros, acc.currency ?? "USD", acc.basis),
+          runIds: listed,
+          runIdsOmitted: runIds.length - listed.length,
+        };
+      })
       .sort(compareLines);
     const total = {
       runs: all.runs,
       unpricedRuns: all.unpriced,
-      cost: cost(all.micros, all.currency, all.basis),
+      cost: cost(all.micros, all.currency ?? "USD", all.basis),
     };
     const csv = [
       COST_CENTER_STATEMENT_COLUMNS.join(","),
@@ -175,7 +236,7 @@ export function createCostCenterStatementHandler(
           l.runs,
           l.unpricedRuns,
           l.cost,
-          l.runIds,
+          allRunIds.get(l.costCenter) ?? [],
         ),
       ),
       // The total line lists no run ids: every one is on a line above it.

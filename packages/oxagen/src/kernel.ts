@@ -763,6 +763,7 @@ export type KernelFailureCode =
   | "external_tool_authority_unavailable"
   | "external_decision_refused"
   | ExternalRefusalCode
+  | ExternalExecutionFailureCode
   | CapabilityErrorCode
   | "no_tenant_scope"
   | "invalid_tenant_scope"
@@ -803,6 +804,31 @@ export function isExternalRefusalCode(
   code: unknown,
 ): code is ExternalRefusalCode {
   return typeof code === "string" && EXTERNAL_REFUSAL_CODES.has(code);
+}
+
+/**
+ * The codes an external tool call fails with after every gate allowed it.
+ * The call reached the remote tool, so the audit row must not read as a
+ * refusal: `mcp_tool_execution_failed` is the remote tool answering with an
+ * error result (`isError: true`), and `mcp_transport_failed` is the call
+ * failing to complete at all (a network error, a timeout, a dropped
+ * session). Neither code carries the remote payload or the error message.
+ */
+export type ExternalExecutionFailureCode =
+  | "mcp_tool_execution_failed"
+  | "mcp_transport_failed";
+
+const EXTERNAL_EXECUTION_FAILURE_CODES: ReadonlySet<string> =
+  new Set<ExternalExecutionFailureCode>([
+    "mcp_tool_execution_failed",
+    "mcp_transport_failed",
+  ]);
+
+/** True for a code an allowed external call fails with (`ExternalExecutionFailureCode`). */
+export function isExternalExecutionFailureCode(
+  code: unknown,
+): code is ExternalExecutionFailureCode {
+  return typeof code === "string" && EXTERNAL_EXECUTION_FAILURE_CODES.has(code);
 }
 
 export interface KernelSecurityEvent {
@@ -2175,7 +2201,9 @@ export async function enforceExternalDecisionRules(
  * CapabilityError or decision-rule error names its own code. A gate that
  * answered the model with text instead of throwing passes an object whose
  * `code` is an `ExternalRefusalCode`, so a kill switch, a withheld consent
- * and an agent rule each reach the audit row under their own name. A deny
+ * and an agent rule each reach the audit row under their own name. A call
+ * the gates allowed but the remote tool or its transport failed passes an
+ * `ExternalExecutionFailureCode`, so it never reads as a refusal. A deny
  * that names nothing is a policy deny, `authz_denied`.
  */
 export function emitExternalCapabilityOutcome(
@@ -2197,7 +2225,8 @@ export function emitExternalCapabilityOutcome(
         : reported === "decision_rule_denied" ||
             reported === "decision_rule_approval_required" ||
             reported === "external_tool_authority_unavailable" ||
-            isExternalRefusalCode(reported)
+            isExternalRefusalCode(reported) ||
+            isExternalExecutionFailureCode(reported)
           ? reported
           : outcome === "deny"
             ? "authz_denied"

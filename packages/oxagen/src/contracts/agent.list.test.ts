@@ -41,7 +41,12 @@ describe("list_agents contract", () => {
       org: { Owner: "allow", Admin: "allow", Member: "allow" },
       workspace: { Owner: "allow", Member: "allow" },
     });
-    expect(agentList.surfaces).toEqual(["api", "mcp"]);
+    expect(agentList.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(agentList.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "introspection",
+    });
     expect(agentList.layers).not.toContain("e2e");
   });
 

@@ -3,7 +3,9 @@
 // `invrevoke` dialog (the email as its subtitle, what revoking ends, and Cancel
 // then Revoke in the footer), because revoking cannot be taken back. A refusal
 // is named where the write was asked for and changes nothing; a write that
-// answered leaves its receipt and reloads the table.
+// answered leaves its receipt and reloads the table. Each row's buttons carry
+// the recipient in their accessible name, so a screen reader listing the
+// table's controls can tell one invitation's Resend from another's.
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import { buttonDanger, buttonSecondary } from "@/ui/control-styles";
@@ -90,6 +92,7 @@ export function InvitationControls({
           type="button"
           className={buttonSecondary}
           disabled={ended}
+          aria-label={t("resendFor", { email })}
           onClick={() => void act("resend")}
         >
           {t("resend")}
@@ -98,6 +101,7 @@ export function InvitationControls({
           type="button"
           className={buttonDanger}
           disabled={ended}
+          aria-label={t("revokeFor", { email })}
           onClick={() => {
             setFailure(null);
             setConfirming(true);

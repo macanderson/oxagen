@@ -65,6 +65,15 @@ export interface AutoReloadResult {
   reloaded: boolean;
   amountCents?: number;
   reason?: string;
+  /**
+   * The effective balance this call read, set only when no credit was granted
+   * and no grant can have landed since the read. The admission gate reuses it
+   * instead of reading the balance a second time (#2976). It is absent when
+   * auto-reload is disabled, because the balance is never read, and after a
+   * successful charge, because a grant may exist. A caller that finds it
+   * absent reads the balance itself.
+   */
+  balanceCents?: bigint;
 }
 
 /**
@@ -199,7 +208,11 @@ export async function maybeAutoReload(
   const thresholdCents = Number(settings.autoReloadThresholdCents);
 
   if (balanceCents >= thresholdCents) {
-    return { reloaded: false, reason: "balance_above_threshold" };
+    return {
+      reloaded: false,
+      reason: "balance_above_threshold",
+      balanceCents: balance,
+    };
   }
 
   // Idempotency: bucket by hour — one reload per hour maximum.
@@ -210,12 +223,20 @@ export async function maybeAutoReload(
       { orgId, lastAutoReloadAt: settings.lastAutoReloadAt },
       "billing: auto-reload — already reloaded within the last hour, skipping",
     );
-    return { reloaded: false, reason: "reloaded_recently" };
+    return {
+      reloaded: false,
+      reason: "reloaded_recently",
+      balanceCents: balance,
+    };
   }
 
   const amountCents = Number(settings.autoReloadAmountCents);
   if (amountCents <= 0) {
-    return { reloaded: false, reason: "invalid_reload_amount" };
+    return {
+      reloaded: false,
+      reason: "invalid_reload_amount",
+      balanceCents: balance,
+    };
   }
 
   // The settings column is the authoritative customer id; a subscription row
@@ -229,7 +250,11 @@ export async function maybeAutoReload(
       { orgId },
       "billing: auto-reload — no stripe customer found, cannot charge",
     );
-    return { reloaded: false, reason: "no_stripe_customer" };
+    return {
+      reloaded: false,
+      reason: "no_stripe_customer",
+      balanceCents: balance,
+    };
   }
 
   // Determine payment method: settings override or customer default.
@@ -250,7 +275,11 @@ export async function maybeAutoReload(
       { orgId },
       "billing: auto-reload — could not claim an idempotency key; refusing to charge",
     );
-    return { reloaded: false, reason: "episode_key_unavailable" };
+    return {
+      reloaded: false,
+      reason: "episode_key_unavailable",
+      balanceCents: balance,
+    };
   }
 
   // Past Stripe's 24-hour idempotency window the same key no longer
@@ -268,7 +297,7 @@ export async function maybeAutoReload(
       },
       "billing: auto-reload — episode older than Stripe's idempotency window; refusing to charge again. Reconcile the original payment intent, then clear org_billing_settings.auto_reload_episode_key for this org to re-enable auto-reload",
     );
-    return { reloaded: false, reason: "episode_stale" };
+    return { reloaded: false, reason: "episode_stale", balanceCents: balance };
   }
 
   const idempotencyKey = episode.idempotencyKey;
@@ -300,7 +329,7 @@ export async function maybeAutoReload(
       },
       "billing: auto-reload — charge off-session failed",
     );
-    return { reloaded: false, reason: message };
+    return { reloaded: false, reason: message, balanceCents: balance };
   }
 
   if (!chargeResult.succeeded) {
@@ -314,7 +343,11 @@ export async function maybeAutoReload(
       },
       "billing: auto-reload — charge did not succeed",
     );
-    return { reloaded: false, reason: `charge_status:${chargeResult.status}` };
+    return {
+      reloaded: false,
+      reason: `charge_status:${chargeResult.status}`,
+      balanceCents: balance,
+    };
   }
 
   // ── Grant credits for the successful charge ────────────────────────────────

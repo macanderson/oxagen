@@ -125,6 +125,7 @@ import {
   AssistantEngineNotice,
 } from "./assistant-engine-notice";
 import { AssistantStreamingText } from "./assistant-streaming-text";
+import { AssistantSuggestions } from "./assistant-suggestions";
 import { AssistantThinking } from "./assistant-thinking";
 import {
   ASSISTANT_MIN_WIDTH,
@@ -135,6 +136,7 @@ import {
   widthForKey,
 } from "./assistant-width";
 import { parseShellPath } from "./nav";
+import { labelOnPage } from "./page-label";
 import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
 import { useEngineHealth } from "./use-engine-health";
@@ -700,11 +702,15 @@ export function AssistantFlyout() {
       pending: true,
     }));
     try {
+      const entityId = recordOnPage(declaredRecord, rest[1]);
+      const entityLabel = labelOnPage(declaredRecord, entityId);
       const result = await askAssistant(org, ws, {
         conversationId,
         content,
         route,
-        entityId: recordOnPage(declaredRecord, rest[1]),
+        entityId,
+        // Only a page that named its record sends a label.
+        ...(entityLabel === null ? {} : { entityLabel }),
       });
       if (result.ok) {
         const answered: Entry = {
@@ -856,6 +862,7 @@ export function AssistantFlyout() {
           >
             <h3 className="text-sm font-semibold">{t("intro.title")}</h3>
             <p className="text-sm text-muted-foreground">{t("intro.body")}</p>
+            <AssistantSuggestions />
           </div>
         ) : (
           <ol className="flex flex-col gap-3" data-testid="assistant-log">

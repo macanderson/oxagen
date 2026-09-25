@@ -1,4 +1,8 @@
-import { assertPublicHttpUrl } from "@oxagen/config/public-url";
+import {
+  assertPublicHttpUrl,
+  redactUrlCredentials,
+  UnsafeOutboundUrlError,
+} from "@oxagen/config/public-url";
 import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
 import { healthcheck, type McpToolDescriptor } from "../dispatch/mcp-client";
@@ -23,14 +27,42 @@ export type { AgentMcpRegisterInput, AgentMcpRegisterOutput };
 // for existing rows rather than a refactor.
 const REFUSING_MCP = "Refusing to register MCP server";
 
+/**
+ * Refuse a stdio command URI that carries userinfo. A stdio endpoint such as
+ * `stdio://linear` names a local command, not a network address, so the
+ * public-address guard does not apply. The URI is still stored and read back
+ * in the clear, so a username or password in it is refused, and the refusal
+ * quotes the address with its userinfo redacted.
+ */
+function assertNoUrlCredentials(raw: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new UnsafeOutboundUrlError(
+      `${REFUSING_MCP}: invalid URL "${redactUrlCredentials(raw)}"`,
+    );
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    throw new UnsafeOutboundUrlError(
+      `${REFUSING_MCP}: "${redactUrlCredentials(raw)}" must not carry a username or password; send the credential in the request, not in the URL`,
+    );
+  }
+}
+
 export async function agentMcpRegisterHandler(
   input: AgentMcpRegisterInput,
   ctx: CapabilityContext,
 ): Promise<AgentMcpRegisterOutput> {
-  // SSRF guard: validate the endpoint before any outbound connection that
-  // carries auth secrets (the streamable-http probe below).
+  // Validate the endpoint for every transport, before the probe and before
+  // the insert (#3720). The streamable-http probe below connects with auth
+  // secrets attached, so that address must be a public http(s) URL. A stdio
+  // endpoint is a command URI with no network address to check, but it is
+  // still stored and shown, so it must not carry a username or password.
   if (input.transportType === "streamable-http") {
     assertPublicHttpUrl(input.endpointUrl, { refusing: REFUSING_MCP });
+  } else {
+    assertNoUrlCredentials(input.endpointUrl);
   }
 
   // Run the health check before insert so we persist the live tool list

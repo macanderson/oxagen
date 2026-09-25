@@ -236,10 +236,12 @@ describe("shellSource", () => {
     context.mockResolvedValue(down);
     const { data } = await shellSource(ctx, source);
     expect(data.context).toEqual(down);
-    // With no workspace list there is nothing to read approvals or a feed in.
+    // With no workspace list there is nothing to read approvals in. The bell
+    // still reads the organization's own rows in the organization's scope.
     expect(data.approvals.workspaces).toEqual([]);
-    expect(data.feed).toBeNull();
     expect(pending).not.toHaveBeenCalled();
+    expect(notifications).toHaveBeenCalledWith(ctx);
+    expect(data.feed).toEqual(feed);
   });
 
   it("keeps a person with no recorded name as null, never an invented one", async () => {
@@ -322,7 +324,26 @@ describe("shellSource across the organization's workspaces", () => {
     const { data } = await shellSource(ctx, source);
     expect(counts).not.toHaveBeenCalled();
     expect(data.counts).toBeNull();
-    expect(data.feed).toBeNull();
+  });
+
+  it("reads the organization's own notifications for a viewer who can open no workspace (#3806)", async () => {
+    context.mockResolvedValue(readOk({ orgs: [], workspaces: [] }));
+    const orgRows = readOk({
+      items: [
+        {
+          id: "ntf_01K5RS8F3J",
+          title: "Billing contact changed",
+          unread: true,
+        },
+      ],
+      unread: 1,
+    });
+    notifications.mockResolvedValue(orgRows);
+    const { data } = await shellSource(ctx, source);
+    expect(requireViewer).not.toHaveBeenCalled();
+    expect(notifications).toHaveBeenCalledOnce();
+    expect(notifications).toHaveBeenCalledWith(ctx);
+    expect(data.feed).toEqual(orgRows);
   });
 
   it("reads the mandate ledger only for a workspace whose parked call names a mandate", async () => {

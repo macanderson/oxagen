@@ -8,7 +8,7 @@ export const secretValueSet = registerCapability({
     "Set a secret's value override for a specific environment. Encrypted or plaintext per the key's sensitive flag.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "high", category: "secret" },
+  agent: { requiresApproval: true, riskLevel: "high", category: "secret" },
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "high",

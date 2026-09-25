@@ -473,6 +473,52 @@ describe("the model proxy after the gateway audit", () => {
     });
   });
 
+  describe("the day budget under parallel calls", () => {
+    it("holds an admitted call's ceiling against the agent's day, across sessions, and lets go when it settles", async () => {
+      let release: () => void = () => undefined;
+      const fake = await vendor((_req, res) => {
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.write(MESSAGE_START);
+        release = () => res.end(MESSAGE_END);
+      });
+      // $0.90 of a $1 day is already settled, and no session limit is set.
+      const { proxy, port, session } = await proxyFor(() => fake.url, {
+        bundle: { budget: { mode: "enforced", daily_limit_usd: 1 } },
+        deps: { priorDaySpendMicros: () => 900_000 },
+      });
+      session("sess-day-a");
+      session("sess-day-b");
+      const ask = (id: string, maxTokens: number) =>
+        call(port, {
+          headers: { "X-Claude-Code-Session-Id": id },
+          body: JSON.stringify({
+            model: "claude-sonnet-5",
+            max_tokens: maxTokens,
+            stream: true,
+          }),
+        });
+
+      // 13,000 output tokens at $15 a million is $0.195. One call is admitted
+      // on the $0.90 settled, and a second beside it would pass $1.
+      const first = ask("sess-day-a", 13_000);
+      await until(() => fake.requests.length === 1);
+      const beside = await ask("sess-day-b", 13_000);
+      expect(beside.status).toBe(403);
+      expect(beside.headers["x-oxagen-refusal"]).toBe("daily_budget_exceeded");
+      expect(beside.body).toContain("held by calls in flight");
+      expect(fake.requests).toHaveLength(1);
+
+      release();
+      expect((await first).status).toBe(200);
+      await until(() => proxy.stats().inFlight === 0);
+      // Settled at its real cost, a few cents, so a small call is admitted.
+      const after = ask("sess-day-b", 10);
+      await until(() => fake.requests.length === 2);
+      release();
+      expect((await after).status).toBe(200);
+    });
+  });
+
   describe("a stream that ends badly", () => {
     it("records Anthropic's event: error after a 200 as the call's error", async () => {
       const fake = await vendor((_req, res) => {
