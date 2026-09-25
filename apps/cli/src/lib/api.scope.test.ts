@@ -18,7 +18,7 @@ vi.mock("./config.js", () => ({
   getApiUrl: () => "https://api.example.invalid",
 }));
 
-import { apiPostOrThrow } from "./api";
+import { apiGetOrThrow, apiPostOrThrow } from "./api";
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -76,5 +76,30 @@ describe("apiPostOrThrow with an explicit scope", () => {
     await apiPostOrThrow("x", {}, { org: "a", ws: "b" }, { timeoutMs: 50 });
     const init = fetchMock.mock.calls[0]?.[1];
     expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe("apiGetOrThrow with an explicit scope", () => {
+  it("addresses the named org and workspace with only the token", async () => {
+    await apiGetOrThrow(
+      "connections",
+      { connectorId: "github" },
+      { org: "acme", ws: "payments" },
+    );
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://api.example.invalid/v1/acme/payments/connections?connectorId=github",
+    );
+  });
+
+  it("still refuses without a token", async () => {
+    config.token = undefined;
+    await expect(
+      apiGetOrThrow("x", undefined, { org: "acme", ws: "payments" }),
+    ).rejects.toThrow(/Not logged in/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still needs the global selection when no scope is given", async () => {
+    await expect(apiGetOrThrow("x")).rejects.toThrow(/Not logged in/);
   });
 });

@@ -1,0 +1,224 @@
+{
+  "name": "search_mcp_registry",
+  "domain": "agent",
+  "description": "Search the official MCP Registry and Oxagen's verified first-party servers for MCP servers a workspace can add as a tool provider",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "maxLength": 120,
+        "default": ""
+      },
+      "cursor": {
+        "type": "string",
+        "maxLength": 400
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 30,
+        "default": 20
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "servers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "publisher": {
+              "type": "string"
+            },
+            "publisherVerified": {
+              "type": "boolean"
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "verified",
+                "registry"
+              ]
+            },
+            "version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "iconUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "websiteUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "docsUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "repositoryUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "endpointUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "transports": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "streamable-http",
+                  "sse",
+                  "stdio"
+                ]
+              }
+            },
+            "auth": {
+              "type": "string",
+              "enum": [
+                "oauth",
+                "bearer",
+                "header",
+                "none",
+                "unknown"
+              ]
+            },
+            "authHeader": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "oauthRegistration": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "dynamic",
+                    "client_required",
+                    "unknown"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "connectable": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "description",
+            "publisher",
+            "publisherVerified",
+            "source",
+            "version",
+            "iconUrl",
+            "websiteUrl",
+            "docsUrl",
+            "repositoryUrl",
+            "endpointUrl",
+            "transports",
+            "auth",
+            "authHeader",
+            "oauthRegistration",
+            "connectable"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "registryReachable": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "servers",
+      "nextCursor",
+      "registryReachable"
+    ],
+    "additionalProperties": false
+  }
+}

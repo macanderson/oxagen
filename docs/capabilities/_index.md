@@ -34,6 +34,7 @@ after the registered name separately when their contract uses a dotted stem.
 | --- | --- | --- |
 | [assign_agent_role](agent.role.assign.md) | [agent.role.assign.ts](../../packages/oxagen/src/contracts/agent.role.assign.ts) | api, mcp, agent |
 | [attach_memory_evidence](agent.memory_evidence.attach.md) | [agent.memory_evidence.attach.ts](../../packages/oxagen/src/contracts/agent.memory_evidence.attach.ts) | api, mcp, agent |
+| [authorize_mcp_server](agent.mcp.authorize.complete.md) | [agent.mcp.authorize.complete.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.complete.ts) | api, mcp |
 | [bind_agent_environment](agent.environment.bind.md) | [agent.environment.bind.ts](../../packages/oxagen/src/contracts/agent.environment.bind.ts) | api, mcp, agent |
 | [cite_memory](agent.memory.cite.md) | [agent.memory.cite.ts](../../packages/oxagen/src/contracts/agent.memory.cite.ts) | api, mcp, agent |
 | [commit_agent_definition](agent.definition.commit.md) | [agent.definition.commit.ts](../../packages/oxagen/src/contracts/agent.definition.commit.ts) | api |
@@ -81,7 +82,9 @@ after the registered name separately when their contract uses a dotted stem.
 | [revoke_agent_role](agent.role.revoke.md) | [agent.role.revoke.ts](../../packages/oxagen/src/contracts/agent.role.revoke.ts) | api, mcp, agent |
 | [rotate_agent_credential](agent.credential.rotate.md) | [agent.credential.rotate.ts](../../packages/oxagen/src/contracts/agent.credential.rotate.ts) | api |
 | [save_memory](agent.memory.remember.md) | [agent.memory.remember.ts](../../packages/oxagen/src/contracts/agent.memory.remember.ts) | api, mcp, agent |
+| [search_mcp_registry](agent.mcp.registry.search.md) | [agent.mcp.registry.search.ts](../../packages/oxagen/src/contracts/agent.mcp.registry.search.ts) | api, mcp |
 | [set_mcp_enabled](agent.mcp.set_enabled.md) | [agent.mcp.set_enabled.ts](../../packages/oxagen/src/contracts/agent.mcp.set_enabled.ts) | api, mcp |
+| [start_mcp_authorization](agent.mcp.authorize.start.md) | [agent.mcp.authorize.start.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.start.ts) | api, mcp |
 | [suggest_agent_def](agent.definition.suggest.md) | [agent.definition.suggest.ts](../../packages/oxagen/src/contracts/agent.definition.suggest.ts) | api, mcp, agent |
 | [suggest_promotion_rationales](agent.memory_promotion.rationales.md) | [agent.memory_promotion.rationales.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.rationales.ts) | api, mcp, agent |
 | [summarize_agent_def](agent.definition.summarize.md) | [agent.definition.summarize.ts](../../packages/oxagen/src/contracts/agent.definition.summarize.ts) | api, mcp, agent |
@@ -207,6 +210,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [dismiss_proposal](context.proposal.dismiss.md) | [context.proposal.dismiss.ts](../../packages/oxagen/src/contracts/context.proposal.dismiss.ts) | api |
 | [get_context_pr](context.pr.get.md) | [context.pr.get.ts](../../packages/oxagen/src/contracts/context.pr.get.ts) | api, mcp |
 | [get_record](context.records.get.md) | [context.records.get.ts](../../packages/oxagen/src/contracts/context.records.get.ts) | api, mcp, agent |
+| [get_published_steering](context.steering.published.get.md) | [context.steering.published.get.ts](../../packages/oxagen/src/contracts/context.steering.published.get.ts) | api, mcp, cli |
 | `get_steering_freshness` | [context.steering.freshness.ts](../../packages/oxagen/src/contracts/context.steering.freshness.ts) | api, mcp, agent |
 | [list_context_records](context.record.list.md) | [context.record.list.ts](../../packages/oxagen/src/contracts/context.record.list.ts) | api, agent, mcp |
 | [list_proposals](context.proposal.list.md) | [context.proposal.list.ts](../../packages/oxagen/src/contracts/context.proposal.list.ts) | api, mcp |
@@ -447,7 +451,9 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_github_installations](repository.installation.candidates.md) | [repository.installation.candidates.ts](../../packages/oxagen/src/contracts/repository.installation.candidates.ts) | api, mcp |
 | [list_installation_repositories](repository.installation.list.md) | [repository.installation.list.ts](../../packages/oxagen/src/contracts/repository.installation.list.ts) | api, mcp |
 | [list_repositories](repository.list.md) | [repository.list.ts](../../packages/oxagen/src/contracts/repository.list.ts) | api, mcp, cli |
+| [list_working_copies](repository.working_copy.list.md) | [repository.working_copy.list.ts](../../packages/oxagen/src/contracts/repository.working_copy.list.ts) | api, mcp |
 | [open_init_pr](repository.init_pr.open.md) | [repository.init_pr.open.ts](../../packages/oxagen/src/contracts/repository.init_pr.open.ts) | api, mcp, cli |
+| [record_working_copy](repository.working_copy.record.md) | [repository.working_copy.record.ts](../../packages/oxagen/src/contracts/repository.working_copy.record.ts) | api, cli |
 | [set_production_branch](repository.production_branch.set.md) | [repository.production_branch.set.ts](../../packages/oxagen/src/contracts/repository.production_branch.set.ts) | api, mcp, cli |
 | [unlink_repository](repository.unlink.md) | [repository.unlink.ts](../../packages/oxagen/src/contracts/repository.unlink.ts) | api, mcp, cli |
 

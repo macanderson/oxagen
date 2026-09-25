@@ -6,8 +6,10 @@
 // The row prints what the roster and the registry carry: the system, the
 // transport (every roster row is reached over `mcp`) over the wire and the
 // endpoint, the versions the registry holds from it, and the recorded health.
-// Toolbelts, Agents, Connection, Authorization and Last import have no field
-// on any read yet (#3852, #3917, #3918), and each cell says so.
+// Connection is the provider's status light and Authorization how it
+// authenticates, with an OAuth token's expiry (#4132). Toolbelts, Agents and
+// Last import have no field on any read yet (#3852, #3917), and each cell
+// says so.
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { buttonSecondary, mono } from "@/ui/control-styles";
@@ -21,6 +23,12 @@ import {
   type ProviderView,
   RemoveProvider,
 } from "./provider-dialog";
+import { ProviderIcon } from "./provider-icon";
+import {
+  ProviderAuthorization,
+  ProviderStatusLight,
+  ReconnectProvider,
+} from "./provider-status";
 import type { ToolsAt } from "./view";
 
 export function ProviderRow({
@@ -46,12 +54,17 @@ export function ProviderRow({
           type="button"
           data-provider-open={server.id}
           aria-label={t("openNamed", { name: server.name })}
-          className={`${buttonGhost} -ml-2 flex-col items-start gap-0.5`}
+          className={`${buttonGhost} -ml-2 items-start gap-2.5`}
           onClick={show}
         >
-          <span className="font-semibold">{server.name}</span>
-          <span className={`${mono} text-xs font-normal text-muted-foreground`}>
-            {server.id}
+          <ProviderIcon name={server.name} iconUrl={server.iconUrl} size={24} />
+          <span className="flex flex-col items-start gap-0.5">
+            <span className="font-semibold">{server.name}</span>
+            <span
+              className={`${mono} text-xs font-normal text-muted-foreground`}
+            >
+              {server.id}
+            </span>
           </span>
         </button>
         <ProviderDialog
@@ -102,10 +115,10 @@ export function ProviderRow({
         <HealthDot health={server.healthStatus} />
       </td>
       <td className={cell}>
-        <NotBackedValue gap="oauth" />
+        <ProviderStatusLight server={server} />
       </td>
       <td className={cell}>
-        <NotBackedValue gap="oauth" />
+        <ProviderAuthorization server={server} />
       </td>
       <td className={cell}>
         <NotBackedValue gap="providers" />
@@ -120,6 +133,7 @@ export function ProviderRow({
           >
             {t("open")}
           </button>
+          {canAdminister ? <ReconnectProvider at={at} server={server} /> : null}
           {canAdminister ? <RemoveProvider at={at} server={server} /> : null}
         </span>
       </td>

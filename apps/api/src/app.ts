@@ -57,6 +57,9 @@ import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
 import { agentMcpResolveRoute } from "./routes/v1/agent.mcp.resolve";
 import { agentMcpSetEnabledRoute } from "./routes/v1/agent.mcp.set_enabled";
 import { agentMcpDeleteRoute } from "./routes/v1/agent.mcp.delete";
+import { agentMcpRegistrySearchRoute } from "./routes/v1/agent.mcp.registry.search";
+import { agentMcpAuthorizeStartRoute } from "./routes/v1/agent.mcp.authorize.start";
+import { agentMcpAuthorizeCompleteRoute } from "./routes/v1/agent.mcp.authorize.complete";
 import { agentMcpConsentResolveRoute } from "./routes/v1/agent.mcp_consent.resolve";
 import { agentMcpConsentListRoute } from "./routes/v1/agent.mcp_consent.list";
 import { agentMemoryRecallRoute } from "./routes/v1/agent.memory.recall";
@@ -205,6 +208,7 @@ import { contextRecordsGetRoute } from "./routes/v1/context.records.get";
 import { contextRecordsAppendRoute } from "./routes/v1/context.records.append";
 import { contextSteeringDeliveriesRoute } from "./routes/v1/context.steering.deliveries";
 import { contextSteeringFreshnessRoute } from "./routes/v1/context.steering.freshness";
+import { publishedSteeringGetRoute } from "./routes/v1/context.steering.published.get";
 import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
 import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
 import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismiss";
@@ -281,6 +285,8 @@ import { repositoryLinkRoute } from "./routes/v1/repository.link";
 import { repositoryUnlinkRoute } from "./routes/v1/repository.unlink";
 import { repositoryListRoute } from "./routes/v1/repository.list";
 import { repositoryTreeGetRoute } from "./routes/v1/repository.tree.get";
+import { workingCopyRecordRoute } from "./routes/v1/repository.working_copy.record";
+import { workingCopyListRoute } from "./routes/v1/repository.working_copy.list";
 import { repositoryProductionBranchSetRoute } from "./routes/v1/repository.production_branch.set";
 import { repositoryInitPrOpenRoute } from "./routes/v1/repository.init_pr.open";
 import { contextGovernanceModeSetRoute } from "./routes/v1/context.governance_mode.set";
@@ -718,6 +724,12 @@ orgScoped.route(
   repositoryProductionBranchSetRoute,
 );
 orgScoped.route("/repository/init-pr", repositoryInitPrOpenRoute);
+// Working copies (MC spec §10.1): `oxagen init` and `oxagen pull` report the
+// directory they linked (POST), and the Working copies tab lists them (GET).
+// The published .oxagen/ tree a pull writes is read beside the other steering
+// routes below.
+orgScoped.route("/working-copies", workingCopyRecordRoute);
+orgScoped.route("/working-copies", workingCopyListRoute);
 orgScoped.route("/context/governance-mode", contextGovernanceModeSetRoute);
 orgScoped.route(
   "/repository/installation/repositories",
@@ -868,6 +880,15 @@ orgScoped.route("/agent/mcp-servers", agentMcpListRoute);
 orgScoped.route("/agent/mcp-servers/resolve", agentMcpResolveRoute);
 orgScoped.route("/agent/mcp-servers/set-enabled", agentMcpSetEnabledRoute);
 orgScoped.route("/agent/mcp-servers/delete", agentMcpDeleteRoute);
+orgScoped.route("/agent/mcp-registry", agentMcpRegistrySearchRoute);
+orgScoped.route(
+  "/agent/mcp-servers/authorize/start",
+  agentMcpAuthorizeStartRoute,
+);
+orgScoped.route(
+  "/agent/mcp-servers/authorize/complete",
+  agentMcpAuthorizeCompleteRoute,
+);
 orgScoped.route("/agent/mcp-consents/resolve", agentMcpConsentResolveRoute);
 orgScoped.route("/agent/mcp-consents", agentMcpConsentListRoute);
 orgScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
@@ -1096,6 +1117,8 @@ orgScoped.route("/context/records/get", contextRecordsGetRoute);
 orgScoped.route("/context/records/append", contextRecordsAppendRoute);
 orgScoped.route("/context/steering/freshness", contextSteeringFreshnessRoute);
 orgScoped.route("/context/steering/deliveries", contextSteeringDeliveriesRoute);
+// The published .oxagen/ tree with every file's text, for `oxagen pull`.
+orgScoped.route("/context/steering/published", publishedSteeringGetRoute);
 orgScoped.route("/context/proposals", contextProposalListRoute);
 orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
 orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);

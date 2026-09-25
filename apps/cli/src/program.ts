@@ -1199,12 +1199,58 @@ export function buildProgram(): Command {
     .description(
       "Link this project to an Oxagen org + workspace (writes .oxagen/workspace.json)",
     )
+    .option(
+      "--org <slug>",
+      "Link this organization instead of choosing one; works without a terminal",
+    )
+    .option(
+      "--workspace <slug>",
+      "Link this workspace instead of choosing one; relinks when the project names another",
+    )
     .option("--json", "Output JSON instead of human-readable text")
     .option("--no-link", "Skip the workspace linker step entirely")
-    .action(async (opts: { json?: boolean; link?: boolean }) => {
-      const { handleInit } = await import("./commands/init.js");
-      await handleInit({ json: opts.json, noLink: opts.link === false });
-    });
+    .action(
+      async (opts: {
+        org?: string;
+        workspace?: string;
+        json?: boolean;
+        link?: boolean;
+      }) => {
+        const { handleInit } = await import("./commands/init.js");
+        await handleInit({
+          org: opts.org,
+          workspace: opts.workspace,
+          json: opts.json,
+          noLink: opts.link === false,
+        });
+      },
+    );
+
+  // ── pull: the workspace's published steering, into this directory ─────────
+
+  program
+    .command("pull")
+    .description(
+      "Write the steering published in this workspace into this directory's .oxagen/",
+    )
+    .option(
+      "--binding <rpb_id>",
+      "Pull from this repository binding instead of the workspace's main repository",
+    )
+    .option("--force", "Overwrite files edited here")
+    .option("--dry-run", "Show what would change, and write nothing")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        binding?: string;
+        force?: boolean;
+        dryRun?: boolean;
+        json?: boolean;
+      }) => {
+        const { pull } = await import("./commands/pull.js");
+        await pull(opts);
+      },
+    );
 
   // ── logs: see + debug the OXAGEN_CLI_DEBUG .output stream ────────────────────
 

@@ -327,13 +327,16 @@ describe("header", () => {
     expect(screen.queryByTestId("run-wall-ticking")).toBeNull();
   });
 
-  it("leaves out the generated name when automatic names are disabled", async () => {
+  it("shows the harness title when automatic names are disabled", async () => {
+    // With enrichment off, get_run already swaps Oxagen's name for the title
+    // the harness gave the session (`resolveRun`). The header shows what it
+    // is sent; dropping it hid the one title the operator chose to keep.
     await renderRun({
       detail: ok(
         runDetail({
           run: runRow({
             enrichmentEnabled: false,
-            name: "Old generated name",
+            name: "Fix the billing proration",
             taskRef: "A derived project label",
             summary: null,
           }),
@@ -341,8 +344,10 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.queryByText("Old generated name")).toBeNull();
     expect(screen.getByTestId("run-when")).toHaveTextContent(
+      "Fix the billing proration",
+    );
+    expect(screen.getByTestId("run-when")).not.toHaveTextContent(
       "A derived project label",
     );
     expect(
@@ -350,6 +355,25 @@ describe("header", () => {
         name: "Automatic run names and summaries",
       }),
     ).not.toBeChecked();
+  });
+
+  it("falls back to the task label when names are disabled and the harness gave none", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            enrichmentEnabled: false,
+            name: null,
+            taskRef: "A derived project label",
+            summary: null,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-when")).toHaveTextContent(
+      "A derived project label",
+    );
   });
 
   it("draws the agent, status, tier and task chips, and the rig the run ran on", async () => {
@@ -432,6 +456,65 @@ describe("header", () => {
     expect(path.getAttribute("title")).toContain(
       "Oxagen recorded this checkout on mac-studio.local.",
     );
+    await expectNoAxe(container);
+  });
+
+  it("says each pull request's state beside it, as the work read took it from the forge", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork()),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    const states = checkout.getAllByTestId("run-pull-state");
+    expect(states.map((s) => s.getAttribute("data-state"))).toEqual(["open"]);
+    expect(states[0]).toHaveTextContent("open");
+  });
+
+  it("links a pull request only the frames recorded, a GitLab merge request included, with status unknown", async () => {
+    const gitlab = "https://gitlab.com/acme/platform/web/-/merge_requests/9";
+    const { container } = await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork()),
+      outputs: ok(
+        runOutputs([
+          // The work read already holds #482; this node is the same PR.
+          runOutputNode({
+            seq: "300",
+            kind: "pr",
+            name: "#482",
+            where: "acme/platform",
+            state: "open",
+            note: "https://github.com/acme/platform/pull/482",
+            stat: null,
+          }),
+          runOutputNode({
+            seq: "301",
+            kind: "pr",
+            name: "#9",
+            where: "acme/platform/web",
+            state: "open",
+            note: gitlab,
+            stat: null,
+          }),
+        ]),
+      ),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    // #482 is listed once, from the work read, with its live state.
+    expect(
+      checkout.getAllByRole("link", { name: "acme/platform#482" }),
+    ).toHaveLength(1);
+    const mr = checkout.getByRole("link", { name: "acme/platform/web#9" });
+    expect(mr).toHaveAttribute("href", gitlab);
+    expect(mr).toHaveAttribute("target", "_blank");
+    expect(
+      checkout
+        .getAllByTestId("run-pull-state")
+        .map((s) => s.getAttribute("data-state")),
+    ).toEqual(["open", "unknown"]);
+    expect(checkout.getByText("status unknown")).toBeTruthy();
     await expectNoAxe(container);
   });
 
@@ -559,14 +642,18 @@ describe("header", () => {
     expect(operator).toHaveTextContent(/^not recorded$/);
   });
 
-  it("draws the pause banner only while ingress is paused", async () => {
+  it("draws the pause banner only while the run is paused", async () => {
     await renderRun({
       detail: ok(
         runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
       ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
+    // A wrapped run's host refuses tool calls. It holds no ingress fence.
+    expect(screen.getByTestId("run-paused")).toHaveTextContent(
+      "Paused. The host refuses the agent's tool calls until you resume it.",
+    );
+    expect(screen.getByTestId("run-paused")).not.toHaveTextContent("Ingress");
     cleanup();
     await renderRun({
       detail: ok(runDetail()),
@@ -607,7 +694,9 @@ describe("header", () => {
       approvals: ok({ items: [approval()], more: false }),
     });
     expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
-    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
+    expect(screen.getByTestId("run-paused")).toHaveTextContent(
+      "Paused. Ingress is paused.",
+    );
     // Resume sits with Pause and Cancel in the header; the banner only says
     // why the run is waiting.
     expect(screen.getByTestId("run-resume")).toHaveTextContent("Resume run");
@@ -908,14 +997,29 @@ describe("header", () => {
 });
 
 describe("controls", () => {
-  it("draws pause, resume, steer and cancel on a live wrapped run", async () => {
+  it("draws pause, steer and cancel on a live wrapped run, and no Resume", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ status: "live" }) })),
       transcript: ok(runTranscript()),
     });
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
+    expect(screen.queryByTestId("run-resume")).toBeNull();
+  });
+
+  it("draws Resume in Pause's place once a wrapped run's host has paused it (#4112)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
+    for (const command of ["resume", "steer", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
+    }
+    expect(screen.queryByTestId("run-pause")).toBeNull();
   });
 
   it("disables only Steer on a live run whose harness carries no mid-session prompt", async () => {
@@ -928,7 +1032,7 @@ describe("controls", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-steer")).toBeDisabled();
-    for (const command of ["pause", "resume", "cancel"]) {
+    for (const command of ["pause", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
   });
@@ -967,13 +1071,20 @@ describe("controls", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-pause")).toHaveTextContent("❙❙ Pause run");
-    expect(screen.getByTestId("run-resume")).toHaveTextContent("▶ Resume run");
     expect(screen.getByTestId("run-cancel").className).toContain(
       "text-error-ink",
     );
     expect(screen.getByTestId("run-steer").className).not.toContain(
       "text-error-ink",
     );
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-resume")).toHaveTextContent("▶ Resume run");
   });
 
   it("ends a live run's actions on Export, drawn disabled until the run seals", async () => {

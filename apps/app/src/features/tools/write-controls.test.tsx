@@ -48,6 +48,18 @@ vi.mock("@/features/shell/client", () => ({
   chooseSwitchTargets,
   chooseServerTools,
 }));
+// The wizard opens on the registry browser; these paths use the other sources.
+vi.mock("./provider-auth-actions", () => ({
+  searchRegistry: vi.fn().mockResolvedValue({
+    ok: true,
+    value: { servers: [], nextCursor: null, registryReachable: true },
+  }),
+  startProviderAuthorization: vi.fn(),
+  providerRedirectUrl: vi.fn().mockResolvedValue({
+    ok: true,
+    value: { redirectUrl: "https://app.oxagen.sh/api/v1/mcp/oauth/callback" },
+  }),
+}));
 
 const { ImportProvider } = await import("./import-provider");
 const { ToolDialog } = await import("./tool-dialog");
@@ -64,7 +76,6 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 const formOf = (node: HTMLElement) => element(node.closest("form"), "form");
 
 const at = { org: "acme", ws: "core-platform" };
-const TOOLS = "/acme/core-platform/tools";
 const SWITCHES = "/acme/core-platform/tools/switches";
 const GENERATION = { org: 12, workspace: 4 };
 /** The operator level's picker (#3147): one member, so its option is unambiguous. */
@@ -198,6 +209,7 @@ describe("ImportProvider", () => {
     open(ROSTER);
     // The picker shows the provider's name; what goes to the kernel is the id
     // `import_tools` names a provider by, never the name a person reads.
+    fireEvent.click(screen.getByTestId("tools-import-source-existing"));
     fill("Provider", "mcs_01k5s2");
     fireEvent.submit(formOf(screen.getByLabelText("Provider")));
     // The tools field offers the names this provider's versions carry, found
@@ -241,6 +253,7 @@ describe("ImportProvider", () => {
       value: { importDigest: "d1", published: 1, unchanged: 0 },
     });
     open(ROSTER);
+    fireEvent.click(screen.getByTestId("tools-import-source-existing"));
     fill("Provider", "mcs_01k5s1");
     fireEvent.submit(formOf(screen.getByLabelText("Provider")));
     fireEvent.click(screen.getByTestId("tools-import-classify"));
@@ -268,8 +281,10 @@ describe("ImportProvider", () => {
       value: { importDigest: "d2", published: 1, unchanged: 0 },
     });
     open([]);
+    fireEvent.click(screen.getByTestId("tools-import-source-custom"));
     fill("Name", "Notion");
     fill("Endpoint URL", "https://mcp.notion.example/v1");
+    fill("Auth", "none");
     fireEvent.submit(formOf(screen.getByLabelText("Name")));
     await waitFor(() => {
       expect(registerServer).toHaveBeenCalledWith("acme", "core-platform", {
@@ -310,8 +325,10 @@ describe("ImportProvider", () => {
       },
     });
     open(null);
+    fireEvent.click(screen.getByTestId("tools-import-source-custom"));
     fill("Name", "Notion");
     fill("Endpoint URL", "https://mcp.notion.example/v1");
+    fill("Auth", "none");
     fireEvent.submit(formOf(screen.getByLabelText("Name")));
     fireEvent.click(await screen.findByRole("checkbox", { name: "get_page" }));
     expect(screen.getByTestId("tools-import-classify")).toBeDisabled();
@@ -324,8 +341,10 @@ describe("ImportProvider", () => {
       code: "org_role_required",
     });
     open([]);
+    fireEvent.click(screen.getByTestId("tools-import-source-custom"));
     fill("Name", "Notion");
     fill("Endpoint URL", "https://mcp.notion.example/v1");
+    fill("Auth", "none");
     fireEvent.submit(formOf(screen.getByLabelText("Name")));
     expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
       "This needs an organization Owner or Admin.",
@@ -341,6 +360,7 @@ describe("ImportProvider", () => {
       code: "org_role_required",
     });
     open(ROSTER);
+    fireEvent.click(screen.getByTestId("tools-import-source-existing"));
     fill("Provider", "mcs_01k5s1");
     fireEvent.submit(formOf(screen.getByLabelText("Provider")));
     fireEvent.click(screen.getByTestId("tools-import-classify"));
@@ -355,6 +375,7 @@ describe("ImportProvider", () => {
   it("names a write that threw before it answered", async () => {
     importTools.mockRejectedValue(new Error("network"));
     open(ROSTER);
+    fireEvent.click(screen.getByTestId("tools-import-source-existing"));
     fill("Provider", "mcs_01k5s1");
     fireEvent.submit(formOf(screen.getByLabelText("Provider")));
     fireEvent.click(screen.getByTestId("tools-import-classify"));
@@ -437,7 +458,10 @@ describe("ToolDialog", () => {
         },
       );
     });
-    expect(router.replace).toHaveBeenCalledWith(TOOLS);
+    // It refreshes where it stands, so a classify from the Providers tab
+    // stays on Providers (#3800).
+    expect(router.refresh).toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("keeps a multiword data class whole when the person edits it", async () => {

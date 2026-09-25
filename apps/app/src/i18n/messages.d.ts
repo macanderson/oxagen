@@ -2987,14 +2987,16 @@ type Messages = {
       facetAll: string;
       facetLabel: string;
       rows: string;
-      rowsAll: string;
       sortBy: string;
       tokensUnsorted: string;
       columns: {
         run: string;
+        summary: string;
         agent: string;
         operator: string;
         status: string;
+        pullRequests: string;
+        diff: string;
         tier: string;
         replay: string;
         tokens: string;
@@ -3021,9 +3023,6 @@ type Messages = {
         range: string;
         rangeMore: string;
         none: string;
-        previous: string;
-        next: string;
-        page: string;
         older: string;
         newest: string;
       };
@@ -3033,6 +3032,57 @@ type Messages = {
       rowAction: string;
       exportQueued: string;
       exportFailed: string;
+      actionsColumn: string;
+      summaryNone: string;
+      summaryOff: string;
+      prFilter: {
+        label: string;
+        any: string;
+        with: string;
+        without: string;
+        note: string;
+        noneWith: string;
+        noneWithout: string;
+      };
+      columnsPicker: {
+        open: string;
+        title: string;
+        subtitle: string;
+        legend: string;
+        fixed: string;
+        reset: string;
+        saved: string;
+      };
+      prs: {
+        none: string;
+        notRead: string;
+        onRunPage: string;
+        ledgerHint: string;
+        unread: string;
+        openedNoLink: string;
+        noLinkHint: string;
+        more: string;
+        unnamed: string;
+        stateUnknown: string;
+        stateUnknownHint: string;
+        state: {
+          open: string;
+          draft: string;
+          merged: string;
+          closed: string;
+        };
+        openOnGitHub: string;
+        openOnGitLab: string;
+      };
+      diff: {
+        none: string;
+        uncommitted: string;
+        spoken: string;
+        basis: {
+          harness_reported: string;
+          git_observed: string;
+        };
+      };
     };
     pause: {
       title: string;
@@ -5384,7 +5434,28 @@ type Messages = {
       title: string;
       subtitle: string;
       connect: string;
-      notRecorded: string;
+      loading: string;
+      empty: string;
+      denied: string;
+      unavailable: string;
+      retry: string;
+      truncated: string;
+      noRemote: string;
+      detached: string;
+      neverPulled: string;
+      head: string;
+      reportedBy: string;
+      reportedByKey: string;
+      reportedByUnnamed: string;
+      oxagenState: {
+        present: string;
+        absent: string;
+      };
+      symlinkState: {
+        linked: string;
+        missing: string;
+        none: string;
+      };
       filesTitle: string;
       filesToml: string;
       filesJson: string;
@@ -5393,8 +5464,8 @@ type Messages = {
       sync: {
         init: string;
         pull: string;
-        status: string;
-        propose: string;
+        steeringStatus: string;
+        contextPropose: string;
       };
       syncNote: string;
       stale: string;
@@ -5405,7 +5476,7 @@ type Messages = {
         branch: string;
         oxagen: string;
         symlinks: string;
-        bundle: string;
+        pulled: string;
         lastSeen: string;
       };
     };
@@ -5414,19 +5485,19 @@ type Messages = {
       subtitle: string;
       lead: string;
       commandLabel: string;
-      pairing: string;
-      pairingHint: string;
+      loginComment: string;
+      hint: string;
       whatLabel: string;
       writes: {
         writes: {
           name: string;
           what: string;
         };
-        links: {
+        reports: {
           name: string;
           what: string;
         };
-        noWrite: {
+        pull: {
           name: string;
           what: string;
         };
@@ -6632,6 +6703,12 @@ type Messages = {
       repoNotCaptured: string;
       repoOnlyNotCaptured: string;
       noPullRequest: string;
+      pullState: {
+        open: string;
+        closed: string;
+        merged: string;
+        unknown: string;
+      };
       pathNotCaptured: string;
       noMachine: string;
       subagents: string;
@@ -6648,6 +6725,7 @@ type Messages = {
       sealNotRecorded: string;
       enrolledBy: string;
       paused: string;
+      pausedSession: string;
       copyLabel: string;
       copied: string;
       copyFailed: string;
@@ -7490,7 +7568,6 @@ type Messages = {
     assistant: {
       label: string;
       launcher: string;
-      launcherHint: string;
       launcherUnread: string;
       resize: string;
       close: string;
@@ -9203,7 +9280,6 @@ type Messages = {
         s3: string;
       };
       provider: string;
-      newProvider: string;
       name: string;
       nameHint: string;
       endpoint: string;
@@ -9215,6 +9291,7 @@ type Messages = {
         none: string;
         bearer: string;
         header: string;
+        oauth: string;
       };
       authConfig: string;
       authConfigHint: string;
@@ -9238,6 +9315,86 @@ type Messages = {
       importCount: string;
       importing: string;
       done: string;
+      addTitle: string;
+      theProvider: string;
+      pickProvider: string;
+      source: {
+        label: string;
+        browse: string;
+        custom: string;
+        existing: string;
+      };
+      browse: {
+        search: string;
+        searchPlaceholder: string;
+        sourceNote: string;
+        searching: string;
+        results: string;
+        empty: string;
+        more: string;
+        registryUnreachable: string;
+        verified: string;
+        publisher: string;
+        publisherVerified: string;
+        website: string;
+        docs: string;
+        source: string;
+        pick: string;
+        pickNamed: string;
+        change: string;
+        stdioOnly: string;
+        noRemote: string;
+        token: string;
+        header: string;
+        headerValue: string;
+        secretHint: string;
+        noAuth: string;
+        auth: {
+          oauth: string;
+          oauthClient: string;
+          bearer: string;
+          header: string;
+          none: string;
+          unknown: string;
+        };
+        version: string;
+      };
+      oauth: {
+        authorize: string;
+        explain: string;
+        explainUnknown: string;
+        ownClient: string;
+        clientRequired: string;
+        redirect: string;
+        redirectHint: string;
+        copy: string;
+        copied: string;
+        clientId: string;
+        clientSecret: string;
+        clientSecretHint: string;
+        scopes: string;
+        scopesHint: string;
+        docs: string;
+        starting: string;
+        waiting: string;
+        blocked: string;
+        openSignIn: string;
+        cancel: string;
+        notOAuth: string;
+        connectOpen: string;
+        failure: {
+          access_denied: string;
+          authorization_expired: string;
+          authorization_failed: string;
+          authorization_discovery_failed: string;
+          authorization_url_invalid: string;
+          endpoint_not_public: string;
+          redirect_url_invalid: string;
+          server_not_found: string;
+          org_role_required: string;
+        };
+      };
+      another: string;
     };
     connections: {
       title: string;
@@ -9814,7 +9971,6 @@ type Messages = {
         actions: string;
       };
       transportNote: string;
-      attentionNotBacked: string;
       open: string;
       openNamed: string;
       wireLine: string;
@@ -9853,19 +10009,6 @@ type Messages = {
         note: string;
         confirm: string;
       };
-      oauth: {
-        open: string;
-        title: string;
-        clientId: string;
-        clientSecret: string;
-        authUrl: string;
-        scopes: string;
-        redirect: string;
-        redirectHint: string;
-        refusal: string;
-        note: string;
-        confirm: string;
-      };
       drill: {
         subtitle: string;
         healthWarning: {
@@ -9887,7 +10030,6 @@ type Messages = {
         schemas: string;
         atLeast: string;
         authTitle: string;
-        authNotBacked: string;
         keyInstead: string;
         keyTitle: string;
         keyNote: string;
@@ -9903,8 +10045,60 @@ type Messages = {
           calls: string;
         };
         transportMcp: string;
+        reviewNotBacked: string;
       };
       transportMcp: string;
+      status: {
+        lights: {
+          green: string;
+          yellow: string;
+          red: string;
+        };
+        short: {
+          ok: string;
+          unchecked: string;
+          degraded: string;
+          tokenLapsed: string;
+          unreachable: string;
+          tokenExpired: string;
+          needsReauth: string;
+          revoked: string;
+          notConnected: string;
+        };
+        reasons: {
+          ok: string;
+          unchecked: string;
+          degraded: string;
+          tokenLapsed: string;
+          unreachable: string;
+          tokenExpired: string;
+          needsReauth: string;
+          revoked: string;
+          notConnected: string;
+        };
+        kinds: {
+          oauth: string;
+          bearer: string;
+          header: string;
+          none: string;
+        };
+        states: {
+          connected: string;
+          needs_reauth: string;
+          revoked: string;
+          not_connected: string;
+        };
+        expires: string;
+        refreshable: string;
+        notRefreshable: string;
+        attention: string;
+      };
+      reconnect: {
+        open: string;
+        pending: string;
+        named: string;
+        clientRequired: string;
+      };
     };
     toolbelts: {
       title: string;
@@ -9988,6 +10182,13 @@ type Messages = {
         plain: string;
       };
       versionsTable: string;
+    };
+    oauthCallback: {
+      doneTitle: string;
+      done: string;
+      failedTitle: string;
+      denied: string;
+      failed: string;
     };
   };
   ui: {

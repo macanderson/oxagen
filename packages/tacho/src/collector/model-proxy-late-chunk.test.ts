@@ -1,0 +1,270 @@
+/**
+ * A response chunk that arrives after its call settled (#4107).
+ *
+ * A real socket cannot decide when its last chunk lands relative to
+ * `settle`, so the upstream here is a fake: `node:http`'s `request` hands
+ * the proxy a stand-in `ClientRequest` for one host, and the test emits the
+ * vendor's response, and each chunk of it, exactly when it wants to.
+ */
+import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
+import { createServer, request, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { PassThrough } from "node:stream";
+import { gzipSync } from "node:zlib";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { TachoEvent } from "../envelope";
+import { TEST_ENROLLMENT, unsignedBundle } from "../host/test-support";
+import type { PolicyBundle } from "../wire";
+import { createModelProxy, type ModelProxy } from "./model-proxy";
+import { SessionRegistry } from "./registry";
+
+const FAKE_HOST = "late-chunk-vendor.invalid";
+
+/** The `ClientRequest` the proxy is handed for `FAKE_HOST`. */
+class FakeUpstreamRequest extends EventEmitter {
+  reusedSocket = false;
+  destroyed = false;
+  setTimeout(): this {
+    return this;
+  }
+  end(): this {
+    return this;
+  }
+  destroy(): this {
+    if (this.destroyed) return this;
+    this.destroyed = true;
+    // Node reports a destroyed request on a later tick, not inside the call.
+    process.nextTick(() => this.emit("close"));
+    return this;
+  }
+}
+
+const upstreams = vi.hoisted(() => [] as FakeUpstreamRequest[]);
+vi.mock("node:http", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:http")>();
+  return {
+    ...actual,
+    request: ((...args: Parameters<typeof actual.request>) => {
+      const options = args[0];
+      if (typeof options === "object" && "hostname" in options) {
+        if (options.hostname === FAKE_HOST) {
+          const fake = new FakeUpstreamRequest();
+          upstreams.push(fake);
+          return fake;
+        }
+      }
+      return actual.request(...args);
+    }) as typeof actual.request,
+  };
+});
+
+/** The vendor's `IncomingMessage`: a stream the test writes chunks into. */
+function vendorResponse(headers: Record<string, string>) {
+  return Object.assign(new PassThrough(), {
+    statusCode: 200,
+    statusMessage: "OK",
+    headers,
+    rawHeaders: Object.entries(headers).flat(),
+  });
+}
+
+const sse = (name: string, data: unknown) =>
+  Buffer.from(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+
+const EARLY = sse("message_start", {
+  type: "message_start",
+  message: {
+    id: "msg_1",
+    model: "claude-sonnet-5",
+    usage: { input_tokens: 1000, output_tokens: 1 },
+  },
+});
+const LATE = sse("content_block_delta", {
+  type: "content_block_delta",
+  index: 0,
+  delta: { type: "text_delta", text: "after the call settled" },
+});
+
+const sha = (bytes: Buffer) =>
+  `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+
+const until = async (condition: () => boolean, ms = 3000) => {
+  const deadline = Date.now() + ms;
+  while (!condition() && Date.now() < deadline)
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(condition()).toBe(true);
+};
+
+describe("a response chunk after its call settled", () => {
+  const cleanups: Array<() => Promise<void> | void> = [];
+  afterEach(async () => {
+    for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+    upstreams.length = 0;
+  });
+
+  async function start(
+    headers: Record<string, string> = { "content-type": "text/event-stream" },
+  ) {
+    const registry = new SessionRegistry({
+      scope: TEST_ENROLLMENT,
+      now: Date.now,
+      context: {
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_1",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+          host_enrollment_id: TEST_ENROLLMENT,
+        },
+      },
+    });
+    const host = registry.ensure("tachod-late-chunk", {
+      harness: "claude-code",
+    }).record;
+    const uuid = registry.ensure("sess-late", { harness: "claude-code" }).record
+      .recorder.sessionUuid;
+    const events: TachoEvent[] = [];
+    const log: string[] = [];
+    const bundle = unsignedBundle({}) as PolicyBundle;
+    let port = 0;
+    const proxy: ModelProxy = createModelProxy({
+      registry,
+      hostRecorder: () => host.recorder,
+      record: (sealed) => events.push(...sealed),
+      policy: () => ({ bundle, hostStatus: "active" }),
+      upstreams: () => ({
+        anthropic: `http://${FAKE_HOST}`,
+        openai: `http://${FAKE_HOST}/v1`,
+        chatgpt: `http://${FAKE_HOST}/backend-api/codex`,
+      }),
+      port: () => port,
+      log: (line) => log.push(line),
+      now: Date.now,
+    });
+    const server: Server = createServer((req, res) => proxy.handle(req, res));
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    port = (server.address() as AddressInfo).port;
+    cleanups.push(() => {
+      proxy.close();
+      return new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      });
+    });
+
+    // The caller's side: a streaming call that has read its headers.
+    const body = JSON.stringify({ model: "claude-sonnet-5", stream: true });
+    const caller = request({
+      host: "127.0.0.1",
+      port,
+      method: "POST",
+      path: "/anthropic/v1/messages",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": String(Buffer.byteLength(body)),
+        "X-Claude-Code-Session-Id": "sess-late",
+      },
+      agent: false,
+    });
+    caller.on("error", () => undefined);
+    const answered = new Promise<void>((resolve) =>
+      caller.on("response", (res) => {
+        res.on("error", () => undefined);
+        res.resume();
+        resolve();
+      }),
+    );
+    caller.end(body);
+
+    await until(() => upstreams.length === 1);
+    const upstreamReq = upstreams[0]!;
+    const upstream = vendorResponse(headers);
+    upstreamReq.emit("response", upstream);
+    await answered;
+
+    const frames = () =>
+      events.filter((e) => e.session_uuid === uuid && e.kind === "llm_call");
+    return { proxy, uuid, caller, upstream, upstreamReq, frames, log };
+  }
+
+  it("is ignored once the caller closed, and the frame digests only what came before", async () => {
+    const { caller, upstream, upstreamReq, frames } = await start();
+
+    upstream.emit("data", EARLY);
+    caller.destroy();
+    await until(() => frames().length === 1);
+    expect(upstreamReq.destroyed).toBe(true);
+
+    // The chunk the stream still had buffered, delivered after settle. On
+    // main before #4107 this threw ERR_CRYPTO_HASH_FINALIZED out of the
+    // listener, which in the daemon is an uncaught exception. `emit` rather
+    // than `write`: once the caller is gone `pipe` unpipes and the stream may
+    // pause, so a written chunk might never reach the listener and the test
+    // would pass without exercising anything.
+    expect(() => upstream.emit("data", LATE)).not.toThrow();
+
+    const [frame] = frames();
+    expect(frame!.body).toMatchObject({ api_error_class: "client_aborted" });
+    expect(frame!.attrs["oxagen.response_digest"]).toBe(sha(EARLY));
+    expect(frame!.attrs["oxagen.response_bytes"]).toBe(String(EARLY.length));
+    expect(frames()).toHaveLength(1);
+  });
+
+  it("is ignored once the operator interrupted the call", async () => {
+    const { proxy, uuid, upstream, frames } = await start();
+
+    upstream.emit("data", EARLY);
+    expect(proxy.abortSession(uuid, "operator stop")).toBe(1);
+    await until(() => frames().length === 1);
+
+    expect(() => upstream.emit("data", LATE)).not.toThrow();
+
+    const [frame] = frames();
+    expect(frame!.body).toMatchObject({ api_error_class: "interrupted" });
+    expect(frame!.attrs["oxagen.response_digest"]).toBe(sha(EARLY));
+    expect(frame!.attrs["oxagen.response_bytes"]).toBe(String(EARLY.length));
+    expect(frames()).toHaveLength(1);
+  });
+
+  it("is ignored once the upstream failed mid-response", async () => {
+    const { upstream, frames, log } = await start();
+
+    upstream.emit("data", EARLY);
+    upstream.emit("error", new Error("socket hang up"));
+    expect(log.some((line) => line.includes("failed mid-response"))).toBe(true);
+    expect(frames()).toHaveLength(1);
+
+    expect(() => upstream.emit("data", LATE)).not.toThrow();
+
+    const [frame] = frames();
+    expect(frame!.body).toMatchObject({ api_error_class: "upstream_reset" });
+    expect(frame!.attrs["oxagen.response_digest"]).toBe(sha(EARLY));
+    expect(frame!.attrs["oxagen.response_bytes"]).toBe(String(EARLY.length));
+    expect(frames()).toHaveLength(1);
+  });
+
+  it("is ignored for an encoded response too, and the digest covers the wire bytes", async () => {
+    const early = gzipSync(EARLY);
+    const { caller, upstream, frames } = await start({
+      "content-type": "text/event-stream",
+      "content-encoding": "gzip",
+    });
+
+    upstream.emit("data", early);
+    caller.destroy();
+    await until(() => frames().length === 1);
+
+    expect(() => upstream.emit("data", gzipSync(LATE))).not.toThrow();
+
+    // Usage and body are not asserted: zlib decodes on a later tick, so
+    // whether the decoded chunk reached the meter before settle is a race.
+    const [frame] = frames();
+    expect(frame!.attrs["oxagen.response_digest"]).toBe(sha(early));
+    expect(frame!.attrs["oxagen.response_bytes"]).toBe(String(early.length));
+    expect(frames()).toHaveLength(1);
+  });
+});

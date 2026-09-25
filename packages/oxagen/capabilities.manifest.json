@@ -421,6 +421,42 @@
       }
     },
     {
+      "name": "authorize_mcp_server",
+      "file": "agent.mcp.authorize.complete.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "start_mcp_authorization",
+      "file": "agent.mcp.authorize.start.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "delete_mcp_server",
       "file": "agent.mcp.delete.ts",
       "domain": "agent",
@@ -473,6 +509,24 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "search_mcp_registry",
+      "file": "agent.mcp.registry.search.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true,
         "app": true
       }
@@ -2344,6 +2398,25 @@
         "mcp": true,
         "unit": false,
         "docs": false
+      }
+    },
+    {
+      "name": "get_published_steering",
+      "file": "context.steering.published.get.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -4785,6 +4858,41 @@
         "unit": false,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "list_working_copies",
+      "file": "repository.working_copy.list.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "record_working_copy",
+      "file": "repository.working_copy.record.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

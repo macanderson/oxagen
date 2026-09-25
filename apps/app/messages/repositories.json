@@ -262,21 +262,42 @@
     },
     "copies": {
       "title": "Working copies",
-      "subtitle": "The same <code>.oxagen/</code> tree on a machine. Each is a directory somebody ran <code>oxagen init</code> in; the enrollment is the machine’s, and the link is one gitignored file.",
+      "subtitle": "The same <code>.oxagen/</code> tree on a machine. Each row is a directory where somebody ran <code>oxagen init</code>, as the CLI last reported it.",
       "connect": "Connect a directory",
-      "notRecorded": "No working copy is recorded yet. <code>oxagen init</code> links a directory on a machine and reports nothing back to Oxagen, so this table stays empty until it does.",
+      "loading": "Reading the working copies",
+      "empty": "No directory has reported to this workspace yet. Run the commands in Connect a directory in a checkout of the main repository. The directory appears here once <code>oxagen init</code> reports it.",
+      "denied": "Your role cannot read this workspace’s working copies. Any role in this workspace can, and so can an organization Owner or Admin. Ask a workspace Owner to add you.",
+      "unavailable": "Oxagen could not read the working copies ({code}). Try again in a moment.",
+      "retry": "Try again",
+      "truncated": "Showing the {limit} most recently seen directories. Older ones are not listed.",
+      "noRemote": "No remote",
+      "detached": "Detached head",
+      "neverPulled": "Never pulled",
+      "head": "head {commit}",
+      "reportedBy": "by {name}",
+      "reportedByKey": "by a key",
+      "reportedByUnnamed": "by a member with no display name",
+      "oxagenState": {
+        "present": "present",
+        "absent": "absent"
+      },
+      "symlinkState": {
+        "linked": "linked",
+        "missing": "missing",
+        "none": "none"
+      },
       "filesTitle": "Files to review",
       "filesToml": "# committed. reviewed. the source of truth.",
       "filesJson": "# gitignored · this machine’s link",
       "filesNote": "The committed file says what the workspace is. The gitignored one says which workspace this checkout is talking to, which is a fact about a laptop and not about the product, so it is never reviewed, never merged, and never the same file in two places.",
       "syncTitle": "Sync",
       "sync": {
-        "init": "Links this directory. Reads the git remote and writes <code>.oxagen/workspace.json</code>. Idempotent.",
-        "pull": "Not in the CLI yet. <code>git pull</code> on the production branch updates <code>.oxagen/</code> today.",
-        "status": "What this copy has against what is published: the files under <code>.oxagen/</code> that are behind or changed here.",
-        "propose": "Turns a local edit under <code>.oxagen/</code> into a proposal. Opening and merging its pull request happen here, because both gate on a role only a signed-in person holds."
+        "init": "Links this directory to the workspace. Writes <code>.oxagen/workspace.json</code>, adds it to <code>.gitignore</code>, and reports the directory here.",
+        "pull": "Writes the steering published on the main repository’s production branch into <code>.oxagen/</code>. Refuses to overwrite a local edit unless you pass <code>--force</code>, and records the commit it pulled here.",
+        "steeringStatus": "Compares <code>.oxagen/</code> in this directory against the production branch: the files that are behind or changed here.",
+        "contextPropose": "Records a proposal for a record under <code>.oxagen/rules/</code>: what it should say, and why. Its Context PR is opened and merged here, on the Changes tab, because a merge gates on a role only a signed-in person holds."
       },
-      "syncNote": "stella symlinks into this directory rather than copying it, so there is no second copy that could drift. A copy whose symlinks read <code>missing</code> is one where stella will load nothing.",
+      "syncNote": "<code>oxagen init</code> does not create stella’s links. It reports whether they exist. A copy whose symlinks read <code>missing</code> is one where stella loads nothing from <code>.oxagen/</code>, and <code>none</code> means the directory has no <code>.stella/</code>.",
       "stale": "A copy that is behind is not a run that is behind. Steering reaches a run from the merged commit, whatever a directory on a laptop holds.",
       "label": "Working copies of this workspace",
       "columns": {
@@ -285,40 +306,40 @@
         "branch": "Branch",
         "oxagen": ".oxagen/",
         "symlinks": "Symlinks",
-        "bundle": "Bundle",
+        "pulled": "Pulled",
         "lastSeen": "Last seen"
       }
     },
     "linkdir": {
       "title": "Connect a directory",
-      "subtitle": "one command, run in the directory",
-      "lead": "Run this in the directory you want linked. It reads the git remote, matches it against the repositories this installation can reach, and writes the one gitignored file that says which workspace this checkout talks to.",
+      "subtitle": "three commands, run in the directory",
+      "lead": "Run these in a checkout of the repository you want linked. <code>oxagen init</code> reads the git remote, writes the one gitignored file that says which workspace this checkout talks to, and reports the directory to this workspace.",
       "commandLabel": "In the directory",
-      "pairing": "# Pairing code: not issued yet",
-      "pairingHint": "Oxagen does not issue pairing codes yet, so the directory is linked on the machine only and does not appear on the Working copies tab.",
+      "loginComment": "# once per machine",
+      "hint": "The directory appears on the Working copies tab once <code>oxagen init</code> reports it.",
       "whatLabel": "What it writes, and what it does not",
       "writes": {
         "writes": {
           "name": "writes",
-          "what": "<code>.oxagen/workspace.json</code>: org, workspace, path, machine. Gitignored, never reviewed, never merged."
+          "what": "<code>.oxagen/workspace.json</code>: the org and workspace this checkout talks to. <code>oxagen init</code> adds it to <code>.gitignore</code>, so it is never reviewed or merged."
         },
-        "links": {
-          "name": "links",
-          "what": "<code>.stella/rules</code>, <code>.stella/proposals</code> and <code>.stella/agents</code> as symlinks into <code>.oxagen/</code>, so there is no second copy that could drift."
+        "reports": {
+          "name": "reports",
+          "what": "the machine’s hostname, the directory’s path, the git remote, the branch, and the head commit, to this workspace. That report is the row on the Working copies tab."
         },
-        "noWrite": {
-          "name": "does not write",
-          "what": "anything under <code>.oxagen/</code> that is committed. If the repository has no <code>.oxagen/</code> tree at all, it says so and offers the pull request that adds one."
+        "pull": {
+          "name": "pull writes",
+          "what": "the <code>.oxagen/</code> files published on the production branch. <code>oxagen pull</code> refuses to overwrite a local edit unless you pass <code>--force</code>."
         },
         "noRead": {
           "name": "does not read",
-          "what": "your working tree. Oxagen reads <code>.oxagen/</code> and nothing else; what a run needs from the rest of the repository reaches it as frames, at the hooks."
+          "what": "the other files in your working tree. The report names the directory and carries no file’s contents."
         }
       },
-      "grants": "Linking a directory grants nothing. A person’s roles decide what they may do here, and an agent’s mandate decides what it may do there; a laptop is not a principal.",
-      "copy": "Copy command",
+      "grants": "Linking a directory grants nothing. A person’s roles decide what they may do here, and an agent’s mandate decides what it may do there. A laptop is not a principal.",
+      "copy": "Copy commands",
       "copied": "Copied",
-      "copyFailed": "Copying did not work. Select the command and copy it."
+      "copyFailed": "Copying did not work. Select the commands and copy them."
     },
     "changes": {
       "title": "Open Context PRs",

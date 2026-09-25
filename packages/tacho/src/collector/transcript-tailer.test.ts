@@ -57,8 +57,16 @@ function fakeSession(
       rollbackChain(mark: unknown) {
         lines.length = (mark as { lines: number }).lines;
       },
-      sealCollectorEvent(kind: string): TachoEvent {
-        return { kind } as unknown as TachoEvent;
+      sealCollectorEvent(
+        kind: string,
+        body?: Record<string, unknown>,
+        fields?: { attrs?: Record<string, string> },
+      ): TachoEvent {
+        return {
+          kind,
+          body,
+          attrs: fields?.attrs ?? {},
+        } as unknown as TachoEvent;
       },
     },
   };
@@ -234,6 +242,82 @@ describe("TranscriptTailer", () => {
     // line, not just the ones on either side of it.
     await instance.tick();
     expect(session.lines).toHaveLength(2);
+  });
+
+  it("seals one gap for every line one pass refused, with their count", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    const session = fakeSession("s1", path);
+    writeFileSync(path, "a\nBAD1\nBAD2\nBAD3\nc\n");
+    const originalIngest = session.recorder.ingestTranscriptLine;
+    session.recorder.ingestTranscriptLine = (line, subagentId) => {
+      if (line.startsWith("BAD")) throw new Error(`refused ${line}`);
+      return originalIngest(line, subagentId);
+    };
+    const { instance, recorded } = tailer([session]);
+    await instance.tick();
+    expect(session.lines.map((l) => l.line)).toEqual(["a", "c"]);
+    const gaps = recorded.filter((event) => event.kind === "telemetry_gap");
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]!.body).toEqual({ gap_dropped_count: 3 });
+    expect(gaps[0]!.attrs["gap.detail"]).toBe("refused BAD1");
+  });
+
+  it("seals one gap for a subagent transcript whose chain refuses every line", async () => {
+    // A subagent chain reopened at seq 0 over its own WAL refused all 608
+    // lines of its transcript, and each one sealed a gap on the parent.
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    const subPath = join(dir, "agent-sub.jsonl");
+    writeFileSync(path, "");
+    writeFileSync(subPath, "s1\ns2\ns3\ns4\n");
+    const session = fakeSession("s1", path);
+    session.recorder.ingestTranscriptLine = () => {
+      throw new Error("WAL append refused: seq 0 is not after seq 155");
+    };
+    const { instance, recorded } = tailer([session]);
+    await expect(
+      instance.ingestSubagentTranscript("s1", "sub", subPath),
+    ).resolves.toBe(4);
+    const gaps = recorded.filter((event) => event.kind === "telemetry_gap");
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]!.body).toEqual({ gap_dropped_count: 4 });
+    expect(gaps[0]!.attrs["gap.subagent_id"]).toBe("sub");
+  });
+
+  it("carries a gap it could not write into the next pass's gap", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    const session = fakeSession("s1", path);
+    writeFileSync(path, "BAD1\nok\n");
+    const originalIngest = session.recorder.ingestTranscriptLine;
+    session.recorder.ingestTranscriptLine = (line, subagentId) => {
+      if (line.startsWith("BAD")) throw new Error(`refused ${line}`);
+      return originalIngest(line, subagentId);
+    };
+    const recorded: TachoEvent[] = [];
+    const log: string[] = [];
+    let gapWritable = false;
+    const instance = new TranscriptTailer({
+      sessions: () => [session],
+      session: () => session,
+      record: (events) => {
+        if (!gapWritable && events.some((e) => e.kind === "telemetry_gap"))
+          throw new Error("ENOSPC");
+        recorded.push(...events);
+      },
+      log: (line) => log.push(line),
+    });
+    await instance.tick();
+    expect(recorded.filter((e) => e.kind === "telemetry_gap")).toEqual([]);
+    expect(log.some((l) => l.includes("failed this tick: ENOSPC"))).toBe(true);
+    gapWritable = true;
+    appendFileSync(path, "BAD2\n");
+    await instance.tick();
+    const gaps = recorded.filter((event) => event.kind === "telemetry_gap");
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]!.body).toEqual({ gap_dropped_count: 2 });
+    expect(session.lines.map((l) => l.line)).toEqual(["ok"]);
   });
 
   it("keeps tailing one session when another's recorder is broken beyond a gap frame", async () => {

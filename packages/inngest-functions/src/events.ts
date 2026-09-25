@@ -35,3 +35,13 @@ export const PRICE_BOOK_BACKDATED_EVENT = "cost/price-book.backdated";
  * consumer, so a sender need not throttle.
  */
 export const RUN_PROGRESSED_EVENT = "cost/run.progressed";
+
+/**
+ * Asks `run.enrich` to name and summarise one run. Sent by the tacho ingest
+ * handler in the batch that lands a run's first prompt, so a new run gets its
+ * account within seconds rather than at the next sweep; by `summarize_run`
+ * when an operator asks; and by `run.enrichment-sweep` every five minutes for
+ * every run whose record changed since it was last read. Data is
+ * `{ orgId, workspaceId, runPublicId }`.
+ */
+export const RUN_ENRICH_EVENT = "run/enrich";

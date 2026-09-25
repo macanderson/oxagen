@@ -146,9 +146,13 @@ async function renderFleet(
   reads: Parameters<typeof fleetSource>[0],
   cursor: string | null = null,
   banners?: ReactNode,
+  view: {
+    prefs?: Parameters<typeof Fleet>[0]["prefs"];
+    pullRequests?: Parameters<typeof Fleet>[0]["pullRequests"];
+  } = {},
 ) {
   const { source, calls } = fleetSource(reads);
-  const element = await Fleet({ ctx, source, cursor, banners });
+  const element = await Fleet({ ctx, source, cursor, banners, ...view });
   const { container } = render(<IntlProvider>{element}</IntlProvider>);
   return { container, calls };
 }
@@ -189,6 +193,8 @@ afterEach(async () => {
   vi.useRealTimers();
   await expectNoAxe(document.body);
   cleanup();
+  // A test that saved a table choice leaves no cookie for the next one.
+  document.cookie = "fleet_view=; Path=/; Max-Age=0";
 });
 
 describe("Fleet reads", () => {
@@ -197,7 +203,11 @@ describe("Fleet reads", () => {
       { runs: runPage(RUNS), approvals: NO_APPROVALS },
       "c1",
     );
-    expect(calls.runs).toEqual([[ctx, { cursor: "c1" }]]);
+    // The page size is the read's own limit (25 until the person picks
+    // another), and every run is listed until a filter is chosen.
+    expect(calls.runs).toEqual([
+      [ctx, { cursor: "c1", limit: 25, pullRequests: "any" }],
+    ]);
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
     expect(calls.agents).toEqual([[ctx, { cursor: null }]]);
   });
@@ -475,23 +485,26 @@ describe("summary tiles", () => {
 });
 
 describe("the Runs panel", () => {
-  it("heads the table with the design's columns, in order, and an unlabelled action column", async () => {
+  it("heads the table with every column, in order, and an action column named only to a screen reader", async () => {
     await loaded();
     const heads = within(runsPanel())
       .getAllByRole("columnheader")
       .map((th) => th.textContent);
     expect(heads).toEqual([
       "Run",
+      "Summary",
       "Agent",
       "Operator",
       "Status",
+      "Pull requests",
+      "Lines",
       "Tier",
       "Replay",
       "Tokens",
       "Cost",
       "Frames",
       "Started",
-      "",
+      "Actions",
     ]);
   });
 
@@ -570,9 +583,11 @@ describe("the Runs panel", () => {
       expect(screen.getByTestId(`chip-${chip}`)).toHaveAttribute(
         "data-touch-target",
       );
-    const pager = screen.getByRole("navigation", { name: "Runs pages" });
-    for (const button of within(pager).getAllByRole("button"))
-      expect(button).toHaveAttribute("data-touch-target");
+    expect(screen.getByTestId("columns-open")).toHaveAttribute(
+      "data-touch-target",
+    );
+    for (const select of ["pr-filter", "rows-per-page"])
+      expect(screen.getByTestId(select).className).toContain("max-md:min-h-11");
     expect(within(row("tse_live")).getByTestId("row-pause")).toHaveAttribute(
       "data-touch-target",
     );
@@ -787,24 +802,46 @@ describe("list controls", () => {
     }),
   );
 
-  it("pages ten rows at a time, and says when the read stopped before the oldest run", async () => {
+  it("lists every run the read returned, and says when the read stopped before the oldest run", async () => {
     await loaded({ runs: runPage(many, "c2"), approvals: NO_APPROVALS });
-    expect(rows()).toHaveLength(10);
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–10 of 12+");
+    expect(rows()).toHaveLength(12);
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 12+");
     expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
       "href",
       "/acme/core-platform?cursor=c2",
     );
+    expect(screen.getByTestId("rows-per-page")).toHaveValue("25");
+  });
+
+  it("saves a new page size in the cookie and reads the newest runs again at that size", async () => {
+    await loaded({ runs: runPage(many, "c2"), approvals: NO_APPROVALS });
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Next page" }));
-    expect(rows()).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Page 2" })).toHaveAttribute(
-      "aria-current",
-      "page",
+    await user.selectOptions(screen.getByTestId("rows-per-page"), "50");
+    expect(document.cookie).toContain("fleet_view=v1|50|");
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("goes back to the newest runs when the page size changes on a later page", async () => {
+    await renderFleet(
+      { runs: runPage(many), approvals: NO_APPROVALS },
+      "c2",
+      undefined,
+      { pullRequests: "with" },
     );
-    await user.selectOptions(screen.getByTestId("rows-per-page"), "5");
-    expect(rows()).toHaveLength(5);
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–5 of 12+");
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByTestId("rows-per-page"), "10");
+    expect(push).toHaveBeenCalledWith("/acme/core-platform?prs=with");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("reads again only when the page size actually changes (negative)", async () => {
+    await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
+    fireEvent.change(screen.getByTestId("rows-per-page"), {
+      target: { value: "25" },
+    });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(document.cookie).not.toContain("fleet_view");
   });
 
   it("links back to the newest runs on a later read", async () => {
@@ -813,7 +850,7 @@ describe("list controls", () => {
       "href",
       "/acme/core-platform",
     );
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–10 of 12");
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 12");
   });
 
   it("searches, filters on a facet and sorts on a column", async () => {
