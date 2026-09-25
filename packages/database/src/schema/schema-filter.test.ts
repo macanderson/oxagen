@@ -18,7 +18,7 @@ const SCHEMAS_SOURCE = readFileSync(
 );
 
 function declaredSchemaNames(): string[] {
-  return Object.values(schemas)
+  return (Object.values(schemas) as unknown[])
     .filter((value): value is PgSchema => value instanceof PgSchema)
     .map((schema) => schema.schemaName)
     .sort();

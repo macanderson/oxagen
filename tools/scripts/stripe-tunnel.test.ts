@@ -1,7 +1,15 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type MockInstance,
+  vi,
+} from "vitest";
 import {
   isStripeTunnelPid,
   stopStripeTunnel,
@@ -38,7 +46,7 @@ describe("isStripeTunnelPid", () => {
 describe("stripe tunnel pidfile", () => {
   let dir: string;
   let pidFile: string;
-  let kill: ReturnType<typeof vi.spyOn>;
+  let kill: MockInstance<typeof process.kill>;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "stripe-tunnel-"));
