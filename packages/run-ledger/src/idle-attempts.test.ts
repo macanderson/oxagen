@@ -84,13 +84,13 @@ describe("buildListIdleAttemptsSql", () => {
     expect(params).toEqual([CUTOFF.toISOString(), 500]);
   });
 
-  // ADR-173: an operator pause refuses every append, so a paused run is
+  // ADR-180: an operator pause refuses every append, so a paused run is
   // silent by design and must never be sealed as abandoned.
   it("never lists a run whose evidence ingress an operator paused", () => {
     expect(text).toContain("AND NOT r.ingress_paused");
   });
 
-  // ADR-173: a resume stamps the run row's updated_at (setRunIngressPaused),
+  // ADR-180: a resume stamps the run row's updated_at (setRunIngressPaused),
   // so silence counts from the resume and a run resumed after twelve hours is
   // not sealed at the next pass.
   it("counts silence from a resume as well as from the last event", () => {

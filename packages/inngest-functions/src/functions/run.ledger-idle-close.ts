@@ -19,7 +19,7 @@ const MAX_SCANS = 4;
 
 /**
  * Every fifteen minutes: seal the ledger attempts with no event for twelve
- * hours as `abandoned`, and roll up each closed run's cost (#3988, ADR-173).
+ * hours as `abandoned`, and roll up each closed run's cost (#3988, ADR-180).
  *
  * A ledger run seals when its producer calls `sealAttempt`. When the process
  * dies mid-turn, nothing does, so the run read as live on Fleet for good and

@@ -185,7 +185,7 @@ close, not the end.
   until its next frame lands.
 - Ledger runs (`arun_…`) get no running rollup. The in-app assistant seals
   its run when the turn settles. A run whose API process died mid-turn stayed
-  open until ADR-173 (#3988): `run.ledger-idle-close` now seals an attempt
+  open until ADR-180 (#3988): `run.ledger-idle-close` now seals an attempt
   with no event for twelve hours as `abandoned` and rolls up its cost as
   final. Unlike the idle close of a session, that seal is final, because a
   ledger seal mints the attempt's finalization grant.

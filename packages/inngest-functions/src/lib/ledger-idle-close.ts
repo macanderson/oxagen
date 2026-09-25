@@ -1,5 +1,5 @@
 // ledger-idle-close.ts — the control plane's close of a ledger attempt whose
-// producer stopped reporting (#3988, ADR-173).
+// producer stopped reporting (#3988, ADR-180).
 //
 // The scan (`listIdleLedgerAttempts`, @oxagen/run-ledger) finds an open
 // attempt with no event and no operator resume for twelve hours. It never
@@ -17,7 +17,7 @@
 //
 // Unlike the wrapped-session close (ADR-159), this one is final. A seal mints
 // the attempt's finalization grant and commits its stream digest, so a late
-// append is refused as it is after any seal. ADR-173 records why.
+// append is refused as it is after any seal. ADR-180 records why.
 import {
   isAttemptAdvancedError,
   LEDGER_IDLE_CLOSE_REASON,

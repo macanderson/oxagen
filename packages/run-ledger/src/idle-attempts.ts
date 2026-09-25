@@ -1,5 +1,5 @@
 // idle-attempts.ts — the scan behind the control plane's close of a ledger
-// attempt whose producer stopped reporting (#3988, ADR-173).
+// attempt whose producer stopped reporting (#3988, ADR-180).
 //
 // A ledger attempt seals through `sealAttempt`, which its producer calls: the
 // in-app assistant when its turn settles, a preflight refusal, or
@@ -62,7 +62,7 @@ export function ledgerIdleCutoff(now: Date): Date {
  * `(attempt_id, attempt_seq)` unique index, highest first. Appends serialize
  * on the run lock, so the highest sequence is also the latest recorded.
  *
- * Two rules keep the close off a run an operator is holding (ADR-173):
+ * Two rules keep the close off a run an operator is holding (ADR-180):
  *
  * - A run whose evidence ingress is paused is never listed. The pause refuses
  *   every append, so the silence is the operator's doing, not a sign that

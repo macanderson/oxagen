@@ -2151,7 +2151,7 @@ describe("sealAttempt", () => {
     });
 
     it("refuses a late append to an attempt the close sealed", async () => {
-      // ADR-173: the idle close is final, as any seal is. The producer that
+      // ADR-180: the idle close is final, as any seal is. The producer that
       // comes back finds its attempt sealed and must be issued a new run.
       const { tx, executed } = makeRoutingTx([
         { match: LOCK_ATTEMPT, rows: [makeAttemptRow({ seal_id: "seal-1" })] },

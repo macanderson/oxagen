@@ -1,4 +1,4 @@
-# ADR-173: The control plane seals a silent ledger attempt abandoned
+# ADR-180: The control plane seals a silent ledger attempt abandoned
 
 - **Status:** Accepted
 - **Date:** 2026-09-24
