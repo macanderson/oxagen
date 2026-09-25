@@ -30,6 +30,7 @@ pnpm dev                     # starts Docker + migrations + all apps
 Other rules:
 
 - Commit messages: imperative mood, under 72 chars (`Add capability: recall_memory`) — dotted capability names are retired (ADR-025).
+- GitHub ignores negation. "This PR does not close #12" closes #12 on merge, so the `dod` check fails a PR whose body or commit messages carry that phrasing (#3680). Write `Refs #12`, or put the reference in backticks.
 - Don't rebase, squash, or cherry-pick to "tidy" shared history — correct, complete, pushed work beats a pretty history.
 - Everything committed must be **functionally complete**: fully wired end-to-end, every layer present, tests passing, no dead code.
 

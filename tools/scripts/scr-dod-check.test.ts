@@ -323,6 +323,64 @@ describe("dodStatus", () => {
       expect(status.heading).toBe("Done when");
     });
   });
+
+  // oxagen#3678. The witness: when the section ended at the next heading of
+  // any level, the first "###" inside a "## Definition of done" closed it, so
+  // an issue fixing several bugs read as having no checkboxes at all.
+  describe("a DoD split into subheadings (oxagen#3678)", () => {
+    const split = [
+      "## Definition of done",
+      "",
+      "### Bug A",
+      "",
+      "- [ ] x",
+      "",
+      "### Final",
+      "",
+      "- [ ] y",
+    ].join("\n");
+
+    it("counts the boxes under every subheading", () => {
+      const status = dodStatus(split);
+      expect(status.present).toBe(true);
+      expect(status.heading).toBe("Definition of done");
+      expect(status.unchecked).toEqual(["x", "y"]);
+    });
+
+    it("passes a close once every subsection is ticked", () => {
+      const ticked = split.replace(/- \[ \]/g, "- [x]");
+      const status = dodStatus(ticked);
+      expect(status.present).toBe(true);
+      expect(status.checked).toBe(2);
+      expect(status.unchecked).toEqual([]);
+      const result = verdict({ body: "Closes #3678", labels: [] }, [
+        { ref: "#3678", body: ticked },
+      ]);
+      expect(result.ok).toBe(true);
+    });
+
+    it("still reports a section of prose subsections as holding no boxes", () => {
+      const status = dodStatus(
+        "## Definition of done\n\n### Bug A\n\nIt works.\n\n### Final\n\nDone.",
+      );
+      expect(status.present).toBe(false);
+      expect(status.heading).toBe("Definition of done");
+    });
+
+    it("stops at the next heading of the same level", () => {
+      const status = dodStatus(
+        `${split}\n\n## Notes\n\n- [ ] a stray box in a later section`,
+      );
+      expect(status.unchecked).toEqual(["x", "y"]);
+    });
+
+    it("still ends a bold label at the next heading of any level", () => {
+      const status = dodStatus(
+        "**Definition of done**\n- [ ] x\n\n#### Notes\n- [ ] stray",
+      );
+      expect(status.unchecked).toEqual(["x"]);
+    });
+  });
 });
 
 describe("verdict", () => {

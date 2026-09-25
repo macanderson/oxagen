@@ -112,7 +112,7 @@
                       },
                       "maxNodes": {
                         "type": "integer",
-                        "minimum": 0
+                        "exclusiveMinimum": 0
                       },
                       "minRelevance": {
                         "type": "number",
@@ -121,7 +121,7 @@
                       },
                       "maxTraversalMs": {
                         "type": "integer",
-                        "minimum": 0
+                        "exclusiveMinimum": 0
                       }
                     },
                     "required": [

@@ -362,7 +362,17 @@ export interface TurnLedgerToolCall {
   toolName: string;
   /** The model-facing alias, when it differs from the canonical name. */
   toolAlias?: string;
-  outcome: "completed" | "failed" | "denied" | "cancelled";
+  /**
+   * How the call ended. `denied` means a gate or a person refused it.
+   * `parked` means it did not run and waits on a person's approval; the
+   * decision starts a later turn, so it is not a refusal.
+   */
+  outcome: "completed" | "failed" | "denied" | "cancelled" | "parked";
+  /**
+   * The approval a `parked` call waits on, as its public id (`apr_…`), so the
+   * Run page can show which approval that is. Absent on every other outcome.
+   */
+  approvalPublicId?: string;
   input: unknown;
   output?: unknown;
   error?: string;
@@ -874,6 +884,9 @@ export async function runGovernedTurn(
               toolName: canonical,
               ...(alias ? { toolAlias: alias } : {}),
               outcome: toolOutcome(execution),
+              ...(execution.parked?.approvalPublicId
+                ? { approvalPublicId: execution.parked.approvalPublicId }
+                : {}),
               input: request.input,
               // The receipt digests what the engine is answered with (the
               // rendered wire output), which is plain JSON for every tool.
@@ -949,12 +962,21 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** How a tool execution reads on the ledger: a refusal is `denied`, a cancel is `cancelled`. */
+/**
+ * How a tool execution reads on the ledger: a call parked for approval is
+ * `parked`, a refusal is `denied`, a cancel is `cancelled`.
+ *
+ * The park is read first. The engine is answered `refused_by_policy` for it,
+ * because its error vocabulary has no word for a wait, so reading the class
+ * alone recorded every parked write as denied.
+ */
 function toolOutcome(execution: {
   failed: boolean;
   output: ToolOutput;
+  parked?: unknown;
 }): TurnLedgerToolCall["outcome"] {
   if (!execution.failed) return "completed";
+  if (execution.parked !== undefined) return "parked";
   const errorClass =
     "error" in execution.output ? execution.output.error.class : undefined;
   if (errorClass === "refused_by_policy" || errorClass === "permission_denied")

@@ -74,7 +74,7 @@
             "properties": {
               "gauMax": {
                 "type": "integer",
-                "minimum": 0
+                "exclusiveMinimum": 0
               },
               "uninvoicedGau": {
                 "type": "integer",
@@ -111,7 +111,7 @@
               },
               "blocks": {
                 "type": "integer",
-                "minimum": 0
+                "exclusiveMinimum": 0
               },
               "paymentMethod": {
                 "anyOf": [

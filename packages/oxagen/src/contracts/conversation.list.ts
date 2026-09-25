@@ -1,6 +1,16 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+/**
+ * A conversation's public id, the `cnv_` handle the conversation capabilities
+ * take and the app's history nav carries. `public_id` is citext, so the match
+ * ignores case, and the suffix is idMixin's lowercase Crockford alphabet.
+ * `get_conversation` and `ask_assistant` validate against it.
+ */
+export const conversationPublicIdSchema = z
+  .string()
+  .regex(/^cnv_[0-9a-z]+$/i, "a conversation's public id starts with cnv_");
+
 // One row in the conversation-history nav. Kept lean (title + lifecycle
 // timestamps, no message preview) so listing N conversations is a single
 // indexed scan with no per-row message join — the preview would be an N+1.
