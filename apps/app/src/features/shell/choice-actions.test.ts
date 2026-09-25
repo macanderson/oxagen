@@ -283,9 +283,238 @@ describe("chooseServerTools", () => {
       code: "tool_registry_unavailable",
     });
   });
+
+  // `titleOf` is private, and this list is the one place its output is the
+  // whole label: no version suffix, no vendor fallback from the source.
+  it.each([
+    ["camelCase", "createDatabase", "Create database"],
+    ["an acronym", "getURL", "Get URL"],
+    ["the vendor's name in any case", "Notion.search", "Search"],
+    ["snake_case with a digit", "notion_get_v2_page", "Get v2 page"],
+    ["a name with spaces", "Notion create a page", "Notion create a page"],
+    ["a name that is only the vendor", "notion", "Notion"],
+    ["the vendor and a trailing separator", "notion-", "Notion"],
+    [
+      "the vendor only as part of a word",
+      "notionsearch-pages",
+      "Notionsearch pages",
+    ],
+    ["nothing but separators", "--", "--"],
+  ])("titles %s: %s reads %s", async (_, name, title) => {
+    source.tools.versions.mockResolvedValue(
+      ok({ items: [notion(name, 1)], nextCursor: null }),
+    );
+    const result = await chooseServerTools("acme", "core", "mcs_notion");
+    if (!result.ok) throw new Error("expected a list");
+    expect(result.value.options[0]?.label).toBe(title);
+    expect(result.value.options[0]?.detail).toBe(name);
+  });
+
+  it("keeps the vendor in each title and draws no logo when the server read is refused (negative)", async () => {
+    source.tools.mcpServers.mockResolvedValue(
+      readError("mcp_servers_unavailable", 503),
+    );
+    source.tools.versions.mockResolvedValue(
+      ok({ items: [notion("notion-fetch", 1)], nextCursor: null }),
+    );
+    const result = await chooseServerTools("acme", "core", "mcs_notion");
+    expect(result.ok && result.value.options).toEqual([
+      { value: "notion-fetch", label: "Notion fetch", detail: "notion-fetch" },
+    ]);
+  });
+});
+
+describe("chooseToolPatterns namespaces", () => {
+  const LINEAR_UUID = "0d1f4c2e-5b1a-4f7e-9c33-2a1b6e0f9d11";
+  const LINEAR_SERVER = { id: "mcs_linear", name: "Linear", iconUrl: null };
+
+  it("names one prefix per server, however many tools it has", async () => {
+    source.tools.mcpServers.mockResolvedValue(
+      ok({ servers: [NOTION_SERVER, LINEAR_SERVER] }),
+    );
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [
+          notion("notion-search", 1),
+          notion("notion-fetch", 1),
+          {
+            ...version(`mcp.${LINEAR_UUID}.list_issues`, 1),
+            name: "list_issues",
+            source: "mcp",
+            serverId: "mcs_linear",
+          },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseToolPatterns("acme", "core");
+    if (!result.ok) throw new Error("expected a list");
+    expect(result.value.namespaces).toEqual([
+      {
+        prefix: `mcp.${NOTION_UUID}.`,
+        label: "Notion",
+        icon: { name: "Notion", url: "https://notion.so/icon.png" },
+      },
+      {
+        prefix: `mcp.${LINEAR_UUID}.`,
+        label: "Linear",
+        icon: { name: "Linear", url: null },
+      },
+    ]);
+  });
+
+  it("names no prefix for a server tool whose slug is not an mcp slug (negative)", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [
+          {
+            ...version("notion_search", 1),
+            source: "mcp",
+            serverId: "mcs_notion",
+          },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseToolPatterns("acme", "core");
+    if (!result.ok) throw new Error("expected a list");
+    expect(result.value.options[0]?.icon).toEqual({
+      name: "Notion",
+      url: "https://notion.so/icon.png",
+    });
+    expect(result.value.namespaces).toBeUndefined();
+  });
 });
 
 describe("chooseSwitchTargets", () => {
+  it("draws each MCP server with its logo, or its initial when it has none", async () => {
+    source.tools.mcpServers.mockResolvedValue(
+      ok({
+        servers: [
+          { ...NOTION_SERVER, endpointUrl: "https://mcp.notion.com/mcp" },
+          {
+            id: "mcs_linear",
+            name: "Linear",
+            iconUrl: null,
+            endpointUrl: "https://mcp.linear.app/sse",
+          },
+        ],
+      }),
+    );
+    const result = await chooseSwitchTargets("acme", "core", "tool_server");
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        partial: false,
+        options: [
+          {
+            value: "mcs_notion",
+            label: "Notion",
+            detail: "https://mcp.notion.com/mcp",
+            icon: { name: "Notion", url: "https://notion.so/icon.png" },
+          },
+          {
+            value: "mcs_linear",
+            label: "Linear",
+            detail: "https://mcp.linear.app/sse",
+            icon: { name: "Linear", url: null },
+          },
+        ],
+      },
+    });
+    expect(source.tools.versions).not.toHaveBeenCalled();
+  });
+
+  it("fails the server list with the reason the read gave (negative)", async () => {
+    source.tools.mcpServers.mockResolvedValue(
+      readError("mcp_servers_unavailable", 503),
+    );
+    expect(await chooseSwitchTargets("acme", "core", "tool_server")).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "mcp_servers_unavailable",
+    });
+  });
+
+  // What a tool does is read from its classification first: a tool that
+  // declares itself read-only but is classified as writing is shown writing.
+  it.each([
+    [
+      "a classification over a read-only declaration",
+      { readOnly: true, classification: { sideEffect: "write" } },
+      { text: "Writes", tone: "approval" },
+    ],
+    [
+      "a read classification over an undeclared tool",
+      { readOnly: false, classification: { sideEffect: "read" } },
+      { text: "Read only", tone: "allowed" },
+    ],
+    [
+      "an irreversible classification",
+      { readOnly: false, classification: { sideEffect: "irreversible" } },
+      { text: "Irreversible", tone: "critical" },
+    ],
+  ])("draws %s as the tool's effect", async (_, fields, effect) => {
+    source.tools.versions.mockResolvedValue(
+      ok({ items: [{ ...version("stripe", 1), ...fields }], nextCursor: null }),
+    );
+    const result = await chooseSwitchTargets("acme", "core", "tool_version");
+    if (!result.ok) throw new Error("expected a list");
+    expect(result.value.options[0]?.facts?.[0]).toEqual(effect);
+  });
+
+  it("grades a medium-risk tool quietly", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [{ ...version("stripe", 1), riskGrade: "medium" }],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseSwitchTargets("acme", "core", "tool_version");
+    if (!result.ok) throw new Error("expected a list");
+    expect(result.value.options[0]?.facts?.[1]).toEqual({
+      text: "Medium risk",
+      tone: "quiet",
+    });
+  });
+
+  it("names a declared tool by where it comes from, with no logo", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [
+          { ...version("web_fetch", 2), source: "builtin" },
+          { ...version("ledger_sync", 1), source: "foundry" },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseSwitchTargets("acme", "core", "tool_version");
+    if (!result.ok) throw new Error("expected a list");
+    const [fetch, ledger] = result.value.options;
+    expect(fetch).toMatchObject({
+      label: "Web fetch v2",
+      context: "Built in · version 2 only",
+    });
+    expect(ledger).toMatchObject({
+      label: "Ledger sync v1",
+      context: "Foundry · version 1 only",
+    });
+    expect(fetch?.icon).toBeUndefined();
+    expect(ledger?.icon).toBeUndefined();
+  });
+
+  it("draws no description line for a blank description (negative)", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [{ ...version("stripe", 1), description: "  \n " }],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseSwitchTargets("acme", "core", "tool_version");
+    if (!result.ok) throw new Error("expected a list");
+    expect(result.value.options[0]).not.toHaveProperty("description");
+  });
+
   it("offers a tool version by its title, server and version, keyed by its public id", async () => {
     source.tools.versions.mockResolvedValue(
       ok({
@@ -390,5 +619,58 @@ describe("chooseModels", () => {
         options: [{ value: "kimi-k2", label: "kimi-k2", detail: "moonshot" }],
       },
     });
+  });
+});
+
+describe("tool titles", () => {
+  it("drops every word of a multi-word server name from the front", async () => {
+    source.tools.mcpServers.mockResolvedValue(
+      ok({
+        servers: [
+          { id: "mcs_drive", name: "Google Drive", iconUrl: null },
+          { id: "mcs_mail", name: "Google Mail", iconUrl: null },
+        ],
+      }),
+    );
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [
+          {
+            ...version("mcp.d.google_drive_list_files", 1),
+            name: "google_drive_list_files",
+            serverId: "mcs_drive",
+          },
+          {
+            ...version("mcp.m.google_send", 1),
+            name: "google_send",
+            serverId: "mcs_mail",
+          },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseToolPatterns("acme", "core");
+    if (!result.ok) throw new Error("expected a list");
+    const labels = result.value.options.map((o) => o.label);
+    expect(labels).toContain("List files");
+    // Only the words the name shares with the server's name go.
+    expect(labels).toContain("Send");
+  });
+
+  it("keeps a declared tool's whole name, whatever its source label says (negative)", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [
+          { ...version("custom-fields-sync", 1), source: "custom" },
+          { ...version("mcp-search", 1), source: "mcp" },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseToolPatterns("acme", "core");
+    if (!result.ok) throw new Error("expected a list");
+    const labels = result.value.options.map((o) => o.label);
+    expect(labels).toContain("Custom fields sync");
+    expect(labels).toContain("Mcp search");
   });
 });

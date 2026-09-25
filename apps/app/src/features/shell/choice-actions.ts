@@ -145,9 +145,11 @@ function effectOf(version: ToolVersion): Effect {
 
 /**
  * A title from a tool's API name: `notion-create-database` from the Notion
- * server reads "Create database". The vendor's own name is dropped from the
- * front, since the logo and the context line carry it. A name that already
- * has spaces is a title and is kept.
+ * server reads "Create database", and `google_drive_list_files` from Google
+ * Drive reads "List files". The server's own name is dropped from the front,
+ * word by word, since the logo and the context line carry it; at least one
+ * word is always kept. `vendor` is the server's name, or null for a tool no
+ * server provides. A name that already has spaces is a title and is kept.
  */
 function titleOf(name: string, vendor: string | null): string {
   if (/\s/.test(name)) return name;
@@ -157,16 +159,17 @@ function titleOf(name: string, vendor: string | null): string {
     .filter((word) => word !== "")
     .map((word) => (/^[A-Z][a-z]/.test(word) ? word.toLowerCase() : word));
   const lead = (vendor ?? "")
-    .split(/\s+/)[0]
-    ?.toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  if (
-    lead !== undefined &&
-    lead !== "" &&
-    words.length > 1 &&
-    words[0]?.toLowerCase() === lead
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word !== "");
+  let dropped = 0;
+  while (
+    dropped < lead.length &&
+    dropped < words.length - 1 &&
+    words[dropped]?.toLowerCase() === lead[dropped]
   )
-    words = words.slice(1);
+    dropped += 1;
+  words = words.slice(dropped);
   const text = words.join(" ");
   return text === "" ? name : text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -176,15 +179,21 @@ function vendorOf(
   version: ToolVersion,
   servers: ReadonlyMap<string, McpServer>,
   words: ToolWords,
-): { name: string; icon: PickerIcon | undefined } {
+): {
+  name: string;
+  icon: PickerIcon | undefined;
+  /** The providing server's name; null for a tool no server provides. */
+  server: string | null;
+} {
   const server =
     version.serverId === null ? undefined : servers.get(version.serverId);
   if (server !== undefined)
     return {
       name: server.name,
       icon: { name: server.name, url: server.iconUrl },
+      server: server.name,
     };
-  return { name: words.source(version.source), icon: undefined };
+  return { name: words.source(version.source), icon: undefined, server: null };
 }
 
 /**
@@ -199,7 +208,9 @@ function toolOption(
   words: ToolWords,
 ): PickerOption {
   const vendor = vendorOf(version, servers, words);
-  const title = titleOf(version.name, vendor.name);
+  // A source label such as "Custom tool" is not part of a tool's name, so
+  // only a server's name is stripped from the title.
+  const title = titleOf(version.name, vendor.server);
   const effect = effectOf(version);
   const facts: PickerFact[] = [
     { text: words.effect(effect), tone: EFFECT_TONE[effect] },

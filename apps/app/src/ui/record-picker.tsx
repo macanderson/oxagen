@@ -151,16 +151,25 @@ type Shown = {
   context: string | undefined;
   /** No option or namespace names it, so it is drawn as the raw value. */
   raw: boolean;
+  /** The list that names it has not arrived, so `label` says it is loading. */
+  pending: boolean;
 };
+
+/** A uuid anywhere in a value, such as the server segment of an MCP tool's slug. */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 /**
  * The option that is `value`, then a namespace that owns its prefix (the
  * pattern after the prefix, under the owner's logo), then the value itself.
+ * While the list is still loading, a value that carries a uuid is drawn as
+ * `loading` rather than raw, because the list about to arrive names it. A
+ * value a person can read, such as `claude-opus-*`, is drawn as it is.
  */
 function shownFor(
   value: string,
   options: readonly PickerOption[],
   namespaces: readonly PickerNamespace[],
+  loading: string | null,
 ): Shown {
   const option = options.find((o) => o.value === value);
   if (option !== undefined)
@@ -169,6 +178,7 @@ function shownFor(
       icon: option.icon,
       context: option.context,
       raw: false,
+      pending: false,
     };
   const owner = namespaces.find(
     (ns) => value.startsWith(ns.prefix) && value.length > ns.prefix.length,
@@ -179,8 +189,28 @@ function shownFor(
       icon: owner.icon,
       context: owner.label,
       raw: true,
+      pending: false,
     };
-  return { label: value, icon: undefined, context: undefined, raw: true };
+  if (loading !== null && UUID.test(value))
+    return {
+      label: loading,
+      icon: undefined,
+      context: undefined,
+      raw: false,
+      pending: true,
+    };
+  return {
+    label: value,
+    icon: undefined,
+    context: undefined,
+    raw: true,
+    pending: false,
+  };
+}
+
+/** The list has not arrived yet: `load` has not run, or has not answered. */
+function isPending(source: Source): boolean {
+  return source.status === "idle" || source.status === "loading";
 }
 
 /** The picker's options: the list it was given, or the one `load` fetches on first open. */
@@ -207,12 +237,17 @@ function useSource(
       },
     );
   }, [load]);
+  // A picker given neither a list nor a way to load one has nothing to wait
+  // for, so it reads as an empty list rather than one still loading.
   const source = useMemo<Source>(
     () =>
-      options !== undefined
-        ? { status: "ready", page: { options, partial: false } }
+      options !== undefined || load === undefined
+        ? {
+            status: "ready",
+            page: { options: options ?? NONE, partial: false },
+          }
         : loaded,
-    [options, loaded],
+    [options, load, loaded],
   );
   return [source, ensure];
 }
@@ -440,14 +475,17 @@ export function RecordPicker({
     source.status === "ready"
       ? (source.page.namespaces ?? NO_NAMESPACES)
       : NO_NAMESPACES;
-  const chosen = value === "" ? null : shownFor(value, all, namespaces);
+  const loading = isPending(source) ? t("loading") : null;
+  const chosen =
+    value === "" ? null : shownFor(value, all, namespaces, loading);
   // A prefilled value is shown by its label, so its list is read up front.
   const prefilled = value !== "";
   useEffect(() => {
     if (prefilled) ensure();
   }, [prefilled, ensure]);
   const [query, setQuery] = useState<string | null>(null);
-  const text = query ?? chosen?.label ?? "";
+  // A value still loading leaves the field empty and says so in the placeholder.
+  const text = query ?? (chosen?.pending === true ? "" : (chosen?.label ?? ""));
   // The chosen record's logo sits in the field while its name is shown there.
   const icon = query === null ? chosen?.icon : undefined;
   const matches = useMemo(
@@ -517,7 +555,11 @@ export function RecordPicker({
           aria-invalid={invalid}
           required={required === true && value === ""}
           disabled={disabled}
-          placeholder={placeholder ?? t("search")}
+          placeholder={
+            chosen?.pending === true
+              ? chosen.label
+              : (placeholder ?? t("search"))
+          }
           value={text}
           onFocus={openList}
           onClick={openList}
@@ -635,7 +677,8 @@ export function RecordMultiPicker({
   };
 
   const rowValue = (i: number) => rowAt(i, matches, typed);
-  const labelOf = (v: string) => shownFor(v, all, namespaces).label;
+  const loading = isPending(source) ? t("loading") : null;
+  const labelOf = (v: string) => shownFor(v, all, namespaces, loading).label;
   /** The typed text names this value outright, by its value or its label. */
   const names = (v: string) => {
     const said = query.trim().toLowerCase();
@@ -690,7 +733,7 @@ export function RecordMultiPicker({
     <div className="min-w-0" data-testid={testId}>
       <div className={chipBox} aria-disabled={disabled}>
         {values.map((v) => {
-          const shown = shownFor(v, all, namespaces);
+          const shown = shownFor(v, all, namespaces, loading);
           const label = shown.label;
           return (
             <span

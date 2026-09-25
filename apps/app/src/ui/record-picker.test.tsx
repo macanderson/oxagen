@@ -506,4 +506,252 @@ describe("tool rows and chips", () => {
     expect(input).toHaveAttribute("title", "Notion · every version");
     expect(container.querySelector("[data-provider-icon]")).not.toBeNull();
   });
+
+  it("finds a record by its context line alone, below one its label names", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <label htmlFor="target">Target</label>
+        <RecordPicker
+          id="target"
+          options={[
+            {
+              value: "tlv_1",
+              label: "Search v1",
+              context: "Notion · version 1 only",
+              icon: NOTION,
+            },
+            { value: "tlv_2", label: "Refund v1", context: "Stripe" },
+            { value: "tlv_3", label: "Notion sync v2", context: "Custom tool" },
+          ]}
+        />
+      </IntlProvider>,
+    );
+    await user.type(screen.getByRole("combobox"), "notion");
+    const rows = screen.getAllByRole("option");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("Notion sync v2");
+    expect(rows[1]).toHaveTextContent("Search v1");
+  });
+
+  it("names a tool chip's remove button by its title, never its slug", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker
+          id="tools"
+          name="tools"
+          load={() => Promise.resolve(page())}
+          defaultValue={[`mcp.${UUID}.notion-search@*`, `mcp.${UUID}.notion-*`]}
+          freeform
+        />
+      </IntlProvider>,
+    );
+    expect(
+      await screen.findByRole("button", { name: "Remove Search" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove notion-*" }),
+    ).toBeInTheDocument();
+    for (const button of screen.getAllByRole("button"))
+      expect(button.getAttribute("aria-label")).not.toContain(UUID);
+    // A chip an option names is drawn as a name, not as a pattern in mono.
+    const named = container.querySelector(
+      `[data-chip="mcp.${UUID}.notion-search@*"]`,
+    );
+    expect(named?.querySelector(".font-mono")).toBeNull();
+  });
+
+  it("draws a value that is only a server's prefix as typed, without its logo (negative)", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker
+          id="tools"
+          load={() => Promise.resolve(page())}
+          defaultValue={[`mcp.${UUID}.`]}
+          freeform
+        />
+      </IntlProvider>,
+    );
+    await screen.findByRole("button", { name: `Remove mcp.${UUID}.` });
+    const chip = container.querySelector(`[data-chip="mcp.${UUID}."]`);
+    expect(chip).toHaveTextContent(`mcp.${UUID}.`);
+    expect(chip).not.toHaveAttribute("title");
+    expect(chip?.querySelector("[data-provider-icon]")).toBeNull();
+    expect(chip?.querySelector(".font-mono")).not.toBeNull();
+  });
+
+  it("shows a typed pattern under a server in a single picker's field by the server's logo", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tool">Tool</label>
+        <RecordPicker
+          id="tool"
+          name="tool"
+          load={() => Promise.resolve(page())}
+          defaultValue={`mcp.${UUID}.notion-*`}
+          freeform
+        />
+      </IntlProvider>,
+    );
+    const input = screen.getByRole("combobox", { name: "Tool" });
+    await waitFor(() => {
+      expect(input).toHaveValue("notion-*");
+    });
+    expect(input).toHaveAttribute("title", "Notion");
+    expect(
+      input.parentElement?.querySelector("[data-provider-icon]"),
+    ).not.toBeNull();
+    expect(hidden(container, "tool")).toBe(`mcp.${UUID}.notion-*`);
+  });
+
+  it("takes the chosen record's logo and hover text out of the field while a person types", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <label htmlFor="tool">Tool</label>
+        <RecordPicker
+          id="tool"
+          options={TOOLS}
+          defaultValue={`mcp.${UUID}.notion-search@*`}
+        />
+      </IntlProvider>,
+    );
+    const input = screen.getByRole("combobox", { name: "Tool" });
+    const field = input.parentElement;
+    expect(field?.querySelector("[data-provider-icon]")).not.toBeNull();
+    // Typing onto the name, not clearing it: clearing drops the choice.
+    await user.type(input, "x");
+    expect(input).toHaveValue("Searchx");
+    expect(field?.querySelector("[data-provider-icon]")).toBeNull();
+    expect(input).not.toHaveAttribute("title");
+  });
+
+  it("draws a plain record's row with no logo, context or badge (negative)", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <label htmlFor="agent">Agent</label>
+        <RecordPicker id="agent" options={AGENTS} defaultValue="agt_1" />
+      </IntlProvider>,
+    );
+    const input = screen.getByRole("combobox", { name: "Agent" });
+    expect(input).not.toHaveAttribute("title");
+    await user.click(input);
+    const listbox = screen.getByRole("listbox");
+    expect(listbox.querySelector("[data-provider-icon]")).toBeNull();
+    expect(screen.getAllByRole("option")[0]?.textContent).toBe(
+      "✓Billing reconcilerbilling-reconciler",
+    );
+  });
+});
+
+describe("a prefilled value while its list loads", () => {
+  const UUID = "7c084658-9d6d-480d-81eb-499322416dae";
+  const VALUE = `mcp.${UUID}.notion-search@*`;
+  const PAGE: OptionLoad = {
+    ok: true,
+    value: {
+      options: [{ value: VALUE, label: "Search", context: "Notion" }],
+      partial: false,
+    },
+  };
+
+  /** A load that answers only when the test says so. */
+  function deferred() {
+    let answer: (page: OptionLoad) => void = () => undefined;
+    const promise = new Promise<OptionLoad>((resolve) => {
+      answer = resolve;
+    });
+    return { load: () => promise, answer };
+  }
+
+  it("draws a chip as loading, never as its slug, until the list names it", async () => {
+    const { load, answer } = deferred();
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker
+          id="tools"
+          name="tools"
+          load={load}
+          defaultValue={[VALUE]}
+        />
+      </IntlProvider>,
+    );
+    const chip = container.querySelector(`[data-chip="${VALUE}"]`);
+    expect(chip).toHaveTextContent("Loading…");
+    expect(chip?.textContent).not.toContain(UUID);
+    expect(hidden(container, "tools")).toBe(VALUE);
+    answer(PAGE);
+    await waitFor(() => {
+      expect(chip).toHaveTextContent("Search");
+    });
+  });
+
+  it("leaves a single picker's field empty and says loading in its placeholder", async () => {
+    const { load, answer } = deferred();
+    render(
+      <IntlProvider>
+        <label htmlFor="tool">Tool</label>
+        <RecordPicker id="tool" name="tool" load={load} defaultValue={VALUE} />
+      </IntlProvider>,
+    );
+    const input = screen.getByRole("combobox", { name: "Tool" });
+    expect(input).toHaveValue("");
+    expect(input).toHaveAttribute("placeholder", "Loading…");
+    answer(PAGE);
+    await waitFor(() => {
+      expect(input).toHaveValue("Search");
+    });
+  });
+
+  it("draws the raw value once the list fails, since nothing will name it (negative)", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker
+          id="tools"
+          load={() => Promise.resolve({ ok: false })}
+          defaultValue={[VALUE]}
+          freeform
+        />
+      </IntlProvider>,
+    );
+    const chip = container.querySelector(`[data-chip="${VALUE}"]`);
+    await waitFor(() => {
+      expect(chip).toHaveTextContent(VALUE);
+    });
+  });
+
+  it("draws a readable value as it is while the list loads (negative)", () => {
+    const { load } = deferred();
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker
+          id="tools"
+          load={load}
+          defaultValue={["claude-opus-*"]}
+          freeform
+        />
+      </IntlProvider>,
+    );
+    expect(
+      container.querySelector('[data-chip="claude-opus-*"]'),
+    ).toHaveTextContent("claude-opus-*");
+  });
+
+  it("draws a value as given when the picker has no list and no load (negative)", () => {
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="tools">Tools</label>
+        <RecordMultiPicker id="tools" defaultValue={[VALUE]} freeform />
+      </IntlProvider>,
+    );
+    expect(container.querySelector(`[data-chip="${VALUE}"]`)).toHaveTextContent(
+      VALUE,
+    );
+  });
 });
