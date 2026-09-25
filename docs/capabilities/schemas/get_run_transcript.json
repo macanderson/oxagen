@@ -727,6 +727,24 @@
                                             "type": "null"
                                           }
                                         ]
+                                      },
+                                      "family": {
+                                        "type": "string",
+                                        "enum": [
+                                          "shell",
+                                          "read",
+                                          "edit",
+                                          "create",
+                                          "delete",
+                                          "search",
+                                          "web",
+                                          "skill",
+                                          "agent",
+                                          "plan",
+                                          "notebook",
+                                          "mcp",
+                                          "tool"
+                                        ]
                                       }
                                     },
                                     "required": [
@@ -1417,6 +1435,24 @@
                                           {
                                             "type": "null"
                                           }
+                                        ]
+                                      },
+                                      "family": {
+                                        "type": "string",
+                                        "enum": [
+                                          "shell",
+                                          "read",
+                                          "edit",
+                                          "create",
+                                          "delete",
+                                          "search",
+                                          "web",
+                                          "skill",
+                                          "agent",
+                                          "plan",
+                                          "notebook",
+                                          "mcp",
+                                          "tool"
                                         ]
                                       }
                                     },

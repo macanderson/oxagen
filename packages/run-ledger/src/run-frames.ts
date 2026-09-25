@@ -780,15 +780,10 @@ export const RECALL_TYPES: ReadonlySet<string> = new Set([
   // what it cut (ADR-093).
   "steering.manifest",
 ]);
-/**
- * A wrapped chain's own integrity frames: the signed checkpoint over the
- * chain so far, and the gap it records where frames were lost. A ledger
- * attempt's counterpart is its terminal-stage event, read by stage.
- */
-const SEAL_TYPES: ReadonlySet<string> = new Set([
-  "checkpoint",
-  "telemetry_gap",
-]);
+/** The wrapped agent's own stop frame. */
+const AGENT_STOP = "agent_stop";
+/** The ledger event that closes an attempt before its seal. */
+const ATTEMPT_TERMINATED = "terminal.attempt_terminated";
 /**
  * Tool outcomes that record a call that did not do what it was asked to.
  * `rejected` is tacho's word for a call the harness refused
@@ -806,18 +801,53 @@ export const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Whether `frame` is the run's own stop: the wrapped agent's `agent_stop` on
+ * the run's own chain, or the ledger event that closes an attempt before its
+ * seal. A subagent stopping is the subagent's, not the run's.
+ */
+export function stopsRun(frame: RunFrame): boolean {
+  return (
+    (frame.type === AGENT_STOP && frame.chain === undefined) ||
+    frame.type === ATTEMPT_TERMINATED ||
+    frame.stage === "terminal"
+  );
+}
+
+/**
+ * The half a turn boundary's own body is. The operator's prompt is what went
+ * out; a `turn_end` or a message the harness reported apart from it
+ * (`tachoFramePhase`) is what came back. A boundary whose body was not kept
+ * is no half.
+ */
+export function boundaryHalf(frame: RunFrame): "request" | "response" | null {
+  if (frame.body.bodyRef === null) return null;
+  if (frame.type === "turn_start") return "request";
+  if (frame.type === "turn_end") return "response";
+  if (frame.type === "oxagen:message" && frame.phase === "response")
+    return "response";
+  return null;
+}
+
+/**
  * Every chip a frame answers to. A frame may answer several: a failed tool
  * result is both `tools` and `errors`, and a model response that carried a
  * cost record is both `responses` and `usage`.
+ *
+ * A chip selects what the Run page's Transcript tab draws under it, so a
+ * chip's count is the count of what it shows (ADR-182): the operator's
+ * prompts, the words that came back, the tool calls, the cost and token
+ * counts, what was recalled, and the run's stop.
  */
 export function frameKinds(frame: RunFrame): TranscriptKind[] {
   const kinds = new Set<TranscriptKind>();
-  if (MODEL_TYPES.has(frame.type)) {
-    kinds.add(frame.phase === "request" ? "prompt" : "responses");
-  }
-  // A wrapped run's prompt is the `turn_start` its operator typed, not a model
-  // request: tacho records the harness's hooks and never a `model.request`.
-  // A subagent's own `turn_start` is the prompt its parent wrote, so it is not
+  // What came back from a model, and a reply the harness reported with its
+  // words kept. The request half of a model call answers no chip: it is the
+  // context the model was sent, not something a person prompted.
+  if (MODEL_TYPES.has(frame.type) && frame.phase !== "request")
+    kinds.add("responses");
+  if (boundaryHalf(frame) === "response") kinds.add("responses");
+  // A wrapped run's prompt is the `turn_start` its operator typed. A
+  // subagent's own `turn_start` is the prompt its parent wrote, so it is not
   // counted. Nor is the transcript's or OTel's `oxagen:message` copy of the
   // same prompt, which would count each prompt two or three times.
   if (opensRunTurn(frame)) kinds.add("prompt");
@@ -827,10 +857,10 @@ export function frameKinds(frame: RunFrame): TranscriptKind[] {
   if (TOOL_TYPES.has(frame.type)) kinds.add("tools");
   if (POLICY_TYPES.has(frame.type)) kinds.add("policy");
   if (RECALL_TYPES.has(frame.type)) kinds.add("recall");
-  if (frame.costMicros !== null) kinds.add("usage");
-  if (SEAL_TYPES.has(frame.type) || frame.stage === "terminal") {
-    kinds.add("seal");
-  }
+  // A cost record, or token counts the provider reported without one.
+  if (frame.costMicros !== null || (frame.usage ?? null) !== null)
+    kinds.add("usage");
+  if (stopsRun(frame)) kinds.add("seal");
   const status = frame.identity.toolStatus;
   if (status !== null && FAILED_OUTCOMES.has(status)) kinds.add("errors");
   if (frame.type === "error" || frame.type.endsWith(".error")) {

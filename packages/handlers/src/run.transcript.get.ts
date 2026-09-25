@@ -62,6 +62,7 @@ import {
   recallOf,
   type RunFrame,
   stepFolds,
+  toolFamilyOf,
   toolUseClaimer,
   TRANSCRIPT_KINDS,
   transcriptCounts,
@@ -423,8 +424,9 @@ export function toolResultsOf(
 
 /**
  * `half` with each `tool_use` block's `stepKey` (the tool step that recorded
- * the call, from `claim`) and `result` (what the page's `tool_result` blocks
- * say came back). A half with no assembly is returned as it is.
+ * the call, from `claim`), `result` (what the page's `tool_result` blocks say
+ * came back) and `family` (`toolFamilyOf` its name). A half with no assembly
+ * is returned as it is.
  */
 export function withToolUseFacts(
   half: TranscriptEntryBody | null,
@@ -457,6 +459,7 @@ export function withToolUseFacts(
                 block.callKey === null
                   ? null
                   : (results.get(block.callKey) ?? null),
+              family: toolFamilyOf(block.name),
             }
           : block,
       ),

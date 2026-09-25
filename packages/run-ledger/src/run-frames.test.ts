@@ -405,7 +405,9 @@ describe("frameKinds and the chips an entry answers", () => {
   );
 
   it("derives every chip a frame answers to", () => {
-    expect(frameKinds(model)).toEqual(["prompt"]);
+    // The request half of a model call is the context the model was sent,
+    // not a prompt a person typed, so it answers no chip (ADR-182).
+    expect(frameKinds(model)).toEqual([]);
     expect(frameKinds(tool).sort()).toEqual(["errors", "tools"]);
     expect(frameKinds(usage).sort()).toEqual(["responses", "usage"]);
     expect(frameKinds(policy)).toEqual(["policy"]);
@@ -493,10 +495,43 @@ describe("frameKinds and the chips an entry answers", () => {
       "usage",
     ]);
     expect(frameKinds(plain)).not.toContain("thinking");
-    expect(frameKinds(checkpoint)).toEqual(["seal"]);
-    expect(frameKinds(gap)).toEqual(["seal"]);
+    // The seal chip is the run's own stop, which the Transcript tab draws.
+    // A checkpoint and a gap are the chain's, and read on the Chain tab.
+    const stopped = tachoFrame(tachoRow(14, "agent_stop"));
+    const subagentStopped = tachoFrame(
+      tachoRow(15, "agent_stop", {
+        sessionUuid: "sub",
+        rootSessionUuid: "root",
+      }),
+    );
+    expect(frameKinds(checkpoint)).toEqual([]);
+    expect(frameKinds(gap)).toEqual([]);
     expect(frameKinds(terminated)).toEqual(["seal"]);
+    expect(frameKinds(stopped)).toEqual(["seal"]);
+    expect(frameKinds(subagentStopped)).toEqual([]);
     expect(frameKinds(tool)).not.toContain("seal");
+  });
+
+  it("answers responses for a reply whose words were kept, and usage for tokens without a cost", () => {
+    const kept = {
+      contentDigest: `sha256:${"c".repeat(64)}`,
+      bytesRef: "evidence://reply",
+    };
+    const reply = tachoFrame(tachoRow(16, "turn_end", kept));
+    const unkept = tachoFrame(tachoRow(17, "turn_end"));
+    expect(frameKinds(reply)).toEqual(["responses"]);
+    expect(frameKinds(unkept)).toEqual([]);
+    const counted = {
+      ...model,
+      usage: {
+        inputUncached: 10,
+        cacheRead: null,
+        cacheWrite: null,
+        output: 4,
+        reasoning: null,
+      },
+    };
+    expect(frameKinds(counted)).toEqual(["usage"]);
   });
 
   it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {
@@ -504,8 +539,8 @@ describe("frameKinds and the chips an entry answers", () => {
     const seqs = (kept: typeof folds) => kept.map((f) => f.opening.seq);
     expect(filterFoldsByKind(folds, [])).toHaveLength(5);
     expect(seqs(filterFoldsByKind(folds, ["errors"]))).toEqual(["2"]);
-    expect(seqs(filterFoldsByKind(folds, ["prompt", "recall"]))).toEqual([
-      "1",
+    expect(seqs(filterFoldsByKind(folds, ["responses", "recall"]))).toEqual([
+      "3",
       "5",
     ]);
   });

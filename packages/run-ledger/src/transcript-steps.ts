@@ -49,6 +49,7 @@
  */
 import {
   addFrameUsage,
+  boundaryHalf,
   COMMAND_APPLIED,
   FAILED_OUTCOMES,
   type FrameUsage,
@@ -59,6 +60,7 @@ import {
   RECALL_TYPES,
   type RunFrame,
   stepKind,
+  stopsRun,
   type TranscriptKind,
   turnOrdinals,
 } from "./run-frames";
@@ -214,11 +216,6 @@ const ANSWER: ReadonlySet<string> = new Set([
   "tool.approval_recorded",
   "token_denied",
 ]);
-/** The run's own stop frames: a wrapped agent's, and the ledger attempt's. */
-const SEAL: ReadonlySet<string> = new Set([
-  "agent_stop",
-  "terminal.attempt_terminated",
-]);
 /** Frames that frame the run rather than record what it did. */
 const CONTROL: ReadonlySet<string> = new Set([
   "agent_start",
@@ -281,27 +278,12 @@ function wordOf(gate: TranscriptDecision): string | null {
   return gate.decision === gate.type ? null : gate.decision;
 }
 
-/**
- * The half a turn boundary's own body is. The operator's prompt is what went
- * out; a `turn_end` or a message the harness reported apart from it
- * (`tachoFramePhase`) is what came back. A boundary whose body was not kept
- * is no half.
- */
-function boundarySlot(frame: RunFrame): "request" | "response" | null {
-  if (frame.body.bodyRef === null) return null;
-  if (frame.type === "turn_start") return "request";
-  if (frame.type === "turn_end") return "response";
-  if (frame.type === "oxagen:message" && frame.phase === "response")
-    return "response";
-  return null;
-}
-
 /** A frame with nothing to read on it: no call half, no decision, no kept boundary body. */
 function isBare(frame: RunFrame): boolean {
   return (
     stepKind(frame) === null &&
     !POLICY_TYPES.has(frame.type) &&
-    boundarySlot(frame) === null
+    boundaryHalf(frame) === null
   );
 }
 
@@ -583,7 +565,7 @@ function eventNode(opening: RunFrame): TranscriptNode {
   if (opensRunTurn(opening)) return "prompt";
   if (REPLY.has(opening.type)) return "reply";
   if (RECALL_TYPES.has(opening.type)) return "recall";
-  if (SEAL.has(opening.type) && opening.chain === undefined) return "seal";
+  if (stopsRun(opening)) return "seal";
   if (POLICY_TYPES.has(opening.type)) return "policy";
   if (isControl(opening.type)) return "control";
   return "event";
@@ -650,7 +632,7 @@ function stepFold(
   }
   const decision = gates[gates.length - 1] ?? null;
   if (decision !== null) kinds.add("policy");
-  const slot = boundarySlot(opening);
+  const slot = boundaryHalf(opening);
   const halves =
     tag === "event"
       ? {

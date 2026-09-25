@@ -62,21 +62,23 @@ Claude Code's own permission check (`tool_decision` and `tool.blocked_on_user` i
 
 ## Chips (`kinds`)
 
+Each chip selects what the Run page's Transcript tab draws under it, so the count `counts.kinds` gives a chip is the count of what that chip shows (ADR-182).
+
 | Chip | Frames it selects |
 |---|---|
-| `prompt` | the request half of a model call, or the `turn_start` an operator typed to open a turn of a wrapped run. A subagent's `turn_start` and the `oxagen:message` copies of the same prompt are not counted, so each prompt counts once |
-| `responses` | the response half of a model call, or a single model receipt |
+| `prompt` | the `turn_start` an operator typed to open a turn. A subagent's `turn_start` and the `oxagen:message` copies of the same prompt are not counted, so each prompt counts once. The request half of a model call is the context the model was sent and answers no chip |
+| `responses` | the response half of a model call, a single model receipt, or a reply the harness reported with its words kept: a `turn_end`, or an `oxagen:message` recorded as a response |
 | `thinking` | a model call whose usage records reasoning tokens. A wrapped session records them from Claude Code's `thinking_tokens`; a duplicate sighting of the same call carries no usage and is not counted |
 | `tools` | either half of a tool call |
 | `policy` | a decision a rule or a person made: allow, deny, route, and an operator's pause, resume, cancel or steer as the host applied it (`oxagen:command_applied`) |
 | `recall` | what was pulled into the model's context |
-| `usage` | a frame that carried a cost record |
-| `seal` | a frame that records the chain's own integrity: a `checkpoint`, a `telemetry_gap`, or the ledger event that closes an attempt |
+| `usage` | a frame that carried a cost record, or token counts the provider reported without one |
+| `seal` | the run's own stop: the wrapped agent's `agent_stop` on the run's own chain, or the ledger event that closes an attempt. A `checkpoint` and a `telemetry_gap` are the chain's own, read with `get_run_chain`, and answer no chip |
 | `errors` | a call whose recorded outcome is failed, denied, cancelled, error, timeout, refused or rejected |
 
 The fold runs over every frame first, and the filter then keeps the entries that answer a chip pressed. A filtered transcript therefore shows the same steps as an unfiltered one, only fewer of them: a `policy` selection at `steps` keeps each governed tool call whole, with both halves. At `everything` the answer is the same as filtering frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
 
-The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query opens the Transcript tab with every chip off. The tab filters the whole-run read the page already made, so no chip setting reads again.
+The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query opens the Transcript tab with every chip off. The tab hides and shows the rows of the whole-run read the page already made, so no chip setting reads again, and each chip's count is `counts.kinds` from that read.
 
 ## Output
 
@@ -204,7 +206,7 @@ way.
 | `assembly.partial` | boolean | true when the stream ended before the message did; its blocks are still answered |
 | `assembly.wire` | object | `events` and `bytes`: what the transport was, for a reader that wants to see it |
 
-A `tool_use` block also carries `stepKey`, the `key` of the tool step that recorded the call, so a reader draws the call once, as that step. The block and the step pair on the call key, or, where either kept none, the block takes the next tool step of the same name in its turn that no other block took. It is null for a call no tool step recorded. `result` is `{ ok, summary }` from a `tool_result` block on the page that answers the same call key, or null.
+A `tool_use` block also carries `stepKey`, the `key` of the tool step that recorded the call, so a reader draws the call once, as that step. The block and the step pair on the call key, or, where either kept none, the block takes the next tool step of the same name in its turn that no other block took. It is null for a call no tool step recorded. `result` is `{ ok, summary }` from a `tool_result` block on the page that answers the same call key, or null. `family` is the called tool's family, read from its name by the rule that sets an entry's `family`.
 
 A `tool_use` block's input carries every string field up to 400 characters and
 folds a longer one to `"…N characters"`, with `inputFolded: true`. A `Write`

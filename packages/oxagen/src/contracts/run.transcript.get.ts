@@ -249,6 +249,12 @@ export const contentBlockSchema = z.discriminatedUnion("kind", [
         .strict()
         .nullable()
         .optional(),
+      /**
+       * The family the called tool belongs to, read from `name` by the same
+       * rule as an entry's `family`, so a reader never keeps a family table
+       * of its own.
+       */
+      family: toolFamilySchema.optional(),
     })
     .strict(),
   z

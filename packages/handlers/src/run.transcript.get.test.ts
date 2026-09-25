@@ -1628,6 +1628,7 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       kind: "tool_use",
       stepKey: "2",
       result: null,
+      family: "create",
     });
     const alone = harness([
       tachoRow(1, {
@@ -1763,8 +1764,9 @@ describe("toolResultsOf and withToolUseFacts", () => {
         ...use("k1"),
         stepKey: "7",
         result: { ok: false, summary: "no such file" },
+        family: "read",
       },
-      { ...use(null), stepKey: null, result: null },
+      { ...use(null), stepKey: null, result: null, family: "read" },
       { ...base, kind: "text", text: "x", truncated: false },
     ]);
   });
