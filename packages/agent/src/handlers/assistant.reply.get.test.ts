@@ -114,7 +114,7 @@ describe("get_assistant_reply", () => {
     });
   });
 
-  it.each([
+  it.each<[string, AssistantReplyRun | null]>([
     ["a run this tenant has no record of", null],
     [
       "a wrapped session's run, which has no reply",
