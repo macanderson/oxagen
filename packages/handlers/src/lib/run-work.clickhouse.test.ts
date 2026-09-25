@@ -25,6 +25,8 @@ const scope = { orgId: randomUUID(), workspaceId: randomUUID() };
 const session = randomUUID();
 const REPOSITORY = "https://github.com/acme/app";
 const PR = "https://github.com/acme/app/pull/41";
+// Written under the dotted names, as an `oxagen:pr_link` frame is since #3944.
+const DOTTED_PR = "https://github.com/acme/app/pull/42";
 
 /** One frame, every column not named here left at its default. */
 function frame(
@@ -97,6 +99,14 @@ const FRAMES = [
     effort_level_setting: "max",
     always_thinking_enabled: true,
   }),
+  frame(16, false, {
+    kind: "oxagen:pr_link",
+    attrs: {
+      "pr.url": DOTTED_PR,
+      "pr.number": "42",
+      "pr.repository": "acme/app",
+    },
+  }),
 ];
 
 const read = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
@@ -119,7 +129,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     await closeClickhouse();
   });
 
-  it("reads each PR link once, at its first frame, past a chain break", async () => {
+  it("reads each PR link once, at its first frame, past a chain break, under either attr spelling", async () => {
     const links = await read(() => readWorkPrLinks(session));
     expect(
       links.map((row) => ({ ...row, first_seq: String(row.first_seq) })),
@@ -130,6 +140,13 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
         repository: "acme/app",
         first_seq: "10",
         first_ts: "2026-09-24 10:00:10.000",
+      },
+      {
+        url: DOTTED_PR,
+        number: "42",
+        repository: "acme/app",
+        first_seq: "16",
+        first_ts: "2026-09-24 10:00:16.000",
       },
     ]);
   });

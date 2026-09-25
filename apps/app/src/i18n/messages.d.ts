@@ -9029,6 +9029,14 @@ type Messages = {
       autoSyncHint: string;
       blockStaleRuns: string;
       blockStaleRunsHint: string;
+      sync: string;
+      syncSynced: string;
+      syncPending: string;
+      syncProblems: string;
+      syncFailed: string;
+      syncFindingsTitle: string;
+      findingError: string;
+      findingWarning: string;
     };
     status: {
       proposed: string;

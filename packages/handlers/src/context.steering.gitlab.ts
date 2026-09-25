@@ -182,6 +182,9 @@ function asPullRequest(mr: GitLabMergeRequest) {
   return {
     baseRef: mr.targetBranch,
     headSha: mr.sha,
+    // GitLab holds a merge request `locked` while it merges it. That is not
+    // closed, and reading it as closed would reject a proposal mid-merge.
+    open: mr.state === "opened" || mr.state === "locked",
     merged: mr.state === "merged",
     // With a squash into a merge-commit project GitLab reports both; the merge
     // commit is the one on the production branch. A fast-forward project has
@@ -434,6 +437,21 @@ export function createSteeringGitLab(
     getPullRequest(repo, number) {
       return call(repo, async (gl, project) =>
         asPullRequest(await gl.getMergeRequest({ project, iid: number })),
+      );
+    },
+
+    branchHead(repo, branch) {
+      return call(repo, async (gl, project) => {
+        const out = await gl.getBranch({ project, branch });
+        return out?.commitSha ?? null;
+      });
+    },
+
+    listFiles(repo, ref, dir) {
+      return call(repo, async (gl, project) =>
+        (await gl.listTree({ project, ref, path: dir })).filter((path) =>
+          path.startsWith(`${dir}/`),
+        ),
       );
     },
 

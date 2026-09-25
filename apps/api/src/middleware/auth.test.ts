@@ -19,7 +19,12 @@ vi.mock("@oxagen/auth", () => ({
   resolveSession: mocks.resolveSession,
 }));
 
+vi.mock("./logger", () => ({
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
 import { authMiddleware } from "./auth";
+import { errorMiddleware } from "./error";
 
 function appWithAuth() {
   const app = new Hono<AppEnv>();
@@ -107,5 +112,25 @@ describe("authMiddleware", () => {
     expect(await res.text()).toBe(
       "This organization requires single sign-on. The person who created this key must sign in through SSO.",
     );
+  });
+
+  it("answers 403 host_revoked for a revoked Tacho host's retired key", async () => {
+    // The shipper keys on the reason: a 401 or a bare 403 is retried, and a
+    // revocation never clears on a retry (#3944).
+    mocks.resolveApiKey.mockResolvedValueOnce({
+      ok: false,
+      kind: "host_revoked",
+    });
+    // With the API's own error handler, which renders a HandlerError's
+    // reason in the envelope.
+    const app = appWithAuth();
+    app.onError(errorMiddleware);
+    const res = await app.request("/whoami", {
+      headers: { authorization: "Bearer ox_retired_host_key" },
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: { code: "forbidden", reason: "host_revoked" },
+    });
   });
 });

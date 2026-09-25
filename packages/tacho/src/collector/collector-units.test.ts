@@ -54,9 +54,11 @@ import { SessionRegistry } from "./registry";
 import { createRequestHandler, type CollectorApi } from "./server";
 import {
   Shipper,
+  HOST_REVOKED_MESSAGE,
   MAX_BODY_AUTHORITY_WAIT_MS,
   MAX_CONSECUTIVE_QUARANTINES,
   RETENTION_HOLD_LOG_INTERVAL_MS,
+  type ShipperOptions,
 } from "./spool";
 
 const CONTEXT: ClaudeCodeContext = {
@@ -643,6 +645,7 @@ describe("shipper", () => {
     dir: string,
     now: () => number,
     hostEnrollmentId?: string,
+    extra: Partial<ShipperOptions> = {},
   ) {
     const controls: unknown[] = [];
     const logs: string[] = [];
@@ -668,6 +671,7 @@ describe("shipper", () => {
       minBackoffMs: 1_000,
       maxBackoffMs: 4_000,
       ...(hostEnrollmentId !== undefined ? { hostEnrollmentId } : {}),
+      ...extra,
     });
     return { s, controls, logs };
   }
@@ -682,6 +686,97 @@ describe("shipper", () => {
       bundle_etag: "e",
       commands: [],
     },
+  });
+
+  // The envelope the API's error handler writes for a HandlerError.
+  const refusal = (reason?: string) =>
+    JSON.stringify({
+      error: {
+        code: "forbidden",
+        ...(reason !== undefined ? { reason } : {}),
+        message: "Forbidden",
+      },
+      requestId: "req_1",
+    });
+
+  it("stops for good when the control plane says an operator revoked this host", async () => {
+    // A revoked host's key is retired, so every request is refused, and a
+    // refusal that never clears was retried with backoff for ever while the
+    // WAL grew (#3944, S-04).
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    let clock = 0;
+    let offered = 0;
+    let told = 0;
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async () => {
+          offered += 1;
+          throw new ControlError(403, refusal("host_revoked"));
+        },
+      },
+      paths.quarantine,
+      () => clock,
+      undefined,
+      {
+        onHostRevoked: () => {
+          told += 1;
+        },
+      },
+    );
+    const first = await s.drain();
+    expect(first).toMatchObject({ shipped: 0, quarantined: 0 });
+    expect(s.hostRevoked).toBe(true);
+    expect(s.lastError).toBe(HOST_REVOKED_MESSAGE);
+    expect(told).toBe(1);
+    expect(logs.filter((l) => l.includes("revoked"))).toHaveLength(1);
+    // Past any backoff: nothing is offered again, nothing is set aside, and
+    // every event stays in the WAL.
+    clock = 24 * 60 * 60_000;
+    expect(s.ready()).toBe(false);
+    await s.drain();
+    expect(offered).toBe(1);
+    expect(told).toBe(1);
+    expect(wal.stats().unshipped).toBe(events.length);
+    expect(
+      readdirSync(paths.quarantine).filter((f) => f.endsWith(".json")),
+    ).toHaveLength(0);
+  });
+
+  it("still backs off and retries a 403 that names no revocation (negative)", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    let clock = 0;
+    let offered = 0;
+    let told = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async () => {
+          offered += 1;
+          throw new ControlError(403, refusal());
+        },
+      },
+      paths.quarantine,
+      () => clock,
+      undefined,
+      {
+        onHostRevoked: () => {
+          told += 1;
+        },
+      },
+    );
+    await s.drain();
+    expect(s.hostRevoked).toBe(false);
+    expect(told).toBe(0);
+    clock = 1_000;
+    expect(s.ready()).toBe(true);
+    await s.drain();
+    expect(offered).toBe(2);
   });
 
   it("quarantines the single event a refused batch bisects down to", async () => {
