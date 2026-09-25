@@ -355,6 +355,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       preferences: refuse,
       counts: refuse,
       notifications: refuse,
+      assistantEngine: refuse,
     },
     runs: {
       list: refuse,

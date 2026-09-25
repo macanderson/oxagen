@@ -485,6 +485,7 @@ export function agentsSource(reads: AgentReads) {
       preferences: refuse,
       counts: refuse,
       notifications: refuse,
+      assistantEngine: refuse,
     },
     billing: {
       plan: refuse,
