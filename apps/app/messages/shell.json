@@ -169,8 +169,7 @@
         "billing": "plan, meters, invoices",
         "audit": "events, incidents, holds"
       },
-      "assistant": "Assistant",
-      "assistantSub": "ask about a run, or change something",
+      "assistantSub": "about runs, agents, and spend",
       "search": "Search",
       "searchSub": "or run an action",
       "notifications": "Notifications",
