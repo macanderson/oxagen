@@ -26,6 +26,7 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 | `conversationId` | uuid or null | no | null opens a new conversation; an id outside the workspace is `not_found` |
 | `content` | string | yes | 1 to 32 KiB, the cap every chat ingress shares |
 | `pageContext` | object or null | no | `{ route, orgSlug, workspaceSlug, entityId }` — where the person was when they asked; null for a caller with no page |
+| `goal` | object | no | `{ statement, maxRounds }`: `statement` is 1 to 2,000 characters, trimmed; `maxRounds` is 1 to 4, default 3. Omitted runs one ordinary turn. See Goal-shaped turns |
 
 ## Output
 
@@ -40,9 +41,17 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 
 ## Recording
 
-`openAssistantRun` (`@oxagen/agent`) admits the turn before the engine is contacted: the workspace's managed interactive agent acting through the `oxagen.assistant` service principal, the asking person's human principal as the initiating principal, a pinned authorization snapshot and a digest-only retention policy. Every provider and tool request the host answers is recorded first as `model.engine_call_completed` or `tool.engine_call_completed`, keyed by the engine frame's `seq`; the belt meta-tools `search_tools` and `load_tools` are recorded through the tool receipt. The seal carries verdict `waived` for a completed turn, `cancelled` for an aborted one and `failed` for an engine failure.
+`openAssistantRun` (`@oxagen/agent`) admits the turn before the engine is contacted: the workspace's managed interactive agent acting through the `oxagen.assistant` service principal, the asking person's human principal as the initiating principal, a pinned authorization snapshot and a digest-only retention policy. Every provider and tool request the host answers is recorded first as `model.engine_call_completed` or `tool.engine_call_completed`, keyed by the engine frame's `seq`; the belt meta-tools `search_tools` and `load_tools` are recorded through the tool receipt. A goal-shaped turn also records each round's verdict as `verification.goal_verdict`: the round, whether the goal was met, the digests of the goal and of the verifier's reasoning, and the verifier's cost, with the goal and the reasoning as the frame's body. Every verdict is written before the seal, and a verdict that cannot be written cancels the turn. The run spec's goal is the goal statement when one is set. The seal carries verdict `waived` for a completed turn, `cancelled` for an aborted one and `failed` for an engine failure.
 
 The run is admitted on the `chat` (SSE) or `api-chat` (API, MCP) surface, and `list_runs`, `list_recent_runs` and `search_tools` exclude both: the assistant is Oxagen's, and its turns never appear as the customer's runs.
+
+## Goal-shaped turns
+
+A turn with a `goal` is judged (ADR-XXX). The engine works in rounds, and after each round an independent verifier reads the transcript and rules whether the goal is met. The verifier's model calls arrive with the `verdict` role and are answered on a different tier from the worker's. A met goal ends the turn and the reply is the worker's last answer. An unmet goal sends the verifier's feedback back to the worker for the next round. A goal still unmet when the rounds run out fails the turn with `engine_aborted`, and nothing is saved as a reply.
+
+The caller sets the goal, never the model: this contract is not on the agent surface. The goal is capped at 2,000 characters because the engine repeats it in every round and in every verifier call, and at 4 rounds because each round is a whole turn plus a verifier and a person is waiting.
+
+Rule authoring is the first caller. `ruleAuthoringGoal` (`@oxagen/agent`) states the goal for a rule across two sources: a `query_ontology` traversal over the rule's relationship type, from a node of the first source, returns a node of the second. `POST /chat/stream` does not carry `goal` yet; the API route and the MCP tool do.
 
 ## Tools
 

@@ -1,6 +1,6 @@
 # The in-app agent on Stella's headless engine — the wire, the answerer, and the gaps
 
-- **Status:** Implemented for slices 1 to 3 and the role routing of slice 4; the goal-shaped turn and its graph-rule witness remain (see §6)
+- **Status:** Implemented for slices 1 to 4; the flyout does not yet send a goal (see §6)
 - **Date:** 2026-09-09
 - **Author:** platform
 - **Related:** [ADR-053](../../adr/ADR-053-in-app-agent-on-stella-serve-and-funding-sources.md)
@@ -238,11 +238,22 @@ Shipped with #2968's backend:
 - `ask_assistant` as the turn's contract, with `POST /chat/stream` as its
   streaming adapter; `get_assistant_engine` as the engine-down read.
 
+Shipped with #4175 (ADR-XXX):
+
+- The goal-shaped turn. `ask_assistant` takes an optional `goal`, which the
+  turn sends to the engine as `GoalSpec`. The verifier's calls arrive with the
+  `verdict` role and are answered on another tier, and each round's verdict
+  is recorded on the run as `verification.goal_verdict` before the seal.
+  Rule authoring is the first caller (`ruleAuthoringGoal`). The witness is
+  `packages/agent/src/runtime/goal-turn.test.ts`: a rule authored across two
+  sources is answered by a graph query, with the engine, the models and the
+  graph simulated as that file's header names.
+
 Left, each its own change:
 
-- A goal-shaped turn (`goal` on the request) for the schema builder and rule
-  authoring, so the engine's verify ladder judges the result, with a test in
-  which a rule authored across two sources is answered by a graph query.
+- A control in the flyout that marks a turn as rule authoring or schema
+  building, so the app sends the goal the API and MCP already accept, and
+  `goal` on `POST /chat/stream`.
 - Attachments from the engine's own file system, which this host never
   mounts and refuses.
 - Bumping the client's pinned version and the image tag together when a
