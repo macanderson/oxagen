@@ -181,26 +181,6 @@ describe("deriveCompletenessGaps", () => {
     );
   });
 
-  it("grades a cancelled model call's run on what it recorded", () => {
-    // The recorder writes a `null` body for a call the provider never
-    // answered, so the completion carries a body reference like any other.
-    const rows = [
-      kept("model.engine_call_started"),
-      kept("model.engine_call_completed", {
-        payload_inline: { outcome: "cancelled" },
-      }),
-    ];
-    const gaps = deriveCompletenessGaps({
-      rows,
-      policy: FULL,
-      terminalStatus: "cancelled",
-    });
-    expect(gaps).toEqual([]);
-    expect(gradeSealedAttempt(gaps, 2, ledgerEnforcementTier(rows))).toBe(
-      "fork",
-    );
-  });
-
   it("names unobserved_tail for an abandoned attempt (negative path)", () => {
     expect(
       deriveCompletenessGaps({

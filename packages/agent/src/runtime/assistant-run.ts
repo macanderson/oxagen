@@ -979,7 +979,14 @@ class Recorder implements AssistantRunRecorder {
       // provider returned nothing, and the record says so. `toolCall` does
       // the same with a denied call's missing error. Writing no body at all
       // read as lost content, and sealed a fully recorded run `inspect`.
-      body: jsonBody(eventType, record.response ?? null),
+      // A completed call always had an answer, so one that arrives without
+      // it writes no body and the seal reports the loss.
+      body: jsonBody(
+        eventType,
+        record.outcome === "completed"
+          ? record.response
+          : (record.response ?? null),
+      ),
     });
   }
 

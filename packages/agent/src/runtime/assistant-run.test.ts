@@ -1400,6 +1400,34 @@ describe("the recorder hands the ledger the content its frames are about", () =>
     },
   );
 
+  it("writes no body for a completed model call that arrives without its answer", async () => {
+    // A completed call had an answer. Recording `null` for it would seal a
+    // body that looks captured and hide the loss the seal exists to report.
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      originMessageId: MESSAGE,
+      surface: "api-chat",
+      instruction: "hi",
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    await recorder.modelCall({
+      seq: 1,
+      requestId: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      outcome: "completed",
+    });
+    expect(
+      bodyOf(ledger.batches, "model.engine_call_completed"),
+    ).toBeUndefined();
+  });
+
   it("writes no body past the cap, and the frame's own digest still names the content", async () => {
     setupRun();
     const ledger = fakeStore();
