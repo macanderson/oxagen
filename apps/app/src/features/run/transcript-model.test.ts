@@ -11,6 +11,7 @@ import { releaseTranscript } from "./transcript.builders";
 import {
   buildFeed,
   buildTranscript,
+  closedLine,
   decisionSubject,
   entryKey,
   type FeedRow,
@@ -18,6 +19,7 @@ import {
   frameCost,
   type Frames,
   isOperatorPrompt,
+  LINE_CAP,
   mergeEntries,
   stepDigest,
   stepTool,
@@ -882,6 +884,65 @@ describe("buildFeed over the release run", () => {
   });
 });
 
+describe("buildFeed, the assistant's parked call", () => {
+  /** The ledger's two halves of one engine tool call, closed with `label`. */
+  const call = (label: string, kinds: TranscriptEntry["kinds"]) => [
+    frame({
+      seq: "3",
+      kind: "tool_call",
+      type: "tool.engine_call_started",
+      label: "create_workspace",
+      callKey: "tool-1-0",
+      at: "2026-09-25T12:00:00.000Z",
+      request: transcriptBody({
+        seq: "3",
+        type: "tool.engine_call_started",
+        text: '{"name":"ops"}',
+      }),
+      kinds: ["tools"],
+    }),
+    frame({
+      seq: "4",
+      kind: "tool_call",
+      type: "tool.engine_call_completed",
+      label,
+      callKey: "tool-1-0",
+      at: "2026-09-25T12:00:00.004Z",
+      response: transcriptBody({
+        seq: "4",
+        type: "tool.engine_call_completed",
+        text: '"refused: create_workspace is waiting for approval"',
+      }),
+      kinds,
+    }),
+  ];
+
+  it("parks the call on its receipt, names the approval, and does not fail it", () => {
+    const [row] = tools(
+      buildFeed(
+        call("create_workspace parked apr_0a1b2c3d4e5f6g7h8j9k0m", ["tools"]),
+      ),
+    );
+    expect(row?.failed).toBe(false);
+    expect(row?.call.parked).toEqual({
+      seq: "4",
+      type: "tool.engine_call_completed",
+      chainRef: null,
+    });
+    expect(row?.call.approvalId).toBe("apr_0a1b2c3d4e5f6g7h8j9k0m");
+    expect(row?.call.pending).toBe(false);
+  });
+
+  it("still reads a denied receipt as a refusal that parks nothing (negative)", () => {
+    const [row] = tools(
+      buildFeed(call("create_workspace denied", ["tools", "errors"])),
+    );
+    expect(row?.failed).toBe(true);
+    expect(row?.call.parked).toBeNull();
+    expect(row?.call.approvalId).toBeNull();
+  });
+});
+
 describe("buildFeed, a reply's own shapes", () => {
   const reply = (over: Partial<TranscriptEntry>) =>
     frame({
@@ -926,6 +987,75 @@ describe("buildFeed, a reply's own shapes", () => {
       pending: false,
     });
     expect(tool?.failed).toBe(true);
+  });
+
+  it("prints the call as it was made on the first line when its arguments have no headline", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: null,
+          blocks: [
+            {
+              kind: "tool_use",
+              name: "mcp__linear__update_issue",
+              input: { filter: { state: "open" }, patch: { labels: ["a"] } },
+              callKey: "toolu_1",
+            },
+          ],
+        }),
+      }),
+    ]);
+    expect(tools(rows)[0]?.call.arg).toBe(
+      '{"filter":{"state":"open"},"patch":{"labels":["a"]}}',
+    );
+  });
+
+  it("prints the name alone for a call made with no arguments (negative)", () => {
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: null,
+          blocks: [
+            {
+              kind: "tool_use",
+              name: "mcp__linear__list_teams",
+              input: {},
+              callKey: "toolu_1",
+            },
+          ],
+        }),
+      }),
+    ]);
+    expect(tools(rows)[0]?.call).toMatchObject({
+      name: "linear__list_teams",
+      arg: null,
+    });
+  });
+
+  it("cuts a long argument at the closed line's cap and keeps the call whole", () => {
+    const command = `echo ${"x".repeat(LINE_CAP)}`;
+    const rows = buildFeed([
+      reply({
+        response: transcriptBody({
+          seq: "3",
+          text: null,
+          blocks: [
+            {
+              kind: "tool_use",
+              name: "Bash",
+              input: { command },
+              callKey: "toolu_1",
+            },
+          ],
+        }),
+      }),
+    ]);
+    const call = tools(rows)[0]?.call;
+    expect(call?.arg).toHaveLength(LINE_CAP);
+    expect(call?.arg?.endsWith("…")).toBe(true);
+    expect(call?.raw).toBe(command);
   });
 
   it("names a call by the tool step of the same name when neither side kept a key", () => {
@@ -2298,5 +2428,28 @@ describe("a call whose step opens on Oxagen's gate", () => {
       type: "tool_requested",
       chainRef: null,
     });
+  });
+});
+
+describe("closedLine", () => {
+  it("puts text on one line, each run of whitespace a single space", () => {
+    expect(closedLine("  First line.\n\n\tSecond  line.\n")).toBe(
+      "First line. Second line.",
+    );
+  });
+
+  it("keeps text of exactly the cap whole (negative)", () => {
+    const text = "a".repeat(LINE_CAP);
+    expect(closedLine(text)).toBe(text);
+  });
+
+  it("cuts text one past the cap to the cap, ending in an ellipsis", () => {
+    const line = closedLine("a".repeat(LINE_CAP + 1));
+    expect(line).toHaveLength(LINE_CAP);
+    expect(line).toBe(`${"a".repeat(LINE_CAP - 1)}…`);
+  });
+
+  it("returns nothing for text that is only whitespace", () => {
+    expect(closedLine(" \n\t ")).toBe("");
   });
 });

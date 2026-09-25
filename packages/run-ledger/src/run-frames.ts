@@ -262,6 +262,19 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       if (provider && outcome) return `${provider} ${outcome}`;
       return outcome ?? event.eventType;
     }
+    case "context.history_summarized": {
+      const outcome = field(p, "outcome");
+      const covered = field(p, "covered_message_count");
+      if (outcome && covered) return `history summary ${outcome} (${covered})`;
+      return outcome ? `history summary ${outcome}` : event.eventType;
+    }
+    case "steering.manifest": {
+      const included = field(p, "included");
+      const cut = field(p, "cut");
+      return included && cut
+        ? `included=${included} cut=${cut}`
+        : event.eventType;
+    }
     default:
       // Both spellings of each call, and both spellings of the tool's name:
       // the ledger's own event calls it `capability_name`, the assistant's
@@ -278,6 +291,12 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
         case "tool_call": {
           const tool = toolNameOf(p);
           const outcome = field(p, "outcome");
+          // A parked call names the approval it waits on as a third word
+          // (`create_workspace parked apr_…`), so the Run page can pair the
+          // receipt with that approval's card by id rather than by instant.
+          const approval = field(p, "approval_public_id");
+          if (tool && outcome && approval && outcome === "parked")
+            return `${tool} ${outcome} ${approval}`;
           if (tool && outcome) return `${tool} ${outcome}`;
           // An intention has no outcome by design — it is the frame that says
           // a call is about to happen — so its tool name is the whole truth
@@ -729,6 +748,7 @@ const POLICY_TYPES: ReadonlySet<string> = new Set([
 const RECALL_TYPES: ReadonlySet<string> = new Set([
   "context.frames_selected",
   "context.instructions_applied",
+  "context.history_summarized",
   "context.assembled",
   // What the assembler put in front of a wrapped agent at its start, and
   // what it cut (ADR-093).

@@ -64,6 +64,7 @@ export const billingBudgetSet = registerCapability({
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "billing" },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },

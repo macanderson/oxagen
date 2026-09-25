@@ -151,12 +151,21 @@ const killSwitchMocks = vi.hoisted(() => ({
     async (_facts: { capabilityId: string; readOnly: boolean }) =>
       null as unknown,
   ),
+  /** The acting agent each gate was created with (its third argument). */
+  actingAgents: [] as unknown[],
 }));
 vi.mock("./kill-switch-gate", async (importOriginal) => {
   const real = await importOriginal<typeof import("./kill-switch-gate")>();
   return {
     ...real,
-    createKillSwitchGate: () => ({ check: killSwitchMocks.check }),
+    createKillSwitchGate: (
+      _ctx: unknown,
+      _reads?: unknown,
+      actingAgent?: unknown,
+    ) => {
+      killSwitchMocks.actingAgents.push(actingAgent);
+      return { check: killSwitchMocks.check };
+    },
   };
 });
 
@@ -288,7 +297,11 @@ vi.mock("./mcp-snapshots", async (importOriginal) => {
 });
 
 const mocks = vi.hoisted(() => ({
-  createApprovalRequest: vi.fn(async () => ({ approvalId: "appr_x" })),
+  createApprovalRequest: vi.fn(
+    async (): Promise<{ approvalId: string; approvalPublicId?: string }> => ({
+      approvalId: "appr_x",
+    }),
+  ),
   waitForApproval: vi.fn(
     async (): Promise<{
       approvalId: string;
@@ -348,10 +361,14 @@ vi.mock("@oxagen/iam", async () => {
   const live = await vi.importActual<
     typeof import("@oxagen/iam/live-agent-run-authorization")
   >("@oxagen/iam/live-agent-run-authorization");
+  const scopes = await vi.importActual<
+    typeof import("@oxagen/iam/resource-scope")
+  >("@oxagen/iam/resource-scope");
   return {
     emitAudit: iamMocks.emitAudit,
     matchEmergencyDeny: live.matchEmergencyDeny,
     readActiveEmergencyDenies: iamMocks.readActiveEmergencyDenies,
+    resourceScopeDigestOf: scopes.resourceScopeDigestOf,
   };
 });
 
@@ -361,7 +378,7 @@ import {
   type MaterializeOptions,
 } from "./materialize-tools";
 import { decideCapabilityForBelt } from "./toolbelt";
-import type { ActiveEmergencyDeny } from "@oxagen/iam";
+import { resourceScopeDigestOf, type ActiveEmergencyDeny } from "@oxagen/iam";
 import type { RegistryCapability } from "../registry-loader";
 import {
   invoke,
@@ -574,7 +591,12 @@ describe("materializeTools", () => {
   });
 
   it("parks the call under approvalMode park: the request is created, the event fires, nothing waits and the handler never runs", async () => {
+    mocks.insertToolInvocation.mockClear();
     mocks.createApprovalRequest.mockClear();
+    mocks.createApprovalRequest.mockResolvedValueOnce({
+      approvalId: "appr_x",
+      approvalPublicId: "apr_x",
+    });
     mocks.waitForApproval.mockClear();
     vi.mocked(invoke).mockClear();
     const fixtureGated = [
@@ -606,12 +628,26 @@ describe("materializeTools", () => {
       (e) =>
         e instanceof ApprovalPendingError &&
         e.code === "pending_approval" &&
-        e.capability === FIXTURE[2]!.name,
+        e.capability === FIXTURE[2]!.name &&
+        // The public id rides the park, so the turn's ledger can name the
+        // approval the call waits on.
+        e.approvalPublicId === "apr_x",
     );
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     expect(mocks.waitForApproval).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
     expect(events).toHaveLength(1);
+    // `tool_invocations` records the call as parked, not as a failure with
+    // the park's class, so failure rates leave it out.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledOnce();
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability_name: FIXTURE[2]!.name,
+        status: "parked",
+        error_class: null,
+        required_approval: 1,
+      }),
+    );
   });
 
   it("attaches a parked approval to the run set on runIdRef AFTER materialization, not the run captured at materialize time (finding 9, negative)", async () => {
@@ -703,6 +739,7 @@ describe("materializeTools", () => {
   });
 
   it("denied approval throws and the handler never runs", async () => {
+    mocks.insertToolInvocation.mockClear();
     mocks.createApprovalRequest.mockClear();
     mocks.waitForApproval.mockClear();
     mocks.waitForApproval.mockResolvedValueOnce({
@@ -732,6 +769,10 @@ describe("materializeTools", () => {
       ).execute({ y: 1 }),
     ).rejects.toThrow(/approval denied/);
     expect(invoke).not.toHaveBeenCalled();
+    // A person's no is still a failure in `tool_invocations` (negative).
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", error_class: "Error" }),
+    );
   });
 
   it("form.fill (non-agent.* name) dispatches through kernel invoke without 'No handler registered'", async () => {
@@ -1019,6 +1060,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       const args = externalRulesFactory.mock.calls[0]?.[0] as {
         onApprovalRequired: (event: {
           approvalId: string;
+          approvalPublicId?: string;
           capability: string;
           inputPreview: unknown;
           riskLevel: "high";
@@ -1027,6 +1069,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       };
       args.onApprovalRequired({
         approvalId: "parked-external",
+        approvalPublicId: "apr_parked",
         capability: "external",
         inputPreview: {},
         riskLevel: "high",
@@ -1043,10 +1086,16 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     await expect(t.execute({})).rejects.toMatchObject({
       code: "pending_approval",
       approvalId: "parked-external",
+      approvalPublicId: "apr_parked",
     });
     expect(onApprovalRequired).toHaveBeenCalledOnce();
     expect(fakeExecute).not.toHaveBeenCalled();
     expect(emitExternalCapabilityOutcome).not.toHaveBeenCalled();
+    // One `tool_invocations` row, saying parked rather than failed.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledOnce();
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "parked", error_class: null }),
+    );
   });
 
   it("refuses IAM revoked during an external approval or consent wait", async () => {
@@ -1889,6 +1938,21 @@ describe("materializeTools — first-use consent gate", () => {
     expect(fakeExecute).toHaveBeenCalledTimes(1);
   });
 
+  it("the consent card carries the risk level the engine is told", async () => {
+    const { tools, governance } = await materializeTools(CHAT_CTX);
+    const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(governance[alias]?.riskLevel).toBe("high");
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilityName: `mcp.${MCP_SERVER.id}.list_pull_requests`,
+        riskLevel: governance[alias]?.riskLevel,
+      }),
+    );
+  });
+
   it("records denial and blocks the transport when consent is denied at the prompt", async () => {
     mocks.waitForApproval.mockResolvedValueOnce({
       approvalId: "appr_consent",
@@ -2308,7 +2372,7 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
     agentRun: null | "observer" | "contributor" | "unresolved";
     opts: Pick<
       MaterializeOptions,
-      "allowlist" | "excludeCapabilities" | "riskCeiling"
+      "allowlist" | "excludeCapabilities" | "riskCeiling" | "actingAgent"
     >;
     /** What `readActiveEmergencyDenies` answers; both sides see the rows. */
     emergencyDenies?: ActiveEmergencyDeny[];
@@ -2322,6 +2386,20 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
     capabilityId,
     resourceScopeDigest: null,
     principalId,
+    reason: "incident",
+  });
+  /** The workspace's assistant agent, as its turn passes it. */
+  const ASSISTANT = { agentId: "agt_assistant", principalId: "prn_assistant" };
+  /** An `agent` switch on the assistant: the row `set_kill_switch` writes. */
+  const assistantSwitch = (): ActiveEmergencyDeny => ({
+    publicId: "edn_agent",
+    denyKind: "resource_scope",
+    capabilityId: null,
+    resourceScopeDigest: resourceScopeDigestOf({
+      kind: "agent",
+      id: ASSISTANT.agentId,
+    }),
+    principalId: null,
     reason: "incident",
   });
   const PARITY: [string, ParityScenario][] = [
@@ -2363,6 +2441,42 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
         emergencyDenies: [killSwitch("capA", "prn_someone_else")],
       },
     ],
+    // R4 (#3370, finding 9): a person's turn, the in-app assistant's, carries
+    // no agent run. A switch that names no principal still cuts its tool.
+    [
+      "a person's turn under a kill switch on capA",
+      { agentRun: null, opts: {}, emergencyDenies: [killSwitch("capA")] },
+    ],
+    [
+      "a kill switch naming a principal leaves a person's belt whole",
+      {
+        agentRun: null,
+        opts: {},
+        emergencyDenies: [killSwitch("capA", AGENT_PRN)],
+      },
+    ],
+    // The in-app assistant's turn also answers to the agent it runs as: a
+    // deny naming that agent's principal, or an `agent` switch on it.
+    [
+      "the assistant's turn under a deny naming its agent's principal",
+      {
+        agentRun: null,
+        opts: { actingAgent: ASSISTANT },
+        emergencyDenies: [killSwitch("capA", ASSISTANT.principalId)],
+      },
+    ],
+    [
+      "the assistant's turn under an agent switch on its agent",
+      {
+        agentRun: null,
+        opts: { actingAgent: ASSISTANT },
+        emergencyDenies: [assistantSwitch()],
+      },
+    ],
+    [
+      "an agent switch on the assistant leaves a person's own belt whole",
+      { agentRun: null, opts: {}, emergencyDenies: [assistantSwitch()] },
+    ],
   ];
   it.each(PARITY)(
     "lists exactly the tools the shared belt decision keeps: %s",
@@ -2383,14 +2497,24 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
         ctx,
         scenario.opts,
       );
-      // The read happens once, and only for a resolved agent run: a human
-      // turn and a fail-closed run list nothing the kill switch could cut.
+      // The read happens once for every caller, a person's turn included. A
+      // fail-closed run skips it: it lists no capability tool a switch could
+      // cut.
       expect(iamMocks.readActiveEmergencyDenies).toHaveBeenCalledTimes(
-        resolution === undefined ? 0 : 1,
+        scenario.agentRun === "unresolved" ? 0 : 1,
       );
+      // A person's turn carries no principal ids, so only a deny that names
+      // no principal reaches it. The assistant's turn carries its agent's.
+      const principals: string[] =
+        agentRun !== null
+          ? [AGENT_PRN, HUMAN_PRN]
+          : scenario.opts.actingAgent
+            ? [ASSISTANT.principalId]
+            : [];
       for (const deny of emergencyDenies) {
-        const name = deny.capabilityId ?? "";
-        if (deny.principalId === null || deny.principalId === AGENT_PRN)
+        if (deny.capabilityId === null) continue;
+        const name = deny.capabilityId;
+        if (deny.principalId === null || principals.includes(deny.principalId))
           expect(tools[name]).toBeUndefined();
         else expect(tools[name]).toBeDefined();
       }
@@ -2420,6 +2544,7 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
             now: new Date(),
             clientIp: null,
             emergencyDenies,
+            actingAgent: scenario.opts.actingAgent ?? null,
             entitledPluginIds: new Set<string>(),
           }),
         }),
@@ -2443,6 +2568,26 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
       }
     },
   );
+
+  it("an agent switch on the assistant empties the assistant's capability belt and reaches its call gate, and leaves a person's own turn alone", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([assistantSwitch()]);
+    killSwitchMocks.actingAgents.length = 0;
+
+    const assistantTurn = await materializeTools(CTX, {
+      actingAgent: ASSISTANT,
+    });
+    expect(Object.keys(assistantTurn.tools)).toEqual([]);
+    const personTurn = await materializeTools(CTX);
+    expect(Object.keys(personTurn.tools).sort()).toEqual([
+      "capA",
+      "capB",
+      "fill_form",
+    ]);
+    // The call gate of the assistant's turn carries its agent, so the switch
+    // refuses the call there too (kill-switch-gate.test.ts). A person's gate
+    // carries none.
+    expect(killSwitchMocks.actingAgents).toEqual([ASSISTANT, null]);
+  });
 });
 
 // ── Agent RBAC Phase 4a: MCP rule enforcement (spec §3.7) ────────────────────
@@ -2762,6 +2907,25 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
     // Approved → the transport ran.
     expect(fakeExecute).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ data: "result" });
+  });
+
+  it("ask: the consent card carries the risk level the engine is told", async () => {
+    const ctx = {
+      ...CTX,
+      messageId: "msg_ask_risk",
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "ask" }]),
+    };
+    const { tools, governance } = await materializeTools(ctx);
+    await (tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(governance[ALIAS]?.riskLevel).toBe("high");
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilityName: SYNTHETIC,
+        riskLevel: governance[ALIAS]?.riskLevel,
+      }),
+    );
   });
 
   it("ask: an active agent-subject grant runs inline — no card, no audit, no user gate", async () => {

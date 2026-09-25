@@ -164,7 +164,9 @@ beforeEach(() => {
   context.mockReset();
   context.mockResolvedValue(listed);
   preferences.mockReset();
-  preferences.mockResolvedValue(readOk({ timeZone: "Europe/London" }));
+  preferences.mockResolvedValue(
+    readOk({ timeZone: "Europe/London", enterToSubmit: true }),
+  );
   getAuthUser.mockReset();
   getAuthUser.mockResolvedValue({
     id: "usr_marcusbell",
@@ -199,6 +201,7 @@ describe("shellSource", () => {
         emailVerified: true,
         twoFactorEnabled: true,
         timeZone: "Europe/London",
+        enterToSubmit: true,
       },
       context: listed,
       approvals: {
@@ -227,6 +230,14 @@ describe("shellSource", () => {
     preferences.mockResolvedValue(readError("control_plane_unavailable", 503));
     expect((await shellSource(ctx, source)).data.viewer.timeZone).toBe(
       "America/Los_Angeles",
+    );
+  });
+
+  // A failed read must not turn Enter into a send the person never chose.
+  it("leaves Enter adding a line when the preference read fails (negative)", async () => {
+    preferences.mockResolvedValue(readError("control_plane_unavailable", 503));
+    expect((await shellSource(ctx, source)).data.viewer.enterToSubmit).toBe(
+      false,
     );
   });
 

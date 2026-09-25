@@ -18,6 +18,7 @@ import type {
   TranscriptEntry,
   TranscriptUsage,
 } from "@/data/contracts/run";
+import { parkedReceipt } from "./player-model";
 import {
   parseBody,
   type ToolDetail,
@@ -876,7 +877,7 @@ export type FeedGate = { decision: string; frame: FrameRef };
 export type FeedCall = {
   name: string;
   group: ToolGroup;
-  /** What the call acted on, on one line; null when the record says nothing more than the name. */
+  /** What the call acted on, on one line and cut at `LINE_CAP`; null when the record says nothing more than the name. */
   arg: string | null;
   /** First frame of the call to its last; null for a call recorded in one frame. */
   durationMs: number | null;
@@ -885,8 +886,16 @@ export type FeedCall = {
   /** The call as it was made, for the row's fold. */
   raw: string | null;
   gates: FeedGate[];
-  /** The request for approval the call is waiting on, when it is. */
+  /**
+   * The frame that records the call waiting on approval, when it is: the
+   * request for approval, or the ledger receipt of a call that parked.
+   */
   parked: FrameRef | null;
+  /**
+   * The public id (`apr_…`) of the approval a parked call waits on, when its
+   * receipt named one; null otherwise.
+   */
+  approvalId: string | null;
   /** No frame recorded a result, and nothing refused or parked the call. */
   pending: boolean;
   /** A body of the call was cut at the contract's ceiling. */
@@ -1213,6 +1222,48 @@ function argOf(detail: ToolDetail | null): string | null {
   return parts.length === 0 ? null : parts.join(" · ");
 }
 
+/**
+ * The longest text a closed row carries, in characters. At the row's 12.5px
+ * mono that is about 2,400px, wider than the argument's slot on a 2,560px
+ * screen, so the cap never cuts text a reader could see. It keeps a heredoc
+ * or an inline file out of every closed row. The open row shows it whole.
+ *
+ * @internal Exported for its test.
+ */
+export const LINE_CAP = 320;
+
+/**
+ * Text as a closed row prints it: each run of whitespace, newlines included,
+ * becomes one space, and the text is cut at `LINE_CAP` with an ellipsis.
+ */
+export function closedLine(text: string): string {
+  const line = text.replace(/\s+/g, " ").trim();
+  return line.length > LINE_CAP ? `${line.slice(0, LINE_CAP - 1)}…` : line;
+}
+
+/** The call as it was made, as compact JSON; null when it holds nothing. */
+function compactRaw(raw: string | null): string | null {
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== "object") return raw;
+    return Object.keys(parsed).length === 0 ? null : JSON.stringify(parsed);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * What a closed row prints after the tool's name: the reading's headline, or
+ * the call as it was made when the reading found none, as `closedLine` cuts
+ * it. A call whose arguments are all objects has no headline, and its row
+ * would otherwise print the name alone.
+ */
+function callArg(arg: string | null, raw: string | null): string | null {
+  const line = closedLine(arg ?? compactRaw(raw) ?? "");
+  return line === "" ? null : line;
+}
+
 function toolRow(step: TranscriptStep): FeedRow {
   const digest = stepDigest(step);
   const detail = stepTool(step);
@@ -1228,15 +1279,25 @@ function toolRow(step: TranscriptStep): FeedRow {
       (frame) =>
         TOOL_GATE.has(frame.type) && ASK.test(policyOutcome(frame) ?? ""),
     );
+  // The in-app assistant records a parked call on its receipt, not on a
+  // request frame before it: the call closed, and it waits on the approval
+  // the receipt names.
+  const parkedClose =
+    close === undefined ? null : parkedReceipt(close.type, close.label);
   const parked =
     asked !== undefined && close === undefined && !answered
       ? refOf(asked)
-      : null;
+      : close !== undefined && parkedClose !== null
+        ? refOf(close)
+        : null;
   const failed =
     digest.node === "deny" ||
     step.frames.some((frame) => frame.kinds.includes("errors"));
   const name = detail?.name ?? digest.name;
-  const arg = detail === null ? digest.arg : argOf(detail);
+  const arg = callArg(
+    detail === null ? digest.arg : argOf(detail),
+    detail?.raw ?? null,
+  );
   const call: FeedCall = {
     name,
     group: detail?.group ?? "tool",
@@ -1249,6 +1310,7 @@ function toolRow(step: TranscriptStep): FeedRow {
     raw: detail?.raw ?? null,
     gates: gatesOf(step.frames),
     parked,
+    approvalId: parkedClose?.approvalId ?? null,
     pending: close === undefined && parked === null && !failed,
     truncated: step.frames.some(
       (frame) =>
@@ -1298,7 +1360,7 @@ function blockToolRow(
     output: result?.summary ?? null,
   });
   const name = detail?.name ?? block.name;
-  const arg = argOf(detail);
+  const arg = callArg(argOf(detail), detail?.raw ?? null);
   const call: FeedCall = {
     name,
     group: detail?.group ?? "tool",
@@ -1309,6 +1371,7 @@ function blockToolRow(
     raw: detail?.raw ?? null,
     gates: [],
     parked: null,
+    approvalId: null,
     pending: result === undefined,
     truncated: frame.response?.truncated === true,
     frame: refOf(frame),

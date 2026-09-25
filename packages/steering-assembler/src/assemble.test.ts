@@ -141,6 +141,31 @@ describe("assembleSteering", () => {
     expect(manifest.cut).toBe(2);
   });
 
+  it("opens with the header the run names, and counts it against the budget", () => {
+    const header = "This run's steering, from two sources.";
+    const candidates = [record({})];
+    const named = assembleSteering({ ...run(candidates), header }, 4096);
+    expect(named.text!.split("\n")[0]).toBe(header);
+    expect(named.text).not.toContain(STEERING_HEADER);
+    expect(named.manifest.spent_tokens).toBe(budgetTokens(named.text!));
+
+    // Without one, the text keeps ADR-091's header, so the bundle a host
+    // receives does not change.
+    const plain = assembleSteering(run(candidates), 4096);
+    expect(plain.text!.split("\n")[0]).toBe(STEERING_HEADER);
+    expect(plain.text!.replace(STEERING_HEADER, header)).toBe(named.text);
+
+    // A header too long for the budget leaves no room for any item.
+    const cramped = assembleSteering(
+      { ...run(candidates), header: "h".repeat(400) },
+      100,
+    );
+    expect(cramped.text).toBeNull();
+    expect(cramped.manifest.items).toEqual([
+      expect.objectContaining({ id: "a-record", reason: "budget" }),
+    ]);
+  });
+
   it("delivers may and info when the injection point asks for them", () => {
     const { text, manifest } = assembleSteering(
       run(

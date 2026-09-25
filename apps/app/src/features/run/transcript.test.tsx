@@ -119,6 +119,7 @@ function renderSection(view: SectionView = {}) {
 
 afterEach(() => {
   cleanup();
+  window.getSelection()?.removeAllRanges();
   readTranscriptPage.mockReset();
   refresh.mockReset();
 });
@@ -320,13 +321,14 @@ describe("the kind chips", () => {
 });
 
 describe("the rows", () => {
-  it("opens on the operator's first prompt, named with the task", () => {
+  it("opens on the operator's first prompt on one line, and names the task once it opens", () => {
     renderSection();
     const [first] = rows();
     expect(first).toHaveAttribute("data-kind", "prompt");
     const you = screen.getByTestId("transcript-you");
-    expect(you).toHaveTextContent("YOU");
-    expect(you).toHaveTextContent(/^YOUCut the 4\.11\.0 release notes/);
+    expect(you).toHaveTextContent(/^YOU⏵Cut the 4\.11\.0 release notes/);
+    expect(you).not.toHaveTextContent("first prompt");
+    fireEvent.click(within(you).getByRole("button", { name: "Show in full" }));
     expect(you).toHaveTextContent(
       "Marcus Bell · operatortask a-intel/platform#482first prompt",
     );
@@ -385,22 +387,54 @@ describe("the rows", () => {
     expect(within(list).getByTestId("tx-out")).toHaveTextContent("#470");
   });
 
-  it("shows six lines of a longer output and says how many it holds back", () => {
+  it("draws a closed call as its one line, with nothing of the call or its output under it (negative)", () => {
     renderSection();
     const list = toolRow("github__list_pull_requests");
-    expect(within(list).getByTestId("tx-out")).not.toHaveTextContent("#470");
+    expect(within(list).queryByTestId("tx-call-fold")).toBeNull();
+    expect(within(list).queryByTestId("tx-out")).toBeNull();
     expect(
-      within(list).getByRole("button", { name: /1 more line/ }),
-    ).toBeTruthy();
+      within(list).queryByRole("button", { name: /more line/ }),
+    ).toBeNull();
+    expect(
+      within(list).getByRole("button", { name: "Show the call" }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("opens a call from a click on its line, and not from a click that ends a selection", () => {
+    renderSection();
+    const list = toolRow("github__list_pull_requests");
+    const line = within(list).getByTestId("tx-call-line");
+    // The reader selects the line's text to copy it.
+    const range = document.createRange();
+    range.selectNodeContents(line);
+    window.getSelection()?.addRange(range);
+    fireEvent.click(line);
+    expect(within(list).queryByTestId("tx-call-fold")).toBeNull();
+    window.getSelection()?.removeAllRanges();
+    fireEvent.click(line);
+    expect(within(list).getByTestId("tx-call-fold")).toBeTruthy();
+    expect(
+      within(list).getByRole("button", { name: "Hide the call" }),
+    ).toHaveAttribute("aria-expanded", "true");
   });
 
   it("reads a new file as the diff it is, and marks a failed call and its output", () => {
     renderSection();
     const write = toolRow("Write");
-    expect(within(write).getByTestId("tx-diff")).toHaveTextContent("new file");
     expect(write).toHaveTextContent("+13 −0");
+    expect(within(write).queryByTestId("tx-diff")).toBeNull();
+    fireEvent.click(
+      within(write).getByRole("button", { name: "Show the call" }),
+    );
+    expect(within(write).getByTestId("tx-diff")).toHaveTextContent("new file");
+    // The diff is the whole of what the edit did, so its "File created"
+    // output does not repeat it.
+    expect(within(write).queryByTestId("tx-out")).toBeNull();
     const bash = toolRow("Bash");
     expect(bash).toHaveTextContent("✗");
+    fireEvent.click(
+      within(bash).getByRole("button", { name: "Show the call" }),
+    );
     expect(within(bash).getByTestId("tx-out").className).toContain(
       "text-error",
     );
@@ -415,8 +449,14 @@ describe("the rows", () => {
       "href",
       "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=17",
     );
-    expect(release).toHaveTextContent("Held at Oxagen until someone answers.");
     expect(release).not.toHaveTextContent(/\d ms/);
+    expect(release).not.toHaveTextContent(
+      "Held at Oxagen until someone answers.",
+    );
+    fireEvent.click(
+      within(release).getByRole("button", { name: "Show the call" }),
+    );
+    expect(release).toHaveTextContent("Held at Oxagen until someone answers.");
   });
 
   it("says what each model step cost, its tokens and the running total, with the frame behind them", () => {
@@ -438,15 +478,18 @@ describe("the rows", () => {
     );
   });
 
-  it("lists three recalled frames and folds the rest with their tokens", () => {
+  it("reads the recall as its heading, and lists what was recalled once it opens", () => {
     renderSection();
     const recall = screen.getByTestId("tx-recall");
     expect(recall).toHaveTextContent("◉ recall · 6 frames · 11,204 tok");
     expect(recall).not.toHaveTextContent("RELEASING.md");
+    expect(within(recall).queryByTestId("tx-recall-items")).toBeNull();
     fireEvent.click(
-      within(recall).getByRole("button", { name: /3 more · 5,218 tok/ }),
+      within(recall).getByRole("button", { name: "Show what was recalled" }),
     );
-    expect(recall).toHaveTextContent("RELEASING.md");
+    expect(within(recall).getByTestId("tx-recall-items")).toHaveTextContent(
+      "RELEASING.md",
+    );
     expect(
       within(recall).getByRole("link", { name: "open the Context tab" }),
     ).toHaveAttribute(
@@ -467,18 +510,40 @@ describe("the rows", () => {
     );
   });
 
-  it("folds the model's words after the first sentence until asked", () => {
-    renderSection();
+  it("draws the model's words on one line until asked, then as they were written", () => {
+    renderSection({
+      read: readOk(
+        transcriptOf(
+          releaseSpecs().map((spec) =>
+            spec.seq === 8
+              ? {
+                  ...spec,
+                  blocks: [
+                    {
+                      kind: "text" as const,
+                      text: "31 merged in range.\n\nReading CHANGELOG.md for the heading order.",
+                    },
+                  ],
+                }
+              : spec,
+          ),
+        ),
+      ),
+    });
     const second = screen.getAllByTestId("transcript-agent")[1];
     if (second === undefined) throw new Error("expected the agent's words");
-    expect(second).toHaveTextContent("31 merged in range. …");
-    expect(second).not.toHaveTextContent("Reading CHANGELOG.md");
-    fireEvent.click(
-      within(second).getByRole("button", { name: "Show the rest" }),
+    expect(second.textContent).toContain(
+      "31 merged in range. Reading CHANGELOG.md",
     );
-    expect(second).toHaveTextContent(
-      "Reading CHANGELOG.md for the heading order",
+    const fold = within(second).getByRole("button", { name: "Show in full" });
+    expect(fold).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(fold);
+    expect(second.textContent).toContain(
+      "31 merged in range.\n\nReading CHANGELOG.md",
     );
+    expect(
+      within(second).getByRole("button", { name: "Show less" }),
+    ).toHaveAttribute("aria-expanded", "true");
   });
 
   it("opens every thought with expand thinking, and closes them again", () => {
@@ -492,7 +557,7 @@ describe("the rows", () => {
                   blocks: [
                     {
                       kind: "thinking" as const,
-                      text: "First thought. Second thought.",
+                      text: "First thought.\nSecond thought.",
                     },
                   ],
                 }
@@ -501,12 +566,19 @@ describe("the rows", () => {
         ),
       ),
     });
-    const [thought] = screen.getAllByTestId("tx-think");
-    expect(thought).not.toHaveTextContent("Second thought.");
+    // The first thought, re-read each time: it is a span on one line while
+    // closed and a block of every line once open.
+    const thought = () => screen.getAllByTestId("tx-think")[0];
+    expect(thought()?.tagName).toBe("SPAN");
+    expect(thought()?.textContent).toBe("First thought. Second thought.");
     fireEvent.click(screen.getByRole("button", { name: "expand thinking" }));
-    expect(thought).toHaveTextContent("Second thought.");
+    expect(thought()?.tagName).toBe("DIV");
+    expect(thought()?.textContent).toBe("First thought.\nSecond thought.");
     fireEvent.click(screen.getByRole("button", { name: "collapse thinking" }));
-    expect(thought).not.toHaveTextContent("Second thought.");
+    expect(thought()?.tagName).toBe("SPAN");
+    // Its own fold opens the one thought.
+    fireEvent.click(screen.getByRole("button", { name: "thinking · 2 lines" }));
+    expect(thought()?.tagName).toBe("DIV");
   });
 
   it("reads each row's clock in the viewer's zone and names its place in the run", () => {
@@ -588,7 +660,7 @@ describe("the rows", () => {
     );
     fireEvent.click(
       within(screen.getByTestId("tx-recall")).getByRole("button", {
-        name: /3 more/,
+        name: "Show what was recalled",
       }),
     );
     await expectNoAxe(container);
@@ -652,19 +724,22 @@ describe("event rows", () => {
     expect(within(decision).queryByText("policy_decision · fr 2")).toBeNull();
   });
 
-  it("shows an event's first line and folds the rest until asked, then folds it again", () => {
+  it("shows an event's text on one line, opens it as written, then folds it again", () => {
     renderSection({ read: readOk(transcriptOf(EVENTS)) });
     const [, notice] = events();
     if (notice === undefined) throw new Error("a notice row");
     expect(notice).toHaveTextContent("●");
     expect(within(notice).getByText("notification")).toBeTruthy();
-    expect(within(notice).getByTitle("Build finished")).toBeTruthy();
-    expect(within(notice).queryByText(/all 42 tests passed/)).toBeNull();
-    const fold = within(notice).getByRole("button", { name: "Show the rest" });
+    expect(within(notice).getByTestId("tx-event-line")).toHaveAttribute(
+      "title",
+      "Build finished all 42 tests passed",
+    );
+    expect(notice.querySelector("pre")).toBeNull();
+    const fold = within(notice).getByRole("button", { name: "Show in full" });
     expect(fold).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(fold);
-    expect(notice.querySelector("pre")).toHaveTextContent(
-      "Build finished all 42 tests passed",
+    expect(notice.querySelector("pre")?.textContent).toBe(
+      "Build finished\nall 42 tests passed",
     );
     fireEvent.click(within(notice).getByRole("button", { name: "Show less" }));
     expect(notice.querySelector("pre")).toBeNull();
@@ -858,15 +933,23 @@ describe("paging past the cursor", () => {
       [],
       "ZjoxMQ",
     );
-    // The release call is now one row with its answer and its result.
-    expect(toolRow("github__create_release")).toHaveTextContent(
-      "draft created",
-    );
+    // The release call is now one row carrying the answer that landed with the
+    // appended page.
+    const release = toolRow("github__create_release");
+    expect(release).toHaveTextContent("approve \u00b7 fr 18");
     expect(
       rows()
         .slice(0, -1)
         .map((row) => row.textContent),
     ).toEqual(before.slice(0, -1));
+    // A row leads on one line, so the result the page carried is behind the
+    // call's fold rather than in the row's own text.
+    fireEvent.click(
+      within(release).getByRole("button", { name: "Show the call" }),
+    );
+    expect(within(release).getByTestId("tx-out")).toHaveTextContent(
+      "draft created",
+    );
   });
 
   it("stops offering more once the page it read carried no cursor", async () => {
@@ -1137,6 +1220,96 @@ describe("live access changes", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("a call the in-app assistant parked", () => {
+  /** An assistant turn's one tool call, its receipt labelled `label`. */
+  const assistantCall = (label: string, kinds: TranscriptEntry["kinds"]) =>
+    runTranscript({
+      zoom: "everything",
+      entries: [
+        transcriptEntry({
+          seq: "3",
+          endSeq: "3",
+          kind: "tool_call",
+          type: "tool.engine_call_started",
+          label: "create_workspace",
+          callKey: "tool-1-0",
+          kinds: ["tools"],
+          request: transcriptBody({
+            seq: "3",
+            type: "tool.engine_call_started",
+            text: '{"name":"ops"}',
+          }),
+          response: null,
+          frames: 1,
+          cost: null,
+          cumulativeCost: null,
+        }),
+        transcriptEntry({
+          seq: "4",
+          endSeq: "4",
+          kind: "tool_call",
+          type: "tool.engine_call_completed",
+          label,
+          callKey: "tool-1-0",
+          kinds,
+          request: null,
+          response: transcriptBody({
+            seq: "4",
+            type: "tool.engine_call_completed",
+            text: '"refused: create_workspace is waiting for approval"',
+          }),
+          frames: 1,
+          cost: null,
+          cumulativeCost: null,
+        }),
+      ],
+    });
+
+  it("shows the call as parked, links its receipt, and names the approval it waits on", async () => {
+    const { container } = renderSection({
+      read: readOk(
+        assistantCall("create_workspace parked apr_0a1b2c3d4e5f6g7h8j9k0m", [
+          "tools",
+        ]),
+      ),
+    });
+    const call = toolRow("create_workspace");
+    // Waiting on a person is not a failure.
+    expect(call).not.toHaveTextContent("✗");
+    expect(
+      within(call).getByRole("link", { name: "parked · fr 4" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=4",
+    );
+    // The note and the approval id sit in the call's fold, with its output.
+    fireEvent.click(
+      within(call).getByRole("button", { name: "Show the call" }),
+    );
+    expect(call).toHaveTextContent("Held at Oxagen until someone answers.");
+    expect(within(call).getByTestId("tx-parked-approval")).toHaveTextContent(
+      "Approval apr_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("still shows a denied call as refused, with no approval (negative)", () => {
+    renderSection({
+      read: readOk(
+        assistantCall("create_workspace denied", ["tools", "errors"]),
+      ),
+    });
+    const call = toolRow("create_workspace");
+    expect(call).toHaveTextContent("✗");
+    expect(within(call).queryByRole("link", { name: /parked/ })).toBeNull();
+    fireEvent.click(
+      within(call).getByRole("button", { name: "Show the call" }),
+    );
+    expect(call).not.toHaveTextContent("Held at Oxagen until someone answers.");
+    expect(within(call).queryByTestId("tx-parked-approval")).toBeNull();
   });
 });
 

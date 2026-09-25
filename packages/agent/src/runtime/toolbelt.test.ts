@@ -14,7 +14,7 @@ vi.mock("@oxagen/oxagen/plugins", () => ({
   pluginForContract: pluginMocks.pluginForContract,
 }));
 
-import type { ActiveEmergencyDeny } from "@oxagen/iam";
+import { resourceScopeDigestOf, type ActiveEmergencyDeny } from "@oxagen/iam";
 import {
   createAgentRunResolution,
   type AgentAuthzSnapshot,
@@ -251,6 +251,83 @@ describe("decideCapabilityForBelt", () => {
       decideCapabilityForBelt(
         READ,
         env({ agentRun: run, resolution, emergencyDenies: [otherPrincipal] }),
+      ).outcome,
+    ).toBe("allow");
+  });
+
+  // R4 (#3370, finding 9): the in-app assistant lists its tools as a person
+  // and carries no agent run. A switch reaches it all the same, on the facts
+  // the per-call gate matches a person's call on: no principal ids.
+  it("an emergency deny that names no principal cuts the tool from a person's belt too, and one that names a principal does not", () => {
+    const byCapability: ActiveEmergencyDeny = {
+      publicId: "edn_1",
+      denyKind: "capability",
+      capabilityId: WRITE.name,
+      resourceScopeDigest: null,
+      principalId: null,
+      reason: "incident",
+    };
+    expect(
+      decideCapabilityForBelt(WRITE, env({ emergencyDenies: [byCapability] })),
+    ).toMatchObject({ outcome: "deny", rule: "kill_switch" });
+    expect(
+      decideCapabilityForBelt(
+        WRITE,
+        env({
+          emergencyDenies: [{ ...byCapability, principalId: AGENT_PRN }],
+        }),
+      ),
+    ).toMatchObject({ outcome: "require_approval", rule: "contract_approval" });
+    expect(
+      decideCapabilityForBelt(READ, env({ emergencyDenies: [byCapability] }))
+        .outcome,
+    ).toBe("allow");
+  });
+
+  it("the assistant's turn answers to the agent it runs as: a deny naming its principal, or an agent switch on it", () => {
+    const actingAgent = { agentId: "agt_assistant", principalId: AGENT_PRN };
+    const byPrincipal: ActiveEmergencyDeny = {
+      publicId: "edn_1",
+      denyKind: "capability",
+      capabilityId: READ.name,
+      resourceScopeDigest: null,
+      principalId: AGENT_PRN,
+      reason: "incident",
+    };
+    const agentSwitch: ActiveEmergencyDeny = {
+      publicId: "edn_2",
+      denyKind: "resource_scope",
+      capabilityId: null,
+      resourceScopeDigest: resourceScopeDigestOf({
+        kind: "agent",
+        id: actingAgent.agentId,
+      }),
+      principalId: null,
+      reason: "incident",
+    };
+    for (const deny of [byPrincipal, agentSwitch]) {
+      expect(
+        decideCapabilityForBelt(
+          READ,
+          env({ actingAgent, emergencyDenies: [deny] }),
+        ),
+      ).toMatchObject({ outcome: "deny", rule: "kill_switch" });
+      // A person's own turn names no acting agent, and neither reaches it.
+      expect(
+        decideCapabilityForBelt(READ, env({ emergencyDenies: [deny] })).outcome,
+      ).toBe("allow");
+    }
+    const otherAgent = {
+      ...agentSwitch,
+      resourceScopeDigest: resourceScopeDigestOf({
+        kind: "agent",
+        id: "agt_someone_else",
+      }),
+    };
+    expect(
+      decideCapabilityForBelt(
+        READ,
+        env({ actingAgent, emergencyDenies: [otherAgent] }),
       ).outcome,
     ).toBe("allow");
   });

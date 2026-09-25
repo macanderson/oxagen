@@ -5926,18 +5926,17 @@ type Messages = {
       firstPrompt: string;
       laterPrompt: string;
       turn: string;
-      showRest: string;
+      showFull: string;
       showLess: string;
       thinkingLines: string;
       showCall: string;
       hideCall: string;
-      moreLines: string;
-      collapse: string;
       lines: string;
       running: string;
       noResult: string;
       parked: string;
       parkedNote: string;
+      parkedApproval: string;
       gate: string;
       frame: string;
       subagentFrame: string;
@@ -5951,8 +5950,8 @@ type Messages = {
       recallItems: string;
       recallTokens: string;
       recallCut: string;
-      recallMore: string;
-      recallMoreTokens: string;
+      showRecall: string;
+      hideRecall: string;
       openContext: string;
       stopped: string;
       sealedAt: string;
@@ -6059,6 +6058,11 @@ type Messages = {
         previous: string;
         next: string;
         last: string;
+        play: string;
+        pause: string;
+        replay: string;
+        speed: string;
+        speedLabel: string;
         scrub: string;
         scrubValue: string;
         position: string;
@@ -7504,6 +7508,8 @@ type Messages = {
           dark: string;
           light: string;
         };
+        enterToSubmit: string;
+        enterToSubmitHint: string;
         preview: string;
         previewDate: string;
         previewNumber: string;
@@ -7618,6 +7624,8 @@ type Messages = {
         label: string;
         placeholder: string;
         send: string;
+        sendHintEnter: string;
+        sendHintModEnter: string;
         draftTooLong: string;
       };
       refused: {
@@ -9115,6 +9123,7 @@ type Messages = {
         gitlabCredentialRejected: string;
         repositoryHostChanged: string;
         mergeTimeUnknown: string;
+        mergedOutsideOxagen: string;
         refused: string;
         invalid: string;
         pendingApproval: string;

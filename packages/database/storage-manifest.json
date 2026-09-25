@@ -12412,6 +12412,12 @@
           "type": "jsonb"
         },
         {
+          "name": "history_summary",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
           "name": "deleted_at",
           "nullable": true,
           "primaryKey": false,
