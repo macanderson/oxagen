@@ -81,7 +81,7 @@ describe("DesktopDownloads", () => {
       "macOS refuses the first launch until builds are notarized. Choose Done, then click Open Anyway in System Settings > Privacy & Security.",
     );
     // macOS 15 removed the Control-click Open override.
-    expect(note.textContent.toLowerCase()).not.toContain("right-click");
+    expect(note.textContent).not.toMatch(/(right|control|ctrl)[- ]click/i);
   });
 
   it("groups the installers under macOS, Windows and Linux, in that order", () => {
