@@ -10,8 +10,10 @@
  *
  * Four secret writes shipped that way (`import_env_secrets`,
  * `delete_secret_key`, `upsert_secret_key`, `set_secret_value`) while the
- * other 29 high-risk agent contracts set the flag. This test reads every
- * registered contract, so the next one fails here instead of in review.
+ * other 29 high-risk agent contracts set the flag. A fifth,
+ * `unset_secret_value`, was rated medium and is now rated high with them.
+ * This test reads every registered contract, so the next one fails here
+ * instead of in review.
  */
 import { describe, expect, it } from "vitest";
 import { z } from "zod";

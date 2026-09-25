@@ -53,12 +53,12 @@ Metering, IAM, and audit run through the kernel.
 
 ## Approval
 
-On the `agent` surface this call waits for a person to approve it before it
-runs (`requiresApproval: true`). The flag covers the whole capability, so a
-preview (`commit: false`) from the agent waits for approval too. When the
-in-app assistant parks the call, the approval row keeps only a digest of the
-input. The input, `.env` text included, is stored encrypted until the approved
-call resumes.
+When an agent turn calls this capability on the `agent` surface, the call waits
+for a person to approve it before it runs (`requiresApproval: true`). The flag
+covers the whole capability, so a preview (`commit: false`) from the agent waits
+for approval too. When the in-app assistant parks the call, the approval row
+keeps only a digest of the input. The input, `.env` text included, is stored
+encrypted until the approved call resumes.
 
 The `api` and `mcp` surfaces do not read `requiresApproval`. IAM (org Owner or
 Admin) and the workspace's decision rules gate those calls.
