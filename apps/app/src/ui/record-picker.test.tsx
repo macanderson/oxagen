@@ -489,7 +489,7 @@ describe("tool rows and chips", () => {
     expect(chip?.querySelector(".font-mono")).not.toBeNull();
   });
 
-  it("shows the chosen record's logo in a single picker's field", async () => {
+  it("shows the chosen record's logo in a single picker's field", () => {
     const { container } = render(
       <IntlProvider>
         <label htmlFor="tool">Tool</label>

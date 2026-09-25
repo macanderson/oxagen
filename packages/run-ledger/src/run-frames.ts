@@ -266,6 +266,7 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       const round = field(p, "round");
       const verdict = goalVerdictOf(p);
       return round && verdict ? `round ${round} ${verdict}` : event.eventType;
+    }
     case "context.history_summarized": {
       const outcome = field(p, "outcome");
       const covered = field(p, "covered_message_count");
