@@ -24,8 +24,8 @@ run          trusted RunSpecV2 identity — principals, agent version,
 
 - **Owns:**
   - Every write to the `agent.agent_runs*` tables: run admission, attempts,
-    event appends, seals, terminal outcomes, and run control (cancel and
-    ingress pause).
+    event appends, seals, terminal outcomes, run control (cancel and ingress
+    pause), and the `abandoned` seal of a run whose producer went silent.
   - The trusted admission contract, `RunSpecV2`, and its canonical JSON.
   - The closed event vocabulary and the event and stream digest contract.
   - Frame bodies and the seal's replay evidence, including the rollup and
@@ -64,6 +64,7 @@ run          trusted RunSpecV2 identity — principals, agent version,
 | `RunStoreOptions.authorizeAppend` | port | `packages/run-ledger/src/run-store.ts` | `packages/handlers/src/run.frames.ingest.ts`. It runs under the append's run lock. |
 | `evidenceStore` / `deferredEvidenceBodies` / `deferredEvidenceArchive` | adapter | `packages/run-ledger/src/evidence-store.ts` | `packages/handlers/src/run.frames.ingest.ts`, `packages/handlers/src/lib/run-read.ts`, `packages/inngest-functions/src/functions/run.enrich.ts` |
 | `lockRunForControl` / `cancelRunInTransaction` / `setRunIngressPaused` | export | `packages/run-ledger/src/run-control.ts` | `packages/handlers/src/tacho.command.dispatch.ts`, `packages/handlers/src/run.token.issue.ts` |
+| `RunStore.abandonRun` | export | `packages/run-ledger/src/run-store.ts` | `packages/inngest-functions/src/lib/assistant-run-abandon.ts`, run by the `evidence.assistant-run-abandon` job |
 | `listIdleLedgerAttempts` / `ledgerIdleCutoff` | export | `packages/run-ledger/src/idle-attempts.ts` | `packages/inngest-functions/src/functions/run.ledger-idle-close.ts` |
 
 ## Entry points
@@ -106,6 +107,10 @@ run          trusted RunSpecV2 identity — principals, agent version,
   which the `next_run_seq` allocator needs anyway.
 - **The seal is the fence.** There is no lease token and no epoch. An append or
   a second seal against a sealed attempt raises `AttemptNotWritableError`.
+  The run row's lock is taken in a statement of its own before the seal is
+  read (`buildLockRunOfAttemptSql`). Under READ COMMITTED a statement that
+  waited on the lock still reads its starting snapshot, so a seal read in the
+  same statement could miss a seal another writer committed meanwhile.
 - **Dense sequences, or nothing.** `attempt_seq` is producer-assigned and dense
   from 1. A gap inside a batch, or between a batch and the durable log, is
   refused (`RunEventSequenceGapError`) rather than repaired.
@@ -118,6 +123,13 @@ run          trusted RunSpecV2 identity — principals, agent version,
   `ON CONFLICT` clause.
 - **A zero-event attempt seals honestly.** Null final-event digest, the
   canonical empty-stream digest, no synthesized terminal event.
+- **A silent run is abandoned only as it was read.** `abandonRun` fails the
+  run in one UPDATE that matches only while the run is open, points at the
+  same attempt, and holds the `next_run_seq` the caller read. An append or a
+  seal since the read moves one of those, so the producer wins and nothing is
+  written. The attempt then seals `abandoned` from its recorded rows, with no
+  terminal event and an `unobserved_tail` gap. The seal is final like any
+  other, so a late append is refused (ADR-173).
 - **A silent attempt is sealed for its producer, and the seal is final.**
   `run.ledger-idle-close` in `@oxagen/inngest-functions` seals an open attempt
   with no event for twelve hours as `abandoned` (reason `idle_timeout`), which
