@@ -141,6 +141,13 @@ export {
   type TranscriptZoom,
   type ToolUseRef,
 } from "./transcript-steps";
+// The Run page's figures, counted over the same fold (ADR-182).
+export {
+  transcriptFigures,
+  type BatchFigures,
+  type FamilyFigure,
+  type TranscriptFigures,
+} from "./transcript-figures";
 export {
   bareToolName,
   TOOL_FAMILIES,
