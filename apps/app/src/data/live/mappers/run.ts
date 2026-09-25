@@ -262,6 +262,7 @@ function toTranscriptBody(
                   stepKey: block.stepKey ?? null,
                   result: block.result ?? null,
                   family: block.family ?? null,
+                  tool: block.tool ?? null,
                 };
               case "tool_result":
                 return {
@@ -375,6 +376,7 @@ export function toRunTranscript(
       approvalId: entry.approvalId ?? null,
       gates: (entry.gates ?? []).map(toDecisionView),
       subject: entry.subject ?? null,
+      tool: entry.tool ?? null,
       family: entry.family ?? null,
       model: entry.model ?? null,
       durationMs: entry.durationMs ?? null,

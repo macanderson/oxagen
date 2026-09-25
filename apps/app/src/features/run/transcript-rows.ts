@@ -359,7 +359,9 @@ function toolRow(entry: TranscriptEntry): FeedRow {
     entry.target == null || entry.target === "" ? null : entry.target;
   const detail = withTarget(
     callDetail({
-      name: entry.subject,
+      // The server names the tool as its harness knows it (ADR-182); an
+      // answer that did not leaves the name as recorded.
+      name: entry.tool ?? entry.subject,
       family: entry.family ?? "tool",
       request: entry.request?.text ?? null,
       response: entry.response?.text ?? null,
@@ -376,7 +378,7 @@ function toolRow(entry: TranscriptEntry): FeedRow {
         : openingOf(entry);
   const lastGate = gates[gates.length - 1];
   const call: FeedCall = {
-    name: detail?.name ?? entry.subject ?? entry.type,
+    name: detail?.name ?? entry.tool ?? entry.subject ?? entry.type,
     group: detail?.group ?? entry.family ?? "tool",
     arg: callArg(detail === null ? target : argOf(detail), detail?.raw ?? null),
     durationMs: entry.durationMs,
@@ -413,13 +415,13 @@ function blockToolRow(
   frame: FrameRef,
 ): FeedRow {
   const detail = toolDetailOf(
-    block.name,
+    block.tool ?? block.name,
     block.family ?? "tool",
     block.input,
     block.result?.summary ?? null,
   );
   const call: FeedCall = {
-    name: detail?.name ?? block.name,
+    name: detail?.name ?? block.tool ?? block.name,
     group: detail?.group ?? block.family ?? "tool",
     arg: callArg(argOf(detail), detail?.raw ?? null),
     durationMs: null,

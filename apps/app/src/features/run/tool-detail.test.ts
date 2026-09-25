@@ -93,15 +93,18 @@ describe("shortPath", () => {
 });
 
 describe("shortName", () => {
-  it("drops a harness prefix, a version and the MCP marker, and keeps the server", () => {
-    expect(shortName("claude_code__Bash")).toBe("Bash");
-    expect(shortName("Read@2.1.4")).toBe("Read");
+  it("drops the MCP marker and keeps the server", () => {
     expect(shortName("mcp__github__create_release")).toBe(
       "github__create_release",
     );
     expect(shortName("github__list_pull_requests")).toBe(
       "github__list_pull_requests",
     );
+  });
+  it("cuts no harness prefix or version: the server's `tool` already did (negative)", () => {
+    // `bareToolName` in @oxagen/run-ledger is the one place that rule lives.
+    expect(shortName("claude_code__Bash")).toBe("claude_code__Bash");
+    expect(shortName("Read@2.1.4")).toBe("Read@2.1.4");
   });
 });
 

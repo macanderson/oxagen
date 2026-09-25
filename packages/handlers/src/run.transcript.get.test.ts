@@ -457,6 +457,26 @@ describe("get_run_transcript", () => {
     expect(out.entries[0]?.kinds).toContain("policy");
   });
 
+  it("names an entry's tool as its harness knows it, and keeps the recorded name as the subject", async () => {
+    const { transcript } = harness([
+      tachoRow(0, { kind: "tool_call", toolName: "claude_code__Bash" }),
+      tachoRow(1, { kind: "tool_call", toolName: "Read@2.1.4" }),
+      tachoRow(2, {
+        kind: "turn_start",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.entries.map((e) => [e.subject, e.tool])).toEqual([
+      ["claude_code__Bash", "Bash"],
+      ["Read@2.1.4", "Read"],
+      [null, null],
+    ]);
+  });
+
   it("says which decisions are the harness checking itself, so no reader keeps its own list of sources", async () => {
     const decided = (seq: number, source: string | null) =>
       tachoRow(seq, {
@@ -1535,6 +1555,7 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     const call = out.entries[1];
     expect(call).toMatchObject({
       subject: "Bash",
+      tool: "Bash",
       family: "shell",
       model: null,
       approvalId: null,
@@ -2014,9 +2035,37 @@ describe("toolResultsOf and withToolUseFacts", () => {
         stepKey: "7",
         result: { ok: false, summary: "no such file" },
         family: "read",
+        tool: "Read",
       },
-      { ...use(null), stepKey: null, result: null, family: "read" },
+      {
+        ...use(null),
+        stepKey: null,
+        result: null,
+        family: "read",
+        tool: "Read",
+      },
       { ...base, kind: "text", text: "x", truncated: false },
+    ]);
+  });
+
+  it("names a called tool as its harness knows it, without the gateway's prefix or a version", () => {
+    const out = withToolUseFacts(
+      half([
+        { ...use(null), name: "claude_code__Bash" },
+        { ...use(null), name: "Read@2.1.4" },
+        { ...use(null), name: "mcp__github__create_release" },
+      ]),
+      (uses) => uses.map(() => null),
+      new Map(),
+    );
+    expect(
+      out?.assembly?.blocks.map((block) =>
+        block.kind === "tool_use" ? [block.name, block.tool] : null,
+      ),
+    ).toEqual([
+      ["claude_code__Bash", "Bash"],
+      ["Read@2.1.4", "Read"],
+      ["mcp__github__create_release", "mcp__github__create_release"],
     ]);
   });
 

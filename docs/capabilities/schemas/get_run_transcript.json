@@ -745,6 +745,9 @@
                                           "mcp",
                                           "tool"
                                         ]
+                                      },
+                                      "tool": {
+                                        "type": "string"
                                       }
                                     },
                                     "required": [
@@ -1454,6 +1457,9 @@
                                           "mcp",
                                           "tool"
                                         ]
+                                      },
+                                      "tool": {
+                                        "type": "string"
                                       }
                                     },
                                     "required": [
@@ -1979,6 +1985,16 @@
               }
             },
             "subject": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tool": {
               "anyOf": [
                 {
                   "type": "string"

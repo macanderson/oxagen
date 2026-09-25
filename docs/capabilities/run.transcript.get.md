@@ -132,6 +132,7 @@ The server is the only place a transcript is folded (ADR-182), so every fact a r
 | `entries[].approvalId` | string or null | the approval a parked call waits on (`apr_…`), when its receipt named one |
 | `entries[].gates` | object[] | every decision folded into the entry, in the order recorded, each shaped like `decision`. `decision` is the last of them |
 | `entries[].subject` | string or null | the tool the entry is about, as the record names it |
+| `entries[].tool` | string or null | `subject` as the harness knows the tool, without the prefix a gateway adds (`claude_code__Bash` is `Bash`) or a trailing `@version`; null when `subject` is. A reader names the tool by this and keeps no prefix list of its own |
 | `entries[].family` | string or null | the tool's family: `shell`, `read`, `edit`, `create`, `delete`, `search`, `web`, `skill`, `agent`, `plan`, `notebook`, `mcp` or `tool` |
 | `entries[].model` | string or null | `provider/model` of a model call |
 | `entries[].durationMs` | integer or null | first frame to last; null for one frame, and for a call with no result yet |
@@ -213,7 +214,7 @@ way.
 | `assembly.partial` | boolean | true when the stream ended before the message did; its blocks are still answered |
 | `assembly.wire` | object | `events` and `bytes`: what the transport was, for a reader that wants to see it |
 
-A `tool_use` block also carries `stepKey`, the `key` of the tool step that recorded the call, so a reader draws the call once, as that step. The block and the step pair on the call key, or, where either kept none, the block takes the next tool step of the same name in its turn that no other block took. It is null for a call no tool step recorded. `result` is `{ ok, summary }` from a `tool_result` block on the page that answers the same call key, or null. `family` is the called tool's family, read from its name by the rule that sets an entry's `family`.
+A `tool_use` block also carries `stepKey`, the `key` of the tool step that recorded the call, so a reader draws the call once, as that step. The block and the step pair on the call key, or, where either kept none, the block takes the next tool step of the same name in its turn that no other block took. It is null for a call no tool step recorded. `result` is `{ ok, summary }` from a `tool_result` block on the page that answers the same call key, or null. `family` is the called tool's family, read from its name by the rule that sets an entry's `family`, and `tool` is its name as the harness knows it, by the rule that sets an entry's `tool`.
 
 A `tool_use` block's input carries every string field up to 400 characters and
 folds a longer one to `"…N characters"`, with `inputFolded: true`. A `Write`

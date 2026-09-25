@@ -61,6 +61,8 @@ export type BlockSpec =
       stepKey?: string | null;
       result?: { ok: boolean; summary: string } | null;
       family?: ToolFamily;
+      /** The name as the harness knows it, as the server reads it; absent means the answer did not say. */
+      tool?: string;
     }
   | { kind: "tool_result"; forId: string; ok: boolean; summary: string };
 
@@ -108,6 +110,8 @@ export type StepSpec = {
   kinds?: TranscriptKind[];
   outcome?: TranscriptOutcome | null;
   subject?: string;
+  /** The subject as the harness knows it, as the server reads it; absent means the answer did not say. */
+  tool?: string;
   family?: ToolFamily;
   model?: string;
   durationMs?: number;
@@ -155,6 +159,7 @@ const block = (spec: BlockSpec, index: number): Block => {
         stepKey: spec.stepKey ?? null,
         result: spec.result ?? null,
         ...(spec.family === undefined ? {} : { family: spec.family }),
+        ...(spec.tool === undefined ? {} : { tool: spec.tool }),
       };
     case "tool_result":
       return {
@@ -285,6 +290,7 @@ export function stepsOf(
       approvalId: spec.approvalId ?? null,
       gates,
       subject: spec.subject ?? null,
+      ...(spec.tool === undefined ? {} : { tool: spec.tool }),
       family: spec.family ?? null,
       model: spec.model ?? null,
       durationMs: spec.durationMs ?? null,

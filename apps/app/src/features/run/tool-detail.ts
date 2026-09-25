@@ -186,19 +186,17 @@ function pretty(value: unknown): string | null {
 
 // ── Naming ──────────────────────────────────────────────────────────────────
 
-/** The harnesses whose tool names a gateway records with a prefix (`claude_code__Bash`). */
-const HARNESS_PREFIX = /^(claude_code|codex|stella|cursor)__/;
-
 /**
- * A tool's name as a reader knows it (mockup `txToolName`): the harness
- * prefix and a trailing `@version` dropped, and an MCP tool named by its
- * server and tool (`mcp__github__create_release` reads `github__create_release`).
+ * A tool's name as the row prints it (mockup `txToolName`): an MCP tool by
+ * its server and tool (`mcp__github__create_release` reads
+ * `github__create_release`). The server has already dropped a gateway's
+ * harness prefix and a trailing `@version` (the entry's `tool`, ADR-182), so
+ * this cuts nothing else.
  *
  * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function shortName(name: string): string {
-  const bare = name.replace(HARNESS_PREFIX, "").replace(/@[\d.]+$/, "");
-  return bare.startsWith("mcp__") ? bare.slice("mcp__".length) : bare;
+  return name.startsWith("mcp__") ? name.slice("mcp__".length) : name;
 }
 
 /**

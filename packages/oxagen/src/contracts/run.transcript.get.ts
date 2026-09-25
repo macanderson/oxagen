@@ -257,6 +257,12 @@ export const contentBlockSchema = z.discriminatedUnion("kind", [
        * of its own.
        */
       family: toolFamilySchema.optional(),
+      /**
+       * `name` as the harness knows the tool: without the prefix a gateway
+       * adds (`claude_code__Bash` is `Bash`) or a trailing `@version`. The
+       * server applies the one rule, so a reader keeps no prefix list.
+       */
+      tool: z.string().optional(),
     })
     .strict(),
   z
@@ -583,6 +589,13 @@ export const transcriptEntrySchema = z
     gates: z.array(transcriptDecisionSchema).optional(),
     /** The tool the entry is about, as the record names it; null when none. */
     subject: z.string().nullable().optional(),
+    /**
+     * `subject` as the harness knows the tool: without the prefix a gateway
+     * adds (`claude_code__Bash` is `Bash`) or a trailing `@version`. Null
+     * when `subject` is. The server applies the one rule, so a reader keeps
+     * no prefix list.
+     */
+    tool: z.string().nullable().optional(),
     /** The family of the entry's tool; null for an entry that is no tool call. */
     family: toolFamilySchema.nullable().optional(),
     /** `provider/model` of a model call; null elsewhere. */

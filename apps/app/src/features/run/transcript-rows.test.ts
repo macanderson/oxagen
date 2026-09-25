@@ -285,6 +285,31 @@ describe("a tool entry's two halves (#3375)", () => {
     expect(tool.approvalId).toBe("apr_7Kq2");
   });
 
+  it("names the call by the server's reading of its tool, not the name the gateway recorded", () => {
+    const tool = toolOf(
+      only(
+        rowsFrom([
+          call({
+            subject: "claude_code__Bash",
+            tool: "Bash",
+            request: {
+              seq: 1,
+              type: "tool.engine_call_started",
+              text: '{"command":"ls"}',
+            },
+          }),
+        ]),
+      ),
+    );
+    expect(tool.name).toBe("Bash");
+    // An answer that carried no reading shows the name as recorded: the
+    // page keeps no prefix list of its own (ADR-182).
+    const recorded = toolOf(
+      only(rowsFrom([call({ subject: "claude_code__Bash" })])),
+    );
+    expect(recorded.name).toBe("claude_code__Bash");
+  });
+
   it("reads a call a rule refused as failed, parking nothing (negative)", () => {
     const row = only(
       rowsFrom([
@@ -349,6 +374,29 @@ describe("a model step's rows", () => {
       output: "no such file",
       pending: false,
     });
+  });
+
+  it("names a call from the reply's block by the server's reading of its tool", () => {
+    const rows = rowsFrom([
+      model({
+        response: {
+          seq: 1,
+          type: "llm_call",
+          blocks: [
+            {
+              kind: "tool_use",
+              name: "claude_code__Read",
+              tool: "Read",
+              input: { file_path: "src/a.ts" },
+              callKey: "k1",
+              stepKey: null,
+              family: "read",
+            },
+          ],
+        },
+      }),
+    ]);
+    expect(toolOf(only(rows)).name).toBe("Read");
   });
 
   it("draws a reply kept as plain words, and one kept as JSON by its cost alone (negative)", () => {

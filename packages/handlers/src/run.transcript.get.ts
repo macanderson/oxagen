@@ -67,6 +67,7 @@ import {
   type TranscriptZoom,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import {
+  bareToolName,
   filterFoldsByKind,
   frameCounts,
   frameFolds,
@@ -528,7 +529,8 @@ export function toolResultsOf(
 /**
  * `half` with each `tool_use` block's `stepKey` (the tool step that recorded
  * the call, from `claim`), `result` (what the page's `tool_result` blocks say
- * came back) and `family` (`toolFamilyOf` its name). A half with no assembly
+ * came back), `family` (`toolFamilyOf` its name) and `tool` (its name as the
+ * harness knows it, `bareToolName`). A half with no assembly
  * is returned as it is.
  */
 export function withToolUseFacts(
@@ -563,6 +565,7 @@ export function withToolUseFacts(
                   ? null
                   : (results.get(block.callKey) ?? null),
               family: toolFamilyOf(block.name),
+              tool: bareToolName(block.name),
             }
           : block,
       ),
@@ -902,6 +905,7 @@ export function createRunTranscriptGetHandler(
         approvalId: fold.approvalId,
         gates: fold.gates.map(decisionView),
         subject: fold.subject,
+        tool: fold.subject === null ? null : bareToolName(fold.subject),
         family: fold.family,
         model: fold.model,
         durationMs: fold.durationMs,

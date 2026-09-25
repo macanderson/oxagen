@@ -392,6 +392,12 @@ const TranscriptBlock = z.discriminatedUnion("kind", [
     result: z.object({ ok: z.boolean(), summary: z.string() }).nullable(),
     /** The called tool's family; null when the answer did not say. */
     family: ToolFamily.nullable(),
+    /**
+     * `name` as the harness knows the tool, without a gateway's prefix or a
+     * version, as the server read it. Null or absent when the answer did not
+     * say, and the page then shows `name` as recorded.
+     */
+    tool: z.string().nullable().optional(),
   }),
   z.object({
     kind: z.literal("tool_result"),
@@ -582,6 +588,12 @@ export const TranscriptEntry = z.object({
   gates: z.array(TranscriptDecision),
   /** The tool the entry is about, as the record names it; null when none. */
   subject: z.string().nullable(),
+  /**
+   * `subject` as the harness knows the tool, without a gateway's prefix or a
+   * version, as the server read it (ADR-182). Null or absent when the answer
+   * did not say, and the page then shows `subject` as recorded.
+   */
+  tool: z.string().nullable().optional(),
   /** The family of the entry's tool; null for an entry that is no tool call. */
   family: ToolFamily.nullable(),
   /** `provider/model` of a model call; null elsewhere. */

@@ -979,7 +979,7 @@ describe("runs.transcript", () => {
                     partial: false,
                     cost: null,
                     kind: "tool_use",
-                    name: "Read",
+                    name: "claude_code__Read",
                     input: { file_path: "a.ts" },
                     inputRaw: false,
                     inputFolded: false,
@@ -988,6 +988,7 @@ describe("runs.transcript", () => {
                     stepKey: "9",
                     result: { ok: true, summary: "12 lines" },
                     family: "read",
+                    tool: "Read",
                   },
                 ],
                 precis: "",
@@ -1017,7 +1018,8 @@ describe("runs.transcript", () => {
             outcome: "parked",
             approvalId: "apr_7Kq2",
             gates: [decision],
-            subject: "Bash",
+            subject: "claude_code__Bash",
+            tool: "Bash",
             family: "shell",
             model: null,
             durationMs: 1200,
@@ -1078,7 +1080,8 @@ describe("runs.transcript", () => {
       node: "tool",
       outcome: "parked",
       approvalId: "apr_7Kq2",
-      subject: "Bash",
+      subject: "claude_code__Bash",
+      tool: "Bash",
       family: "shell",
       durationMs: 1200,
       matches: ["response"],
@@ -1094,12 +1097,13 @@ describe("runs.transcript", () => {
     });
     expect(entry?.response?.blocks?.[0]).toEqual({
       kind: "tool_use",
-      name: "Read",
+      name: "claude_code__Read",
       input: { file_path: "a.ts" },
       callKey: "toolu_2",
       stepKey: "9",
       result: { ok: true, summary: "12 lines" },
       family: "read",
+      tool: "Read",
     });
     expect(read.value.counts?.policy).toBe(1);
     // The frames' counts at `everything`, carried on a read at `steps`.

@@ -758,6 +758,7 @@ describe("readTranscriptPage", () => {
         stepKey: null,
         result: null,
         family: null,
+        tool: null,
       },
     ]);
     expect(response?.text).toBe(
