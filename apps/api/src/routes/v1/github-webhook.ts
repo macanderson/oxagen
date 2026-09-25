@@ -26,6 +26,9 @@
  *   1. Verify the signature against GITHUB_APP_WEBHOOK_SECRET.
  *   2. `ping` → ack. `installation` / `installation_repositories` → reconcile
  *      (pause connections on uninstall/suspend), ack.
+ *   2b. `push` / `pull_request` → ask every workspace whose main repository
+ *      this is, on the branch the delivery touched, for a steering sync
+ *      (ADR-182). The sync reads the branch itself.
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
  *   4. Ask the connector to extract ingestable (sourceRecordType, record) pairs.
  *   5. Fan out one `ingestion/entity.received` per (connection × record). The
@@ -37,6 +40,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { upsertGithubInstallation } from "./github-installations";
+import {
+  githubSyncTargets,
+  requestSteeringSync,
+} from "@oxagen/handlers/context.steering.sync.request";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
@@ -253,6 +260,27 @@ githubAppWebhookRoute.post("/", async (c) => {
     }
 
     return c.json({ received: true, lifecycle: eventName, action }, 200);
+  }
+
+  // ── Steering: the repository sync (ADR-182) ─────────────────────────────
+  // A push to a workspace's production branch, or a pull request that closed
+  // or moved against it, can change the records in force. The sync reads the
+  // branch itself, so this only finds the workspaces and asks. It runs before
+  // the ingestion routing below, which answers early for a repository that is
+  // not an ingestion source, and a failure here never fails the delivery: the
+  // five-minute sweep syncs every main repository anyway.
+  if (eventName === "push" || eventName === "pull_request") {
+    try {
+      await requestSteeringSync(
+        await githubSyncTargets({ eventName, body, installationId }),
+        eventName,
+      );
+    } catch (err) {
+      logger.error(
+        { err, eventName },
+        "GitHub App webhook: could not request a steering sync; the scheduled sweep will run it",
+      );
+    }
   }
 
   if (!installationId) {

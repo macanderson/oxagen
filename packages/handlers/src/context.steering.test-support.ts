@@ -666,15 +666,25 @@ export class FakeGitHub implements SteeringGitHub {
     path: string,
     ref: string,
   ) {
+    // A directory's content is every file under it, so the same walk answers
+    // the commit that last changed anything in `.oxagen/rules/`.
+    const snapshot = (sha: string): string | undefined => {
+      const exact = this.files.get(`${sha}:${path}`);
+      if (exact !== undefined) return exact;
+      const under = [...this.tree(sha)]
+        .filter(([p]) => p.startsWith(`${path}/`))
+        .sort(([a], [b]) => a.localeCompare(b));
+      return under.length > 0 ? JSON.stringify(under) : undefined;
+    };
     for (const sha of this.lineage(this.shaOf(ref))) {
       // GitHub lists the commits that CHANGED the path, not the ones whose
       // tree happens to hold it. Every commit after a file lands carries that
       // file forward, so a fake that ignored the parent would hand a record
       // the provenance of whatever landed on the branch last.
-      const content = this.files.get(`${sha}:${path}`);
+      const content = snapshot(sha);
       if (content === undefined) continue;
       const parent = this.parents.get(sha);
-      if (parent && this.files.get(`${parent}:${path}`) === content) continue;
+      if (parent && snapshot(parent) === content) continue;
       const meta = this.commitMeta.get(sha);
       // No recorded commit means the file came from the constructor's seed,
       // which has no commit behind it. Null, so a test can see the provenance
@@ -814,10 +824,63 @@ export class FakeGitHub implements SteeringGitHub {
     return {
       baseRef: pr.base,
       headSha: pr.state === "open" ? this.shaOf(pr.head) : pr.headSha,
+      open: pr.state === "open",
       merged: pr.merged,
       mergeCommitSha: pr.mergeCommitSha,
       mergedAt: pr.mergedAt,
     };
+  }
+  async branchHead(_repo: SteeringRepository, branch: string) {
+    return this.heads.get(branch) ?? null;
+  }
+  async listFiles(_repo: SteeringRepository, ref: string, dir: string) {
+    return [...this.tree(this.shaOf(ref)).keys()]
+      .filter((path) => path.startsWith(`${dir}/`))
+      .sort();
+  }
+  /** Remove a file on a branch, as a person with push access does. */
+  remove(branch: string, path: string, message = ""): string {
+    const sha = this.commit(branch, path, "", message);
+    this.files.delete(`${sha}:${path}`);
+    return sha;
+  }
+  /** Rename a file on a branch in one commit, as `git mv` does. */
+  rename(branch: string, from: string, to: string, message = ""): string {
+    const content = this.files.get(`${this.shaOf(branch)}:${from}`);
+    if (content === undefined) throw new Error(`no ${from} on ${branch}`);
+    const sha = this.commit(branch, to, content, message);
+    this.files.delete(`${sha}:${from}`);
+    return sha;
+  }
+  /** Merge an open PR on the host, as a person clicking Merge on GitHub does. */
+  mergeOnHost(number: number): string {
+    const pr = this.pull(number);
+    const head = this.shaOf(pr.head);
+    const base = this.shaOf(pr.base);
+    const mergeSha = `hostmerge${number}`;
+    for (const [key, content] of this.files)
+      if (key.startsWith(`${head}:`))
+        this.files.set(`${mergeSha}:${key.slice(head.length + 1)}`, content);
+    this.parents.set(mergeSha, base);
+    const mergedAt = this.clock();
+    this.commitMeta.set(mergeSha, {
+      at: mergedAt,
+      message: `Merge #${number}`,
+    });
+    this.heads.set(pr.base, mergeSha);
+    Object.assign(pr, {
+      state: "closed",
+      merged: true,
+      mergeCommitSha: mergeSha,
+      mergedAt,
+      headSha: head,
+    });
+    return mergeSha;
+  }
+  /** Close an open PR on the host without merging it. */
+  closeOnHost(number: number): void {
+    const pr = this.pull(number);
+    Object.assign(pr, { state: "closed", headSha: this.shaOf(pr.head) });
   }
   async reportCheckRun(
     _repo: SteeringRepository,

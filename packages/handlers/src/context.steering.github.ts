@@ -18,6 +18,7 @@ import {
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { resolveGitHubToken } from "./lib/github-token";
+import type { SteeringStore } from "./context.steering.store";
 
 /**
  * The repository hosts steering can publish through. A Context PR on GitHub is
@@ -178,10 +179,24 @@ export interface SteeringHost {
   ): Promise<{
     baseRef: string;
     headSha: string | null;
+    /** False once the host closed it, merged or not. */
+    open: boolean;
     merged: boolean;
     mergeCommitSha: string | null;
     mergedAt: Date | null;
   }>;
+  /**
+   * The commit at the tip of `branch`, or null when the host has no such
+   * branch. The repository sync reads the production branch through this and
+   * then reads every file at that one commit, so the files agree.
+   */
+  branchHead(repo: SteeringRepository, branch: string): Promise<string | null>;
+  /** Every file path under the directory `dir` at `ref`, at any depth. */
+  listFiles(
+    repo: SteeringRepository,
+    ref: string,
+    dir: string,
+  ): Promise<string[]>;
   /**
    * Every path the commit `head` changes against `base`, as its pull request
    * shows them; a rename names both its paths.
@@ -451,31 +466,67 @@ export function assertProductionBase(
 }
 
 /**
- * A Context PR that GitHub merged at a commit the checks never ran on.
+ * A Context PR that the host merged at a commit the checks never ran on.
  *
  * Someone merged it on the host instead of from Oxagen, after the head moved:
  * a merge of `main` into the branch, or a review bot's suggestion accepted
- * into the record file. Oxagen publishes only the commit its checks passed
- * on, so this merge published nothing to the registry, and the record file
- * now on the production branch may not verify. Re-running the checks cannot
- * fix it, because the pull request is closed and its head can no longer
- * change. The way out is to dismiss this proposal and propose the wording
- * again in Oxagen, which writes a freshly stamped file in a new Context PR.
+ * into the record file. Running the checks again cannot help, because a
+ * merged pull request's head never moves again. The production branch now
+ * holds whatever merged, and the repository sync (ADR-182) publishes that:
+ * the record file is the record. This refusal says so; the handlers run the
+ * sync before they throw it, and `reason` carries what the sync decided when
+ * it could not publish the file.
  */
 export function mergedOutsideOxagen(
   prUrl: string | null,
   mergedHead: string | null,
-  checkedHead: string | null,
+  reason?: string | null,
 ): HandlerError {
   const at = mergedHead ? ` at ${mergedHead}` : "";
-  const checked = checkedHead
-    ? `, and the checks ran on ${checkedHead}`
-    : ", and the checks never passed on it";
   return new HandlerError({
     code: "conflict",
     reason: "merged_outside_oxagen",
-    message: `Someone merged ${prUrl ?? "this pull request"} on the repository host${at}${checked}, so Oxagen published nothing. Dismiss this proposal, then propose the wording you want in Oxagen and merge that Context PR from Oxagen.`,
+    message: reason
+      ? `Someone merged ${prUrl ?? "this pull request"} on the repository host${at}. ${reason}.`
+      : `Someone merged ${prUrl ?? "this pull request"} on the repository host${at}. Oxagen publishes what the production branch holds, and this proposal shows the result once the sync finishes.`,
   });
+}
+
+/**
+ * Run the repository sync for a Context PR the host already merged, then
+ * refuse with what it found. A merge the sync published answers
+ * `already_merged`; one it could not publish answers `merged_outside_oxagen`
+ * with the sync's reason.
+ */
+export async function refuseMergedOnHost(
+  deps: {
+    store: Pick<SteeringStore, "findProposal">;
+    sync?: (scope: { orgId: string; workspaceId: string }) => Promise<unknown>;
+  },
+  scope: { orgId: string; workspaceId: string },
+  row: { publicId: string; prUrl: string | null },
+  mergedHead: string | null,
+): Promise<never> {
+  if (deps.sync) {
+    try {
+      await deps.sync(scope);
+    } catch (err) {
+      logger.warn(
+        { err, proposal: row.publicId },
+        "context.steering: the sync after a merge on the host failed; the scheduled sync retries it",
+      );
+    }
+    const after = await deps.store.findProposal(scope, row.publicId);
+    if (after?.status === "merged")
+      throw new HandlerError({
+        code: "conflict",
+        reason: "already_merged",
+        message: `${row.prUrl ?? row.publicId} was merged on the repository host, and Oxagen published it from the production branch`,
+      });
+    if (after?.status === "rejected")
+      throw mergedOutsideOxagen(row.prUrl, mergedHead, after.dismissedReason);
+  }
+  throw mergedOutsideOxagen(row.prUrl, mergedHead);
 }
 
 /**
@@ -763,10 +814,35 @@ export function createSteeringGitHub(
         return {
           baseRef: pr.baseRef,
           headSha: pr.headSha,
+          open: pr.state === "open",
           merged: pr.merged,
           mergeCommitSha: pr.mergeCommitSha,
           mergedAt: pr.mergedAt ? new Date(pr.mergedAt) : null,
         };
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async branchHead(repo, branch) {
+      try {
+        const out = await clientFor(repo).getBranch({
+          owner: repo.owner,
+          repo: repo.repo,
+          branch,
+        });
+        return out?.sha ?? null;
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async listFiles(repo, ref, dir) {
+      try {
+        const paths = await clientFor(repo).getTree({
+          owner: repo.owner,
+          repo: repo.repo,
+          ref,
+        });
+        return paths.filter((path) => path.startsWith(`${dir}/`));
       } catch (err) {
         throw githubRefused(err);
       }

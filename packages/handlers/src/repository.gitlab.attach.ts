@@ -285,7 +285,9 @@ export function createGitLabAttachHandler(
           url: deps.webhookUrl(connection.publicId),
           token: credential.webhookSecret,
           mergeRequestsEvents: true,
-          pushEvents: false,
+          // A push to the production branch changes the records in force.
+          // The repository sync (ADR-182) reads it.
+          pushEvents: true,
         });
         await withTenantDb((tx) =>
           tx

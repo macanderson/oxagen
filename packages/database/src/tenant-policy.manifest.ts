@@ -59,6 +59,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // agents append through append_record (ADR-061); org_id + workspace_id NOT NULL.
   { table: "agent.context_proposals", policyClass: "standard" },
   { table: "agent.context_appends", policyClass: "standard" },
+  // The repository sync's per-workspace state (ADR-182).
+  { table: "agent.context_sync_state", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },

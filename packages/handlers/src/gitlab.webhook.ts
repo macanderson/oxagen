@@ -1,4 +1,4 @@
-// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, and a project path label. None is a privileged mutation a person makes.
+// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, a project path label, and a repository sync request. None is a privileged mutation a person makes.
 //
 // gitlab.webhook.ts: what a GitLab project webhook delivery does (#3762).
 //
@@ -79,6 +79,11 @@ export interface GitLabWebhookDeps {
   client(token: string): GitLabClient;
   now(): Date;
   runInScope<T>(scope: WebhookScope, fn: () => Promise<T>): Promise<T>;
+  /**
+   * Ask for the repository sync (ADR-182). A push or a merge on GitLab can
+   * change the records in force, and the sync reads the branch itself.
+   */
+  requestSync?(scope: WebhookScope, reason: string): Promise<void>;
 }
 
 export interface GitLabWebhookRequest {
@@ -97,6 +102,7 @@ export type GitLabWebhookOutcome =
   | "proposal_rejected"
   | "proposal_moved"
   | "merged_awaiting_publication"
+  | "sync_requested"
   | "no_change";
 
 export interface GitLabWebhookResult {
@@ -154,10 +160,22 @@ export async function handleGitLabWebhook(
       }
     }
 
+    if (event.kind === "other" && event.objectKind === "push") {
+      // A push can land on the production branch. The sync reads the
+      // branch and finds nothing to do when it was another one.
+      if (!deps.requestSync) return { status: 202, outcome: "ignored_event" };
+      await deps.requestSync(scope, "push");
+      return { status: 202, outcome: "sync_requested" };
+    }
     if (event.kind !== "merge_request")
       return { status: 202, outcome: "ignored_event" };
 
     return await deps.runInScope(scope, async () => {
+      // Any merge can change the production branch, whether or not Oxagen
+      // opened the merge request. The payload's word is enough to ask: the
+      // sync reads the branch, and finds nothing when nothing merged.
+      if (event.state === "merged" && deps.requestSync)
+        await deps.requestSync(scope, "merge_request");
       const proposal = await deps.findOpenProposal(scope, event.iid);
       if (!proposal) return { status: 202, outcome: "no_proposal" } as const;
       const mr = await gl.getMergeRequest({
@@ -165,8 +183,8 @@ export async function handleGitLabWebhook(
         iid: event.iid,
       });
       if (mr.state === "merged")
-        // Publishing is merge_context_pr's: it applies the reviewer gate and
-        // resumes a merge the host already holds.
+        // The repository sync publishes what merged (ADR-182). A merge made
+        // from Oxagen publishes itself first, and the sync finds nothing left.
         return {
           status: 202,
           outcome: "merged_awaiting_publication",
@@ -327,5 +345,11 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
     client: (token) => createGitLabClient({ token }),
     now: () => new Date(),
     runInScope: (scope, fn) => runInTenantScope(scope, fn),
+    async requestSync(scope, reason) {
+      const { requestSteeringSync } = await import(
+        "./context.steering.sync.request"
+      );
+      await requestSteeringSync([scope], reason);
+    },
   };
 }

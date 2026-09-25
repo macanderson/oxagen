@@ -45,7 +45,7 @@ import {
 import {
   assertProductionBase,
   assertSameHost,
-  mergedOutsideOxagen,
+  refuseMergedOnHost,
   type SteeringRepository,
 } from "./context.steering.github";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
@@ -54,6 +54,7 @@ import {
   parseGovernanceMode,
 } from "./context.steering.policy";
 import { proposalMoved, type ProposalRow } from "./context.steering.store";
+import { isRepositoryRecord } from "./context.steering.sync.plan";
 import {
   bodyNamesProposal,
   contextPrView,
@@ -131,7 +132,17 @@ export function createOpenContextPrHandler(
       });
     }
 
-    const path = recordFilePath(row.lineageId);
+    // A revision is written where the record's file lives now. A person can
+    // rename or move a record file on the host (ADR-182), and a revision
+    // written to the derived path would leave a second file holding the same
+    // lineage. A record the registry has never seen takes the derived path.
+    const held = await deps.store.findRecord(scope, row.lineageId);
+    const heldPath = held?.record.path ?? null;
+    const path =
+      row.path ??
+      (isRepositoryRecord(heldPath) && heldPath
+        ? heldPath
+        : recordFilePath(row.lineageId));
     const branch = contextBranch(row.lineageId);
     if (!isOpen(row.status)) {
       // An open PR on the branch is this proposal's only when an earlier call
@@ -153,9 +164,6 @@ export function createOpenContextPrHandler(
       // The file carries the record's name (ADR-178): the proposal's when it
       // renames the record, else the name the record already has, else one
       // derived from the slug.
-      const held = row.label
-        ? null
-        : await deps.store.findRecord(scope, row.lineageId);
       const file = buildRecordFile({
         lineageId: row.lineageId,
         label:
@@ -221,11 +229,7 @@ export function createOpenContextPrHandler(
       const passedHere =
         row.status === "checks_passed" && pr.headSha === row.headSha;
       if (pr.merged && !passedHere) {
-        throw mergedOutsideOxagen(
-          row.prUrl,
-          pr.headSha,
-          row.status === "checks_passed" ? row.headSha : null,
-        );
+        await refuseMergedOnHost(deps, scope, row, pr.headSha);
       }
       row = await deps.store.updateProposal(
         row.id,
