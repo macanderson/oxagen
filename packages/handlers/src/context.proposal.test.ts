@@ -96,6 +96,20 @@ describe("propose_record", () => {
     ).toBe("findings job · fnd_01K5RT6C");
   });
 
+  it("asks the store for a new lineage only when the call or the handler says create-only (ADR-173)", async () => {
+    const h = harness();
+    const insert = vi.spyOn(h.store, "insertProposal");
+    await createProposeRecordHandler(h)(proposal(), ctx());
+    expect(insert.mock.calls[0]).toHaveLength(1);
+    await createProposeRecordHandler(h)(proposal({ createOnly: true }), ctx());
+    expect(insert.mock.calls[1]?.[1]).toEqual({ createOnly: true });
+    await createProposeRecordHandler({ ...h, createOnly: true })(
+      proposal({ createOnly: false }),
+      ctx(),
+    );
+    expect(insert.mock.calls[2]?.[1]).toEqual({ createOnly: true });
+  });
+
   it("is refused for a role the gate excludes, signed in or by API key, and writes no row", async () => {
     const h = harness();
     gate.refuse = true;

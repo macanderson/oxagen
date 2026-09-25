@@ -13,12 +13,13 @@
 // the dialog moves to Steering · Context PRs with the new pull request
 // selected, so closing the wizard lands there (creation-spec §5).
 import {
+  CONTEXT_RECORD_LABEL_MAX,
   CONTEXT_RECORD_LINEAGE,
   contextRecordLabel,
   contextRecordSlug,
 } from "@oxagen/oxagen/context-record-label";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useId } from "react";
 import {
   ConstraintEffect,
   RECORD_KINDS,
@@ -121,6 +122,9 @@ const FAILURES = {
   head_moved: "proposalMoved",
   already_merged: "proposalMoved",
   unanswered: "unanswered",
+  // The wizard proposes create-only (ADR-173): a label can repeat, so the
+  // slug made from it can name a record that already exists.
+  clone_name_taken: "slugTaken",
 } as const;
 
 function isKnownFailure(code: string): code is keyof typeof FAILURES {
@@ -201,22 +205,26 @@ function recordOf(api: Api, ctx: CreateContext) {
       sent !== "" &&
       sent.length <= STATEMENT_MAX &&
       CONTEXT_RECORD_LINEAGE.test(lineageId) &&
-      (d.name === null || d.name.trim() !== ""),
+      label !== "" &&
+      label.length <= CONTEXT_RECORD_LABEL_MAX,
   };
 }
 
 function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
   const t = useTranslations("createRecord.describe");
+  const labelId = useId();
   const slugValid = CONTEXT_RECORD_LINEAGE.test(
     recordOf(api, ctx).choice.lineageId,
   );
   return (
     <div className="flex flex-col gap-3 text-sm">
-      <label className="flex flex-col gap-1">
-        <span>{t("name")}</span>
+      <div className="flex flex-col gap-1">
+        <label htmlFor={labelId}>{t("name")}</label>
         <input
+          id={labelId}
+          aria-describedby={`${labelId}-hint`}
           className={inputBase}
-          maxLength={200}
+          maxLength={CONTEXT_RECORD_LABEL_MAX}
           value={
             api.draft.name ??
             contextRecordLabel(lineageOf(ctx.ws, api.draft.desc))
@@ -229,7 +237,10 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
               api.update({ name: tidyName(api.draft.name) });
           }}
         />
-      </label>
+        <span id={`${labelId}-hint`} className="text-xs text-muted-foreground">
+          {t("labelHint")}
+        </span>
+      </div>
       <label className="flex flex-col gap-1">
         <span>{t("slug")}</span>
         <input

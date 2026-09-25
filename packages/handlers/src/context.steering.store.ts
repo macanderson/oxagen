@@ -394,7 +394,7 @@ export const postgresSteeringStore: SteeringStore = {
             code: "conflict",
             reason: "clone_name_taken",
             message:
-              "This lineage already belongs to a record or proposal. Refresh the clone draft.",
+              "This slug already belongs to a record or a proposal. Choose another slug.",
           });
       }
       const [row] = await tx

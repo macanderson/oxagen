@@ -2629,6 +2629,7 @@ type Messages = {
       noGrant: string;
       next: string;
       name: string;
+      labelHint: string;
       slug: string;
       slugHint: string;
       slugInvalid: string;
@@ -2826,6 +2827,7 @@ type Messages = {
       baseMoved: string;
       proposalMoved: string;
       unanswered: string;
+      slugTaken: string;
       refused: string;
       invalid: string;
       pendingApproval: string;
