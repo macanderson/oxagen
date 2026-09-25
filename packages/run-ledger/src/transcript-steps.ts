@@ -1065,44 +1065,108 @@ export interface ToolUseRef {
 }
 
 /**
- * Which tool step recorded each `tool_use` block of a model step's reply, so
- * a reader draws the call once, as that step. A block and a step with the
- * same call key are the same call. Where either side kept no key, the block
- * is the next tool step of the same name in the turn, after the reply, that
- * no other block claimed. Null for a call no tool step recorded.
+ * Which tool step recorded each `tool_use` block of a model's reply, so a
+ * reader draws the call once, as that step. A block and a step with the same
+ * call key are the same call. Where either side kept no key, the block is the
+ * first tool step of the same name (`bareToolName`) on the reply's chain and
+ * in its turn that opens after the reply and before that chain's next model
+ * call, and that no earlier block of the same reply took. Null for a call no
+ * tool step recorded.
  *
- * `steps` are the run's `steps` zoom. The claimer keeps its claims across
- * calls, so one reader passes each model step of the run to it in order.
+ * `steps` are the run's `steps` zoom. The claimer is asked about the frame
+ * that carried the reply, and finds the step that frame belongs to, so the
+ * `turns` and `everything` zooms claim as `steps` does. A reply's claims
+ * depend on the run's steps and its own blocks alone, never on which other
+ * replies a page holds or the order they are asked about: tool calls run
+ * between one model call and the next, so two replies on a chain never
+ * compete for a step.
+ *
+ * Built in O(n log n) over the steps; each block costs a binary search plus
+ * the same-named steps in its reply's window.
  */
 export function toolUseClaimer(
   steps: readonly TranscriptFold[],
-): (model: TranscriptFold, uses: readonly ToolUseRef[]) => (string | null)[] {
-  const tools = steps.filter((step) => step.node === "tool");
+): (
+  carrier: RunFrame | null,
+  uses: readonly ToolUseRef[],
+) => (string | null)[] {
   const byCall = new Map<string, TranscriptFold>();
-  for (const tool of tools)
-    for (const frame of tool.members) {
+  /** Tool steps by chain and bare name, in the order they open. */
+  const byName = new Map<string, TranscriptFold[]>();
+  /** Where each chain's model steps open, in order. */
+  const modelOpens = new Map<string, number[]>();
+  const stepOf = new Map<RunFrame, TranscriptFold>();
+  const push = <T>(map: Map<string, T[]>, key: string, value: T) => {
+    const list = map.get(key);
+    if (list === undefined) map.set(key, [value]);
+    else list.push(value);
+  };
+  const nameKey = (chain: string, name: string) => `${chain}\u0000${name}`;
+  for (const step of steps) {
+    for (const frame of step.members)
+      if (!stepOf.has(frame)) stepOf.set(frame, step);
+    const chain = chainOf(step.opening);
+    if (step.node === "model") push(modelOpens, chain, step.span.open);
+    if (step.node !== "tool") continue;
+    for (const frame of step.members) {
       const key = callOf(frame);
-      if (key !== null && !byCall.has(key)) byCall.set(key, tool);
+      if (key !== null && !byCall.has(key)) byCall.set(key, step);
     }
-  const claimed = new Set<TranscriptFold>();
-  return (model, uses) =>
-    uses.map((use) => {
+    if (step.subject !== null)
+      push(byName, nameKey(chain, bareToolName(step.subject)), step);
+  }
+  for (const list of byName.values())
+    list.sort((a, b) => a.span.open - b.span.open);
+  for (const opens of modelOpens.values()) opens.sort((a, b) => a - b);
+
+  return (carrier, uses) => {
+    const reply = carrier === null ? undefined : stepOf.get(carrier);
+    const claimed = new Set<TranscriptFold>();
+    const claim = (tool: TranscriptFold): string => {
+      claimed.add(tool);
+      return tool.key;
+    };
+    return uses.map((use) => {
       const keyed = use.callKey === null ? undefined : byCall.get(use.callKey);
-      if (keyed !== undefined) return keyed.key;
-      const name = bareToolName(use.name);
-      const match = tools.find(
-        (tool) =>
-          tool.turn === model.turn &&
-          tool.span.open > model.span.end &&
-          !claimed.has(tool) &&
-          (callOf(tool.opening) === null || use.callKey === null) &&
-          tool.subject !== null &&
-          bareToolName(tool.subject) === name,
-      );
-      if (match === undefined) return null;
-      claimed.add(match);
-      return match.key;
+      if (keyed !== undefined) return claim(keyed);
+      if (reply === undefined) return null;
+      const chain = chainOf(reply.opening);
+      const after = reply.span.end;
+      const opens = modelOpens.get(chain) ?? [];
+      const bound = opens[firstIndex(opens, (open) => open > after)];
+      const list = byName.get(nameKey(chain, bareToolName(use.name))) ?? [];
+      for (
+        let i = firstIndex(list, (tool) => tool.span.open > after);
+        i < list.length;
+        i += 1
+      ) {
+        const tool = list[i] as TranscriptFold;
+        // Turns only grow along a chain, so a step in a later turn, or at or
+        // past the chain's next model call, ends the reply's window.
+        if (bound !== undefined && tool.span.open >= bound) break;
+        if (tool.turn !== reply.turn) break;
+        if (claimed.has(tool)) continue;
+        if (callOf(tool.opening) !== null && use.callKey !== null) continue;
+        return claim(tool);
+      }
+      return null;
     });
+  };
+}
+
+/**
+ * The first index of a list sorted on `past` whose item is past the point,
+ * or the list's length when none is: a binary search.
+ */
+function firstIndex<T>(list: readonly T[], past: (item: T) => boolean): number {
+  let low = 0;
+  let high = list.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (past(list[mid] as T)) high = mid;
+    else low = mid + 1;
+  }
+  return low;
 }
 
 // ── Recall ──────────────────────────────────────────────────────────────────

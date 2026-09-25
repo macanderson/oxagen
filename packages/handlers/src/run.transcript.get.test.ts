@@ -1916,6 +1916,50 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     });
   });
 
+  it("claims a call by name at every zoom and on every page alike, even where the step kept no key", async () => {
+    const rows = [
+      tachoRow(0, { kind: "turn_start", ...blank, turnSeq: 1 }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        turnSeq: 1,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        ...stored(modelStream(["Writing it."]), "text/event-stream"),
+      }),
+      // The harness sealed the call without its id, so only its name joins it.
+      tachoRow(2, {
+        kind: "tool_call",
+        toolName: "Write",
+        toolUseId: "",
+        turnSeq: 1,
+      }),
+    ];
+    const stepKeys = async (zoom: "steps" | "turns" | "everything") => {
+      const out = await harness(rows).transcript(input({ zoom }), ctx());
+      return out.entries.flatMap((entry) =>
+        [entry.request, entry.response].flatMap(
+          (half) =>
+            half?.assembly?.blocks.flatMap((block) =>
+              block.kind === "tool_use" ? [block.stepKey] : [],
+            ) ?? [],
+        ),
+      );
+    };
+    expect(await stepKeys("steps")).toEqual(["2"]);
+    // A turn's span holds its calls, so the turn's reply is claimed from the
+    // model step that made it, not from the turn.
+    expect(await stepKeys("turns")).toEqual(["2"]);
+    expect(await stepKeys("everything")).toEqual(["2"]);
+    // A page that holds only the reply claims what a whole read claims.
+    const page = await harness(rows).transcript(
+      input({ zoom: "steps", limit: 2 }),
+      ctx(),
+    );
+    const block = page.entries[1]?.response?.assembly?.blocks[1];
+    expect(block).toMatchObject({ kind: "tool_use", stepKey: "2" });
+  });
+
   it("nests a subagent's steps under the call that spawned them", async () => {
     const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
     const { transcript } = harness(

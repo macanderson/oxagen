@@ -864,8 +864,12 @@ export function createRunTranscriptGetHandler(
         request: TranscriptEntryBody | null;
         response: TranscriptEntryBody | null;
       };
-      const claim = (uses: { name: string; callKey: string | null }[]) =>
-        claimer(fold, uses);
+      // Each half is claimed from the frame that carried it, so a turn's
+      // reply claims its calls as the model step that made it does.
+      const claimFrom =
+        (carrier: RunFrame | null) =>
+        (uses: { name: string; callKey: string | null }[]) =>
+          claimer(carrier, uses);
       return {
         seq: opening.seq,
         endSeq: fold.endSeq,
@@ -890,8 +894,16 @@ export function createRunTranscriptGetHandler(
         effort: entryEffort(fold),
         usage: fold.usage ?? null,
         kinds: [...fold.kinds],
-        request: withToolUseFacts(pair.request, claim, results),
-        response: withToolUseFacts(pair.response, claim, results),
+        request: withToolUseFacts(
+          pair.request,
+          claimFrom(fold.request),
+          results,
+        ),
+        response: withToolUseFacts(
+          pair.response,
+          claimFrom(fold.response),
+          results,
+        ),
         decision: fold.decision === null ? null : decisionView(fold.decision),
         frames: fold.frames,
         turn: fold.turn,

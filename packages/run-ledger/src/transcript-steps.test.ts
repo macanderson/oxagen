@@ -1538,12 +1538,12 @@ describe("toolUseClaimer", () => {
     w(7, "tool_call", { toolName: "Grep", toolStatus: "ok" }),
   ];
   const steps = stepFolds(frames);
-  const model = nth(steps, 1);
+  const reply = frames[1] as RunFrame;
 
   it("claims a block by its call key, then by name for the next unclaimed step after the reply", () => {
     const claim = toolUseClaimer(steps);
     expect(
-      claim(model, [
+      claim(reply, [
         { name: "Bash", callKey: "k1" },
         { name: "Read", callKey: null },
         { name: "Read", callKey: null },
@@ -1555,7 +1555,7 @@ describe("toolUseClaimer", () => {
   it("claims nothing in another turn, or for a call no step recorded (negative)", () => {
     const claim = toolUseClaimer(steps);
     expect(
-      claim(model, [
+      claim(reply, [
         { name: "Grep", callKey: null },
         { name: "Edit", callKey: "k9" },
       ]),
@@ -1564,7 +1564,87 @@ describe("toolUseClaimer", () => {
 
   it("does not claim a keyed step by name for a block that kept a different key (negative)", () => {
     const claim = toolUseClaimer(steps);
-    expect(claim(model, [{ name: "Bash", callKey: "k2" }])).toEqual([null]);
+    expect(claim(reply, [{ name: "Bash", callKey: "k2" }])).toEqual([null]);
+  });
+
+  // Finding P3-2 of the ADR-182 review: claims were kept across the replies
+  // one page asked about, so an unkeyed claim came out differently wherever
+  // the page cut.
+  describe("whatever the page holds", () => {
+    const run = [
+      w(1, "turn_start", { turnSeq: 1 }),
+      w(2, "llm_call", { turnSeq: 1, model: "m" }),
+      w(3, "llm_call", { turnSeq: 1, model: "m" }),
+      w(4, "tool_call", { turnSeq: 1, toolName: "Bash", toolStatus: "ok" }),
+      w(5, "llm_call", { turnSeq: 1, model: "m" }),
+      w(6, "tool_call", { turnSeq: 1, toolName: "Bash", toolStatus: "ok" }),
+    ];
+    const folded = stepFolds(run);
+    const [, first, second, , third] = run as RunFrame[];
+    const bash = [{ name: "Bash", callKey: null }];
+
+    it("claims the same steps for a reply asked alone or after the replies before it", () => {
+      const all = toolUseClaimer(folded);
+      const inOrder = [first, second, third].map((frame) =>
+        all(frame as RunFrame, bash),
+      );
+      const alone = [third, second, first].map((frame) =>
+        toolUseClaimer(folded)(frame as RunFrame, bash),
+      );
+      expect(inOrder).toEqual([[null], ["4"], ["6"]]);
+      expect(alone.reverse()).toEqual(inOrder);
+    });
+
+    it("never claims past the chain's next model call, which the reply's calls ran before (negative)", () => {
+      // The first reply's Bash ran before the second model call, or it ran
+      // nowhere the record shows.
+      expect(toolUseClaimer(folded)(first as RunFrame, bash)).toEqual([null]);
+    });
+  });
+
+  it("claims from the step a carrying frame belongs to, so a turn's reply claims as its model step does", () => {
+    const run = [
+      w(1, "turn_start", { turnSeq: 1, ...kept("p") }),
+      w(2, "llm_call", { turnSeq: 1, model: "m" }),
+      w(3, "tool_call", { turnSeq: 1, toolName: "Write", toolStatus: "ok" }),
+      w(4, "turn_end", { turnSeq: 1 }),
+    ];
+    const folded = stepFolds(run);
+    const [turn] = turnFolds(run, folded);
+    expect(turn?.span.end).toBe(3);
+    // The turn's span holds the call, so claiming from the turn's own span
+    // could never find it.
+    expect(
+      toolUseClaimer(folded)(run[1] as RunFrame, [
+        { name: "Write", callKey: null },
+      ]),
+    ).toEqual(["3"]);
+  });
+
+  it("claims nothing by name for a frame no step holds, or no frame (negative)", () => {
+    const claim = toolUseClaimer(steps);
+    expect(claim(w(99, "llm_call"), [{ name: "Read", callKey: null }])).toEqual(
+      [null],
+    );
+    expect(claim(null, [{ name: "Bash", callKey: "k1" }])).toEqual(["3"]);
+  });
+
+  it("claims only on the reply's own chain (negative)", () => {
+    const CHILD = "0192d4a8-7c1e-7a00-8000-0000000000c9";
+    const run = [
+      w(1, "turn_start", { turnSeq: 1 }),
+      w(2, "llm_call", { turnSeq: 1, model: "m" }),
+      s(CHILD, 0, "tool_call", {
+        turnSeq: 1,
+        toolName: "Read",
+        toolStatus: "ok",
+      }),
+    ];
+    expect(
+      toolUseClaimer(stepFolds(run))(run[1] as RunFrame, [
+        { name: "Read", callKey: null },
+      ]),
+    ).toEqual([null]);
   });
 });
 

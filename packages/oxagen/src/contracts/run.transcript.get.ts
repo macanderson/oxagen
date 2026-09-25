@@ -238,8 +238,9 @@ export const contentBlockSchema = z.discriminatedUnion("kind", [
       /**
        * The `key` of the tool step that recorded this call, so a reader draws
        * the call once, as that step: by call key, or, where either side kept
-       * none, the next tool step of the same name in the turn. Null for a
-       * call no tool step recorded.
+       * none, the next tool step of the same name on the reply's chain and in
+       * its turn, before that chain's next model call. Null for a call no
+       * tool step recorded.
        */
       stepKey: z.string().nullable().optional(),
       /**
