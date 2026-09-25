@@ -1005,6 +1005,7 @@ const wsRow = (slug: string, name: string) => ({
   slug,
   namespace: slug,
   name,
+  avatarUrl: null,
   role: "Owner",
   archivedAt: null,
   costCenter: null,

@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Avatar } from "./avatar";
 import {
   AVATAR_ICONS,
+  AVATAR_TONES,
   INITIALS_MAX,
   monogram,
   parseAvatarValue,
@@ -51,6 +52,22 @@ describe("the spec", () => {
       expect(parsed.kind === "icon" || parsed.kind === "initials").toBe(true);
       if (parsed.kind === "icon" || parsed.kind === "initials")
         expect(serializeAvatar(parsed)).toBe(value);
+    }
+  });
+
+  it("offers the three theme tones and the two golds, in that order", () => {
+    expect(AVATAR_TONES).toEqual([
+      "solid",
+      "soft",
+      "line",
+      "gold",
+      "gold-deep",
+    ]);
+    for (const tone of AVATAR_TONES) {
+      const value = `avatar:v1:{"kind":"icon","icon":"rocket","tone":"${tone}"}`;
+      const parsed = parseAvatarValue(value);
+      expect(parsed).toEqual({ kind: "icon", icon: "rocket", tone });
+      if (parsed.kind === "icon") expect(serializeAvatar(parsed)).toBe(value);
     }
   });
 
@@ -155,6 +172,23 @@ describe("Avatar", () => {
     expect(parseFloat(six.style.fontSize)).toBeLessThan(
       parseFloat(tile.style.fontSize),
     );
+  });
+
+  it("draws the brand gold and its deep shade, each with its own glyph ink", () => {
+    const gold = drawn(
+      'avatar:v1:{"kind":"icon","icon":"rocket","tone":"gold"}',
+    );
+    expect(gold.dataset.tone).toBe("gold");
+    expect(gold.className).toContain("bg-gold ");
+    expect(gold.className).toContain("text-on-gold ");
+
+    const deep = drawn(
+      'avatar:v1:{"kind":"initials","text":"OX","font":"sans","tone":"gold-deep"}',
+    );
+    expect(deep.dataset.tone).toBe("gold-deep");
+    expect(deep.className).toContain("bg-gold-deep");
+    expect(deep.className).toContain("text-on-gold-deep");
+    expect(deep.textContent).toBe("OX");
   });
 
   it("sizes the tile in pixels and scales the type with it", () => {

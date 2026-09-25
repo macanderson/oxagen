@@ -53,6 +53,7 @@ const WORKSPACES = {
     slug: "a-intel",
     namespace: "a-intel",
     name: "Anderson Intelligence Corp.",
+    avatarUrl: null,
   },
   workspaces: [
     {
@@ -61,6 +62,7 @@ const WORKSPACES = {
       slug: "finance",
       namespace: "fin",
       name: "Finance",
+      avatarUrl: null,
       role: null,
       archivedAt: null,
       costCenter: null,
@@ -71,6 +73,7 @@ const WORKSPACES = {
       slug: "core-platform",
       namespace: "core",
       name: "Core platform",
+      avatarUrl: null,
       role: "owner",
       archivedAt: null,
       costCenter: null,

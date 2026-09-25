@@ -150,6 +150,7 @@ describe("acceptInvitation and declineInvitation", () => {
     slug: "acme",
     namespace: "acme",
     name: record.orgName,
+    avatarUrl: null,
   };
   const ws = (slug: string, role: string | null) => ({
     id: `0192f1c4-0000-7000-8000-0000000000${String(slug.length)}0`,
@@ -157,6 +158,7 @@ describe("acceptInvitation and declineInvitation", () => {
     slug,
     namespace: slug,
     name: slug,
+    avatarUrl: null,
     role,
     archivedAt: null,
     costCenter: null,

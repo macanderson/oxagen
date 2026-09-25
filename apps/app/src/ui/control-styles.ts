@@ -43,6 +43,17 @@ export const buttonDanger = `${buttonBase} border border-error/40 bg-button-defa
 export const linkText =
   "font-medium text-link underline-offset-4 hover:text-link-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-sm";
 
+/**
+ * The Account and Avatar dialogs' field label and the hint under a field
+ * (`.field label`, `.field .hint`), and the small button beside a field.
+ */
+export const fieldLabel =
+  "mb-1 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground";
+export const fieldHint =
+  "mt-1.5 text-xs leading-relaxed text-muted-foreground";
+export const buttonSmall =
+  "inline-flex min-h-8 flex-none items-center justify-center gap-1.5 rounded-md border border-button-default-border bg-button-default-bg px-2.5 text-xs font-medium text-button-default-fg hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:bg-button-disabled-bg disabled:text-muted-foreground";
+
 export const inputBase =
   // 16px below md as well as by phone.css, so the class list alone says an
   // input never makes iOS zoom the page on focus.
