@@ -1,7 +1,7 @@
 {
   "name": "resolve_approval",
   "domain": "agent",
-  "description": "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
+  "description": "Approve or deny a pending tool-call approval request; an approved call the in-app assistant parked runs at once, and the answer says what became of it",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -103,6 +103,47 @@
               "mandateId",
               "reserved",
               "outcome"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "execution": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "runId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "runId",
+              "reason"
             ],
             "additionalProperties": false
           },

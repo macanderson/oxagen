@@ -414,7 +414,11 @@ async function runPreparedTurn(
   const onApprovalRequired = (event: ApprovalRequiredEvent): void => {
     if (event.capability !== BUDGET_CONTINUE_CAPABILITY) {
       parked.push({
-        approvalId: event.approvalId,
+        // The contract promises the public id (`apr_…`): it is the id the
+        // flyout matches against `list_approvals` and
+        // `list_resolved_approvals`, and the one Fleet shows. The row uuid is
+        // the fallback for a writer that returned no public id.
+        approvalId: event.approvalPublicId ?? event.approvalId,
         capability: event.capability,
         expiresAt: event.expiresAt,
       });

@@ -129,7 +129,11 @@ describe("resolveApprovalAction", () => {
       decision: "approved",
       note: "  release window is open  ",
     });
-    expect(result).toEqual({ ok: true, value: settled });
+    // A mandate row stores no call, so there is no execution to report.
+    expect(result).toEqual({
+      ok: true,
+      value: { ...settled, execution: null },
+    });
     expect(written()).toEqual({
       approvalId: APPROVAL,
       decision: "approved",
@@ -146,6 +150,32 @@ describe("resolveApprovalAction", () => {
     });
     expect(result.ok).toBe(true);
     expect(written()).toEqual({ approvalId: APPROVAL, decision: "approved" });
+  });
+
+  // ADR-118: the handler runs a call the in-app assistant parked once it is
+  // approved, and answers what the row then records. The flyout's parked card
+  // decides through this action, so the execution has to come back through it.
+  it("carries back what became of an approved call the assistant parked", async () => {
+    const execution = {
+      status: "succeeded",
+      runId: "arun_resumed",
+      reason: null,
+    };
+    invoke.mockResolvedValue({ ...settled, mandate: null, execution });
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "approved",
+      note: "",
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        approvalId: APPROVAL,
+        resolution: "approved",
+        mandate: null,
+        execution,
+      },
+    });
   });
 
   it("refuses a denial with no reason before the kernel, naming the field (negative)", async () => {

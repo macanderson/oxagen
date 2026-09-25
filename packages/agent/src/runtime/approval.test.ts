@@ -142,9 +142,9 @@ describe("approval runtime", () => {
       ttlMs: 10_000,
     });
     expect(res.approvalId).toBe("appr_123");
-    // The public id rides back with the row id, so a parked call's ledger
-    // receipt can name the approval the way Fleet and the Run page show it.
-    expect(res.approvalPublicId).toBe("apr_123");
+    // The public id a parked card carries, so the flyout can match the row
+    // that Fleet and the list reads show.
+    expect(res.publicId).toBe("apr_123");
     expect(insertMock).toHaveBeenCalledTimes(1);
     const row = insertedValues[0] as {
       capabilityName: string;
@@ -252,7 +252,7 @@ describe("approval runtime", () => {
       toolCallId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
     });
     expect(res.approvalId).toBe("appr_existing");
-    expect(res.approvalPublicId).toBe("apr_existing");
+    expect(res.publicId).toBe("apr_existing");
     expect(insertMock).not.toHaveBeenCalled();
   });
 
