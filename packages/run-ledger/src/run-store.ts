@@ -1407,6 +1407,30 @@ export function buildLockAttemptForWriteSql(attemptId: string): SQL {
 }
 
 /**
+ * Take the run row's lock in a statement of its own, before
+ * `buildLockAttemptForWriteSql` reads the seal.
+ *
+ * Under READ COMMITTED a statement reads from the snapshot it started with,
+ * even after it waits for a row lock. Postgres re-reads the locked row itself,
+ * but the seal join still reads the old snapshot. So a projection that waited
+ * on another writer's seal inside one statement would miss that seal, and an
+ * append would land on a sealed attempt. A second writer exists since the
+ * abandon sweep (#3988). The next statement's snapshot is taken after this
+ * lock is held, so it sees every seal committed before this transaction got
+ * the row.
+ */
+export function buildLockRunOfAttemptSql(attemptId: string): SQL {
+  return sql`
+    SELECT r.id
+    FROM agent.agent_runs r
+    WHERE r.id = (
+      SELECT run_id FROM agent.agent_run_attempts WHERE id = ${attemptId}::uuid
+    )
+    FOR UPDATE
+  `;
+}
+
+/**
  * Every durable event of one attempt, ordered — the input to
  * `foldAttemptEventState`. Reading the whole stream is the point: the fold both
  * derives the attempt's position and proves the log has no hole, which a stored
@@ -2159,6 +2183,9 @@ async function lockAttemptInTx(
   tx: Tx,
   attemptId: string,
 ): Promise<LockedAttemptRow | undefined> {
+  // Lock first, then project: the projection must read the seal from a
+  // snapshot taken after the lock is held (`buildLockRunOfAttemptSql`).
+  await tx.execute(buildLockRunOfAttemptSql(attemptId));
   const rows = (await tx.execute(
     buildLockAttemptForWriteSql(attemptId),
   )) as unknown as LockedAttemptRow[];

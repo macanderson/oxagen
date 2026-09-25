@@ -61,6 +61,7 @@ import {
   buildInsertAttemptSealSql,
   buildFinishRunSql,
   buildAbandonRunSql,
+  buildLockRunOfAttemptSql,
   buildGetRunByPublicIdSql,
   buildListRunAttemptsSql,
   buildListAttemptIdentitySql,
@@ -3010,7 +3011,7 @@ describe("compaction", () => {
   });
 });
 
-// ── Abandoning a run its producer stopped writing to (#3988) ────────────────
+// ── Abandoning a run its producer stopped writing to (#3988) ─────────────────
 
 describe("buildAbandonRunSql", () => {
   it("fails the run only while it is open, on its attempt, at the sequence read", () => {
@@ -3255,5 +3256,59 @@ describe("abandonRun", () => {
     expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
     expect(ranSql(executed, INSERT_GRANT)).toBe(false);
     expect(ranSql(executed, FINISH_RUN)).toBe(false);
+  });
+});
+
+describe("the run lock comes before the seal read", () => {
+  // The lock-only statement: it names the run row and nothing else.
+  const LOCK_ONLY = /^\s*SELECT r\.id\s+FROM agent\.agent_runs r/;
+
+  it("buildLockRunOfAttemptSql locks the run row and reads no seal", () => {
+    const { sql: text, params } = compile(
+      buildLockRunOfAttemptSql(UUID_ATTEMPT),
+    );
+    expect(text).toMatch(LOCK_ONLY);
+    expect(text).toContain("FOR UPDATE");
+    expect(text).not.toContain("agent_run_attempt_seals");
+    expect(params).toEqual([UUID_ATTEMPT]);
+  });
+
+  // Under READ COMMITTED a statement that waited on the lock still reads the
+  // seal from the snapshot it started with. Locking in a statement of its
+  // own means the seal read starts after the lock is held, so a seal the
+  // abandon sweep committed while the append waited is seen.
+  it("an append locks the run before the statement that reads the seal", async () => {
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow({ seal_id: "seal-1" })] },
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEvent(1)],
+      }),
+    ).rejects.toMatchObject({ reason: "sealed" });
+    const lock = executed.findIndex((e) => LOCK_ONLY.test(e.sql));
+    const read = executed.findIndex((e) => LOCK_ATTEMPT.test(e.sql));
+    expect(lock).toBe(0);
+    expect(read).toBe(1);
+  });
+
+  it("a seal locks the run before the statement that reads the seal", async () => {
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    await createPostgresRunStore({
+      archive: fakeArchiveStore().store,
+    }).sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "failed",
+      sealerId: "oxagen.assistant",
+    });
+    expect(executed.findIndex((e) => LOCK_ONLY.test(e.sql))).toBe(0);
+    expect(executed.findIndex((e) => LOCK_ATTEMPT.test(e.sql))).toBe(1);
   });
 });

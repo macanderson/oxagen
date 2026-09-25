@@ -141,6 +141,7 @@ export {
   buildInsertAttemptSql,
   buildMarkRunAttemptedSql,
   buildLockAttemptForWriteSql,
+  buildLockRunOfAttemptSql,
   buildSelectAttemptEventStateSql,
   buildAllocateRunSeqSql,
   buildInsertAttemptEventsSql,

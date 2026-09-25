@@ -63,6 +63,15 @@ rule.
    every append and seal waits on, so the seal written after it in the same
    transaction cannot race them.
 
+   The sweep is the first writer that can seal an attempt while its producer
+   may still append, so every append and seal now takes that lock in a
+   statement of its own before it reads the seal.
+   Under READ COMMITTED a statement reads from the snapshot it started with,
+   even after it waits on a lock. An append whose one statement both waited on
+   the close's lock and read the seal would miss the seal the close committed,
+   and its frame would land on a sealed attempt. Read in the next statement,
+   the seal is visible and the append is refused.
+
 4. **The seal records only what the ledger saw.** The open attempt seals
    `abandoned` with the reason `producer_silent`, from the rows already on the
    ledger. No terminal event is appended, because nothing observed the end.

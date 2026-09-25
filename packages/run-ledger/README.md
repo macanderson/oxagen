@@ -105,6 +105,10 @@ run          trusted RunSpecV2 identity — principals, agent version,
   which the `next_run_seq` allocator needs anyway.
 - **The seal is the fence.** There is no lease token and no epoch. An append or
   a second seal against a sealed attempt raises `AttemptNotWritableError`.
+  The run row's lock is taken in a statement of its own before the seal is
+  read (`buildLockRunOfAttemptSql`). Under READ COMMITTED a statement that
+  waited on the lock still reads its starting snapshot, so a seal read in the
+  same statement could miss a seal another writer committed meanwhile.
 - **Dense sequences, or nothing.** `attempt_seq` is producer-assigned and dense
   from 1. A gap inside a batch, or between a batch and the durable log, is
   refused (`RunEventSequenceGapError`) rather than repaired.

@@ -32,6 +32,7 @@ describe.skipIf(!enabled)("the assistant-run sweep against Postgres", () => {
   const names = [
     "quiet",
     "raced",
+    "contended",
     "twice",
     "unattempted",
     "live",
@@ -138,6 +139,7 @@ describe.skipIf(!enabled)("the assistant-run sweep against Postgres", () => {
     const opened: Name[] = [
       "quiet",
       "raced",
+      "contended",
       "twice",
       "live",
       "external",
@@ -147,6 +149,7 @@ describe.skipIf(!enabled)("the assistant-run sweep against Postgres", () => {
       await tx.insert(schema.agentRuns).values([
         runRow("quiet"),
         runRow("raced"),
+        runRow("contended"),
         runRow("twice"),
         runRow("unattempted", { status: "pending" }),
         runRow("live"),
@@ -174,6 +177,7 @@ describe.skipIf(!enabled)("the assistant-run sweep against Postgres", () => {
     });
     await append("quiet", 1);
     await append("raced", 1);
+    await append("contended", 1);
     await append("external", 1);
     // The cutoff is the database's clock after every silent row landed, so
     // a frame written after it is life the scan must see. The pauses keep
@@ -222,6 +226,7 @@ describe.skipIf(!enabled)("the assistant-run sweep against Postgres", () => {
       [
         publicId("quiet"),
         publicId("raced"),
+        publicId("contended"),
         publicId("twice"),
         publicId("unattempted"),
       ].sort(),
@@ -287,6 +292,46 @@ describe.skipIf(!enabled)("the assistant-run sweep against Postgres", () => {
     ).toBeNull();
     expect((await readRun("raced"))?.status).toBe("running");
     expect(await readSeals("raced")).toHaveLength(0);
+  });
+
+  it("refuses an append that waited on the close's lock", async () => {
+    // The close holds the run row from its UPDATE to its commit. Its archive
+    // write happens in between, so gating it holds the lock open while an
+    // append queues behind it.
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered: () => void = () => {};
+    const inside = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gated = createPostgresRunStore({
+      archive: {
+        putSegment: async (input) => {
+          entered();
+          await held;
+          return archive.putSegment(input);
+        },
+        getSegment: archive.getSegment,
+      },
+    });
+    const closing = abandonSilentRun(found.get(publicId("contended"))!, gated);
+    await inside;
+    const late = append("contended", 2);
+    // Give the append time to reach the lock. If it has not, it runs after
+    // the commit instead, and the refusal below holds all the same.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    release();
+    expect((await closing)?.seal?.terminalStatus).toBe("abandoned");
+    await expect(late).rejects.toMatchObject({ reason: "sealed" });
+    const events = await withSystemDb((tx) =>
+      tx
+        .select({ id: schema.agentRunEvents.id })
+        .from(schema.agentRunEvents)
+        .where(eq(schema.agentRunEvents.attemptId, attemptIds.contended)),
+    );
+    expect(events).toHaveLength(1);
   });
 
   it("seals a run swept twice once", async () => {
