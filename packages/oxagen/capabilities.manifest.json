@@ -7,7 +7,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -391,6 +392,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "layers": {
@@ -409,7 +411,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -5026,7 +5029,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -5129,7 +5133,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -5195,7 +5200,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -5288,7 +5294,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -5969,7 +5976,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -6105,7 +6113,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -6123,7 +6132,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,

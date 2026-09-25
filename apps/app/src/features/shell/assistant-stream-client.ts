@@ -70,6 +70,14 @@ export type AssistantQuestion = {
   content: string;
   route: string | null;
   entityId: string | null;
+  /**
+   * The name the page gave the record `entityId` names (a run's title, a
+   * runtime's hostname), so the agent can cite the record the way the person
+   * sees it. The caller cuts it to the contract's cap (`page-label.ts`). The
+   * turn strips its control characters and quotes it as a label beside the
+   * id. Absent or null sends none.
+   */
+  entityLabel?: string | null;
 };
 
 /** A tool call the turn made, named by the capability it called. */
@@ -130,7 +138,11 @@ export function refusalOfCode(code: string | undefined): AssistantRefusal {
   if (code === "conversation_not_found") {
     return { ok: false, reason: "not_found", code };
   }
-  if (code === "no_principal" || code === "org_role_required") {
+  if (
+    code === "no_principal" ||
+    code === "org_role_required" ||
+    code === "kill_switch"
+  ) {
     return { ok: false, reason: "denied", code };
   }
   return { ok: false, reason: "unavailable", code };
@@ -326,6 +338,7 @@ export async function askAssistantStream(
                 orgSlug: org,
                 workspaceSlug: ws,
                 entityId: question.entityId,
+                entityLabel: question.entityLabel ?? null,
               },
       }),
     });

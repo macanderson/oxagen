@@ -288,7 +288,10 @@ What standing in the path gives you:
   advertise `models_independent` and refresh their signed bundle. The reported
   host count measures support, not confirmed receipt. While lists are enabled,
   metered requests with missing or ambiguous models are refused with
-  `model_ambiguous`, including requests without a correlated session.
+  `model_ambiguous`, including requests without a correlated session. While
+  lists are off, a body that names more than one model is forwarded, and its
+  frame carries `oxagen.model_ambiguous: "true"` because the model it records
+  and prices against may not be the one the vendor ran.
 - **A real interrupt.** `pause`, `cancel`, `kill` and a steer delivered as
   `interrupt` abort the session's in-flight model calls. A paused session's new
   calls are refused until `resume`.
@@ -363,7 +366,7 @@ refuses a call with one of these reason codes:
 | `session_budget_exceeded` | The session's observed spend reached `budget.session_limit_usd`. |
 | `daily_budget_exceeded` | The agent's observed spend for the UTC day reached `budget.daily_limit_usd` (ADR-160). The day total is this host's WAL for the day, what the proxy priced since, and the other hosts' total from the control envelope's `agent_day_spend` (`src/collector/day-spend.ts`). Signed only to a host that advertises `daily_budget`. |
 | `model_not_permitted` | The workspace's armed model lists refuse the requested model (ADR-149). Signed only to a host that advertises `models_independent`. |
-| `model_ambiguous` | Model lists are armed and the request names no single readable model. |
+| `model_ambiguous` | Model lists are armed and the request names no single readable model. With lists off the call is forwarded, and a body that names more than one model marks its frame `oxagen.model_ambiguous: "true"`. |
 | `session_paused`, `session_cancelled` | The operator paused or cancelled the session. |
 | `host_paused`, `host_suspended`, `host_revoked` | The operator changed the host's status. |
 

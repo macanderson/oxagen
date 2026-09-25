@@ -16,6 +16,7 @@ export const repoConfigure = registerCapability({
     category: "ingestion",
   },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

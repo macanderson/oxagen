@@ -96,6 +96,30 @@ describe("askAssistantStream", () => {
         orgSlug: "acme",
         workspaceSlug: "core-platform",
         entityId: "arun_01k8",
+        entityLabel: null,
+      },
+    });
+  });
+
+  // The Run page names its run, so a question asked there reaches the turn
+  // with the title the person sees beside the id the agent can look up.
+  it("sends the label the page gave its record, beside the record's id", async () => {
+    const fetch = respond(sse([done(TURN)]));
+    await askAssistantStream("acme", "core-platform", {
+      ...QUESTION,
+      route: "runs",
+      entityId: "arun_01k9",
+      entityLabel: "Fix the flaky checkout test",
+    });
+    expect(posted(fetch)).toEqual({
+      conversationId: null,
+      content: "what is live?",
+      pageContext: {
+        route: "runs",
+        orgSlug: "acme",
+        workspaceSlug: "core-platform",
+        entityId: "arun_01k9",
+        entityLabel: "Fix the flaky checkout test",
       },
     });
   });
@@ -298,6 +322,27 @@ describe("askAssistantStream", () => {
     });
   });
 
+  // An operator's `agent` kill switch on the assistant refuses the turn
+  // before it is prepared, so the route answers 403 before the stream opens.
+  it("answers a kill switch on the assistant as denied, named by the switch (negative)", async () => {
+    respond(
+      Response.json(
+        {
+          error: {
+            code: "forbidden",
+            reason: "kill_switch",
+            message: "An agent kill switch is on: incident 42",
+          },
+          requestId: "r1",
+        },
+        { status: 403 },
+      ),
+    );
+    await expect(
+      askAssistantStream("acme", "core-platform", QUESTION),
+    ).resolves.toEqual({ ok: false, reason: "denied", code: "kill_switch" });
+  });
+
   it("refuses a terminal that is not a turn rather than inventing a reply (negative)", async () => {
     respond(sse([done({ reply: 7 })]));
     await expect(
@@ -318,6 +363,7 @@ describe("the refusal codes, as the kernel seam classifies them", () => {
     ["engine_aborted", "conflict"],
     ["conversation_not_found", "not_found"],
     ["no_principal", "denied"],
+    ["kill_switch", "denied"],
     ["engine_unavailable", "unavailable"],
     ["assistant_run_not_recorded", "unavailable"],
     ["model_call_failed", "unavailable"],

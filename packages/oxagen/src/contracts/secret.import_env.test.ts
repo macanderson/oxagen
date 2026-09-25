@@ -28,6 +28,13 @@ describe("secret.import_env contract", () => {
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(secretImportEnv.surfaces).toEqual(["api", "mcp", "agent"]);
   });
+  it("waits for a person's approval on the agent surface", () => {
+    expect(secretImportEnv.agent).toEqual({
+      requiresApproval: true,
+      riskLevel: "high",
+      category: "secret",
+    });
+  });
   it("accepts a valid input", () => {
     expect(() =>
       secretImportEnv.input.parse({ text: "FOO=bar" }),

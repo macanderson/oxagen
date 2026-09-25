@@ -880,6 +880,7 @@
       "name": "get_agent",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -1273,6 +1274,7 @@
       "name": "get_nav_counts",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1469,6 +1471,7 @@
       "name": "get_run",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1489,6 +1492,7 @@
       "name": "get_run_cost",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1607,6 +1611,7 @@
       "name": "get_spend",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1629,6 +1634,7 @@
       "name": "get_spend_drill",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1903,6 +1909,7 @@
       "name": "list_agents",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1933,6 +1940,7 @@
       "name": "list_approvals",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2339,6 +2347,7 @@
       "name": "list_recent_runs",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2393,6 +2402,7 @@
       "name": "list_runs",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -4099,7 +4109,7 @@
       "writes": []
     }
   ],
-  "contentHash": "3a8666b5a6ed8a5ae14c3188b08c1266914b11e419b555d6043d6413225c8dda",
+  "contentHash": "861a31987f8a2094632a7c8934fdbfae474ee9a463146b9347159de22e226a28",
   "domains": [
     {
       "name": "agent",

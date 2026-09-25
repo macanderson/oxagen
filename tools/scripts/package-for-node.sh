@@ -20,13 +20,16 @@
 
 set -euo pipefail
 
-# The one place the engine's version is written. `stella-serve` ships as a
-# published image rather than a build of this repository, so bumping the
-# engine is a change to this line (or an override in the environment for a
-# one-off deploy of another tag), and nothing else in the tree names the tag.
-# ADR-053 §1 is why the engine is a separate container at all.
-STELLA_SERVE_IMAGE_TAG="${STELLA_SERVE_IMAGE_TAG:-0.9.414}"
-readonly STELLA_SERVE_IMAGE_TAG
+# The engine's version is written once, as STELLA_SERVE_PINNED_VERSION in
+# @oxagen/stella-engine-client. `stella-serve` ships as a published image
+# rather than a build of this repository, so the engine's manifest names the
+# image tagged with that version. Every assistant run records the same
+# constant as its engine version, so the tag comes from that file and from no
+# environment override: a deploy of another tag would make the run ledger
+# name an engine that is not running. Bump it with the steps in
+# packages/stella-engine-client/README.md. ADR-053 §1 is why the engine is a
+# separate container at all.
+readonly ENGINE_VERSION_FILE=packages/stella-engine-client/src/version.ts
 
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 <docs|app|api|mcp|stella-serve>" >&2
@@ -81,6 +84,21 @@ port_for() {
     stella-serve) echo 4300 ;;
     *)    fail "unknown service '$1'" ;;
   esac
+}
+
+# Print STELLA_SERVE_PINNED_VERSION from $ENGINE_VERSION_FILE, or fail. The
+# pattern is the one tools/scripts/check-engine-version.mjs reads, so a line
+# this cannot parse fails that check too. A missing file, a second pin, or a
+# value that is not a plain version stops the package before a manifest names
+# a tag nobody chose.
+engine_version() {
+  local version
+  version=$(sed -n \
+    's/^export const STELLA_SERVE_PINNED_VERSION = "\(.*\)";$/\1/p' \
+    "$ENGINE_VERSION_FILE" 2>/dev/null) || true
+  [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || fail "cannot read STELLA_SERVE_PINNED_VERSION from $ENGINE_VERSION_FILE"
+  printf '%s\n' "$version"
 }
 
 # Write the manifest. `config_prefix` is omitted for `docs`, which renders MDX
@@ -267,13 +285,15 @@ case $SERVICE in
     # STELLA_SERVE_TOKEN is not here — it is a secret, and this file ships in
     # a public CI artifact — it arrives from Parameter Store under the
     # engine's own prefix (see infra/tools/node/README.md).
-    log "manifest for ghcr.io/macanderson/stella-serve:$STELLA_SERVE_IMAGE_TAG"
+    engine_tag=$(engine_version)
+    engine_image="ghcr.io/macanderson/stella-serve:$engine_tag"
+    log "manifest for $engine_image"
     printf '%s\n' \
       "This release is a manifest only. stella-serve runs from the published" \
       "image named in oxagen-run.json; nothing here is executed. See" \
-      "tools/scripts/package-for-node.sh in oxageninc/oxagen-platform." \
+      "tools/scripts/package-for-node.sh in macanderson/oxagen." \
       > "$OUT/README.txt"
-    WRITE_MANIFEST_IMAGE="ghcr.io/macanderson/stella-serve:$STELLA_SERVE_IMAGE_TAG" \
+    WRITE_MANIFEST_IMAGE="$engine_image" \
       write_manifest "$(port_for stella-serve)" 384m "/healthz" \
         "$PARAMETER_PREFIX/stella-serve"
     tmp=$(mktemp)

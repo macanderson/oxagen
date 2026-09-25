@@ -258,6 +258,7 @@ describe("POST chat/stream — the turn on the wire", () => {
           orgSlug: "acme",
           workspaceSlug: "main",
           entityId: null,
+          entityLabel: null,
         },
       },
       CTX,
@@ -270,6 +271,43 @@ describe("POST chat/stream — the turn on the wire", () => {
       effort: null,
       budget: null,
     });
+  });
+
+  // The flyout sends the name its page gave the record beside the record's
+  // id. The body's page context is the contract's own schema, so the label
+  // reaches ask_assistant as the person saw it.
+  it("carries the record's label beside its id to ask_assistant", async () => {
+    await post({
+      content: "why did this fail?",
+      pageContext: {
+        route: "runs",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+        entityId: "arun_01k9",
+        entityLabel: "Fix the flaky checkout test",
+      },
+    }).then((r) => r.text());
+    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({
+      pageContext: {
+        entityId: "arun_01k9",
+        entityLabel: "Fix the flaky checkout test",
+      },
+    });
+  });
+
+  it("refuses a label past the contract's cap with 400 before the turn starts (negative)", async () => {
+    const res = await post({
+      content: "why did this fail?",
+      pageContext: {
+        route: "runs",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+        entityId: "arun_01k9",
+        entityLabel: "x".repeat(257),
+      },
+    });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
   it("streams the run, the translated parts, one usage event, then the output as the terminal", async () => {

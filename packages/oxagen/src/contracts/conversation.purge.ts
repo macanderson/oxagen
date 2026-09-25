@@ -22,6 +22,7 @@ export const conversationPurge = registerCapability({
     category: "conversation",
   },
   sensitivity: "destructive",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

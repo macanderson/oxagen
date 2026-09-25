@@ -36,6 +36,24 @@ vi.mock("@oxagen/iam/org-role", () => ({
   }),
 }));
 
+// The agents are cleared in each workspace's own scope. The double records the
+// scopes it was asked for and runs the callback without the UUID checks.
+const tenancy = vi.hoisted(() => ({
+  scopes: [] as { orgId: string; workspaceId: string }[],
+}));
+vi.mock("@oxagen/tenancy", () => ({
+  getPrincipalAttribution: () => ({}),
+  runInTenantScope: (
+    scope: { orgId: string; workspaceId: string },
+    fn: () => unknown,
+  ) => {
+    tenancy.scopes.push({ orgId: scope.orgId, workspaceId: scope.workspaceId });
+    return fn();
+  },
+}));
+
+vi.mock("./logger", () => ({ logger: { info: vi.fn() } }));
+
 function useTx(double: TxDouble) {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) => fn(double.tx),
@@ -46,6 +64,7 @@ beforeEach(() => {
   mocks.withTenantDb.mockReset();
   roleGate.refuse = false;
   roleGate.assertOrgRole.mockClear();
+  tenancy.scopes = [];
 });
 
 describe("delete_cost_center", () => {
@@ -60,18 +79,74 @@ describe("delete_cost_center", () => {
   it("soft-deletes a live label and answers when", async () => {
     const at = new Date("2026-09-22T12:00:00.000Z");
     const double = makeTx({
-      selects: [[centerRow()]],
-      updates: [[centerRow({ deletedAt: at, deletedById: CTX.userId })]],
+      selects: [[centerRow()], [], [centerRow()]],
+      updates: [[], [centerRow({ deletedAt: at, deletedById: CTX.userId })]],
     });
     useTx(double);
     const out = await costCenterDeleteHandler({ label: "ENG-1001" }, CTX);
-    expect(double.calls.updates[0]?.table).toBe(schema.costCenters);
-    expect(double.calls.updates[0]?.values).toMatchObject({
+    const center = double.calls.updates.find(
+      (u) => u.table === schema.costCenters,
+    );
+    expect(center?.values).toMatchObject({
       deletedById: CTX.userId,
       updatedById: CTX.userId,
     });
-    expect(double.calls.updates[0]?.values.deletedAt).toBeInstanceOf(Date);
+    expect(center?.values.deletedAt).toBeInstanceOf(Date);
     expect(out).toEqual({ label: "ENG-1001", deletedAt: at.toISOString() });
+  });
+
+  it("clears the label from every agent and workspace that names it (#3750)", async () => {
+    const at = new Date("2026-09-22T12:00:00.000Z");
+    const double = makeTx({
+      // The live row, the two workspaces holding an agent that names it, and
+      // the live row again in the transaction that deletes it.
+      selects: [
+        [centerRow()],
+        [{ workspaceId: "ws_a" }, { workspaceId: "ws_b" }],
+        [centerRow()],
+      ],
+      updates: [
+        [{ id: "agent_1" }, { id: "agent_2" }],
+        [{ id: "agent_3" }],
+        [{ id: "ws_row_1" }],
+        [centerRow({ deletedAt: at, deletedById: CTX.userId })],
+      ],
+    });
+    useTx(double);
+    const out = await costCenterDeleteHandler({ label: "ENG-1001" }, CTX);
+    expect(out.label).toBe("ENG-1001");
+    // Each workspace's agents are written in that workspace's own scope,
+    // since an org-wide transaction cannot write a standard table (ADR-086).
+    expect(tenancy.scopes).toEqual([
+      { orgId: CTX.orgId, workspaceId: "ws_a" },
+      { orgId: CTX.orgId, workspaceId: "ws_b" },
+    ]);
+    expect(double.calls.updates.map((u) => u.table)).toEqual([
+      schema.agents,
+      schema.agents,
+      schema.workspaces,
+      schema.costCenters,
+    ]);
+    for (const update of double.calls.updates.slice(0, 3)) {
+      expect(update.values).toMatchObject({
+        costCenter: null,
+        updatedById: CTX.userId,
+      });
+      expect(update.where).toBeDefined();
+    }
+    // The label goes off the list in the same transaction that clears the
+    // workspaces, so no workspace keeps a label the list no longer has.
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(4);
+  });
+
+  it("clears nothing when the label is not live", async () => {
+    const double = makeTx({ selects: [[]] });
+    useTx(double);
+    await expect(
+      costCenterDeleteHandler({ label: "ENG-1001" }, CTX),
+    ).rejects.toMatchObject({ reason: "cost_center_not_found" });
+    expect(tenancy.scopes).toEqual([]);
+    expect(double.calls.updates).toEqual([]);
   });
 
   it("answers not_found for a label that is not live", async () => {

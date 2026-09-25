@@ -35,6 +35,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import {
+  AssistantStoppedError,
   ConversationNotFoundError,
   AssistantTurnRefusedError,
 } from "../runtime/assistant-turn";
@@ -184,6 +185,26 @@ describe("ask_assistant", () => {
     await expect(assistantAskHandler(INPUT, CTX)).rejects.toSatisfy(
       (e) => isHandlerError(e) && e.code === "not_found",
     );
+  });
+
+  it("answers a switched-off assistant as forbidden with reason kill_switch, before the stream is told the turn is prepared", async () => {
+    mocks.prepareAssistantTurn.mockRejectedValueOnce(
+      new AssistantStoppedError("edn_stop", "incident 42"),
+    );
+    const onPrepared = vi.fn();
+    await expect(
+      streamAssistantTurn({ overrides: {}, hooks: {}, onPrepared }, () =>
+        assistantAskHandler(INPUT, CTX),
+      ),
+    ).rejects.toSatisfy(
+      (e) =>
+        isHandlerError(e) &&
+        e.code === "forbidden" &&
+        e.reason === "kill_switch" &&
+        e.message.includes("edn_stop"),
+    );
+    expect(onPrepared).not.toHaveBeenCalled();
+    expect(mocks.run).not.toHaveBeenCalled();
   });
 
   it("lets a credit-gate refusal through with its own code, before the stream is told the turn is prepared", async () => {
