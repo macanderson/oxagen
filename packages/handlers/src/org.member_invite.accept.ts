@@ -16,7 +16,7 @@ import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { and, eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { provisionMemberPrincipal } from "./iam-provision";
 import { logger } from "./logger";
 
@@ -70,15 +70,27 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
   }
   if (invitation.expiresAt && invitation.expiresAt < new Date()) {
     // Mark expired to keep state consistent; don't block on failure.
+    // The read above ran in an earlier transaction, so an Owner may have
+    // resent the invitation since. A resend keeps the row pending and moves
+    // expires_at into the future. The update therefore matches only a row that
+    // is still pending and still past its expiry at write time, so a stale
+    // accept cannot mark a renewed invitation expired.
+    const now = new Date();
     await withSystemDb((tx) =>
       tx
         .update(schema.invitations)
         .set({
           status: "expired",
-          updatedAt: new Date(),
+          updatedAt: now,
           updatedById: ctx.userId,
         })
-        .where(eq(schema.invitations.id, invitation.id)),
+        .where(
+          and(
+            eq(schema.invitations.id, invitation.id),
+            eq(schema.invitations.status, "pending"),
+            lt(schema.invitations.expiresAt, now),
+          ),
+        ),
     ).catch((err) =>
       logger.warn(
         { err, invitationPublicId: input.invitationPublicId },

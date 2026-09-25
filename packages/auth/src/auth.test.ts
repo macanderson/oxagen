@@ -31,6 +31,10 @@ const capture = vi.hoisted(() => ({
   config: null as Record<string, unknown> | null,
 }));
 
+const { TEST_BETTER_AUTH_URL } = vi.hoisted(() => ({
+  TEST_BETTER_AUTH_URL: "https://app.oxagen.test",
+}));
+
 // ---------------------------------------------------------------------------
 // All external dependency mocks — declared before any static import so vitest
 // hoists them before auth.ts and its transitive deps are evaluated.
@@ -132,7 +136,13 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: (keys: readonly string[]) => {
     const result: Record<string, string> = {};
     for (const k of keys as string[]) {
-      result[k] = process.env[k] ?? `test-value-for-${k}`;
+      // BETTER_AUTH_URL feeds new URL() in the mail hooks, so its fallback
+      // must parse as a URL.
+      result[k] =
+        process.env[k] ??
+        (k === "BETTER_AUTH_URL"
+          ? TEST_BETTER_AUTH_URL
+          : `test-value-for-${k}`);
     }
     return result;
   },
@@ -159,6 +169,12 @@ vi.mock("@oxagen/notifications", () => ({
     subject: "Verify your email",
     html: "<p>Click to verify</p>",
   })),
+  existingAccountEmailTemplate: vi.fn(
+    (input: { loginUrl: string; forgotPasswordUrl: string }) => ({
+      subject: "You already have an Oxagen account",
+      html: `<a href="${input.loginUrl}">Log in</a> <a href="${input.forgotPasswordUrl}">Reset it here</a>`,
+    }),
+  ),
 }));
 
 // account-linking.ts imports from drizzle-orm
@@ -178,7 +194,10 @@ vi.mock("drizzle-orm", () => ({
 import { auth } from "./auth";
 import { withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { sendEmailFireAndForget } from "@oxagen/notifications";
+import {
+  existingAccountEmailTemplate,
+  sendEmailFireAndForget,
+} from "@oxagen/notifications";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { isNonSsoSignInRefused } from "./sso/policy";
 
@@ -540,6 +559,46 @@ describe("emailAndPassword.sendResetPassword callback", () => {
 });
 
 // ---------------------------------------------------------------------------
+// onExistingUserSignUp callback body (#4043)
+// ---------------------------------------------------------------------------
+
+describe("emailAndPassword.onExistingUserSignUp callback", () => {
+  beforeEach(() => {
+    vi.mocked(sendEmailFireAndForget).mockClear();
+    vi.mocked(existingAccountEmailTemplate).mockClear();
+  });
+
+  it("is configured, so a sign-up with a registered address mails the owner", () => {
+    const epw = getConfig()["emailAndPassword"] as Record<string, unknown>;
+    expect(typeof epw["onExistingUserSignUp"]).toBe("function");
+  });
+
+  it("sends one mail to the owner with the login and forgot-password links", async () => {
+    const epw = getConfig()["emailAndPassword"] as Record<string, AnyFn>;
+    await expect(
+      epw["onExistingUserSignUp"]!({ user: { email: "owner@example.com" } }),
+    ).resolves.toBeUndefined();
+
+    expect(sendEmailFireAndForget).toHaveBeenCalledOnce();
+    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock
+      .calls[0]! as [Record<string, unknown>, string];
+    expect(emailArg["to"]).toBe("owner@example.com");
+    expect(tagArg).toBe("existing-account");
+
+    const templateInput = vi.mocked(existingAccountEmailTemplate).mock
+      .calls[0]![0];
+    const base = process.env.BETTER_AUTH_URL ?? TEST_BETTER_AUTH_URL;
+    expect(templateInput.email).toBe("owner@example.com");
+    expect(templateInput.loginUrl).toBe(new URL("/login", base).toString());
+    expect(templateInput.forgotPasswordUrl).toBe(
+      new URL("/forgot-password", base).toString(),
+    );
+    expect(emailArg["html"]).toContain("Log in");
+    expect(emailArg["html"]).toContain("Reset it here");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // sendVerificationEmail callback body
 // ---------------------------------------------------------------------------
 
@@ -759,6 +818,106 @@ describe("databaseHooks.session.delete.after (sign_out audit)", () => {
 
     const hook = getSessionHook("delete", "after");
     await expect(hook({ userId: "user_del_4" })).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Account audit — auth.password_changed and auth.email_verified (#3938)
+// ---------------------------------------------------------------------------
+
+describe("account audit callbacks", () => {
+  function onPasswordReset(): AnyFn {
+    const epw = getConfig()["emailAndPassword"] as Record<string, AnyFn>;
+    return epw["onPasswordReset"]!;
+  }
+  function afterEmailVerification(): AnyFn {
+    const ev = getConfig()["emailVerification"] as Record<string, AnyFn>;
+    return ev["afterEmailVerification"]!;
+  }
+  function withOrg(rows: unknown[]): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(makeQueryTx(rows)),
+    );
+  }
+  function lastEvent(): Record<string, unknown> {
+    const [event] = vi
+      .mocked(emitSecurityEvent)
+      .mock.calls.at(-1)! as unknown as [Record<string, unknown>];
+    return event;
+  }
+
+  beforeEach(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (withSystemDb as any).mockReset();
+    // mockReset, not mockClear: an earlier test left a throwing implementation.
+    vi.mocked(emitSecurityEvent).mockReset();
+  });
+
+  it("records auth.password_changed when a reset completes", async () => {
+    withOrg([{ orgId: "org_pw" }]);
+    const request = new Request(
+      "https://app.oxagen.test/api/auth/reset-password",
+      {
+        headers: { "user-agent": "ResetBrowser/1" },
+      },
+    );
+
+    await onPasswordReset()(
+      { user: { id: "user_pw", email: "pw@example.com" } },
+      request,
+    );
+
+    expect(emitSecurityEvent).toHaveBeenCalledOnce();
+    const event = lastEvent();
+    expect(event).toMatchObject({
+      eventType: "auth.password_changed",
+      actorUserId: "user_pw",
+      orgId: "org_pw",
+      outcome: "success",
+      userAgent: "ResetBrowser/1",
+      detail: { method: "reset", sessionsRevoked: true },
+    });
+    // The row holds no token, password or link.
+    expect(JSON.stringify(event)).not.toMatch(/token|password=|https?:/);
+  });
+
+  it("records auth.email_verified when an address is verified", async () => {
+    withOrg([]);
+
+    await afterEmailVerification()({ id: "user_ev", email: "ev@example.com" });
+
+    expect(emitSecurityEvent).toHaveBeenCalledOnce();
+    const event = lastEvent();
+    expect(event).toMatchObject({
+      eventType: "auth.email_verified",
+      actorUserId: "user_ev",
+      orgId: "00000000-0000-0000-0000-000000000000",
+      outcome: "success",
+      userAgent: null,
+    });
+    expect(event["detail"]).toBeUndefined();
+  });
+
+  it("SECURITY: a failed org lookup does not fail the reset", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (withSystemDb as any).mockRejectedValue(new Error("connection refused"));
+
+    await expect(
+      onPasswordReset()({ user: { id: "user_pw2" } }),
+    ).resolves.toBeUndefined();
+    expect(emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("SECURITY: a failed emit does not fail the verification", async () => {
+    withOrg([{ orgId: "org_ev2" }]);
+    vi.mocked(emitSecurityEvent).mockImplementation(() => {
+      throw new Error("audit sink unavailable");
+    });
+
+    await expect(
+      afterEmailVerification()({ id: "user_ev2" }),
+    ).resolves.toBeUndefined();
   });
 });
 

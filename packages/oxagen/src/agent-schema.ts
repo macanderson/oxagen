@@ -124,6 +124,26 @@ export type AgentTool = z.infer<typeof agentToolSchema>;
 export const agentDeploymentStatusSchema = z.enum(["inactive", "active"]);
 export type AgentDeploymentStatus = z.infer<typeof agentDeploymentStatusSchema>;
 
+/** One declared spend ceiling in micros. `definitionBudget` in
+ *  agent-definition-source.ts applies the same rule to the TOML source: a
+ *  positive safe integer. */
+const budgetMicrosSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(Number.MAX_SAFE_INTEGER);
+
+/** The definition's `budget` table: the ceilings the mandate signs to the host
+ *  (see `budgetDocFromVersion`). It keeps any other key the table carries, the
+ *  way the TOML source path does, so the config path drops nothing. */
+export const agentDefinitionBudgetSchema = z
+  .object({
+    per_run_micros: budgetMicrosSchema.optional(),
+    per_day_micros: budgetMicrosSchema.optional(),
+  })
+  .passthrough();
+export type AgentDefinitionBudget = z.infer<typeof agentDefinitionBudgetSchema>;
+
 export const agentDefinitionSchema = z.object({
   /** Stable id. Slugged public_id + UUID under the hood, per Oxagen convention. */
   id: z.string(),
@@ -141,6 +161,8 @@ export const agentDefinitionSchema = z.object({
   agentTools: z.array(agentToolSchema),
   /** Optional system prompt / instructions baked into the definition. */
   instructions: z.string().optional(),
+  /** Optional spend ceilings for one run and one UTC day. */
+  budget: agentDefinitionBudgetSchema.optional(),
   /** Deploy posture. New definitions seed `inactive`. */
   deploymentStatus: agentDeploymentStatusSchema.default("inactive"),
   /** Tenant + workspace scope. Every agent is scoped; no global agents. */
@@ -157,6 +179,7 @@ export const agentDefinitionConfigSchema = agentDefinitionSchema.pick({
   graph: true,
   agentTools: true,
   instructions: true,
+  budget: true,
 });
 export type AgentDefinitionConfig = z.infer<typeof agentDefinitionConfigSchema>;
 

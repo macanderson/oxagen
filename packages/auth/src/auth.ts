@@ -7,7 +7,7 @@ import { db } from "@oxagen/database/client";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { resolveSsoKms } from "@oxagen/database/sso-secrets";
-import { captureError } from "@oxagen/telemetry";
+import { captureError, type SecurityEventDetail } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
@@ -31,6 +31,7 @@ import {
   sendEmailFireAndForget,
   resetPasswordEmailTemplate,
   emailVerificationTemplate,
+  existingAccountEmailTemplate,
 } from "@oxagen/notifications";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
@@ -150,6 +151,55 @@ async function resolveFirstOrgId(userId: string): Promise<string | null> {
 // org provisioning is async). Events with this orgId are valid audit rows and
 // can be disambiguated in compliance queries via `actor_user_id`.
 const NO_ORG_SENTINEL = "00000000-0000-0000-0000-000000000000";
+
+// ---------------------------------------------------------------------------
+// emitAccountAuditEvent — the audit row for an account change that Better
+// Auth reports through an options callback rather than a database hook:
+// completing a password reset, and verifying an email address.
+//
+// Better Auth awaits these callbacks after the change is written. A throw
+// here would turn a finished reset or verification into an HTTP 500, and on
+// a reset it would also skip revokeSessionsOnPasswordReset, which runs after
+// the callback. So the body is best effort, like the session hooks below: a
+// failure is logged and escalated through captureError, never re-thrown.
+//
+// The row carries the user, the org and the User-Agent. It never carries the
+// password, the token or the link.
+// ---------------------------------------------------------------------------
+
+async function emitAccountAuditEvent(input: {
+  eventType: "auth.password_changed" | "auth.email_verified";
+  userId: string;
+  request: Request | undefined;
+  detail?: SecurityEventDetail;
+}): Promise<void> {
+  try {
+    const orgId = await resolveFirstOrgId(input.userId);
+    emitSecurityEvent({
+      eventType: input.eventType,
+      actorUserId: input.userId,
+      orgId: orgId ?? NO_ORG_SENTINEL,
+      workspaceId: null,
+      capability: null,
+      outcome: "success",
+      ip: null,
+      userAgent: input.request?.headers.get("user-agent") ?? null,
+      requestId: null,
+      ...(input.detail ? { detail: input.detail } : {}),
+    });
+  } catch (err) {
+    logger.error(
+      { userId: input.userId, eventType: input.eventType, err },
+      "[auth] account audit emit failed",
+    );
+    captureError({
+      error: err,
+      source: "app",
+      severity: "warn",
+      context: `auth ${input.eventType} audit emit failed`,
+    });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Trusted origins — built from env vars so switching domains is a one-line
@@ -389,6 +439,39 @@ export const auth = betterAuth({
         "password-reset",
       );
     },
+    // Runs once the new password is stored and before
+    // revokeSessionsOnPasswordReset ends the user's sessions.
+    onPasswordReset: async ({ user }, request) => {
+      await emitAccountAuditEvent({
+        eventType: "auth.password_changed",
+        userId: user.id,
+        request,
+        detail: { method: "reset", sessionsRevoked: true },
+      });
+    },
+    // While requireEmailVerification is on (deployed environments), a sign-up
+    // with a registered address gets the same reply as a new one, so the page
+    // never reveals which addresses have accounts. Better Auth calls this hook
+    // for that case, in the background, with the existing user. Without it
+    // the owner never learns of the attempt, and a returning person waits for
+    // a verification mail that never comes (#4043). Locally the sign-up is
+    // refused with USER_ALREADY_EXISTS and this hook does not run.
+    onExistingUserSignUp: async ({ user }) => {
+      sendEmailFireAndForget(
+        {
+          to: user.email,
+          ...existingAccountEmailTemplate({
+            email: user.email,
+            loginUrl: new URL("/login", env.BETTER_AUTH_URL).toString(),
+            forgotPasswordUrl: new URL(
+              "/forgot-password",
+              env.BETTER_AUTH_URL,
+            ).toString(),
+          }),
+        },
+        "existing-account",
+      );
+    },
   },
 
   // ---------------------------------------------------------------------------
@@ -408,6 +491,15 @@ export const auth = betterAuth({
         },
         "verification",
       );
+    },
+    // Runs once the user row reads emailVerified: true, for a verification
+    // link and for a confirmed change of address.
+    afterEmailVerification: async (user, request) => {
+      await emitAccountAuditEvent({
+        eventType: "auth.email_verified",
+        userId: user.id,
+        request,
+      });
     },
     sendOnSignIn: true,
   },

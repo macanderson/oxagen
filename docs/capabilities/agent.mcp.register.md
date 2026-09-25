@@ -18,9 +18,15 @@ agent's tool surface so they behave like first-class Oxagen tools.
 | --------------- | ------------------------------------- | ------------------------------------------- |
 | `name`          | `string` (1 – 120 chars)              | Human label shown in the UI.                |
 | `transportType` | `"streamable-http" \| "stdio"`        | StreamableHTTP is the default.              |
-| `endpointUrl`   | `string` (URL)                        | HTTPS URL or stdio command URI.             |
+| `endpointUrl`   | `string` (URL)                        | Public `http:` or `https:` URL. See below.  |
 | `authStrategy`  | `"none" \| "bearer" \| "header"`      | Defaults to `"none"`.                       |
 | `authConfig`    | `Record<string,string>?`              | Credentials per strategy.                   |
+
+Every transport checks `endpointUrl` before the health check and before
+the insert. The handler refuses an address that carries a username or a
+password, that is not `http:` or `https:`, or that resolves to a loopback,
+private, link-local, or cloud-metadata address. A `stdio` server is not
+probed, but its address is stored and shown, so it gets the same check.
 
 ## Output
 

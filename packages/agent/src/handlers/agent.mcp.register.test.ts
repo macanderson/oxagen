@@ -188,6 +188,49 @@ describe("agent.mcp.register handler", () => {
     },
   );
 
+  // Every transport runs the guard. A stdio row is never probed, but its
+  // endpoint_url is stored and displayed, so it must not carry a credential
+  // or point at a private address (#3720).
+  it.each([
+    ["https://user:pass@mcp.example.com/", "username and password"],
+    ["https://sk-live-abc123@mcp.example.com/", "username only"],
+    ["http://10.1.2.3/mcp", "RFC1918 class A"],
+    ["http://169.254.169.254/latest/meta-data/", "cloud-metadata link-local"],
+  ])(
+    "rejects a stdio registration whose endpoint %s carries %s",
+    async (url) => {
+      const input = {
+        ...BASE_INPUT,
+        transportType: "stdio" as const,
+        endpointUrl: url,
+      };
+
+      await expect(agentMcpRegisterHandler(input, CTX)).rejects.toThrow(
+        /Refusing to register MCP server/,
+      );
+      expect(mocks.healthcheckMock).not.toHaveBeenCalled();
+      expect(mocks.insertSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  it("registers a stdio server whose endpoint is a clean public URL", async () => {
+    const input = {
+      ...BASE_INPUT,
+      transportType: "stdio" as const,
+      endpointUrl: "https://mcp.public-host.com/mcp",
+    };
+
+    const result = await agentMcpRegisterHandler(input, CTX);
+
+    expect(mocks.insertSpy).toHaveBeenCalledTimes(1);
+    const valuesArg = mocks.insertValues.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(valuesArg.endpointUrl).toBe("https://mcp.public-host.com/mcp");
+    expect(result.healthStatus).toBe("degraded");
+  });
+
   it("allows a publicly routable https endpoint", async () => {
     mocks.healthcheckMock.mockResolvedValueOnce({
       status: "healthy",
