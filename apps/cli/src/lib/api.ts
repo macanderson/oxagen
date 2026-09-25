@@ -202,8 +202,21 @@ function requireApiContext(writer: CommandWriter = stdoutWriter): ApiContext {
 export async function apiGetOrThrow<T>(
   path: string,
   query?: Record<string, unknown>,
+  /**
+   * The org and workspace to address instead of the global selection, as
+   * {@link apiPostOrThrow} takes it. With a scope only the token is needed.
+   */
+  scope?: { org: string; ws: string },
 ): Promise<T> {
-  const ctx = resolveApiContext();
+  let ctx: ApiContext | null;
+  if (scope) {
+    const token = getToken();
+    ctx = token
+      ? { apiUrl: getApiUrl(), token, org: scope.org, ws: scope.ws }
+      : null;
+  } else {
+    ctx = resolveApiContext();
+  }
   if (!ctx) throw new ApiError(NOT_LOGGED_IN);
   const url = new URL(`${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`);
   if (query) {

@@ -1,5 +1,5 @@
 {
-  "generatedCount": 384,
+  "generatedCount": 390,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -163,6 +163,17 @@
       "domain": "run",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "authorize_mcp_server",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1493,6 +1504,18 @@
       "consumes": []
     },
     {
+      "name": "get_published_steering",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_rate_card",
       "domain": "billing",
       "surfaces": [
@@ -2729,6 +2752,17 @@
       "consumes": []
     },
     {
+      "name": "list_working_copies",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_workspaces",
       "domain": "workspace",
       "surfaces": [
@@ -3122,6 +3156,17 @@
       "consumes": []
     },
     {
+      "name": "record_working_copy",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "register_agent",
       "domain": "agent",
       "surfaces": [
@@ -3479,6 +3524,17 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "search_mcp_registry",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3889,6 +3945,17 @@
       "domain": "run",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "start_mcp_authorization",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

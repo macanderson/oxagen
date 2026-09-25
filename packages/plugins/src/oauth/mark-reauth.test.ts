@@ -119,11 +119,11 @@ describe("markCredentialNeedsReauth", () => {
     expect(sent["orgId"]).toBe("org-1");
     expect(sent["workspaceId"]).toBe("ws-1");
     expect(sent["kind"]).toBe("security");
-    // The link points at the actual MCP Servers page for this org/workspace,
-    // with ?reauth=<orgListingId> — never the old dead /settings/integrations
-    // route, and never a raw UUID path.
+    // The link points at the workspace's Providers tab, where the provider's
+    // row offers Reconnect: never the dead /settings/integrations route or the
+    // retired /workbench/tools/mcp page, and never a raw UUID path.
     const deepLink = sent["deepLink"] as string;
-    expect(deepLink).toContain("/acme/main/workbench/tools/mcp?reauth=ol-1");
+    expect(deepLink).toBe("https://app.oxagen.sh/acme/main/tools/providers");
     expect(deepLink).not.toContain("/settings/integrations");
     expect(deepLink).not.toContain("org-1"); // no UUID leakage in the path
     // serverName prefers the human title over the slug.

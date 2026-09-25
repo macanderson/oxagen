@@ -59,17 +59,19 @@ function adaptStep(inngestStep: {
  */
 function wrapHandler(handler: DurableFunctionHandler) {
   return async (ctx: {
-    event: { data: unknown; name?: string };
-    events?: Array<{ data: unknown; name?: string }>;
+    event: { data: unknown; name?: string; ts?: number };
+    events?: Array<{ data: unknown; name?: string; ts?: number }>;
     step: Parameters<typeof adaptStep>[0];
     runId?: string;
   }) => {
     const step = adaptStep(ctx.step);
+    // `ts` is kept: a handler reads it to tell how long an event queued.
     const toPayload = (
-      e: { data: unknown; name?: string } | undefined,
+      e: { data: unknown; name?: string; ts?: number } | undefined,
     ): EventPayload => ({
       name: e?.name ?? "",
       data: (e?.data ?? {}) as Record<string, unknown>,
+      ...(typeof e?.ts === "number" ? { ts: e.ts } : {}),
     });
     const event = toPayload(ctx.event);
     // Inngest supplies `ctx.events` (the full batch) for batchEvents functions;

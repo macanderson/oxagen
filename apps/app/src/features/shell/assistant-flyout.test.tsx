@@ -701,6 +701,28 @@ describe("AssistantFlyout", () => {
     });
   }
 
+  // The pending indicator is the kit's stella spinner, which replaced three
+  // bouncing dots (#4087). The spinner is hidden from assistive tech, so the
+  // log reads the plain label beside it.
+  it("shows the stella spinner while a turn is pending, and clears it when the reply lands", async () => {
+    const settle = heldTurn();
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+
+    const thinking = screen.getByTestId("assistant-thinking");
+    const spinner = screen.getByTestId("assistant-thinking-spinner");
+    expect(thinking.contains(spinner)).toBe(true);
+    expect(spinner.getAttribute("data-mark")).toBe("stella-spinner");
+    expect(spinner.getAttribute("aria-hidden")).toBe("true");
+    expect(thinking.textContent).toBe("Working…");
+
+    settle({ reply: "core-platform is live." });
+    await flush();
+    await waitFor(() => {
+      expect(screen.queryByTestId("assistant-thinking-spinner")).toBeNull();
+    });
+  });
+
   // ADR-092: a turn the person walks away from is owned to completion. It used
   // to be discarded, which threw away an answer the person had asked for and
   // the budget already spent on it. Its reply goes to the thread of the

@@ -43,6 +43,7 @@ const {
   readRepositoryChange,
   readRepositoryChanges,
   readRepositoryTree,
+  readWorkingCopies,
   readWorkspaceRepositories,
   readWorkspaceRepository,
   setProductionBranch,
@@ -489,6 +490,63 @@ describe("readWorkspaceRepositories", () => {
       repositories: [{ ...REPOSITORIES.repositories[0], role: "fork" }],
     });
     expect(await readWorkspaceRepositories("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "contract_output_mismatch",
+    });
+  });
+});
+
+describe("readWorkingCopies", () => {
+  const COPY = {
+    id: "wcp_laptop01",
+    hostname: "mac-studio.local",
+    directory: "/Users/mac/code/platform",
+    repository: "acme/platform",
+    branch: "main",
+    headCommit: "0123456789abcdef",
+    oxagenPresent: true,
+    symlinks: "linked",
+    pulledCommit: null,
+    lastEvent: "init",
+    reportedBy: { userId: "usr_mac", name: "Mac Anderson" },
+    cliVersion: "3.4.0",
+    firstSeenAt: "2026-09-24T09:00:00.000Z",
+    lastSeenAt: "2026-09-24T09:00:00.000Z",
+  };
+
+  it("reads list_working_copies at the contract's ceiling for the workspace the URL names", async () => {
+    invoke.mockResolvedValue({ workingCopies: [COPY] });
+    expect(await readWorkingCopies("acme", "core-platform")).toEqual({
+      ok: true,
+      value: { workingCopies: [COPY] },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "list_working_copies",
+      { limit: 200 },
+      expect.objectContaining({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        surface: "app",
+      }),
+    );
+  });
+
+  it("carries a denial across as denied (negative)", async () => {
+    invoke.mockRejectedValue({ code: "authz_denied" });
+    expect(await readWorkingCopies("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "repository.read",
+    });
+  });
+
+  it("refuses a row whose symlink state the contract does not name (negative)", async () => {
+    invoke.mockResolvedValue({
+      workingCopies: [{ ...COPY, symlinks: "copied" }],
+    });
+    expect(await readWorkingCopies("acme", "core-platform")).toEqual({
       ok: false,
       reason: "unavailable",
       code: "contract_output_mismatch",

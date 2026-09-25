@@ -42,13 +42,24 @@ const UNREMARKABLE_BRANCHES = new Set(["main", "master", "HEAD", ""]);
 /** The most a derived title may run to, so a list stays readable. */
 const TITLE_MAX = 80;
 
-/** The last segment of a path, with any trailing separator ignored. */
+/** A segment with a letter or a digit in it says which folder it is. */
+const NAMES_A_PLACE = /[\p{L}\p{N}]/u;
+
+/**
+ * The last segment of a path, with any trailing separator ignored.
+ *
+ * A segment with no letter or digit, such as `_` or `--`, names nothing on
+ * its own, so it keeps its parents up to the nearest one that does:
+ * `~/Documents/_` reads `Documents/_`.
+ */
 function basename(path: string): string | undefined {
-  const trimmed = path.replace(/[/\\]+$/, "");
-  if (trimmed === "") return undefined;
-  const cut = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
-  const name = cut === -1 ? trimmed : trimmed.slice(cut + 1);
-  return name === "" ? undefined : name;
+  const segments = path.split(/[/\\]+/).filter((segment) => segment !== "");
+  const name = segments.pop();
+  if (name === undefined) return undefined;
+  const kept = [name];
+  while (!NAMES_A_PLACE.test(kept[0] ?? "") && segments.length > 0)
+    kept.unshift(segments.pop() ?? "");
+  return kept.join("/");
 }
 
 function countPart(count: number, one: string, many: string): string {
@@ -106,4 +117,40 @@ export function deriveSessionTitle(
   // A long place or branch gives way, so the size is always read whole.
   const suffix = ` (${size})`;
   return `${shorten(where, TITLE_MAX - suffix.length)}${suffix}`;
+}
+
+const TITLE_PROMPT_CHARS = 60;
+
+/**
+ * A title that needs no model: the first sentence of the run's first prompt,
+ * cut at a word boundary, then "on" and the branch when it names the work,
+ * the way a session title reads ("oxagen on agent/pensive-volta"). Ingest
+ * writes it in the batch that carries the run's first prompt, and the model's
+ * name replaces it once an account is written. Unlike `deriveSessionTitle` it
+ * reads prompt text, so it exists only where the workspace retains that text.
+ * Returns null when the prompt holds no words.
+ */
+export function fallbackRunTitle(
+  prompt: string,
+  branch: string | null,
+): string | null {
+  const line =
+    prompt
+      .replace(/<[^>]*>/gu, " ")
+      .split(/\r?\n/u)
+      .map((part) => part.replace(/\s+/gu, " ").trim())
+      .find((part) => part.length > 0) ?? "";
+  const sentence = (/^.*?[.?!](?=\s|$)/u.exec(line)?.[0] ?? line)
+    .replace(/[.]$/u, "")
+    .trim();
+  if (!sentence) return null;
+  let title = sentence;
+  if (title.length > TITLE_PROMPT_CHARS) {
+    const cut = title.slice(0, TITLE_PROMPT_CHARS - 1);
+    const space = cut.lastIndexOf(" ");
+    title = `${(space > TITLE_PROMPT_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+  }
+  const named = branch?.trim();
+  if (!named || UNREMARKABLE_BRANCHES.has(named)) return title;
+  return `${title} on ${named}`.slice(0, TITLE_MAX);
 }

@@ -229,12 +229,60 @@ export function steerBlockOf(runtime: string | null): SteerBlock | null {
  */
 export const HOST_POLL_WINDOW_MS = 5 * 60_000;
 
+/** The most pull requests one row carries; a run that linked more says so with `pullRequestsOpened`. */
+export const RUN_PULL_REQUEST_MAX = 10;
+
+/**
+ * A pull request (or GitLab merge request) the run's record names: an
+ * `oxagen:pr_link` frame the harness wrote, or the URL a `pr_open` call
+ * printed. The URL is the one recorded, unvalidated; a caller links it only
+ * when it names a forge page it recognises.
+ */
+export const runPullRequestSchema = z
+  .object({
+    url: z.string().max(2048),
+    /** The number the frame recorded; null when it recorded none. */
+    number: z.number().int().positive().nullable(),
+    /** `owner/name` as the frame recorded it; null when it recorded none. */
+    repository: z.string().max(512).nullable(),
+    /**
+     * The state a store recorded for the pull request. `list_runs` reads no
+     * forge, and no store records a pull request's state yet, so this is null
+     * today: a caller renders "status unknown", never a guessed "open".
+     * `get_run_work` reads the live state from GitHub for one run.
+     */
+    state: z.enum(["open", "draft", "merged", "closed"]).nullable(),
+  })
+  .strict();
+
+/**
+ * The lines a run added and removed. `harness_reported` is the session's own
+ * total, which the harness reports when the session ends. `git_observed` is
+ * the uncommitted change git reported at the last worktree check, used while
+ * no harness total exists; committed work leaves it, so it is a floor.
+ */
+export const runDiffSchema = z
+  .object({
+    added: z.number().int().nonnegative(),
+    removed: z.number().int().nonnegative(),
+    basis: z.enum(["harness_reported", "git_observed"]),
+  })
+  .strict();
+
+/** Which runs a page lists by their pull requests. */
+export const RUN_PULL_REQUEST_FILTERS = ["any", "with", "without"] as const;
+
 export const runItemSchema = z
   .object({
     id: runPublicIdSchema,
     source: runSourceSchema,
     /** A ledger append fence, independent of the external process status. */
     ingressRevoked: z.boolean().optional(),
+    /**
+     * The run is paused until someone resumes it. A ledger run reads this from
+     * its ingress fence. A live wrapped run reads it from the last pause or
+     * resume its host applied (#4112). A sealed wrapped run is never paused.
+     */
     ingressPaused: z.boolean().optional(),
     /** `org_ns.ws_ns.slug` (ADR-024); null when the ledger row names no agent. */
     agentKey: z.string().nullable(),
@@ -298,7 +346,8 @@ export const runItemSchema = z
      */
     sealedAt: z.string().datetime().nullable(),
     /**
-     * What sealed a wrapped session: `agent_stop`, its host's own end;
+     * What sealed a wrapped session: `agent_stop`, its host's own end,
+     * which the host's next `agent_start` on the chain reopens (ADR-172);
      * `idle_timeout`, the control plane closing a run that sent nothing for
      * twelve hours, which the run's next event reopens; or `operator`, a
      * person sealing it through `seal_run` (ADR-169), which is final. Null
@@ -425,6 +474,24 @@ export const runItemSchema = z
     /** The generated name; null until `summarize_run` wrote one. */
     name: z.string().nullable(),
     summary: runSummarySchema.nullable(),
+    /**
+     * The pull requests the run's frames name, earliest first. Absent when
+     * they were not read: every ledger run (its receipts name a repository
+     * id, not a page, and are read by `get_run_work`), and a wrapped session
+     * whose frames could not be read (the page then carries a warning). An
+     * empty array is a read that found none.
+     */
+    pullRequests: z
+      .array(runPullRequestSchema)
+      .max(RUN_PULL_REQUEST_MAX)
+      .optional(),
+    /**
+     * How many `pr_open` calls ingest counted for a wrapped session, including
+     * any whose output named no URL. Absent for a ledger run.
+     */
+    pullRequestsOpened: z.number().int().nonnegative().optional(),
+    /** Lines added and removed; null when neither the harness nor git reported any. */
+    diff: runDiffSchema.nullable().optional(),
   })
   .strict();
 
@@ -495,12 +562,27 @@ export const runList = registerCapability({
       limit: z.number().int().min(1).max(100).default(50),
       /** Opaque; only a cursor this capability returned is accepted. */
       cursor: z.string().max(256).optional(),
+      /**
+       * Absent or `any` lists every run. `with` lists wrapped sessions whose
+       * record names a pull request or counted one opened; `without` lists
+       * those that do neither. Either leaves out ledger runs, whose pull
+       * requests this read cannot see.
+       * A filtered page may hold fewer than `limit` runs with a `nextCursor`:
+       * the read looks through a bounded number of runs per page.
+       */
+      pullRequests: z.enum(RUN_PULL_REQUEST_FILTERS).optional(),
     })
     .strict(),
   output: z
     .object({
       runs: z.array(runItemSchema).max(100),
       nextCursor: z.string().nullable(),
+      /**
+       * `pull_requests_unread`: the pull-request frames could not be read, so
+       * rows carry no `pullRequests` and a filtered page decided on the
+       * counted `pr_open` calls alone.
+       */
+      warnings: z.array(z.enum(["pull_requests_unread"])).optional(),
     })
     .strict(),
 });
@@ -508,3 +590,6 @@ export const runList = registerCapability({
 export type RunListInput = z.output<typeof runList.input>;
 export type RunListOutput = z.output<typeof runList.output>;
 export type RunItem = z.output<typeof runItemSchema>;
+export type RunPullRequest = z.output<typeof runPullRequestSchema>;
+export type RunDiff = z.output<typeof runDiffSchema>;
+export type RunPullRequestFilter = (typeof RUN_PULL_REQUEST_FILTERS)[number];

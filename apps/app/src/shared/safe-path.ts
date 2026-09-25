@@ -192,9 +192,19 @@ export const routes = {
    * their domain proofs, and whether SSO is required (ADR-145).
    */
   sso: (org: string): SafePath => pathOf(org, "sso"),
-  /** Fleet; `cursor` opens a later page of its runs table. */
-  fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
-    withQuery(pathOf(org, ws), { cursor: q?.cursor }),
+  /**
+   * Fleet; `cursor` opens a later page of its runs table, and `prs` lists
+   * only the runs `with` or `without` pull requests (`any`, or absent, is all).
+   */
+  fleet: (
+    org: string,
+    ws: string,
+    q?: { cursor?: string; prs?: "any" | "with" | "without" },
+  ): SafePath =>
+    withQuery(pathOf(org, ws), {
+      prs: q?.prs === "any" ? undefined : q?.prs,
+      cursor: q?.cursor,
+    }),
   /** Agent IAM; `cursor` opens a later page of the identities table. */
   agents: (
     org: string,

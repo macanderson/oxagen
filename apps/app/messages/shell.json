@@ -285,7 +285,6 @@
     "assistant": {
       "label": "stella",
       "launcher": "Ask <wordmark>stella<accent>*</accent></wordmark>",
-      "launcherHint": "<wordmark>oxagen’s</wordmark> in-app AI agent",
       "launcherUnread": "New reply",
       "resize": "Resize stella",
       "close": "Close stella",

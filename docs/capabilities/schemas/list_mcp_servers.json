@@ -74,6 +74,79 @@
             "toolCount": {
               "type": "integer",
               "minimum": 0
+            },
+            "authKind": {
+              "type": "string",
+              "enum": [
+                "oauth",
+                "bearer",
+                "header",
+                "none"
+              ],
+              "default": "none"
+            },
+            "iconUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "authorization": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "connected",
+                        "needs_reauth",
+                        "revoked",
+                        "not_connected"
+                      ]
+                    },
+                    "expiresAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "refreshable": {
+                      "type": "boolean"
+                    },
+                    "lastRefreshedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "expiresAt",
+                    "refreshable",
+                    "lastRefreshedAt"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             }
           },
           "required": [

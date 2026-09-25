@@ -3,10 +3,17 @@
  * every normalizer. Pure data; the collector fills it in once per session.
  */
 import { createHash } from "node:crypto";
+import type { ChainCursor } from "../chain";
 import type { TachoEvent } from "../envelope";
 
 export type AgentIdentity = TachoEvent["agent"];
 export type HostFacts = NonNullable<TachoEvent["host"]>;
+
+/** Where a chain on this host's disk ends. */
+export interface ChainTail extends ChainCursor {
+  /** Whether the last event on disk is the chain's `agent_stop`. */
+  stopped: boolean;
+}
 
 export interface ClaudeCodeContext {
   agent: AgentIdentity;
@@ -16,6 +23,14 @@ export interface ClaudeCodeContext {
   secretEnvPattern?: RegExp;
   /** Clock for `ts` when the source carries none (hooks). */
   now?: () => number;
+  /**
+   * The position after the last event this host's WAL holds for a chain, or
+   * undefined when it holds none. A recorder opened with no restored state
+   * starts here instead of at genesis, so a chain the daemon lost track of
+   * continues on disk rather than restarting at seq 0 over events it
+   * already wrote.
+   */
+  chainTail?: (sessionUuid: string) => ChainTail | undefined;
 }
 
 /**

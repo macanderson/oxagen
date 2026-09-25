@@ -28,6 +28,14 @@
       "cursor": {
         "type": "string",
         "maxLength": 256
+      },
+      "pullRequests": {
+        "type": "string",
+        "enum": [
+          "any",
+          "with",
+          "without"
+        ]
       }
     },
     "additionalProperties": false
@@ -657,6 +665,101 @@
                   "type": "null"
                 }
               ]
+            },
+            "pullRequests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "number": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "repository": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "state": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "open",
+                          "draft",
+                          "merged",
+                          "closed"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "url",
+                  "number",
+                  "repository",
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            "pullRequestsOpened": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "diff": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "added": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "removed": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "basis": {
+                      "type": "string",
+                      "enum": [
+                        "harness_reported",
+                        "git_observed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "added",
+                    "removed",
+                    "basis"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -700,6 +803,15 @@
             "type": "null"
           }
         ]
+      },
+      "warnings": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "pull_requests_unread"
+          ]
+        }
       }
     },
     "required": [

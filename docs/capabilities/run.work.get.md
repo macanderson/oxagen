@@ -24,6 +24,8 @@ Each pull request carries `closingIssues`, read from GitHub's `closingIssuesRefe
 
 The read limits checkout groups and recorded diffs to 200 each, PRs and discovery requests to 20 each, and each PR patch response to 512 KiB. A collector snapshot holds at most 256 KiB and probes at most 32 untracked files. Limits do not turn missing evidence into an empty successful result.
 
+Checkouts, captured diffs, subagents and pull request receipts come from every frame the control plane accepted from the run's host, including frames past a chain break. When the session's hash chain broke, the read returns `complete: false` with the `chain_break` warning rather than dropping those frames (ADR-171). A sealed run also names the break in its completeness gaps.
+
 A wrapped run's `oxagen:pr_link` frames are its recorded receipts: each names `pr_number`, `pr_url`, and `pr_repository`. Frames with the same URL count once. A receipt resolves only against a repository connected to this workspace that carries its provider repository id.
 
 Ledger runs reuse recorded PR receipts. Their receipts do not record a host checkout, so location remains absent. The existing Outputs view retains file observations and ledger change locators.

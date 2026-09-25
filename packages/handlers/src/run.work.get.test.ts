@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prLinkOf } from "./lib/run-work";
 import { createRunWorkGetHandler, type RunWorkDeps } from "./run.work.get";
+import type { TachoSessionColumns } from "./run.list";
 import {
   ctx,
   memoryStores,
@@ -20,8 +21,11 @@ beforeEach(() => {
   role.current = "Owner";
 });
 const RUN_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
-function setup() {
-  const stores = memoryStores([], [tachoSession({ publicId: RUN_ID })]);
+function setup(session: Partial<TachoSessionColumns> = {}) {
+  const stores = memoryStores(
+    [],
+    [tachoSession({ publicId: RUN_ID, session })],
+  );
   const deps: RunWorkDeps = {
     queries: stores.queries,
     readRunRollups: stores.readRunRollups,
@@ -99,6 +103,23 @@ describe("get_run_work", () => {
       warnings: ["repository_not_connected"],
     });
   });
+  // ADR-171: one break early in a long run used to blank the checkout and
+  // subagents for the rest of it. The facts stay, and the break is named.
+  it("keeps the facts of a session whose chain broke and warns chain_break", async () => {
+    const { handler } = setup({ chainVerified: false });
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result).toMatchObject({
+      complete: false,
+      checkouts: [{ path: "/repo", branch: "main" }],
+      warnings: ["repository_not_connected", "chain_break"],
+    });
+    expect(result.subagents).toHaveLength(2);
+  });
+  it("adds no chain_break warning while the chain holds", async () => {
+    const { handler } = setup({ chainVerified: true });
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result.warnings).not.toContain("chain_break");
+  });
   it("lists the subagents the session started from their hook frames", async () => {
     const { handler } = setup();
     const result = await handler({ runId: RUN_ID }, ctx());
@@ -137,22 +158,22 @@ describe("get_run_work", () => {
         url: "https://github.com/acme/app/pull/41",
         number: "41",
         repository: "acme/app",
-        seq: 20,
-        ts: "2026-09-23 10:00:00.000",
+        first_seq: 20,
+        first_ts: "2026-09-23 10:00:00.000",
       },
       {
         url: "https://github.com/Acme/App/pull/42",
         number: "",
         repository: "",
-        seq: 30,
-        ts: "2026-09-23 10:05:00.000",
+        first_seq: 30,
+        first_ts: "2026-09-23 10:05:00.000",
       },
       {
         url: "https://github.com/other/repo/pull/7",
         number: "7",
         repository: "other/repo",
-        seq: 40,
-        ts: "2026-09-23 10:06:00.000",
+        first_seq: 40,
+        first_ts: "2026-09-23 10:06:00.000",
       },
     ]);
     const result = await handler({ runId: RUN_ID }, ctx());

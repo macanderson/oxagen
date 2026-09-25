@@ -76,7 +76,7 @@ These repository-status tools read connected repositories. Separate definition-c
 
 | Tool | Description |
 |---|---|
-| `list_mcp_servers` | List external MCP servers registered for the workspace. |
+| `list_mcp_servers` | List external MCP servers registered for the workspace, with each one's health and authorization state. |
 | `list_agent_tools` | List every tool available in the current turn (built-in and plugin tools). |
 
 ## Plugin tools
@@ -84,6 +84,32 @@ These repository-status tools read connected repositories. Separate definition-c
 When a workspace enables an external MCP server plugin, the governed MCP tool gateway adds that server's tools to the workspace toolchain. Plugin tools appear in the agent's tool list next to built-in tools. The same IAM and audit path governs them, so calling a plugin tool leaves the same audit record as calling a built-in tool. The server's credential stays in Oxagen, and the agent never sees it.
 
 Plugin tool names are namespaced by the plugin's server ID to prevent collisions.
+
+## Add a tool provider
+
+Open **Tools › Providers** and select **Add a provider**. The dialog takes you from finding a server to importing its tools without leaving the page.
+
+1. Find the server. **Browse the registry** searches Oxagen's verified first-party servers (Linear, Slack, GitHub, Notion, Atlassian, Sentry and others) and the [official MCP Registry](https://registry.modelcontextprotocol.io). Each result shows the publisher, whether the publisher proved it owns the name, the transports it offers, and how it authenticates. **Custom server** takes any streamable-http endpoint, including an internal one.
+2. Authenticate. For an OAuth server, select **Authorize** and sign in to the provider in the window that opens. The window closes on its own and the dialog moves on. Some servers, Slack and GitHub among them, do not register OAuth apps themselves. For those, create an OAuth app with the provider, register the redirect URL the dialog shows, and enter its client ID and secret. A server that takes a bearer token or an API key header asks for it instead.
+3. Review the tools the server lists, and import the ones you want. Imported tools land unclassified and on no toolbelt.
+
+Select **Add another provider** to add the next one in the same dialog.
+
+Adding and authorizing a provider needs an organization Owner or Admin, or a workspace Owner. Oxagen encrypts every token and client secret before it stores them, and never shows one again.
+
+### Provider status
+
+Each provider row shows a status light.
+
+| Light | Meaning |
+|---|---|
+| Green | The provider answered its last check and holds a live credential. |
+| Yellow | The provider is connected with errors: it is degraded, has not been checked yet, or its access token lapsed and renews on the next call. |
+| Red | The provider cannot be used: it is unreachable, its token expired with no way to renew, or the provider refused the token. |
+
+A red OAuth provider offers **Reconnect**, which runs the sign-in again from the row. When a refresh fails at run time, Oxagen marks the provider red and emails the organization's Owners and Admins a link to the Providers tab.
+
+The capabilities behind the dialog are `search_mcp_registry`, `start_mcp_authorization` and `authorize_mcp_server`.
 
 ## Tool permissions and risk levels
 

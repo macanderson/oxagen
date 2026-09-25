@@ -101,11 +101,12 @@ export const linkChip =
 
 /**
  * `.panel-h { padding:12px 16px; border-bottom:1px solid var(--border) }` and
- * `.panel-h h3 { font-size:13.5px }` — flat on the panel, no band. The same
- * hairline closes a footer.
+ * `.panel-h h3 { font-size:13.5px }`, on the `--panel-head` band: light grey
+ * on paper, a step lighter than the panel on ink (ADR-170). The footer keeps
+ * the hairline and stays flat on the panel.
  */
 export const panelHeader =
-  "flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3";
+  "flex flex-wrap items-center justify-between gap-3 border-b border-border bg-panel-head px-4 py-3";
 export const panelTitle = "text-[13.5px] font-semibold text-foreground";
 export const panelFooter =
   "flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground";

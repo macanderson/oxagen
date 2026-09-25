@@ -99,6 +99,9 @@ import { repositoryInstallationList } from "./repository.installation.list";
 import { repositoryInstallationCandidates } from "./repository.installation.candidates";
 import { repositoryInstallationAttach } from "./repository.installation.attach";
 import { repositoryGitlabAttach } from "./repository.gitlab.attach";
+import { workingCopyRecord } from "./repository.working_copy.record";
+import { workingCopyList } from "./repository.working_copy.list";
+import { publishedSteeringGet } from "./context.steering.published.get";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runTurnsGet } from "./run.turns.get";
@@ -156,6 +159,9 @@ import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
 import { agentMcpSetEnabled } from "./agent.mcp.set_enabled";
 import { agentMcpDelete } from "./agent.mcp.delete";
+import { agentMcpRegistrySearch } from "./agent.mcp.registry.search";
+import { agentMcpAuthorizeStart } from "./agent.mcp.authorize.start";
+import { agentMcpAuthorizeComplete } from "./agent.mcp.authorize.complete";
 import { agentMcpConsentResolve } from "./agent.mcp_consent.resolve";
 import { agentMcpConsentList } from "./agent.mcp_consent.list";
 import { agentMemoryRecall } from "./agent.memory.recall";
@@ -443,6 +449,14 @@ export type {
 // capability, so exported here to satisfy the file-coverage guard.
 export { operatorFactsSchema } from "./operator.shared";
 export type { OperatorFacts } from "./operator.shared";
+// Working-copy vocabulary shared by record_working_copy and
+// list_working_copies. Not a capability, so exported here to satisfy the
+// file-coverage guard.
+export {
+  workingCopyIdSchema,
+  workingCopySymlinksSchema,
+  workingCopyEventSchema,
+} from "./repository.working_copy.shared";
 // Steering vocabulary (ADR-061) shared by the context.* contracts. Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -673,6 +687,9 @@ export {
   agentMcpRegister,
   agentMcpSetEnabled,
   agentMcpDelete,
+  agentMcpRegistrySearch,
+  agentMcpAuthorizeStart,
+  agentMcpAuthorizeComplete,
   agentMcpConsentResolve,
   agentMcpConsentList,
   agentMemoryRecall,
@@ -728,6 +745,9 @@ export {
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
   repositoryGitlabAttach,
+  workingCopyRecord,
+  workingCopyList,
+  publishedSteeringGet,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1070,6 +1090,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentMcpRegister,
   agentMcpSetEnabled,
   agentMcpDelete,
+  agentMcpRegistrySearch,
+  agentMcpAuthorizeStart,
+  agentMcpAuthorizeComplete,
   agentMcpConsentResolve,
   agentMcpConsentList,
   agentMemoryRecall,
@@ -1125,6 +1148,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
   repositoryGitlabAttach,
+  workingCopyRecord,
+  workingCopyList,
+  publishedSteeringGet,
   runList,
   runGet,
   runFrameBodyGet,

@@ -897,6 +897,12 @@
       "repoNotCaptured": "repository and branch not captured",
       "repoOnlyNotCaptured": "repository not captured",
       "noPullRequest": "no pull request",
+      "pullState": {
+        "open": "open",
+        "closed": "closed",
+        "merged": "merged",
+        "unknown": "status unknown"
+      },
       "pathNotCaptured": "path not captured",
       "noMachine": "machine not recorded",
       "subagents": "Subagents",
@@ -913,6 +919,7 @@
       "sealNotRecorded": "ended with no seal recorded",
       "enrolledBy": "enrolled the host",
       "paused": "Ingress is paused. The agent takes no new step until you resume it.",
+      "pausedSession": "The host refuses the agent's tool calls until you resume it.",
       "copyLabel": "Copy {text}",
       "copied": "Copied {text}",
       "copyFailed": "Copy failed. Select the text and copy it.",

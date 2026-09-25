@@ -31,6 +31,11 @@
 // a workspace Owner or Member) sees them disabled with that reason, not a
 // button that ends in `org_role_required`.
 //
+// Pause and Resume share one slot, enabled or disabled: a running run offers
+// Pause and a paused one offers Resume, never both. `ingressPaused` says
+// which. A ledger run reads it from its ingress fence, a wrapped run from the
+// last pause or resume its host applied.
+//
 // Re-reading the run refreshes the route the person is on, so the tab, zoom
 // and frames page they were using stay put.
 import { useTranslations } from "next-intl";
@@ -60,8 +65,16 @@ import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { haltRun, type QueuedCommand, steerRun } from "./actions";
 
-const COMMANDS = ["pause", "resume", "steer", "cancel"] as const;
-type Command = (typeof COMMANDS)[number];
+type Command = "pause" | "resume" | "steer" | "cancel";
+
+/**
+ * The commands a live run offers, in header order. Pause and Resume share the
+ * first slot, because only one of them can change the run: Pause while it
+ * runs, Resume while it is paused.
+ */
+function commandsFor(paused: boolean): readonly Command[] {
+  return [paused ? "resume" : "pause", "steer", "cancel"];
+}
 
 /**
  * The delivery modes `dispatch_command`'s `payload.requestedMode` accepts, in
@@ -297,15 +310,17 @@ function CommandDialog({
 function DisabledControls({
   reason,
   testId,
+  paused,
 }: {
   reason: string;
   testId: string;
+  paused: boolean;
 }) {
   const t = useTranslations("run.commands");
   return (
     <div className="flex flex-col items-start gap-2 lg:items-end">
       <div className="flex flex-wrap gap-2">
-        {COMMANDS.map((command) => (
+        {commandsFor(paused).map((command) => (
           <button
             key={command}
             type="button"
@@ -366,12 +381,17 @@ export function RunControls({
       <DisabledControls
         reason={t(`blocked.${COMMAND_BLOCK_COPY[commandBlock]}`)}
         testId="host-no-control"
+        paused={ingressPaused}
       />
     );
   }
   if (!canCommandRun(orgRole, wsRole)) {
     return (
-      <DisabledControls reason={t("roleReason")} testId="role-no-control" />
+      <DisabledControls
+        reason={t("roleReason")}
+        testId="role-no-control"
+        paused={ingressPaused}
+      />
     );
   }
   if (source === "ledger" && ingressRevoked)
@@ -379,34 +399,34 @@ export function RunControls({
       <DisabledControls
         reason={t("ledgerRevoked")}
         testId="ledger-ingress-revoked"
+        paused={ingressPaused}
       />
     );
   if (source === "ledger") {
     return (
       <div className="flex flex-col items-start gap-2 lg:items-end">
         <div className="flex flex-wrap gap-2">
-          <CommandDialog
-            command={ingressPaused ? "resume" : "pause"}
-            runId={runId}
-            ledgerControl
-            write={(text) =>
-              haltRun(org, ws, runId, ingressPaused ? "resume" : "pause", text)
-            }
-          />
-          <button
-            type="button"
-            disabled
-            data-testid="run-steer"
-            className={buttonSecondary}
-          >
-            {t("steer.open")}
-          </button>
-          <CommandDialog
-            command="cancel"
-            runId={runId}
-            ledgerControl
-            write={(text) => haltRun(org, ws, runId, "cancel", text)}
-          />
+          {commandsFor(ingressPaused).map((command) =>
+            command === "steer" ? (
+              <button
+                key={command}
+                type="button"
+                disabled
+                data-testid="run-steer"
+                className={buttonSecondary}
+              >
+                {t("steer.open")}
+              </button>
+            ) : (
+              <CommandDialog
+                key={command}
+                command={command}
+                runId={runId}
+                ledgerControl
+                write={(text) => haltRun(org, ws, runId, command, text)}
+              />
+            ),
+          )}
         </div>
         <p
           data-testid="ledger-control-limit"
@@ -419,7 +439,7 @@ export function RunControls({
   }
   const controls = (
     <div className="flex flex-wrap gap-2">
-      {COMMANDS.map((command) =>
+      {commandsFor(ingressPaused).map((command) =>
         command === "steer" && steerBlock !== null ? (
           <button
             key={command}

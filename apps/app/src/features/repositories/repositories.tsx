@@ -8,8 +8,9 @@
 // The page reads on demand through its server actions: the bound
 // repositories first (a local read, so it draws while GitHub is down), then
 // the repositories the installation reaches, what each bound one holds under
-// `.oxagen/`, and the Context PRs, in parallel. Every write re-reads them all,
-// so a row never goes on describing a state the person has just changed.
+// `.oxagen/`, and the Context PRs, in parallel. The Working copies tab reads
+// the directories the CLI reported when it shows. Every write re-reads them
+// all, so a row never goes on describing a state the person has just changed.
 //
 // States (quality gates): loading replaces the body with the skeleton; a
 // refusal to read is the denied state; any other failure is the error state;
@@ -27,6 +28,7 @@ import type {
   InstallationRepositories,
   RepositoryChanges,
   RepositoryTree,
+  WorkingCopies as WorkingCopiesRecord,
   WorkspaceRepositories,
 } from "@/data/contracts/repository";
 import type { ActionResult } from "@/server/kernel";
@@ -40,6 +42,7 @@ import {
   listInstallationRepositories,
   readRepositoryChanges,
   readRepositoryTree,
+  readWorkingCopies,
   readWorkspaceRepositories,
 } from "./actions";
 import { ChangeDetail, type Closer } from "./change-detail";
@@ -111,6 +114,12 @@ export function Repositories({
     opening: 0,
   });
   const [connectOpen, setConnectOpen] = useState(false);
+  const [copies, setCopies] = useState<Load<WorkingCopiesRecord>>({
+    kind: "loading",
+  });
+  const [copiesAt, setCopiesAt] = useState<Date | null>(null);
+  const [copiesVersion, setCopiesVersion] = useState(0);
+  const onCopies = view.tab === "working-copies";
   const [mergeable, setMergeable] = useState(false);
 
   const reread = useCallback(() => {
@@ -180,6 +189,34 @@ export function Repositories({
       live.current = false;
     };
   }, [org, ws, version]);
+
+  // The Working copies tab reads `list_working_copies` when it shows, and again
+  // on its own retry or after any write on the page. The other tabs never need
+  // it, so they never wait on it.
+  useEffect(() => {
+    if (!onCopies) return;
+    const live = { current: true };
+    const load = async () => {
+      setCopies({ kind: "loading" });
+      let result: ActionResult<WorkingCopiesRecord>;
+      try {
+        result = await readWorkingCopies(org, ws);
+      } catch {
+        result = UNANSWERED;
+      }
+      if (!live.current) return;
+      setCopiesAt(new Date());
+      setCopies(
+        result.ok
+          ? { kind: "ready", value: result.value }
+          : { kind: "failed", failure: result },
+      );
+    };
+    void load();
+    return () => {
+      live.current = false;
+    };
+  }, [org, ws, version, copiesVersion, onCopies]);
 
   const openWizard = useCallback((initial: string | null) => {
     setSelected(null);
@@ -315,6 +352,11 @@ export function Repositories({
               primary
               onConnect={() => {
                 setConnectOpen(true);
+              }}
+              copies={copies}
+              readAt={copiesAt}
+              onRetry={() => {
+                setCopiesVersion((n) => n + 1);
               }}
             />
           ) : view.tab === "changes" ? (

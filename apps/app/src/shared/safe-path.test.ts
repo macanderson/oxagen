@@ -229,6 +229,13 @@ describe("routes", () => {
     expect(routes.fleet("acme", "core-platform", { cursor: "eyJ+/=" })).toBe(
       "/acme/core-platform?cursor=eyJ%2B%2F%3D",
     );
+    // The pull-request filter rides beside the cursor; `any` is the bare page.
+    expect(
+      routes.fleet("acme", "core-platform", { cursor: "c2", prs: "with" }),
+    ).toBe("/acme/core-platform?prs=with&cursor=c2");
+    expect(routes.fleet("acme", "core-platform", { prs: "any" })).toBe(
+      "/acme/core-platform",
+    );
     expect(routes.run("acme", "core-platform", "arun_7k2")).toBe(
       "/acme/core-platform/runs/arun_7k2",
     );

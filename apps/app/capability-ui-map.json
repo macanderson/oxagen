@@ -939,6 +939,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "list_working_copies": {
+      "route": "/[org]/[ws]/repositories/working-copies",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories \u203a Working copies: one row per directory the CLI reported, with machine and path, repository, branch and head, .oxagen/, symlinks, the commit last pulled, and when it was last seen (features/repositories/working-copies.tsx, features/repositories/repositories.tsx, features/repositories/actions.ts readWorkingCopies)",
+      "testid": "working-copies-table",
+      "proof": "apps/app/src/features/repositories/working-copies.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GZPHxxMpQQN1NwQRuGakEq"
+    },
     "list_workspaces": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
@@ -1060,6 +1069,33 @@
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
+    },
+    "search_mcp_registry": {
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: “Add a provider” opens the wizard on Browse the registry, whose search invokes search_mcp_registry (features/tools/registry-browser.tsx, features/tools/provider-auth-actions.ts)",
+      "testid": "registry-browser",
+      "proof": "apps/app/src/features/tools/provider-oauth.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_013LENK7WiiY5jb2DzroLwiY"
+    },
+    "start_mcp_authorization": {
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: “Add a provider” → Authorize with {name} (a registry or custom OAuth server), and Reconnect on an OAuth provider's row, invoke start_mcp_authorization and open the sign-in popup (features/tools/use-provider-oauth.ts, features/tools/provider-auth-actions.ts)",
+      "testid": "tools-import-connect",
+      "proof": "apps/app/src/features/tools/provider-oauth.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_013LENK7WiiY5jb2DzroLwiY"
+    },
+    "authorize_mcp_server": {
+      "route": "/api/v1/mcp/oauth/callback",
+      "page": "apps/app/src/app/api/v1/mcp/oauth/callback/route.ts",
+      "entry": "The OAuth popup returns to /api/v1/mcp/oauth/callback, which invokes authorize_mcp_server as the viewer and posts the provider back to the Add a provider wizard (features/tools/oauth-callback.ts)",
+      "testid": "tools-import-oauth-waiting",
+      "proof": "apps/app/src/features/tools/oauth-callback.test.ts",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_013LENK7WiiY5jb2DzroLwiY"
     },
     "remove_org_member": {
       "route": "/[org]",
@@ -1538,7 +1574,7 @@
     "get_run_outcomes_settings": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "Run follow-through consent panel. An organization Owner or Admin enables metered follow-through.",
+      "entry": "/[org]/[ws]/runs/[run]?tab=issues Run follow-through consent panel, mounted by FollowThrough (features/run/issues-tab.tsx). An organization Owner or Admin enables metered follow-through.",
       "proof": "apps/app/src/features/run-outcomes/consent.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "run-outcomes-providers"
@@ -1546,7 +1582,7 @@
     "set_run_outcomes_settings": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "Run follow-through consent panel. An organization Owner or Admin enables metered follow-through.",
+      "entry": "/[org]/[ws]/runs/[run]?tab=issues Run follow-through consent panel, mounted by FollowThrough (features/run/issues-tab.tsx). An organization Owner or Admin enables metered follow-through.",
       "proof": "apps/app/src/features/run-outcomes/consent.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "run-outcomes-providers"

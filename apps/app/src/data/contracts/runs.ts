@@ -197,6 +197,35 @@ export function commandBlockOf(run: {
 }
 
 /** Token totals by kind, as the recorder counted them. */
+/**
+ * A pull request (or GitLab merge request) the run's frames name. The URL is
+ * as recorded; the page links it only when it parses as a PullRequestUrl.
+ * `state` is null when no store recorded one, which is every row today: the
+ * page says "status unknown" rather than guessing "open".
+ */
+export const RunPullRequest = z.object({
+  url: z.string().min(1),
+  number: z.number().int().positive().nullable(),
+  repository: z.string().min(1).nullable(),
+  state: z.enum(["open", "draft", "merged", "closed"]).nullable(),
+});
+export type RunPullRequest = z.infer<typeof RunPullRequest>;
+
+/**
+ * Lines added and removed. `harness_reported` is the session's own total;
+ * `git_observed` is git's uncommitted change, shown until the harness reports.
+ */
+export const RunDiff = z.object({
+  added: z.number().int().nonnegative(),
+  removed: z.number().int().nonnegative(),
+  basis: z.enum(["harness_reported", "git_observed"]),
+});
+export type RunDiff = z.infer<typeof RunDiff>;
+
+/** Which runs a Fleet page lists by their pull requests. */
+export const PullRequestFilter = z.enum(["any", "with", "without"]);
+export type PullRequestFilter = z.infer<typeof PullRequestFilter>;
+
 const RunTokens = z.object({
   input: z.number().int().nonnegative(),
   output: z.number().int().nonnegative(),
@@ -253,6 +282,15 @@ export const RunRow = z.object({
   enrichmentError: z.string().optional(),
   name: z.string().min(1).nullable(),
   summary: RunSummary.nullable(),
+  /**
+   * The pull requests the frames name. Absent when they were not read: every
+   * ledger run, and a page whose read of them failed (`RunPage.warnings`).
+   */
+  pullRequests: z.array(RunPullRequest).optional(),
+  /** `pr_open` calls counted for a wrapped session, some perhaps with no URL recorded. */
+  pullRequestsOpened: z.number().int().nonnegative().optional(),
+  /** Lines added and removed; null when nothing reported a change. */
+  diff: RunDiff.nullable().optional(),
   replayGrade: ReplayGrade.nullable(),
   verdict: ProofVerdict.nullable(),
   enforcementTier: EnforcementTier,
@@ -261,6 +299,11 @@ export const RunRow = z.object({
   /** Why a steer cannot reach this run; null or absent when it can. */
   steerBlock: SteerBlock.nullable().optional(),
   ingressRevoked: z.boolean().optional(),
+  /**
+   * The run is paused until someone resumes it. A ledger run reads this from
+   * its ingress fence. A live wrapped run reads it from the last pause or
+   * resume its host applied (#4112). A sealed wrapped run is never paused.
+   */
   ingressPaused: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */
   completenessGaps: z.array(CompletenessGap),
@@ -300,5 +343,7 @@ export const RunPage = z.object({
   runs: z.array(RunRow),
   /** Opaque; the next page's cursor, null on the last page. */
   nextCursor: z.string().nullable(),
+  /** `pull_requests_unread`: the page's pull requests could not be read. */
+  warnings: z.array(z.enum(["pull_requests_unread"])).optional(),
 });
 export type RunPage = z.infer<typeof RunPage>;

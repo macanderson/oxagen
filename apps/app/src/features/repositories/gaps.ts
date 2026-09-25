@@ -4,10 +4,10 @@
 // A gap leaves this table in the pull request that backs it.
 export const REPOSITORY_GAPS = {
   /**
-   * #3241 carries the lifecycle this page assumes: working copies, the
-   * pull-request kinds beyond context records, the close comment, the
-   * reconciler and drift, the code graph and event counters, and
-   * `set_main_repository`.
+   * #3241 carries the lifecycle this page assumes: the pull-request kinds
+   * beyond context records, the close comment, the reconciler and drift, the
+   * code graph and event counters, and `set_main_repository`. Working copies
+   * left it with `list_working_copies`.
    */
   lifecycle: "#3241",
   /** A person refused a page asking for the role it needs. */

@@ -8,9 +8,9 @@
 // provider reached over `http`, `sdk` or a harness hook has nowhere to live
 // until providers are stored apart from their transport (#3917).
 //
-// The warning the design draws under the table counts connections with an
-// expired token or a passed review date. Neither is recorded on a connection
-// (#3918), so the page says it cannot count them rather than printing none.
+// The warning under the table counts providers whose status light is red or
+// yellow: unreachable, degraded, or with an OAuth token that lapsed or must be
+// renewed by a person (#4132). Review dates are not recorded yet (#3918).
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
@@ -26,8 +26,8 @@ import { formatCount } from "@/ui/money-format";
 import { Table } from "@/ui/table";
 import { ConnectionsTable, GrantsLog } from "./connections";
 import { ImportProvider } from "./import-provider";
-import { NotBacked } from "./not-backed";
 import { ProviderRow } from "./provider-row";
+import { ProvidersAttention } from "./provider-status";
 import { ToolsReadFailure } from "./read-failure";
 import { providerViews } from "./registry";
 import { type ToolsAt, toolsLink } from "./view";
@@ -147,9 +147,7 @@ export function Providers({
           <p className="max-w-prose border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
             {t("transportNote")}
           </p>
-          <NotBacked gap="oauth" testId="tools-providers-attention">
-            {t("attentionNotBacked")}
-          </NotBacked>
+          <ProvidersAttention servers={servers.value.servers} />
         </div>
       </section>
     );

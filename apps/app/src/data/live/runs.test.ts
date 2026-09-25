@@ -172,6 +172,57 @@ describe("runs.list", () => {
     });
   });
 
+  it("passes the page size and a pull-request filter to list_runs, and leaves out an `any` filter", async () => {
+    kernelRead.mockResolvedValue(readOk({ runs: [], nextCursor: null }));
+    await runs.list(ctx, { cursor: null, limit: 25, pullRequests: "with" });
+    expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
+      contract: runList,
+      input: { limit: 25, pullRequests: "with" },
+      page: "fleet",
+    });
+    await runs.list(ctx, { cursor: "c2", limit: 10, pullRequests: "any" });
+    expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
+      contract: runList,
+      input: { limit: 10, cursor: "c2" },
+      page: "fleet",
+    });
+  });
+
+  it("carries a row's pull requests, lines and the page's warning, and leaves unread ones absent", async () => {
+    const pull = {
+      url: "https://github.com/acme/api/pull/42",
+      number: 42,
+      repository: "acme/api",
+      state: null,
+    };
+    kernelRead.mockResolvedValue(
+      readOk({
+        runs: [
+          {
+            ...run,
+            pullRequests: [pull],
+            pullRequestsOpened: 1,
+            diff: { added: 12, removed: 3, basis: "harness_reported" },
+          },
+          { ...run, id: "tse_4f0b" },
+        ],
+        nextCursor: null,
+        warnings: ["pull_requests_unread"],
+      }),
+    );
+    const read = await runs.list(ctx, { cursor: null });
+    if (!read.ok) throw new Error("the read maps");
+    expect(read.value.warnings).toEqual(["pull_requests_unread"]);
+    expect(read.value.runs[0]).toMatchObject({
+      pullRequests: [pull],
+      pullRequestsOpened: 1,
+      diff: { added: 12, removed: 3, basis: "harness_reported" },
+    });
+    // Not read is not "none": the row carries no list at all.
+    expect(read.value.runs[1]).not.toHaveProperty("pullRequests");
+    expect(read.value.runs[1]).not.toHaveProperty("diff");
+  });
+
   it("passes a refused read through (negative)", async () => {
     const denied = {
       ok: false,
