@@ -74,12 +74,14 @@ export async function externalApproval(args: {
         if (claimed)
           return {
             approvalId: existing.id,
+            approvalPublicId: existing.publicId,
             expiresAt: existing.expiresAt,
             status: "approved" as const,
           };
       }
       return {
         approvalId: existing.id,
+        approvalPublicId: existing.publicId,
         expiresAt: existing.expiresAt,
         status:
           existing.resolution === null
@@ -102,7 +104,7 @@ export async function externalApproval(args: {
         resumeKey,
         runPublicId: await resolveRunPublicId(tx, args),
       })
-      .returning({ approvalId: a.id });
+      .returning({ approvalId: a.id, approvalPublicId: a.publicId });
     if (!row) throw new ApprovalResumeError("approval_not_recorded");
     await notifyApprovalRequested(tx, {
       orgId: args.orgId,

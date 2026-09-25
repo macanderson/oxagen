@@ -75,7 +75,7 @@
       },
       "syncDepthDays": {
         "type": "integer",
-        "minimum": 0
+        "exclusiveMinimum": 0
       },
       "owner": {
         "type": "string"

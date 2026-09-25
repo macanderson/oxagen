@@ -21,7 +21,10 @@
 // otherwise. The chrome lives in the organization layout and survives a
 // workspace switch, so the flyout keeps one thread per workspace (transcript,
 // conversation id, draft, and in-flight flag) and shows the thread of the
-// workspace the person is standing in. Standing on an organization page is not
+// workspace the person is standing in. The threads live in
+// `assistant-threads.ts`: each is filed under the workspace's id, not its
+// slug, so a rename keeps it, and it is read back from the record when the
+// flyout opens, so a reload keeps it too (#4163). Standing on an organization page is not
 // a switch: it has no workspace of its own, so the last thread stays on screen
 // and only the composer is withheld.
 //
@@ -120,9 +123,17 @@ import {
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
+import { AssistantParkedApprovals } from "./assistant-parked-approvals";
 import { AssistantStreamingText } from "./assistant-streaming-text";
 import { AssistantSuggestions } from "./assistant-suggestions";
 import { AssistantThinking } from "./assistant-thinking";
+import { AssistantThreadBar } from "./assistant-thread-bar";
+import {
+  isRestoredEntry,
+  type RestoredEntry,
+  type ThreadState,
+  useAssistantThreads,
+} from "./assistant-threads";
 import {
   ASSISTANT_MIN_WIDTH,
   assistantWidthCookieString,
@@ -166,13 +177,12 @@ type Entry =
  * a turn is in flight. Kept per workspace so each one survives the person
  * leaving and coming back (ADR-092).
  */
-type Thread = {
-  entries: readonly Entry[];
-  conversationId: string | null;
-  draft: string;
-  draftTooLong?: boolean;
-  pending: boolean;
-};
+type Thread = ThreadState<Entry>;
+
+/** A turn read back from the record is already an entry the log draws. */
+function restoreEntry(entry: RestoredEntry): Entry {
+  return entry;
+}
 
 const EMPTY_THREAD: Thread = {
   entries: [],
@@ -449,13 +459,18 @@ export function AssistantFlyout({
   // A monotonic key per entry: two turns in the same millisecond would collide
   // on a clock-derived one, and React needs these stable across re-renders.
   const nextIdRef = useRef(0);
-  // One thread per workspace, keyed "org/ws" (ADR-092). A turn is written to
-  // the thread of the workspace it was asked in, whatever the person is looking
-  // at when it resolves, so a reply cannot land in the wrong conversation at
-  // any timing. The routing is structural, not a race the code has to win.
-  const [threads, setThreads] = useState<ReadonlyMap<string, Thread>>(
-    () => new Map(),
-  );
+  // One thread per workspace, keyed by the workspace's id (ADR-092, #4163).
+  // A turn is written to the thread of the workspace it was asked in, whatever
+  // the person is looking at when it resolves, so a reply cannot land in the
+  // wrong conversation at any timing. The routing is structural, not a race
+  // the code has to win. `scope` is null on an organization page.
+  const { scope, status, threadOf, updateThread, startNewThread } =
+    useAssistantThreads<Entry>({
+      org,
+      ws,
+      open: assistantOpen,
+      restore: restoreEntry,
+    });
   // Answers whose reveal has already run. Only the thread on screen is
   // mounted, so a workspace round trip remounts every answer in it; without
   // this each would start over from nothing and the transcript would retype.
@@ -468,9 +483,6 @@ export function AssistantFlyout({
   // to read something else.
   const pinnedRef = useRef(true);
 
-  // The workspace the person is standing in, "org/ws". Null on an organization
-  // page, which owns no conversation.
-  const scope = org === null || ws === null ? null : `${org}/${ws}`;
   // The workspace whose thread is on screen. An organization page is not a
   // switch (it has no conversation of its own), so it keeps showing the last
   // workspace's thread and only withholds the composer. Adjusted during render
@@ -478,20 +490,28 @@ export function AssistantFlyout({
   // workspace.
   const [shownScope, setShownScope] = useState(scope);
   if (scope !== null && scope !== shownScope) setShownScope(scope);
-  const thread =
+  // The slugs of that workspace, which is where its parked writes were
+  // recorded, even on an organization page. They are held apart from
+  // `shownScope` because a restored thread is filed under the workspace's
+  // key rather than its `org/ws` slugs (#4207), so the scope cannot be split
+  // back into them.
+  const [shownSlugs, setShownSlugs] = useState<{
+    org: string;
+    ws: string;
+  } | null>(org !== null && ws !== null ? { org, ws } : null);
+  if (
+    org !== null &&
+    ws !== null &&
+    (shownSlugs?.org !== org || shownSlugs.ws !== ws)
+  )
+    setShownSlugs({ org, ws });
+  const thread: Thread =
     shownScope === null
       ? EMPTY_THREAD
-      : (threads.get(shownScope) ?? EMPTY_THREAD);
+      : (threadOf(shownScope) ?? EMPTY_THREAD);
   const { entries, draft, pending } = thread;
-
-  /** Change one workspace's thread, from whatever it holds now rather than from this render's copy. */
-  function updateThread(key: string, change: (prior: Thread) => Thread): void {
-    setThreads((prior) => {
-      const next = new Map(prior);
-      next.set(key, change(prior.get(key) ?? EMPTY_THREAD));
-      return next;
-    });
-  }
+  const threadOrg = shownSlugs?.org;
+  const threadWs = shownSlugs?.ws;
 
   useEffect(() => {
     const receiveDraft = (event: Event) => {
@@ -503,20 +523,14 @@ export function AssistantFlyout({
         scope === null
       )
         return;
-      setThreads((prior) => {
-        const next = new Map(prior);
-        const current = prior.get(scope) ?? EMPTY_THREAD;
+      updateThread(scope, (current) => {
         // Keep unsent work and place the requested change after it.
         const combined = current.draft.trim()
           ? `${current.draft}\n\n${request.content}`
           : request.content;
-        next.set(
-          scope,
-          combined.length > ASSISTANT_CONTENT_MAX
-            ? { ...current, draftTooLong: true }
-            : { ...current, draft: combined, draftTooLong: false },
-        );
-        return next;
+        return combined.length > ASSISTANT_CONTENT_MAX
+          ? { ...current, draftTooLong: true }
+          : { ...current, draft: combined, draftTooLong: false };
       });
       setAssistantOpen(true);
     };
@@ -524,7 +538,7 @@ export function AssistantFlyout({
     return () => {
       window.removeEventListener(ASSISTANT_DRAFT_EVENT, receiveDraft);
     };
-  }, [org, ws, scope, setAssistantOpen]);
+  }, [org, ws, scope, setAssistantOpen, updateThread]);
 
   // Where focus came from, so closing can give it back. Captured at the open,
   // which is the launcher that was tapped — the rail's on a desktop, or, on a
@@ -726,9 +740,9 @@ export function AssistantFlyout({
         // A parked write is a new approval on the record, created after Fleet
         // and the shell's waiting count were server-rendered
         // (`features/fleet/fleet.tsx` reads `approvals.pending` once per
-        // render, and there is no poll). The sentence beside this sends the
-        // person to Fleet to approve them and they expire, so a stale view has
-        // a deadline on it. `navigate.refresh()` re-renders the server
+        // render, and there is no poll). The person can decide each one here
+        // or on Fleet, and they expire, so a stale Fleet view has a deadline
+        // on it. `navigate.refresh()` re-renders the server
         // components at the URL already showing, without a history entry —
         // only when something actually parked, because an ordinary turn
         // changes nothing either surface reads.
@@ -829,6 +843,16 @@ export function AssistantFlyout({
         </button>
       </div>
 
+      {inWorkspace ? (
+        <AssistantThreadBar
+          status={status}
+          canStartNew={
+            !pending && (entries.length > 0 || thread.conversationId !== null)
+          }
+          onNewThread={startNewThread}
+        />
+      ) : null}
+
       {/*
         The conversation, and the live region that announces it. `role="log"`
         is polite and reads what is added, which is what an answer arriving
@@ -871,7 +895,9 @@ export function AssistantFlyout({
                   <div data-testid="assistant-answer">
                     <AssistantStreamingText
                       text={entry.text}
-                      reveal={!revealed.has(entry.id)}
+                      reveal={
+                        !revealed.has(entry.id) && !isRestoredEntry(entry.id)
+                      }
                       onRevealed={() => {
                         setRevealed((prior) => new Set(prior).add(entry.id));
                       }}
@@ -900,6 +926,17 @@ export function AssistantFlyout({
                       >
                         {t("parked", { count: entry.parked.length })}
                       </p>
+                    )}
+                    {/* Each parked write as a card with Approve and Deny (#4162). */}
+                    {entry.parked.length === 0 ||
+                    threadOrg === undefined ||
+                    threadWs === undefined ? null : (
+                      <AssistantParkedApprovals
+                        org={threadOrg}
+                        ws={threadWs}
+                        runId={entry.runId}
+                        cards={entry.parked}
+                      />
                     )}
                   </div>
                 ) : (

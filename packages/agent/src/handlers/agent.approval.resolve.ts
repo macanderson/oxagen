@@ -8,14 +8,20 @@
 //   2. Read the row by either id form (#2906) inside the caller's org and
 //      workspace while it is unexpired and unresolved. No row → HandlerError
 //      conflict `approval_expired`.
-//   3. On a row the mandate gate parked (ADR-059 decision 4), the mandate's
+//   3. A call from the run the row records as raising the approval is
+//      refused `run_cannot_resolve_own_approval` (ADR-175). The in-app
+//      assistant acts as the person who typed, so the role gate cannot tell
+//      the turn from the person. The run is what differs. The contract is off
+//      the agent surface, so no model reaches this handler today, and the
+//      check holds for any other caller that carries a run.
+//   4. On a row the mandate gate parked (ADR-059 decision 4), the mandate's
 //      approval rule decides who answers (MC spec §6.9): an agent principal
 //      is refused `agent_cannot_resolve_own_mandate`; the caller holds an
 //      org role the workspace names for every consequence tag on the mandate
 //      (assertConsequenceRole, INV-29); and, when the rule names approvers,
 //      is one of them (assertApprover). Each refusal is `forbidden` and
 //      leaves before the ledger or the row is touched.
-//   4. One transaction: on a mandate row lock the mandate and, for `denied`,
+//   5. One transaction: on a mandate row lock the mandate and, for `denied`,
 //      release the reservation; then the UPDATE that sets the resolution,
 //      guarded by the WHERE of step 2. The lock order is the one the gate
 //      and the expiry job use: mandate row, then approval_requests. No row
@@ -23,10 +29,18 @@
 //      release back, and leaves through the kernel's catch, so the usage
 //      recorder never runs and the no-op is not a governed action (§3.9
 //      item 15).
-//   5. `approved` leaves the reservation held for the agent's retry, whose
+//   6. `approved` leaves the reservation held for the agent's retry, whose
 //      receipt settles it. The output reports the settlement.
-//   6. A matched row writes the approval.resolved feed row for the person
+//   7. A matched row writes the approval.resolved feed row for the person
 //      whose message parked the call, in the same transaction.
+//   7. On a row that stores the parked call (ADR-118), the UPDATE queues it
+//      when approved. This request then delivers it: the call runs now, as
+//      its requester, through `resumeApprovedCall`, and the answer reads back
+//      what became of it. The periodic worker (`approval/resume`) is the
+//      fallback when this process fails between the decision and delivery.
+//      Before this step the worker was the only delivery, so a call approved
+//      in the last minute of its five-minute window expired unrun, and every
+//      other one waited up to a minute with nothing reported back (#3127).
 
 import { withTenantDb, schema, type Tx } from "@oxagen/database";
 import {
@@ -36,9 +50,11 @@ import {
 } from "@oxagen/iam/mandate-role";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
+import { runOutsideGovernedAction } from "@oxagen/oxagen/kernel";
 import { lockMandate, parseMandateRow, release } from "@oxagen/rules";
 import { and, eq, sql } from "drizzle-orm";
-import { notifyResolution } from "../runtime/approval";
+import pino from "pino";
+import { notifyResolution, raisedByCallingRun } from "../runtime/approval";
 import { APPROVAL_RESOLVER_ROLES } from "@oxagen/rules/approval-notify";
 import { approvalIdCondition } from "../runtime/approval-id";
 import type {
@@ -47,6 +63,11 @@ import type {
 } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 
 export type { AgentApprovalResolveInput, AgentApprovalResolveOutput };
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { pkg: "agent.approval.resolve" },
+});
 
 export async function agentApprovalResolveHandler(
   input: AgentApprovalResolveInput,
@@ -79,12 +100,14 @@ export async function agentApprovalResolveHandler(
       .select({
         mandateId: schema.approvalRequests.mandateId,
         toolCallId: schema.approvalRequests.toolCallId,
+        runPublicId: schema.approvalRequests.runPublicId,
       })
       .from(schema.approvalRequests)
       .where(pending)
       .limit(1);
     if (!row) return null;
-    if (!row.mandateId || !row.toolCallId) return { row, parked: null };
+    const ownRun = await raisedByCallingRun(tx, ctx, row.runPublicId);
+    if (!row.mandateId || !row.toolCallId) return { ownRun, parked: null };
     const [mandateRow] = await tx
       .select()
       .from(schema.mandates)
@@ -92,7 +115,7 @@ export async function agentApprovalResolveHandler(
       .limit(1);
     if (!mandateRow) throw expired();
     return {
-      row,
+      ownRun,
       parked: {
         mandateId: row.mandateId,
         toolCallId: row.toolCallId,
@@ -102,6 +125,15 @@ export async function agentApprovalResolveHandler(
     };
   });
   if (!found) throw expired();
+
+  if (found.ownRun) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "run_cannot_resolve_own_approval",
+      message:
+        "The run that raised this approval cannot resolve it. Approve or deny it on Fleet.",
+    });
+  }
 
   const { parked } = found;
   if (parked) {
@@ -123,7 +155,7 @@ export async function agentApprovalResolveHandler(
     await assertApprover(ctx, parked.mandate.approval.approvers);
   }
 
-  const { rowId, mandate } = await withTenantDb(async (tx) => {
+  const { rowId, mandate, resumeStatus } = await withTenantDb(async (tx) => {
     const mandate = parked
       ? await settleMandateReservation(tx, parked, input.decision)
       : null;
@@ -142,6 +174,9 @@ export async function agentApprovalResolveHandler(
         id: schema.approvalRequests.id,
         messageId: schema.approvalRequests.messageId,
         capabilityName: schema.approvalRequests.capabilityName,
+        // After the CASE above: `queued` or `denied` on a row that stores
+        // the call, whatever it held before on any other row.
+        resumeStatus: schema.approvalRequests.resumeStatus,
       });
     if (!updated) throw expired();
 
@@ -180,7 +215,11 @@ export async function agentApprovalResolveHandler(
         });
       }
     }
-    return { rowId: updated.id, mandate };
+    return {
+      rowId: updated.id,
+      mandate,
+      resumeStatus: updated.resumeStatus ?? null,
+    };
   });
 
   // Waiters are keyed by the row uuid (createApprovalRequest returns it), so
@@ -190,7 +229,84 @@ export async function agentApprovalResolveHandler(
     resolution: input.decision,
     note: input.note ?? null,
   });
-  return { approvalId: input.approvalId, resolution: input.decision, mandate };
+  const execution = await deliverDecision(
+    { id: rowId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+    resumeStatus,
+  );
+  return {
+    approvalId: input.approvalId,
+    resolution: input.decision,
+    mandate,
+    execution,
+  };
+}
+
+type Execution = NonNullable<AgentApprovalResolveOutput["execution"]>;
+
+/**
+ * Run the call this decision released, and say what became of it.
+ *
+ * Null for a row that stores no call: a mandate row, a legacy row, a budget
+ * pause. A denied call is never run, so its answer is the row's `denied`.
+ *
+ * An approved call runs through `resumeApprovedCall`, the one path the
+ * periodic worker also takes, so both deliveries share its durable claim: the
+ * first to claim the row runs the call and the other finds nothing to claim.
+ * It runs outside this governed action (`runOutsideGovernedAction`), so the
+ * call is its own top-level invocation, metered and admitted exactly as when
+ * the worker delivers it, and never billed as part of the decision.
+ *
+ * The decision has committed by now, so nothing here may undo it. A delivery
+ * that throws is logged and the row is read as it stands: still `queued` for
+ * the worker, or `running` if the claim landed before the failure.
+ */
+async function deliverDecision(
+  ref: { id: string; orgId: string; workspaceId: string },
+  resumeStatus: string | null,
+): Promise<Execution | null> {
+  if (resumeStatus === null) return null;
+  if (resumeStatus === "queued") {
+    try {
+      const { resumeApprovedCall } = await import("../runtime/approval-resume");
+      await runOutsideGovernedAction(() => resumeApprovedCall(ref));
+    } catch (err) {
+      logger.error(
+        { err, approvalId: ref.id, orgId: ref.orgId },
+        "approved call was not delivered in the deciding request; the periodic worker will retry while it is still queued",
+      );
+    }
+  }
+  return readExecution(ref, resumeStatus);
+}
+
+/** The row's execution as it stands, which is what Fleet and the flyout both read. */
+async function readExecution(
+  ref: { id: string; orgId: string; workspaceId: string },
+  fallback: string,
+): Promise<Execution> {
+  const a = schema.approvalRequests;
+  const [row] = await withTenantDb((tx) =>
+    tx
+      .select({
+        resumeStatus: a.resumeStatus,
+        resumeRunPublicId: a.resumeRunPublicId,
+        resumeError: a.resumeError,
+      })
+      .from(a)
+      .where(
+        and(
+          eq(a.id, ref.id),
+          eq(a.orgId, ref.orgId),
+          eq(a.workspaceId, ref.workspaceId),
+        ),
+      )
+      .limit(1),
+  );
+  return {
+    status: row?.resumeStatus ?? fallback,
+    runId: row?.resumeRunPublicId ?? null,
+    reason: row?.resumeError ?? null,
+  };
 }
 
 type MandateSettlement = AgentApprovalResolveOutput["mandate"];

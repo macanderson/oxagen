@@ -10,7 +10,7 @@
 // book is public marketing content behind a lead wall — so there is no org_id /
 // workspace_id and no tenant_isolation policy. Instead every table gets a
 // bypass-only RLS policy (USING app.rls_bypass = 'on'): the sole access path is
-// the audited withSystemDb bypass, so leads can never leak through a tenant
+// the withSystemDb bypass, so leads can never leak through a tenant
 // query. All writes/reads go through the public /v1/cms/* API routes.
 //
 // Purely transactional state (leads, codes) → Postgres is the correct store per

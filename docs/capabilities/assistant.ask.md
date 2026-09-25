@@ -23,9 +23,10 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `conversationId` | uuid or null | no | null opens a new conversation; an id outside the workspace is `not_found` |
+| `conversationId` | `cnv_` public id, uuid, or null | no | the conversation to continue, by the `cnv_` id every conversation capability takes (`get_conversation` reads it back) or by the internal id `conversationId` below carries; null opens a new conversation. A conversation that is not yours, or is deleted or archived, is `not_found` |
 | `content` | string | yes | 1 to 32 KiB, the cap every chat ingress shares |
 | `pageContext` | object or null | no | `{ route, orgSlug, workspaceSlug, entityId, entityLabel }`: where the person was when they asked, and the record on screen. Null for a caller with no page. See [Page context](#page-context) |
+| `goal` | object | no | `{ statement, maxRounds }`: `statement` is 1 to 2,000 characters, trimmed; `maxRounds` is 1 to 4, default 3. Omitted runs one ordinary turn. See [Goal-shaped turns](#goal-shaped-turns) |
 
 ### Page context
 
@@ -47,17 +48,30 @@ A label is untrusted text: an agent, a model, or a person wrote it. The turn giv
 | Field | Type | Description |
 |---|---|---|
 | `conversationId` | uuid | the conversation the turn was appended to |
+| `conversationPublicId` | string | `cnv_…`, the same conversation by its public id; `get_conversation` reads the thread back |
 | `userMessageId` | uuid | the person's message |
 | `assistantMessageId` | uuid | the persisted reply |
 | `runId` | string | `arun_…`, the run the turn was recorded as; `get_run` opens it |
 | `reply` | string | the assistant's reply, whole |
 | `parkedCards` | array | one `{ approvalId, capability, expiresAt }` per governed write the turn opened that waits on a person, in park order; empty when nothing parked. A turn can park more than one, and each has its own five-minute expiry, so all of them are returned |
 
+## Conversation
+
+A turn continues a conversation only when it is the asker's own, in this workspace, and neither deleted nor archived: the rule `list_conversations` and `get_conversation` apply (#4163). The person's message is written before the engine is asked anything, so a turn that fails still leaves the question on the record. The reply is written with the run it was recorded as (`metadata.runId`) and, when the turn parked governed writes, the cards (`metadata.parkedCards`), so `get_conversation` returns the thread as the turn answered it.
+
 ## Recording
 
-`openAssistantRun` (`@oxagen/agent`) admits the turn before the engine is contacted: the workspace's managed interactive agent acting through the `oxagen.assistant` service principal, the asking person's human principal as the initiating principal, a pinned authorization snapshot and a digest-only retention policy. Every provider and tool request the host answers is recorded first as `model.engine_call_completed` or `tool.engine_call_completed`, keyed by the engine frame's `seq`; the belt meta-tools `search_tools` and `load_tools` are recorded through the tool receipt. The seal carries verdict `waived` for a completed turn, `cancelled` for an aborted one and `failed` for an engine failure.
+`openAssistantRun` (`@oxagen/agent`) admits the turn before the engine is contacted: the workspace's managed interactive agent acting through the `oxagen.assistant` service principal, the asking person's human principal as the initiating principal, a pinned authorization snapshot and a digest-only retention policy. Every provider and tool request the host answers is recorded first as `model.engine_call_completed` or `tool.engine_call_completed`, keyed by the engine frame's `seq`; the belt meta-tools `search_tools` and `load_tools` are recorded through the tool receipt. A goal-shaped turn also records each round's verdict as `verification.goal_verdict`: the round, whether the goal was met, the digests of the goal and of the verifier's reasoning, and the verifier's cost, with the goal and the reasoning as the frame's body. Every verdict is written before the seal, and a verdict that cannot be written cancels the turn. The run spec's goal is the goal statement when one is set. The seal carries verdict `waived` for a completed turn, `cancelled` for an aborted one and `failed` for an engine failure.
 
 The run is admitted on the `chat` (SSE) or `api-chat` (API, MCP) surface, and `list_runs`, `list_recent_runs` and `search_tools` exclude both: the assistant is Oxagen's, and its turns never appear as the customer's runs.
+
+## Goal-shaped turns
+
+A turn with a `goal` is judged (ADR-177). The engine works in rounds, and after each round an independent verifier reads the transcript and rules whether the goal is met. The verifier's model calls arrive with the `verdict` role and are answered on a different tier from the worker's. A met goal ends the turn and the reply is the worker's last answer. An unmet goal sends the verifier's feedback back to the worker for the next round. A goal still unmet when the rounds run out fails the turn with `engine_aborted`, and nothing is saved as a reply.
+
+The caller sets the goal, never the model: this contract is not on the agent surface. The goal is capped at 2,000 characters because the engine repeats it in every round and in every verifier call, and at 4 rounds because each round is a whole turn plus a verifier and a person is waiting.
+
+Rule authoring is the first caller. `ruleAuthoringGoal` (`@oxagen/agent`) states the goal for a rule across two sources: a `query_ontology` traversal over the rule's relationship type, from a node of the first source, returns a node of the second. `POST /chat/stream` does not carry `goal` yet; the API route and the MCP tool do.
 
 ## Steering
 
@@ -71,7 +85,7 @@ The engine is declared every governed tool plus the two meta-tools. Each complet
 
 | Code | Status | When |
 |---|---|---|
-| `not_found` (reason `conversation_not_found`) | 404 | `conversationId` names no conversation in this workspace |
+| `not_found` (reason `conversation_not_found`) | 404 | `conversationId` names no conversation of the asker's in this workspace, or one that is deleted or archived |
 | `forbidden` (reason `no_principal`, `org_role_required`) | 403 | the caller carries no person to ask as, or the person holds none of the contract's roles |
 | `forbidden` (reason `kill_switch`) | 403 | an `agent` kill switch is on for the workspace's assistant agent; the turn is refused before anything is written, and the message names the switch and its reason |
 | `engine_unavailable` | 503 | `stella-serve` is not configured or could not be reached; nothing falls back to an in-process loop (ADR-053 §4) |

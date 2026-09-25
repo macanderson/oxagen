@@ -1070,6 +1070,16 @@
       "writes": []
     },
     {
+      "domain": "conversation",
+      "name": "get_conversation",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "get_data_plane",
       "reads": [],
@@ -2991,7 +3001,6 @@
       "name": "resolve_approval",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3002,7 +3011,6 @@
       "name": "resolve_mcp_consent",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -4100,7 +4108,7 @@
       "writes": []
     }
   ],
-  "contentHash": "540157713918917a7360451d0cc4b5b39efe38729cb236898afc233e56b2490e",
+  "contentHash": "cef601806444e51e654e41db0a82950b6efa9976a973a06e1ea87538e0a0de31",
   "domains": [
     {
       "name": "agent",
@@ -6089,7 +6097,7 @@
       },
       "name": "EntityNode",
       "store": "neo4j",
-      "tenantScoped": false
+      "tenantScoped": true
     },
     {
       "columns": [
@@ -8213,6 +8221,12 @@
         },
         {
           "name": "risk_level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "kind",
           "nullable": false,
           "primaryKey": false,
           "type": "text"
@@ -12407,6 +12421,12 @@
         },
         {
           "name": "code_binding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "history_summary",
           "nullable": true,
           "primaryKey": false,
           "type": "jsonb"
