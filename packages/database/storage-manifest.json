@@ -2911,6 +2911,16 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "record_reply_feedback",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repository",
       "name": "record_working_copy",
       "reads": [],
@@ -4126,7 +4136,7 @@
       "writes": []
     }
   ],
-  "contentHash": "8ee3d0b5d44aa3cbee321a4b535eb98dfd6a87da76a506a9b8b1001d69db3671",
+  "contentHash": "84eba562ffbf0c501bf6db20754b09792ca1b3dcc81eb585e574cf973294de0c",
   "domains": [
     {
       "name": "agent",
@@ -4236,10 +4246,12 @@
     {
       "name": "chat",
       "stores": [
+        "clickhouse",
         "neo4j",
         "postgres"
       ],
       "tables": [
+        "clickhouse:assistant_reply_feedback",
         "neo4j:Conversation",
         "neo4j:Message",
         "postgres:chat.conversations",
@@ -4592,12 +4604,13 @@
       "domains": [
         "agent",
         "billing",
+        "chat",
         "eval",
         "telemetry"
       ],
       "kind": "clickhouse",
       "purpose": "Append-only runtime events — execution events, logs, metrics, traces, token analytics, telemetry.",
-      "tableCount": 11
+      "tableCount": 12
     },
     {
       "domains": [
@@ -4683,6 +4696,75 @@
       },
       "name": "generated_asset",
       "store": "blob",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "conversation_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "message_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "verdict",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "note",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        }
+      ],
+      "domain": "chat",
+      "id": "clickhouse:assistant_reply_feedback",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, workspace_id, run_public_id, user_id, created_at)",
+        "partitionBy": "toYYYYMM(created_at)",
+        "ttl": "toDateTime(created_at) + INTERVAL 365 DAY"
+      },
+      "name": "assistant_reply_feedback",
+      "store": "clickhouse",
       "tenantScoped": true
     },
     {

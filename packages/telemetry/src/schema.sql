@@ -339,3 +339,25 @@ CREATE TABLE IF NOT EXISTS router_outcomes (
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (org_id, task_class, model, created_at)
 TTL toDateTime(created_at) + INTERVAL 365 DAY;
+
+-- In-app assistant reply feedback (migration 0030). One append-only row per
+-- vote a person casts on a reply: the run it was recorded as, the conversation
+-- and message that hold it, the voter, 'useful' or 'wrong', and an optional
+-- note of at most 500 characters. A second vote is a second row, and a reader
+-- takes the newest per (user_id, run_public_id). Tenant-scoped
+-- (chInsert/chSelect), 365-day TTL. See the migration file for the full
+-- column rationale.
+CREATE TABLE IF NOT EXISTS assistant_reply_feedback (
+  org_id UUID,
+  workspace_id UUID,
+  run_public_id String,
+  conversation_id UUID,
+  message_id UUID,
+  user_id UUID,
+  verdict LowCardinality(String),
+  note String DEFAULT '' CODEC(ZSTD(3)),
+  created_at DateTime64(3) DEFAULT now64(3) CODEC(DoubleDelta, ZSTD(1))
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(created_at)
+ORDER BY (org_id, workspace_id, run_public_id, user_id, created_at)
+TTL toDateTime(created_at) + INTERVAL 365 DAY;

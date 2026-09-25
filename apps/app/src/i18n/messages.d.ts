@@ -7744,6 +7744,19 @@ type Messages = {
         checking: string;
       };
       retry: string;
+      feedback: {
+        label: string;
+        useful: string;
+        wrong: string;
+        noteLabel: string;
+        notePlaceholder: string;
+        noteHint: string;
+        send: string;
+        cancel: string;
+        recordedUseful: string;
+        recordedWrong: string;
+        failed: string;
+      };
     };
     avatar: {
       title: string;

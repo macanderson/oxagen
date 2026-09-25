@@ -141,6 +141,7 @@ import {
 import { AssistantMarkdown } from "./assistant-markdown";
 import { AssistantParkedApprovals } from "./assistant-parked-approvals";
 import { AssistantReplyCost } from "./assistant-reply-cost";
+import { AssistantReplyFeedback } from "./assistant-reply-feedback";
 import {
   askAssistantStream,
   type AssistantRefusal,
@@ -212,6 +213,14 @@ type Entry =
       parked: readonly ParkedCard[];
       /** The person stopped it, so `text` is what it reached before the stop. */
       stopped?: boolean;
+      /**
+       * The conversation the turn saved this reply in, which a vote on it
+       * names (#4169). A reply loaded after its stream dropped can sit in a
+       * different conversation from the thread's current one, when the
+       * person asked again before loading it. A reply read back from the
+       * record has none: it sits in the thread's own conversation.
+       */
+      conversationId?: string;
     }
   /** A reply whose stream dropped. The turn ran on and saves its reply. */
   | {
@@ -881,6 +890,7 @@ export function AssistantFlyout({
           runId: value.runId,
           parked: value.parkedCards,
           stopped: value.stopped,
+          conversationId: value.conversationId,
         }));
         updateThread(asked, (t) => ({
           ...t,
@@ -983,6 +993,7 @@ export function AssistantFlyout({
         runId,
         parked: entry.parked,
         stopped: found.stopped,
+        conversationId: found.conversationId,
       }));
       // The next question continues the conversation the reply was saved in,
       // unless the thread has started another since the stream dropped.
@@ -1187,6 +1198,27 @@ export function AssistantFlyout({
                         cards={entry.parked}
                       />
                     )}
+                    {/*
+                      Useful or wrong, recorded against the run (#4169). Only
+                      inside a workspace, like the run link: the vote names the
+                      workspace the thread was asked in. A stopped reply keeps
+                      its controls: the turn still saved an assistant message
+                      under this run (#4164), so the vote resolves to it.
+                    */}
+                    {(() => {
+                      const conversation =
+                        entry.conversationId ?? thread.conversationId;
+                      return org !== null &&
+                        ws !== null &&
+                        conversation !== null ? (
+                        <AssistantReplyFeedback
+                          org={org}
+                          ws={ws}
+                          conversationId={conversation}
+                          runId={entry.runId}
+                        />
+                      ) : null;
+                    })()}
                   </div>
                 ) : (
                   <div>
