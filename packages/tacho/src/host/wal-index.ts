@@ -307,8 +307,12 @@ function collect(
     result.invalid = true;
     return;
   }
-  // First line wins, the way a top-to-bottom read answered a duplicate.
-  if (index.entries.has(stored.event_id_idem)) return;
+  // Last line wins. `Wal.append` writes a body only for an event it is about
+  // to write, and takes it back out when that event does not land, so a
+  // second line for one event id is a crash orphan followed by the body of
+  // the event that later took the orphan's seq. The later line is the body
+  // that event's digest names. First-wins served the orphan, and ingest
+  // refused it as a digest mismatch (#3372).
   const at = {
     offset: line.offset,
     length: line.end - line.offset - (line.terminated ? 1 : 0),
@@ -422,11 +426,12 @@ export class BodyIndexStore {
         continue;
       }
       const [idem, offset, length] = row as [unknown, unknown, unknown];
+      // Entries are appended in file order, so the last one for an event id
+      // is the line `collect` chose.
       if (
         typeof idem === "string" &&
         Number.isSafeInteger(offset) &&
-        Number.isSafeInteger(length) &&
-        !entries.has(idem)
+        Number.isSafeInteger(length)
       )
         entries.set(idem, {
           offset: offset as number,

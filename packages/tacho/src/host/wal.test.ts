@@ -827,6 +827,97 @@ describe("restart safety", () => {
   });
 });
 
+describe("orphan bodies", () => {
+  // #3372 finding 2: `append` wrote bodies before it checked or wrote the
+  // events. A batch whose events did not land left its body behind under an
+  // `event_id_idem` the next event at that seq reuses, and the index served
+  // the first line for an id, so the next event shipped the orphan and ingest
+  // refused it as a digest mismatch.
+  const bodyFor = (
+    event: { event_id_idem: string; session_uuid: string; seq: number },
+    text: string,
+  ): FrameBody => ({
+    event_id_idem: event.event_id_idem,
+    session_uuid: event.session_uuid,
+    seq: event.seq,
+    content_type: "text/plain; charset=utf-8",
+    bytes: new TextEncoder().encode(text),
+    content_class: "model_call",
+  });
+  const served = (wal: Wal, event: Parameters<Wal["bodiesFor"]>[0][number]) =>
+    wal
+      .bodiesFor([event])
+      .map((body) => Buffer.from(body.bytes_base64, "base64").toString("utf8"));
+
+  it("writes no body for a batch refused for a stale seq", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const first = events[0]!;
+    wal.append(events, [bodyFor(first, "the prompt that was sent")]);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    const sizeBefore = statSync(bodyPath).size;
+    expect(() =>
+      wal.append([first], [bodyFor(first, "a stale reseal's prompt")]),
+    ).toThrow(/not after the last written seq/);
+    expect(statSync(bodyPath).size).toBe(sizeBefore);
+    expect(served(wal, first)).toEqual(["the prompt that was sent"]);
+  });
+
+  it("takes a batch's bodies back out when its events fail to write", async () => {
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const [first, second] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    wal.append([first]);
+    // The body write lands and the event write after it fails.
+    vi.mocked(appendFileSync)
+      .mockImplementationOnce(actual.appendFileSync)
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("ENOSPC"), { code: "ENOSPC" });
+      });
+    expect(() =>
+      wal.append([second], [bodyFor(second, "the call that never landed")]),
+    ).toThrow(/ENOSPC/);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    expect(existsSync(bodyPath)).toBe(false);
+    // The recorder rolled its seal back, so the next event takes the same seq
+    // and the same event id. It ships its own body.
+    wal.append([second], [bodyFor(second, "the call that did land")]);
+    expect(served(wal, second)).toEqual(["the call that did land"]);
+  });
+
+  it("serves the later body when a crash left an orphan under the same event id", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const [first, second] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    new Wal(paths.wal).append([first]);
+    // The process died between the body write and the event write.
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    appendFileSync(
+      bodyPath,
+      `${JSON.stringify({
+        event_id_idem: second.event_id_idem,
+        seq: second.seq,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: Buffer.from("the orphan").toString("base64"),
+      })}\n`,
+    );
+    const restarted = new Wal(paths.wal);
+    restarted.append([second], [bodyFor(second, "the resealed call")]);
+    expect(served(restarted, second)).toEqual(["the resealed call"]);
+    // The persisted index answers the same way after another restart.
+    expect(served(new Wal(paths.wal), second)).toEqual(["the resealed call"]);
+  });
+});
+
 describe("group commit", () => {
   // Tacho collector P1-6/P1-7: a body write failure was swallowed, so a
   // sealed event persisted with content the store never received, and WAL
