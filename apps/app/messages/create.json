@@ -226,6 +226,7 @@
       "lead": "Review a copy under a new name. This opens a proposal and leaves the original in place. It copies no credentials or access grants.",
       "loading": "Reading published configuration…",
       "name": "Display name",
+      "label": "Label",
       "slug": "Source identifier",
       "source": "Configuration source",
       "companions": "Includes {count} companion files from the source.",
@@ -236,7 +237,7 @@
       "viewProposal": "Review proposal",
       "denied": "Your organization role must be Owner or Admin to clone this configuration.",
       "unavailable": "The published configuration could not be read. Retry after checking the repository binding.",
-      "collision": "This name is already occupied. Choose another name or reopen the draft for the next suggestion.",
+      "collision": "Another configuration already holds this slug or name. Choose another, or reopen the draft for the next suggestion.",
       "changed": "The source changed after this draft opened. Close and reopen the draft before submitting.",
       "refused": "The clone did not pass validation. Check the source and submit again.",
       "retry": "Retry"

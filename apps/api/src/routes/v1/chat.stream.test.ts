@@ -344,6 +344,45 @@ describe("POST chat/stream — the turn on the wire", () => {
     expect(mocks.invoke.mock.lastCall?.[1]).not.toHaveProperty("goal");
   });
 
+  // The flyout mints a turn id so the person can stop the turn it streams
+  // (#4164). Dropped here, cancel_assistant_turn would never find the turn.
+  it("carries the caller's turn id to ask_assistant, and sends none when it names none", async () => {
+    const turnId = "0192d4a8-7c1e-7a00-8000-0000000000f1";
+    await post({ content: "hi", turnId }).then((r) => r.text());
+    expect(mocks.invoke).toHaveBeenLastCalledWith(
+      "ask_assistant",
+      expect.objectContaining({ turnId }),
+      CTX,
+      { surface: "api" },
+    );
+
+    await post({ content: "hi" }).then((r) => r.text());
+    expect(mocks.invoke.mock.lastCall?.[1]).not.toHaveProperty("turnId");
+  });
+
+  it("refuses a turn id that is not a uuid with 400 before the turn starts (negative)", async () => {
+    const res = await post({ content: "hi", turnId: "not-a-uuid" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("streams a stopped turn's partial reply and its stopped flag as the terminal", async () => {
+    mocks.invoke.mockImplementationOnce(async () => {
+      mocks.stream?.onPrepared();
+      mocks.stream?.hooks.onRun?.({ runId: OUTPUT.runId });
+      mocks.stream?.hooks.onPart?.({ type: "text-delta", text: "hello" });
+      return { ...OUTPUT, reply: "hello", stopped: true };
+    });
+    const { events, done } = await readSse(
+      await post({
+        content: "hi",
+        turnId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+      }),
+    );
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    expect(done).toMatchObject({ reply: "hello", stopped: true });
+  });
+
   it("streams the run, the translated parts, one usage event, then the output as the terminal", async () => {
     const res = await post({ content: "hi" });
     expect(res.status).toBe(200);

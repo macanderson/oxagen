@@ -30,8 +30,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   // a registry or custom server without leaving the dialog.
   search_mcp_registry: () => import("./agent.mcp.registry.search"),
   start_mcp_authorization: () => import("./agent.mcp.authorize.start"),
-  authorize_mcp_server: () =>
-    import("./agent.mcp.authorize.complete"),
+  authorize_mcp_server: () => import("./agent.mcp.authorize.complete"),
   resolve_mcp_consent: () => import("./agent.mcp_consent.resolve"),
   list_mcp_consents: () => import("./agent.mcp_consent.list"),
   recall_memory: () => import("./agent.memory.recall"),
@@ -85,10 +84,11 @@ const LOADERS: Record<string, LoaderEntry> = {
   revoke_agent_role: () => import("./agent.role.revoke"),
   list_agent_roles: () => import("./agent.role.list"),
   get_agent_role: () => import("./agent.role.get"),
-  // The in-app agent on stella-serve (#2968, ADR-053): the turn, the engine
-  // probe, the reply a turn left on the record (ADR-176), and the two belt
-  // meta-tools outside a turn.
+  // The in-app agent on stella-serve (#2968, ADR-053): the turn, the stop
+  // (#4164), the engine probe, the reply a turn left on the record (ADR-176),
+  // and the two belt meta-tools outside a turn.
   ask_assistant: () => import("./assistant.ask"),
+  cancel_assistant_turn: () => import("./assistant.turn.cancel"),
   get_assistant_engine: () => import("./assistant.engine.get"),
   get_assistant_reply: () => import("./assistant.reply.get"),
   search_tools: () => import("./tools.search"),

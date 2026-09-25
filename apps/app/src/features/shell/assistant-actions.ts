@@ -9,15 +9,30 @@
 // Workspace-scoped, because a turn and its reply belong to the workspace the
 // question was asked in. The flyout passes that workspace, not the one the
 // person is standing in now.
+//
+// It also holds the stop (#4164). The flyout names each turn with a `turnId`
+// it mints and sends in the stream request, so the person can stop it. The
+// flyout posts the stop to the `assistant/stop` route, which calls
+// `stopAssistantTurn` here.
 import { assistantReplyGet } from "@oxagen/oxagen/contracts/assistant.reply.get";
+import { assistantTurnCancel } from "@oxagen/oxagen/contracts/assistant.turn.cancel";
 import type { ActionResult } from "@/server/kernel";
-import { kernelRead, readToActionResult } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 /** What the record holds for a turn's run. */
 export type AssistantReplyRead =
-  /** The reply is saved, in the conversation the next question continues. */
-  | { state: "answered"; conversationId: string; reply: string }
+  /**
+   * The reply is saved, in the conversation the next question continues.
+   * `stopped` is true when the person stopped the turn (#4164): its run is
+   * sealed cancelled and `reply` is what it wrote before the stop.
+   */
+  | {
+      state: "answered";
+      conversationId: string;
+      reply: string;
+      stopped: boolean;
+    }
   /**
    * No reply yet. The turn is still running, or it has just finished and its
    * reply is still being saved.
@@ -47,9 +62,28 @@ export async function readAssistantReply(
         state: "answered",
         conversationId: reply.conversationId,
         reply: reply.text,
+        // A disconnect and a budget stop save no reply, so a cancelled run
+        // that left one was stopped by the person who asked.
+        stopped: runStatus === "cancelled",
       },
     };
   }
   const ended = runStatus === "failed" || runStatus === "cancelled";
   return { ok: true, value: { state: ended ? "ended" : "running" } };
+}
+
+/**
+ * Stop the viewer's own turn that is still running under `turnId` (#4164).
+ * `found` is false when no such turn is running: it ended, it was already
+ * stopped, or it has not started yet, in which case the stop is held and
+ * applied when it does. Only the person who asked can stop a
+ * turn, so another person's `turnId` also answers `found: false`.
+ */
+export async function stopAssistantTurn(
+  org: string,
+  ws: string,
+  turnId: string,
+): Promise<ActionResult<{ turnId: string; found: boolean }>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, assistantTurnCancel, { turnId });
 }

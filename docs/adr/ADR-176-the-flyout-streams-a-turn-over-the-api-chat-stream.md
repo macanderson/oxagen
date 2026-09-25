@@ -58,8 +58,13 @@ ends, parked writes, and the final output.
 
 **A dropped connection does not stop the turn.** The route no longer hands the
 request's abort signal to the turn. The turn runs to completion and persists its
-reply. Stopping a turn on purpose stays with run controls (#2953), through an
-explicit cancel, never through a socket closing.
+reply. Stopping a turn on purpose is an explicit cancel, never a socket
+closing. For an assistant turn that cancel is `cancel_assistant_turn` (#4164):
+the flyout mints a `turnId`, sends it in the stream request, and Stop posts it
+to the app's `assistant/stop` route. The handler registers the turn under that
+id with an abort controller of its own, so the stop reaches the engine although
+the turn carries no signal from the request. Run controls for every run stay
+with #2953.
 
 **The route writes a keep-alive comment every 15 seconds.** The rewrite proxy
 closes a socket that is idle for 30 seconds, and a load balancer does the same

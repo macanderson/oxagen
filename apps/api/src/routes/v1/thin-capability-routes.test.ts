@@ -257,6 +257,7 @@ import { tachoIncidentListRoute } from "./tacho.incident.list";
 import { assistantAsk } from "@oxagen/oxagen/contracts/assistant.ask";
 import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.get";
 import { assistantReplyGet } from "@oxagen/oxagen/contracts/assistant.reply.get";
+import { assistantTurnCancel } from "@oxagen/oxagen/contracts/assistant.turn.cancel";
 import { toolsSearch } from "@oxagen/oxagen/contracts/tools.search";
 import { toolsLoad } from "@oxagen/oxagen/contracts/tools.load";
 import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
@@ -265,6 +266,7 @@ import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.se
 import { assistantAskRoute } from "./assistant.ask";
 import { assistantEngineGetRoute } from "./assistant.engine.get";
 import { assistantReplyGetRoute } from "./assistant.reply.get";
+import { assistantTurnCancelRoute } from "./assistant.turn.cancel";
 import { toolsSearchRoute } from "./tools.search";
 import { toolsLoadRoute } from "./tools.load";
 import { shellNavCountsGetRoute } from "./shell.nav_counts.get";
@@ -1183,6 +1185,16 @@ const ROUTES: ThinRoute[] = [
       pageContext: null,
     },
     invalidBody: { content: "" },
+    status: 200,
+  },
+  {
+    file: "assistant.turn.cancel",
+    route: assistantTurnCancelRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: assistantTurnCancel.name,
+    body: { turnId: "0192d4a8-7c1e-7a00-8000-0000000000f1" },
+    invalidBody: { turnId: "not-a-uuid" },
+    jsonGuard: true,
     status: 200,
   },
   {

@@ -1,0 +1,160 @@
+{
+  "turn": "07 which agents exist",
+  "question": "Which agents are enrolled?",
+  "source": "hand-authored",
+  "handlers": {
+    "list_agents": {
+      "items": [
+        {
+          "id": "agt_replay",
+          "slug": "release-bot",
+          "name": "release-bot",
+          "description": null,
+          "agentKey": "agt_replay",
+          "harness": "claude-code",
+          "principalId": null,
+          "operatorId": null,
+          "operatorName": null,
+          "status": "enrolled",
+          "tier": null,
+          "enforcementTier": "gateway",
+          "beltSize": null,
+          "runs30d": 9,
+          "spend30d": {
+            "micros": "1140000",
+            "currency": "USD",
+            "basis": "gateway_observed"
+          },
+          "tokens30d": null,
+          "proven30d": null,
+          "mandates": null,
+          "incidents": 0,
+          "tamperIncidents": 0,
+          "tamperIncidentsRecorded": 0,
+          "credentials": 1,
+          "hosts": 1,
+          "host": null,
+          "registeredAt": "2026-09-01T00:00:00.000Z"
+        }
+      ],
+      "nextCursor": null,
+      "totals": {
+        "identities": 1,
+        "enrolled": 1,
+        "unenrolled": 0,
+        "holdingMandate": null,
+        "mandateHolders": [],
+        "tamperIncidents": 0,
+        "tamper": {
+          "recorded": 0,
+          "open": 0,
+          "newest": null
+        }
+      }
+    }
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Which agents are enrolled?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "list_agents",
+      "input": {
+        "limit": 10
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "list_agents",
+          "input": {
+            "limit": 10
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Which agents are enrolled?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "One agent is enrolled: release-bot, on Claude Code."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "One agent is enrolled: release-bot, on Claude Code.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["list_agents"],
+    "gates": [
+      "emergency_denies none",
+      "kill_switch list_agents open",
+      "iam list_agents allow",
+      "handler list_agents"
+    ],
+    "ledger": [
+      "model completed",
+      "tool list_agents completed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["ok"],
+    "refusals": [],
+    "invocations": ["list_agents completed"],
+    "approvals": [],
+    "answer": "One agent is enrolled: release-bot, on Claude Code."
+  }
+}

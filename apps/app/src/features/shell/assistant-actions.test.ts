@@ -1,10 +1,11 @@
-// Loading the finished reply of a turn whose stream dropped, through the real
-// kernel seam: the viewer resolution and the kernel's invoke() are the only
-// fakes, so each case shows what the flyout gets back and what
-// get_assistant_reply was asked.
+// Loading the finished reply of a turn whose stream dropped, and stopping a
+// running turn (#4164), through the real kernel seam: the viewer resolution
+// and the kernel's invoke() are the only fakes, so each case shows what the
+// flyout gets back and what get_assistant_reply or cancel_assistant_turn was
+// asked.
 //
-// The read is workspace-scoped, because a turn and its reply belong to the
-// workspace the question was asked in, so the viewer this action resolves is
+// Both are workspace-scoped, because a turn and its reply belong to the
+// workspace the question was asked in, so the viewer each action resolves is
 // a WsCtx.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -30,7 +31,9 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { readAssistantReply } = await import("./assistant-actions");
+const { readAssistantReply, stopAssistantTurn } = await import(
+  "./assistant-actions"
+);
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -46,6 +49,7 @@ const ctx = unsafeMint(WsCtx, {
 
 const RUN = "arun_01k9";
 const CONVERSATION = "6f1f5a8e-0000-4000-8000-00000000c0de";
+const TURN_ID = "0192d4a8-7c1e-7a00-8000-0000000000f1";
 
 beforeEach(() => {
   invoke.mockReset();
@@ -79,6 +83,29 @@ describe("readAssistantReply", () => {
         state: "answered",
         conversationId: CONVERSATION,
         reply: "Three runs are live.",
+        stopped: false,
+      },
+    });
+  });
+
+  // A turn the person stopped keeps the words it wrote, and its run is sealed
+  // cancelled (#4164), so a stream that dropped after the stop loads them
+  // marked.
+  it("answers a cancelled run's saved reply as stopped", async () => {
+    invoke.mockResolvedValue({
+      runId: RUN,
+      runStatus: "cancelled",
+      reply: { conversationId: CONVERSATION, text: "Three runs" },
+    });
+    await expect(
+      readAssistantReply("acme", "core-platform", RUN),
+    ).resolves.toEqual({
+      ok: true,
+      value: {
+        state: "answered",
+        conversationId: CONVERSATION,
+        reply: "Three runs",
+        stopped: true,
       },
     });
   });
@@ -126,5 +153,45 @@ describe("readAssistantReply", () => {
     await expect(
       readAssistantReply("acme", "core-platform", RUN),
     ).resolves.toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+describe("stopAssistantTurn", () => {
+  it("stops the viewer's own turn in the workspace, by the id it was asked under", async () => {
+    invoke.mockResolvedValue({ turnId: TURN_ID, found: true });
+    const result = await stopAssistantTurn("acme", "core-platform", TURN_ID);
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "cancel_assistant_turn",
+      { turnId: TURN_ID },
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: { turnId: TURN_ID, found: true },
+    });
+  });
+
+  it("answers found false for a turn that is not running, not an error", async () => {
+    invoke.mockResolvedValue({ turnId: TURN_ID, found: false });
+    const result = await stopAssistantTurn("acme", "core-platform", TURN_ID);
+    expect(result).toEqual({
+      ok: true,
+      value: { turnId: TURN_ID, found: false },
+    });
+  });
+
+  it("refuses an id that is not a uuid before the kernel is asked (negative)", async () => {
+    const result = await stopAssistantTurn("acme", "core-platform", "t1");
+    expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("answers denied when the handler refuses the caller (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({ code: "forbidden", reason: "no_principal" }),
+    );
+    const result = await stopAssistantTurn("acme", "core-platform", TURN_ID);
+    expect(result).toMatchObject({ ok: false, reason: "denied" });
   });
 });

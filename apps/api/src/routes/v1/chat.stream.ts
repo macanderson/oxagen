@@ -38,6 +38,10 @@ const BodySchema = z.object({
   // A goal-shaped turn: the engine's verifier judges each round against it
   // (ADR-177). Omitted for an ordinary turn, as in ask_assistant's input.
   goal: assistantGoalSchema.optional(),
+  // The id the caller minted for this turn, so it can stop the turn by name
+  // with `cancel_assistant_turn` while the stream is open (#4164). Omitted,
+  // nobody can stop the turn by name.
+  turnId: assistantAsk.input.shape.turnId,
   // Per-turn MCP server allowlist. When non-empty, only those servers' tools
   // are loaded for this turn. Omit or pass [] to load all workspace MCPs.
   activeServerIds: z.array(z.string()).optional().default([]),
@@ -82,10 +86,13 @@ export const CHAT_STREAM_HEARTBEAT_MS = 15_000;
 //
 // A dropped connection does not stop the turn (ADR-092, ADR-176). The turn
 // runs to completion and persists its reply, so a client that lost the
-// stream can read the finished reply with `get_assistant_reply`. Stopping a
-// turn on purpose belongs to run controls (#2953), not to a socket closing:
-// cancelling mid-turn can leave a governed write half done, and a network
-// blip is not a decision to stop.
+// stream can read the finished reply with `get_assistant_reply`. A socket
+// closing is not a decision to stop: cancelling mid-turn can leave a governed
+// write half done, and a network blip is not a choice the person made.
+// Stopping a turn on purpose is `cancel_assistant_turn` naming the `turnId`
+// the caller sent here (#4164). The handler registers the turn under that id
+// with its own abort controller, so the stop reaches the engine although the
+// turn carries no signal from this request.
 chatStreamRoute.post("/", async (c) => {
   let rawBody: unknown;
   try {
@@ -181,6 +188,7 @@ chatStreamRoute.post("/", async (c) => {
           content: body.content,
           pageContext: body.pageContext,
           ...(body.goal ? { goal: body.goal } : {}),
+          ...(body.turnId ? { turnId: body.turnId } : {}),
         },
         ctx,
         { surface: "api" },

@@ -24,7 +24,9 @@
 // Every way a turn ends is answered in the shape the Server Action answered
 // it (`ActionResult<AssistantTurn>`), classified by the codes the kernel seam
 // classifies (server/kernel.ts), so the flyout's refusal sentences read the
-// same whichever way a refusal arrived. One outcome is new: `dropped`, a
+// same whichever way a refusal arrived. A turn the person stopped (#4164) is
+// not a refusal: it ends with its terminal, `stopped: true`, and the reply it
+// had written. One outcome is new: `dropped`, a
 // stream that ended before its terminal. A dropped connection does not stop
 // the turn (ADR-092), so the flyout keeps what arrived and offers to load the
 // finished reply from the run.
@@ -44,6 +46,8 @@ type AssistantTurn = {
   runId: string;
   reply: string;
   parkedCards: readonly ParkedCard[];
+  /** The person stopped the turn; `reply` is what was written before the stop. */
+  stopped: boolean;
 };
 
 /** A refusal, in the shape the kernel seam gives one. */
@@ -78,6 +82,11 @@ export type AssistantQuestion = {
    * id. Absent or null sends none.
    */
   entityLabel?: string | null;
+  /**
+   * A uuid the caller mints for the turn, so the person can stop it with
+   * `cancel_assistant_turn` while it streams (#4164). Absent sends none.
+   */
+  turnId?: string;
 };
 
 /** A tool call the turn made, named by the capability it called. */
@@ -229,6 +238,9 @@ const turnSchema = z.object({
   runId: z.string(),
   reply: z.string(),
   parkedCards: z.array(parkedCardSchema),
+  // A stopped turn is not a refusal: it ends with its terminal and the reply
+  // it had written (#4164). The contract defaults the flag to false.
+  stopped: z.boolean().default(false),
 });
 
 const eventSchema = z.discriminatedUnion("type", [
@@ -333,6 +345,7 @@ export async function askAssistantStream(
       },
       body: JSON.stringify({
         conversationId: question.conversationId,
+        ...(question.turnId === undefined ? {} : { turnId: question.turnId }),
         content: question.content,
         pageContext:
           question.route === null

@@ -70,6 +70,9 @@ vi.mock("next/navigation", () => ({
 
 const { AssistantFlyout } = await import("./assistant-flyout");
 
+/** Any turn id: the flyout mints a new one for each question (#4164). */
+const A_TURN_ID: unknown = expect.any(String);
+
 function OpenIt() {
   const { setAssistantOpen } = useShellState();
   return (
@@ -155,6 +158,7 @@ describe("AssistantFlyout › the record's label", () => {
       conversationId: null,
       content: "why did it fail?",
       route: "runs",
+      turnId: A_TURN_ID,
       entityId: "arun_01k9",
       entityLabel: "Fix the flaky checkout test",
     });

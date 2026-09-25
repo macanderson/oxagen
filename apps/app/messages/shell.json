@@ -291,6 +291,7 @@
       "close": "Close stella",
       "thinking": "Working…",
       "recordedAs": "recorded as",
+      "stopped": "Stopped",
       "parked": "{count, plural, one {This turn parked # write for a person to decide} other {This turn parked # writes for a person to decide}}. Approve or deny each one here or on Fleet.",
       "parkedCard": {
         "list": "Writes this turn parked",
@@ -376,6 +377,8 @@
         "label": "Ask stella",
         "placeholder": "Ask about a run, an agent, or what this is costing…",
         "send": "Send",
+        "stop": "Stop",
+        "stopFailed": "stella could not stop this turn, so it is still running. Try Stop again.",
         "sendHintEnter": "Enter to send, Shift+Enter for a new line",
         "sendHintModEnter": "Cmd+Enter or Ctrl+Enter to send, Enter for a new line",
         "draftTooLong": "This request would exceed the message limit. Your existing draft is unchanged. Send or shorten it, then open the recommendation again."

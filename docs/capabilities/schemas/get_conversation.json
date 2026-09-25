@@ -140,6 +140,9 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "stopped": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -148,7 +151,8 @@
                     "content",
                     "createdAt",
                     "runId",
-                    "parkedCards"
+                    "parkedCards",
+                    "stopped"
                   ],
                   "additionalProperties": false
                 }

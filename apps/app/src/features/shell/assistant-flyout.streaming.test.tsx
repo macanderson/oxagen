@@ -174,6 +174,7 @@ describe("a streamed reply", () => {
         runId: RUN,
         reply: "Three runs are live.",
         parkedCards: [],
+        stopped: false,
       },
     });
 
@@ -224,6 +225,7 @@ describe("a streamed reply", () => {
         runId: RUN,
         reply: "Read [the runbook](https://oxagen.sh/docs) first.",
         parkedCards: [],
+        stopped: false,
       },
     });
     const answer = screen.getByTestId("assistant-answer");
@@ -241,6 +243,7 @@ describe("a streamed reply", () => {
         runId: RUN,
         reply: "Three runs are live.",
         parkedCards: [],
+        stopped: false,
       },
     });
     await user.type(screen.getByTestId("assistant-composer"), "and failed?");
@@ -333,6 +336,7 @@ describe("a dropped stream", () => {
         state: "answered",
         conversationId: CONVERSATION,
         reply: "Three runs are live.",
+        stopped: false,
       },
     });
 
@@ -354,6 +358,31 @@ describe("a dropped stream", () => {
       expect(turns).toHaveLength(2);
     });
     expect(current().question).toMatchObject({ conversationId: CONVERSATION });
+    expect(screen.queryByTestId("assistant-stopped")).toBeNull();
+  });
+
+  // The person stopped the turn and the stream dropped before its terminal:
+  // the reply the stop kept loads marked Stopped (#4164).
+  it("loads a stopped turn's reply marked Stopped", async () => {
+    const { user } = await dropMidReply();
+    readAssistantReply.mockResolvedValue({
+      ok: true,
+      value: {
+        state: "answered",
+        conversationId: CONVERSATION,
+        reply: "Three runs",
+        stopped: true,
+      },
+    });
+
+    await user.click(screen.getByTestId("assistant-load-reply"));
+
+    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
+      "Three runs",
+    );
+    expect(screen.getByTestId("assistant-stopped")).toHaveTextContent(
+      "Stopped",
+    );
   });
 
   it("says when the reply is not saved yet, keeps the offer, and says when the turn ended without one (negative)", async () => {

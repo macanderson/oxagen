@@ -9,6 +9,9 @@ export const schema = {
   category: toolVersionList.input.shape.category.describe(
     "Only versions carrying this consequence tag (snake_case, e.g. moves_money)",
   ),
+  serverId: toolVersionList.input.shape.serverId.describe(
+    "Only versions imported from this server (its mcs_… id from list_mcp_servers)",
+  ),
   limit: toolVersionList.input.shape.limit.describe(
     "Max versions to return (1–100)",
   ),

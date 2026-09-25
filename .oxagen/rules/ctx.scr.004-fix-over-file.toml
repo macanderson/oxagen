@@ -3,6 +3,7 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.004-fix-over-file"
+label = "Fix defects in the current PR"
 record_id = "rec_scr_004_fix_over_file_3191e4be4d04"
 record_hash = "sha256:1da0425c0c758ba83c79430ea16309fb28c156db155632dbebcf388df21538e3"
 kind = "rule"

@@ -46,9 +46,11 @@ beforeEach(() => {
 });
 
 describe("tools.versions", () => {
+  const firstPage = { category: null, cursor: null, serverId: null };
+
   it("reads the first page on the tools failure row and maps the classification the view shows", async () => {
     kernelRead.mockResolvedValue(readOk(toolVersionListOutput()));
-    const read = await tools.versions(ctx, { category: null, cursor: null });
+    const read = await tools.versions(ctx, firstPage);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: toolVersionList,
       input: {},
@@ -76,12 +78,16 @@ describe("tools.versions", () => {
     expect(plain?.classification).toBeNull();
   });
 
-  it("carries the consequence tag and the cursor the view asked for", async () => {
+  it("carries the consequence tag, the server, and the cursor the view asked for", async () => {
     kernelRead.mockResolvedValue(readOk(toolVersionListOutput()));
-    await tools.versions(ctx, { category: "moves_money", cursor: "c2" });
+    await tools.versions(ctx, {
+      category: "moves_money",
+      cursor: "c2",
+      serverId: "mcs_stripe",
+    });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: toolVersionList,
-      input: { category: "moves_money", cursor: "c2" },
+      input: { category: "moves_money", cursor: "c2", serverId: "mcs_stripe" },
       page: "tools",
     });
   });
@@ -93,7 +99,7 @@ describe("tools.versions", () => {
       permission: "tools.read",
     } as const;
     kernelRead.mockResolvedValue(denied);
-    expect(await tools.versions(ctx, { category: null, cursor: null })).toEqual(
+    expect(await tools.versions(ctx, firstPage)).toEqual(
       denied,
     );
     expect(captureError).not.toHaveBeenCalled();
@@ -110,7 +116,7 @@ describe("tools.versions", () => {
         }),
       ),
     );
-    expect(await tools.versions(ctx, { category: null, cursor: null })).toEqual(
+    expect(await tools.versions(ctx, firstPage)).toEqual(
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledTimes(1);

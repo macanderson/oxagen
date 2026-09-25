@@ -14,7 +14,11 @@ import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 
 export function createProposeRecordHandler(
   deps: Pick<SteeringDeps, "store"> & {
-    /** Refuse a lineage that already has a proposal (a clone's row is new by definition). */
+    /**
+     * Refuse a lineage that already has a record or a proposal, whatever the
+     * caller asks (a clone's row is new by definition). A caller can also ask
+     * for it per call with `createOnly` on the input.
+     */
     createOnly?: boolean;
   },
 ): CapabilityHandler<typeof contextProposalCreate> {
@@ -40,7 +44,9 @@ export function createProposeRecordHandler(
         source: input.source,
         support: input.support,
       },
-      deps.createOnly ? { createOnly: true } : undefined,
+      deps.createOnly === true || input.createOnly === true
+        ? { createOnly: true }
+        : undefined,
     );
     return {
       proposalId: row.publicId,

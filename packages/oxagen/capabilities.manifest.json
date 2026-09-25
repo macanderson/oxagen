@@ -1374,6 +1374,22 @@
       }
     },
     {
+      "name": "cancel_assistant_turn",
+      "file": "assistant.turn.cancel.ts",
+      "domain": "assistant",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "export_audit_events",
       "file": "audit.events.export.ts",
       "domain": "audit",

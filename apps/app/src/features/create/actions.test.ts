@@ -24,10 +24,15 @@ vi.mock("@/server/kernel", async (importOriginal) => ({
 }));
 
 const { skillPropose } = await import("@oxagen/oxagen/contracts/skill.propose");
+const { contextProposalCreate } = await import(
+  "@oxagen/oxagen/contracts/context.proposal.create"
+);
 const { contextSteeringFreshness } = await import(
   "@oxagen/oxagen/contracts/context.steering.freshness"
 );
-const { proposeSkill, readMainRepository } = await import("./actions");
+const { proposeRecord, proposeSkill, readMainRepository } = await import(
+  "./actions"
+);
 
 const CTX = { orgSlug: "acme", wsSlug: "core-platform" };
 
@@ -113,6 +118,41 @@ describe("readMainRepository", () => {
     const result = await readMainRepository("acme", "core-platform");
     expect(result.ok).toBe(false);
     expect(result).toMatchObject({ code: "github_unreachable" });
+  });
+});
+
+describe("proposeRecord", () => {
+  it("proposes create-only, so a new record never revises one that holds its slug (ADR-178)", async () => {
+    kernelWrite.mockResolvedValue({
+      ok: true,
+      value: {
+        proposalId: "prp_1",
+        lineageId: "ctx.a.one",
+        status: "proposed",
+      },
+    });
+    const record = {
+      lineageId: "ctx.a.one",
+      label: "One",
+      kind: "rule" as const,
+      force: "must" as const,
+      sharingScope: "workspace" as const,
+      statement: "Do one thing.",
+    };
+    const result = await proposeRecord("acme", "core-platform", {
+      record,
+      rationale: "  Why  ",
+    });
+    expect(kernelWrite).toHaveBeenCalledWith(CTX, contextProposalCreate, {
+      record,
+      rationale: "Why",
+      support: {},
+      createOnly: true,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: { proposalId: "prp_1", lineageId: "ctx.a.one" },
+    });
   });
 });
 

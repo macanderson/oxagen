@@ -1,0 +1,172 @@
+{
+  "turn": "08 a kill switch write parks for approval",
+  "question": "Switch off agent agt_replay.",
+  "source": "hand-authored",
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Switch off agent agt_replay."
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "load_tools",
+      "input": {
+        "names": ["set_kill_switch"]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "load_tools",
+          "input": {
+            "names": ["set_kill_switch"]
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Switch off agent agt_replay."
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-1",
+      "name": "set_kill_switch",
+      "input": {
+        "target": {
+          "kind": "agent",
+          "id": "agt_replay"
+        },
+        "on": true,
+        "reason": "The operator asked to stop it."
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_2",
+          "name": "set_kill_switch",
+          "input": {
+            "target": {
+              "kind": "agent",
+              "id": "agt_replay"
+            },
+            "on": true,
+            "reason": "The operator asked to stop it."
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-2",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Switch off agent agt_replay."
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_2",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "The kill switch for agt_replay is waiting for approval."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "The kill switch for agt_replay is waiting for approval.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["load_tools", "set_kill_switch"],
+    "gates": [
+      "emergency_denies none",
+      "kill_switch set_kill_switch open",
+      "approval set_kill_switch opened"
+    ],
+    "ledger": [
+      "model completed",
+      "tool load_tools completed",
+      "model completed",
+      "tool set_kill_switch parked apr_replay1",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["ok", "refused_by_policy"],
+    "refusals": ["pending_approval"],
+    "invocations": ["set_kill_switch parked"],
+    "approvals": ["set_kill_switch"],
+    "answer": "The kill switch for agt_replay is waiting for approval.",
+    "loadUnknown": []
+  }
+}

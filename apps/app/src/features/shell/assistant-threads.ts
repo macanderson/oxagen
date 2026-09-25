@@ -54,6 +54,8 @@ export type RestoredEntry =
       text: string;
       runId: string;
       parked: readonly ParkedCard[];
+      /** The person stopped it, so a reload shows the mark again (#4164). */
+      stopped: boolean;
     };
 
 /** Whether the read for the workspace on screen is out, or failed. */
@@ -65,9 +67,7 @@ export type ThreadStatus = "idle" | "loading" | "failed";
  * assistant turn (another chat surface wrote it), and the flyout has nothing
  * to link it to, so it is left out.
  */
-function restoredEntries(
-  thread: AssistantThread,
-): readonly RestoredEntry[] {
+function restoredEntries(thread: AssistantThread): readonly RestoredEntry[] {
   const entries: RestoredEntry[] = [];
   for (const message of thread.messages) {
     if (message.role === "user") {
@@ -79,6 +79,7 @@ function restoredEntries(
         text: message.text,
         runId: message.runId,
         parked: message.parked,
+        stopped: message.stopped,
       });
     }
   }

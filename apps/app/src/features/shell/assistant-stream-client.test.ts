@@ -186,6 +186,45 @@ describe("askAssistantStream", () => {
         runId: TURN.runId,
         reply: TURN.reply,
         parkedCards: [],
+        // The route's output names no stop, and the contract reads that as
+        // a turn that ran to its end.
+        stopped: false,
+      },
+    });
+  });
+
+  // The flyout mints a turn id so Stop can name the turn while it streams
+  // (#4164).
+  it("sends the turn id the caller minted, and none when it minted none", async () => {
+    const turnId = "0192d4a8-7c1e-7a00-8000-0000000000f1";
+    const fetch = respond(sse([done(TURN)]));
+    await askAssistantStream("acme", "core-platform", { ...QUESTION, turnId });
+    expect(posted(fetch)).toMatchObject({ turnId });
+
+    const again = respond(sse([done(TURN)]));
+    await askAssistantStream("acme", "core-platform", QUESTION);
+    expect(posted(again)).not.toHaveProperty("turnId");
+  });
+
+  // A stop is not a refusal: the stream ends with its terminal, and the
+  // reply is what the turn had written before the stop.
+  it("answers a stopped turn with its partial reply and the stop marked", async () => {
+    respond(
+      sse([
+        data({ type: "run", runId: "arun_01k9" }),
+        data({ type: "text", text: "Three runs" }),
+        done({ ...TURN, reply: "Three runs", stopped: true }),
+      ]),
+    );
+    const result = await askAssistantStream("acme", "core-platform", QUESTION);
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        conversationId: TURN.conversationId,
+        runId: TURN.runId,
+        reply: "Three runs",
+        parkedCards: [],
+        stopped: true,
       },
     });
   });

@@ -204,6 +204,15 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "cancel_assistant_turn",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "change_member_role",
       "reads": [],
@@ -4117,7 +4126,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e76bef99cdf5ed9369507fc7910a0bf94e4970d82e2ee3a218faadfe786ea1c3",
+  "contentHash": "90bfb5a9f61eaf97d619758ee5dc8c132b03a8ff20112e1954a50de143155f09",
   "domains": [
     {
       "name": "agent",
