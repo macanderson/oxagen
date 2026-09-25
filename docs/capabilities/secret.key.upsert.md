@@ -5,7 +5,7 @@
 **Scope:** tenant + workspace
 **Surfaces:** api, mcp, agent
 **Risk level:** high
-**Requires approval:** no
+**Requires approval:** yes, on the agent surface (riskLevel: high)
 
 ## Intent
 
@@ -40,6 +40,17 @@ Inserts or updates the key row in `environments` vault tables (PostgreSQL). When
 (`value_enc` + `value_kms_key_id`); otherwise it is stored as plaintext text.
 Metering, IAM, and audit run through the kernel.
 - **Writes a `secret.value_changed` row to `security_events`** (`capability: upsert_secret_key`). Upsert accepts a `defaultValue`, so it can write secret material (ADR-050).
+
+## Approval
+
+When an agent turn calls this capability on the `agent` surface, the call waits
+for a person to approve it before it runs (`requiresApproval: true`). When the
+in-app assistant parks the call, the approval row keeps only a digest of the
+input. The input, `defaultValue` included, is stored encrypted until the
+approved call resumes.
+
+The `api` and `mcp` surfaces do not read `requiresApproval`. IAM (org Owner or
+Admin) and the workspace's decision rules gate those calls.
 
 ## API
 
