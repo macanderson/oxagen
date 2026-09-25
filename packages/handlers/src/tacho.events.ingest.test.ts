@@ -379,6 +379,12 @@ interface FakeDb {
    */
   advanceSeqCountOnRead: number | undefined;
   /**
+   * Another successor takes the session between this request's read and its
+   * write, moving the row's `host_id` to this value. One-shot, like
+   * `advanceSeqCountOnRead`.
+   */
+  moveHostOnRead: string | undefined;
+  /**
    * The control plane's idle close commits between this request's read and
    * its write: the row is sealed `idle_timeout` and its head does not move.
    * One-shot, like `advanceSeqCountOnRead`.
@@ -475,6 +481,7 @@ function fakeDb(): FakeDb {
     promoteTierOnRead: undefined,
     hideSessionFromNextRead: false,
     advanceSeqCountOnRead: undefined,
+    moveHostOnRead: undefined,
     closeOnRead: false,
     operatorSealOnRead: false,
     pendingColumns: new Set<string>(),
@@ -689,6 +696,10 @@ function wire(db: FakeDb): void {
               if (db.advanceSeqCountOnRead !== undefined) {
                 row["seqCount"] = db.advanceSeqCountOnRead;
                 db.advanceSeqCountOnRead = undefined;
+              }
+              if (db.moveHostOnRead !== undefined) {
+                row["hostId"] = db.moveHostOnRead;
+                db.moveHostOnRead = undefined;
               }
               if (db.promoteTierOnRead !== undefined) {
                 row["enforcementTier"] = db.promoteTierOnRead;
@@ -2113,6 +2124,27 @@ describe("ingest_tacho_events", () => {
         CONTEXT,
       );
       expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
+    });
+
+    it("refuses the loser of two successors racing for one session", async () => {
+      const db = withPredecessor();
+      const events = resealed(() => HOST_PUBLIC);
+      heldByPredecessor(db, events);
+      // The rival successor commits between this batch's read and its write.
+      const rival = "55555555-5555-4555-8555-555555555555";
+      db.moveHostOnRead = rival;
+      wire(db);
+      await expect(
+        tachoEventsIngestHandler(
+          {
+            schema: "tacho.batch.v1",
+            host_enrollment_id: HOST_PUBLIC,
+            events: events.slice(3),
+          },
+          CONTEXT,
+        ),
+      ).rejects.toMatchObject({ code: "conflict" });
+      expect(db.sessions.get(SESSION)?.["hostId"]).toBe(rival);
     });
 
     it("writes no body for a successor's batch it refuses", async () => {
