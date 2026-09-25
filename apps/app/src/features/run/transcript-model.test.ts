@@ -2056,6 +2056,40 @@ describe("stepTool", () => {
     expect(row?.call.arg).toBe("ls -la");
   });
 
+  it("unwraps a structured result from a `{output}` receipt rather than drawing the wrapper (#3375)", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Bash ok",
+        request: body("1", '{"command":"ls"}'),
+        response: body("1", '{"output":{"stdout":"a.ts","stderr":""}}'),
+      }),
+    ]);
+    const detail = stepTool(nth(steps, 0));
+    expect(detail).toMatchObject({ name: "Bash", headline: "ls" });
+    expect(detail?.output).toBe("a.ts");
+  });
+
+  it("names the tool from a `{name, output}` receipt when the label names nothing (#3375)", () => {
+    const steps = stepsIn([
+      edgeFrame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "tool_call",
+        request: body("1", '{"command":"pwd"}'),
+        response: body("1", '{"name":"Bash","output":"/repo"}'),
+      }),
+    ]);
+    expect(stepTool(nth(steps, 0))).toMatchObject({
+      name: "Bash",
+      headline: "pwd",
+      output: "/repo",
+    });
+  });
+
   it("falls back to the request's input when the call never completed", () => {
     const steps = stepsIn([
       edgeFrame({

@@ -824,12 +824,20 @@ export function stepTool(step: TranscriptStep): ToolDetail | null {
     isRecord(parsed) && !("input" in parsed) && !("tool_use" in parsed);
   if (isExchange(parsed) && !(outputOnly && requested !== null))
     return toolDetailOf(known, parsed);
-  const output = parsed ?? receiptText;
+  // Rewrapped beside the request, a `{output}` receipt passes on its result,
+  // not the wrapper, and a `name` it kept still names the tool. A bare result
+  // is passed on whole, and its fields never name the tool.
+  const wrapper =
+    isRecord(parsed) && outputOnly && "output" in parsed ? parsed : null;
+  const output =
+    wrapper === null ? (parsed ?? receiptText) : (wrapper["output"] ?? null);
+  const wrapperName = wrapper === null ? undefined : wrapper["name"];
+  const tool = known ?? (typeof wrapperName === "string" ? wrapperName : null);
   if (isRecord(requested) && isRecord(requested["tool_use"]))
-    return toolDetailOf(known, { ...requested, tool_result: output });
+    return toolDetailOf(tool, { ...requested, tool_result: output });
   if (isExchange(requested))
-    return toolDetailOf(known, { ...requested, output });
-  const detail = toolDetailOf(known, { input: requested, output });
+    return toolDetailOf(tool, { ...requested, output });
+  const detail = toolDetailOf(tool, { input: requested, output });
   const target = stepTarget(step);
   if (detail === null || requested !== null || target === null) return detail;
   // No input was kept, but the gate recorded what the call acted on. That is

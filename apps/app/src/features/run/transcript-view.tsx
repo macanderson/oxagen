@@ -588,7 +588,11 @@ type RowProps = {
   row: FeedRow;
   q: string;
   open: boolean;
-  onToggle: (key: string) => void;
+  /**
+   * Opens or closes the row. Null while a search holds every row open: a fold
+   * would change nothing on screen, so each fold control is disabled.
+   */
+  onToggle: ((key: string) => void) | null;
   place: Place;
 };
 
@@ -612,7 +616,7 @@ function Passage({
   text: string;
   q: string;
   open: boolean;
-  onToggle: (key: string) => void;
+  onToggle: ((key: string) => void) | null;
   /** The passage's own ink, open and closed. */
   className: string;
 }) {
@@ -628,8 +632,9 @@ function Passage({
           className={`${txFold} flex-none pr-1.5`}
           aria-expanded={open}
           aria-label={open ? t("showLess") : t("showRest")}
+          disabled={onToggle === null}
           onClick={() => {
-            onToggle(rowKey);
+            onToggle?.(rowKey);
           }}
         >
           {open ? "⏶" : "⏵"}
@@ -670,7 +675,9 @@ function PromptRow({
           onToggle={onToggle}
           className="text-foreground"
         />
-        {open ? (
+        {/* A passage with nothing to fold has no control to open it, so its
+            line shows from the start. */}
+        {open || !holdsMore(row.text) ? (
           <div className={txSub}>
             {run.operatorName === null ? null : (
               <span>{t("operator", { name: run.operatorName })}</span>
@@ -719,7 +726,7 @@ function TextRow({
           onToggle={onToggle}
           className=""
         />
-        {open && row.subagent !== undefined ? (
+        {(open || !holdsMore(row.text)) && row.subagent !== undefined ? (
           <div className={txSub}>
             <SubagentChip row={row} />
           </div>
@@ -761,8 +768,9 @@ function ThinkingRow({
         type="button"
         className={`${txFold} flex-none`}
         aria-expanded={open}
+        disabled={onToggle === null}
         onClick={() => {
-          onToggle(row.key);
+          onToggle?.(row.key);
         }}
       >
         <span aria-hidden="true">{open ? "⏶ " : "⏵ "}</span>
@@ -859,8 +867,9 @@ function ToolRow({
             className={txFold}
             aria-expanded={open}
             aria-label={open ? t("hideCall") : t("showCall")}
+            disabled={onToggle === null}
             onClick={() => {
-              onToggle(row.key);
+              onToggle?.(row.key);
             }}
           >
             {open ? "⏶" : "⋯"}
@@ -1033,8 +1042,9 @@ function RecallRow({
             type="button"
             className={`${headingClass} hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring`}
             aria-expanded={open}
+            disabled={onToggle === null}
             onClick={() => {
-              onToggle(row.key);
+              onToggle?.(row.key);
             }}
           >
             <span aria-hidden="true">◉ </span>
@@ -1193,8 +1203,9 @@ function EventRow({
               className={txFold}
               aria-expanded={open}
               aria-label={open ? t("showLess") : t("showRest")}
+              disabled={onToggle === null}
               onClick={() => {
-                onToggle(row.key);
+                onToggle?.(row.key);
               }}
             >
               {open ? "⏶" : "⋯"}
@@ -1767,7 +1778,9 @@ export function TranscriptView({
             (row.kind === "thinking" && thinking) ||
             (index === answer ? !open.has(row.key) : open.has(row.key))
           }
-          onToggle={toggle}
+          // While the search holds every row open, a fold would change only
+          // what the rows show once the search is cleared.
+          onToggle={q === "" ? toggle : null}
           place={place}
           run={run}
           live={live}
