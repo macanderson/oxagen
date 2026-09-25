@@ -116,6 +116,7 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
       "list_tool_declarations",
       "list_mcp_servers",
       "list_mcp_consents",
+      "search_mcp_registry",
     ],
   },
   {
@@ -125,6 +126,8 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     capabilities: [
       "publish_tool_declaration",
       "register_mcp_server",
+      "start_mcp_authorization",
+      "authorize_mcp_server",
       "delete_mcp_server",
       "set_mcp_enabled",
       "resolve_mcp_consent",

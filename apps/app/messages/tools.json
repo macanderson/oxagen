@@ -154,7 +154,7 @@
       "open": "Import a provider",
       "openAdd": "Add a provider",
       "title": "Import tools from a provider",
-      "subtitle": "The registry is the only source of tools an agent can see. Nothing reaches a belt until it is here.",
+      "subtitle": "Find a server in the MCP Registry or add your own. Oxagen connects to it, lists its tools, and imports only the ones you pick.",
       "reviewTitle": "Review tools/list",
       "reviewSubtitle": "{count, plural, one {# tool} other {# tools}} listed by {name}",
       "classifyTitle": "Classify and import",
@@ -165,7 +165,6 @@
         "s3": "3 Classify and import"
       },
       "provider": "Provider",
-      "newProvider": "A new provider",
       "name": "Name",
       "nameHint": "The system the tools belong to, such as GitHub. Up to 120 characters.",
       "endpoint": "Endpoint URL",
@@ -176,7 +175,8 @@
       "authStrategies": {
         "none": "none",
         "bearer": "bearer token",
-        "header": "header"
+        "header": "header",
+        "oauth": "OAuth sign-in"
       },
       "authConfig": "Auth config",
       "authConfigHint": "One name = value per line: the bearer token, or the header and its value. It is encrypted before storage and is not shown again.",
@@ -199,7 +199,87 @@
       "importAll": "Import every tool",
       "importCount": "Import {count, plural, one {# tool} other {# tools}}",
       "importing": "Importing…",
-      "done": "{published, plural, =0 {No new version} one {# new version} other {# new versions}} · {unchanged, plural, =0 {nothing unchanged} one {# already registered} other {# already registered}}."
+      "done": "{published, plural, =0 {No new version} one {# new version} other {# new versions}} · {unchanged, plural, =0 {nothing unchanged} one {# already registered} other {# already registered}}.",
+      "addTitle": "Add a provider",
+      "theProvider": "the provider",
+      "pickProvider": "Choose a provider",
+      "source": {
+        "label": "Where the provider comes from",
+        "browse": "Browse the registry",
+        "custom": "Custom server",
+        "existing": "Already added"
+      },
+      "browse": {
+        "search": "Search MCP servers",
+        "searchPlaceholder": "Linear, Slack, GitHub…",
+        "sourceNote": "Verified first-party servers come first, then the official MCP Registry. A registry name is verified by its publisher's domain or GitHub account.",
+        "searching": "Searching…",
+        "results": "MCP servers",
+        "empty": "No server matches “{query}”. Try another name, or add it as a custom server.",
+        "more": "Show more",
+        "registryUnreachable": "The MCP Registry did not answer, so only verified servers are listed. Search again in a minute.",
+        "verified": "Verified",
+        "publisher": "by {publisher}",
+        "publisherVerified": "by {publisher} (verified domain)",
+        "website": "Website",
+        "docs": "Docs",
+        "source": "Source",
+        "pick": "Select",
+        "pickNamed": "Select {name}",
+        "change": "Change",
+        "stdioOnly": "Runs on the agent's machine over stdio, so Oxagen cannot reach it. Govern it through the agent's harness instead.",
+        "noRemote": "Publishes no streamable-http endpoint Oxagen can reach.",
+        "token": "Bearer token",
+        "header": "Header name",
+        "headerValue": "Header value",
+        "secretHint": "Encrypted before storage. It is not shown again.",
+        "noAuth": "This server asks for no credential.",
+        "auth": {
+          "oauth": "OAuth",
+          "oauthClient": "OAuth, your app",
+          "bearer": "Bearer token",
+          "header": "API key header",
+          "none": "No auth",
+          "unknown": "Auth not detected"
+        },
+        "version": "v{version}"
+      },
+      "oauth": {
+        "authorize": "Authorize with {name}",
+        "explain": "{name} uses OAuth. A sign-in window opens. Approve access there and this dialog continues on its own.",
+        "explainUnknown": "Oxagen could not tell how this server authenticates. Authorizing checks: it opens a sign-in window if the server uses OAuth, and says so if it does not.",
+        "ownClient": "Use your own OAuth app",
+        "clientRequired": "This server does not register OAuth apps itself. Create one with the provider, register the redirect URL below, then enter its client ID.",
+        "redirect": "Redirect URL",
+        "redirectHint": "Register this exact URL as the OAuth app's redirect or callback URL.",
+        "copy": "Copy",
+        "copied": "Copied",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "clientSecretHint": "Leave it empty for a public client. Encrypted before storage and not shown again.",
+        "scopes": "Scopes",
+        "scopesHint": "Space-separated. Leave it empty to request what the server advertises.",
+        "docs": "Provider's setup guide",
+        "starting": "Starting sign-in…",
+        "waiting": "Waiting for you to sign in to {name} in the other window.",
+        "blocked": "The browser blocked the sign-in window for {name}. Open it from here.",
+        "openSignIn": "Open sign-in",
+        "cancel": "Cancel",
+        "notOAuth": "This server does not ask for OAuth sign-in.",
+        "connectOpen": "Connect without sign-in",
+        "failure": {
+          "access_denied": "The sign-in was declined, so nothing was stored. Authorize again to retry.",
+          "authorization_expired": "This sign-in expired or was already used. Authorize again.",
+          "authorization_failed": "The provider refused the sign-in. Check the OAuth app and scopes, then authorize again.",
+          "authorization_discovery_failed": "The server's OAuth metadata could not be read. Check the endpoint URL.",
+          "authorization_url_invalid": "The provider returned a sign-in address that is not https, so it was not opened.",
+          "endpoint_not_public": "The endpoint must be a public https address.",
+          "redirect_url_invalid": "The redirect URL was refused. Reload the page and try again.",
+          "server_not_found": "That provider is no longer in this workspace.",
+          "org_role_required": "Authorizing a provider needs an org Owner or Admin, or a workspace Owner."
+        }
+      },
+      "another": "Add another provider"
     },
     "connections": {
       "title": "Credential grants log",
@@ -776,7 +856,6 @@
         "actions": "Actions"
       },
       "transportNote": "MCP is one transport among several. A provider reached over http, native or a harness local hook is imported, versioned and decided the same way, so the transport is a property of the row and never the name of the collection.",
-      "attentionNotBacked": "Token expiry and review dates are not recorded on a connection, so no connection is counted here as expired or due for review.",
       "open": "Open",
       "openNamed": "Open {name}",
       "wireLine": "{wire} · {endpoint}",
@@ -815,19 +894,6 @@
         "note": "Editing a provider is not built yet: the roster records a provider only by the endpoint it was imported from, and nothing changes its endpoint, transport or connection after it is registered.",
         "confirm": "Save"
       },
-      "oauth": {
-        "open": "Connect with OAuth",
-        "title": "Authorize {name}",
-        "clientId": "Client id",
-        "clientSecret": "Client secret",
-        "authUrl": "Authorization URL",
-        "scopes": "Scopes",
-        "redirect": "Redirect URL",
-        "redirectHint": "Register this URL with the provider.",
-        "refusal": "Authorizing refuses without a client id and an authorization URL.",
-        "note": "Authorizing a provider is not built yet. It would open the provider, exchange the code, envelope the token under the organization key, and record who authorized it. No client registration, token or expiry is stored for a provider today.",
-        "confirm": "Authorize with {name}"
-      },
       "drill": {
         "subtitle": "mcp · {wire} · {endpoint}",
         "healthWarning": {
@@ -849,7 +915,6 @@
         "schemas": "{declared} declared, {imported} imported",
         "atLeast": "{count}+",
         "authTitle": "Authorization",
-        "authNotBacked": "No connection, token or scope is recorded against this provider yet, so what the broker would mint for it and who authorized it are not shown.",
         "keyInstead": "Add a key or a role instead",
         "keyTitle": "Add a key or a role",
         "keyNote": "Binding a stored key or a cloud role to a provider is not built yet. A connection added on this tab holds a credential for a connector, and nothing ties it to a provider.",
@@ -864,9 +929,61 @@
           "agents": "Agents",
           "calls": "Calls 30d"
         },
-        "transportMcp": "mcp"
+        "transportMcp": "mcp",
+        "reviewNotBacked": "Who authorized it and its review dates are not recorded yet."
       },
-      "transportMcp": "mcp"
+      "transportMcp": "mcp",
+      "status": {
+        "lights": {
+          "green": "Connected",
+          "yellow": "Needs a look",
+          "red": "Disconnected"
+        },
+        "short": {
+          "ok": "All good",
+          "unchecked": "Not checked yet",
+          "degraded": "Degraded",
+          "tokenLapsed": "Token lapsed, renews on next call",
+          "unreachable": "Unreachable",
+          "tokenExpired": "Token expired",
+          "needsReauth": "Sign-in needed",
+          "revoked": "Revoked",
+          "notConnected": "Never authorized"
+        },
+        "reasons": {
+          "ok": "It answered its last check and holds a live credential.",
+          "unchecked": "No health check has run since it was added.",
+          "degraded": "Its last health check answered with errors.",
+          "tokenLapsed": "The access token expired. A refresh token is held, so the next call renews it.",
+          "unreachable": "Its last health check could not reach it.",
+          "tokenExpired": "The access token expired and no refresh token is held. Reconnect to sign in again.",
+          "needsReauth": "The provider refused the token or its refresh. Reconnect to sign in again.",
+          "revoked": "The authorization was revoked. Reconnect to sign in again.",
+          "notConnected": "Nobody has signed in yet. Reconnect to authorize it."
+        },
+        "kinds": {
+          "oauth": "OAuth",
+          "bearer": "Bearer token",
+          "header": "API key header",
+          "none": "No auth"
+        },
+        "states": {
+          "connected": "OAuth, signed in",
+          "needs_reauth": "OAuth, sign-in needed",
+          "revoked": "OAuth, revoked",
+          "not_connected": "OAuth, not signed in"
+        },
+        "expires": "Token expires {when}",
+        "refreshable": "Renews on its own",
+        "notRefreshable": "Does not renew",
+        "attention": "{red, plural, =0 {} one {# provider is disconnected.} other {# providers are disconnected.}} {yellow, plural, =0 {} one {# provider needs a look.} other {# providers need a look.}}"
+      },
+      "reconnect": {
+        "open": "Reconnect",
+        "pending": "Starting…",
+        "named": "Reconnect {name}",
+        "clientRequired": "This provider needs its OAuth app again. Remove it and add it from the registry to enter the client ID."
+      }
     },
     "toolbelts": {
       "title": "Toolbelts",
@@ -950,6 +1067,13 @@
         "plain": "A rule names the call it governs, then the condition that lets it through. This one denies a payment unless the same run already priced it."
       },
       "versionsTable": "tools.policy_versions"
+    },
+    "oauthCallback": {
+      "doneTitle": "{name} is connected",
+      "done": "You can close this window. The Add a provider dialog continues.",
+      "failedTitle": "Sign-in did not finish",
+      "denied": "The sign-in was declined. Close this window and try again from Oxagen.",
+      "failed": "Close this window. Oxagen shows what went wrong."
     }
   }
 }
