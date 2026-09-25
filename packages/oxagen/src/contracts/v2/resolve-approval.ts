@@ -38,7 +38,10 @@ export const resolveApproval = defineTool({
   description:
     "Approve or deny a parked action — a tool-call approval or a first-use consent for an external tool server. Approval mints a single-use token bound to the agent, run, action and expiry; the decision resumes the paused run.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli", "agent"],
+  // Not on the `agent` surface: an approval is a person's decision, and a
+  // model that holds this tool can answer the call its own run parked
+  // (ADR-XXX). Cutover (#2884) carries that decision with the tool.
+  surfaces: ["api", "mcp", "cli"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   // A parked call is a run already waiting on a human. Making the resolution

@@ -35,15 +35,24 @@ export function isApprovalPublicId(value: string): boolean {
 // the handler as `HandlerError { code: "conflict", reason: "approval_expired" }`
 // and never reaches the recorder, which is why the output enum holds only the
 // two decisions a caller can make (§3.9 item 15).
+//
+// An approval is a person's decision, so the contract is not on the `agent`
+// surface (ADR-XXX). The in-app assistant acts as the person who typed, and a
+// model holding this tool approved the write its own turn had parked. People
+// resolve from Fleet, the Run page and the shell's approvals drawer, which
+// invoke through the app's kernel seam and name no surface.
 export const agentApprovalResolve = registerCapability({
   name: "resolve_approval",
   domain: "agent",
   description:
     "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
+  // Writes the resolution onto the approval row and, on a mandate row that
+  // is denied, releases the reservation.
+  mutates: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "approval" },
   sensitivity: "medium",
   defaultEffect: "deny",
