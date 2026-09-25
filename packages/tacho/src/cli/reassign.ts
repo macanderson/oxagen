@@ -203,7 +203,7 @@ async function reassignLocked(
       force: true,
       // A harness-only reassign keeps its live sessions' runs, and only once
       // the old enrollment is revoked: ingest hands a session to the new
-      // host only then (ADR-178).
+      // host only then (ADR-179).
       predecessorRevoked: revoked,
     },
     deps,

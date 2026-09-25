@@ -53,6 +53,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { invoke } from "@oxagen/oxagen/kernel";
 import {
   assistantAsk,
+  type AssistantGoal,
   type AssistantPageContext,
   type AssistantParkedCard,
 } from "@oxagen/oxagen/contracts/assistant.ask";
@@ -136,6 +137,8 @@ export interface AssistantTurnRequest {
   conversationId: string | null;
   content: string;
   pageContext: AssistantPageContext | null;
+  /** Makes the turn goal-shaped: a verifier judges each round against it. */
+  goal?: AssistantGoal;
   /** Per-turn MCP server allowlist; empty loads every workspace server. */
   activeServerIds?: readonly string[];
   tier?: "fast" | "balanced" | "precise" | null;
@@ -411,7 +414,11 @@ async function runPreparedTurn(
   const onApprovalRequired = (event: ApprovalRequiredEvent): void => {
     if (event.capability !== BUDGET_CONTINUE_CAPABILITY) {
       parked.push({
-        approvalId: event.approvalId,
+        // The contract promises the public id (`apr_…`): it is the id the
+        // flyout matches against `list_approvals` and
+        // `list_resolved_approvals`, and the one Fleet shows. The row uuid is
+        // the fallback for a writer that returned no public id.
+        approvalId: event.approvalPublicId ?? event.approvalId,
         capability: event.capability,
         expiresAt: event.expiresAt,
       });
@@ -546,6 +553,7 @@ async function runPreparedTurn(
     userId,
     surface: request.surface,
     instruction: request.content,
+    ...(request.goal ? { goal: request.goal.statement } : {}),
     maxSteps: DEFAULT_GOVERNED_TURN_MAX_STEPS,
     // The spec's tool policy is the set this turn holds: the capabilities
     // materializeTools resolved, plus the belt's two meta-tools, which are
@@ -632,6 +640,7 @@ async function runPreparedTurn(
       toolNameMap: materialised.nameMap,
       ...(p.effort ? { effort: p.effort } : {}),
       ...(budgetGuard !== undefined ? { budgetGuard } : {}),
+      ...(request.goal ? { goal: request.goal } : {}),
       fundedBy: funding.fundedBy,
       ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
       ledger: run,

@@ -62,9 +62,11 @@ const POLICY = new Set([
   "approval_decision",
   "token_issued",
 ]);
+// Mirrors RECALL_TYPES in packages/run-ledger/src/run-frames.ts.
 const RECALL = new Set([
   "context.assembled",
   "context.frames_selected",
+  "context.instructions_applied",
   "steering.manifest",
 ]);
 

@@ -114,7 +114,7 @@ const HOST_PUBLIC = "tch_0123456789abcdefghjkmn";
 const HOST_ID = "11111111-1111-4111-8111-111111111111";
 /** The device key fingerprint the fixture's host enrolled with. */
 const DEVICE_KEY = `sha256:${"d".repeat(64)}`;
-/** An earlier enrollment of the same machine (ADR-178). */
+/** An earlier enrollment of the same machine (ADR-179). */
 const PREDECESSOR_PUBLIC = "tch_predecessor00000000000";
 const PREDECESSOR_ID = "44444444-4444-4444-8444-444444444444";
 const ENROLLER_USER_ID = "22222222-2222-4222-8222-222222222222";
@@ -1965,7 +1965,7 @@ describe("ingest_tacho_events", () => {
     expect(mocks.loggerError).not.toHaveBeenCalled();
   });
 
-  describe("a successor enrollment (ADR-178)", () => {
+  describe("a successor enrollment (ADR-179)", () => {
     /** The fixture's host, preceded by a revoked enrollment of the same machine. */
     function withPredecessor(
       overrides: Record<string, unknown> = {},
