@@ -7579,6 +7579,11 @@ type Messages = {
         title: string;
         body: string;
       };
+      thread: {
+        new: string;
+        loading: string;
+        loadFailed: string;
+      };
       composer: {
         label: string;
         placeholder: string;
