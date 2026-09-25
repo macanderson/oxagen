@@ -80,6 +80,29 @@ The app gains the `task` level the kernel already had. Its key stays the
 run's `goal`, because no run carries a task id. A task id belongs on the run
 record first. The level can re-key to it once one exists.
 
+### 6. Label case
+
+`cost.cost_centers.label` is citext, so its unique index treats `ENG-1001`
+and `eng-1001` as one label. `agent.agents.cost_center`,
+`workspace.workspaces.cost_center` and `cost.run_totals.cost_center` are
+text, and a text comparison is case-sensitive. The database does not keep
+their case aligned with the list. The writers do:
+
+- `set_cost_center` stores the list's spelling, not the spelling it was
+  given, so `eng-1001` on an agent is stored as `ENG-1001`.
+- The rollup casts the agent's and the workspace's label to citext before it
+  looks the label up in the list, and records the list's spelling on the run
+  row. The statement and the `cost_center` level group runs by that stored
+  spelling, so a label that reached an agent in another case still files its
+  runs under the list's spelling.
+- `delete_cost_center` clears agents and workspaces whose label matches
+  ignoring case.
+
+A new writer of any of the three columns must follow the same rule: store
+the list's spelling, and compare against the list ignoring case. Converting
+the three columns to citext would move the rule into the schema. That takes
+a migration and is deferred. Recorded 2026-09-25 for #3750.
+
 ## Alternatives
 
 - **Store the label on the run at admission.** Rejected for now: a ledger run

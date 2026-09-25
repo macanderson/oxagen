@@ -361,7 +361,23 @@ describe("setSubscriptionSeats — direction-aware proration", () => {
     ];
     expect(callArgs[1].prorationBehavior).toBe("always_invoice");
     expect(callArgs[1].seats).toBe(5);
-    expect(callArgs[1].idempotencyKey).toBe("seats:sub_test:5");
+    expect(callArgs[1].idempotencyKey).toBe("seats:sub_test:3->5");
+  });
+
+  it("keys A->B and B->A differently, so a change back is not replayed (#2976)", async () => {
+    subscriptionsFindFirstMock.mockResolvedValueOnce(
+      makeActiveSubRow({ seatCount: 5 }),
+    );
+    await setSubscriptionSeats("org-001", 8);
+    subscriptionsFindFirstMock.mockResolvedValueOnce(
+      makeActiveSubRow({ seatCount: 8 }),
+    );
+    await setSubscriptionSeats("org-001", 5, { requestId: "req_2" });
+
+    const keys = setSubscriptionSeatsMock.mock.calls.map(
+      (c) => (c as [string, { idempotencyKey: string }])[1].idempotencyKey,
+    );
+    expect(keys).toEqual(["seats:sub_test:5->8", "seats:sub_test:8->5:req_2"]);
   });
 
   it("decrease — passes prorationBehavior create_prorations", async () => {
