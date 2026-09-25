@@ -11,8 +11,10 @@ import { chSelect } from "./tenant";
 export const TOOL_INVOCATION_WINDOW_DAYS = 30;
 
 /**
- * Completed and failed invocations in the last 30 days, by capability id,
- * for the ids given. An id with no rows is absent from the map.
+ * Every invocation recorded in the last 30 days, by capability id, for the
+ * ids given: completed, failed and parked alike. A parked call is a call the
+ * agent made; it is only kept out of failure counts. An id with no rows is
+ * absent from the map.
  */
 export async function countRecentToolInvocations(
   capabilityIds: readonly string[],

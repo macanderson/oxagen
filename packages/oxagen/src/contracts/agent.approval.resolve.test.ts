@@ -93,6 +93,36 @@ describe("agent.approval.resolve capability", () => {
     ).toBe(false);
   });
 
+  it("carries what became of an approved stored call, and keeps it when absent (ADR-118)", () => {
+    const parsed = agentApprovalResolve.output.parse({
+      approvalId: PUBLIC_ID,
+      resolution: "approved",
+      mandate: null,
+      execution: { status: "succeeded", runId: "arun_1", reason: null },
+    });
+    expect(parsed.execution).toEqual({
+      status: "succeeded",
+      runId: "arun_1",
+      reason: null,
+    });
+    expect(
+      agentApprovalResolve.output.parse({
+        approvalId: PUBLIC_ID,
+        resolution: "denied",
+        mandate: null,
+        execution: null,
+      }).execution,
+    ).toBeNull();
+    expect(
+      agentApprovalResolve.output.safeParse({
+        approvalId: PUBLIC_ID,
+        resolution: "approved",
+        mandate: null,
+        execution: { status: "succeeded" },
+      }).success,
+    ).toBe(false);
+  });
+
   it.each(["expired", "stalled"])(
     "rejects the resolution %j: a no-op is a conflict, never a success",
     (resolution) => {

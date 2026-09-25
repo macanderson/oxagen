@@ -8,103 +8,19 @@
 //
 // Secret VALUES are read from gcloud into memory and written only to the local,
 // gitignored secrets.db. They are never logged.
-import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
-import { promisify } from "node:util";
+import { fetchSecret, listSecretNames } from "./gcloud-secrets";
 import { openDb, upsertFromPull } from "./secrets-db";
 import type { PullUpsert } from "./secrets-db";
 import { docFor, resolveEnvKey } from "./secrets-meta";
 import { buildEnvRefIndex, deriveUsage } from "./secrets-usage";
 import { parseEnvFile, reconcile } from "./secrets-reconcile";
 
-const execFileP = promisify(execFile);
-
 const here = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(here, "..", "..", "..");
 const PROJECT = process.env.GCP_PROJECT ?? "oxagen-490023";
-
-// ── gcloud helpers ────────────────────────────────────────────────────────────
-
-interface GcloudVersion {
-  name: string; // projects/P/secrets/S/versions/N
-  createTime: string;
-  state: string;
-}
-
-async function gcloudJson<T>(args: string[]): Promise<T> {
-  const { stdout } = await execFileP(
-    "gcloud",
-    [...args, "--format=json", "--project", PROJECT],
-    {
-      maxBuffer: 32 * 1024 * 1024,
-    },
-  );
-  return JSON.parse(stdout) as T;
-}
-
-/** All secret names in the project. */
-async function listSecretNames(): Promise<string[]> {
-  const items = await gcloudJson<{ name: string }[]>(["secrets", "list"]);
-  return items
-    .map((i) => i.name.split("/").pop() ?? i.name)
-    .sort((a, b) => a.localeCompare(b));
-}
-
-interface ActiveVersion {
-  version: string;
-  createTime: string;
-}
-
-/** The newest enabled version of a secret (version number + createTime). */
-async function activeVersion(secret: string): Promise<ActiveVersion | null> {
-  try {
-    const versions = await gcloudJson<GcloudVersion[]>([
-      "secrets",
-      "versions",
-      "list",
-      secret,
-      "--filter=state=enabled",
-      "--sort-by=~createTime",
-      "--limit=1",
-    ]);
-    const v = versions[0];
-    if (!v) return null;
-    return {
-      version: v.name.split("/").pop() ?? "?",
-      createTime: v.createTime,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** Access a specific version's value (raw stdout, never logged). */
-async function accessValue(
-  secret: string,
-  version: string,
-): Promise<string | null> {
-  try {
-    const { stdout } = await execFileP(
-      "gcloud",
-      [
-        "secrets",
-        "versions",
-        "access",
-        version,
-        "--secret",
-        secret,
-        "--project",
-        PROJECT,
-      ],
-      { maxBuffer: 32 * 1024 * 1024 },
-    );
-    return stdout;
-  } catch {
-    return null;
-  }
-}
 
 // ── Concurrency pool ───────────────────────────────────────────────────────────
 
@@ -146,7 +62,7 @@ async function main(): Promise<void> {
   const refIndex = buildEnvRefIndex(REPO_ROOT);
 
   log(`  listing secrets…`);
-  const names = await listSecretNames();
+  const names = await listSecretNames(PROJECT);
   log(`  ${names.length} secrets — fetching versions + values (pool of 8)…`);
 
   const db = openDb();
@@ -155,10 +71,17 @@ async function main(): Promise<void> {
   let updated = 0;
   let dupes = 0;
   let missingVals = 0;
+  const failures: { name: string; message: string }[] = [];
 
   await mapPool(names, 8, async (name) => {
-    const active = await activeVersion(name);
-    const value = active ? await accessValue(name, active.version) : null;
+    const fetched = await fetchSecret(name, PROJECT);
+    if (!fetched.ok) {
+      // gcloud failed for a reason other than NOT_FOUND. Keep the last good
+      // row rather than overwrite it with a missing value.
+      failures.push({ name, message: fetched.message });
+      return;
+    }
+    const { active, value } = fetched;
     if (value === null) missingVals++;
 
     const envKey = resolveEnvKey(name);
@@ -186,9 +109,19 @@ async function main(): Promise<void> {
 
   log(
     `\n  done: ${inserted} inserted, ${updated} updated, ${dupes} reconciled vs local files, ` +
-      `${missingVals} with no accessible value.`,
+      `${missingVals} with no value in Secret Manager, ${failures.length} failed.`,
   );
   log(`  → ${join(here, "..", "secrets.db")} (gitignored)`);
+  if (failures.length > 0) {
+    failures.sort((a, b) => a.name.localeCompare(b.name));
+    process.stderr.write(
+      `\n  gcloud failed for ${failures.length} secret(s). Their rows were left unchanged:\n`,
+    );
+    for (const f of failures) {
+      process.stderr.write(`    ${f.name}: ${f.message}\n`);
+    }
+    process.exitCode = 1;
+  }
 }
 
 main().catch((e: unknown) => {

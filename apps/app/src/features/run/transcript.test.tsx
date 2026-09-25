@@ -1230,6 +1230,96 @@ describe("live access changes", () => {
   });
 });
 
+describe("a call the in-app assistant parked", () => {
+  /** An assistant turn's one tool call, its receipt labelled `label`. */
+  const assistantCall = (label: string, kinds: TranscriptEntry["kinds"]) =>
+    runTranscript({
+      zoom: "everything",
+      entries: [
+        transcriptEntry({
+          seq: "3",
+          endSeq: "3",
+          kind: "tool_call",
+          type: "tool.engine_call_started",
+          label: "create_workspace",
+          callKey: "tool-1-0",
+          kinds: ["tools"],
+          request: transcriptBody({
+            seq: "3",
+            type: "tool.engine_call_started",
+            text: '{"name":"ops"}',
+          }),
+          response: null,
+          frames: 1,
+          cost: null,
+          cumulativeCost: null,
+        }),
+        transcriptEntry({
+          seq: "4",
+          endSeq: "4",
+          kind: "tool_call",
+          type: "tool.engine_call_completed",
+          label,
+          callKey: "tool-1-0",
+          kinds,
+          request: null,
+          response: transcriptBody({
+            seq: "4",
+            type: "tool.engine_call_completed",
+            text: '"refused: create_workspace is waiting for approval"',
+          }),
+          frames: 1,
+          cost: null,
+          cumulativeCost: null,
+        }),
+      ],
+    });
+
+  it("shows the call as parked, links its receipt, and names the approval it waits on", async () => {
+    const { container } = renderSection({
+      read: readOk(
+        assistantCall("create_workspace parked apr_0a1b2c3d4e5f6g7h8j9k0m", [
+          "tools",
+        ]),
+      ),
+    });
+    const call = toolRow("create_workspace");
+    // Waiting on a person is not a failure.
+    expect(call).not.toHaveTextContent("✗");
+    expect(
+      within(call).getByRole("link", { name: "parked · fr 4" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=4",
+    );
+    // The note and the approval id sit in the call's fold, with its output.
+    fireEvent.click(
+      within(call).getByRole("button", { name: "Show the call" }),
+    );
+    expect(call).toHaveTextContent("Held at Oxagen until someone answers.");
+    expect(within(call).getByTestId("tx-parked-approval")).toHaveTextContent(
+      "Approval apr_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("still shows a denied call as refused, with no approval (negative)", () => {
+    renderSection({
+      read: readOk(
+        assistantCall("create_workspace denied", ["tools", "errors"]),
+      ),
+    });
+    const call = toolRow("create_workspace");
+    expect(call).toHaveTextContent("✗");
+    expect(within(call).queryByRole("link", { name: /parked/ })).toBeNull();
+    fireEvent.click(
+      within(call).getByRole("button", { name: "Show the call" }),
+    );
+    expect(call).not.toHaveTextContent("Held at Oxagen until someone answers.");
+    expect(within(call).queryByTestId("tx-parked-approval")).toBeNull();
+  });
+});
+
 describe("a run with no frames", () => {
   it("says the run has none yet", () => {
     renderSection({ read: readOk(runTranscript({ entries: [] })) });

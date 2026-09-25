@@ -124,6 +124,7 @@
       "noResult": "no result recorded",
       "parked": "parked · fr {seq}",
       "parkedNote": "Held at Oxagen until someone answers. Approve or deny it on the Governed actions tab.",
+      "parkedApproval": "Approval <code>{approval}</code>",
       "gate": "{decision} · fr {seq}",
       "frame": "{type} · fr {seq}",
       "subagentFrame": "On a subagent's chain, which the Governed actions tab does not read",

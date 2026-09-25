@@ -33,6 +33,7 @@ import type {
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
+import type { AssistantThread } from "./contracts/conversations";
 import type { MandateDetail, MandateList } from "./contracts/mandates";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
@@ -147,6 +148,16 @@ export interface DataSource {
      * whole feed for a viewer who can open no workspace (#3806).
      */
     notifications(ctx: OrgCtx): Promise<Read<NotificationFeed>>;
+  };
+  /**
+   * get_conversation with no id: the viewer's latest active conversation in
+   * the workspace, the thread the assistant flyout reopens (#4163), or null
+   * when the viewer has none. Caller:
+   * features/shell/assistant-thread-actions.ts, when the flyout opens in a
+   * workspace it has not read yet.
+   */
+  conversations: {
+    latest(ctx: WsCtx): Promise<Read<AssistantThread | null>>;
   };
   /**
    * The Billing page's six noBillingGate reads, each Owner, Admin or Billing

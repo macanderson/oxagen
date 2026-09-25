@@ -127,6 +127,7 @@ import { conversationDeleteRoute } from "./routes/v1/conversation.delete";
 import { conversationPurgeRoute } from "./routes/v1/conversation.purge";
 import { conversationFilesListRoute } from "./routes/v1/conversation.files.list";
 import { conversationExportRoute } from "./routes/v1/conversation.export";
+import { conversationGetRoute } from "./routes/v1/conversation.get";
 import { conversationAttachmentAddRoute } from "./routes/v1/conversation.attachment.add";
 import { assetUploadRoute } from "./routes/v1/asset.upload";
 import { pluginRegistryListRoute } from "./routes/v1/plugin.registry.list";
@@ -866,6 +867,10 @@ orgScoped.route("/conversations", conversationListRoute);
 orgScoped.route("/conversations", conversationFilesListRoute);
 // GET /conversations/:conversationId/export — same prefix trick as /files above.
 orgScoped.route("/conversations", conversationExportRoute);
+// GET /conversations/latest and /conversations/:conversationId: the thread
+// with its messages (get_conversation). One path segment, so it never matches
+// /:conversationId/files or /:conversationId/export.
+orgScoped.route("/conversations", conversationGetRoute);
 orgScoped.route("/conversations/rename", conversationRenameRoute);
 orgScoped.route("/conversations/archive", conversationArchiveRoute);
 orgScoped.route("/conversations/delete", conversationDeleteRoute);

@@ -191,6 +191,34 @@ describe("external decision admission", () => {
     expect(mocks.create).toHaveBeenCalledOnce();
     expect(mocks.wait).not.toHaveBeenCalled();
   });
+  it("names the parked approval by its public id", async () => {
+    rule("require_approval");
+    const parked = new Error("parked");
+    mocks.external.mockResolvedValue({
+      approvalId: "approval-1",
+      approvalPublicId: "apr_1",
+      expiresAt: new Date(Date.now() + 60_000),
+      status: "pending",
+    });
+    const event = vi.fn(() => {
+      throw parked;
+    });
+    await expect(
+      externalDecisionCheck({
+        name,
+        input: { amount: 5 },
+        ctx,
+        approvalMode: "park",
+        onApprovalRequired: event,
+      })(),
+    ).rejects.toBe(parked);
+    expect(event).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvalId: "approval-1",
+        approvalPublicId: "apr_1",
+      }),
+    );
+  });
   it("recovers parked proof in a rebuilt checker and consumes it once", async () => {
     rule("require_approval");
     const parked = new Error("parked");

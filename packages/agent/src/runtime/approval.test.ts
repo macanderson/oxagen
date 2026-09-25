@@ -13,7 +13,9 @@ vi.mock("pino", () => ({
 const insertedValues: unknown[] = [];
 const executeSpy = vi.fn(async () => undefined);
 
-const returningMock = vi.fn(async () => [{ id: "appr_123" }]);
+const returningMock = vi.fn(async () => [
+  { id: "appr_123", publicId: "apr_123" },
+]);
 const valuesMock = vi.fn((v: unknown) => {
   insertedValues.push(v);
   return { returning: returningMock };
@@ -23,9 +25,9 @@ const insertMock = vi.fn(() => ({ values: valuesMock }));
 // Three reads share the fake: the approver fan-out (principals ⨝ assignments
 // ⨝ roles), the dedupe read for a live approval on this call, and
 // readApproval. The first two are told apart from readApproval by table and
-// by projection width — the dedupe read asks for `id` alone.
+// by projection width — the dedupe read asks for `id` and `publicId` alone.
 let approverRows: Array<{ userId: string | null }> = [];
-let liveApprovalRows: Array<{ id: string }> = [];
+let liveApprovalRows: Array<{ id: string; publicId: string }> = [];
 let readApprovalRows: Array<Record<string, unknown>> = [];
 let fromTable: unknown = null;
 let projectionKeys = 0;
@@ -34,7 +36,7 @@ const whereConds: SQL[] = [];
 const limitMock = vi.fn(async () => {
   if (fromTable === schema.principals) return approverRows;
   if (fromTable === schema.approvalRequests)
-    return projectionKeys === 1 ? liveApprovalRows : readApprovalRows;
+    return projectionKeys === 2 ? liveApprovalRows : readApprovalRows;
   return [];
 });
 const whereMock = vi.fn((cond: SQL) => {
@@ -140,6 +142,9 @@ describe("approval runtime", () => {
       ttlMs: 10_000,
     });
     expect(res.approvalId).toBe("appr_123");
+    // The public id a parked card carries, so the flyout can match the row
+    // that Fleet and the list reads show.
+    expect(res.publicId).toBe("apr_123");
     expect(insertMock).toHaveBeenCalledTimes(1);
     const row = insertedValues[0] as {
       capabilityName: string;
@@ -235,7 +240,7 @@ describe("approval runtime", () => {
   // each retry writes a fresh approval and another fan-out, and the person is
   // asked to answer the same write several times.
   it("reuses a live approval for the same parked call instead of writing another (negative)", async () => {
-    liveApprovalRows = [{ id: "appr_existing" }];
+    liveApprovalRows = [{ id: "appr_existing", publicId: "apr_existing" }];
     approverRows = [{ userId: "u_owner" }];
     const res = await createApprovalRequest({
       orgId: "ten_1",
@@ -247,6 +252,7 @@ describe("approval runtime", () => {
       toolCallId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
     });
     expect(res.approvalId).toBe("appr_existing");
+    expect(res.publicId).toBe("apr_existing");
     expect(insertMock).not.toHaveBeenCalled();
   });
 

@@ -87,15 +87,41 @@ export function decisionOf(entry: TranscriptEntry | undefined): string | null {
   return entry?.decision?.decision ?? null;
 }
 
+/** The in-app assistant's tool receipt in the ledger. */
+const TOOL_RECEIPT = "tool.engine_call_completed";
+
 /**
- * A frame that needs a person: the approval request itself, or the policy
- * decision that asked for one (`ask` in the wrapper's closed vocabulary,
- * tacho `POLICY_DECISIONS`).
+ * What a ledger tool receipt records about a call parked for approval, or
+ * null when the frame is not one. The ledger's summary (the transcript's
+ * label) reads `<tool> parked`, then the public id of the approval the call
+ * waits on when the receipt named one: `create_workspace parked apr_…`.
+ * `approvalId` is null when it named none.
  */
-export function isParked(type: string, decision: string | null): boolean {
+export function parkedReceipt(
+  type: string,
+  summary: string,
+): { approvalId: string | null } | null {
+  if (type !== TOOL_RECEIPT) return null;
+  const [, outcome, approvalId] = summary.split(/\s+/);
+  if (outcome !== "parked") return null;
+  return { approvalId: approvalId ?? null };
+}
+
+/**
+ * A frame that needs a person: the approval request itself, the policy
+ * decision that asked for one (`ask` in the wrapper's closed vocabulary,
+ * tacho `POLICY_DECISIONS`), or a ledger receipt for a call that parked.
+ * `summary` is only read for that last case.
+ */
+export function isParked(
+  type: string,
+  decision: string | null,
+  summary = "",
+): boolean {
   return (
     type === "approval_request" ||
-    (type === "policy_decision" && decision === "ask")
+    (type === "policy_decision" && decision === "ask") ||
+    parkedReceipt(type, summary) !== null
   );
 }
 
@@ -106,7 +132,11 @@ export function isParked(type: string, decision: string | null): boolean {
  */
 export type Mark = "allowed" | "approval" | "denied" | "proven" | "quiet";
 
-export function markOf(type: string, decision: string | null): Mark | null {
+export function markOf(
+  type: string,
+  decision: string | null,
+  summary = "",
+): Mark | null {
   if (type === "policy_decision" || type === "approval_decision") {
     if (decision === "allow") return "allowed";
     if (decision === "deny") return "denied";
@@ -114,6 +144,7 @@ export function markOf(type: string, decision: string | null): Mark | null {
     return "quiet";
   }
   if (type === "approval_request") return "approval";
+  if (parkedReceipt(type, summary) !== null) return "approval";
   if (kindOf(type) === "op") return "proven";
   if (type === "tool_requested" || type === "tool_call") return "quiet";
   return null;
@@ -205,7 +236,9 @@ export function timelineMarks(
   frames.forEach((frame, i) => {
     const at = xs[i] ?? 0;
     if (frame.type === "control.steer") marks.push({ at, kind: "steer" });
-    if (isParked(frame.type, decisionOf(entries.get(frame.seq)))) {
+    if (
+      isParked(frame.type, decisionOf(entries.get(frame.seq)), frame.summary)
+    ) {
       if (i - parkedAt > 1) marks.push({ at, kind: "parked" });
       parkedAt = i;
     }
@@ -290,15 +323,23 @@ export function runStateOf(run: RunRow): RunState {
   return run.status;
 }
 
-/** The frames an approval can be recorded on: the request that parked it, and the decision that settled it. */
+/**
+ * The frames an approval can be recorded on: the request that parked it, and
+ * the decision that settled it. A ledger receipt for a parked call is a
+ * request too (`parkedReceipt`), read from its summary rather than its type.
+ */
 const REQUEST_FRAMES: ReadonlySet<string> = new Set([
   "approval_request",
   "tool.approval_recorded",
 ]);
 const DECISION_FRAMES: ReadonlySet<string> = new Set(["approval_decision"]);
 
-export function isApprovalFrame(type: string): boolean {
-  return REQUEST_FRAMES.has(type) || DECISION_FRAMES.has(type);
+export function isApprovalFrame(type: string, summary = ""): boolean {
+  return (
+    REQUEST_FRAMES.has(type) ||
+    DECISION_FRAMES.has(type) ||
+    parkedReceipt(type, summary) !== null
+  );
 }
 
 /** An approval as matching reads it: pending ones carry no `resolvedAt`. */
@@ -316,14 +357,18 @@ type Matches<T> = {
 /**
  * Which approval frame on the page records which approval.
  *
- * The approval row carries no seq and the frame carries no approval id, so
- * the match reads the two things both record: the tool (the frame's summary
- * names it, tacho `tachoFrameSummary`) and the instant (a request frame is
- * recorded when the call parked, a decision frame when it was settled). A
- * frame and an approval pair only when the frame names the approval's tool,
- * and among those the closest instants pair first. A frame that names no
- * tool, as a ledger `tool.approval_recorded` does, matches nothing: its
- * approval stays unmatched and the tab lists it where no frame hides it.
+ * A ledger receipt for a parked call names its approval's public id, so it
+ * pairs with that approval and no other, ahead of any match by instant.
+ *
+ * Every other approval frame carries no approval id, and the approval row
+ * carries no seq, so the match reads the two things both record: the tool
+ * (the frame's summary names it, tacho `tachoFrameSummary`) and the instant
+ * (a request frame is recorded when the call parked, a decision frame when it
+ * was settled). A frame and an approval pair only when the frame names the
+ * approval's tool, and among those the closest instants pair first. A frame
+ * that names no tool, as a ledger `tool.approval_recorded` does, matches
+ * nothing: its approval stays unmatched and the tab lists it where no frame
+ * hides it.
  */
 export function matchApprovals<T extends Matchable>(
   frames: readonly RunFrame[],
@@ -337,19 +382,22 @@ export function matchApprovals<T extends Matchable>(
     order: number;
   }[] = [];
   frames.forEach((frame, order) => {
-    if (!isApprovalFrame(frame.type)) return;
+    if (!isApprovalFrame(frame.type, frame.summary)) return;
     const tokens = frame.summary.split(/\s+/);
     const group = DECISION_FRAMES.has(frame.type) ? "decision" : "request";
     const at = Date.parse(frame.observedAt);
+    const named = parkedReceipt(frame.type, frame.summary)?.approvalId ?? null;
     for (const item of items) {
-      if (!tokens.includes(item.tool)) continue;
+      if (named === null ? !tokens.includes(item.tool) : item.id !== named)
+        continue;
       const ref = group === "decision" ? item.resolvedAt : item.createdAt;
       if (ref === undefined) continue;
       pairs.push({
         seq: frame.seq,
         item,
         group,
-        distance: Math.abs(at - Date.parse(ref)),
+        // A pair by id is exact, so it sorts ahead of every pair by instant.
+        distance: named === null ? Math.abs(at - Date.parse(ref)) : -1,
         order,
       });
     }

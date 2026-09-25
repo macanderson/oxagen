@@ -31,7 +31,6 @@ import {
   supportsReasoning,
   type ModelFundingSource,
   type ModelIdentity,
-  type ModelMessage,
   type StreamAgentReplyArgs,
 } from "@oxagen/ai";
 import {
@@ -54,6 +53,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { invoke } from "@oxagen/oxagen/kernel";
 import {
   assistantAsk,
+  type AssistantGoal,
   type AssistantPageContext,
   type AssistantParkedCard,
 } from "@oxagen/oxagen/contracts/assistant.ask";
@@ -65,7 +65,7 @@ import {
 import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { INTERACTIVE_AGENT_CAPABILITIES } from "@oxagen/oxagen/interactive-agent";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
@@ -88,6 +88,11 @@ import {
   type GovernedTurnUsage,
 } from "./governed-turn";
 import {
+  compactHistory,
+  loadConversationHistory,
+  type LoadedHistory,
+} from "./history-summary";
+import {
   materializeTools,
   type ApprovalRequiredEvent,
 } from "./materialize-tools";
@@ -99,9 +104,11 @@ const logger = pino({
   base: { pkg: "agent.assistant-turn" },
 });
 
-/** Prior turns the transcript carries. */
+/**
+ * Prior messages the transcript carries word for word. Older ones reach the
+ * turn as one summary (`history-summary.ts`).
+ */
 const HISTORY_LIMIT = 50;
-const VALID_ROLES = new Set(["user", "assistant", "system"]);
 /** How long a "prompt"-mode budget approval waits on a person. */
 const BUDGET_APPROVAL_TTL_MS = 5 * 60 * 1000;
 /** The capability name the budget-continue approval is filed under. */
@@ -126,9 +133,12 @@ export interface AssistantTurnRequest {
   surface: AssistantRunSurface;
   orgSlug: string;
   workspaceSlug: string;
+  /** The conversation to continue: its internal id or its `cnv_` public id. */
   conversationId: string | null;
   content: string;
   pageContext: AssistantPageContext | null;
+  /** Makes the turn goal-shaped: a verifier judges each round against it. */
+  goal?: AssistantGoal;
   /** Per-turn MCP server allowlist; empty loads every workspace server. */
   activeServerIds?: readonly string[];
   tier?: "fast" | "balanced" | "precise" | null;
@@ -166,6 +176,8 @@ export interface AssistantTurnHooks {
 
 export interface AssistantTurnResult {
   conversationId: string;
+  /** `cnv_…`: the same conversation by the id `get_conversation` takes. */
+  conversationPublicId: string;
   userMessageId: string;
   assistantMessageId: string;
   /** `arun_…` */
@@ -369,11 +381,12 @@ async function runPreparedTurn(
     runInTenantScope(scope, fn);
   // The conversation and the person's message, before anything else is
   // spent: a turn that fails after this leaves the question on the record.
-  const { conversationId, userMessageId, history } = await inScope(() =>
-    withTenantDb((tx) =>
-      appendUserMessage(tx, scope, userId, request, p.request.surface),
-    ),
-  );
+  const { conversationId, conversationPublicId, userMessageId, history } =
+    await inScope(() =>
+      withTenantDb((tx) =>
+        appendUserMessage(tx, scope, userId, request, p.request.surface),
+      ),
+    );
   // The person's message names the turn everywhere: `token_usage`, the
   // approval rows' message id (which `resolve_approval` follows back to the
   // person who asked), the memory recall's execution ref.
@@ -383,12 +396,29 @@ async function runPreparedTurn(
     messageId,
     executionStepId: messageId,
   };
+  // Started here and awaited once the run is open, so a summary the thread
+  // needs is written while the tools, the prompt and the memory load. It
+  // never rejects: a summary it cannot write leaves the plain window (#4171).
+  const compactedHistory = compactHistory(history, {
+    scope,
+    conversationId,
+    funding,
+    telemetry: {
+      surface: request.surface === "chat" ? "app" : "api",
+      messageId,
+    },
+    ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
+  });
 
   const parked: AssistantParkedCard[] = [];
   const onApprovalRequired = (event: ApprovalRequiredEvent): void => {
     if (event.capability !== BUDGET_CONTINUE_CAPABILITY) {
       parked.push({
-        approvalId: event.approvalId,
+        // The contract promises the public id (`apr_…`): it is the id the
+        // flyout matches against `list_approvals` and
+        // `list_resolved_approvals`, and the one Fleet shows. The row uuid is
+        // the fallback for a writer that returned no public id.
+        approvalId: event.approvalPublicId ?? event.approvalId,
         capability: event.capability,
         expiresAt: event.expiresAt,
       });
@@ -523,6 +553,7 @@ async function runPreparedTurn(
     userId,
     surface: request.surface,
     instruction: request.content,
+    ...(request.goal ? { goal: request.goal.statement } : {}),
     maxSteps: DEFAULT_GOVERNED_TURN_MAX_STEPS,
     // The spec's tool policy is the set this turn holds: the capabilities
     // materializeTools resolved, plus the belt's two meta-tools, which are
@@ -563,6 +594,11 @@ async function runPreparedTurn(
     // refuses the turn here, the same as any other receipt it will not take:
     // steering the record cannot account for is what #3303 is about.
     await run.steeringManifest(steering);
+    // The same holds for a summary carried in place of older messages. It
+    // rides the history, not the system prompt, so the assembler never sees
+    // it (ADR-174 §4).
+    const compacted = await compactedHistory;
+    if (compacted.frame) await run.historySummary(compacted.frame);
     turn = await runGovernedTurn({
       telemetry: {
         ...scope,
@@ -589,7 +625,7 @@ async function runPreparedTurn(
         }),
         steering,
       ),
-      history,
+      history: compacted.history,
       contextMessages: [
         pageContextMessage(request.pageContext),
         recalledMemory,
@@ -604,6 +640,7 @@ async function runPreparedTurn(
       toolNameMap: materialised.nameMap,
       ...(p.effort ? { effort: p.effort } : {}),
       ...(budgetGuard !== undefined ? { budgetGuard } : {}),
+      ...(request.goal ? { goal: request.goal } : {}),
       fundedBy: funding.fundedBy,
       ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
       ledger: run,
@@ -649,6 +686,7 @@ async function runPreparedTurn(
       appendAssistantMessage(tx, scope, userId, conversationId, reply, {
         surface: request.surface,
         runId: run.runPublicId,
+        parkedCards: parked,
       }),
     ),
   );
@@ -669,6 +707,7 @@ async function runPreparedTurn(
 
   return {
     conversationId,
+    conversationPublicId,
     userMessageId,
     assistantMessageId,
     runId: run.runPublicId,
@@ -799,8 +838,15 @@ function stepsFromReceipts(
       requestPayload: receipt.input,
       ...(receipt.outcome === "completed"
         ? { responsePayload: receipt.output }
-        : { responsePayload: { error: receipt.error ?? receipt.outcome } }),
-      status: receipt.outcome === "completed" ? "completed" : "failed",
+        : receipt.outcome === "parked"
+          ? {
+              responsePayload: {
+                error: receipt.error ?? receipt.outcome,
+                approvalPublicId: receipt.approvalPublicId ?? null,
+              },
+            }
+          : { responsePayload: { error: receipt.error ?? receipt.outcome } }),
+      status: executionStatusOf(receipt.outcome),
       latencyMs: Math.max(0, Math.round(receipt.durationMs)),
     });
   }
@@ -811,39 +857,86 @@ type ChatMessageExecutionStep = NonNullable<
   ChatMessageExecutionInput["steps"]
 >[number];
 
+type ExecutionToolCallStatus = NonNullable<
+  ChatMessageExecutionStep["toolCalls"]
+>[number]["status"];
+
+/**
+ * A tool receipt's outcome as an `agent_tool_calls` status. A parked call did
+ * not run and waits on a person, so it is `pending`, never `failed`: the
+ * execution trace would otherwise count every parked write as a failure.
+ */
+function executionStatusOf(
+  outcome: Extract<AssistantRunReceipt, { kind: "tool" }>["outcome"],
+): ExecutionToolCallStatus {
+  if (outcome === "completed") return "completed";
+  if (outcome === "parked") return "pending";
+  return "failed";
+}
+
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
 type Scope = { orgId: string; workspaceId: string };
+
+/** A `cnv_` public id; anything else `conversationId` carries is the uuid. */
+const CONVERSATION_PUBLIC_ID = /^cnv_/i;
 
 /**
  * Resolve or open the conversation and append the person's message, then
  * load the prior turns as the transcript, newest last, without the message
  * just written.
+ *
+ * A turn continues only a conversation the person asking may continue: in
+ * this org and workspace, theirs, not deleted and not archived. The rule is
+ * the one `list_conversations`, `rename_conversation` and `get_conversation`
+ * apply, and it is checked before anything is written. Until #4163 the lookup
+ * matched on the tenant alone, so a member who held another member's
+ * conversation id could append a question to it, read its history back as the
+ * model's transcript, and continue a thread its owner had deleted. Each case
+ * answers `ConversationNotFoundError`, which says nothing about whether the
+ * row exists.
+ *
+ * Exported for its own test (`assistant-turn.conversation.test.ts`); the turn
+ * is its only production caller.
  */
-async function appendUserMessage(
+export async function appendUserMessage(
   tx: Tx,
   scope: Scope,
   userId: string,
-  request: AssistantTurnRequest,
+  request: Pick<
+    AssistantTurnRequest,
+    "conversationId" | "content" | "pageContext"
+  >,
   surface: AssistantRunSurface,
 ): Promise<{
   conversationId: string;
+  conversationPublicId: string;
   userMessageId: string;
-  history: ModelMessage[];
+  history: LoadedHistory;
 }> {
-  let conversationId = request.conversationId;
-  if (conversationId) {
+  let conversation: { id: string; publicId: string };
+  const named = request.conversationId;
+  if (named) {
     const [existing] = await tx
-      .select({ id: schema.conversations.id })
+      .select({
+        id: schema.conversations.id,
+        publicId: schema.conversations.publicId,
+      })
       .from(schema.conversations)
       .where(
         and(
-          eq(schema.conversations.id, conversationId),
+          CONVERSATION_PUBLIC_ID.test(named)
+            ? eq(schema.conversations.publicId, named)
+            : eq(schema.conversations.id, named),
           eq(schema.conversations.orgId, scope.orgId),
           eq(schema.conversations.workspaceId, scope.workspaceId),
+          eq(schema.conversations.userId, userId),
+          isNull(schema.conversations.deletedAt),
+          isNull(schema.conversations.archivedAt),
         ),
       )
       .limit(1);
-    if (!existing) throw new ConversationNotFoundError(conversationId);
+    if (!existing) throw new ConversationNotFoundError(named);
+    conversation = existing;
   } else {
     const [created] = await tx
       .insert(schema.conversations)
@@ -855,30 +948,20 @@ async function appendUserMessage(
         createdById: userId,
         updatedById: userId,
       })
-      .returning({ id: schema.conversations.id });
+      .returning({
+        id: schema.conversations.id,
+        publicId: schema.conversations.publicId,
+      });
     if (!created) throw new Error("conversation insert returned no row");
-    conversationId = created.id;
+    conversation = created;
   }
+  const conversationId = conversation.id;
 
-  const rows = await tx
-    .select({ role: schema.messages.role, content: schema.messages.content })
-    .from(schema.messages)
-    .where(
-      and(
-        eq(schema.messages.conversationId, conversationId),
-        eq(schema.messages.orgId, scope.orgId),
-        eq(schema.messages.workspaceId, scope.workspaceId),
-      ),
-    )
-    .orderBy(desc(schema.messages.createdAt))
-    .limit(HISTORY_LIMIT);
-  const history: ModelMessage[] = rows
-    .filter((r) => VALID_ROLES.has(r.role) && r.content.trim().length > 0)
-    .map((r) => ({
-      role: r.role as "user" | "assistant" | "system",
-      content: r.content,
-    }))
-    .reverse();
+  const history = await loadConversationHistory(tx, {
+    scope,
+    conversationId,
+    limit: HISTORY_LIMIT,
+  });
 
   const [userMessage] = await tx
     .insert(schema.messages)
@@ -897,17 +980,33 @@ async function appendUserMessage(
     })
     .returning({ id: schema.messages.id });
   if (!userMessage) throw new Error("message insert returned no row");
-  return { conversationId, userMessageId: userMessage.id, history };
+  return {
+    conversationId,
+    conversationPublicId: conversation.publicId,
+    userMessageId: userMessage.id,
+    history,
+  };
 }
 
-async function appendAssistantMessage(
+/**
+ * Persist the reply with the run it was recorded as and, when the turn parked
+ * governed writes, the parked cards, so a thread read back after a reload
+ * (`get_conversation`) shows the notice the turn returned. Then move the
+ * conversation's active leaf to it.
+ */
+export async function appendAssistantMessage(
   tx: Tx,
   scope: Scope,
   userId: string,
   conversationId: string,
   reply: string,
-  metadata: { surface: AssistantRunSurface; runId: string },
+  metadata: {
+    surface: AssistantRunSurface;
+    runId: string;
+    parkedCards: readonly AssistantParkedCard[];
+  },
 ): Promise<string> {
+  const { parkedCards, ...recorded } = metadata;
   const [assistantMessage] = await tx
     .insert(schema.messages)
     .values({
@@ -916,7 +1015,11 @@ async function appendAssistantMessage(
       role: "assistant",
       content: reply,
       contentBlocks: [],
-      metadata: { status: "complete", ...metadata },
+      metadata: {
+        status: "complete",
+        ...recorded,
+        ...(parkedCards.length > 0 ? { parkedCards } : {}),
+      },
       createdById: userId,
       updatedById: userId,
     })
@@ -929,7 +1032,10 @@ async function appendAssistantMessage(
   return assistantMessage.id;
 }
 
-/** The conversation the caller named is not in this workspace. */
+/**
+ * The conversation the caller named is not one this person may continue in
+ * this workspace: missing, another member's, deleted or archived.
+ */
 export class ConversationNotFoundError extends Error {
   override readonly name = "ConversationNotFoundError";
   readonly code = "not_found" as const;

@@ -32,6 +32,7 @@
  * summary, and the process still exits 0 — visible without being fatal.
  */
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { reportTicketFailure } from "./lib/ticket-failure";
 
 const DRY = process.argv.includes("--dry-run");
@@ -83,17 +84,48 @@ function readGaps(): Gap[] {
   return parsed.gaps ?? [];
 }
 
-/** Functional-area label names to attach per capability domain prefix. */
-function areaLabelsFor(capability: string): string[] {
-  const prefix = capability.split(".")[0] ?? "";
-  const map: Record<string, string[]> = {
-    billing: ["billing"],
-    org: ["iam", "foundations"],
-    member: ["iam"],
-    iam: ["iam"],
-    security: ["security"],
-  };
-  return map[prefix] ?? [];
+/**
+ * Functional-area labels for each noun a capability name can carry.
+ *
+ * ADR-025 renamed every capability to verb-first snake_case, so the domain is
+ * no longer the first dotted segment. `billing.checkout` is now
+ * `create_checkout_session` and `org.member.remove` is `remove_org_member`.
+ * Matching on the first dotted segment alone gave every current name no area
+ * label at all.
+ */
+const AREA_LABELS_BY_NOUN: Record<string, readonly string[]> = {
+  billing: ["billing"],
+  checkout: ["billing"],
+  invoice: ["billing"],
+  invoices: ["billing"],
+  subscription: ["billing"],
+  subscriptions: ["billing"],
+  credit: ["billing"],
+  credits: ["billing"],
+  org: ["iam", "foundations"],
+  orgs: ["iam", "foundations"],
+  member: ["iam"],
+  members: ["iam"],
+  iam: ["iam"],
+  role: ["iam"],
+  roles: ["iam"],
+  security: ["security"],
+};
+
+/**
+ * Functional-area label names for a capability. The name is split on both "."
+ * and "_", so legacy dotted names and ADR-025 snake_case names resolve the
+ * same way. Labels come back in the order their nouns appear, without repeats.
+ */
+export function areaLabelsFor(capability: string): string[] {
+  const labels = new Set<string>();
+  for (const token of capability.toLowerCase().split(/[._]/)) {
+    const mapped = Object.hasOwn(AREA_LABELS_BY_NOUN, token)
+      ? AREA_LABELS_BY_NOUN[token]
+      : undefined;
+    for (const label of mapped ?? []) labels.add(label);
+  }
+  return [...labels];
 }
 
 async function main() {
@@ -339,19 +371,27 @@ async function main() {
   log("done.");
 }
 
-main().catch((err) => {
-  reportTicketFailure(
-    {
-      what: "manifest parity tickets",
-      consequence:
-        "every capability-parity gap found from here on goes untracked",
-      issue: "#2556",
-    },
-    err,
-  );
-  // Exit 0 deliberately. The step carries `continue-on-error: true`, so a
-  // non-zero exit would be swallowed into the same yellow mark this change
-  // exists to replace — the annotation above is what actually reaches a reader.
-  // The `checks` job's verdict is decided by the gates above this step.
-  process.exit(0);
-});
+// Run only as a script. The test imports `areaLabelsFor` without starting a
+// Linear sync.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    reportTicketFailure(
+      {
+        what: "manifest parity tickets",
+        consequence:
+          "every capability-parity gap found from here on goes untracked",
+        issue: "#2556",
+      },
+      err,
+    );
+    // Exit 0 deliberately. The step carries `continue-on-error: true`, so a
+    // non-zero exit would be swallowed into the same yellow mark this change
+    // exists to replace — the annotation above is what actually reaches a reader.
+    // The `checks` job's verdict is decided by the gates above this step.
+    process.exit(0);
+  });
+}

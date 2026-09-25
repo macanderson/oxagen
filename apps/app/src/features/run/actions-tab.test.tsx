@@ -36,6 +36,7 @@ import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   decidedRelease,
   parkedRelease,
+  releaseAt,
   releaseFrames,
   releaseTranscript,
 } from "./actions-tab.builders";
@@ -48,6 +49,7 @@ import {
   runOutputs,
   runRow,
   runSource,
+  runTranscript,
 } from "./run.builders";
 
 const push = vi.fn();
@@ -628,6 +630,69 @@ describe("parked calls", () => {
         decision: "denied",
         note: "Not this cycle",
       },
+    );
+  });
+
+  it("draws the assistant's parked call's card on its receipt, by the approval the receipt names", async () => {
+    const user = userEvent.setup();
+    readApprovalEligibility.mockResolvedValue({
+      ok: true,
+      value: { resolvedBy: null, eligibility: null },
+    });
+    // Two parked calls to one tool. The receipt names the one parked
+    // earlier, so pairing by the closest instant would open the wrong card.
+    const receipt = runFrame({
+      seq: "4",
+      cursor: "4",
+      type: "tool.engine_call_completed",
+      stage: "tool",
+      summary: "create_workspace parked apr_ws_early",
+      observedAt: releaseAt(4),
+    });
+    const { container } = await renderTab({
+      frames: [
+        runFrame({
+          seq: "3",
+          cursor: "3",
+          type: "tool.engine_call_started",
+          stage: "tool",
+          summary: "create_workspace",
+          observedAt: releaseAt(3),
+        }),
+        receipt,
+      ],
+      everything: ok(runTranscript({ zoom: "everything", entries: [] })),
+      body: "4",
+      frameBody: ok(runFrameBody({ seq: "4" })),
+      approvals: pending([
+        parkedRelease({
+          id: "apr_ws_late",
+          tool: "create_workspace",
+          createdAt: releaseAt(4),
+        }),
+        parkedRelease({
+          id: "apr_ws_early",
+          tool: "create_workspace",
+          createdAt: releaseAt(1),
+        }),
+      ]),
+    });
+    const parked = within(screen.getByTestId("frame-open")).getByTestId(
+      "frame-parked",
+    );
+    expect(parked).toHaveTextContent("Parked.");
+    expect(within(parked).getAllByTestId("approval")).toHaveLength(1);
+    await expectNoAxe(container);
+    await user.click(within(parked).getByTestId("decide"));
+    expect(readApprovalEligibility).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "apr_ws_early",
+      "run",
+    );
+    // The other parked call stays reachable.
+    expect(screen.getByTestId("parked-elsewhere")).toHaveTextContent(
+      "1 more call is parked on this run.",
     );
   });
 

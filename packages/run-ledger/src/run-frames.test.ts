@@ -620,6 +620,51 @@ describe("the engine's own call halves", () => {
     ).toBe("single");
   });
 
+  it("reads a parked call as parked, naming its approval, and not as an error", () => {
+    const parked = ledgerFrame(
+      event(2, "tool.engine_call_completed", {
+        tool_call_id: "tc_1",
+        tool_name: "create_workspace",
+        outcome: "parked",
+        approval_public_id: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+        input_digest: `sha256:${"b".repeat(64)}`,
+        error_digest: `sha256:${"c".repeat(64)}`,
+        duration_ms: 4,
+      }),
+    );
+    // The third word is the approval the Run page pairs the card on.
+    expect(parked.summary).toBe(
+      "create_workspace parked apr_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    expect(parked.identity.toolStatus).toBe("parked");
+    // Waiting on a person is not a failure: the errors chip leaves it out.
+    expect(frameKinds(parked)).toContain("tools");
+    expect(frameKinds(parked)).not.toContain("errors");
+    // A parked receipt that names no approval reads as the other outcomes do.
+    const unnamed = ledgerFrame(
+      event(3, "tool.engine_call_completed", {
+        tool_call_id: "tc_2",
+        tool_name: "create_workspace",
+        outcome: "parked",
+        input_digest: `sha256:${"b".repeat(64)}`,
+        duration_ms: 4,
+      }),
+    );
+    expect(unnamed.summary).toBe("create_workspace parked");
+    // A denied call is still an error, and names no approval.
+    const denied = ledgerFrame(
+      event(4, "tool.engine_call_completed", {
+        tool_call_id: "tc_3",
+        tool_name: "create_workspace",
+        outcome: "denied",
+        input_digest: `sha256:${"b".repeat(64)}`,
+        duration_ms: 4,
+      }),
+    );
+    expect(denied.summary).toBe("create_workspace denied");
+    expect(frameKinds(denied)).toContain("errors");
+  });
+
   it("folds an engine tool exchange into ONE step carrying both halves", () => {
     const frames = [
       ledgerFrame(
@@ -826,6 +871,20 @@ describe("frameKinds and filterFramesByKind", () => {
     expect(
       filterFramesByKind([ok, rejected], ["errors"]).map((f) => f.seq),
     ).toEqual(["12"]);
+  });
+
+  it("files a history summary under recall and names what it stands in for (#4171)", () => {
+    const summary = ledgerFrame(
+      event(9, "context.history_summarized", {
+        provider: "conversation_history",
+        outcome: "applied",
+        covered_message_count: 80,
+        window_message_count: 40,
+        regenerated: true,
+      }),
+    );
+    expect(frameKinds(summary)).toEqual(["recall"]);
+    expect(summary.summary).toBe("history summary applied (80)");
   });
 
   it("counts the prompt an operator typed, once, and not a subagent's", () => {

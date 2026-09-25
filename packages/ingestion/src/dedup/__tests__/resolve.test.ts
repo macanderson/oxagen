@@ -441,6 +441,51 @@ describe("resolveEntity — Pass B when the embedder cannot answer", () => {
     expect(result.similarityDeferred).toBe(true);
   });
 
+  it("logs the embedder's error so a 429 and a 401 can be told apart", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      mocks.embedText.mockRejectedValueOnce(
+        new Error("gateway 429 rate_limit"),
+      );
+      await resolveEntity(makeMutation(), "org-1");
+      mocks.embedText.mockRejectedValueOnce(new Error("gateway 401 auth"));
+      await resolveEntity(makeMutation(), "org-1");
+
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining("embedding failed"),
+        expect.objectContaining({
+          err: "gateway 429 rate_limit",
+          orgId: "org-1",
+          entityType: makeMutation().entityType,
+        }),
+      );
+      expect(warn).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("embedding failed"),
+        expect.objectContaining({ err: "gateway 401 auth" }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("logs a non-Error rejection as a string", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      mocks.embedText.mockRejectedValueOnce("socket hang up");
+      await resolveEntity(makeMutation(), "org-1");
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ err: "socket hang up" }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("does not run the vector search when there is no vector", async () => {
     mocks.embedText.mockRejectedValue(new Error("gateway down"));
 

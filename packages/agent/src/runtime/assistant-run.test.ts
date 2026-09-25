@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
+import { digestJcs } from "@oxagen/run-evidence";
 import {
   digestOfCanonicalJson,
   RETENTION_CONTENT_CLASSES,
@@ -75,6 +76,7 @@ import {
   ASSISTANT_RETENTION_POLICY,
   assistantRunStore,
   AssistantRunNotRecordedError,
+  HISTORY_SUMMARY_PROVIDER,
   openAssistantRun,
   readAssistantAgentState,
   resolveAssistantRunIdentity,
@@ -721,6 +723,60 @@ describe("openAssistantRun", () => {
     ]);
   });
 
+  it("records a parked call as parked, naming its approval, in a receipt the ledger accepts", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "make a workspace",
+      maxSteps: 4,
+      toolAllowlist: ["create_workspace"],
+      store: ledger.store,
+    });
+    await recorder.toolCall({
+      seq: 3,
+      requestId: "tool-1-0",
+      toolName: "create_workspace",
+      outcome: "parked",
+      approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+      input: { name: "ops" },
+      error: "refused: create_workspace is waiting for approval",
+      durationMs: 4,
+    });
+    // A denied call names no approval even when handed one: only a park
+    // waits on a person.
+    await recorder.toolCall({
+      seq: 5,
+      requestId: "tool-1-1",
+      toolName: "create_workspace",
+      outcome: "denied",
+      approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+      input: { name: "ops" },
+      error: "approval denied",
+      durationMs: 2,
+    });
+    const parked = ledger.batches[1]!.events[0]!;
+    const denied = ledger.batches[2]!.events[0]!;
+    expect(parked.eventType).toBe("tool.engine_call_completed");
+    expect(parked.payload).toMatchObject({
+      outcome: "parked",
+      approval_public_id: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+      error_digest: expect.stringMatching(/^sha256:/),
+    });
+    expect(denied.payload).toMatchObject({ outcome: "denied" });
+    expect(denied.payload).not.toHaveProperty("approval_public_id");
+    // The real registry, which the Postgres store runs before any SQL.
+    for (const event of [parked, denied])
+      expect(() =>
+        validateInlineEventPayload(event.eventType, event.payload),
+      ).not.toThrow();
+    expect(
+      recorder.receipts.map((r) => r.kind === "tool" && r.outcome),
+    ).toEqual(["parked", "denied"]);
+  });
+
   it("seals an aborted turn as cancelled and a failed one as failed", async () => {
     setupRun();
     const ledger = fakeStore();
@@ -1269,6 +1325,72 @@ describe("the recorder hands the ledger the content its frames are about", () =>
       }),
     ).resolves.toBeUndefined();
     expect(bodyOf(ledger.batches, "model.engine_call_started")).toBeUndefined();
+  });
+
+  // #4171: the run says a summary stood in for the thread's older messages,
+  // names it by digest, and keeps its text as the body.
+  it("records the history summary the turn carried as a context frame", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "which cost centre?",
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    const text = "- The person's cost centre is CC-7741.";
+    await recorder.historySummary({
+      outcome: "applied",
+      digest: digestJcs(text),
+      chars: text.length,
+      coveredMessages: 80,
+      windowMessages: 40,
+      regenerated: true,
+      text,
+    });
+    await recorder.historySummary({
+      outcome: "unavailable",
+      digest: null,
+      chars: null,
+      coveredMessages: 0,
+      windowMessages: 50,
+      regenerated: false,
+      reasonCode: "summary_timeout",
+      text: null,
+    });
+    const frames = ledger.batches
+      .map((b) => b.events[0]!)
+      .filter((e) => e.eventType === "context.history_summarized");
+    expect(frames.map((f) => f.payload)).toEqual([
+      {
+        provider: HISTORY_SUMMARY_PROVIDER,
+        outcome: "applied",
+        summary_digest: digestJcs(text),
+        summary_chars: text.length,
+        covered_message_count: 80,
+        window_message_count: 40,
+        regenerated: true,
+      },
+      {
+        provider: HISTORY_SUMMARY_PROVIDER,
+        outcome: "unavailable",
+        covered_message_count: 0,
+        window_message_count: 50,
+        regenerated: false,
+        reason_code: "summary_timeout",
+      },
+    ]);
+    // The ledger's own registry takes both payloads as written.
+    for (const frame of frames) {
+      expect(() =>
+        validateInlineEventPayload(frame.eventType, frame.payload),
+      ).not.toThrow();
+    }
+    expect(decode(frames[0]!.body)).toBe(JSON.stringify(text));
+    expect(frames[1]!.body).toBeUndefined();
   });
 });
 
