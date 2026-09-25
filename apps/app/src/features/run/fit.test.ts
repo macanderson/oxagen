@@ -39,6 +39,7 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
     errors: null,
     perModelCall: null,
     reportedTokens: null,
+    provisional: null,
     ...overrides,
   };
 }

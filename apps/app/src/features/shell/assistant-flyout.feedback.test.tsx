@@ -32,6 +32,11 @@ const mocks = vi.hoisted(() => ({
   pathname: vi.fn(() => "/acme/core-platform"),
 }));
 vi.mock("./assistant-actions", () => ({ askAssistant: mocks.askAssistant }));
+// The engine read has its own file (assistant-flyout.engine-health.test.tsx).
+// Here it never answers, so its notice draws nothing and holds nothing.
+vi.mock("./engine-actions", () => ({
+  readAssistantEngine: () => new Promise(() => undefined),
+}));
 vi.mock("./assistant-feedback-actions", () => ({
   recordReplyFeedback: mocks.recordReplyFeedback,
 }));
@@ -158,7 +163,7 @@ describe("reply feedback in the flyout", () => {
       },
     );
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
+      expect(screen.getByTestId("assistant-feedback-recorded")).toHaveTextContent(
         "Recorded as useful against this run.",
       );
     });
@@ -199,7 +204,7 @@ describe("reply feedback in the flyout", () => {
       },
     );
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
+      expect(screen.getByTestId("assistant-feedback-recorded")).toHaveTextContent(
         "Recorded as wrong against this run.",
       );
     });
@@ -283,14 +288,14 @@ describe("reply feedback in the flyout", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Your rating was not recorded. Try again.",
     );
-    expect(screen.getByRole("status")).toHaveTextContent("");
+    expect(screen.getByTestId("assistant-feedback-recorded")).toHaveTextContent("");
     expect(screen.getByTestId("assistant-feedback-note")).toHaveValue(
       "Off by 2",
     );
 
     await user.click(screen.getByTestId("assistant-feedback-send"));
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
+      expect(screen.getByTestId("assistant-feedback-recorded")).toHaveTextContent(
         "Recorded as wrong against this run.",
       );
     });

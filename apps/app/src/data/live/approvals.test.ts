@@ -183,23 +183,26 @@ describe("approvals.resolved (#3153)", () => {
       readOk({ items: [resolvedItem], nextCursor: null }),
     );
     expect(await approvals.resolved(ctx, { runId: "arun_7k2m9q" })).toEqual(
-      readOk([
-        {
-          id: "apr_q8t1",
-          runId: "arun_7k2m9q",
-          tool: "stripe__create_payment",
-          agentKey: null,
-          requester: null,
-          rule: null,
-          mandateId: null,
-          createdAt: "2026-09-18T10:00:00.000Z",
-          expiresAt: "2026-09-18T10:05:00.000Z",
-          resolvedAt: "2026-09-18T10:00:01.000Z",
-          resolution: "approved",
-          resolvedBy: "policy:small-vendor-payments",
-          autoRuleRef: "small-vendor-payments",
-        },
-      ]),
+      readOk({
+        items: [
+          {
+            id: "apr_q8t1",
+            runId: "arun_7k2m9q",
+            tool: "stripe__create_payment",
+            agentKey: null,
+            requester: null,
+            rule: null,
+            mandateId: null,
+            createdAt: "2026-09-18T10:00:00.000Z",
+            expiresAt: "2026-09-18T10:05:00.000Z",
+            resolvedAt: "2026-09-18T10:00:01.000Z",
+            resolution: "approved",
+            resolvedBy: "policy:small-vendor-payments",
+            autoRuleRef: "small-vendor-payments",
+          },
+        ],
+        more: false,
+      }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: agentApprovalListResolved,
@@ -223,10 +226,12 @@ describe("approvals.resolved (#3153)", () => {
         }),
       );
     const out = await approvals.resolved(ctx, { runId: "arun_7k2m9q" });
-    expect(out.ok && out.value.map((i) => i.id)).toEqual([
+    expect(out.ok && out.value.items.map((i) => i.id)).toEqual([
       "apr_q8t1",
       "apr_next",
     ]);
+    // The walk reached the end of the ledger, so nothing lies past it.
+    expect(out.ok && out.value.more).toBe(false);
     expect(kernelRead).toHaveBeenCalledTimes(2);
     expect(kernelRead).toHaveBeenNthCalledWith(2, ctx, {
       contract: agentApprovalListResolved,
@@ -241,7 +246,32 @@ describe("approvals.resolved (#3153)", () => {
     );
     const out = await approvals.resolved(ctx, { runId: "arun_7k2m9q" });
     expect(kernelRead).toHaveBeenCalledTimes(10);
-    expect(out.ok && out.value).toHaveLength(10);
+    expect(out.ok && out.value.items).toHaveLength(10);
+  });
+
+  // #3477: a run with more than 1,000 decided approvals must not read as a
+  // whole ledger. The eleventh page is never read, and `more` says so.
+  it("sets more when the bound stops the walk with a cursor still in hand (#3477)", async () => {
+    kernelRead.mockImplementation(() =>
+      Promise.resolve(readOk({ items: [resolvedItem], nextCursor: "more" })),
+    );
+    const out = await approvals.resolved(ctx, { runId: "arun_7k2m9q" });
+    expect(kernelRead).toHaveBeenCalledTimes(10);
+    expect(out.ok && out.value.more).toBe(true);
+  });
+
+  it("leaves more unset when the ledger ends on the last page the bound allows (negative)", async () => {
+    for (let page = 0; page < 9; page += 1)
+      kernelRead.mockResolvedValueOnce(
+        readOk({ items: [resolvedItem], nextCursor: `c${String(page)}` }),
+      );
+    kernelRead.mockResolvedValueOnce(
+      readOk({ items: [resolvedItem], nextCursor: null }),
+    );
+    const out = await approvals.resolved(ctx, { runId: "arun_7k2m9q" });
+    expect(kernelRead).toHaveBeenCalledTimes(10);
+    expect(out.ok && out.value.items).toHaveLength(10);
+    expect(out.ok && out.value.more).toBe(false);
   });
 
   it("passes a failed read through, without paging further (negative)", async () => {

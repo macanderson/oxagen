@@ -50,6 +50,8 @@ type Over = {
   sessionConfig?: { effort: string | null; thinking: boolean | null };
   /** The settings read rejects, as a ClickHouse outage would. */
   configFails?: boolean;
+  /** The frame read rejects, as ClickHouse over its memory cap does. */
+  framesFail?: boolean;
   /** Runs after each fake sleep, with the count so far; a test lands events here. */
   onSleep?: (count: number, log: AttemptEventReadRecord[]) => void;
 };
@@ -84,7 +86,13 @@ function harness(over: Over = {}) {
           ? (over.witnessFor ?? null)
           : null,
       ),
-    tachoFrames: memoryTachoFrames(SESSION_UUID, over.tachoRows ?? []),
+    tachoFrames:
+      over.framesFail === true
+        ? () =>
+            Promise.reject(
+              new Error("Code: 241. Memory limit (total) exceeded"),
+            )
+        : memoryTachoFrames(SESSION_UUID, over.tachoRows ?? []),
     sessionTitle: (sessionUuid) =>
       over.titleFails === true
         ? Promise.reject(new Error("clickhouse unreachable"))
@@ -482,6 +490,40 @@ describe("get_run", () => {
     });
     expect(out.frames).toEqual({ frames: [], cursor: null });
   });
+
+  // #4112: a wrapped run's pause is applied by its host, so get_run reads it
+  // from the last pause or resume the host acknowledged `applied`, which the
+  // session query selects as `paused`.
+  it("answers a live wrapped run paused while the last applied halt is a pause, and not once a resume lands", async () => {
+    const live = (paused: boolean) =>
+      tachoSession({
+        publicId: TACHO_ID,
+        session: { outcome: "running", sealedAt: null, paused },
+      });
+    const pausedRun = await harness({ tacho: [live(true)] }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
+    expect(runGet.output.parse(pausedRun)).toEqual(pausedRun);
+    expect(pausedRun.run).toMatchObject({
+      status: "live",
+      ingressPaused: true,
+    });
+    const resumed = await harness({ tacho: [live(false)] }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
+    expect(resumed.run.ingressPaused).toBe(false);
+  });
+
+  it("answers a sealed wrapped run not paused, whatever its host last applied (negative)", async () => {
+    const { get } = harness({
+      tacho: [tachoSession({ publicId: TACHO_ID, session: { paused: true } })],
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.status).toBe("sealed");
+    expect(out.run.ingressPaused).toBe(false);
+  });
 });
 
 describe("frame cursor", () => {
@@ -583,5 +625,31 @@ describe("get_run witnessFor (ADR-064)", () => {
     const { get } = harness({ configFails: true });
     const out = await get(input({ runId: TACHO_ID }), ctx());
     expect(out.run.thinking).toBeUndefined();
+  });
+
+  // ClickHouse refuses a read under its server-wide memory cap whichever query
+  // it picks, and it picked this one for the Run stream and the assistant
+  // alike (#4243). The header is Postgres's and still answers.
+  it("still answers the run header when the frame store refuses the read, and says so", async () => {
+    const { get, sleeps } = harness({
+      tachoRows: [tachoRow(0), tachoRow(1)],
+      framesFail: true,
+    });
+    const out = await get(input({ runId: TACHO_ID, waitMs: 1_200 }), ctx());
+    const plain = await harness().get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run).toEqual(plain.run);
+    // No cursor: the caller keeps its own, and an empty page is not a seal.
+    expect(out.frames).toEqual({ frames: [], cursor: null });
+    expect(out.framesError?.code).toBe("frames_unavailable");
+    // A refusal is not an empty store: the long poll does not read it again.
+    expect(sleeps).toEqual([]);
+    expect(runGet.output.parse(out)).toEqual(out);
+  });
+
+  it("carries no framesError when the frames were read (negative)", async () => {
+    const { get } = harness({ tachoRows: [tachoRow(0)] });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.frames.frames).toHaveLength(1);
+    expect("framesError" in out).toBe(false);
   });
 });
