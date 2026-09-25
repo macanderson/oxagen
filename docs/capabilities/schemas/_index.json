@@ -3295,8 +3295,7 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp",
-        "agent"
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3307,8 +3306,7 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp",
-        "agent"
+        "mcp"
       ],
       "component": null,
       "produces": [],

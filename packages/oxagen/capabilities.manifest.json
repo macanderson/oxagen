@@ -45,8 +45,7 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp",
-        "agent"
+        "mcp"
       ],
       "layers": {
         "schema": true,
@@ -590,8 +589,7 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp",
-        "agent"
+        "mcp"
       ],
       "layers": {
         "schema": true,
