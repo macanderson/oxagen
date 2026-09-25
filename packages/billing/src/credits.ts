@@ -1,6 +1,6 @@
 import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
 import { inTransaction } from "./internal/in-transaction";
-import { and, asc, eq, isNull, or, sql, gt } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql, gt } from "drizzle-orm";
 import { CREDIT_REASONS } from "./constants";
 import { MICRO_CREDITS_PER_CREDIT } from "./pricing";
 
@@ -373,12 +373,17 @@ async function lockSpendableLots(
  * caller has already clamped `amount` to what the lots hold. Mutates the
  * in-memory `remainingCents` so a second draw in the same transaction sees
  * what the first left.
+ *
+ * The walk runs in memory and the debits land in one UPDATE, whatever the
+ * number of lots drawn. The lots are already locked FOR UPDATE, so no other
+ * transaction can change them between the walk and the write.
  */
 async function drainLots(
   tx: Tx,
   lots: SpendableLot[],
   amount: bigint,
 ): Promise<void> {
+  const debits: Array<{ id: string; debit: bigint }> = [];
   let remaining = amount;
   for (const lot of lots) {
     if (remaining <= 0n) break;
@@ -387,14 +392,29 @@ async function drainLots(
     const debit = remaining <= lotRemaining ? remaining : lotRemaining;
     remaining -= debit;
     lot.remainingCents = lotRemaining - debit;
-    await tx
-      .update(schema.creditLots)
-      .set({
-        remainingCents: sql`${schema.creditLots.remainingCents} - ${debit}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.creditLots.id, lot.id));
+    debits.push({ id: lot.id, debit });
   }
+  if (debits.length === 0) return;
+
+  // Each row takes its own debit from the CASE. The IN list holds exactly the
+  // ids the CASE names, so every updated row matches a WHEN. The casts type
+  // the parameters, which a CASE of bare parameters would resolve as text.
+  const debitByLot = sql.join(
+    debits.map(({ id, debit }) => sql`WHEN ${id}::uuid THEN ${debit}::bigint`),
+    sql` `,
+  );
+  await tx
+    .update(schema.creditLots)
+    .set({
+      remainingCents: sql`${schema.creditLots.remainingCents} - CASE ${schema.creditLots.id} ${debitByLot} END`,
+      updatedAt: new Date(),
+    })
+    .where(
+      inArray(
+        schema.creditLots.id,
+        debits.map(({ id }) => id),
+      ),
+    );
 }
 
 /**

@@ -880,7 +880,7 @@
         "title": "Delete {label}",
         "confirm": "Delete",
         "pending": "Deleting",
-        "body": "Runs already rolled up keep this label. New runs from an agent or workspace that names it fall back to the workspace's cost center, or to none."
+        "body": "Runs already rolled up keep this label. Agents and workspaces that name it are cleared, so their new runs fall back to the workspace's cost center, or to none."
       },
       "charge": {
         "open": "Change",

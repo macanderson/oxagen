@@ -356,6 +356,8 @@ describe("maybeAutoReload", () => {
     const result = await maybeAutoReload("org-abc");
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("auto_reload_disabled");
+    expect(result.balanceCents).toBeUndefined();
+    expect(effectiveBalanceMock).not.toHaveBeenCalled();
     expect(chargeOffSessionMock).not.toHaveBeenCalled();
   });
 
@@ -370,6 +372,8 @@ describe("maybeAutoReload", () => {
     const result = await maybeAutoReload("org-abc");
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("balance_above_threshold");
+    // #2976: the read is handed back so the admission gate need not repeat it.
+    expect(result.balanceCents).toBe(600n);
   });
 
   it("skips when reloaded within the last hour", async () => {
@@ -387,6 +391,7 @@ describe("maybeAutoReload", () => {
     const result = await maybeAutoReload("org-abc");
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("reloaded_recently");
+    expect(result.balanceCents).toBe(100n);
     expect(chargeOffSessionMock).not.toHaveBeenCalled();
   });
 
@@ -402,6 +407,7 @@ describe("maybeAutoReload", () => {
     const result = await maybeAutoReload("org-abc");
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("no_stripe_customer");
+    expect(result.balanceCents).toBe(100n);
     expect(chargeOffSessionMock).not.toHaveBeenCalled();
   });
 
@@ -422,6 +428,8 @@ describe("maybeAutoReload", () => {
 
     expect(result.reloaded).toBe(true);
     expect(result.amountCents).toBe(2000);
+    // Credits were granted, so the pre-grant read is not handed back.
+    expect(result.balanceCents).toBeUndefined();
     expect(chargeOffSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         customerId: "cus_test_001",
@@ -499,6 +507,7 @@ describe("maybeAutoReload", () => {
     const result = await maybeAutoReload("org-abc");
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("card_declined");
+    expect(result.balanceCents).toBe(100n);
     expect(createCreditLotMock).not.toHaveBeenCalled();
     expect(state.lastAutoReloadAt).toBeNull();
   });
@@ -523,6 +532,8 @@ describe("maybeAutoReload", () => {
     const result = await maybeAutoReload("org-abc");
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("grant_failed_after_charge");
+    // The card was charged, so a grant may have landed: no stale balance.
+    expect(result.balanceCents).toBeUndefined();
     // The reload window must NOT be marked consumed, so a retry can self-heal —
     // and the episode key must stay claimed, since that is what the retry
     // charges under.
@@ -545,6 +556,7 @@ describe("maybeAutoReload", () => {
     const result = await maybeAutoReload("org-abc");
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("charge_status:requires_payment_method");
+    expect(result.balanceCents).toBe(100n);
     expect(createCreditLotMock).not.toHaveBeenCalled();
   });
 });
