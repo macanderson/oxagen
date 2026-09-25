@@ -187,7 +187,7 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
   const prefix = apiKeyPrefix(rawKey);
   const hash = createHash("sha256").update(rawKey).digest("hex");
 
-  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
+  // tenancy: identity resolution before a tenant scope exists. The row's orgId and workspaceId are used only after the raw key's hash is verified against it.
   // Resolves a raw API key → (apiKeyId, orgId, workspaceId). This IS the
   // resolution step: the apiKeys table carries the pre-bound tenant scope for
   // every machine-auth request. No tenant scope can exist before this lookup
@@ -306,7 +306,7 @@ async function revokedHostNames(retired: {
   scope: unknown;
 }): Promise<boolean> {
   const enrollment = hostEnrollmentOf(retired.scope);
-  // tenancy: identity resolution before a tenant scope exists; filtered by the orgId of the key just verified by its hash.
+  // tenancy: identity resolution before a tenant scope exists. The lookup is filtered by the orgId of the key just verified by its hash.
   const host = await withSystemDb((tx) =>
     tx.query.tachoHosts.findFirst({
       where: and(
