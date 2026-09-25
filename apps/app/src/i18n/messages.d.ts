@@ -4042,6 +4042,8 @@ type Messages = {
       actions: string;
       resend: string;
       revoke: string;
+      resendFor: string;
+      revokeFor: string;
       working: string;
       resent: string;
       revoked: string;

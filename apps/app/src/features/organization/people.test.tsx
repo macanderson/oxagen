@@ -302,8 +302,16 @@ describe("Invitations", () => {
     expect(cells[1]).toHaveTextContent("org.compliance");
     expect(cells[2]).toHaveTextContent("not recorded");
     expect(cells[4]).toHaveTextContent("Never");
-    expect(within(row).getByRole("button", { name: "Resend" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "Revoke" })).toBeTruthy();
+    expect(
+      within(row).getByRole("button", {
+        name: "Resend invitation to audit@acme.example",
+      }),
+    ).toBeTruthy();
+    expect(
+      within(row).getByRole("button", {
+        name: "Revoke invitation to audit@acme.example",
+      }),
+    ).toBeTruthy();
   });
 
   it("filters by the day an invitation was sent and the day it expires", async () => {
