@@ -33,6 +33,23 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 import { CHAT_CONTENT_MAX_CHARS } from "./chat.message.send";
 
+/**
+ * The longest record label a page context carries, in UTF-16 code units.
+ *
+ * The label is the name the page drew for its record. 256 holds these
+ * sources whole: a runtime's hostname (253, the DNS limit
+ * `create_tacho_enrollment` enforces), a steering record's title (200), an
+ * agent's name (128), and a run's generated name or derived title (80). Three
+ * sources run longer: a mandate's purpose (2,000), which the Mandate page
+ * uses because a mandate has no name, and the title a harness gives its own
+ * session and a ledger run's task reference, which have no cap where they are
+ * written. Past 256 characters a label is prose rather than a name. The app
+ * cuts a longer label to this length before it sends one, and the contract
+ * refuses a longer one from any other caller, because the turn puts the label
+ * in a line the model reads as system context.
+ */
+export const ASSISTANT_ENTITY_LABEL_MAX = 256;
+
 /** Where the person was when they asked: the route key and the tenant slugs. */
 export const assistantPageContextSchema = z
   .object({
@@ -42,6 +59,18 @@ export const assistantPageContextSchema = z
     workspaceSlug: z.string().min(1).max(128),
     /** The record on the page, when there is one (a run id, an agent key). */
     entityId: z.string().min(1).max(256).nullable().default(null),
+    /**
+     * The record's name as the page drew it (a run's title, a runtime's
+     * hostname), beside `entityId`. Untrusted: an agent or a person wrote it.
+     * The turn strips its control characters and quotes it as a label, and
+     * ignores it when `entityId` is null.
+     */
+    entityLabel: z
+      .string()
+      .min(1)
+      .max(ASSISTANT_ENTITY_LABEL_MAX)
+      .nullable()
+      .default(null),
   })
   .strict();
 
