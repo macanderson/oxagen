@@ -305,8 +305,12 @@ describe("the engine line above the composer", () => {
     await user.click(check);
     expect(check).toHaveTextContent("Checking…");
     expect(check).toHaveAttribute("aria-disabled", "true");
-    // A second press joins the read that is out.
+    // A second press, and a focus past the cache, join the read that is out.
     await user.click(check);
+    now += ENGINE_HEALTH_TTL_MS;
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
     expect(readAssistantEngine).toHaveBeenCalledTimes(2);
 
     const refused = { ok: false, reason: "unavailable", code: "kernel_down" };
