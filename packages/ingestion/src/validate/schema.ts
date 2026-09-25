@@ -522,14 +522,43 @@ function clamp01(n: number): number {
  */
 type PatternResult = "match" | "no-match" | "invalid-pattern";
 
-function testPattern(pattern: string, value: string): PatternResult {
-  let compiled: RegExp;
+/**
+ * The most compiled patterns the validator keeps. A pinned schema carries a
+ * handful of patterns and a worker validates many values against each, so 500
+ * covers a realistic registry and bounds memory if patterns churn.
+ */
+export const PATTERN_CACHE_LIMIT = 500;
+
+/**
+ * Compiled patterns keyed by source, in insertion order. `null` records a
+ * pattern that failed to compile, so a broken pattern is not recompiled for
+ * every value either (#2974). The patterns carry no flags, so a shared
+ * `RegExp` keeps no `lastIndex` state between calls to `test`.
+ */
+const compiledPatterns = new Map<string, RegExp | null>();
+
+function compilePattern(pattern: string): RegExp | null {
+  const cached = compiledPatterns.get(pattern);
+  if (cached !== undefined) return cached;
+  let compiled: RegExp | null;
   try {
     compiled = new RegExp(pattern);
   } catch {
-    // "Could not be checked", never "fine" — see the note above.
-    return "invalid-pattern";
+    compiled = null;
   }
+  if (compiledPatterns.size >= PATTERN_CACHE_LIMIT) {
+    // Evict the oldest entry. A Map iterates in insertion order.
+    const oldest = compiledPatterns.keys().next().value;
+    if (oldest !== undefined) compiledPatterns.delete(oldest);
+  }
+  compiledPatterns.set(pattern, compiled);
+  return compiled;
+}
+
+function testPattern(pattern: string, value: string): PatternResult {
+  const compiled = compilePattern(pattern);
+  // "Could not be checked", never "fine". See the note above.
+  if (compiled === null) return "invalid-pattern";
   return compiled.test(value) ? "match" : "no-match";
 }
 

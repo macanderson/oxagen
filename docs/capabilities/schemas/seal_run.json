@@ -49,7 +49,7 @@
       },
       "sessionsSealed": {
         "type": "integer",
-        "minimum": 0
+        "exclusiveMinimum": 0
       },
       "kill": {
         "anyOf": [

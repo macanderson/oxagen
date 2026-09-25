@@ -32,13 +32,13 @@
     "properties": {
       "includedMonths": {
         "type": "integer",
-        "minimum": 0
+        "exclusiveMinimum": 0
       },
       "effectiveRetentionDays": {
         "anyOf": [
           {
             "type": "integer",
-            "minimum": 0
+            "exclusiveMinimum": 0
           },
           {
             "type": "null"

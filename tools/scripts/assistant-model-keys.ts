@@ -42,17 +42,18 @@
  */
 
 import { URL } from "node:url";
-import { and, isNull, ne, sql } from "drizzle-orm";
 import kleur from "kleur";
-import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
+import { closeDatabase, withSystemDb } from "@oxagen/database";
 import { listAssistantModelKeyHandles } from "@oxagen/database/assistant-model-key";
 import { ensureAssistantModelKey } from "@oxagen/ai/key-provisioning";
 import { listAssistantKeys } from "@oxagen/ai/openrouter-provisioning";
 import { formatError } from "./lib/format-error";
 import {
   classifyBackfillOutcome,
+  firstRowPerOrg,
   hasCeilingDrift,
   isLiveAtVendorButDisabledHere,
+  orgsWithoutKeyQuery,
   parseLimitFlag,
 } from "./lib/assistant-model-keys";
 
@@ -94,57 +95,15 @@ interface OrgRow {
 }
 
 /**
- * Every organisation with no `assistant_model_keys` row, with the email of the
- * member who owns it.
- *
- * The owner rather than the creator: `org_users` records the role, and the
- * creator's identity is not kept separately once the row is written. For an
- * organisation created by the signup flow the two are the same person. For one
- * where they have since diverged, the owner is the better answer anyway,
- * because the name exists so an operator can tell whose key this is.
+ * Every organisation with no key, with the email of its owner. The predicates
+ * live in `orgsWithoutKeyQuery`, where a test can read them.
  */
 async function orgsWithoutKey(): Promise<OrgRow[]> {
-  // tenancy: system bypass via withSystemDb (cross-tenant backfill; no single
-  // organisation's scope applies) (see docs/specs/tenancy-rls/spec.md)
-  const rows = await withSystemDb(async (tx) =>
-    tx
-      .select({
-        id: schema.organizations.id,
-        slug: schema.organizations.slug,
-        email: schema.users.email,
-      })
-      .from(schema.organizations)
-      .leftJoin(
-        schema.assistantModelKeys,
-        sql`${schema.assistantModelKeys.orgId} = ${schema.organizations.id}`,
-      )
-      .innerJoin(
-        schema.orgUsers,
-        // lower(role), because org_users records the role in both casings and
-        // its own CHECK is written `lower(role) IN (...)`. Matching 'owner'
-        // exactly skips an organisation whose owner row reads 'Owner', and
-        // skips it with no output at all.
-        sql`${schema.orgUsers.orgId} = ${schema.organizations.id} and lower(${schema.orgUsers.role}) = 'owner'`,
-      )
-      .innerJoin(
-        schema.users,
-        sql`${schema.users.id} = ${schema.orgUsers.userId}`,
-      )
-      .where(
-        and(
-          isNull(schema.assistantModelKeys.orgId),
-          // A deleted organisation is a retained row, not an absent one.
-          // Minting for it would put a live, spendable credential behind an
-          // organisation the rest of the product treats as gone.
-          ne(schema.organizations.status, "deleted"),
-        ),
-      ),
-  );
-  // An organisation with two owner rows would otherwise be minted for twice;
-  // the second attempt loses the unique index and deletes its own key, which
-  // is correct but wasteful and reads like a fault in the output.
-  const seen = new Set<string>();
-  return rows.filter((r) => !seen.has(r.id) && seen.add(r.id));
+  // tenancy: cross-tenant backfill over all orgs, so no single organisation's
+  // scope applies. The query is filtered to live organisations with no key and
+  // reads only each one's owner (see docs/specs/tenancy-rls/spec.md).
+  const rows = await withSystemDb(async (tx) => orgsWithoutKeyQuery(tx));
+  return firstRowPerOrg(rows);
 }
 
 // ── backfill ─────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { buildManifest, renderManifest, MANIFEST_VERSION } from "./generate";
 import { canonicalJson, canonicalize, contentHashOf } from "./canonical-json";
 import { collectPostgresTables } from "./sources/postgres";
 import { parseClickhouseSchema } from "./sources/clickhouse";
-import { parseCypherSchema } from "./sources/neo4j";
+import { collectNeo4jLabels, parseCypherSchema } from "./sources/neo4j";
 import { GENERATED_ASSET_KINDS, collectBlobAssets } from "./sources/blob";
 import { PG_DOMAINS } from "./domains";
 
@@ -287,6 +287,26 @@ describe("storage manifest — Neo4j parser", () => {
     expect(tables.find((t) => t.name === "SourceFile")?.tenantScoped).toBe(
       true,
     );
+  });
+
+  it("marks a label tenant-scoped when an index references workspaceId alone", () => {
+    const tables = parseCypherSchema(`
+      CREATE INDEX entity_node_workspace IF NOT EXISTS FOR (n:EntityNode) ON (n.workspaceId, n.entityType);
+      CREATE CONSTRAINT platform_model_id IF NOT EXISTS FOR (n:PlatformModel) REQUIRE n.id IS UNIQUE;
+    `);
+    expect(tables.find((t) => t.name === "EntityNode")?.tenantScoped).toBe(
+      true,
+    );
+    expect(tables.find((t) => t.name === "PlatformModel")?.tenantScoped).toBe(
+      false,
+    );
+  });
+
+  it("marks :EntityNode tenant-scoped in the committed schema", () => {
+    const entityNode = collectNeo4jLabels().find(
+      (t) => t.name === "EntityNode",
+    );
+    expect(entityNode?.tenantScoped).toBe(true);
   });
 
   it("ignores the trailing MATCH ... SET data-migration statements", () => {

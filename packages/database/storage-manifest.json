@@ -4100,7 +4100,7 @@
       "writes": []
     }
   ],
-  "contentHash": "9b8a88847905799c589a67ed039effbabe46a444d3f54b33cade9fcf44ac3bcb",
+  "contentHash": "40e59402a361255c98bb46b4d87d8e1be975ee29b2b75d4f23a11a61d7fbcf84",
   "domains": [
     {
       "name": "agent",
@@ -6089,7 +6089,7 @@
       },
       "name": "EntityNode",
       "store": "neo4j",
-      "tenantScoped": false
+      "tenantScoped": true
     },
     {
       "columns": [

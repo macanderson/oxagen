@@ -9,7 +9,79 @@
  * the output: a mistyped cap that removed the cap, a vendor outage that
  * reported as a clean run, a deleted key reported as a live one, and a ceiling
  * that changed its reset window without changing its dollar figure.
+ *
+ * `orgsWithoutKeyQuery` is the one builder here. It takes the transaction as
+ * an argument and returns the unexecuted query, so a test can render its SQL
+ * through `drizzle.mock` and read the predicates without a database.
  */
+
+import { and, isNull, ne, sql } from "drizzle-orm";
+import { schema, type Tx } from "@oxagen/database";
+
+/** What the query builder needs from a transaction: the select builder. */
+type QueryDb = Pick<Tx, "select">;
+
+/**
+ * Every organisation with no `assistant_model_keys` row, joined to the email
+ * of each member whose role is owner.
+ *
+ * Two predicates here shipped wrong on #3598, and each one failed silently:
+ * the run printed a shorter list and nothing said which organisation was left
+ * out or why it was there.
+ *
+ * The owner rather than the creator: `org_users` records the role, and the
+ * creator's identity is not kept separately once the row is written. For an
+ * organisation created by the signup flow the two are the same person.
+ */
+export function orgsWithoutKeyQuery(tx: QueryDb) {
+  return tx
+    .select({
+      id: schema.organizations.id,
+      slug: schema.organizations.slug,
+      email: schema.users.email,
+    })
+    .from(schema.organizations)
+    .leftJoin(
+      schema.assistantModelKeys,
+      sql`${schema.assistantModelKeys.orgId} = ${schema.organizations.id}`,
+    )
+    .innerJoin(
+      schema.orgUsers,
+      // lower(role), because org_users records the role in both casings and
+      // its own CHECK is written `lower(role) IN (...)`. Matching 'owner'
+      // exactly skips an organisation whose owner row reads 'Owner', and
+      // skips it with no output at all.
+      sql`${schema.orgUsers.orgId} = ${schema.organizations.id} and lower(${schema.orgUsers.role}) = 'owner'`,
+    )
+    .innerJoin(
+      schema.users,
+      sql`${schema.users.id} = ${schema.orgUsers.userId}`,
+    )
+    .where(
+      and(
+        isNull(schema.assistantModelKeys.orgId),
+        // A deleted organisation is a retained row, not an absent one.
+        // Minting for it would put a live, spendable credential behind an
+        // organisation the rest of the product treats as gone.
+        ne(schema.organizations.status, "deleted"),
+      ),
+    );
+}
+
+/**
+ * Keep the first row for each organisation.
+ *
+ * An organisation with two owner rows comes back twice from the join, and
+ * would otherwise be minted for twice. The second attempt loses the unique
+ * index and deletes its own key, which is correct but wasteful and reads like
+ * a fault in the output.
+ */
+export function firstRowPerOrg<T extends { readonly id: string }>(
+  rows: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => !seen.has(r.id) && seen.add(r.id));
+}
 
 /** A cap that was read, or the reason it could not be. */
 export type LimitFlag =
