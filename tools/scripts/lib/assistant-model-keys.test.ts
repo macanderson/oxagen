@@ -6,10 +6,14 @@
  * whose wrongness the script's own output concealed.
  */
 import { describe, expect, it } from "vitest";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { schema } from "@oxagen/database";
 import {
   classifyBackfillOutcome,
+  firstRowPerOrg,
   hasCeilingDrift,
   isLiveAtVendorButDisabledHere,
+  orgsWithoutKeyQuery,
   parseLimitFlag,
   type VendorKeyFacts,
 } from "./assistant-model-keys";
@@ -153,5 +157,69 @@ describe("hasCeilingDrift", () => {
 
   it("is true when the vendor carries no ceiling at all", () => {
     expect(hasCeilingDrift(vendorKey({ limit: null }), 25)).toBe(true);
+  });
+});
+
+/**
+ * The backfill's selection, read off the SQL the builder emits. `drizzle.mock`
+ * renders the query without a connection, so these tests fix what Postgres is
+ * asked rather than what a fake answers.
+ */
+describe("orgsWithoutKeyQuery", () => {
+  const db = drizzle.mock({ schema });
+  const compiled = () => orgsWithoutKeyQuery(db).toSQL();
+  const ORGS = `"org"."organizations"`;
+  const ORG_USERS = `"org"."org_users"`;
+  const KEYS = `"org"."assistant_model_keys"`;
+  const USERS = `"auth"."users"`;
+
+  it("excludes a deleted organisation, so a retained row gets no live key", () => {
+    const { sql, params } = compiled();
+    const match = /"org"\."organizations"\."status" <> \$(\d+)/.exec(sql);
+    expect(match).not.toBeNull();
+    expect(params[Number(match?.[1]) - 1]).toBe("deleted");
+  });
+
+  it("matches the owner role in any casing, so an 'Owner' row is found", () => {
+    const { sql } = compiled();
+    expect(sql).toContain(`lower(${ORG_USERS}."role") = 'owner'`);
+    // An exact match on the column would skip 'Owner' and 'OWNER' silently.
+    expect(sql).not.toContain(`and ${ORG_USERS}."role" =`);
+  });
+
+  it("keeps only organisations with no key row", () => {
+    const { sql } = compiled();
+    expect(sql).toContain(
+      `left join ${KEYS} on ${KEYS}."org_id" = ${ORGS}."id"`,
+    );
+    expect(sql).toContain(`${KEYS}."org_id" is null`);
+  });
+
+  it("joins each owner to their user row for the email", () => {
+    const { sql } = compiled();
+    expect(sql).toContain(
+      `inner join ${ORG_USERS} on ${ORG_USERS}."org_id" = ${ORGS}."id"`,
+    );
+    expect(sql).toContain(
+      `inner join ${USERS} on ${USERS}."id" = ${ORG_USERS}."user_id"`,
+    );
+  });
+});
+
+describe("firstRowPerOrg", () => {
+  it("keeps one row for an organisation with two owners", () => {
+    const rows = [
+      { id: "o1", slug: "a", email: "first@a.test" },
+      { id: "o2", slug: "b", email: "b@b.test" },
+      { id: "o1", slug: "a", email: "second@a.test" },
+    ];
+    expect(firstRowPerOrg(rows)).toEqual([
+      { id: "o1", slug: "a", email: "first@a.test" },
+      { id: "o2", slug: "b", email: "b@b.test" },
+    ]);
+  });
+
+  it("returns an empty list for no rows", () => {
+    expect(firstRowPerOrg([])).toEqual([]);
   });
 });

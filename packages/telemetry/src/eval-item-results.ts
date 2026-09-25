@@ -44,17 +44,27 @@ export async function insertEvalItemResults(
 }
 
 /**
- * Read every result row for a run, newest item first. Tenant-filtered by the
- * active scope via chSelect (throws if unscoped). Ordered so eval.run.get can
+ * Most rows selectEvalItemResults returns for one run. A run writes one row per
+ * dataset item, so a large dataset would otherwise return every row in one
+ * response.
+ */
+export const EVAL_ITEM_RESULTS_MAX_ROWS = 1000;
+
+/**
+ * Most characters of `output` and of `rationale` selectEvalItemResults returns
+ * per row. Both columns hold free text of any length. ClickHouse truncates them
+ * with substringUTF8, so the cut never splits a multi-byte character.
+ */
+export const EVAL_ITEM_TEXT_MAX_CHARS = 8000;
+
+/**
+ * Read the result rows for a run, newest item first. Tenant-filtered by the
+ * active scope via chSelect (throws if unscoped). Ordered so a caller can
  * render the drill-down deterministically.
  *
- * Unbounded by design — one row per dataset item, and `output`/`rationale` are
- * free-text. A large dataset therefore returns a payload proportional to the
- * run's size straight into eval.run.get's response. Every other read helper in
- * this package clamps (see clampLimit in error-clusters.ts /
- * execution-diagnostics.ts / sandbox-logs.ts); this one does not, so a run with
- * thousands of items is a memory and response-size hazard. Pagination belongs
- * here, but adding it changes the capability's output contract.
+ * The read is bounded. It returns at most EVAL_ITEM_RESULTS_MAX_ROWS rows, and
+ * it truncates `output` and `rationale` to EVAL_ITEM_TEXT_MAX_CHARS characters
+ * each. A caller that needs every row of a larger run needs a paginated reader.
  */
 export async function selectEvalItemResults(
   runId: string,
@@ -75,14 +85,21 @@ export async function selectEvalItemResults(
         run_id, dataset_id, item_id, target_kind, model, judge_model,
         score, correctness, faithfulness, passed,
         latency_ms, input_tokens, output_tokens, cost_usd_micros,
-        status, error_class, output, rationale
+        status, error_class,
+        substringUTF8(output, 1, {textMax:UInt32}) AS output,
+        substringUTF8(rationale, 1, {textMax:UInt32}) AS rationale
       FROM eval_item_results
       WHERE org_id = {orgId:UUID}
         AND workspace_id = {workspaceId:UUID}
         AND run_id = {runId:String}
       ORDER BY created_at DESC, item_id ASC
+      LIMIT {limit:UInt32}
     `,
-    params: { runId },
+    params: {
+      runId,
+      limit: EVAL_ITEM_RESULTS_MAX_ROWS,
+      textMax: EVAL_ITEM_TEXT_MAX_CHARS,
+    },
   });
   return res.data.map((row) => ({
     ...row,

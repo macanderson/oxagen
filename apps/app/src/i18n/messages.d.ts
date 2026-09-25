@@ -7588,6 +7588,11 @@ type Messages = {
         title: string;
         body: string;
       };
+      thread: {
+        new: string;
+        loading: string;
+        loadFailed: string;
+      };
       suggestions: {
         title: string;
         fleet: {

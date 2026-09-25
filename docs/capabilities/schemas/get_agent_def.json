@@ -112,7 +112,7 @@
         "anyOf": [
           {
             "type": "integer",
-            "minimum": 0
+            "exclusiveMinimum": 0
           },
           {
             "type": "null"
@@ -176,7 +176,7 @@
                   },
                   "maxNodes": {
                     "type": "integer",
-                    "minimum": 0
+                    "exclusiveMinimum": 0
                   },
                   "minRelevance": {
                     "type": "number",
@@ -185,7 +185,7 @@
                   },
                   "maxTraversalMs": {
                     "type": "integer",
-                    "minimum": 0
+                    "exclusiveMinimum": 0
                   }
                 },
                 "required": [
@@ -237,12 +237,12 @@
             "properties": {
               "per_run_micros": {
                 "type": "integer",
-                "minimum": 0,
+                "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
               },
               "per_day_micros": {
                 "type": "integer",
-                "minimum": 0,
+                "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
               }
             },

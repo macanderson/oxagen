@@ -12,9 +12,9 @@
  *     • recordedAt     datetime           when this assertion was written
  *     • invalidatedAt  datetime | null    null ⇒ never retracted / superseded
  *
- * Supersession never deletes or overwrites: when a new fact contradicts an
- * existing one (same subject + predicate, different object) the prior edge is
- * *closed* by stamping `validTo` / `invalidatedAt`, preserving full history.
+ * The upper bounds exist so a superseded fact can be closed rather than deleted.
+ * No writer stamps them yet, so every edge written today stays open, and the
+ * read filter below treats a null upper bound as still true and still known.
  *
  * The Cypher here is composed as string fragments interpolated into the existing
  * MERGE / MATCH statements in the write and read handlers. The only interpolated
@@ -59,45 +59,6 @@ export function edgeValidityOnCreateSet(relVar = "r"): string {
 }
 
 /**
- * Cypher assignment list (no leading/trailing comma) for the `ON MATCH SET` of an
- * upsert. An upsert re-asserts that the edge holds *now*, so it preserves the
- * original lower bounds (`coalesce`, falling back to observed/now only when never
- * stamped) and reopens the upper bounds — reviving an edge that a prior
- * supersession had closed. Requires `$validFrom` from {@link edgeValidityParams}.
- */
-export function edgeValidityOnMatchSet(relVar = "r"): string {
-  assertVar(relVar);
-  return (
-    `${relVar}.validFrom = coalesce(${relVar}.validFrom, datetime($validFrom), datetime()), ` +
-    `${relVar}.recordedAt = coalesce(${relVar}.recordedAt, datetime()), ` +
-    `${relVar}.validTo = null, ` +
-    `${relVar}.invalidatedAt = null`
-  );
-}
-
-/**
- * Cypher assignment list (no leading/trailing comma) that *closes* an edge on
- * supersession — stamping both the valid-time and transaction-time upper bounds
- * without touching the lower bounds or any other property. Idempotent: an
- * already-closed edge keeps its original close time (`coalesce`).
- *
- * Requires the `$closedAt` param from {@link edgeCloseParams} to be bound.
- */
-export function edgeCloseOnSupersedeSet(relVar = "old"): string {
-  assertVar(relVar);
-  return (
-    `${relVar}.validTo = coalesce(${relVar}.validTo, datetime($closedAt)), ` +
-    `${relVar}.invalidatedAt = coalesce(${relVar}.invalidatedAt, datetime($closedAt))`
-  );
-}
-
-/** A Cypher predicate selecting only edges that are currently open (not closed). */
-export function edgeOpenPredicate(relVar = "old"): string {
-  assertVar(relVar);
-  return `${relVar}.validTo IS NULL AND ${relVar}.invalidatedAt IS NULL`;
-}
-
-/**
  * Build the `$validFrom` param for a create write. `observedAt` is the event /
  * valid time of the fact; pass the source timestamp when known, otherwise omit
  * (null) and the Cypher falls back to `datetime()` (now).
@@ -106,13 +67,6 @@ export function edgeValidityParams(observedAt?: string | Date | null): {
   validFrom: string | null;
 } {
   return { validFrom: toIso(observedAt) };
-}
-
-/** Build the `$closedAt` param for a supersession close write (defaults to now). */
-export function edgeCloseParams(closedAt?: string | Date | null): {
-  closedAt: string;
-} {
-  return { closedAt: toIso(closedAt) ?? new Date().toISOString() };
 }
 
 /**

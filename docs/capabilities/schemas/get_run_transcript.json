@@ -1660,13 +1660,13 @@
             },
             "frames": {
               "type": "integer",
-              "minimum": 0
+              "exclusiveMinimum": 0
             },
             "turn": {
               "anyOf": [
                 {
                   "type": "integer",
-                  "minimum": 0
+                  "exclusiveMinimum": 0
                 },
                 {
                   "type": "null"

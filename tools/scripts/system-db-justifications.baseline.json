@@ -545,9 +545,6 @@
   "packages/run-ledger/src/run-store.ts": [
     "dc94c15324c5de41f209183ce90169d9603c526a7bedf1c9b2ff4c09b12db83f"
   ],
-  "tools/scripts/assistant-model-keys.ts": [
-    "92823280fa8765a0ff39b77bd22d5877b63c90cce2b6ab22a1dcd922022905c9"
-  ],
   "tools/scripts/billing-terms.ts": [
     "a177ffe4cd322370f1d11a076cfd5a5499a8078669090cf60ee6f8a1b618bb55"
   ],
