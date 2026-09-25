@@ -166,17 +166,12 @@ describe("askAssistantStream", () => {
       ]),
     );
     const heard: unknown[] = [];
-    const result = await askAssistantStream(
-      "acme",
-      "core-platform",
-      QUESTION,
-      {
-        onRun: (runId) => heard.push(["run", runId]),
-        onText: (delta) => heard.push(["text", delta]),
-        onToolStart: (call) => heard.push(["start", call]),
-        onToolEnd: (call) => heard.push(["end", call]),
-      },
-    );
+    const result = await askAssistantStream("acme", "core-platform", QUESTION, {
+      onRun: (runId) => heard.push(["run", runId]),
+      onText: (delta) => heard.push(["text", delta]),
+      onToolStart: (call) => heard.push(["start", call]),
+      onToolEnd: (call) => heard.push(["end", call]),
+    });
     expect(heard).toEqual([
       ["run", "arun_01k9"],
       ["start", { id: "c1", capability: "list_runs" }],
@@ -215,12 +210,9 @@ describe("askAssistantStream", () => {
       ]),
     );
     const onParked = vi.fn();
-    const result = await askAssistantStream(
-      "acme",
-      "core-platform",
-      QUESTION,
-      { onParked },
-    );
+    const result = await askAssistantStream("acme", "core-platform", QUESTION, {
+      onParked,
+    });
     expect(onParked.mock.calls).toEqual([[parked]]);
     expect(result).toMatchObject({
       ok: true,
@@ -258,12 +250,9 @@ describe("askAssistantStream", () => {
       ]),
     );
     const onText = vi.fn();
-    const result = await askAssistantStream(
-      "acme",
-      "core-platform",
-      QUESTION,
-      { onText },
-    );
+    const result = await askAssistantStream("acme", "core-platform", QUESTION, {
+      onText,
+    });
     expect(onText).toHaveBeenCalledWith("Three runs");
     expect(result).toEqual({
       ok: false,
