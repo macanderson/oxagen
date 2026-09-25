@@ -305,6 +305,27 @@ export function deregisterNeedsSession(
 }
 
 /**
+ * The wizard's confirmation line on enforcement, for what was registered. It
+ * read "client-attested (the hooks the agents honour)" for every machine,
+ * including one whose only registered app is connected and has no hook. A
+ * connected app is checked on the server, and only for the Oxagen tools it
+ * calls (ADR-078, ADR-095).
+ */
+export function enforcementText(harnesses: readonly string[]): string {
+  const tiers = new Set(
+    harnesses
+      .map((h) => HARNESS_TIER[h as Harness])
+      .filter((tier) => tier !== undefined),
+  );
+  const hooks = "client-attested (the hooks the agents honour)";
+  const server = "checked on the server for the Oxagen tools they call";
+  if (tiers.has("harness") && tiers.has("gateway"))
+    return `wrapped agents are ${hooks}, and connected apps are ${server}`;
+  if (tiers.has("gateway")) return `connected apps are ${server}`;
+  return `enforcement is ${hooks}`;
+}
+
+/**
  * The collector in the wizard's confirmation. It read "starting…" for as
  * long as the collector did not answer, which the app had no way to know.
  */

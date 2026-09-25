@@ -17,6 +17,7 @@ import {
   HARNESSES,
   workspaceUrl,
   wizardStep,
+  enforcementText,
   enrollArgs,
   loginArgs,
   needsWorkspacePick,
@@ -45,6 +46,19 @@ describe("sidecar argv", () => {
       "--browser",
       "--signup",
     ]);
+  });
+
+  it("says how enforcement works for what was registered (ADR-095)", () => {
+    expect(enforcementText(["claude-code", "stella"])).toBe(
+      "enforcement is client-attested (the hooks the agents honour)",
+    );
+    // A connected app has no hook to honour.
+    expect(enforcementText(["claude-desktop"])).toBe(
+      "connected apps are checked on the server for the Oxagen tools they call",
+    );
+    expect(enforcementText(["cursor", "claude-desktop"])).toBe(
+      "wrapped agents are client-attested (the hooks the agents honour), and connected apps are checked on the server for the Oxagen tools they call",
+    );
   });
 
   it("enrolls with the picked org, workspace, and harness list", () => {

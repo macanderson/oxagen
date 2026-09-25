@@ -69,6 +69,7 @@ import {
   deregisterArgs,
   deregisterNeedsSession,
   describeCliInstall,
+  enforcementText,
   enrollArgs,
   HARNESS_LABEL,
   HARNESSES,
@@ -1313,9 +1314,8 @@ export function App() {
                       <code>
                         {host.org_slug}/{host.workspace_slug}
                       </code>
-                      ; collector {collectorText(daemonUp, host.port)};
-                      enforcement is client-attested (the hooks the agents
-                      honour).
+                      ; collector {collectorText(daemonUp, host.port)};{" "}
+                      {enforcementText(host.harnesses)}.
                     </p>
                   </div>
                 </div>
