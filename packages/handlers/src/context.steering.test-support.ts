@@ -694,10 +694,12 @@ export class FakeGitHub implements SteeringGitHub {
       // tree happens to hold it. Every commit after a file lands carries that
       // file forward, so a fake that ignored the parent would hand a record
       // the provenance of whatever landed on the branch last.
+      // A commit that removed the path changed it too, as GitHub counts it.
       const content = snapshot(sha);
-      if (content === undefined) continue;
       const parent = this.parents.get(sha);
-      if (parent && snapshot(parent) === content) continue;
+      const before = parent ? snapshot(parent) : undefined;
+      if (content === undefined && before === undefined) continue;
+      if (parent && before === content) continue;
       const meta = this.commitMeta.get(sha);
       // No recorded commit means the file came from the constructor's seed,
       // which has no commit behind it. Null, so a test can see the provenance
@@ -1177,7 +1179,11 @@ export class MemorySyncStore implements SyncStore {
     for (const r of plan.retire) {
       const record = this.store.records.find((x) => x.id === r.recordId);
       if (!record) continue;
-      record.status = "retired";
+      Object.assign(record, {
+        status: "retired",
+        commitSha: input.commitSha,
+        publishedAt: input.publishedAt,
+      });
       this.chain(record.id, null, "retire");
     }
     return {

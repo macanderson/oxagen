@@ -170,6 +170,82 @@ describe("the six §10.3 checks", () => {
     ).toContain("revises the published record");
   });
 
+  it("lineage_uniqueness: accepts the record in any .toml file under the rules directory", () => {
+    // The lineage inside the file is the record's identity (ADR-182). A team
+    // that renames a file, or groups files in a folder, has not changed which
+    // record it holds.
+    for (const path of [
+      ".oxagen/rules/read-the-changelog-once.toml",
+      ".oxagen/rules/release/changelog.toml",
+    ]) {
+      const out = CHECKS.lineage_uniqueness(
+        ctx({ path, changedPaths: [path] }),
+      );
+      expect(out.ok, `${path}: ${out.summary}`).toBe(true);
+    }
+  });
+
+  it("lineage_uniqueness: refuses a file outside the rules directory or not TOML", () => {
+    // The sync reads only .toml files under .oxagen/rules/. A record merged
+    // anywhere else would never be published, so the check stops it before
+    // the merge rather than after.
+    for (const path of [
+      ".oxagen/other/x.toml",
+      "rules/x.toml",
+      `.oxagen/rules.toml`,
+      ".oxagen/rules/x.md",
+      ".oxagen/rules/x.toml.bak",
+    ]) {
+      const out = CHECKS.lineage_uniqueness(
+        ctx({ path, changedPaths: [path] }),
+      );
+      expect(out.ok, path).toBe(false);
+      expect(out.summary).toContain("is not a .toml file under .oxagen/rules/");
+    }
+  });
+
+  it("lineage_uniqueness: refuses a lineage already published at another rules path", () => {
+    // One lineage, one file. Two files holding one lineage would leave the
+    // sync to pick which one is in force.
+    const out = CHECKS.lineage_uniqueness(
+      ctx({
+        path: ".oxagen/rules/renamed.toml",
+        changedPaths: [".oxagen/rules/renamed.toml"],
+        published: { path: `.oxagen/rules/${LINEAGE}.toml`, version: 4 },
+      }),
+    );
+    expect(out.ok).toBe(false);
+    expect(out.summary).toContain(
+      `already published at .oxagen/rules/${LINEAGE}.toml`,
+    );
+    // The same renamed file, where the published record already lives, is a
+    // revision in place.
+    expect(
+      CHECKS.lineage_uniqueness(
+        ctx({
+          path: ".oxagen/rules/renamed.toml",
+          changedPaths: [".oxagen/rules/renamed.toml"],
+          published: { path: ".oxagen/rules/renamed.toml", version: 4 },
+        }),
+      ).summary,
+    ).toContain("revises the published record");
+  });
+
+  it("lineage_uniqueness: does not hold a record published outside the rules directory against a new file", () => {
+    // Characterization of the ADR-182 change, not a rule stated anywhere
+    // else: a published path outside .oxagen/rules/ (a record the sync can
+    // never read back) no longer blocks the lineage, and neither does a
+    // published record with no path.
+    for (const published of [
+      { path: "docs/steering/old.toml", version: 2 },
+      { path: null, version: 2 },
+    ]) {
+      const out = CHECKS.lineage_uniqueness(ctx({ published }));
+      expect(out.ok, `${published.path}: ${out.summary}`).toBe(true);
+      expect(out.summary).toContain("revises the published record");
+    }
+  });
+
   it("record_hash: refuses a file whose statement changed after stamping", () => {
     const edited = file().replace(STATEMENT, `${STATEMENT} Edited.`);
     const out = CHECKS.record_hash(ctx({ fileText: edited }));

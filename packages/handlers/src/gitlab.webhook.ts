@@ -346,10 +346,21 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
     now: () => new Date(),
     runInScope: (scope, fn) => runInTenantScope(scope, fn),
     async requestSync(scope, reason) {
-      const { requestSteeringSync } = await import(
-        "./context.steering.sync.request"
-      );
-      await requestSteeringSync([scope], reason);
+      // A request that cannot be sent must not fail the delivery: GitLab
+      // retries a 5xx and disables a hook that keeps failing, which would
+      // also stop the merge request events that reject closed proposals. The
+      // five-minute sweep syncs the workspace anyway.
+      try {
+        const { requestSteeringSync } = await import(
+          "./context.steering.sync.request"
+        );
+        await requestSteeringSync([scope], reason);
+      } catch (err) {
+        logger.error(
+          { err, workspaceId: scope.workspaceId, reason },
+          "gitlab.webhook: could not request a steering sync; the scheduled sweep will run it",
+        );
+      }
     },
   };
 }

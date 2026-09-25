@@ -11,6 +11,7 @@ import {
 } from "@oxagen/database";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import { and, desc, eq, inArray, isNotNull, max, sql } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import {
   appendPromotion,
   appendVersion,
@@ -106,14 +107,12 @@ const OPEN_PR = [
   "checks_failed",
 ] as const;
 
-const scoped = <T extends { orgId: unknown; workspaceId: unknown }>(
-  table: T,
+/** Every table this store reads carries the org and workspace columns. */
+const scoped = (
+  table: { orgId: PgColumn; workspaceId: PgColumn },
   scope: Scope,
 ) =>
-  and(
-    eq(table.orgId as never, scope.orgId),
-    eq(table.workspaceId as never, scope.workspaceId),
-  );
+  and(eq(table.orgId, scope.orgId), eq(table.workspaceId, scope.workspaceId));
 
 function toState(row: typeof schema.contextSyncState.$inferSelect): SyncState {
   return {
@@ -349,9 +348,16 @@ export const postgresSyncStore: SyncStore = {
       }
 
       for (const r of plan.retire) {
+        // A retirement is a publication too: a checkout that still holds the
+        // file is behind, so the freshness read must name this commit.
         await tx
           .update(schema.contextRecords)
-          .set({ status: "retired", updatedAt: input.now })
+          .set({
+            status: "retired",
+            commitSha: input.commitSha,
+            publishedAt,
+            updatedAt: input.now,
+          })
           .where(eq(schema.contextRecords.id, r.recordId));
         await appendPromotion(tx, {
           scope,

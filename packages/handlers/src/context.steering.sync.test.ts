@@ -26,6 +26,7 @@ vi.mock("@oxagen/iam/org-role", () => ({
 import { createOpenContextPrHandler } from "./context.pr.open";
 import { createMergeContextPrHandler } from "./context.pr.merge";
 import { createProposeRecordHandler } from "./context.proposal.create";
+import { syncView } from "./context.steering.freshness";
 import { buildRecordFile, serializeRecordFile } from "./context.steering.file";
 import {
   MERGE_GRACE_SECONDS,
@@ -205,11 +206,14 @@ describe("syncWorkspaceSteering", () => {
       recordText("ctx.a.one"),
     );
     await r.run();
-    r.h.github.remove("main", `${RULES}/ctx.a.one.toml`);
+    const removal = r.h.github.remove("main", `${RULES}/ctx.a.one.toml`);
     const out = await r.run();
     expect(out.retired).toBe(1);
     expect(active(r)).toEqual([]);
     expect(r.h.store.ledger.at(-1)).toMatchObject({ action: "retire" });
+    // A checkout that still holds the deleted file is behind: the freshness
+    // read names the commit that removed it.
+    expect(r.h.store.records[0]?.commitSha).toBe(removal);
   });
 
   it("reports a broken file on the page and the commit, and keeps the record in force", async () => {
@@ -257,6 +261,19 @@ describe("syncWorkspaceSteering", () => {
     const out = await r.run();
     expect(out.outcome).toBe("no_repository");
     expect(r.sync.state).toBeNull();
+  });
+
+  // A webhook stamps the request before the sync finds there is nothing to
+  // read: a retired GitHub connection, or a GitLab project that is not the
+  // main one. Left unanswered, the stamp reads as pending for good and the
+  // page refreshes itself forever.
+  it("answers a stamped request even when there is no repository to read", async () => {
+    const r = rig();
+    r.h.github.repository = null;
+    await r.sync.markRequested(SCOPE, r.h.now());
+    await r.run();
+    expect(syncView(r.sync.state)?.status).toBe("failed");
+    expect(r.sync.state?.error).toContain("no main repository");
   });
 });
 

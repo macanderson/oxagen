@@ -178,8 +178,21 @@ export async function syncWorkspaceSteering(
     repo = await deps.github.resolveRepository(scope);
   } catch (err) {
     // No main repository is a workspace with nothing to sync, not a failure.
-    if (err instanceof HandlerError && err.code === "not_found")
+    // A request the webhook already stamped is answered, though: an
+    // unanswered stamp reads as pending for good, and the page would refresh
+    // itself forever waiting for it.
+    if (err instanceof HandlerError && err.code === "not_found") {
+      const prior = await deps.store.readState(scope);
+      if (prior)
+        await deps.store.writeState(scope, {
+          ...prior,
+          status: "failed",
+          error:
+            "This workspace has no main repository Oxagen can read, so there is nothing to sync.",
+          syncedAt: deps.now(),
+        });
       return { ...outcome, outcome: "no_repository" };
+    }
     await recordFailure(deps, scope, null, err);
     throw err;
   }
