@@ -45,6 +45,14 @@ export const hostFileSchema = z
   .object({
     schema: z.literal(HOST_FILE_SCHEMA),
     host_enrollment_id: z.string().min(1),
+    /**
+     * What tachod derives session uuids from (ADR-173). A new enrollment sets
+     * it to its own enrollment id. An enrollment that replaces this one on the
+     * same machine and in the same workspace carries it forward, so a live
+     * session keeps its uuid and its run. Optional: a host enrolled before the
+     * field existed derives from `host_enrollment_id` (`sessionScopeOf`).
+     */
+    session_scope: z.string().min(1).optional(),
     agent_key: z.string().min(1),
     organization_id: z.string().min(1),
     workspace_id: z.string().min(1),
@@ -200,6 +208,54 @@ export const hostFileSchema = z
   .passthrough();
 
 export type HostFile = z.output<typeof hostFileSchema>;
+
+/**
+ * The scope tachod derives session uuids from. A host enrolled before
+ * `session_scope` existed has none, and its enrollment id is what every uuid
+ * it has recorded was derived from.
+ */
+export function sessionScopeOf(
+  host: Pick<HostFile, "host_enrollment_id"> &
+    Partial<Pick<HostFile, "session_scope">>,
+): string {
+  return host.session_scope ?? host.host_enrollment_id;
+}
+
+/**
+ * The session scope a new enrollment writes into `host.json` (ADR-173).
+ *
+ * It keeps the scope of the enrollment it replaces when the two name the same
+ * organization and workspace, the device key is the same one, and the control
+ * plane confirmed the old enrollment revoked. Those are the conditions under
+ * which ingest lets the new host continue the old host's sessions, so a live
+ * session keeps its uuid only where its next frames can land. Anywhere else
+ * the scope is the new enrollment id: a session that kept its uuid would be
+ * refused as another host's, and its recording would stop.
+ */
+export function sessionScopeForEnrollment(
+  next: Pick<
+    HostFile,
+    | "host_enrollment_id"
+    | "organization_id"
+    | "workspace_id"
+    | "device_key_fingerprint"
+  >,
+  previous: { host: HostFile; revoked: boolean } | undefined,
+): string {
+  if (previous === undefined) return next.host_enrollment_id;
+  const { host } = previous;
+  // The control plane answered with the enrollment this file already names.
+  if (host.host_enrollment_id === next.host_enrollment_id)
+    return sessionScopeOf(host);
+  if (
+    previous.revoked &&
+    host.organization_id === next.organization_id &&
+    host.workspace_id === next.workspace_id &&
+    host.device_key_fingerprint === next.device_key_fingerprint
+  )
+    return sessionScopeOf(host);
+  return next.host_enrollment_id;
+}
 
 /** What `harness_files` records for the paths enroll is writing. */
 export function harnessFilesRecord(paths: TachoPaths): HarnessFilesRecord {

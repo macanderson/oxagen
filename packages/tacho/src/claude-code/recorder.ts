@@ -115,7 +115,10 @@ export interface RecorderOptions {
   context: ClaudeCodeContext;
   /** The harness's own session id (Claude Code's UUID). */
   harnessSessionId: string;
-  /** Host enrollment id (Claude Code hosts) or agent key (SDK agents). */
+  /**
+   * The host's session scope (`sessionScopeOf`, ADR-173) for enrolled hosts,
+   * or the agent key for SDK agents.
+   */
   scope: string;
   /**
    * The custom agent that owns this session, when one does. A harness session

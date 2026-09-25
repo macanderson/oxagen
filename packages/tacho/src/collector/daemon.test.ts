@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChain } from "../chain";
 import { runTachoHook } from "../claude-code/hook-client";
+import { sessionUuid } from "../ids";
 import type { TachoEvent } from "../envelope";
 import type { FetchLike } from "../host/control-client";
 import { writeSensitiveFileAtomic } from "../host/fs";
@@ -471,6 +472,33 @@ describe("tachod", () => {
 
     releaseForward?.();
     expect((await forward).status).toBe(200);
+  });
+
+  it("derives session uuids from host.json's session scope, not its enrollment id", async () => {
+    // A re-enrollment into the same workspace carries the old scope forward
+    // (ADR-173). A daemon that hashed the new enrollment id instead gave
+    // every live session a second uuid, so a second run that replayed its
+    // transcript (#4201).
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const kept = "tch_predecessor00000000000";
+    writeHostFile(paths.hostFile, {
+      ...testHostFile(signer, signer.sign(unsignedBundle())),
+      session_scope: kept,
+    });
+    const plane = fakeControlPlane("etag-3");
+    const { handle, host } = await boot(plane, paths);
+    const hook = await postHttp(
+      handle.port as number,
+      host.local_token,
+      "/hook",
+      { session_id: "sess-scoped", hook_event_name: "SessionStart", cwd: "/tmp" },
+    );
+    expect(hook.status).toBe(200);
+    await handle.tick();
+    const uuids = new Set(plane.ingested.map((e) => e.session_uuid));
+    expect(uuids).toContain(sessionUuid(kept, "sess-scoped"));
+    expect(uuids).not.toContain(sessionUuid(TEST_ENROLLMENT, "sess-scoped"));
   });
 
   it("seals the spool replay of a hook whose live write failed", async () => {

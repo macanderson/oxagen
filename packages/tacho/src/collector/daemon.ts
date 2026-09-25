@@ -60,6 +60,7 @@ import {
   readHostFile,
   mcpEndpointFor,
   modelProxyPortFor,
+  sessionScopeOf,
 } from "../host/host-file";
 import { readModelBaseUrlState } from "../host/model-base-url";
 import {
@@ -537,9 +538,13 @@ async function initializeDaemon(
           stopped: head.kind === "agent_stop",
         };
   };
+  // The session scope outlives an enrollment that replaces this one on the
+  // same machine and in the same workspace, so a live session keeps its uuid
+  // across `enroll --force`, a harness addition and a harness-only reassign
+  // (ADR-173).
   const registry = new SessionRegistry({
     context,
-    scope: host.host_enrollment_id,
+    scope: sessionScopeOf(host),
     now,
   });
   // Read before anything in this startup touches the file, so it names the
