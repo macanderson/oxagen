@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The assistant's thread across a reload, a workspace rename, and "New
-// thread" (#4163, #3313). The turn action and the thread read are fakes: the
+// thread" (#4163, #3313). The turn's stream and the thread read are fakes: the
 // read answers the thread the record holds and the workspace id the flyout
 // files it under, so each case shows what the person sees.
 import {
@@ -26,9 +26,9 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
-// The turn's transport (assistant-stream-client.ts) answers in the shape the
-// Server Action it replaced did, so one fake that takes the same three
-// arguments stands in for it.
+// The turn streams from the API (assistant-stream-client.ts, ADR-176) and
+// answers in the shape the Server Action it replaced did, so one fake that
+// takes the same three arguments drives it.
 const askAssistant =
   vi.fn<(org: string, ws: string, question: unknown) => Promise<unknown>>();
 vi.mock("./assistant-stream-client", () => ({
@@ -38,6 +38,20 @@ vi.mock("./assistant-stream-client", () => ({
 vi.mock("./assistant-actions", () => ({ readAssistantReply: vi.fn() }));
 const loadAssistantThread = vi.fn();
 vi.mock("./assistant-thread-actions", () => ({ loadAssistantThread }));
+// The parked cards have their own tests (assistant-parked-approvals.test.tsx).
+// This stand-in records the workspace and run the flyout hands them.
+const parkedApprovals =
+  vi.fn<(props: { org: string; ws: string; runId: string }) => void>();
+vi.mock("./assistant-parked-approvals", () => ({
+  AssistantParkedApprovals: (props: {
+    org: string;
+    ws: string;
+    runId: string;
+  }) => {
+    parkedApprovals(props);
+    return <div data-testid="parked-cards" />;
+  },
+}));
 
 const pathname = vi.fn(() => "/acme/core-platform");
 vi.mock("next/navigation", () => ({
@@ -148,6 +162,7 @@ beforeAll(() => {
 beforeEach(() => {
   askAssistant.mockReset();
   loadAssistantThread.mockReset();
+  parkedApprovals.mockReset();
   askAssistant.mockResolvedValue(turn());
   loadAssistantThread.mockResolvedValue(loaded(RECORDED));
   pathname.mockReturnValue("/acme/core-platform");
@@ -160,7 +175,6 @@ describe("the assistant's thread across a reload", () => {
 
     expect(loadAssistantThread).toHaveBeenCalledWith("acme", "core-platform");
     expect(await screen.findByText("what is live?")).toBeTruthy();
-    // A restored answer was read before: it is shown whole, not typed out.
     expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
       "Three runs are live.",
     );
@@ -169,6 +183,19 @@ describe("the assistant's thread across a reload", () => {
     );
     expect(screen.getByTestId("assistant-parked")).toBeTruthy();
     expect(screen.queryByTestId("assistant-intro")).toBeNull();
+  });
+
+  // The thread read files the thread under the workspace's id, which holds
+  // no slugs, so the cards take the slugs of the workspace on screen.
+  it("draws a read-back thread's parked writes as cards for its workspace and run", async () => {
+    await openFlyout();
+    expect(await screen.findByTestId("parked-cards")).toBeTruthy();
+    expect(parkedApprovals).toHaveBeenLastCalledWith({
+      org: "acme",
+      ws: "core-platform",
+      runId: "arun_01k9",
+      cards: RECORDED.messages[1]?.parked,
+    });
   });
 
   it("reads the thread once and continues its conversation by its public id", async () => {

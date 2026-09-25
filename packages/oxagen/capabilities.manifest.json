@@ -1368,7 +1368,7 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": false,
+        "docs": true,
         "app": true
       }
     },

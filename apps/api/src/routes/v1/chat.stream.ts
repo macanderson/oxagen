@@ -28,7 +28,11 @@ const BodySchema = z.object({
   // CHAT_CONTENT_MAX_CHARS in the chat.message.send contract) so every chat
   // surface rejects oversized prompts identically.
   content: z.string().min(1).max(CHAT_CONTENT_MAX_CHARS),
-  conversationId: z.string().uuid().nullable().default(null),
+  // The contract's own field: an internal id or a `cnv_` public id. The
+  // flyout continues a thread it read back on reload by the public id
+  // `get_conversation` returns, so a UUID-only rule here would refuse the
+  // first question after every reload.
+  conversationId: assistantAsk.input.shape.conversationId,
   // Where the person is (the app's flyout); null for a caller with no page.
   pageContext: assistantPageContextSchema.nullable().default(null),
   // A goal-shaped turn: the engine's verifier judges each round against it

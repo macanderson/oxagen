@@ -173,6 +173,20 @@ describe("POST chat/stream — ingress", () => {
     ).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
+
+  it("continues a conversation by its cnv_ public id, as the contract does", async () => {
+    // The flyout reads its thread back on reload by get_conversation, which
+    // answers the public id, and asks the next question with it (#4163).
+    const res = await post({ content: "and now?", conversationId: "cnv_01k9x2" });
+    await res.text();
+    expect(res.status).toBe(200);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "ask_assistant",
+      expect.objectContaining({ conversationId: "cnv_01k9x2" }),
+      CTX,
+      { surface: "api" },
+    );
+  });
 });
 
 describe("ask_assistant — the same gates on both adapters", () => {
