@@ -5854,6 +5854,7 @@ type Messages = {
       reason: string;
       resumedRun: string;
       noMatch: string;
+      partial: string;
       others: string;
       by: {
         system: string;
@@ -6130,6 +6131,10 @@ type Messages = {
         perTurn: string;
         dearest: string;
         median: string;
+        provisional: string;
+        provisionalModel: string;
+        provisionalModelUnpriced: string;
+        provisionalMore: string;
         costChart: string;
         turnCost: string;
         turnUnpriced: string;
@@ -6617,6 +6622,7 @@ type Messages = {
       aside: string;
       asideTurns: string;
       chart: string;
+      chartCut: string;
       barTitle: string;
       turnLabel: string;
       cache: string;
@@ -6625,6 +6631,9 @@ type Messages = {
       turnCost: string;
       soFar: string;
       caption: string;
+      captionCut: string;
+      totalCut: string;
+      partial: string;
       tableLabel: string;
       columns: {
         turn: string;
@@ -7701,6 +7710,14 @@ type Messages = {
         aborted: string;
         model: string;
         unavailable: string;
+      };
+      engine: {
+        unreachable: string;
+        starting: string;
+        draining: string;
+        unconfigured: string;
+        check: string;
+        checking: string;
       };
       retry: string;
     };

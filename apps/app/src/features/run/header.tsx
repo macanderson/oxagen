@@ -718,11 +718,12 @@ function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
  */
 function PauseBanner({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
-  if (run.ingressPaused !== true) return null;
+  if (run.status !== "live" || run.ingressPaused !== true) return null;
   return (
     <p
       role="status"
       data-testid="run-paused"
+      data-source={run.source}
       className="mb-3.5 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
     >
       <b className="text-info">{t("pausedTitle")}</b>{" "}

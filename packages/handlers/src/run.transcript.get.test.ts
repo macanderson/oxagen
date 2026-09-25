@@ -437,6 +437,47 @@ describe("get_run_transcript", () => {
     expect(out.entries[0]?.kinds).toContain("policy");
   });
 
+  // #3370: `kinds` is the union over every folded frame. A turn whose model
+  // call filled its response slot still holds the failed tool call after it,
+  // and that call is the entry's only sign of an error.
+  it("turns: an entry answers to the chips of every frame it folds, not only its halves", async () => {
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "turn_start",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        model: "haiku",
+        provider: "anthropic",
+        turnSeq: 1,
+      }),
+      tachoRow(2, { turnSeq: 1, toolStatus: "error" }),
+    ]);
+    const out = await transcript(input({ zoom: "turns" }), ctx());
+    expect(out.entries).toHaveLength(1);
+    expect(out.entries[0]?.kinds).toEqual(
+      expect.arrayContaining(["prompt", "responses", "tools", "errors"]),
+    );
+    // A turn with no failed call answers no errors chip (negative).
+    const clean = harness([
+      tachoRow(0, {
+        kind: "turn_start",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+      }),
+      tachoRow(1, { turnSeq: 1 }),
+    ]);
+    const quiet = await clean.transcript(input({ zoom: "turns" }), ctx());
+    expect(quiet.entries[0]?.kinds).toContain("tools");
+    expect(quiet.entries[0]?.kinds).not.toContain("errors");
+  });
+
   it("filters frames by the chips pressed before folding, and echoes the selection", async () => {
     const { transcript } = harness(rows);
     const out = await transcript(
@@ -972,6 +1013,43 @@ describe("get_run_transcript reassembly", () => {
     // rather than drawn as a zero.
     expect(assembly?.blocks.every((b) => b.cost === null)).toBe(true);
     expect(assembly?.blocks.reduce((sum, b) => sum + b.tokens, 0)).toBe(400);
+  });
+
+  it("reads only the price rows for the page's models over the page's span", async () => {
+    // #4202. The page loaded the organization's whole price book, 28,246 rows
+    // in production, for every read, whatever its limit.
+    const { deps } = harness([
+      tachoRow(1, {
+        kind: "llm_call",
+        model: "claude-opus-5",
+        provider: "anthropic",
+        ts: "2026-09-11 09:00:10.000",
+        ...stored(modelStream(["first."]), "text/event-stream"),
+      }),
+      tachoRow(2, {
+        kind: "llm_call",
+        model: "claude-haiku-4.5",
+        provider: "anthropic",
+        ts: "2026-09-11 09:00:40.000",
+        ...stored(modelStream(["second."]), "text/event-stream"),
+      }),
+    ]);
+    const priceBook = vi.fn(() => Promise.resolve([]));
+    deps.priceBook = priceBook;
+
+    await createRunTranscriptGetHandler(deps)(
+      input({ zoom: "everything" }),
+      ctx(),
+    );
+
+    expect(priceBook).toHaveBeenCalledTimes(1);
+    // A frame names its model under its provider, the id `outputRate` prices.
+    expect(priceBook).toHaveBeenCalledWith({
+      orgId: ctx().orgId,
+      models: ["anthropic/claude-opus-5", "anthropic/claude-haiku-4.5"],
+      from: new Date("2026-09-11T09:00:10.000Z"),
+      to: new Date("2026-09-11T09:00:40.000Z"),
+    });
   });
 });
 

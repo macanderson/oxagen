@@ -240,9 +240,9 @@ export interface MaterializeOptions {
    * the assistant acts as the person who asked, before the run opens and
    * after it. A value read from `ctx.agentRun` here would be permanently
    * null. Every tool's `execute` reads `runIdRef.current` at CALL time
-   * instead — by then the caller has set it to the opened run's public id —
-   * so a parked approval attaches to the run whose Policy tab a person is
-   * actually looking at (finding 9, macanderson/oxagen#3370). A caller with
+   * instead. By then the caller has set it to the opened run's internal id
+   * (the `agent_runs` uuid, not its `arun_` public id), so a parked approval
+   * attaches to the run whose Policy tab a person is actually looking at (finding 9, macanderson/oxagen#3370). A caller with
    * no such run (a direct API/MCP call, or an automation whose run was
    * already open when it materialized tools) omits this, and the read falls
    * back to `ctx.agentRun.runId` as before.
@@ -825,9 +825,7 @@ export async function materializeTools(
               // approval card never renders — the stream appears hung.
               opts.onApprovalRequired?.({
                 approvalId,
-                ...(approval.publicId === undefined
-                  ? {}
-                  : { approvalPublicId: approval.publicId }),
+                approvalPublicId: approval.approvalPublicId,
                 capability: cap.name,
                 inputPreview: input,
                 riskLevel,
