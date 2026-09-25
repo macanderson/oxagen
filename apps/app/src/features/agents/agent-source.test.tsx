@@ -494,8 +494,8 @@ describe("SourceEditor find and keys", () => {
     expect(count()).toHaveTextContent("3 of 3");
     await userEvent.type(findBox(), "{Shift>}{Enter}{/Shift}");
     expect(count()).toHaveTextContent("2 of 3");
-    // Each press is typed into the find box afresh: a jump moves focus to the
-    // editor, so a second Enter in one burst would land there instead.
+    // Each press is typed into the find box afresh. A jump moves focus to the
+    // editor, and the editor's own Enter handling is covered below.
     await userEvent.type(findBox(), "{Enter}");
     expect(count()).toHaveTextContent("3 of 3");
     await userEvent.type(findBox(), "{Enter}");
@@ -506,18 +506,40 @@ describe("SourceEditor find and keys", () => {
     expect(editor()).toHaveFocus();
   });
 
-  it("hands focus to the editor with the match selected, so a second Enter replaces the match (characterization)", async () => {
-    // A wart, pinned rather than fixed: jump() focuses the textarea so the
-    // selection is painted, and the next Enter is then typed into the file
-    // over the selected match. Changing it is a focus-model decision (a
-    // textarea paints no selection without focus), so this test records the
-    // behaviour until that decision is made.
+  it("keeps the draft unchanged when Enter is pressed again after a jump (#4035)", async () => {
+    // The jump focuses the editor so the selected match is painted. Enter
+    // there steps to the next match instead of typing over the selection.
     renderEditor();
     await userEvent.type(findBox(), "release{Enter}");
     expect(editor()).toHaveFocus();
     await userEvent.keyboard("{Enter}");
-    expect(count()).toHaveTextContent("1 of 2");
+    expect(count()).toHaveTextContent("2 of 3");
+    await userEvent.keyboard("{Enter}{Enter}");
+    expect(count()).toHaveTextContent("1 of 3");
+    expect(editor()).toHaveValue(DEFINITION_SOURCE);
+    expect(screen.getByTestId("draft-state")).toHaveAttribute(
+      "data-dirty",
+      "false",
+    );
+  });
+
+  it("steps back with Shift+Enter in the editor, and Escape returns to the find box", async () => {
+    renderEditor();
+    await userEvent.type(findBox(), "release{Enter}");
+    await userEvent.keyboard("{Shift>}{Enter}{/Shift}");
+    expect(count()).toHaveTextContent("3 of 3");
+    expect(editor()).toHaveValue(DEFINITION_SOURCE);
+    await userEvent.keyboard("{Escape}");
+    expect(findBox()).toHaveFocus();
+    expect(findBox()).toHaveValue("release");
+  });
+
+  it("types Enter into the file once the person moves off the match (negative)", async () => {
+    renderEditor();
+    await userEvent.type(findBox(), "release{Enter}");
+    await userEvent.keyboard("{ArrowRight}{Enter}");
     expect(editor()).not.toHaveValue(DEFINITION_SOURCE);
+    expect(count()).toHaveTextContent("1 of 3");
   });
 
   it("moves nowhere on Enter when nothing matches (negative)", async () => {
