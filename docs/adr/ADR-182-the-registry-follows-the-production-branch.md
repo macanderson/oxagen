@@ -115,4 +115,10 @@ never change cannot be enforced against that.
   The sweep covers them until they are attached again.
 - Agents (`.oxagen/agents/`) and skills still need a person to register them
   after merge. The sync reads only `.oxagen/rules/`, and the same trigger can
-  carry the other directories later.
+  carry the other directories later (#4293).
+- A record written by `publish_context_record` has no path, so check 2 no
+  longer stops a Context PR for its lineage. That PR moves the record into the
+  repository, which is the direction this decision wants.
+- The first sweep after deploy publishes any record file already on a
+  production branch that the registry lacks, and retires any repository
+  record whose file is gone.
