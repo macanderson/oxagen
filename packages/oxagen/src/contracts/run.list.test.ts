@@ -102,6 +102,15 @@ describe("list_runs contract", () => {
     expect(runList.layers).not.toContain("e2e");
   });
 
+  it("is a low-risk read the in-app agent may call without approval", () => {
+    expect(runList.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(runList.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "run",
+    });
+  });
+
   it("defaults the page size and refuses a size outside 1…100 or an unknown key", () => {
     expect(runList.input.parse({})).toEqual({ limit: 50 });
     expect(runList.input.safeParse({ limit: 0 }).success).toBe(false);

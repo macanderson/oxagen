@@ -48,12 +48,17 @@ const identity = {
 };
 
 describe("get_agent contract", () => {
-  it("is a console read on api, mcp and cli, unmetered, Owner/Admin/Member", () => {
+  it("is a console read on api, mcp, agent and cli, unmetered, Owner/Admin/Member", () => {
     expect(getCapability("get_agent")).toBe(agentGet);
     expect(agentGet.mutates).toBe(false);
     expect(agentGet.noBillingGate).toBe(true);
     expect(agentGet.scoped).toBe(true);
-    expect(agentGet.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(agentGet.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
+    expect(agentGet.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "introspection",
+    });
     expect(agentGet.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow", Member: "allow" },
       workspace: { Owner: "allow", Member: "allow" },

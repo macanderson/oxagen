@@ -8,8 +8,11 @@ The ⌘K Runs group (MC spec App. E): the newest runs of the workspace with the 
 
 ## Surface
 
+**Surfaces:** api, mcp, agent
+
 - API: `POST /v1/:org_slug/:workspace_slug/runs/recent`
 - MCP: `list_recent_runs`
+- Agent: the in-app assistant finds it with `search_tools` and loads it with `load_tools`. Low risk, no approval.
 - Authentication: session (org Owner, Admin or Member; workspace Owner or Member)
 - Capability name: `list_recent_runs`
 - Not billed (`noBillingGate: true`).

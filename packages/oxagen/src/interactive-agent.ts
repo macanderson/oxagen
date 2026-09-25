@@ -44,25 +44,47 @@ export function isManagedAgentType(agentType: string): boolean {
 export const MANAGED_AGENT_READONLY_CODE = "agent_managed_read_only";
 
 /**
- * The capability allowlist the interactive agent is granted, as `function`
- * agentTools. These are the governed reads that let it answer "what did my
- * agents do, what grounded them, what is pending" — the graph and ontology
- * read set, the execution record, and its own memory. Every entry is a
- * registered capability name (ADR-025 verb-first snake_case), so each call
- * still passes the kernel's IAM, entitlement and metering gates.
+ * The capabilities the in-app assistant pins, also granted as `function`
+ * agentTools in the published config. The provider sees these seven, plus
+ * `search_tools` and `load_tools`, on every turn. Every other capability on
+ * the `agent` surface stays reachable through those two meta-tools. A pin
+ * costs tokens on every turn (#2611), so each one answers a question people
+ * ask in the flyout, from the same read the rev1 page uses:
  *
- * ADR-043 replaced the previous skill list here: skills no longer exist, and a
- * governed agent's grant is an allowlist of things the platform can gate, not
- * a bundle of prompt fragments.
+ * - `list_runs`: what the workspace's agents ran, from the Fleet table.
+ * - `get_run`: what one run did, frame by frame, from the Run page.
+ * - `get_run_cost`: what one run cost, by model and token class.
+ * - `get_spend`: what the workspace spent, by operator, agent, model, tool,
+ *   task or cost center.
+ * - `list_approvals`: which tool calls wait on a person.
+ * - `list_agents`: which agents exist, their status and 30-day figures.
+ * - `search_graph`: the way into the workspace knowledge graph. It finds
+ *   nodes by meaning. `query_ontology` and `get_ontology_neighbors` start
+ *   from a node id, so neither can answer first. Both stay one `load_tools`
+ *   call away.
+ *
+ * Every pin is a read the assistant may call without a person: it declares
+ * `mutates: false`, low risk and no approval (interactive-agent.test.ts).
+ * That rules out `recall_memory`, which raises the confidence score of every
+ * memory it returns. Each turn already recalls workspace memory before the
+ * model runs (packages/agent/src/runtime/assistant-recall.ts).
+ * `list_executions` and `get_execution_trace` read the legacy
+ * `agent_executions` store. `list_runs` and `get_run` read the fleet record
+ * the rev1 pages show, so they replace those two here.
+ *
+ * Every entry is a registered capability name (ADR-025 verb-first
+ * snake_case), so each call still passes the kernel's IAM, entitlement and
+ * metering gates. ADR-043 replaced the previous skill list here: a governed
+ * agent's grant names things the platform can gate, not prompt fragments.
  */
 export const INTERACTIVE_AGENT_CAPABILITIES = [
-  "query_ontology",
-  "get_ontology_neighbors",
-  "recall_memory",
-  "save_memory",
-  "cite_reference",
-  "list_executions",
-  "get_execution_trace",
+  "list_runs",
+  "get_run",
+  "get_run_cost",
+  "get_spend",
+  "list_approvals",
+  "list_agents",
+  "search_graph",
 ] as const;
 
 /**
@@ -88,13 +110,14 @@ export function buildInteractiveAgentConfig(
       ref: name,
     })),
     instructions:
-      "You are the workspace governance and Q&A agent. Answer questions about " +
-      "this workspace's agents — what they did, what context grounded them, " +
-      "what they cost, what is pending approval — and about the workspace " +
-      "knowledge graph. Ground every claim in a tool result and cite the nodes " +
-      "you used by their human label. When you lack grounding, say so rather " +
-      "than guessing. You do not run, deploy, or edit anything: Oxagen governs " +
-      "agents, it does not execute them.",
+      "You answer questions about this workspace's agents: what they ran, " +
+      "what it cost, which tool calls wait on approval, and which agents " +
+      "exist. You also answer questions about the workspace knowledge graph. " +
+      "Ground every claim in a tool result and name each record by its human " +
+      "label. When no tool result supports an answer, say so. When a question " +
+      "needs a tool you do not hold, find it with search_tools and load it " +
+      "with load_tools. Oxagen governs agents and records what they do. It " +
+      "does not run them.",
   });
 }
 

@@ -97,6 +97,10 @@ const ROLE_CHECKED_CONTRACTS = [
   "delete_cost_center",
   "set_cost_center",
   "export_cost_center_statement",
+  // The role catalogue, its scopes and the enforcement tier. The contract
+  // declares Owner, Admin and Compliance; the app's own check was the only
+  // gate until the handler asserted them too.
+  "list_iam_roles",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

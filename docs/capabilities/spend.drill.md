@@ -8,8 +8,11 @@ One operator, agent or tool over a trailing window: the Spend drill page (Missio
 
 ## Surface
 
+**Surfaces:** api, mcp, agent
+
 - API: `POST /v1/:org_slug/:workspace_slug/spend/drill`
 - MCP: `get_spend_drill`
+- Agent: the in-app assistant finds it with `search_tools` and loads it with `load_tools`. Low risk, no approval.
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `get_spend_drill`
 - Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity.

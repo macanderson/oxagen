@@ -897,6 +897,7 @@ type Messages = {
         };
       };
       runtime: {
+        needsRole: string;
         empty: {
           title: string;
           body: string;
@@ -1734,6 +1735,7 @@ type Messages = {
       suspended: string;
       rateLimited: string;
       alreadyRegistered: string;
+      passwordTooWeak: string;
       codeWrong: string;
       linkExpired: string;
       oauthCancelled: string;
@@ -4040,6 +4042,8 @@ type Messages = {
       actions: string;
       resend: string;
       revoke: string;
+      resendFor: string;
+      revokeFor: string;
       working: string;
       resent: string;
       revoked: string;
@@ -7452,7 +7456,6 @@ type Messages = {
         billing: string;
         audit: string;
       };
-      assistant: string;
       assistantSub: string;
       search: string;
       searchSub: string;
@@ -7578,6 +7581,38 @@ type Messages = {
       intro: {
         title: string;
         body: string;
+      };
+      suggestions: {
+        title: string;
+        fleet: {
+          waiting: string;
+          stopped: string;
+          spend: string;
+        };
+        run: {
+          stopped: string;
+          cost: string;
+          denied: string;
+        };
+        spend: {
+          drivers: string;
+          operators: string;
+          budget: string;
+        };
+        mandate: {
+          allows: string;
+          left: string;
+          expires: string;
+        };
+        agents: {
+          cost: string;
+          waiting: string;
+        };
+        agent: {
+          runs: string;
+          cost: string;
+          mandate: string;
+        };
       };
       composer: {
         label: string;
@@ -7799,6 +7834,7 @@ type Messages = {
         missingVersion: string;
         catalogInvalid: string;
         catalogTooLarge: string;
+        catalogUnsafe: string;
       };
     };
   };

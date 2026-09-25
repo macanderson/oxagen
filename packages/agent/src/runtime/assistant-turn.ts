@@ -640,8 +640,9 @@ async function runPreparedTurn(
  * The evidence ledger is the authority on what the turn did — every reverse
  * request has a receipt there, and the seal attests to them. `agent_executions`
  * is a different question answered for a different reader: `list_executions`
- * and `get_execution_trace` are in `INTERACTIVE_AGENT_CAPABILITIES`, so the
- * assistant itself uses them to answer "what did my agents do", and
+ * and `get_execution_trace` read it, and both stay on the agent surface, one
+ * `load_tools` call away from the assistant. `list_runs` excludes the
+ * assistant's own turns, so these two are how it reads back what it did.
  * `projectToolUsageBestEffort` (the handler's own tail) is the only writer of
  * the lineage projection. A turn that skips this leaves both answering
  * "nothing happened", which is worse than answering nothing at all.

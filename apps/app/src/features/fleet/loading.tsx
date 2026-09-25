@@ -6,10 +6,11 @@
 //
 // Next replaces page.tsx's whole return value with this default export while
 // the route segment suspends. The route lives in the `(fleet)` group so this
-// skeleton never stands in for a nested workspace page. The landmark carries
-// no `id`: while the page streams in, React holds the resolved page hidden
-// beside this fallback, and two `main#main` in one document is what the
-// page-load check refused.
+// skeleton never stands in for a nested workspace page. The frame is a busy
+// region, not a `main`: while the page streams in, React holds the resolved
+// page hidden beside this fallback, and only the page may own the landmark. A
+// second `main`, with or without an `id`, gives the document two main
+// landmarks during the swap (#4053, arch/loading-landmarks.test.ts).
 import { useTranslations } from "next-intl";
 import { panel, panelHeader, statStrip } from "@/ui/control-styles";
 
@@ -24,7 +25,7 @@ const bone = "skeleton";
 export function FleetLoading() {
   const t = useTranslations("fleet");
   return (
-    <main
+    <div
       aria-busy="true"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
@@ -62,6 +63,6 @@ export function FleetLoading() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
