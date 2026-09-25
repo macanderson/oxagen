@@ -7,10 +7,11 @@
  * outcome classification.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
   validateNodeAgainstSchema,
   validateRelationshipAgainstSchema,
+  PATTERN_CACHE_LIMIT,
   MISSING_REQUIRED_WEIGHT,
   TYPE_ERROR_WEIGHT,
   MISSING_OPTIONAL_WEIGHT,
@@ -538,5 +539,90 @@ describe("an uncompilable schema pattern (#1425)", () => {
     // The score is what the defect inflated: a disabled constraint scored the
     // same as a satisfied one.
     expect(validateWith(BROKEN, "anything").conformanceScore).toBeLessThan(1);
+  });
+});
+
+/**
+ * #2974: the validator ran `new RegExp(pattern)` for every value it checked,
+ * so a batch of N values against one pattern compiled it N times.
+ */
+describe("pattern compilation is cached per pattern (#2974)", () => {
+  const RealRegExp = globalThis.RegExp;
+  afterEach(() => {
+    globalThis.RegExp = RealRegExp;
+  });
+
+  /** Counts `new RegExp(source)` calls for each source string. */
+  function countCompiles(): Map<string, number> {
+    const counts = new Map<string, number>();
+    globalThis.RegExp = new Proxy(RealRegExp, {
+      construct(target, args: [string | RegExp, string?]) {
+        const source = String(args[0]);
+        counts.set(source, (counts.get(source) ?? 0) + 1);
+        return Reflect.construct(target, args);
+      },
+    });
+    return counts;
+  }
+
+  const withPattern = (pattern: string) =>
+    schema({
+      labels: [
+        {
+          schemaName: "crm",
+          name: "Person",
+          displayName: "Person",
+          description: null,
+          naturalKeyProps: [],
+          properties: [prop({ key: "code", constraints: { pattern } })],
+        },
+      ],
+    });
+
+  const validateWith = (pinned: PinnedSchema, value: string) =>
+    validateNodeAgainstSchema(
+      { label: "Person", properties: { code: value } },
+      pinned,
+    );
+
+  it("compiles a valid pattern once across 100 values", () => {
+    const pattern = "^cache-2974-[0-9]+$";
+    const pinned = withPattern(pattern);
+    const counts = countCompiles();
+    for (let i = 0; i < 100; i++) {
+      const result = validateWith(pinned, `cache-2974-${i}`);
+      expect(result.errors.filter((e) => e.field === "code")).toEqual([]);
+    }
+    expect(validateWith(pinned, "nope").errors[0]?.code).toBe("pattern");
+    expect(counts.get(pattern)).toBe(1);
+  });
+
+  it("compiles a broken pattern once and still reports patternInvalid", () => {
+    const pattern = "(cache-2974";
+    const pinned = withPattern(pattern);
+    const counts = countCompiles();
+    for (let i = 0; i < 100; i++) {
+      const error = validateWith(pinned, `v${i}`).errors.find(
+        (e) => e.field === "code",
+      );
+      expect(error?.code).toBe("patternInvalid");
+    }
+    expect(counts.get(pattern)).toBe(1);
+  });
+
+  it("keeps validating correctly after the cache evicts old patterns", () => {
+    const first = "^evict-2974-first$";
+    expect(validateWith(withPattern(first), "evict-2974-first").errors).toEqual(
+      [],
+    );
+    for (let i = 0; i <= PATTERN_CACHE_LIMIT; i++) {
+      validateWith(withPattern(`^evict-2974-${i}$`), `evict-2974-${i}`);
+    }
+    const counts = countCompiles();
+    expect(validateWith(withPattern(first), "other").errors[0]?.code).toBe(
+      "pattern",
+    );
+    // The first pattern was evicted, so it compiles again, once.
+    expect(counts.get(first)).toBe(1);
   });
 });
