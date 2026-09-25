@@ -17,6 +17,9 @@ export const schema = {
   after: runTranscriptGet.input.shape.after.describe(
     "An entry cursor from an earlier read; omit to read from the start",
   ),
+  text: runTranscriptGet.input.shape.text.describe(
+    "How much of each body to carry: excerpt cuts it at 1,024 characters, full at 16,384; omit to take the zoom's cap (full at everything, excerpt otherwise)",
+  ),
   limit: runTranscriptGet.input.shape.limit.describe(
     "Entries per page, 1 to 500",
   ),

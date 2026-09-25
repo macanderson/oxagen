@@ -46,7 +46,12 @@
  *
  * `noBillingGate: true`: reading a recording is a console read (§1.5).
  */
-import { TRANSCRIPT_KINDS } from "@oxagen/tacho";
+import {
+  TOOL_FAMILIES,
+  TRANSCRIPT_KINDS,
+  TRANSCRIPT_NODES,
+  TRANSCRIPT_OUTCOMES,
+} from "@oxagen/tacho";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { frameFidelitySchema, frameRedactionSchema } from "./run.get";
@@ -73,20 +78,40 @@ export const TRANSCRIPT_TEXT_MAX = 16_384;
  */
 export const TRANSCRIPT_STEP_TEXT_MAX = 1_024;
 
-/** The text cap a zoom level reads under. */
+/**
+ * How much of each half's body a read carries: `excerpt` cuts it at
+ * `TRANSCRIPT_STEP_TEXT_MAX`, `full` at `TRANSCRIPT_TEXT_MAX`. A read that
+ * names neither takes its zoom's cap, so a caller that never asked keeps the
+ * answer it had. The Run page asks for `full` at `steps`, so a tool's output
+ * is not cut at a kilobyte.
+ */
+export const TRANSCRIPT_TEXTS = ["excerpt", "full"] as const;
+export const transcriptTextSchema = z.enum(TRANSCRIPT_TEXTS);
+
+/** The text cap a read carries its halves under. */
 export function transcriptTextMax(
   zoom: z.output<typeof transcriptZoomSchema>,
+  text?: z.output<typeof transcriptTextSchema>,
 ): number {
+  if (text === "full") return TRANSCRIPT_TEXT_MAX;
+  if (text === "excerpt") return TRANSCRIPT_STEP_TEXT_MAX;
   return zoom === "everything" ? TRANSCRIPT_TEXT_MAX : TRANSCRIPT_STEP_TEXT_MAX;
 }
 
 /**
- * The chips the Transcript tab filters on. The mockup also draws a `thinking`
- * chip; no producer records a reasoning segment in this revision, so there is
- * no kind for it — a chip that can only ever answer "none" would be the
- * placeholder §3.4 forbids.
+ * The chips the Transcript tab filters on, in the order the page draws them
+ * (`TRANSCRIPT_KINDS` in `@oxagen/tacho` says what each selects).
  */
 export const transcriptKindSchema = z.enum(TRANSCRIPT_KINDS);
+
+/** What kind of row a folded entry is (`TRANSCRIPT_NODES` in `@oxagen/tacho`). */
+export const transcriptNodeSchema = z.enum(TRANSCRIPT_NODES);
+
+/** How an entry's call ended (`TRANSCRIPT_OUTCOMES` in `@oxagen/tacho`). */
+export const transcriptOutcomeSchema = z.enum(TRANSCRIPT_OUTCOMES);
+
+/** The family a tool belongs to (`TOOL_FAMILIES` in `@oxagen/tacho`). */
+export const toolFamilySchema = z.enum(TOOL_FAMILIES);
 
 export const transcriptEntryKindSchema = z.enum([
   "turn",
@@ -170,6 +195,22 @@ export const contentBlockSchema = z.discriminatedUnion("kind", [
       /** The producer's own id for the call, so a result attaches to it. */
       callKey: z.string().nullable(),
       verdict: toolVerdictSchema.nullable(),
+      /**
+       * The `key` of the tool step that recorded this call, so a reader draws
+       * the call once, as that step: by call key, or, where either side kept
+       * none, the next tool step of the same name in the turn. Null for a
+       * call no tool step recorded.
+       */
+      stepKey: z.string().nullable().optional(),
+      /**
+       * What came back for this call, from a `tool_result` block for the same
+       * call key on the page. Null when the page holds none.
+       */
+      result: z
+        .object({ ok: z.boolean(), summary: z.string() })
+        .strict()
+        .nullable()
+        .optional(),
     })
     .strict(),
   z
@@ -300,6 +341,34 @@ export const transcriptDecisionSchema = z
   })
   .strict();
 
+/**
+ * What a recall frame put in front of the model, read on the server from the
+ * body it kept: a steering manifest's items (ADR-093) or a context frame's
+ * frames, or else the frame count the ledger recorded.
+ */
+export const transcriptRecallSchema = z
+  .object({
+    /** What `count` counts: context frames, or the items a manifest included. */
+    unit: z.enum(["frames", "items"]),
+    count: z.number().int().nonnegative().nullable(),
+    tokens: z.number().int().nonnegative().nullable(),
+    /** Items the manifest listed and cut; null when it recorded none. */
+    cut: z.number().int().nonnegative().nullable(),
+    /** The items that reached the model, in the order listed, at most 2,000. */
+    items: z
+      .array(
+        z
+          .object({
+            kind: z.string(),
+            label: z.string(),
+            tokens: z.number().int().nonnegative().nullable(),
+          })
+          .strict(),
+      )
+      .max(2_000),
+  })
+  .strict();
+
 export const transcriptUsageSchema = z
   .object({
     inputUncached: z.number().int().nonnegative().nullable(),
@@ -333,10 +402,16 @@ export const transcriptEntrySchema = z
         type: z.string().nullable(),
         /**
          * The parent's tool call that spawned the subagent (the Task or Agent
-         * call's `tool_use_id`), so a client nests the subagent under it.
-         * Null when none was recorded.
+         * call's `tool_use_id`). Null when none was recorded. A client nests
+         * the entry by `parentKey`, which the server resolves from this.
          */
         spawnCallId: z.string().nullable().optional(),
+        /**
+         * The chain that spawned this one: the run's own session for a
+         * subagent the run spawned, or another subagent's. Null when none
+         * was recorded.
+         */
+        parentSessionUuid: z.string().uuid().nullable().optional(),
       })
       .strict()
       .optional(),
@@ -394,6 +469,70 @@ export const transcriptEntrySchema = z
     cost: runCostSchema.nullable(),
     /** Every cost record up to and including this entry (§8.4 prefix sum). */
     cumulativeCost: runCostSchema.nullable(),
+    // What the fold states about the entry (ADR-182). Each is optional so an
+    // older answer still parses; the handler always sends them. A reader
+    // presents these and derives none of them from the frames.
+    /**
+     * The entry's name within the run: its opening frame's `seq` on the
+     * run's own chain, `<sessionUuid>:<seq>` on a subagent's. Stable across
+     * reads, so a reader keys and merges entries on it.
+     */
+    key: z.string().min(1).optional(),
+    /**
+     * The `key` of the entry that spawned this subagent entry: the Task or
+     * Agent call its chain names, or else the latest entry on the parent
+     * chain that recorded a `subagent_start`. Null on the run's own chain.
+     */
+    parentKey: z.string().nullable().optional(),
+    /** What kind of row the entry is; null for a turn, which is a group. */
+    node: transcriptNodeSchema.nullable().optional(),
+    /** True when the entry has nothing to show a reader beyond its frames. */
+    quiet: z.boolean().optional(),
+    /** How the entry's call ended; null for an entry that records no call. */
+    outcome: transcriptOutcomeSchema.nullable().optional(),
+    /** The approval a parked call waits on (`apr_…`); null otherwise. */
+    approvalId: z.string().nullable().optional(),
+    /**
+     * Every decision folded into the entry, in the order recorded. `decision`
+     * is the last of them.
+     */
+    gates: z.array(transcriptDecisionSchema).optional(),
+    /** The tool the entry is about, as the record names it; null when none. */
+    subject: z.string().nullable().optional(),
+    /** The family of the entry's tool; null for an entry that is no tool call. */
+    family: toolFamilySchema.nullable().optional(),
+    /** `provider/model` of a model call; null elsewhere. */
+    model: z.string().nullable().optional(),
+    /**
+     * First frame to last, in milliseconds. Null for a one-frame entry, and
+     * for a call that has no result yet.
+     */
+    durationMs: z.number().int().nonnegative().nullable().optional(),
+    /**
+     * The `key` of an earlier entry in the same turn whose kept body this one
+     * repeats byte for byte: a message that echoes the operator's prompt, or
+     * a reply that says again what the last one said. Null otherwise.
+     */
+    echoOf: z.string().nullable().optional(),
+    /** What a recall entry put in front of the model; null on other entries. */
+    recall: transcriptRecallSchema.nullable().optional(),
+  })
+  .strict();
+
+/**
+ * What the whole run holds at the zoom read, counted over every entry
+ * whatever the chips pressed, so a chip's count and the page agree.
+ */
+export const transcriptCountsSchema = z
+  .object({
+    /** Entries per chip; an entry that answers two chips counts under both. */
+    kinds: z.record(transcriptKindSchema, z.number().int().nonnegative()),
+    /** Entries that have something to show (`quiet` false). */
+    entries: z.number().int().nonnegative(),
+    /** Entries that failed or were refused, or that answer the errors chip. */
+    errors: z.number().int().nonnegative(),
+    /** Decisions a rule or a person made; the harness checking itself is not one. */
+    policy: z.number().int().nonnegative(),
   })
   .strict();
 
@@ -425,6 +564,8 @@ export const runTranscriptGet = registerCapability({
         .default([]),
       /** An entry cursor from an earlier read; omitted reads from the start. */
       after: z.string().max(256).optional(),
+      /** How much of each body to carry; omitted takes the zoom's cap. */
+      text: transcriptTextSchema.optional(),
       limit: z
         .number()
         .int()
@@ -446,6 +587,8 @@ export const runTranscriptGet = registerCapability({
        * it as the whole.
        */
       complete: z.boolean(),
+      /** The run's entries counted at this zoom, whatever the chips. */
+      counts: transcriptCountsSchema.optional(),
     })
     .strict(),
 });
@@ -459,3 +602,6 @@ export type TranscriptKind = z.output<typeof transcriptKindSchema>;
 export type TranscriptAssembly = z.output<typeof transcriptAssemblySchema>;
 export type TranscriptContentBlock = z.output<typeof contentBlockSchema>;
 export type TranscriptToolVerdict = z.output<typeof toolVerdictSchema>;
+export type TranscriptText = z.output<typeof transcriptTextSchema>;
+export type TranscriptRecallView = z.output<typeof transcriptRecallSchema>;
+export type TranscriptCountsView = z.output<typeof transcriptCountsSchema>;

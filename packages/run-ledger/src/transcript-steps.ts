@@ -62,6 +62,12 @@ import {
   type TranscriptKind,
   turnOrdinals,
 } from "./run-frames";
+import {
+  TRANSCRIPT_NODES,
+  TRANSCRIPT_OUTCOMES,
+  type TranscriptNode,
+  type TranscriptOutcome,
+} from "@oxagen/tacho";
 import { bareToolName, type ToolFamily, toolFamilyOf } from "./tool-family";
 
 export type TranscriptZoom = "turns" | "steps" | "everything";
@@ -73,44 +79,14 @@ export type TranscriptEntryKind =
   | "policy"
   | "frame";
 
-/**
- * What kind of row an entry is:
- *
- * - `prompt`: the operator's words, a `turn_start` on the run's own chain;
- * - `reply`: a message the agent reported, `turn_end` or `oxagen:message`;
- * - `model` and `tool`: a model call and a tool call;
- * - `policy`: a decision a rule or a person made, or an operator's command;
- * - `recall`: what was put in front of the model;
- * - `seal`: the run's own stop;
- * - `control`: a frame that frames the run rather than records what it did;
- * - `event`: any other frame.
- */
-export const TRANSCRIPT_NODES = [
-  "prompt",
-  "reply",
-  "model",
-  "tool",
-  "policy",
-  "recall",
-  "seal",
-  "control",
-  "event",
-] as const;
-export type TranscriptNode = (typeof TRANSCRIPT_NODES)[number];
-
-/**
- * How an entry's call ended: it did what it was asked (`ok`), it failed, a
- * rule or the harness refused it (`denied`), it waits on an approval
- * (`parked`), or nothing has come back yet (`pending`).
- */
-export const TRANSCRIPT_OUTCOMES = [
-  "ok",
-  "failed",
-  "denied",
-  "parked",
-  "pending",
-] as const;
-export type TranscriptOutcome = (typeof TRANSCRIPT_OUTCOMES)[number];
+// The node and outcome vocabularies are the leaf package's, like the chips,
+// so the contract that publishes them as enums and this fold read one list.
+export {
+  TRANSCRIPT_NODES,
+  TRANSCRIPT_OUTCOMES,
+  type TranscriptNode,
+  type TranscriptOutcome,
+};
 
 /** A decision a rule or a person made about the call an entry records. */
 export interface TranscriptDecision {
@@ -1054,8 +1030,11 @@ function text(value: unknown, key: string): string | null {
   return typeof found === "string" ? found : null;
 }
 
+/** A recorded count: a whole number, never below zero. Anything else is none. */
 function count(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
 }
 
 /**
@@ -1106,7 +1085,7 @@ export function recallOf(
   }
   return {
     unit: "frames",
-    count: frame.identity.contextRows,
+    count: count(frame.identity.contextRows),
     tokens: null,
     cut: null,
     items: [],

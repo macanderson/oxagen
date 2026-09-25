@@ -168,4 +168,109 @@ describe("transcriptTextMax", () => {
     // is megabytes of body text nobody asked for on that render.
     expect(TRANSCRIPT_STEP_TEXT_MAX).toBeLessThan(TRANSCRIPT_TEXT_MAX);
   });
+
+  it("carries what the caller asked for at any zoom", () => {
+    expect(transcriptTextMax("steps", "full")).toBe(TRANSCRIPT_TEXT_MAX);
+    expect(transcriptTextMax("everything", "excerpt")).toBe(
+      TRANSCRIPT_STEP_TEXT_MAX,
+    );
+    expect(
+      runTranscriptGet.input.safeParse({
+        runId: RUN,
+        zoom: "steps",
+        text: "whole",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("what the fold states about an entry (ADR-182)", () => {
+  const facts = {
+    key: "3",
+    parentKey: null,
+    node: "tool",
+    quiet: false,
+    outcome: "parked",
+    approvalId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+    gates: [
+      {
+        seq: "4",
+        decision: "ask",
+        type: "approval_request",
+        source: "bundle",
+        at: "2026-09-11T10:00:04.000Z",
+      },
+    ],
+    subject: "Write",
+    family: "create",
+    model: null,
+    durationMs: 2_000,
+    echoOf: null,
+    recall: null,
+  };
+
+  it("parses an entry that carries every fact, and one that carries none", () => {
+    expect(transcriptEntrySchema.parse({ ...entry, ...facts })).toMatchObject(
+      facts,
+    );
+    expect(transcriptEntrySchema.safeParse(entry).success).toBe(true);
+  });
+
+  it("refuses a node, outcome or family outside its vocabulary (negative)", () => {
+    for (const bad of [
+      { node: "turn" },
+      { outcome: "cancelled" },
+      { family: "misc" },
+    ]) {
+      expect(
+        transcriptEntrySchema.safeParse({ ...entry, ...facts, ...bad }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("carries a recall read from the body, and refuses a negative count (negative)", () => {
+    const recall = {
+      unit: "items",
+      count: 2,
+      tokens: 340,
+      cut: 1,
+      items: [{ kind: "rule", label: "rec_1", tokens: 200 }],
+    };
+    expect(
+      transcriptEntrySchema.safeParse({ ...entry, ...facts, recall }).success,
+    ).toBe(true);
+    expect(
+      transcriptEntrySchema.safeParse({
+        ...entry,
+        ...facts,
+        recall: { ...recall, count: -1 },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("answers the run's counts beside the page", () => {
+    const counts = {
+      kinds: { prompt: 1, tools: 2 },
+      entries: 3,
+      errors: 0,
+      policy: 1,
+    };
+    const out = {
+      zoom: "steps",
+      kinds: [],
+      entries: [],
+      cursor: null,
+      complete: true,
+    };
+    expect(runTranscriptGet.output.safeParse({ ...out, counts }).success).toBe(
+      true,
+    );
+    expect(runTranscriptGet.output.safeParse(out).success).toBe(true);
+    expect(
+      runTranscriptGet.output.safeParse({
+        ...out,
+        counts: { ...counts, kinds: { nonsense: 1 } },
+      }).success,
+    ).toBe(false);
+  });
 });

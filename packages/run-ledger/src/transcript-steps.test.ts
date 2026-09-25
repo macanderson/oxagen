@@ -1373,6 +1373,22 @@ describe("recallOf", () => {
     }
     expect(recallOf(manifest, null).count).toBeNull();
   });
+
+  it("reads a count that is not a whole number, or is below zero, as none (negative)", () => {
+    const body = JSON.stringify({
+      included: -1,
+      spent_tokens: 1.5,
+      cut: "3",
+      items: [{ id: "r", kind: "fact", tokens: -4, outcome: "included" }],
+    });
+    expect(recallOf(manifest, body)).toEqual({
+      unit: "items",
+      count: 1,
+      tokens: null,
+      cut: null,
+      items: [{ kind: "fact", label: "r", tokens: null }],
+    });
+  });
 });
 
 describe("what a frame fold keeps of the old one", () => {

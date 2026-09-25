@@ -53,6 +53,13 @@
         "type": "string",
         "maxLength": 256
       },
+      "text": {
+        "type": "string",
+        "enum": [
+          "excerpt",
+          "full"
+        ]
+      },
       "limit": {
         "type": "integer",
         "minimum": 1,
@@ -137,6 +144,17 @@
                   "anyOf": [
                     {
                       "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "parentSessionUuid": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
                     },
                     {
                       "type": "null"
@@ -664,6 +682,39 @@
                                               "rule",
                                               "ms",
                                               "waitingOn"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "stepKey": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "result": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "ok": {
+                                                "type": "boolean"
+                                              },
+                                              "summary": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "ok",
+                                              "summary"
                                             ],
                                             "additionalProperties": false
                                           },
@@ -1329,6 +1380,39 @@
                                             "type": "null"
                                           }
                                         ]
+                                      },
+                                      "stepKey": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "result": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "ok": {
+                                                "type": "boolean"
+                                              },
+                                              "summary": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "ok",
+                                              "summary"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
                                       }
                                     },
                                     "required": [
@@ -1738,6 +1822,270 @@
                   "type": "null"
                 }
               ]
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parentKey": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "node": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "prompt",
+                    "reply",
+                    "model",
+                    "tool",
+                    "policy",
+                    "recall",
+                    "seal",
+                    "control",
+                    "event"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "quiet": {
+              "type": "boolean"
+            },
+            "outcome": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "ok",
+                    "failed",
+                    "denied",
+                    "parked",
+                    "pending"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "approvalId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "gates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "seq": {
+                    "type": "string"
+                  },
+                  "sessionUuid": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "decision": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "seq",
+                  "decision",
+                  "type",
+                  "at"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "subject": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "family": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "shell",
+                    "read",
+                    "edit",
+                    "create",
+                    "delete",
+                    "search",
+                    "web",
+                    "skill",
+                    "agent",
+                    "plan",
+                    "notebook",
+                    "mcp",
+                    "tool"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "echoOf": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recall": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "unit": {
+                      "type": "string",
+                      "enum": [
+                        "frames",
+                        "items"
+                      ]
+                    },
+                    "count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cut": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "label",
+                          "tokens"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 2000
+                    }
+                  },
+                  "required": [
+                    "unit",
+                    "count",
+                    "tokens",
+                    "cut",
+                    "items"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -1774,6 +2122,37 @@
       },
       "complete": {
         "type": "boolean"
+      },
+      "counts": {
+        "type": "object",
+        "properties": {
+          "kinds": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "entries": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "policy": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "kinds",
+          "entries",
+          "errors",
+          "policy"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

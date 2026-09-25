@@ -31,6 +31,7 @@ A body the store cannot return reads as `text: null` on its half; the rest of th
 | `zoom` | `turns` \| `steps` \| `everything` | yes | |
 | `kinds` | string[] | no | the chips pressed; empty (the default) keeps every frame |
 | `after` | string | no | an entry cursor from an earlier read |
+| `text` | `excerpt` \| `full` | no | how much of each body to carry; omitted takes the zoom's cap (see below) |
 | `limit` | integer | no | 1–500, default 200 |
 
 ## Zoom levels
@@ -91,7 +92,7 @@ The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `
 | `entries[].kinds` | string[] | the chips this entry answers to |
 | `entries[].target` | string or null | what Oxagen's gate recorded the call acting on (`tool_target`: a command, a path, a pattern), cut at 400 characters; absent when the gate recorded none |
 | `entries[].effort` | string or null | the reasoning effort the model call ran at (`low`, `medium`, `high`), as the harness recorded it on `tacho_events.effort`; null when none was recorded |
-| `entries[].subagent` | object or absent | on an entry from a subagent chain: `{ sessionUuid, id, type }`, plus `spawnCallId`, the `tool_use_id` of the Task or Agent call that spawned it, so a client can nest the subagent's steps under that call |
+| `entries[].subagent` | object or absent | on an entry from a subagent chain: `{ sessionUuid, id, type }`, plus `spawnCallId`, the `tool_use_id` of the Task or Agent call that spawned it, and `parentSessionUuid`, the chain that spawned this one. A client nests the entry by `parentKey` |
 | `entries[].request` | object or null | what went out; null when the recording has only the terminal receipt |
 | `entries[].response` | object or null | what came back; null when only a write-ahead intention was recorded |
 | `entries[].{request,response}.seq`, `.type` | string | the frame that carried the half |
@@ -108,6 +109,27 @@ The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `
 | `entries[].cumulativeCost` | `{ micros, currency, basis }` or null | every cost record of the run up to and including this entry (spec §8.4 prefix sum), so a page never restates the run's spend as the page's |
 | `cursor` | string or null | the point to continue from; null when nothing lies past this page |
 | `complete` | boolean | false when the run has more than 10 000 frames, so the transcript is a prefix |
+| `counts` | object | the run's entries at the zoom read, counted over every entry whatever the chips: `kinds` (entries per chip), `entries` (entries that are not `quiet`), `errors` (entries that failed or were refused, or answer the errors chip), and `policy` (entries that answer the policy chip, except the harness checking itself) |
+
+### What the fold states about each entry
+
+The server is the only place a transcript is folded (ADR-182), so every fact a reader would otherwise derive from an entry's frames is a field of the entry. Each is optional in the schema so an older answer still parses; this handler always sends them. None of them is written into `label` for a client to parse.
+
+| Field | Type | Description |
+|---|---|---|
+| `entries[].key` | string | the entry's name within the run: the opening frame's `seq` on the run's own chain, `<sessionUuid>:<seq>` on a subagent's. Stable across reads |
+| `entries[].parentKey` | string or null | on a subagent's entry, the `key` of the entry that spawned its chain: the call whose `tool_use_id` the chain names, or else the latest entry on the parent chain that recorded a `subagent_start`. Null on the run's own chain |
+| `entries[].node` | string or null | what kind of row the entry is: `prompt` (the operator's words), `reply` (a `turn_end` or a message the agent reported), `model`, `tool`, `policy` (a decision on no recorded call, or an operator's command), `recall`, `seal` (the run's own stop), `control` (a frame that frames the run, such as the agent starting), or `event`. Null for a turn |
+| `entries[].quiet` | boolean | true when the entry has nothing to show beyond its frames: a prompt or reply that kept no body, or an event with no decision and no failure |
+| `entries[].outcome` | string or null | `ok`, `failed`, `denied` (a rule or the harness refused it), `parked` (it waits on an approval), or `pending` (nothing came back yet); null for an entry that records no call |
+| `entries[].approvalId` | string or null | the approval a parked call waits on (`apr_…`), when its receipt named one |
+| `entries[].gates` | object[] | every decision folded into the entry, in the order recorded, each shaped like `decision`. `decision` is the last of them |
+| `entries[].subject` | string or null | the tool the entry is about, as the record names it |
+| `entries[].family` | string or null | the tool's family: `shell`, `read`, `edit`, `create`, `delete`, `search`, `web`, `skill`, `agent`, `plan`, `notebook`, `mcp` or `tool` |
+| `entries[].model` | string or null | `provider/model` of a model call |
+| `entries[].durationMs` | integer or null | first frame to last; null for one frame, and for a call with no result yet |
+| `entries[].echoOf` | string or null | the `key` of an earlier entry in the same turn whose kept body this one repeats byte for byte: a message that echoes the operator's prompt, or a reply that says again what the last one said |
+| `entries[].recall` | object or null | on a recall entry, what it put in front of the model, read from the body it kept: `{ unit, count, tokens, cut, items[] }`. A steering manifest counts `items` and lists the ones that reached the model; a context frame counts `frames`. A body that cannot be read falls back to the frame count the ledger recorded |
 
 ## A model stream is answered as a message, not as a stream
 
@@ -138,6 +160,8 @@ way.
 | `assembly.partial` | boolean | true when the stream ended before the message did; its blocks are still answered |
 | `assembly.wire` | object | `events` and `bytes`: what the transport was, for a reader that wants to see it |
 
+A `tool_use` block also carries `stepKey`, the `key` of the tool step that recorded the call, so a reader draws the call once, as that step. The block and the step pair on the call key, or, where either kept none, the block takes the next tool step of the same name in its turn that no other block took. It is null for a call no tool step recorded. `result` is `{ ok, summary }` from a `tool_result` block on the page that answers the same call key, or null.
+
 A `tool_use` block's input carries every string field up to 400 characters and
 folds a longer one to `"…N characters"`, with `inputFolded: true`. A `Write`
 call's content is the file, and a page of steps carrying every one of them
@@ -150,7 +174,7 @@ leaves every block's cost null rather than drawing a zero.
 
 ## How much body text a zoom carries
 
-`everything` is one entry per frame and carries up to **16 384** characters per half. `turns` and `steps` fold a whole exchange into one entry and carry up to **1 024** — a page of 200 steps at the full cap is several megabytes of body text nobody asked for on that render, and an excerpt plus the entry's `label` is what a folded level is for. A half cut at either cap says `truncated: true`, so a reader follows the frame to `get_run_frame_body` for the whole of it.
+`everything` is one entry per frame and carries up to **16 384** characters per half. `turns` and `steps` fold a whole exchange into one entry and carry up to **1 024** — a page of 200 steps at the full cap is several megabytes of body text nobody asked for on that render, and an excerpt plus the entry's `label` is what a folded level is for. A caller that needs the whole of each body at `steps`, as the Run page does for a tool's output, asks for `text: "full"`, and `text: "excerpt"` cuts `everything` to the smaller cap. A half cut at either cap says `truncated: true`, so a reader follows the frame to `get_run_frame_body` for the whole of it.
 
 ## Errors
 

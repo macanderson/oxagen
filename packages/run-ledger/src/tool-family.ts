@@ -8,25 +8,11 @@
  * row and a figure can group calls. It never says what the call did: that is
  * the body's job.
  */
+import { TOOL_FAMILIES, type ToolFamily } from "@oxagen/tacho";
 
-/** The families, in the order a reader meets them in a coding run. */
-export const TOOL_FAMILIES = [
-  "shell",
-  "read",
-  "edit",
-  "create",
-  "delete",
-  "search",
-  "web",
-  "skill",
-  "agent",
-  "plan",
-  "notebook",
-  "mcp",
-  "tool",
-] as const;
-
-export type ToolFamily = (typeof TOOL_FAMILIES)[number];
+// The list of family names is the leaf package's, so the contract that
+// publishes it as an enum and this reading read one list.
+export { TOOL_FAMILIES, type ToolFamily };
 
 /** Known tool names, lowercased, by family. A name not listed is `tool`. */
 const FAMILIES: Readonly<Record<string, ToolFamily>> = {

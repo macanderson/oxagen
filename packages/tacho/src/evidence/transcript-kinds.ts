@@ -52,3 +52,70 @@ export function isTranscriptKind(value: unknown): value is TranscriptKind {
     (TRANSCRIPT_KINDS as readonly string[]).includes(value)
   );
 }
+
+/**
+ * What kind of row a folded transcript entry is (ADR-182). The server's fold
+ * states it on each entry so a reader draws the entry without reading its
+ * frames again.
+ *
+ * - `prompt`: the operator's words, a `turn_start` on the run's own chain;
+ * - `reply`: a message the agent reported, `turn_end` or `oxagen:message`;
+ * - `model` and `tool`: a model call and a tool call;
+ * - `policy`: a decision a rule or a person made, or an operator's command;
+ * - `recall`: what was put in front of the model;
+ * - `seal`: the run's own stop;
+ * - `control`: a frame that frames the run rather than records what it did;
+ * - `event`: any other frame.
+ */
+export const TRANSCRIPT_NODES = [
+  "prompt",
+  "reply",
+  "model",
+  "tool",
+  "policy",
+  "recall",
+  "seal",
+  "control",
+  "event",
+] as const;
+
+export type TranscriptNode = (typeof TRANSCRIPT_NODES)[number];
+
+/**
+ * How a folded entry's call ended: it did what it was asked (`ok`), it
+ * failed, a rule or the harness refused it (`denied`), it waits on an
+ * approval (`parked`), or nothing has come back yet (`pending`).
+ */
+export const TRANSCRIPT_OUTCOMES = [
+  "ok",
+  "failed",
+  "denied",
+  "parked",
+  "pending",
+] as const;
+
+export type TranscriptOutcome = (typeof TRANSCRIPT_OUTCOMES)[number];
+
+/**
+ * The family a tool belongs to, read from its name: whether a call
+ * inspected, changed, ran or delegated something. The names are listed here
+ * so the contract and the fold read one list; which name falls in which
+ * family is `@oxagen/run-ledger`'s `toolFamilyOf`.
+ */
+export const TOOL_FAMILIES = [
+  "shell",
+  "read",
+  "edit",
+  "create",
+  "delete",
+  "search",
+  "web",
+  "skill",
+  "agent",
+  "plan",
+  "notebook",
+  "mcp",
+  "tool",
+] as const;
+
+export type ToolFamily = (typeof TOOL_FAMILIES)[number];

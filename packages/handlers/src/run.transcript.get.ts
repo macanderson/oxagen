@@ -9,6 +9,14 @@
 // have their bodies read from the evidence store, decoded as UTF-8 and cut at
 // the contract's text cap.
 //
+// Every fact a reader would otherwise derive from an entry's frames is the
+// fold's, and goes out as a field of the entry: its key, parent, node,
+// outcome, gates, subject, family, duration and echo. Two need bytes the fold
+// does not read, so they are added here: a recall entry's items, parsed from
+// the body it kept (`recallOf`), and each reply's `tool_use` blocks, which
+// name the tool step that recorded the call (`toolUseClaimer`) and what came
+// back. `counts` counts the run's entries at the zoom whatever the chips.
+//
 // Three things are computed over the whole run and not over the page: the
 // cumulative cost, which is a prefix sum from the run's first frame (§8.4),
 // the elapsed time, which is measured from the run's recorded start, and the
@@ -36,14 +44,22 @@ import {
   transcriptTextMax,
   type TranscriptEntry,
   type TranscriptEntryBody,
+  type TranscriptRecallView,
   type TranscriptZoom,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import {
   filterFoldsByKind,
-  foldTranscript,
+  frameFolds,
   frameKey,
+  recallOf,
   type RunFrame,
+  stepFolds,
+  toolUseClaimer,
+  TRANSCRIPT_KINDS,
+  transcriptCounts,
+  type TranscriptDecision,
   type TranscriptFold,
+  turnFolds,
   withoutDuplicateModelCalls,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
@@ -74,6 +90,12 @@ import {
 
 /** The most frames a transcript folds; past it the transcript is incomplete. */
 const TRANSCRIPT_FRAME_CAP = 10_000;
+/**
+ * The largest recall body read to parse what it put in front of the model. A
+ * steering manifest lists at most 2,000 items; a body past this is not one,
+ * and the recall falls back to the count the frame recorded.
+ */
+const RECALL_BODY_MAX = 1_048_576;
 /** Bodies read at once. */
 const BODY_CONCURRENCY = 8;
 
@@ -365,6 +387,93 @@ async function mapConcurrent<T, R>(
   return out;
 }
 
+/**
+ * A recall frame's whole body as text, for `recallOf` to parse, or null when
+ * none was kept, it cannot be read, it does not hash to its digest, or it is
+ * larger than any manifest. A half's text is cut at the zoom's cap, and a
+ * manifest cut short does not parse, so this reads the body on its own.
+ */
+async function recallBody(
+  bodies: Pick<EvidenceStore, "getBody">,
+  scope: RunScope,
+  frame: RunFrame,
+): Promise<string | null> {
+  const { bodyRef, bodyDigest } = frame.body;
+  if (bodyRef === null || bodyDigest === null) return null;
+  try {
+    const stored = await bodies.getBody(scope, bodyRef);
+    if (stored.bytes.byteLength > RECALL_BODY_MAX) return null;
+    if (digestBytes(stored.bytes) !== bodyDigest) return null;
+    return decoder.decode(stored.bytes);
+  } catch (err) {
+    logger.warn(
+      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
+      "get_run_transcript: a recall body could not be read; its recall falls back to the recorded count",
+    );
+    return null;
+  }
+}
+
+/** A tool call's result from a `tool_result` block, by the call it answers. */
+type ToolResults = ReadonlyMap<string, { ok: boolean; summary: string }>;
+
+/** Every `tool_result` block the page's halves hold, by the call key it answers. */
+export function toolResultsOf(
+  halves: readonly (TranscriptEntryBody | null)[],
+): ToolResults {
+  const results = new Map<string, { ok: boolean; summary: string }>();
+  for (const half of halves) {
+    for (const block of half?.assembly?.blocks ?? []) {
+      if (block.kind === "tool_result")
+        results.set(block.forId, { ok: block.ok, summary: block.summary });
+    }
+  }
+  return results;
+}
+
+/**
+ * `half` with each `tool_use` block's `stepKey` (the tool step that recorded
+ * the call, from `claim`) and `result` (what the page's `tool_result` blocks
+ * say came back). A half with no assembly is returned as it is.
+ */
+export function withToolUseFacts(
+  half: TranscriptEntryBody | null,
+  claim: (
+    uses: { name: string; callKey: string | null }[],
+  ) => (string | null)[],
+  results: ToolResults,
+): TranscriptEntryBody | null {
+  const blocks = half?.assembly?.blocks;
+  if (half === null || half.assembly === null || blocks === undefined)
+    return half;
+  const uses = blocks.flatMap((block) =>
+    block.kind === "tool_use" ? [block] : [],
+  );
+  if (uses.length === 0) return half;
+  const keys = claim(
+    uses.map((use) => ({ name: use.name, callKey: use.callKey })),
+  );
+  const stepKeys = new Map(uses.map((use, i) => [use, keys[i] ?? null]));
+  return {
+    ...half,
+    assembly: {
+      ...half.assembly,
+      blocks: blocks.map((block) =>
+        block.kind === "tool_use"
+          ? {
+              ...block,
+              stepKey: stepKeys.get(block) ?? null,
+              result:
+                block.callKey === null
+                  ? null
+                  : (results.get(block.callKey) ?? null),
+            }
+          : block,
+      ),
+    },
+  };
+}
+
 // ---- Entries --------------------------------------------------------------------------
 
 const cost = (micros: number | null) =>
@@ -409,6 +518,20 @@ export function pagePriceSlice(
   return { orgId, models: [...models], from: new Date(from), to: new Date(to) };
 }
 
+/** A decision as the contract carries it. */
+function decisionView(decision: TranscriptDecision) {
+  return {
+    seq: decision.seq,
+    ...(decision.sessionUuid === undefined
+      ? {}
+      : { sessionUuid: decision.sessionUuid }),
+    decision: decision.decision,
+    type: decision.type,
+    source: decision.source,
+    at: decision.at.toISOString(),
+  };
+}
+
 /**
  * The reasoning effort the fold's model call ran at: the first of its frames
  * that recorded one. Null where none did, which is every ledger frame and
@@ -446,10 +569,20 @@ export function createRunTranscriptGetHandler(
     // The fold runs over every frame, then the chips narrow its entries, so
     // a filtered read shows the same steps, turns and turn numbers as an
     // unfiltered one (ADR-182).
-    const folds = filterFoldsByKind(
-      foldTranscript(shown, input.zoom),
-      input.kinds,
-    );
+    //
+    // The `steps` fold is taken at every zoom: `turns` groups it, and a model
+    // reply's `tool_use` blocks are claimed by its tool steps.
+    const steps = stepFolds(shown);
+    const all =
+      input.zoom === "steps"
+        ? steps
+        : input.zoom === "turns"
+          ? turnFolds(shown, steps)
+          : frameFolds(shown);
+    const folds = filterFoldsByKind(all, input.kinds);
+    // Counted over every entry at the zoom, whatever the chips, so a chip's
+    // count and the rows it shows agree.
+    const counts = transcriptCounts(all, TRANSCRIPT_KINDS);
 
     // Cumulative cost is a prefix over every frame of the run (§8.4), before
     // any chip filter. Building it from the filtered folds understated spend
@@ -511,12 +644,14 @@ export function createRunTranscriptGetHandler(
         entries: [],
         cursor,
         complete: read.complete,
+        counts,
       };
     }
     const runStartedAt = Date.parse(run.item.startedAt);
 
-    // A folded zoom carries an excerpt; `everything` carries the whole body.
-    const textMax = transcriptTextMax(input.zoom as TranscriptZoom);
+    // A folded zoom carries an excerpt and `everything` the whole body,
+    // unless the caller asked for one or the other.
+    const textMax = transcriptTextMax(input.zoom as TranscriptZoom, input.text);
     // Read once for the page, not once per block: a block's cost is the
     // model's output rate applied to its apportioned share.
     const book = await deps.priceBook(pagePriceSlice(ctx.orgId, page));
@@ -551,6 +686,25 @@ export function createRunTranscriptGetHandler(
         ),
       }),
     );
+    // What each recall entry put in front of the model, parsed here from the
+    // body it kept (ADR-182), so no reader parses a manifest of its own.
+    const recalls = await mapConcurrent(
+      page,
+      BODY_CONCURRENCY,
+      async (fold): Promise<TranscriptRecallView | null> =>
+        fold.node === "recall"
+          ? recallOf(
+              fold.opening,
+              await recallBody(deps.bodies, scope, fold.opening),
+            )
+          : null,
+    );
+    // Each reply's `tool_use` blocks name the tool step that recorded the
+    // call, and what came back, so a reader draws each call once.
+    const claimer = toolUseClaimer(steps);
+    const results = toolResultsOf(
+      halves.flatMap((pair) => [pair.request, pair.response]),
+    );
 
     const entries: TranscriptEntry[] = page.map((fold, i) => {
       const { opening } = fold;
@@ -558,6 +712,8 @@ export function createRunTranscriptGetHandler(
         request: TranscriptEntryBody | null;
         response: TranscriptEntryBody | null;
       };
+      const claim = (uses: { name: string; callKey: string | null }[]) =>
+        claimer(fold, uses);
       return {
         seq: opening.seq,
         endSeq: fold.endSeq,
@@ -569,6 +725,7 @@ export function createRunTranscriptGetHandler(
                 id: opening.chain.subagentId,
                 type: opening.chain.subagentType,
                 spawnCallId: opening.chain.spawnToolUseId,
+                parentSessionUuid: opening.chain.parentSessionUuid,
               },
             }),
         at: opening.observedAt.toISOString(),
@@ -581,25 +738,26 @@ export function createRunTranscriptGetHandler(
         effort: entryEffort(fold),
         usage: fold.usage ?? null,
         kinds: [...fold.kinds],
-        request: pair.request,
-        response: pair.response,
-        decision:
-          fold.decision === null
-            ? null
-            : {
-                seq: fold.decision.seq,
-                ...(fold.decision.sessionUuid === undefined
-                  ? {}
-                  : { sessionUuid: fold.decision.sessionUuid }),
-                decision: fold.decision.decision,
-                type: fold.decision.type,
-                source: fold.decision.source,
-                at: fold.decision.at.toISOString(),
-              },
+        request: withToolUseFacts(pair.request, claim, results),
+        response: withToolUseFacts(pair.response, claim, results),
+        decision: fold.decision === null ? null : decisionView(fold.decision),
         frames: fold.frames,
         turn: fold.turn,
         cost: cost(fold.costMicros),
         cumulativeCost: cost(costThrough.get(fold.last) ?? null),
+        key: fold.key,
+        parentKey: fold.parentKey,
+        node: fold.node,
+        quiet: fold.quiet,
+        outcome: fold.outcome,
+        approvalId: fold.approvalId,
+        gates: fold.gates.map(decisionView),
+        subject: fold.subject,
+        family: fold.family,
+        model: fold.model,
+        durationMs: fold.durationMs,
+        echoOf: fold.echoOf,
+        recall: recalls[i] ?? null,
       };
     });
 
@@ -609,6 +767,7 @@ export function createRunTranscriptGetHandler(
       entries,
       cursor,
       complete: read.complete,
+      counts,
     };
   };
 }

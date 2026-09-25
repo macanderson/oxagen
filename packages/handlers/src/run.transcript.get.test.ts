@@ -16,6 +16,8 @@ import {
   encodeTranscriptCursor,
   planTranscriptPage,
   type RunTranscriptGetDeps,
+  toolResultsOf,
+  withToolUseFacts,
 } from "./run.transcript.get";
 import {
   ctx,
@@ -654,6 +656,22 @@ describe("get_run_transcript", () => {
       entries: [],
       cursor: null,
       complete: true,
+      counts: {
+        kinds: {
+          prompt: 0,
+          responses: 0,
+          thinking: 0,
+          tools: 0,
+          policy: 0,
+          usage: 0,
+          recall: 0,
+          seal: 0,
+          errors: 0,
+        },
+        entries: 0,
+        errors: 0,
+        policy: 0,
+      },
     });
   });
 
@@ -1417,5 +1435,332 @@ describe("get_run_transcript and one model call seen twice", () => {
     expect(out.entries).toHaveLength(1);
     expect(out.entries[0]?.response?.text).toBe("The reply.");
     expect(out.entries[0]?.cost?.micros).toBe("80");
+  });
+});
+
+describe("get_run_transcript states what the fold says about each entry (ADR-182)", () => {
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  const governed = [
+    tachoRow(0, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Fix the build."),
+    }),
+    tachoRow(1, {
+      kind: "policy_decision",
+      toolName: "Bash",
+      toolStatus: "",
+      toolUseId: "tu_b",
+      policyDecision: "allow",
+      turnSeq: 1,
+    }),
+    tachoRow(2, {
+      kind: "tool_requested",
+      toolName: "Bash",
+      toolStatus: "",
+      toolUseId: "tu_b",
+      turnSeq: 1,
+    }),
+    tachoRow(3, {
+      kind: "tool_call",
+      toolName: "Bash",
+      toolUseId: "tu_b",
+      turnSeq: 1,
+    }),
+    // The transcript's copy of the prompt, sealed with its words.
+    tachoRow(4, {
+      kind: "turn_end",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Fix the build."),
+    }),
+    tachoRow(5, { kind: "oxagen:hook_health", ...blank, turnSeq: 1 }),
+  ];
+
+  it("names each entry, what kind of row it is, how it ended, and what it repeats", async () => {
+    const { transcript } = harness(governed);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(
+      out.entries.map((e) => [e.key, e.node, e.quiet, e.outcome, e.echoOf]),
+    ).toEqual([
+      ["0", "prompt", false, null, null],
+      ["1", "tool", false, "ok", null],
+      ["4", "reply", false, null, "0"],
+      ["5", "control", true, null, null],
+    ]);
+    const call = out.entries[1];
+    expect(call).toMatchObject({
+      subject: "Bash",
+      family: "shell",
+      model: null,
+      approvalId: null,
+      parentKey: null,
+      durationMs: 2_000,
+      recall: null,
+    });
+    expect(call?.gates?.map((g) => [g.seq, g.decision])).toEqual([
+      ["1", "allow"],
+    ]);
+    expect(call?.decision).toEqual(call?.gates?.[0]);
+    expect(out.entries[0]?.request?.text).toBe("Fix the build.");
+  });
+
+  it("counts the run's entries at the zoom whatever the chips pressed", async () => {
+    const { transcript } = harness(governed);
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    const tools = await transcript(
+      input({ zoom: "steps", kinds: ["tools"] }),
+      ctx(),
+    );
+    expect(tools.entries.map((e) => e.key)).toEqual(["1"]);
+    expect(tools.counts).toEqual(all.counts);
+    expect(all.counts).toMatchObject({ entries: 3, errors: 0, policy: 1 });
+    expect(all.counts?.kinds).toMatchObject({ prompt: 1, tools: 1, policy: 1 });
+    // A later page says what the whole run holds, not what the page holds.
+    const first = await transcript(input({ zoom: "steps", limit: 2 }), ctx());
+    const later = await transcript(
+      input({ zoom: "steps", limit: 2, after: first.cursor ?? undefined }),
+      ctx(),
+    );
+    expect(later.entries.map((e) => e.key)).toEqual(["4", "5"]);
+    expect(later.counts).toEqual(all.counts);
+  });
+
+  it("carries the whole body when asked, and an excerpt when asked", async () => {
+    const long = "z".repeat(TRANSCRIPT_STEP_TEXT_MAX + 50);
+    const { transcript } = harness([
+      tachoRow(0, { kind: "tool_call", ...stored(long) }),
+    ]);
+    const full = await transcript(
+      input({ zoom: "steps", text: "full" }),
+      ctx(),
+    );
+    expect(full.entries[0]?.response?.text).toBe(long);
+    expect(full.entries[0]?.response?.truncated).toBe(false);
+    const excerpt = await transcript(
+      input({ zoom: "everything", text: "excerpt" }),
+      ctx(),
+    );
+    expect(excerpt.entries[0]?.response?.text).toHaveLength(
+      TRANSCRIPT_STEP_TEXT_MAX,
+    );
+    // Asking for nothing keeps the zoom's cap (negative).
+    const plain = await transcript(input({ zoom: "steps" }), ctx());
+    expect(plain.entries[0]?.response?.truncated).toBe(true);
+  });
+
+  it("reads a steering manifest's recall from its body, and falls back when the body cannot be read", async () => {
+    const manifest = JSON.stringify({
+      schema: "oxagen.steering.manifest/1",
+      included: 1,
+      cut: 1,
+      spent_tokens: 120,
+      items: [
+        { id: "rec_1", kind: "rule", tokens: 120, outcome: "included" },
+        { id: "rec_2", kind: "fact", tokens: 900, outcome: "cut" },
+      ],
+    });
+    const { transcript } = harness([
+      tachoRow(0, { kind: "steering.manifest", ...blank, ...stored(manifest) }),
+      tachoRow(1, {
+        kind: "steering.manifest",
+        ...blank,
+        contentDigest: `sha256:${"e".repeat(64)}`,
+        bytesRef: `evb:v1:k:${"e".repeat(64)}`,
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(out.entries[0]?.recall).toEqual({
+      unit: "items",
+      count: 1,
+      tokens: 120,
+      cut: 1,
+      items: [{ kind: "rule", label: "rec_1", tokens: 120 }],
+    });
+    expect(out.entries[1]?.recall).toEqual({
+      unit: "frames",
+      count: null,
+      tokens: null,
+      cut: null,
+      items: [],
+    });
+  });
+
+  it("names the tool step that recorded each call a reply made, and none for a call nobody recorded", async () => {
+    const { transcript } = harness([
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        ...stored(modelStream(["Writing it."]), "text/event-stream"),
+      }),
+      tachoRow(2, {
+        kind: "tool_call",
+        toolName: "Write",
+        toolUseId: "toolu_a",
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    const call = out.entries[0]?.response?.assembly?.blocks[1];
+    expect(call).toMatchObject({
+      kind: "tool_use",
+      stepKey: "2",
+      result: null,
+    });
+    const alone = harness([
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        ...stored(modelStream(["Writing it."]), "text/event-stream"),
+      }),
+    ]);
+    const unrecorded = await alone.transcript(input({ zoom: "steps" }), ctx());
+    expect(unrecorded.entries[0]?.response?.assembly?.blocks[1]).toMatchObject({
+      kind: "tool_use",
+      stepKey: null,
+    });
+  });
+
+  it("nests a subagent's steps under the call that spawned them", async () => {
+    const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    const { transcript } = harness(
+      [
+        tachoRow(0, { kind: "turn_start", ...blank, turnSeq: 1 }),
+        tachoRow(1, {
+          kind: "tool_requested",
+          toolName: "Task",
+          toolUseId: "toolu_task",
+        }),
+        tachoRow(2, {
+          kind: "subagent_start",
+          ...blank,
+          toolUseId: "toolu_task",
+        }),
+        tachoRow(3, {
+          kind: "tool_call",
+          toolName: "Task",
+          toolUseId: "toolu_task",
+          ts: "2026-09-11 09:00:30.000",
+        }),
+      ],
+      undefined,
+      [
+        tachoRow(0, {
+          kind: "tool_call",
+          toolName: "Grep",
+          toolUseId: "toolu_g",
+          sessionUuid: CHILD,
+          rootSessionUuid: SESSION_UUID,
+          parentSessionUuid: SESSION_UUID,
+          subagentId: "agent-1",
+          subagentType: "Explore",
+          spawnToolUseId: "toolu_task",
+          ts: "2026-09-11 09:00:10.000",
+        }),
+      ],
+    );
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    const grep = out.entries.find((e) => e.subject === "Grep");
+    expect(grep).toMatchObject({ key: `${CHILD}:0`, parentKey: "1" });
+    expect(grep?.subagent?.parentSessionUuid).toBe(SESSION_UUID);
+  });
+});
+
+describe("toolResultsOf and withToolUseFacts", () => {
+  const base = {
+    id: "b",
+    chars: 1,
+    tokens: 0,
+    partial: false,
+    cost: null,
+  };
+  const half = (blocks: unknown[]) =>
+    ({
+      seq: "1",
+      type: "llm_call",
+      digest: null,
+      bytesRef: null,
+      redactions: [],
+      fidelity: "full",
+      text: null,
+      truncated: false,
+      assembly: {
+        blocks,
+        precis: "",
+        stopReason: null,
+        ttftMs: null,
+        durationMs: null,
+        tokensPerSecond: null,
+        usage: {
+          inputTokens: null,
+          cacheReadTokens: null,
+          cacheWriteTokens: null,
+          outputTokens: null,
+        },
+        partial: false,
+        wire: { events: 0, bytes: 0 },
+      },
+    }) as Parameters<typeof withToolUseFacts>[0];
+  const use = (callKey: string | null) => ({
+    ...base,
+    kind: "tool_use",
+    name: "Read",
+    input: {},
+    inputRaw: false,
+    inputFolded: false,
+    callKey,
+    verdict: null,
+  });
+
+  it("joins a tool_result to the call it answers, and claims each call once", () => {
+    const answered = half([
+      {
+        ...base,
+        kind: "tool_result",
+        forId: "k1",
+        ok: false,
+        summary: "no such file",
+        bytes: null,
+        ms: null,
+      },
+    ]);
+    const results = toolResultsOf([answered, null]);
+    const out = withToolUseFacts(
+      half([
+        use("k1"),
+        use(null),
+        { ...base, kind: "text", text: "x", truncated: false },
+      ]),
+      (uses) => uses.map((u) => (u.callKey === null ? null : "7")),
+      results,
+    );
+    expect(out?.assembly?.blocks).toEqual([
+      {
+        ...use("k1"),
+        stepKey: "7",
+        result: { ok: false, summary: "no such file" },
+      },
+      { ...use(null), stepKey: null, result: null },
+      { ...base, kind: "text", text: "x", truncated: false },
+    ]);
+  });
+
+  it("leaves a half with no assembly, or no tool_use block, as it is (negative)", () => {
+    const claim = () => [];
+    expect(withToolUseFacts(null, claim, new Map())).toBeNull();
+    const plain = {
+      ...(half([]) as NonNullable<Parameters<typeof withToolUseFacts>[0]>),
+      assembly: null,
+    };
+    expect(withToolUseFacts(plain, claim, new Map())).toBe(plain);
+    const textOnly = half([
+      { ...base, kind: "text", text: "x", truncated: false },
+    ]);
+    expect(withToolUseFacts(textOnly, claim, new Map())).toBe(textOnly);
   });
 });
