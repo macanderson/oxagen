@@ -353,6 +353,21 @@ describe("readSessionChanges against a real repository", () => {
     ]);
   });
 
+  it("measures from the baseline, and says so, when the counted commits' files cannot be read", async () => {
+    const r = rig();
+    const start = await firstRead(r);
+    writeFileSync(join(r.work, "mine.txt"), "mine\n");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "session work"], datedNow());
+    const failingShow: ExecAsync = (command, args) =>
+      args.includes("--no-walk=unsorted")
+        ? Promise.resolve({ status: 128, stdout: "", stderr: "fatal" })
+        : r.exec(command, args);
+    const read = await readSessionChanges(failingShow, r.work, start);
+    expect(read?.basis).toBe("baseline");
+    expect(paths(read?.changes)).toEqual(["mine.txt"]);
+  });
+
   it("keeps a counted commit after a squash merge comes back through a pull", async () => {
     const r = rig();
     const start = await firstRead(r);
