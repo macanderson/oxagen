@@ -32,7 +32,7 @@
 // time the flyout opens, it reads again.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssistantThread } from "@/data/contracts/conversations";
-import type { ParkedCard } from "./assistant-actions";
+import type { ParkedCard, ToolCallSummary } from "./assistant-actions";
 import { loadAssistantThread } from "./assistant-thread-actions";
 
 /** One workspace's thread, whatever the flyout draws its entries as. */
@@ -54,6 +54,7 @@ export type RestoredEntry =
       text: string;
       runId: string;
       parked: readonly ParkedCard[];
+      toolCalls: readonly ToolCallSummary[];
     };
 
 /** Whether the read for the workspace on screen is out, or failed. */
@@ -73,13 +74,12 @@ export function isRestoredEntry(id: string): boolean {
 
 /**
  * The recorded thread as entries. A question is `asked`; a reply is
- * `answered` with the run it was recorded as. A reply with no run was not an
- * assistant turn (another chat surface wrote it), and the flyout has nothing
- * to link it to, so it is left out.
+ * `answered` with the run it was recorded as and the tool calls that run
+ * made, so a restored reply lists what it listed when it was new (#4161). A
+ * reply with no run was not an assistant turn (another chat surface wrote
+ * it), and the flyout has nothing to link it to, so it is left out.
  */
-function restoredEntries(
-  thread: AssistantThread,
-): readonly RestoredEntry[] {
+function restoredEntries(thread: AssistantThread): readonly RestoredEntry[] {
   const entries: RestoredEntry[] = [];
   for (const message of thread.messages) {
     if (message.role === "user") {
@@ -91,6 +91,7 @@ function restoredEntries(
         text: message.text,
         runId: message.runId,
         parked: message.parked,
+        toolCalls: message.toolCalls,
       });
     }
   }

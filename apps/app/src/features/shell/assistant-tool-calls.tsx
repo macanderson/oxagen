@@ -5,7 +5,8 @@
 // call, the approval id, each selectable so a person can copy it into a search.
 //
 // The list arrives whole with the reply, because a reply does not stream yet
-// (#4204).
+// (#4204). A reply restored after a reload lists the calls `get_conversation`
+// read from its run.
 import { useLocale, useTranslations } from "next-intl";
 import type { ToolCallSummary } from "./assistant-actions";
 import { mono } from "@/ui/control-styles";

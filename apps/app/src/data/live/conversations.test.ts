@@ -43,8 +43,28 @@ const message = (over: Record<string, unknown>) => ({
   createdAt: "2026-09-25T10:00:00.000Z",
   runId: null,
   parkedCards: [],
+  toolCalls: [],
   ...over,
 });
+
+// The reply's calls as get_conversation reads them from its run: a read, and
+// the write it parked on CARD's approval.
+const CALLS = [
+  {
+    toolCallId: "tc-1",
+    toolName: "get_budget",
+    outcome: "completed",
+    durationMs: 12,
+    approvalId: null,
+  },
+  {
+    toolCallId: "tc-2",
+    toolName: "set_budget",
+    outcome: "parked",
+    durationMs: 88,
+    approvalId: CARD.approvalId,
+  },
+];
 
 const conversation = (messages: unknown[]) => ({
   publicId: "cnv_01k9x2",
@@ -75,6 +95,7 @@ describe("conversations.latest", () => {
             content: "One write waits on a person.",
             runId: "arun_0002",
             parkedCards: [CARD],
+            toolCalls: CALLS,
           }),
         ]),
       }),
@@ -98,6 +119,7 @@ describe("conversations.latest", () => {
             text: "what is live?",
             runId: null,
             parked: [],
+            toolCalls: [],
           },
           {
             id: "msg_a2",
@@ -105,6 +127,7 @@ describe("conversations.latest", () => {
             text: "One write waits on a person.",
             runId: "arun_0002",
             parked: [CARD],
+            toolCalls: CALLS,
           },
         ],
         truncated: false,
@@ -128,6 +151,25 @@ describe("conversations.latest", () => {
     kernelRead.mockResolvedValue(
       readOk({
         conversation: conversation([message({ publicId: "not a public id" })]),
+      }),
+    );
+    await expect(conversations.latest(ctx)).resolves.toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a reply whose tool call names an outcome the flyout does not draw (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        conversation: conversation([
+          message({
+            publicId: "msg_a2",
+            role: "assistant",
+            runId: "arun_0002",
+            toolCalls: [{ ...CALLS[0], outcome: "skipped" }],
+          }),
+        ]),
       }),
     );
     await expect(conversations.latest(ctx)).resolves.toEqual(

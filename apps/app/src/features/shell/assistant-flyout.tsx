@@ -191,12 +191,12 @@ type Entry =
 type Thread = ThreadState<Entry>;
 
 /**
- * A turn read back from the record, as an entry the log draws. The
- * conversation read carries no tool calls, so a restored reply lists none.
- * Its run link still opens every call on the Run page.
+ * A turn read back from the record, as an entry the log draws. A restored
+ * reply carries the tool calls `get_conversation` read from its run, so it
+ * lists the calls a live reply lists (#4161).
  */
 function restoreEntry(entry: RestoredEntry): Entry {
-  return entry.kind === "answered" ? { ...entry, toolCalls: [] } : entry;
+  return entry;
 }
 
 const EMPTY_THREAD: Thread = {
@@ -522,9 +522,7 @@ export function AssistantFlyout({
   )
     setShownSlugs({ org, ws });
   const thread: Thread =
-    shownScope === null
-      ? EMPTY_THREAD
-      : (threadOf(shownScope) ?? EMPTY_THREAD);
+    shownScope === null ? EMPTY_THREAD : (threadOf(shownScope) ?? EMPTY_THREAD);
   const { entries, draft, pending } = thread;
   const threadOrg = shownSlugs?.org;
   const threadWs = shownSlugs?.ws;
