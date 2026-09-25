@@ -1067,6 +1067,8 @@ async function offered(ctx: WsCtxType): Promise<Record<ToolsWrite, boolean>> {
   const flipOffered = screen.queryByTestId("tools-flip-open") !== null;
   fireEvent.click(screen.getByText("Create payment"));
   const dialog = within(await screen.findByTestId("tool-dialog"));
+  // The form lives on its own tab, and a hidden panel has no roles to find.
+  fireEvent.click(dialog.getByRole("tab", { name: "Classification" }));
   const classifyOffered =
     dialog.queryByRole("button", { name: "Reclassify this version" }) !== null;
   expect(

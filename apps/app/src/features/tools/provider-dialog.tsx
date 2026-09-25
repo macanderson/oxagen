@@ -467,6 +467,7 @@ export function ProviderDialog({
                       at={at}
                       version={version}
                       canClassify={canClassify}
+                      provider={server}
                     >
                       <span className="flex flex-col gap-0.5">
                         <span className="font-medium">{version.name}</span>

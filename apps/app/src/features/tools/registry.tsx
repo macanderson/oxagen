@@ -218,7 +218,12 @@ function Row({
   return (
     <tr data-tool-version={version.id}>
       <td className={cell}>
-        <ToolDialog at={at} version={version} canClassify={canClassify}>
+        <ToolDialog
+          at={at}
+          version={version}
+          canClassify={canClassify}
+          provider={provider?.server ?? null}
+        >
           <ToolName version={version} names={names} />
         </ToolDialog>
       </td>
