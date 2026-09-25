@@ -142,7 +142,7 @@
         "cancel": "Cancel",
         "confirm": "Open the Context PR",
         "pending": "Opening the Context PR",
-        "done": "Pull request #{number} opened. The agent exists when it merges.",
+        "done": "Pull request #{number} opened. After it merges, register the agent from where it runs to create its identity.",
         "open": "Open the pull request",
         "close": "Close",
         "invalidSlug": "Use lowercase letters, digits and single hyphens, at most 18 characters.",
