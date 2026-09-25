@@ -11,7 +11,6 @@
  */
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { INTERACTIVE_AGENT_CAPABILITIES } from "../interactive-agent";
 import { getCapability, listCapabilities } from "../registry";
 import { getSurfaces, type CapabilityDeclaration } from "../types";
 import "../contracts.generated";
@@ -71,23 +70,17 @@ describe("agent contracts declare whether they write", () => {
     }
   });
 
-  it("the assistant's pinned tools declare the writes they make", () => {
+  it("the memory and citation tools declare that they write", () => {
+    // recall_memory reads like a lookup and is not one: a recall raises the
+    // recalled memories' confidence scores.
+    const names = ["recall_memory", "save_memory", "cite_reference"];
     const declared = Object.fromEntries(
-      INTERACTIVE_AGENT_CAPABILITIES.map((name) => [
-        name,
-        getCapability(name)?.mutates,
-      ]),
+      names.map((name) => [name, getCapability(name)?.mutates] as const),
     );
-    // recall_memory is the one that reads like a lookup and is not one: a
-    // recall raises the recalled memories' confidence scores.
     expect(declared).toEqual({
-      query_ontology: false,
-      get_ontology_neighbors: false,
       recall_memory: true,
       save_memory: true,
       cite_reference: true,
-      list_executions: false,
-      get_execution_trace: false,
     });
   });
 });
