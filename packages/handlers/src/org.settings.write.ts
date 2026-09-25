@@ -3,6 +3,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgSettingsWrite } from "@oxagen/oxagen/contracts/org.settings.write";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { mapOrgSettingsRow } from "./org.settings.read";
 import { logger } from "./logger";
 
@@ -23,6 +24,9 @@ const READ_COLUMNS = {
 export const orgSettingsWriteHandler: CapabilityHandler<
   typeof orgSettingsWrite
 > = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(orgSettingsWrite, ctx);
   const updates: Record<string, unknown> = {};
   if (input.name !== undefined) updates.name = input.name;
   if (input.slug !== undefined) updates.slug = input.slug;

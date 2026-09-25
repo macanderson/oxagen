@@ -54,5 +54,5 @@ Tool name: `create_environment`
 ## Errors
 
 - `validation_error`: input failed Zod parse (empty `name`/`slug`).
-- `unauthorized`: caller is not org Owner/Admin.
+- `forbidden` (`org_role_required`): the caller is not an org Owner or Admin.
 - `conflict`: an environment with the same `slug` already exists in the workspace.

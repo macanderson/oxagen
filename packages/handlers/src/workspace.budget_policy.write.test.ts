@@ -11,6 +11,12 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// The handler's role gate (#4194) runs for real against a role fixture. The
+// default caller is an org Owner; a case that needs another sets roleGate.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
+
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
@@ -32,6 +38,7 @@ vi.mock("./logger", () => ({
 }));
 
 import { workspaceBudgetPolicyWriteHandler } from "./workspace.budget_policy.write";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
 // ── tx builders ───────────────────────────────────────────────────────────────
@@ -348,5 +355,20 @@ describe("workspaceBudgetPolicyWriteHandler", () => {
 
     const result = await workspaceBudgetPolicyWriteHandler({}, TEST_CTX);
     expect(result.enforcement).toBe("ceiling");
+  });
+});
+
+// Witness for the role gate (#4194). The kernel's IAM check allows every
+// capability for a non-enterprise org, so without the handler's
+// assertContractRole call this Member would get through and the test fails.
+describe("update_budget_policy role gate", () => {
+  beforeEach(() => resetRoleGate());
+
+  it("refuses a workspace Member as forbidden and reads no tenant data", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      workspaceBudgetPolicyWriteHandler({ enabled: false }, TEST_CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 });

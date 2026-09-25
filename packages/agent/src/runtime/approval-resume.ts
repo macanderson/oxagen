@@ -252,6 +252,7 @@ export async function resumeApprovedCall(
           allowlist: new Set([cap.name]),
           riskCeiling: payload.riskLevel,
           serverAllowlist: new Set(),
+          callerRoles: { org: orgRoles, workspace: workspaceRoles },
         });
         if (!Object.values(tools.nameMap).includes(cap.name)) {
           // The listing leaves out a tool a kill switch names (toolbelt.ts,

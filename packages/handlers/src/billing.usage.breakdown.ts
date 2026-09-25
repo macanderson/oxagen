@@ -27,6 +27,7 @@ import {
   priceBookBoundaries,
   type NetCacheSavings,
 } from "@oxagen/billing";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 /**
@@ -79,6 +80,9 @@ async function bookCacheSavings(args: {
 export const billingUsageBreakdownHandler: CapabilityHandler<
   typeof billingUsageBreakdown
 > = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(billingUsageBreakdown, ctx);
   const start = new Date(input.start);
   const end = new Date(input.end);
 
