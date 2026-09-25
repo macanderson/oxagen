@@ -27,7 +27,9 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    timeout-minutes: 30
+    # 90, as pipeline.yml's `test` job: at the bounded concurrency below the
+    # full suite outlasts 30 minutes (#4266).
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -131,8 +133,26 @@ jobs:
         run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
       - name: Seed platform defaults
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
+      # The same bounds pipeline.yml holds for these tasks (#4266). At turbo's
+      # default of 10 this job lost its runner (exit 137) and timed out
+      # tests that import modules dynamically, a different file every night
+      # from 2026-09-18 on. Each of those files passes on its own.
+      # --continue names every failing package in one run, where turbo would
+      # otherwise stop at the first. The deprecated app builds last and alone,
+      # so at most one 5GB `next build` heap is live (#4233).
       - name: Full ${{ matrix.task }} (no affected filter)
-        run: pnpm turbo run ${{ matrix.task }}
+        env:
+          TASK: ${{ matrix.task }}
+        run: |
+          case "$TASK" in
+            build)
+              pnpm turbo run build --concurrency=2 --continue --filter=!@oxagen/app-deprecated
+              pnpm turbo run build --concurrency=1 --filter=@oxagen/app-deprecated
+              ;;
+            *)
+              pnpm turbo run "$TASK" --concurrency=3 --continue
+              ;;
+          esac
 
       # The e2e job has filed a ticket on failure since #1206; this job never
       # did, so a nightly red on lint, typecheck, test:unit or build produced
