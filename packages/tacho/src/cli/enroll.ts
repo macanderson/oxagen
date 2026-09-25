@@ -560,6 +560,17 @@ async function enrollSteps(
     existing.revoked_at === null &&
     !fleetRevoked &&
     options.force !== true;
+  // A one-time token names the agent this machine should enroll as. The
+  // re-apply below never presents it, so a live host printed "Already
+  // enrolled", exited 0, and left the register wizard waiting for a first
+  // frame from an agent no host had enrolled as. Refuse before anything
+  // changes, and name the flag that replaces the enrollment.
+  if (live && options.enrollmentToken !== undefined) {
+    deps.err(
+      `This machine is already enrolled as ${existing.agent_key} (${existing.host_enrollment_id}), so the token was not used. Run the same command with --force to replace that enrollment with the agent the token names.`,
+    );
+    return { ok: false, warnings };
+  }
   // An enrolled host only needs its document rendered: nothing is minted,
   // written or installed for it.
   if (options.printManaged === true && live) {
