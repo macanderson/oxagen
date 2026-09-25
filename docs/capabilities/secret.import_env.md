@@ -5,7 +5,7 @@
 **Scope:** tenant + workspace
 **Surfaces:** api, mcp, agent
 **Risk level:** high
-**Requires approval:** no
+**Requires approval:** yes, on the agent surface (riskLevel: high)
 
 ## Intent
 
@@ -50,6 +50,18 @@ keys and writes values (default or per-environment overrides) into the
 `environments` vault tables (PostgreSQL); sensitive values are envelope-encrypted.
 Metering, IAM, and audit run through the kernel.
 - **Writes one `secret.value_changed` row to `security_events`** (`capability: import_env_secrets`) when the import is committed. A dry run changes no secret and writes no row (ADR-050).
+
+## Approval
+
+On the `agent` surface this call waits for a person to approve it before it
+runs (`requiresApproval: true`). The flag covers the whole capability, so a
+preview (`commit: false`) from the agent waits for approval too. When the
+in-app assistant parks the call, the approval row keeps only a digest of the
+input. The input, `.env` text included, is stored encrypted until the approved
+call resumes.
+
+The `api` and `mcp` surfaces do not read `requiresApproval`. IAM (org Owner or
+Admin) and the workspace's decision rules gate those calls.
 
 ## API
 
