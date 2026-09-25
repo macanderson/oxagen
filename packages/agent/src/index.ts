@@ -32,6 +32,13 @@ export * from "./runtime/ontology-tools";
 export * from "./runtime/governed-turn";
 // The SSE route streams `ask_assistant` through the kernel with this beside it.
 export { streamAssistantTurn } from "./runtime/assistant-stream";
+// The goal a rule-authoring turn of `ask_assistant` is judged against.
+export {
+  RULE_AUTHORING_ROUNDS,
+  ruleAuthoringGoal,
+  type GraphRule,
+  type GraphRuleEnd,
+} from "./runtime/rule-authoring-goal";
 export * from "./runtime/approval";
 export * from "./runtime/stream-events";
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";

@@ -49,6 +49,11 @@ import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
+import {
+  GOAL_VERDICT_EVENT_TYPE,
+  goalVerdictPayload,
+  type TurnLedgerGoalVerdict,
+} from "./engine/goal";
 import type { WorkspaceInstructionsFrame } from "./workspace-instructions";
 import type {
   TurnLedger,
@@ -167,6 +172,12 @@ export interface OpenAssistantRunArgs extends AssistantRunScope {
   surface: AssistantRunSurface;
   /** This turn's user text; recorded as the run's goal. */
   instruction: string;
+  /**
+   * The goal a verifier judges the turn against, when the caller set one. It
+   * is the run's goal in place of the instruction: it is what the run is
+   * proven against, and the instruction stays on the first model frame.
+   */
+  goal?: string;
   /** The step cap the turn runs under; pinned on the spec. */
   maxSteps: number;
   /**
@@ -466,7 +477,7 @@ export async function openAssistantRun(
     const spec = parseRunSpecV2({
       version: 2,
       run_kind: "general",
-      goal: goalOf(args.instruction),
+      goal: goalOf(args.goal ?? args.instruction),
       engine_policy: {
         requested_engine: ASSISTANT_ENGINE.name,
         allowed_engine_versions: [ASSISTANT_ENGINE.version],
@@ -884,6 +895,24 @@ class Recorder implements AssistantRunRecorder {
           ? (record.output ?? null)
           : (record.error ?? null),
       ),
+    });
+  }
+
+  /**
+   * One verifier round of a goal-shaped turn. The payload carries the round,
+   * the verdict and the digests; the goal and the verifier's reasoning are
+   * the body, so a reader of the run can see why the verifier said what it
+   * said. Not a receipt: a verdict is no model or tool step of the turn.
+   */
+  goalVerdict(record: TurnLedgerGoalVerdict): Promise<void> {
+    const eventType = GOAL_VERDICT_EVENT_TYPE;
+    return this.append({
+      eventType,
+      payload: goalVerdictPayload(record),
+      body: jsonBody(eventType, {
+        goal: record.goal,
+        reasoning: record.reasoning,
+      }),
     });
   }
 

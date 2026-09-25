@@ -45,6 +45,7 @@ import {
 } from "@oxagen/ai";
 import {
   driveTurn,
+  type AgentEvent,
   type CompletionResult,
   type CompletionUsage,
   type StellaEngineClient,
@@ -56,6 +57,12 @@ import {
   engineClientFromEnv,
   isEngineUnavailable,
 } from "./engine/client";
+import {
+  goalVerdictOf,
+  toGoalSpec,
+  type GovernedTurnGoal,
+  type TurnLedgerGoalVerdict,
+} from "./engine/goal";
 import { fromModelMessage, toCompletionMessages } from "./engine/messages";
 import { createPartMapper, type EnginePart } from "./engine/parts";
 import { createProviderPort } from "./engine/provider";
@@ -252,6 +259,12 @@ export interface GovernedTurnInput {
   effort?: EffortLevel | null;
   /** Hard step cap. Defaults to {@link DEFAULT_GOVERNED_TURN_MAX_STEPS}. */
   maxSteps?: number;
+  /**
+   * Makes the turn goal-shaped: the engine works in rounds and a verifier on
+   * another tier judges each one against this goal (`engine/goal.ts`). Each
+   * round's verdict is recorded through `TurnLedger.goalVerdict`.
+   */
+  goal?: GovernedTurnGoal;
   /** Per-turn dollar guard; omit when the effective budget policy is off. */
   budgetGuard?: GovernedTurnBudgetGuard;
   /**
@@ -376,6 +389,11 @@ export interface TurnLedger {
   /** Write-ahead: recorded before the tool runs, and never counted as a call. */
   toolCallStarted(record: TurnLedgerToolIntent): Promise<void>;
   toolCall(record: TurnLedgerToolCall): Promise<void>;
+  /**
+   * One verifier round of a goal-shaped turn, recorded before the seal.
+   * Optional because only a goal turn has verdicts to record.
+   */
+  goalVerdict?(record: TurnLedgerGoalVerdict): Promise<void>;
   seal(outcome: TurnLedgerOutcome): Promise<void>;
 }
 
@@ -670,7 +688,14 @@ export async function runGovernedTurn(
   // turn's error part is replaced with this one: it keeps a code a surface can
   // name (`modelCallFailure`).
   let modelFailure: Error | null = null;
+  // A goal round's verdict arrives as an event, which the loop hands over
+  // synchronously, so its receipt is written in the background and awaited
+  // before the seal. A verdict that cannot be recorded cancels the turn the
+  // way any other receipt does (`recordGoalVerdict`, below).
+  const goal = input.goal;
+  const verdictWrites: Promise<void>[] = [];
   const settle = async (outcome: TurnOutcomeWire): Promise<void> => {
+    await Promise.all(verdictWrites);
     await sealLedger(
       outcome.status === "completed"
         ? { status: "completed", text: outcome.text }
@@ -701,6 +726,13 @@ export async function runGovernedTurn(
     }
   };
 
+  const recordGoalVerdict = (event: AgentEvent, seq: number): void => {
+    const write = ledger?.goalVerdict?.bind(ledger);
+    const verdict = goal ? goalVerdictOf(event, seq, goal) : null;
+    if (!write || !verdict) return;
+    verdictWrites.push(recorded(() => write(verdict)).catch(() => undefined));
+  };
+
   void driveTurn(client, {
     request: {
       provider_id: ENGINE_PROVIDER_ID,
@@ -711,6 +743,7 @@ export async function runGovernedTurn(
       reverse_request_timeout_ms: ENGINE_REVERSE_REQUEST_TIMEOUT_MS,
       budget: { mode: budgetGuard ? "observed" : "off" },
       ...(input.effort ? { engine: { effort: input.effort } } : {}),
+      ...(goal ? { goal: toGoalSpec(goal) } : {}),
     },
     signal: turnAbort.signal,
     handlers: {
@@ -853,7 +886,10 @@ export async function runGovernedTurn(
         }
         return execution.output;
       },
-      onEvent: (event) => emit(withModelFailure(mapper.map(event))),
+      onEvent: (event, seq) => {
+        recordGoalVerdict(event, seq);
+        emit(withModelFailure(mapper.map(event)));
+      },
     },
   })
     .then(async (result) => {
@@ -865,6 +901,7 @@ export async function runGovernedTurn(
         ? new EngineUnavailableError(errorMessage(err), err)
         : err;
       input.onError?.({ error });
+      await Promise.all(verdictWrites);
       await sealLedger({
         status: "failed",
         error: errorMessage(error),
@@ -930,6 +967,7 @@ export {
   ENGINE_UNAVAILABLE_MESSAGE,
 } from "./engine/client";
 export type { EnginePart } from "./engine/parts";
+export type { GovernedTurnGoal, TurnLedgerGoalVerdict } from "./engine/goal";
 // Re-exported so a surface can build the engine's transcript the way the
 // turn does, for a ledger or a replay.
 export { fromModelMessage };

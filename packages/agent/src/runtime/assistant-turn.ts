@@ -54,6 +54,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { invoke } from "@oxagen/oxagen/kernel";
 import {
   assistantAsk,
+  type AssistantGoal,
   type AssistantPageContext,
   type AssistantParkedCard,
 } from "@oxagen/oxagen/contracts/assistant.ask";
@@ -127,6 +128,8 @@ export interface AssistantTurnRequest {
   conversationId: string | null;
   content: string;
   pageContext: AssistantPageContext | null;
+  /** Makes the turn goal-shaped: a verifier judges each round against it. */
+  goal?: AssistantGoal;
   /** Per-turn MCP server allowlist; empty loads every workspace server. */
   activeServerIds?: readonly string[];
   tier?: "fast" | "balanced" | "precise" | null;
@@ -476,6 +479,7 @@ async function runPreparedTurn(
     userId,
     surface: request.surface,
     instruction: request.content,
+    ...(request.goal ? { goal: request.goal.statement } : {}),
     maxSteps: DEFAULT_GOVERNED_TURN_MAX_STEPS,
     // The spec's tool policy is the set this turn holds: the capabilities
     // materializeTools resolved, plus the belt's two meta-tools, which are
@@ -560,6 +564,7 @@ async function runPreparedTurn(
       toolNameMap: materialised.nameMap,
       ...(p.effort ? { effort: p.effort } : {}),
       ...(budgetGuard !== undefined ? { budgetGuard } : {}),
+      ...(request.goal ? { goal: request.goal } : {}),
       fundedBy: funding.fundedBy,
       ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
       ledger: run,
