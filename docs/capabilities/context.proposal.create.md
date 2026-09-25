@@ -30,7 +30,7 @@ In the app, the context-record wizard calls it. **Write a context record** on ev
 | `rationale` | `string` | 1–4000 characters |
 | `source` | `string`? | Who raised it, as the page prints it; defaults to the calling principal (`user:<id>`, `api_key:<id>`) |
 | `support.runs[]` / `.agents[]` / `.recordIds[]` / `.evidenceLinks[]` | `string[]` | Supporting runs, distinct agents, appended records, evidence; each defaults to empty |
-| `createOnly` | `boolean`? | Refuse a lineage that already names a record or a proposal, with `clone_name_taken`, instead of proposing a new version of it. The wizard sets it: labels need not be unique, so two records can derive the same slug ([ADR-174](../adr/ADR-174-context-record-labels.md)) |
+| `createOnly` | `boolean`? | Refuse a lineage that already names a record or a proposal, with `clone_name_taken`, instead of proposing a new version of it. The wizard sets it: labels need not be unique, so two records can derive the same slug ([ADR-178](../adr/ADR-178-context-record-labels.md)) |
 
 ## Output
 

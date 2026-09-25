@@ -44,7 +44,7 @@ export const contextProposalCreate = registerCapability({
        * Refuse a lineage that already names a record or a proposal, instead
        * of proposing a new version of it. A create sets it: a label need not
        * be unique, so two records can derive the same slug, and a new record
-       * must never revise the one that holds it (ADR-174).
+       * must never revise the one that holds it (ADR-178).
        */
       createOnly: z.boolean().optional(),
     })

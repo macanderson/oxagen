@@ -122,7 +122,7 @@ const FAILURES = {
   head_moved: "proposalMoved",
   already_merged: "proposalMoved",
   unanswered: "unanswered",
-  // The wizard proposes create-only (ADR-174): a label can repeat, so the
+  // The wizard proposes create-only (ADR-178): a label can repeat, so the
   // slug made from it can name a record that already exists.
   clone_name_taken: "slugTaken",
 } as const;

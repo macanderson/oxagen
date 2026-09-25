@@ -531,7 +531,7 @@ describe("the Library, All shelf", () => {
     ]);
     const [must, should] = rows;
     // The item leads with the label (the title stands in until the record
-    // declares one), then the statement, then the slug (ADR-174).
+    // declares one), then the statement, then the slug (ADR-178).
     expect(must?.querySelector('[data-term="label"]')).toHaveTextContent(
       /^Read CHANGELOG.md once per run$/,
     );
@@ -905,7 +905,7 @@ describe("Records", () => {
     }
   });
 
-  it("leads a card with the record's label and prints its statement under it (ADR-174)", async () => {
+  it("leads a card with the record's label and prints its statement under it (ADR-178)", async () => {
     await renderSteering("/records", {
       records: readOk({
         records: [publishedRecord({ label: "Read the changelog once" })],
@@ -921,7 +921,7 @@ describe("Records", () => {
     );
   });
 
-  it("sorts the cards by label, with the title standing in for a record that declares none (ADR-174)", async () => {
+  it("sorts the cards by label, with the title standing in for a record that declares none (ADR-178)", async () => {
     // The statements run the other way from the labels, so a sort by
     // statement would put the cards in the opposite order.
     await renderSteering("/records", {

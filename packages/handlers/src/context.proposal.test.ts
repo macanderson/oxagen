@@ -64,7 +64,7 @@ const proposal = (over: Record<string, unknown> = {}) =>
   });
 
 // A create-only call needs a lineage no row holds yet, because the store
-// refuses one a record or a proposal already carries (ADR-174).
+// refuses one a record or a proposal already carries (ADR-178).
 const onLineage = (lineageId: string, over: Record<string, unknown> = {}) =>
   proposal({
     ...over,
@@ -104,7 +104,7 @@ describe("propose_record", () => {
     ).toBe("findings job · fnd_01K5RT6C");
   });
 
-  it("asks the store for a new lineage only when the call or the handler says create-only (ADR-174)", async () => {
+  it("asks the store for a new lineage only when the call or the handler says create-only (ADR-178)", async () => {
     const h = harness();
     const insert = vi.spyOn(h.store, "insertProposal");
     await createProposeRecordHandler(h)(proposal(), ctx());

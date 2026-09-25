@@ -211,7 +211,7 @@ describe("the context-record wizard: describe", () => {
     expect(slug.value).toBe("custom-release");
   });
 
-  it("caps the label at 36 characters (ADR-174)", async () => {
+  it("caps the label at 36 characters (ADR-178)", async () => {
     mount();
     await screen.findByTestId("wizard-desc");
     const name = screen.getByLabelText<HTMLInputElement>(t("describe.name"));

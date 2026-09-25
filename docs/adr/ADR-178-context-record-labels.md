@@ -1,4 +1,4 @@
-# ADR-174: A context record is named by its label
+# ADR-178: A context record is named by its label
 
 - **Status:** Accepted
 - **Date:** 2026-09-24
@@ -58,7 +58,7 @@ Stella could not read it.
 - A file written before this change has no label. It reads with the label the
   database holds, or the one its slug reads as, until its next revision writes
   one. The record's document title stays its lineage.
-- `20260924190000_context_record_label_36.sql` cuts every stored label over 36
+- `20260925130000_context_record_label_36.sql` cuts every stored label over 36
   characters with the same rule as `fitContextRecordLabel`, then narrows both
   checks to 1 to 36. A row the cut missed fails the new check and stops the
   migration.

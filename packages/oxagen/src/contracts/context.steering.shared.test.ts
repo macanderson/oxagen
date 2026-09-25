@@ -60,7 +60,7 @@ describe("steering vocabulary", () => {
     expect(r.success && r.data.title).toBe("Reads");
   });
 
-  it("caps a label at 36 characters (ADR-174)", () => {
+  it("caps a label at 36 characters (ADR-178)", () => {
     const ok = proposedRecordSchema.safeParse({
       ...base,
       label: "x".repeat(36),

@@ -99,7 +99,7 @@ describe("context.record.publish capability", () => {
     ).toThrow();
   });
 
-  it("caps a label at 36 characters, trimmed, and refuses a blank one (ADR-174)", () => {
+  it("caps a label at 36 characters, trimmed, and refuses a blank one (ADR-178)", () => {
     expect(
       contextRecordPublish.input.parse({
         ...VALID_INPUT,

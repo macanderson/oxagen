@@ -44,7 +44,7 @@ export function createConfigurationCloneGetHandler(
       if (input.kind === "skill") candidate.name = candidate.slug;
       if (
         taken.slugs.has(candidate.slug) ||
-        // A record's name is its label, which may repeat (ADR-174).
+        // A record's name is its label, which may repeat (ADR-178).
         (input.kind !== "record" && taken.names.has(candidate.name)) ||
         taken.files.has(configurationFilePath(input.kind, candidate.slug))
       )

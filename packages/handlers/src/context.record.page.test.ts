@@ -106,7 +106,7 @@ describe("get_record, file-backed", () => {
 
     const out = await read(h);
     expect(out.record.statement).toBe("Keep a diff under 400 lines.");
-    // The file carries the label too (ADR-174), so its label wins as well.
+    // The file carries the label too (ADR-178), so its label wins as well.
     const file = readRecordFile(
       h.github.files.get(`${h.github.heads.get("main")}:${PATH}`)!,
     )!;

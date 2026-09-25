@@ -33,7 +33,7 @@ export type ConfigurationCloneDraft = z.infer<
 /**
  * Fit the suffix inside the existing identifier limit without dropping the
  * suffix. `nameMaximum` caps the name the same way: a record's name is its
- * label, which is at most 36 characters (ADR-174).
+ * label, which is at most 36 characters (ADR-178).
  */
 export function configurationCloneName(
   slug: string,

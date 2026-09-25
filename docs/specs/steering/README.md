@@ -65,9 +65,9 @@ force = "should"
   agent raised over an API key (the proposal has no `created_by_id`),
   whoever opens the PR.
 - `label` is the record's name, at most 36 characters, and every surface shows
-  it first (ADR-174). It need not be unique and it can change. The lineage id
+  it first (ADR-178). It need not be unique and it can change. The lineage id
   is derived from it when the record is created, is unique in the workspace,
-  and never changes. A file written before ADR-174 has no `label`, and readers
+  and never changes. A file written before ADR-178 has no `label`, and readers
   derive one from the lineage.
 - Apart from `label`, only members Stella's `Record` struct carries enter the
   file. Stella re-serializes the typed struct before it recomputes the hash,

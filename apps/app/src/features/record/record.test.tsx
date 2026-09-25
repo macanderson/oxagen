@@ -165,7 +165,7 @@ describe("Record › the address", () => {
 });
 
 describe("Record › the header", () => {
-  it("makes the label the h1 and prints the slug under it (ADR-174)", async () => {
+  it("makes the label the h1 and prints the slug under it (ADR-178)", async () => {
     await renderRecord({
       record: readOk(
         recordDetail({
@@ -862,7 +862,7 @@ describe("Record › Archive", () => {
 
 describe("Record › related records", () => {
   const at = { org: "acme", ws: "core-platform", lineage: LINEAGE };
-  // Each card leads with the record's label and sorts by it (ADR-174), so the
+  // Each card leads with the record's label and sorts by it (ADR-178), so the
   // fixture names each one. The statements keep the same words, because the
   // list shows both and a card that read one way and sorted another would
   // make a reordering test pass for the wrong reason.

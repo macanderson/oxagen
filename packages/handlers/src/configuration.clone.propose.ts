@@ -78,7 +78,7 @@ export function createConfigurationCloneProposeHandler(deps: {
 }): CapabilityHandler<typeof configurationClonePropose> {
   return async (input, ctx) => {
     // The draft allows 200 characters for every kind, and a record's name is
-    // its label (ADR-174). Refuse a long one here, before the record parse
+    // its label (ADR-178). Refuse a long one here, before the record parse
     // throws an untyped ZodError. The MCP tool spreads the contract's
     // `.shape`, so the contract cannot carry a per-kind refinement.
     if (input.kind === "record" && input.name.length > CONTEXT_RECORD_LABEL_MAX)

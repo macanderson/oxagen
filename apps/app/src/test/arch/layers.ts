@@ -337,7 +337,7 @@ const PLATFORM_NAMED_ROWS: Readonly<
   // the same pure functions the publish handler runs, so the preview matches.
   // Both files check a slug against the pattern the contract enforces, and
   // both label inputs cap their text at the ceiling the contract enforces
-  // (ADR-174), the way Steer the fleet reads STEER_TEXT_MAX above.
+  // (ADR-178), the way Steer the fleet reads STEER_TEXT_MAX above.
   "src/features/create/record-wizard.tsx": {
     "@oxagen/oxagen/context-record-label": [
       "CONTEXT_RECORD_LABEL_MAX",

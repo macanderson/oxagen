@@ -105,7 +105,7 @@ export async function readConfigurationSource(
     );
     if (record) {
       slug = record.slug;
-      // A record's name is its label (ADR-174). A row written before the
+      // A record's name is its label (ADR-178). A row written before the
       // label existed gets the one its slug reads as.
       name =
         fitContextRecordLabel(record.label ?? "") ||
@@ -248,7 +248,7 @@ export async function readTakenConfigurationNames(
         names.add(row.name);
       }
     }
-    // A record's label may repeat (ADR-174), so only its slug is taken.
+    // A record's label may repeat (ADR-178), so only its slug is taken.
     if (kind === "record") {
       const records = await tx
         .select({ slug: schema.contextRecords.slug })

@@ -96,7 +96,7 @@ export class MemoryStore implements SteeringStore {
     options?: Parameters<SteeringStore["insertProposal"]>[1],
   ) {
     // The Postgres store takes the lineage's advisory lock and refuses a slug
-    // a record or a proposal already holds (ADR-174). The refusal is what a
+    // a record or a proposal already holds (ADR-178). The refusal is what a
     // caller branches on, so the double reproduces it over its own rows; the
     // lock has no meaning here. context.steering.store.pg.test.ts proves the
     // real one against a database.

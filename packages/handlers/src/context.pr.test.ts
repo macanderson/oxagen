@@ -330,7 +330,7 @@ describe("open_context_pr", () => {
     });
   });
 
-  it("writes the proposal's label into the file, else the published record's, else one read from the slug (ADR-174)", async () => {
+  it("writes the proposal's label into the file, else the published record's, else one read from the slug (ADR-178)", async () => {
     const committedLabel = async (h: Harness) => {
       const parsed = parseChecked(
         (await h.github.readFile(REPO, PATH, BRANCH))!,
@@ -910,7 +910,7 @@ describe("merge_context_pr", () => {
     expect(h.github.pulls.map((p) => p.number)).toEqual([519, 520]);
   });
 
-  it("writes the record's name into the file: the proposal's, else the one the record holds, else one read from the slug (ADR-174)", async () => {
+  it("writes the record's name into the file: the proposal's, else the one the record holds, else one read from the slug (ADR-178)", async () => {
     const h = harness();
     const labelIn = async () =>
       parseChecked((await h.github.readFile(REPO, PATH, BRANCH))!);

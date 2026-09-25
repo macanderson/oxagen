@@ -98,7 +98,7 @@ describe("proposeRecord", () => {
       record: RECORD,
       rationale: "Agents re-read it every turn",
       support: {},
-      // A create never revises an existing lineage (ADR-174).
+      // A create never revises an existing lineage (ADR-178).
       createOnly: true,
     });
     expect(result).toEqual({

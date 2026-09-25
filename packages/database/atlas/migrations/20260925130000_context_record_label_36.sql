@@ -1,4 +1,4 @@
--- A context record's label is at most 36 characters (ADR-174). The label is
+-- A context record's label is at most 36 characters (ADR-178). The label is
 -- the record's name on every surface, so it has to fit a heading, a list row
 -- and a breadcrumb. 20260923233000 allowed 200.
 --

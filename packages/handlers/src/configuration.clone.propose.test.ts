@@ -162,7 +162,7 @@ describe("propose_configuration_clone", () => {
     );
     expect(github.pulls).toEqual([]);
   });
-  it("refuses a second record clone on the same slug even if the name check raced (ADR-174)", async () => {
+  it("refuses a second record clone on the same slug even if the name check raced (ADR-178)", async () => {
     const { handler, source, store } = setup();
     const originalRecord = { ...original, kind: "record" as const };
     source.mockResolvedValue(originalRecord);
@@ -183,7 +183,7 @@ describe("propose_configuration_clone", () => {
     });
     expect(store.proposals).toHaveLength(1);
   });
-  it("refuses a record clone whose name is longer than a label as invalid input, before reading the source (ADR-174)", async () => {
+  it("refuses a record clone whose name is longer than a label as invalid input, before reading the source (ADR-178)", async () => {
     const { handler, source, store } = setup();
     const originalRecord = { ...original, kind: "record" as const };
     source.mockResolvedValue(originalRecord);

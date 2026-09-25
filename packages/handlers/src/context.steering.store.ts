@@ -953,8 +953,8 @@ export const postgresSteeringStore: SteeringStore = {
 
       const classification = {
         title: proposal.title?.trim() || proposal.statement,
-        // The merged file names the record (ADR-174). A file written before
-        // ADR-174 has no label, and then an omitted label keeps the record's
+        // The merged file names the record (ADR-178). A file written before
+        // ADR-178 has no label, and then an omitted label keeps the record's
         // own. The fallback is derived from the slug and fits the 36-character
         // CHECK: a label that fails context_records_label_check fails after
         // GitHub has merged.
