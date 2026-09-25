@@ -10,6 +10,7 @@
  */
 import { execFile, execFileSync } from "node:child_process";
 import {
+  existsSync,
   mkdtempSync,
   realpathSync,
   rmSync,
@@ -31,9 +32,11 @@ import {
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
+import { toProtocolTimestamp } from "../timestamp";
 import { type DaemonHandle, startDaemon } from "./daemon";
 import { readWorkingTreeChanges } from "./git-facts";
 import {
+  MAX_SESSION_COMMITS,
   readPreexistingPaths,
   readSessionChanges,
   type WorktreeAttribution,
@@ -71,6 +74,8 @@ interface Rig {
   upstream: string;
   git: (cwd: string, args: string[], env?: NodeJS.ProcessEnv) => string;
   exec: ExecAsync;
+  /** The environment every git call here runs in. */
+  env: NodeJS.ProcessEnv;
 }
 
 function rig(): Rig {
@@ -119,7 +124,7 @@ function rig(): Rig {
   const upstream = join(root, "upstream");
   git(root, ["clone", "-q", origin, upstream]);
   identify(git, upstream, OTHER);
-  return { origin, work, upstream, git, exec };
+  return { origin, work, upstream, git, exec, env };
 }
 
 function identify(git: Rig["git"], cwd: string, email: string): void {
@@ -142,6 +147,20 @@ function pushUpstream(r: Rig): void {
   r.git(r.upstream, ["add", "."]);
   r.git(r.upstream, ["commit", "-q", "-m", "upstream work"], datedNow());
   r.git(r.upstream, ["push", "-q", "origin", "main"]);
+}
+
+/**
+ * The forge squash-merges the session's branch as one commit under its own
+ * email, and the session goes back to main and pulls it.
+ */
+function squashMergeAndPull(r: Rig, file: string, content: string): void {
+  r.git(r.upstream, ["pull", "-q", "--ff-only", "origin", "main"]);
+  writeFileSync(join(r.upstream, file), content);
+  r.git(r.upstream, ["add", "."]);
+  r.git(r.upstream, ["commit", "-q", "-m", `${file} (#1)`], datedNow());
+  r.git(r.upstream, ["push", "-q", "origin", "main"]);
+  r.git(r.work, ["checkout", "-q", "main"]);
+  r.git(r.work, ["pull", "-q", "--ff-only", "origin", "main"]);
 }
 
 /** What the lane records at a session's first read of `work`. */
@@ -247,6 +266,93 @@ describe("readSessionChanges against a real repository", () => {
     );
   });
 
+  it("does not count a same-email commit from before the session that the session rebased", async () => {
+    const r = rig();
+    // A commit written yesterday on another branch, by the same person.
+    r.git(r.work, ["checkout", "-q", "-b", "older"]);
+    writeFileSync(join(r.work, "yesterday.txt"), "old work\n");
+    r.git(r.work, ["add", "."]);
+    const yesterday = `@${Math.floor(Date.now() / 1000) - 86_400} +0000`;
+    r.git(r.work, ["commit", "-q", "-m", "older work"], {
+      GIT_AUTHOR_DATE: yesterday,
+      GIT_COMMITTER_DATE: yesterday,
+    });
+    // Main moves on, so a rebase onto it replays the older commit.
+    r.git(r.work, ["checkout", "-q", "main"]);
+    pushUpstream(r);
+    r.git(r.work, ["pull", "-q", "--ff-only", "origin", "main"]);
+    const start = await firstRead(r);
+    r.git(r.work, ["checkout", "-q", "older"]);
+    r.git(r.work, ["rebase", "-q", "main"]);
+
+    // The replay carries the session's email and a committer date after the
+    // first read. Only its author date says it was written before.
+    const since = Math.floor((start.firstReadAt ?? 0) / 1000);
+    const [committed, authored, email] = r
+      .git(r.work, ["log", "-1", "--format=%ct %at %ce"])
+      .trim()
+      .split(" ");
+    expect(Number(committed)).toBeGreaterThanOrEqual(since);
+    expect(Number(authored)).toBeLessThan(since);
+    expect(email).toBe(ME);
+    expect((await readSessionChanges(r.exec, r.work, start))?.changes).toEqual(
+      [],
+    );
+  });
+
+  it("keeps every session commit still in the range, however many there are", async () => {
+    const r = rig();
+    const start = await firstRead(r);
+    // More commits than a read carries over, made in one fast-import.
+    const count = MAX_SESSION_COMMITS + 2;
+    const ident = `agent <${ME}> ${Math.floor(Date.now() / 1000)} +0000`;
+    let stream = "";
+    for (let i = 0; i < count; i += 1) {
+      const message = `commit ${i}\n`;
+      const content = `${i}\n`;
+      stream += `commit refs/heads/main\nauthor ${ident}\ncommitter ${ident}\n`;
+      stream += `data ${message.length}\n${message}`;
+      if (i === 0) stream += `from ${start.baseline}\n`;
+      stream += `M 100644 inline f${String(i).padStart(3, "0")}.txt\n`;
+      stream += `data ${content.length}\n${content}\n`;
+    }
+    execFileSync("git", ["fast-import", "--quiet"], {
+      cwd: r.work,
+      env: r.env,
+      input: stream,
+    });
+    r.git(r.work, ["reset", "-q", "--hard", "main"]);
+
+    const first = await readSessionChanges(r.exec, r.work, start);
+    expect(first?.changes).toHaveLength(count);
+    expect(first?.ownCommits).toHaveLength(MAX_SESSION_COMMITS);
+    // The next read starts from the carried commits and finds the same files.
+    const second = await readSessionChanges(r.exec, r.work, {
+      ...start,
+      ownCommits: first?.ownCommits,
+    });
+    expect(paths(second?.changes)).toEqual(paths(first?.changes));
+  });
+
+  it("measures from the baseline, and says so, when the session's commits cannot be read", async () => {
+    const r = rig();
+    const start = await firstRead(r);
+    pushUpstream(r);
+    r.git(r.work, ["pull", "-q", "--ff-only", "origin", "main"]);
+    // A range too long for the exec's buffer or its timeout fails this way.
+    const failingLog: ExecAsync = (command, args) =>
+      args.includes("log")
+        ? Promise.resolve({ status: 128, stdout: "", stderr: "fatal" })
+        : r.exec(command, args);
+    const read = await readSessionChanges(failingLog, r.work, start);
+    expect(read?.basis).toBe("baseline");
+    expect(paths(read?.changes)).toEqual([
+      "shared.txt",
+      "upstream-1.txt",
+      "upstream-2.txt",
+    ]);
+  });
+
   it("keeps a counted commit after a squash merge comes back through a pull", async () => {
     const r = rig();
     const start = await firstRead(r);
@@ -257,15 +363,7 @@ describe("readSessionChanges against a real repository", () => {
     const before = await readSessionChanges(r.exec, r.work, start);
     expect(paths(before?.changes)).toEqual(["feature.txt"]);
 
-    // The forge squash-merges the branch as its own commit, under its own
-    // email, and the session goes back to main and pulls it.
-    r.git(r.upstream, ["pull", "-q", "--ff-only", "origin", "main"]);
-    writeFileSync(join(r.upstream, "feature.txt"), "x\ny\nz\n");
-    r.git(r.upstream, ["add", "."]);
-    r.git(r.upstream, ["commit", "-q", "-m", "feature (#1)"], datedNow());
-    r.git(r.upstream, ["push", "-q", "origin", "main"]);
-    r.git(r.work, ["checkout", "-q", "main"]);
-    r.git(r.work, ["pull", "-q", "--ff-only", "origin", "main"]);
+    squashMergeAndPull(r, "feature.txt", "x\ny\nz\n");
 
     const after = await readSessionChanges(r.exec, r.work, {
       ...start,
@@ -348,25 +446,30 @@ describe("readSessionChanges against a real repository", () => {
 describe("the daemon's reconciliation against a real repository", () => {
   const SESSION = "11111111-2222-3333-4444-555555555555";
 
-  async function boot(exec: ExecAsync): Promise<DaemonHandle> {
-    const paths = scratchPaths();
-    const signer = bundleSigner();
-    const host = testHostFile(signer, signer.sign(unsignedBundle()));
-    writeHostFile(paths.hostFile, host);
-    writeSensitiveFileAtomic(
-      paths.claudeSettings,
-      JSON.stringify(
-        mergeTachoSettings(
-          {},
-          {
-            enrollmentId: TEST_ENROLLMENT,
-            hookCommand: "x",
-            port: 1,
-            localToken: host.local_token,
-          },
-        ).settings,
-      ),
-    );
+  /** A daemon on `paths`, enrolled on first use and restarted after. */
+  async function boot(
+    exec: ExecAsync,
+    paths = scratchPaths(),
+  ): Promise<DaemonHandle> {
+    if (!existsSync(paths.hostFile)) {
+      const signer = bundleSigner();
+      const host = testHostFile(signer, signer.sign(unsignedBundle()));
+      writeHostFile(paths.hostFile, host);
+      writeSensitiveFileAtomic(
+        paths.claudeSettings,
+        JSON.stringify(
+          mergeTachoSettings(
+            {},
+            {
+              enrollmentId: TEST_ENROLLMENT,
+              hookCommand: "x",
+              port: 1,
+              localToken: host.local_token,
+            },
+          ).settings,
+        ),
+      );
+    }
     const handle = await startDaemon({
       paths,
       fetch: async () => {
@@ -397,6 +500,20 @@ describe("the daemon's reconciliation against a real repository", () => {
     ].filter((event) => event.kind === "oxagen:worktree_reconciled");
   }
 
+  /** The paths each reconciliation frame listed, in order. */
+  function listed(handle: DaemonHandle): string[][] {
+    return reconciliations(handle).map((frame) =>
+      (
+        frame.body as { observed_changes: { repo_relative_path: string }[] }
+      ).observed_changes.map((change) => change.repo_relative_path),
+    );
+  }
+
+  async function stop(handle: DaemonHandle): Promise<void> {
+    daemons.splice(daemons.indexOf(handle), 1);
+    await handle.stop();
+  }
+
   it("records none of the files a pull brought in, and the session's own", async () => {
     const r = rig();
     // A person's uncommitted edit, there before the session started.
@@ -423,5 +540,52 @@ describe("the daemon's reconciliation against a real repository", () => {
       changes_basis: "session",
       pre_session_changes: "excluded",
     });
+  });
+  it("reports a file written before a replayed SessionStart reached the daemon", async () => {
+    const r = rig();
+    // The daemon is down as the session starts. The hook spools the
+    // SessionStart, and the agent writes a file before the daemon returns.
+    const receivedAt = toProtocolTimestamp(Date.now());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    writeFileSync(
+      join(r.work, "early.txt"),
+      "written while the daemon was down\n",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const handle = await boot(r.exec);
+    await handle.api.handleHook({
+      ...hook("SessionStart", r.work),
+      replay: { receivedAt },
+    });
+    await handle.tick();
+    await handle.api.handleHook(hook("Stop", r.work));
+    await handle.tick();
+    expect(listed(handle)).toEqual([["early.txt"]]);
+  });
+
+  it("keeps the files of a squash-merged branch across a restart", async () => {
+    const r = rig();
+    const paths = scratchPaths();
+    const first = await boot(r.exec, paths);
+    await first.api.handleHook(hook("SessionStart", r.work));
+    await first.tick();
+    r.git(r.work, ["checkout", "-q", "-b", "feature"]);
+    writeFileSync(join(r.work, "feature.txt"), "x\ny\nz\n");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "feature"], datedNow());
+    await first.api.handleHook(hook("Stop", r.work));
+    await first.tick();
+    expect(listed(first)).toEqual([["feature.txt"]]);
+
+    // The squash commit carries the forge's email, and the session's own
+    // commit leaves main's history. Only the commits the lane kept in
+    // daemon.json still name the file after the restart.
+    squashMergeAndPull(r, "feature.txt", "x\ny\nz\n");
+    await stop(first);
+    const second = await boot(r.exec, paths);
+    await second.api.handleHook(hook("Stop", r.work));
+    await second.tick();
+    expect(listed(second)).toEqual([["feature.txt"]]);
   });
 });

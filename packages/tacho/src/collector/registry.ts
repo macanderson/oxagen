@@ -662,6 +662,14 @@ export class SessionRegistry {
       const seenAt = facts.seenAt ?? now;
       if (Date.parse(seenAt) > Date.parse(existing.lastSeenAt))
         existing.lastSeenAt = seenAt;
+      // The same replay moves the start back. OTel or the transcript reader
+      // can open the record before the spooled SessionStart arrives, and the
+      // git lane dates the edits already in a worktree against this.
+      if (
+        facts.seenAt !== undefined &&
+        Date.parse(facts.seenAt) < Date.parse(existing.startedAt)
+      )
+        existing.startedAt = facts.seenAt;
       this.noteAgent(existing, false);
       return reopened
         ? { record: existing, created: false, reopened: true }
@@ -671,7 +679,12 @@ export class SessionRegistry {
       harnessSessionId,
       recorder: this.openRecorder(harnessSessionId, facts),
       control: { paused: null, cancelled: null, messages: [] },
-      startedAt: now,
+      // A session first seen through a replay started when the hook was
+      // received, not when the daemon came back. The git lane leaves out an
+      // edit made before the start as someone else's, so dating the start
+      // at the restart left out the agent's own edits made while the daemon
+      // was down. `lastSeenAt` keeps its own rule (#4024).
+      startedAt: earlierOf(facts.seenAt, now),
       lastSeenAt: now,
       sealed: false,
       lastCheckpointSeq: -1,
@@ -1261,6 +1274,13 @@ function isTombstone(value: unknown): value is ChainTombstone {
 export const MAX_SESSION_BASELINES = 16;
 
 /** A plain object, as a hand-edited or older state file may not hold one. */
+/** The earlier of a replay's receipt time and now, or now when it does not parse. */
+function earlierOf(seenAt: string | undefined, now: string): string {
+  return seenAt !== undefined && Date.parse(seenAt) < Date.parse(now)
+    ? seenAt
+    : now;
+}
+
 function isRecord(value: unknown): boolean {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

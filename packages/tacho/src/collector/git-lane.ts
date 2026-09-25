@@ -62,8 +62,9 @@ function holdsBaseline(session: SessionRecord): boolean {
 
 /**
  * When the session started, in epoch ms, for deciding whether a dirty file
- * predates it. The registry's first sight of the session, and never later
- * than the read happening now.
+ * predates it, and never later than the read happening now. The registry
+ * dates the start from the first hook it saw, or from a replayed hook's
+ * receipt time when the daemon was down as the session began (`ensure`).
  */
 function startedAtOf(session: SessionRecord, at: number): number {
   const started = Date.parse(session.startedAt);

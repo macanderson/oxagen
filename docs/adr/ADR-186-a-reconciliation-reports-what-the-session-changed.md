@@ -40,9 +40,9 @@ A path is in a reconciliation when the session changed it. The rule lives in
    read (`gitFirstReadAt`). A commit is the session's when it is a non-merge
    commit in `baseline..HEAD`, its committer email equals the email the
    repository stamps (its `user.email`, or the identity git derives when none
-   is set), and its committer date is at or after that first read, floored to
-   the second. A commit counted once stays counted for that worktree
-   (`sessionCommits`).
+   is set), and both its committer date and its author date are at or after
+   that first read, floored to the second. A commit counted once stays
+   counted for that worktree (`sessionCommits`).
 2. **What is reported.** The files those commits touched, measured against the
    baseline, plus the worktree's changes against `HEAD`, tracked and
    untracked.
@@ -62,11 +62,21 @@ A path is in a reconciliation when the session changed it. The rule lives in
    baseline for the rest of its life, with `changes_basis: baseline`. Setting
    the clock on its next read would call every commit it made before the
    upgrade someone else's.
+7. **A read the rule cannot make falls back to the old measure.** When the
+   status read answers but a later probe fails (the commit range, the files
+   of the counted commits, or a diff), the frame is sealed on the baseline
+   measure with `changes_basis: baseline`. A range longer than the exec's
+   buffer or its timeout is the likely cause. A frame that overstates and says
+   so replaces no frame at all.
 
 A pull, a fetch and reset to upstream, and a rebase onto upstream therefore
-add no upstream file. Upstream commits carry another committer email, or a
-date before the session. A rebase stamps the session's replayed commits with
-its email and the time it ran, so they still count.
+add no upstream file. Upstream commits carry another committer email, or
+dates before the session. A rebase stamps every commit it replays with the
+current user's email and the time it ran, but it keeps each one's author
+date. So the session's own rebased commits still count, and a same-email
+commit written before the session, which the session checks out and
+rebases, does not. The same holds for an amend without `--reset-author`,
+and for a `cherry-pick` of a commit written before the session.
 
 ### Two refinements to the rule as first decided
 
@@ -87,7 +97,21 @@ each.
   file there, and the lane reads on a later tick, after the write. A record
   taken then would list the session's own edit as already there. The lane now
   records only paths whose modification and change times are older than the
-  session's start, and, for a deleted path, whose directory's are.
+  session's start, and, for a deleted path, whose directory's are. The start
+  is the registry's `startedAt`. For a session whose `SessionStart` was
+  spooled while the daemon was down, that is the time the hook received it,
+  not the time the daemon replayed it.
+
+### A refinement found in review
+
+The committer date alone let a replay pass as the session's work. A rebase,
+an amend, and a cherry-pick stamp a new committer date on a commit someone
+wrote earlier. A session that checked out a branch holding yesterday's
+unpushed commit and rebased it onto `main` had that commit counted as its
+own, with the session's email and a committer date after its first read. The
+rule now requires the author date too, which those three commands keep. The
+trade-off is that a session that amends a commit written before it started
+is not credited for the amendment.
 
 ## Alternatives
 
@@ -108,24 +132,38 @@ each case as named.
 
 - **Another writer with the same email after the first read.** A sibling
   session in another worktree whose commits reach this one through a merge
-  commit, a person committing in the same repository, and a `cherry-pick`,
-  which stamps the picker's email and the current time. These are reported as
-  the session's. Squash and rebase merges on GitHub carry GitHub's committer
-  email, so they are not.
+  commit, and a person committing in the same repository, both write commits
+  with the session's email and dates after its first read. These are reported
+  as the session's. Squash and rebase merges on GitHub carry GitHub's
+  committer email, so they are not.
 - **An agent that commits under another email** than the repository's
   configuration, for example through `GIT_COMMITTER_EMAIL` in its own
-  environment. Its commits read as someone else's and are not reported.
+  environment. Its commits read as someone else's and are not reported. The
+  hook forwards only an allowlist of environment variables, and `GIT_*` is
+  not on it, so the daemon cannot see that email today.
+- **An amendment to a commit written before the session.** The amended
+  commit keeps the older author date and is not counted.
 - **An upstream change to a path the session also committed** is counted with
   it, because that path is measured against the baseline.
 - **A commit made before the first read of a worktree**, including the first
-  commit of a repository that had none, is inside the baseline and is not
-  reported. This limit predates this ADR.
+  commit of a repository that had none, is not reported. When it is inside
+  the baseline, no diff shows it. When the session checks it out later, its
+  dates are before the first read. This limit predates this ADR.
+- **A session first seen without a hook.** A session the daemon first meets
+  through OTel or the transcript reader has its start dated at that sighting.
+  A later replayed hook moves the start back to its receipt time, but a
+  session whose hooks were never spooled keeps the later date, and an edit it
+  made before that date can be recorded as already there.
 - **A person's edit made while the session runs** is reported as the
   session's.
 - **Bounds.** The record holds 256 paths per worktree and hashes files up to
-  16 MiB, comparing larger ones by size and modification time. A session keeps
-  128 commits and records for 16 worktrees. A dirty path past the bound is
-  reported, and the frame says `partly_excluded`.
+  16 MiB, comparing larger ones by size and modification time. One read lists
+  at most 1,024 of the session's commits from `baseline..HEAD`, filtered by
+  committer email inside git. A session carries 128 commits from one read to
+  the next and keeps records for 16 worktrees. A commit still in the range is
+  found again on every read, so the carried bound only drops commits that
+  left the range. A dirty path past the bound is reported, and the frame says
+  `partly_excluded`.
 
 ## Consequences
 
@@ -133,8 +171,9 @@ each case as named.
   files, so the Run page's file count and the run title stop counting other
   people's merges.
 - The first read of each worktree costs one whole-tree `git status` and a hash
-  of each recorded path. A reconciliation after `HEAD` moved adds a `git log`
-  of the range and one of the counted commits.
+  of each recorded path. A reconciliation after `HEAD` moved adds a
+  `git config` read, a `git log` of the range filtered to the session's email,
+  and one `git log` of the counted commits.
 - `daemon.json` holds the record and the counted commits with the session,
   within the bounds above.
 - The captured diff after a pull no longer carries the upstream files.
