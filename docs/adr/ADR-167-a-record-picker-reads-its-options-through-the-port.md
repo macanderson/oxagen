@@ -149,3 +149,30 @@ and `imports-data-source.ts` fails there without the directive. With
 `assistant-thread-actions.ts` (#4163) and `assistant-approval-actions.ts`
 (#4162), the list now has four entries, and another still needs its own
 reason here and in `layers.ts`.
+
+## Amendment 2026-09-25: the Run page's later transcript pages (ADR-182)
+
+`features/run/actions.ts` joins the list, with the same terms:
+`"use server"`, `requireViewer` before the read, and an `ActionResult`
+answer.
+
+The Run page reads the first page of a transcript through the
+`runs.transcript` port when the route renders. Later pages are read when a
+person asks for more or the live stream signals new frames, and a navigation
+would throw away the playhead and the scroll position, so no render can make
+that read. Until now `readTranscriptPage` called `kernelRead` and mapped the
+contract's output with its own copy of the port's mapper. The copy kept no
+`blocks` and no text fallback from the assembled message, so every later page
+lost the reply the first page drew, and the browser carried a parser for
+provider messages to rebuild it. A test held the two copies equal, but only
+on entries without an assembly.
+
+`readTranscriptPage` now reads `runs.transcript`, so every page goes through
+one mapper and one view-model check. A cursor the capability did not write
+still answers `invalid` on `after`.
+
+- `layers.ts` names the module in `PORT_READING_ACTIONS` with this reason.
+- `import-graph.test.ts` places the `data-source-use-server.ts` probe at the
+  module, where it passes, and the directive-less `imports-data-source.ts`
+  probe there, where it fails.
+- The list now has five entries.

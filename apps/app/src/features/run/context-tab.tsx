@@ -23,7 +23,6 @@ import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell } from "@/ui/table";
 import {
-  bodyOf,
   type FirstPrompt,
   type FirstRequest,
   firstPrompt,
@@ -38,7 +37,7 @@ import { Fact, Facts, Meter, Note, NoValue, Panel, PanelBody } from "./parts";
 import { FrameLink } from "./policy-tab";
 import { entriesOf } from "./recorded-entries";
 import type { Place, RunTabProps } from "./tab-props";
-import { entryKey } from "./transcript-model";
+import { entryKey, soleBody } from "./transcript-model";
 import { isWhole } from "./whole-transcript";
 
 /** Where "Open the window" lands: the Prompt window panel below. */
@@ -748,7 +747,7 @@ async function readManifest(
   { ctx, source, run }: RunTabProps,
   entry: TranscriptEntry,
 ): Promise<ManifestRead> {
-  const body = bodyOf(entry);
+  const body = soleBody(entry);
   if (body?.fidelity === "digest_only") return { state: "unretained", entry };
   let text = body !== null && !body.truncated ? body.text : null;
   if (text === null) {

@@ -234,6 +234,21 @@ describe("framesTurns", () => {
     ]);
   });
 
+  it("counts the steps the transcript draws: one call however often its key was sealed, and no event as a step (#3994)", () => {
+    const frames = [
+      turnStart(0),
+      // A PreToolUse hook delivered twice writes the request twice.
+      requested(1, "K"),
+      requested(2, "K"),
+      called(3, "K"),
+      called(4, "K"),
+      frame(5, { kind: "oxagen:hook_health", toolName: "", toolUseId: "" }),
+      frame(6, { kind: "turn_end", toolName: "", toolUseId: "" }),
+    ];
+    const [only] = framesTurns(frames, 10).turns;
+    expect(only).toMatchObject({ frames: 7, modelSteps: 0, toolSteps: 1 });
+  });
+
   it("stops at the cap and says the list is short", () => {
     const frames = [turnStart(0), turnStart(1), turnStart(2)];
     const { turns, complete } = framesTurns(frames, 2);
