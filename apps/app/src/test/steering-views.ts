@@ -291,6 +291,7 @@ export function steeringFreshness(
     repository: "acme/platform",
     defaultBranch: "main",
     gates: { autoSync: false, blockStaleRuns: false },
+    sync: null,
     ...overrides,
   };
 }

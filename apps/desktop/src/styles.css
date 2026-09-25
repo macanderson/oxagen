@@ -5,15 +5,20 @@
  * screenshots, docs and support conversations consistent. Gold is identity
  * (the x in the wordmark, the eyebrows) and at most one action per screen;
  * every state is a glyph or a neutral fill, never a hue.
+ *
+ * house-fonts.css loads the three house faces: Geist for everything read,
+ * Space Grotesk for the wordmark, and Monaspace Neon for code and paths.
+ * Every colour and face below resolves to an --ox-* token, so the next reskin
+ * of the kit reaches this app without a hand edit.
  */
-@import "@oxagen/ui/styles/fonts/space-grotesk.css";
+@import "@oxagen/ui/styles/house-fonts.css";
 @import "@oxagen/ui/styles/house-tokens.css";
 
 :root {
   color-scheme: light;
   --bg: var(--ox-paper);
   --panel: var(--ox-paper-panel);
-  --hl: #ece6d9;
+  --hl: var(--ox-paper-hl);
   --border: var(--ox-paper-border);
   --rule: var(--ox-paper-rule);
   --text: var(--ox-text-ink);
@@ -23,8 +28,8 @@
   --gold: var(--ox-gold);
   --gold-hover: var(--ox-gold-deep);
   --gold-text: var(--ox-gold-deep);
-  --danger: #a3402f;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --danger: var(--ox-destructive-ink);
+  --mono: var(--ox-font-mono);
 }
 
 * {
@@ -47,6 +52,7 @@ body {
 code,
 .mono {
   font-family: var(--mono);
+  font-feature-settings: var(--ox-font-mono-features);
   font-size: 12.5px;
   user-select: text;
   cursor: text;
@@ -68,6 +74,7 @@ code,
 }
 
 .wordmark {
+  font-family: var(--ox-font-display);
   font-weight: var(--ox-weight-logo);
   font-size: 22px;
   letter-spacing: -0.01em;

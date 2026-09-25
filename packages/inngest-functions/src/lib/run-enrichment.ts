@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { runGovernedTurn } from "@oxagen/agent";
+import { runGovernedTurn, type GovernedTurnUsage } from "@oxagen/agent";
 import { resolveModelFundingSource, selectModelFromFunding } from "@oxagen/ai";
-import { evaluateTurnCreditGate } from "@oxagen/billing";
+import { evaluateTurnCreditGate, turnCostUsd } from "@oxagen/billing";
 import { NonRetriableError } from "@oxagen/functions";
 import type { RunFrame } from "@oxagen/run-ledger";
 import { digestBytes } from "@oxagen/tacho";
@@ -10,6 +10,39 @@ import type { RunScope } from "./run-record";
 export const ENRICHMENT_CHUNK_CHARS = 24_000;
 /** One step holds the whole text and each chunk costs a summary call, so a run's text stops here (#4202). */
 export const ENRICHMENT_TEXT_CEILING_CHARS = 40 * ENRICHMENT_CHUNK_CHARS;
+
+/**
+ * The most one enrichment job spends on summarizing one run, in US dollars,
+ * priced from the tokens each call reports (#3944, E-01). No setting or doc
+ * named a figure, so this is a conservative default. At the text ceiling a
+ * job makes about 45 calls of at most one chunk each, which costs about
+ * $0.40 on the default fast tier (Claude Haiku 4.5), so the cap stops only a
+ * run whose tier maps to a far dearer model.
+ *
+ * The job checks it before every reduction call. Once the job has spent it,
+ * the job reduces nothing more and writes the account from what it has
+ * reduced so far, in one more call over at most one chunk, and the account
+ * says it covers only the start of the run. The account is persisted with
+ * its input digest, so an unchanged run is not summarized again.
+ *
+ * The budget is per job. A live run is enriched again every
+ * `LIVE_ENRICHMENT_INTERVAL_MS` while it changes, and each job starts with the
+ * full budget, so nothing yet caps one run's total (#4312).
+ */
+export const ENRICHMENT_RUN_BUDGET_USD = 1;
+
+/** The account's last sentence when the budget stopped the job early. */
+export const ENRICHMENT_BUDGET_NOTE =
+  " The account covers only the start of the run: its enrichment budget ran out before the rest was read.";
+
+/** One narrative call's answer, with the tokens it used and their price. */
+export interface NarrativeTurn {
+  text: string;
+  model: string;
+  usage: GovernedTurnUsage;
+  /** `usage` priced on the platform rate card for `model`. */
+  costUsd: number;
+}
 const CEILING_NOTE =
   "\n[The transcript stops here. It reached its length limit, and later frames were not read. Do not infer what they contain.]\n";
 const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -174,7 +207,7 @@ export function enrichmentFailureReason(error: unknown): string {
 export async function runNarrativeTurn(
   scope: RunScope,
   instruction: string,
-): Promise<{ text: string; model: string }> {
+): Promise<NarrativeTurn> {
   const funding = await resolveModelFundingSource(scope.orgId);
   const selection = selectModelFromFunding(scope.orgId, funding, {
     tier: "fast",
@@ -211,7 +244,15 @@ export async function runNarrativeTurn(
     if (failure !== null) throw terminalOrRetryable(failure);
     throw new Error("Stella returned no run account");
   }
-  return { text, model: turn.modelId };
+  // The turn already wrote these tokens to `token_usage` and charged them.
+  // They come back here so the job can hold each run to its budget.
+  const usage = await turn.usage;
+  return {
+    text,
+    model: turn.modelId,
+    usage,
+    costUsd: turnCostUsd(turn.modelId, usage),
+  };
 }
 
 function isErrorPart(part: unknown): part is { error: unknown } {

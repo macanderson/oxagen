@@ -753,3 +753,38 @@ export function reservationArgs(input: {
   if (!input.allowOverwrite) args.push("--if-none-match", "*");
   return args;
 }
+
+/**
+ * The curl call that streams one Actions artifact to `out`. The GitHub token
+ * is in `config`, which the caller writes to curl's stdin (`--config -`),
+ * because an argument is readable by every local process through `ps` and
+ * `/proc/<pid>/cmdline`, and the script echoes a failed command's arguments
+ * to the CI log. Curl reads a double-quoted config value with backslash
+ * escapes, so `\` and `"` are escaped. A line break would end the header and
+ * start a new config line, so a token with one is refused.
+ */
+export function artifactDownloadCurl(input: {
+  token: string;
+  url: string;
+  out: string;
+}): { args: string[]; config: string } {
+  if (/[\r\n\0]/.test(input.token))
+    throw new Error("the GitHub token holds a line break or a NUL byte");
+  const quoted = input.token.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return {
+    args: [
+      "--config",
+      "-",
+      "-sSL",
+      "--retry",
+      "5",
+      "--retry-all-errors",
+      "--retry-delay",
+      "10",
+      "-o",
+      input.out,
+      input.url,
+    ],
+    config: `header = "Authorization: Bearer ${quoted}"\n`,
+  };
+}

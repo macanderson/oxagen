@@ -58,6 +58,7 @@ import {
   type HostFile,
   hostStatusInForce,
   readHostFile,
+  readHostFileLenient,
   mcpEndpointFor,
   modelProxyPortFor,
   sessionScopeOf,
@@ -165,6 +166,7 @@ import {
   type HookEnvelope,
 } from "./server";
 import {
+  isHostRevokedRefusal,
   type RetentionDecision,
   Shipper,
   serverRequestedWaitMs,
@@ -1366,6 +1368,32 @@ async function initializeDaemon(
     // control plane 403s a batch containing any of them, and a 403 is
     // retryable, so without this the queue wedges forever.
     hostEnrollmentId: host.host_enrollment_id,
+    // A revoked host fetches no control envelope, so the revoked status
+    // arrives only as the refusal. Recorded here, the hooks and the model
+    // proxy refuse from it and `tacho status` shows it (#3944).
+    //
+    // Only for a revoke this machine did not start. `reassign`, `unenroll`
+    // and a harness add revoke first and mark host.json `revoked_at` (or
+    // write the next enrollment over it), then replace or remove this
+    // daemon. Until they do, live sessions still call through it, and a
+    // harness-only reassign keeps them (ADR-179), so the shipper stops and
+    // the hooks and the model proxy carry on.
+    onHostRevoked: () => {
+      const disk = readHostFileLenient(paths.hostFile).host;
+      if (
+        disk === undefined ||
+        disk.revoked_at !== null ||
+        disk.host_enrollment_id !== host.host_enrollment_id
+      ) {
+        log(
+          "enrollment revoked from this machine (host.json is marked or replaced): shipping stopped, and live sessions carry on until the service is replaced",
+        );
+        return;
+      }
+      host = applyControlFacts(paths.hostFile, host, {
+        host_status: "revoked",
+      });
+    },
     // Hosts that lost the control plane together do not retry in step.
     jitter: Math.random,
     // Asked at ship time, not only at append time. A body appended under
@@ -1474,6 +1502,9 @@ async function initializeDaemon(
   // --- end transcript tailer ---------------------------------------------
 
   async function sendAcks(): Promise<void> {
+    // A revoked host's poll is refused on every attempt and never clears,
+    // so it stops once the shipper or a poll has heard the revocation.
+    if (shipper.hostRevoked) return;
     // A message whose session sealed before a boundary reached it is
     // `expired`; left unsent, the operator reads it as still on its way.
     pendingAcks.push(...registry.takeExpiredOnSeal());
@@ -1508,6 +1539,12 @@ async function initializeDaemon(
     } catch (error) {
       pendingAcks.unshift(...acks);
       commandPollFailures += 1;
+      if (error instanceof ControlError && isHostRevokedRefusal(error)) {
+        // An idle host learns here rather than at its next ingest. The
+        // shipper stops with it, and neither asks again.
+        shipper.markHostRevoked();
+        return;
+      }
       if (
         error instanceof ControlError &&
         (error.status === 400 || error.status === 422)
@@ -3579,6 +3616,8 @@ async function initializeDaemon(
     // mandate the control plane holds now rather than the one cached before
     // an outage.
     await stage("bundle refresh", async () => {
+      // A revoked host's key fetches nothing, so it stops asking (#3944).
+      if (shipper.hostRevoked) return;
       if (now() - lastRefresh >= timers.bundleRefreshMs) {
         lastRefresh = now();
         await refreshBundle();
