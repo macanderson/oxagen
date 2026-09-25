@@ -79,6 +79,7 @@ import {
   HOST_RETENTION_CLASSES,
   narrowestOf,
   NO_RETENTION,
+  RETENTION_CLASS_BY_KIND,
   type RetentionMandate,
 } from "../evidence/retention";
 import { Wal, WalRecoveryConflict } from "../host/wal";
@@ -245,6 +246,13 @@ export interface DaemonHandle {
   refreshBundle: () => Promise<boolean>;
   stop: () => Promise<void>;
 }
+
+/**
+ * The retention class of a prompt queued for a boundary: the class of the
+ * `oxagen:message` frame that delivers it.
+ */
+const QUEUED_PROMPT_CLASS =
+  RETENTION_CLASS_BY_KIND["oxagen:message"] ?? "model_call";
 
 /** How many sealed events each recorder keeps in memory after a tick. */
 const RECORDER_EVENTS_KEPT = 64;
@@ -1163,6 +1171,7 @@ async function initializeDaemon(
     try {
       const purged =
         wal.purgeBodiesOutsideMandate(clause) + purgePendingEndBodies(clause);
+      purgeQueuedPrompts(clause);
       clearBodyPurgeOwed();
       log(
         `completed an owed body purge: erased ${purged} queued body(ies) the mandate does not cover`,
@@ -1172,6 +1181,41 @@ async function initializeDaemon(
         `an owed body purge failed again; content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  /**
+   * Withdraw the prompts queued for a boundary when `clause` does not retain
+   * prompt content, and rewrite the files that hold them: `daemon.json`, and
+   * the registry snapshots in `pending-session-ends.json`. Runs beside the
+   * body sweeps with the same clause, so a narrowing erases a queued prompt
+   * from disk the way it erases a prompt body.
+   *
+   * The prompts are withdrawn rather than kept in memory for delivery. The
+   * next `persistState` would write a prompt kept in memory straight back to
+   * disk, and one written only in memory is lost silently on a restart. Each
+   * withdrawn prompt is acknowledged `failed` with the reason, so the
+   * operator sees it was not delivered and can send it again.
+   */
+  function purgeQueuedPrompts(clause: RetentionMandate): number {
+    if (retentionAllows(clause, QUEUED_PROMPT_CLASS)) return 0;
+    const withdrawn = registry.withdrawQueuedPrompts(
+      "withdrawn before delivery: the retention mandate no longer keeps prompt content",
+    );
+    let snapshots = 0;
+    for (const pending of pendingSessionEnds.values())
+      for (const persisted of pending.terminal?.state.sessions ?? []) {
+        if (persisted.control.messages.length === 0) continue;
+        persisted.control.messages = [];
+        snapshots += 1;
+      }
+    if (snapshots > 0) persistPendingEnds();
+    if (withdrawn > 0) {
+      persistState();
+      log(
+        `mandate narrowed: withdrew ${withdrawn} queued prompt(s) from ${paths.daemonState}`,
+      );
+    }
+    return withdrawn;
   }
 
   function purgeBodiesNarrowedOut(
@@ -1196,6 +1240,7 @@ async function initializeDaemon(
     try {
       const purged =
         wal.purgeBodiesOutsideMandate(next) + purgePendingEndBodies(next);
+      purgeQueuedPrompts(next);
       clearBodyPurgeOwed();
       log(
         `mandate narrowed (${dropped.join(", ")}): erased ${purged} queued body(ies) from the WAL`,

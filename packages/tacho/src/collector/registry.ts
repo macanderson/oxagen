@@ -778,6 +778,38 @@ export class SessionRegistry {
   }
 
   /**
+   * Withdraw every prompt still queued for a boundary, on every session, and
+   * hand each to `takeExpiredOnSeal` as `failed` with `detail`. Answers how
+   * many went.
+   *
+   * A queued message or steer is prompt content, the class the
+   * `oxagen:message` frame that delivers it carries, and the queue is
+   * persisted in `daemon.json`. The daemon calls this when a verified
+   * mandate stops retaining that class, so the text leaves the disk with the
+   * bodies of that class. A prompt that is withdrawn is never delivered, and
+   * the acknowledgement tells the operator so.
+   */
+  withdrawQueuedPrompts(detail: string): number {
+    let withdrawn = 0;
+    for (const record of this.sessions.values()) {
+      for (const message of record.control.messages.splice(0)) {
+        withdrawn += 1;
+        if (this.expiredOnSeal.some((ack) => ack.command_id === message.id))
+          continue;
+        this.expiredOnSeal.push({
+          command_id: message.id,
+          status: "failed",
+          session_uuid: record.recorder.sessionUuid,
+          detail,
+        });
+      }
+    }
+    const over = this.expiredOnSeal.length - MAX_EXPIRED_ON_SEAL;
+    if (over > 0) this.expiredOnSeal.splice(0, over);
+    return withdrawn;
+  }
+
+  /**
    * The `expired` acknowledgements for messages whose session sealed before
    * a boundary delivered them, drained. The daemon sends them with the rest.
    */
