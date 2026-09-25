@@ -187,7 +187,7 @@ function SyncFindings({ findings }: { findings: Sync["findings"] }) {
       <ul className="flex flex-col gap-2">
         {findings.map((f) => (
           <li
-            key={`${f.path}:${f.lineageId ?? ""}:${f.message}`}
+            key={`${f.path}:${f.lineage ?? ""}:${f.message}`}
             data-level={f.level}
             className="flex flex-col gap-0.5 text-sm"
           >

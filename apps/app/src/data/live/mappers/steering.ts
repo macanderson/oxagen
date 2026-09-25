@@ -208,7 +208,7 @@ export function toSteeringFreshness(
           findings: out.sync.findings.map((f) => ({
             level: f.level,
             path: f.path,
-            lineageId: f.lineageId,
+            lineage: f.lineageId,
             message: f.message,
           })),
         }

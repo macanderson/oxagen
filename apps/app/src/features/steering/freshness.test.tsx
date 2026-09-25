@@ -164,13 +164,13 @@ describe("the repository sync", () => {
             {
               level: "error",
               path: ".oxagen/rules/broken.toml",
-              lineageId: null,
+              lineage: null,
               message: ".oxagen/rules/broken.toml is not valid TOML",
             },
             {
               level: "warning",
               path: ".oxagen/rules/renamed.toml",
-              lineageId: "ctx.release.renamed",
+              lineage: "ctx.release.renamed",
               message: "ctx.release.renamed moved to a new file",
             },
           ],
@@ -206,7 +206,7 @@ describe("the repository sync", () => {
             {
               level: "error",
               path: ".oxagen/rules/broken.toml",
-              lineageId: null,
+              lineage: null,
               message: "not valid TOML",
             },
           ],

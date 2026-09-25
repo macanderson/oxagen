@@ -204,7 +204,7 @@ export const SteeringFreshness = z.object({
         z.object({
           level: z.enum(["error", "warning"]),
           path: z.string(),
-          lineageId: z.string().nullable(),
+          lineage: z.string().nullable(),
           message: z.string(),
         }),
       ),
