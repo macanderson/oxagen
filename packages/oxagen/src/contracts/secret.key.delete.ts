@@ -12,6 +12,7 @@ export const secretKeyDelete = registerCapability({
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({ keyId: z.string().min(1) }),

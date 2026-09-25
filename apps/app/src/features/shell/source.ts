@@ -2,7 +2,8 @@
 // requireViewer: signed in, a member, MFA satisfied, on the canonical slug. The
 // person's name and email come from the same request's session; the
 // organizations and workspaces the switchers list come from `shell.context`;
-// the zone the chrome's dates render in comes from `shell.preferences`.
+// the zone the chrome's dates render in, and what Enter does in the assistant
+// composer, come from `shell.preferences`.
 //
 // The approvals drawer is organization-wide (mockup `apdBody()`): the topbar
 // button on every page counts every call parked for a person in every
@@ -107,6 +108,12 @@ export async function shellSource(
   const timeZone = preferences.ok
     ? preferences.value.timeZone
     : DEFAULT_TIME_ZONE;
+  // The same failed read leaves Enter adding a line, the column's default.
+  // Sending on Enter by mistake posts a half-written question as a metered
+  // turn. A line added by mistake costs one Backspace.
+  const enterToSubmit = preferences.ok
+    ? preferences.value.enterToSubmit
+    : false;
   const readAt = Date.now();
   const since = startOfViewerDay(readAt, timeZone);
   const places = context.ok ? context.value.workspaces : [];
@@ -157,6 +164,7 @@ export async function shellSource(
       emailVerified: user.emailVerified,
       twoFactorEnabled: user.twoFactorEnabled,
       timeZone,
+      enterToSubmit,
     },
     context,
     approvals: {

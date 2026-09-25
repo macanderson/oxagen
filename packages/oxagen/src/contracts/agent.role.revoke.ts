@@ -20,6 +20,7 @@ export const agentRoleRevoke = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "mutation" },
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

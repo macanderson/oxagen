@@ -9,7 +9,11 @@
     "agent"
   ],
   "sensitivity": "low",
-  "agent": null,
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

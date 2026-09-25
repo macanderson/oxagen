@@ -217,6 +217,8 @@
           "dark": "Ink",
           "light": "Paper"
         },
+        "enterToSubmit": "Enter sends a message",
+        "enterToSubmitHint": "In the stella composer. When this is off, Enter adds a line and Cmd+Enter or Ctrl+Enter sends.",
         "preview": "Preview",
         "previewDate": "date",
         "previewNumber": "number",
@@ -331,6 +333,8 @@
         "label": "Ask stella",
         "placeholder": "Ask about a run, an agent, or what this is costing…",
         "send": "Send",
+        "sendHintEnter": "Enter to send, Shift+Enter for a new line",
+        "sendHintModEnter": "Cmd+Enter or Ctrl+Enter to send, Enter for a new line",
         "draftTooLong": "This request would exceed the message limit. Your existing draft is unchanged. Send or shorten it, then open the recommendation again."
       },
       "refused": {

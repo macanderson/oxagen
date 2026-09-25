@@ -137,11 +137,11 @@ describe("shell.context", () => {
   });
 });
 
-const preferencesRead = (timezone: string) =>
+const preferencesRead = (timezone: string, enterToSubmit = false) =>
   readOk({
     fontSize: "medium",
     density: "comfortable",
-    enterToSubmit: false,
+    enterToSubmit,
     pendingPromptBehavior: "queue",
     defaultTextTier: null,
     defaultTextModel: null,
@@ -154,7 +154,7 @@ describe("shell.preferences", () => {
   it("reads get_user_preferences through the kernel seam and answers the stored zone", async () => {
     kernelRead.mockResolvedValue(preferencesRead("Europe/London"));
     expect(await shell.preferences(ctx)).toEqual(
-      readOk({ timeZone: "Europe/London" }),
+      readOk({ timeZone: "Europe/London", enterToSubmit: false }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: userPreferencesRead,
@@ -162,6 +162,13 @@ describe("shell.preferences", () => {
       page: "shell",
     });
     expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("answers enter_to_submit as stored, for the assistant composer", async () => {
+    kernelRead.mockResolvedValue(preferencesRead("Europe/London", true));
+    expect(await shell.preferences(ctx)).toEqual(
+      readOk({ timeZone: "Europe/London", enterToSubmit: true }),
+    );
   });
 
   it("passes a failed read through (negative)", async () => {
@@ -175,7 +182,7 @@ describe("shell.preferences", () => {
   it("reads a zone this runtime cannot format in as Pacific, and reports it once (negative)", async () => {
     kernelRead.mockResolvedValue(preferencesRead("Mars/Olympus_Mons"));
     expect(await shell.preferences(ctx)).toEqual(
-      readOk({ timeZone: "America/Los_Angeles" }),
+      readOk({ timeZone: "America/Los_Angeles", enterToSubmit: false }),
     );
     expect(captureError).toHaveBeenCalledOnce();
     expect(captureError).toHaveBeenCalledWith(
@@ -191,8 +198,8 @@ describe("shell.preferences", () => {
       shell.preferences(ctx),
     ]);
     expect(results).toEqual([
-      readOk({ timeZone: "America/Los_Angeles" }),
-      readOk({ timeZone: "America/Los_Angeles" }),
+      readOk({ timeZone: "America/Los_Angeles", enterToSubmit: false }),
+      readOk({ timeZone: "America/Los_Angeles", enterToSubmit: false }),
     ]);
     expect(kernelRead).toHaveBeenCalledTimes(2);
     expect(captureError).toHaveBeenCalledOnce();

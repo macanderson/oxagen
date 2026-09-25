@@ -24,12 +24,15 @@ export const ShellContext = z.object({
 export type ShellContext = z.infer<typeof ShellContext>;
 
 /**
- * The person's own clock, read for the shell and for every page under it: the
- * IANA zone next-intl formats each date in. One field today; the other account
- * preferences join it here when a surface reads them.
+ * The account preferences the app reads, from `get_user_preferences`: the
+ * IANA zone next-intl formats each date in, for the shell and every page under
+ * it, and `enter_to_submit`, which decides whether Enter sends in the
+ * assistant composer (ADR-075). The other account preferences join these here
+ * when a surface reads them.
  */
 export const ViewerPreferences = z.object({
   timeZone: z.string().min(1),
+  enterToSubmit: z.boolean(),
 });
 export type ViewerPreferences = z.infer<typeof ViewerPreferences>;
 

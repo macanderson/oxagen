@@ -51,6 +51,7 @@ import { getOxagenRegistry, type RegistryCapability } from "../registry-loader";
 import {
   createKillSwitchGate,
   KillSwitchDeniedError,
+  type ActingAgent,
   type KillSwitchGate,
 } from "./kill-switch-gate";
 import { decideCapabilityForBelt, decideMcpToolForBelt } from "./toolbelt";
@@ -199,11 +200,20 @@ export interface MaterializeOptions {
   /** Seam for tests; defaults to the Postgres-backed gate. */
   killSwitchGate?: KillSwitchGate;
   /**
+   * The managed agent a person's turn runs as: the in-app assistant passes
+   * its `qa-chat` agent. A kill switch on that agent, or a deny naming its
+   * principal, then leaves the tool off the belt and refuses the call. Tools
+   * still run as the person. Every other caller omits it, so a switch on the
+   * assistant never reaches a person's own calls.
+   */
+  actingAgent?: ActingAgent;
+  /**
    * A mutable box the caller fills in AFTER materialization, once the run
    * this turn opened is known. `runPreparedTurn` calls `materializeTools`
    * before `openAssistantRun` (the belt has to exist to build the run's
-   * `toolAllowlist`), so `ctx.agentRun` is not yet attached when these
-   * closures are built and a value read from it here would be permanently
+   * `toolAllowlist`), and its context never carries `ctx.agentRun` at all:
+   * the assistant acts as the person who asked, before the run opens and
+   * after it. A value read from `ctx.agentRun` here would be permanently
    * null. Every tool's `execute` reads `runIdRef.current` at CALL time
    * instead — by then the caller has set it to the opened run's public id —
    * so a parked approval attaches to the run whose Policy tab a person is
@@ -484,6 +494,21 @@ async function recordExternalToolCall(
 // HITL window the consent card is answerable in (same as the approval card).
 const CONSENT_PROMPT_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * The one risk level an external MCP tool carries: in the governance map the
+ * engine reads, and on the consent card a person answers.
+ *
+ * High, because Oxagen holds no contract for the tool. Nothing states what it
+ * reads or writes, so it gets the grade the engine gives any tool it has no
+ * declaration for (`toToolContracts` in ./engine/tools.ts), and the grade a
+ * decision rule's approval for the same tool records (./external-tool-rules.ts,
+ * ./external-approval.ts). The consent card used to record medium while the
+ * engine was told high, so the person deciding saw a lower grade than the
+ * engine enforced. Lowering the engine to medium instead would relax its
+ * policy for a tool no one has vouched for.
+ */
+const EXTERNAL_TOOL_RISK_LEVEL: ToolGovernance["riskLevel"] = "high";
+
 // Model-facing input schema for a contributed external tool. When the
 // contributor supplied a pinned JSONSchema contract (descriptor pinning,
 // mcp-snapshots.ts), the model is constrained by it; providers reject
@@ -530,7 +555,8 @@ export async function materializeTools(
   // generation before it runs and reloads the switches when it moved, so a
   // flip takes effect at the next call boundary for every tool on the belt.
   const killSwitches: KillSwitchGate =
-    opts.killSwitchGate ?? createKillSwitchGate(ctx);
+    opts.killSwitchGate ??
+    createKillSwitchGate(ctx, undefined, opts.actingAgent ?? null);
 
   // Register a tool under a model-safe alias and record the reverse mapping.
   // Sanitizing collapses distinct chars to "_", so two real names could in
@@ -601,20 +627,25 @@ export async function materializeTools(
   };
   const agentRunNow = new Date();
 
-  // The active emergency denies, read once when the turn carries a resolved
-  // agent run: a kill switch cuts the tool from the belt the model receives,
-  // the same rows `get_agent_toolbelt` reports under `kill_switch`, and the
-  // kernel enforces them again at invoke. This runs inside the caller's
-  // tenant scope (the chat route wraps materializeTools in runInTenantScope).
-  const emergencyDenies =
-    agentRun?.principalKind === "agent" && agentRunResolution !== null
-      ? await withTenantDb((tx) =>
-          readActiveEmergencyDenies(tx, {
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId || null,
-          }),
-        )
-      : [];
+  // The active emergency denies, read once per materialization for every
+  // caller: a kill switch cuts the tool from the belt the model receives, the
+  // same rows `get_agent_toolbelt` reports under `kill_switch`. The kernel
+  // enforces them again at invoke for an agent run, and the kill-switch gate
+  // in each tool's `execute` checks every caller's call. A person's turn
+  // reads them too (R4, #3370 finding 9). The in-app assistant lists its
+  // tools as the person and never carries an agent run, so a read gated on
+  // one left a switched tool on its belt. Only a fail-closed run skips the
+  // read, because it lists no capability tools at all. This runs inside the
+  // caller's tenant scope (every caller wraps materializeTools in
+  // runInTenantScope).
+  const emergencyDenies = agentRunFailClosed
+    ? []
+    : await withTenantDb((tx) =>
+        readActiveEmergencyDenies(tx, {
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId || null,
+        }),
+      );
 
   // Entitlement filter: if a capability is claimed by a plugin, the org must
   // have that plugin installed and enabled. Lazily fetch the entitled set on
@@ -661,6 +692,7 @@ export async function materializeTools(
       now: agentRunNow,
       clientIp: ctx.clientIp ?? null,
       emergencyDenies,
+      actingAgent: opts.actingAgent ?? null,
       entitledPluginIds: await entitledPluginIdsFor(cap),
     });
     if (decision.outcome === "deny") continue;
@@ -1411,7 +1443,7 @@ export async function materializeTools(
                           runId: callAgentRun?.runId ?? null,
                           capabilityName: capturedKey,
                           inputPreview: input,
-                          riskLevel: "medium",
+                          riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
                           ttlMs: CONSENT_PROMPT_TTL_MS,
                         }),
                     );
@@ -1534,7 +1566,7 @@ export async function materializeTools(
                         messageId: ctx.messageId!,
                         capabilityName: capturedKey,
                         inputPreview: input,
-                        riskLevel: "medium",
+                        riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
                         ttlMs: CONSENT_PROMPT_TTL_MS,
                       }),
                   );
@@ -1765,8 +1797,9 @@ export async function materializeTools(
       mutatingToolNames.push(externalAlias);
       // An external tool's semantics are unknown here, so it is declared the
       // way the engine would treat an undeclared one: high risk, mutating.
+      // Its consent card records the same level.
       governance[externalAlias] = {
-        riskLevel: "high",
+        riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
         requiresApproval: false,
         readOnly: false,
       };

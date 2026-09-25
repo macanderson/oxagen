@@ -37,6 +37,10 @@ export const agentDefinitionSuggest = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "medium",
+  // It stores no draft, but two reads it invokes create rows on first use:
+  // browse_plugin_catalog seeds the default MCP registry and list_schemas
+  // creates the schema registry.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

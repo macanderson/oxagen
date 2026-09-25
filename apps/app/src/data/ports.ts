@@ -127,9 +127,10 @@ export interface DataSource {
     context(ctx: OrgCtx): Promise<Read<ShellContext>>;
     /**
      * get_user_preferences, user-global: the zone every date under the
-     * organization layout renders in, and the zone the Audit day filters are
-     * resolved against; callers: features/shell/source.ts,
-     * features/shell/viewer-clock.tsx and features/audit/filters.ts.
+     * organization layout renders in, the zone the Audit day filters are
+     * resolved against, and whether Enter sends in the assistant composer;
+     * callers: features/shell/source.ts, features/shell/viewer-clock.tsx and
+     * features/audit/filters.ts.
      */
     preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
     /**
