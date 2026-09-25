@@ -7452,7 +7452,6 @@ type Messages = {
         billing: string;
         audit: string;
       };
-      assistant: string;
       assistantSub: string;
       search: string;
       searchSub: string;
