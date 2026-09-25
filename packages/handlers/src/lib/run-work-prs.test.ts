@@ -35,6 +35,7 @@ function setup(moving = false) {
       merged: false,
       headSha: moving && reads++ > 0 ? "new-head" : "head",
       headRef: "fix/work",
+      baseRef: "main",
       changedFiles: 1,
     })),
     listClosingIssues: vi.fn().mockResolvedValue({
@@ -95,6 +96,8 @@ describe("run pull request evidence", () => {
     expect(output.pullRequests[0]).toMatchObject({
       current: true,
       association: "head_commit",
+      headRef: "fix/work",
+      baseRef: "main",
       ci: { overall: "failing", complete: true },
       diff: { headSha: "head", complete: true },
     });

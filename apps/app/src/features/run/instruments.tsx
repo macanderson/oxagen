@@ -23,7 +23,14 @@ import {
   ratioWidth,
 } from "@/ui/money-format";
 import { type ClassPrices, type Ledger, perTurn } from "./cost-figures";
-import type { Family, RunMetrics, WallLead } from "./metrics";
+import {
+  type Family,
+  type ProvisionalModel,
+  type ProvisionalSpend,
+  provisionalCost,
+  type RunMetrics,
+  type WallLead,
+} from "./metrics";
 import { NoValue } from "./parts";
 import { ToolIcon } from "./tool-icon";
 
@@ -211,11 +218,56 @@ function TurnAxis({ turns, live }: { turns: number; live: boolean }) {
   );
 }
 
+/** How many models the provisional line names before it counts the rest. */
+const PROVISIONAL_MODELS = 3;
+
+/**
+ * The per-model line of a wrapped run the rollup has not reached (#4032):
+ * each model with what the session reported it cost and over how many calls,
+ * dearest first, so a live run's spend is readable before it is rolled up.
+ */
+function ProvisionalModels({
+  provisional,
+}: {
+  provisional: ProvisionalSpend;
+}) {
+  const t = useTranslations("run.cost.inst");
+  const locale = useLocale();
+  const shown = provisional.byModel.slice(0, PROVISIONAL_MODELS);
+  const more = provisional.byModel.length - shown.length;
+  const part = ({ model, cost, calls }: ProvisionalModel) =>
+    cost === null
+      ? t.rich("provisionalModelUnpriced", {
+          model: () => <b>{model}</b>,
+          calls,
+        })
+      : t.rich("provisionalModel", {
+          model: () => <b>{model}</b>,
+          cost: () => (
+            <b>{formatMoney(cost, { locale, precision: "cents" })}</b>
+          ),
+          calls,
+        });
+  return (
+    <span data-testid="inst-cost-provisional">
+      {shown.map((row, index) => (
+        <Fragment key={`${row.provider ?? ""}/${row.model}`}>
+          {index === 0 ? null : ", "}
+          {part(row)}
+        </Fragment>
+      ))}
+      {more > 0 ? <>, {t("provisionalMore", { count: more })}</> : null}
+    </span>
+  );
+}
+
 function CostTile({
+  run,
   metrics,
   ledger,
   live,
 }: {
+  run: RunRow;
   metrics: RunMetrics;
   /** Null when the per-turn read failed. */
   ledger: Ledger | null;
@@ -224,7 +276,12 @@ function CostTile({
   const t = useTranslations("run.cost.inst");
   const tCost = useTranslations("run.cost");
   const locale = useLocale();
-  const { cost, cacheHit } = metrics;
+  const { cacheHit } = metrics;
+  // Nothing metered the run yet: the figure the stat row prints stands in,
+  // labelled provisional, with the models the session reported under it.
+  const reported = provisionalCost(run, metrics);
+  const cost = metrics.cost ?? reported?.value ?? null;
+  const provisional = metrics.cost === null ? metrics.provisional : null;
   const saved = metrics.priced?.cacheSaved ?? null;
   // A run that read nothing from the cache saved nothing, so it has no saving
   // to report; one that did and has none recorded says so.
@@ -239,13 +296,20 @@ function CostTile({
     <Tile
       testId="inst-cost"
       title={t("cost")}
-      basis={cost === null ? null : (cost.basis ?? tCost("basisNotRecorded"))}
+      basis={
+        metrics.cost !== null
+          ? (metrics.cost.basis ?? tCost("basisNotRecorded"))
+          : reported === null
+            ? null
+            : t("provisional")
+      }
       value={
         cost === null ? (
           <NoValue />
         ) : (
           <>
             <MoneyText value={cost} />
+            {reported?.floor === true ? "+" : null}
             <small className={instUnit}>{cost.currency}</small>
           </>
         )
@@ -253,6 +317,11 @@ function CostTile({
       line={
         <Dotted
           parts={{
+            models:
+              provisional === null ||
+              provisional.byModel.length === 0 ? null : (
+                <ProvisionalModels provisional={provisional} />
+              ),
             perTurn:
               each === null
                 ? null
@@ -807,7 +876,7 @@ export function Instruments({
       data-testid="run-instruments"
       className={instGrid}
     >
-      <CostTile metrics={metrics} ledger={ledger} live={live} />
+      <CostTile run={run} metrics={metrics} ledger={ledger} live={live} />
       <WallTile metrics={metrics} />
       <TokensTile metrics={metrics} prices={prices} />
       <ShapeTile run={run} metrics={metrics} ledger={ledger} live={live} />

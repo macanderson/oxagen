@@ -7,8 +7,16 @@
 // `matchApprovals` pairs it with. An approval frame the record ties to no
 // decision says so, and lists the run's decisions no frame on the page
 // records, so a decision is never out of reach of the frames it concerns.
+//
+// The read of the run's decisions stops at 1,000 rows (#3477). When it stops
+// with more left, the list says it holds the latest ones only, because the
+// decision this frame is looking for may be one of the older rows it did not
+// read.
 import { useTranslations } from "next-intl";
-import type { ResolvedApprovalItem } from "@/data/contracts/approvals";
+import type {
+  ResolvedApprovalItem,
+  ResolvedApprovals,
+} from "@/data/contracts/approvals";
 import type { Read } from "@/data/read";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import {
@@ -106,13 +114,14 @@ export function DecidedApprovals({
   here,
   others,
 }: {
-  /** `list_resolved_approvals` for the run, for its failure. */
-  read: Read<ResolvedApprovalItem[]>;
+  /** `list_resolved_approvals` for the run, for its failure and whether it stopped short. */
+  read: Read<ResolvedApprovals>;
   here: ResolvedApprovalItem | null;
   others: readonly ResolvedApprovalItem[];
 }) {
   const t = useTranslations("run.resolvedApprovals");
   if (!read.ok) return <ReadFailure read={read} section={t("title")} />;
+  const { items, more } = read.value;
   if (here !== null)
     return (
       <ul className="m-0 grid list-none gap-3 p-0">
@@ -127,6 +136,14 @@ export function DecidedApprovals({
       >
         {t("noMatch")}
       </p>
+      {more ? (
+        <p
+          data-testid="approvals-partial"
+          className="text-[12.5px] text-muted-foreground"
+        >
+          {t("partial", { count: items.length })}
+        </p>
+      ) : null}
       {others.length === 0 ? null : (
         <>
           <p className={eyebrowQuiet}>{t("others")}</p>
