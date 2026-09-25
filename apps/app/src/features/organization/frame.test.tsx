@@ -198,6 +198,37 @@ describe("loaded", () => {
       expect(calls.roles).toHaveLength(1);
     },
   );
+
+  it("opens Edit avatar on the organization's stored avatar", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    const stored = 'avatar:v1:{"kind":"icon","icon":"rocket","tone":"gold"}';
+    await renderFrame("owner", {
+      ...loaded,
+      workspaces: readOk({
+        orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+        orgAvatarUrl: stored,
+        workspaces: [workspaceRow()],
+      }),
+    });
+    await userEvent.click(screen.getByTestId("edit-org-avatar"));
+    const dialog = await screen.findByTestId("edit-org-avatar-dialog");
+    expect(dialog).toHaveTextContent("Avatar for Acme Robotics");
+    expect(within(dialog).getByTestId("avatar-icon-rocket")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByTestId("avatar-tone-gold")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByTestId("avatar-remove")).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("the two-factor policy", () => {

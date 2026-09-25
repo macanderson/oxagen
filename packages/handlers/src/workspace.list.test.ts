@@ -212,7 +212,7 @@ describe("workspaceListHandler", () => {
     it("returns the stored avatar of the organization and of each workspace, and null where the column is null", async () => {
       const { schema } = await import("@oxagen/database");
       const link = "https://cdn.example.test/acme.png";
-      const designed = 'avatar:v1:{"glyph":"C","tone":"gold"}';
+      const designed = 'avatar:v1:{"kind":"initials","text":"C","font":"sans","tone":"gold"}';
       const orderBy = vi.fn().mockResolvedValue([
         { ...row, avatarUrl: designed },
         {

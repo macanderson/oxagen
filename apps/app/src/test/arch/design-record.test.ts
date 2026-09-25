@@ -53,6 +53,20 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(buttonPrimary).not.toMatch(/\bbg-primary\b/);
   });
 
+  it("the two gold avatar tones have a fill and a glyph ink in both themes", () => {
+    // `avatar.tsx` draws `bg-gold-deep text-on-gold-deep`. Tailwind emits
+    // nothing for a colour the theme does not name, so without these a
+    // gold-deep tile renders transparent while every component test passes.
+    const css = read("src/app/globals.css");
+    expect(css).toMatch(/--color-gold:\s*var\(--gold\)/);
+    expect(css).toMatch(/--color-on-gold:\s*var\(--on-gold\)/);
+    expect(css).toMatch(/--color-gold-deep:\s*var\(--gold-deep\)/);
+    expect(css).toMatch(/--color-on-gold-deep:\s*var\(--on-gold-deep\)/);
+    const root = lightRoot();
+    expect(root).toMatch(/--gold-deep:\s*var\(--ox-gold-deep\)/);
+    expect(root).toMatch(/--on-gold-deep:\s*var\(--ox-paper\)/);
+  });
+
   it("`.tab[aria-selected] { border-bottom-color: var(--gold) }`", () => {
     expect(lightRoot()).toMatch(/--tab-border-active:\s*var\(--gold\)/);
     expect(tabLink).toContain("aria-[current=page]:border-gold");

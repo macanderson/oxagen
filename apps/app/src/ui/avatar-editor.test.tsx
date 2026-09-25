@@ -225,6 +225,39 @@ describe("Tone", () => {
     );
   });
 
+  it("opens on a stored monogram in its letters, typeface, and tone", async () => {
+    const { dialog } = await openEditor(
+      "workspace",
+      'avatar:v1:{"kind":"initials","text":"OX","font":"mono","tone":"gold-deep"}',
+    );
+    expect(within(dialog).getByTestId("avatar-kind-initials")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByTestId("avatar-letters")).toHaveValue("OX");
+    expect(within(dialog).getByTestId("avatar-font-mono")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByTestId("avatar-tone-gold-deep")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("opens a legacy emoji avatar as a monogram of the name, keeping it removable", async () => {
+    const { dialog } = await openEditor(
+      "user",
+      'avatar:v1:{"emoji":"\u{1F98A}","bg":"#f59e0b","mode":"full"}',
+    );
+    expect(within(dialog).getByTestId("avatar-kind-initials")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByTestId("avatar-letters")).toHaveValue("PW");
+    expect(within(dialog).getByTestId("avatar-remove")).toBeTruthy();
+  });
+
   it("opens on a stored gold avatar", async () => {
     const { dialog } = await openEditor(
       "agent",
@@ -272,6 +305,28 @@ describe("Save", () => {
     save.mockResolvedValue({ ok: true });
     await user.click(screen.getByTestId("avatar-save"));
     expect(save).toHaveBeenCalledTimes(2);
+  });
+
+  it("stays open on a newer edit made while the save was in flight", async () => {
+    let finish: ((result: AvatarSaveResult) => void) | undefined;
+    save.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user, dialog } = await openEditor("organization");
+    await user.click(screen.getByTestId("avatar-save"));
+    const letters = within(dialog).getByTestId("avatar-letters");
+    await user.clear(letters);
+    await user.type(letters, "NEW");
+    finish?.({ ok: true });
+    await waitFor(() => {
+      expect(within(dialog).getByRole("status")).toHaveTextContent("");
+    });
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.getByTestId("avatar-dialog")).toBeTruthy();
+    expect(within(dialog).getByTestId("avatar-letters")).toHaveValue("NEW");
   });
 
   it("clears a stored avatar with an empty string", async () => {

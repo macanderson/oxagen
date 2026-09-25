@@ -308,7 +308,7 @@ describe("toWorkspaceList", () => {
 
   it("carries the stored avatars of the organization and of each workspace, a link and a designed avatar alike", () => {
     const link = "https://cdn.example.test/acme.png";
-    const designed = 'avatar:v1:{"glyph":"C","tone":"gold"}';
+    const designed = 'avatar:v1:{"kind":"initials","text":"C","font":"sans","tone":"gold"}';
     const [core, research] = workspacesSample.workspaces;
     const view = WorkspaceList.parse(
       toWorkspaceList(

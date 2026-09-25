@@ -66,7 +66,7 @@ describe("list_workspaces contract", () => {
 
   it.each([
     ["an https link", "https://cdn.example.test/acme.png"],
-    ["a designed avatar", 'avatar:v1:{"glyph":"A","tone":"gold"}'],
+    ["a designed avatar", 'avatar:v1:{"kind":"icon","icon":"rocket","tone":"gold"}'],
     ["none", null],
   ])(
     "carries %s as the avatar of the organization and of a workspace",

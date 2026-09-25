@@ -539,6 +539,20 @@ describe("setWorkspaceAvatar", () => {
     );
   });
 
+  it("answers conflict for an archived workspace, as the handler refuses it (negative)", async () => {
+    invoke.mockRejectedValue(refusal("conflict", "workspace_archived"));
+    expect(await setWorkspaceAvatar("acme", "wrk_1", GOLD_ICON)).toMatchObject(
+      { ok: false, reason: "conflict" },
+    );
+  });
+
+  it("answers denied when the kernel refuses the role (negative)", async () => {
+    invoke.mockRejectedValue(denied("update_workspace_settings"));
+    expect(await setWorkspaceAvatar("acme", "wrk_1", GOLD_ICON)).toMatchObject(
+      { ok: false, reason: "denied" },
+    );
+  });
+
   it("refuses a value that is not an avatar before the kernel runs (negative)", async () => {
     expect(
       await setWorkspaceAvatar("acme", "wrk_1", "http://cdn.example/a.png"),

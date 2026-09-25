@@ -181,11 +181,6 @@ type AvatarEditorProps = {
   subject: AvatarSubject;
   /** The stored avatar the draft opens on. It is re-read until the first edit. */
   value: string | null;
-  /**
-   * The letters a monogram draft starts from and the fallback tile shows;
-   * defaults to the initials of `name`.
-   */
-  letters?: string;
   /** Whether a stored avatar exists to remove; defaults to whether `value` is set. */
   removable?: boolean;
   /** Writes the stored form. An empty string clears the avatar. */
@@ -197,7 +192,9 @@ type AvatarEditorProps = {
 
 /**
  * The editor in its dialog. `name` titles the dialog for an agent, a
- * workspace, or an organization; a person's own dialog reads "Your avatar".
+ * workspace, or an organization, and a person's own dialog reads "Your
+ * avatar". Its initials are the letters a new monogram starts from and the
+ * fallback tile shows.
  */
 export function AvatarEditorDialog({
   open,
@@ -242,7 +239,7 @@ export function AvatarEditorDialog({
       {open ? (
         <AvatarEditor
           {...editor}
-          letters={editor.letters ?? initialsOf(name)}
+          letters={initialsOf(name)}
           formId={formId}
           gate={gate ?? dialogGate}
         />

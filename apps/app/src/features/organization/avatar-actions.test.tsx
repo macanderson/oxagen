@@ -20,6 +20,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { workspaceRow } from "./organization.builders";
 
@@ -117,6 +118,11 @@ describe("the organization's avatar", () => {
       "You do not have permission to change this organization.",
     );
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("has no axe violations", async () => {
+    const { dialog } = await open(GOLD_ICON);
+    await expectNoAxe(dialog);
   });
 });
 
