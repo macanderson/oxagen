@@ -166,6 +166,19 @@ type Tenant = {
   runPublicId?: string | null;
   /** `agent_runs` in this workspace: internal id → public id. */
   runs?: Record<string, string>;
+  /**
+   * A row that stores the parked call (ADR-118): `resume_status` as the
+   * UPDATE's CASE leaves it, and the execution the row records when the
+   * handler reads it back. Absent for a row with no stored call.
+   */
+  resume?: {
+    afterUpdate: "queued" | "denied";
+    readBack: {
+      resumeStatus: string | null;
+      resumeRunPublicId: string | null;
+      resumeError: string | null;
+    };
+  };
 };
 
 type Captured = {
