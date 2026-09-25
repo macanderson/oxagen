@@ -25,6 +25,8 @@
      design says: gold for identity, dim for a label, hl for a wash. */
   --color-gold: var(--gold);
   --color-on-gold: var(--on-gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-on-gold-deep: var(--on-gold-deep);
   --color-accent-text: var(--accent-text);
   --color-dim: var(--dim);
   --color-hl: var(--hl);
@@ -76,6 +78,9 @@
     --gold-deep: var(--ox-gold-deep);
     --accent-text: var(--ember-ink);
     --on-gold: var(--ox-ink);
+    /* The glyph on a gold-deep avatar (#8A7223): paper reads at 4.66:1, ink at
+       4.27:1. Gold-deep holds in both themes, so this one does too. */
+    --on-gold-deep: var(--ox-paper);
     --st-allowed: var(--success);
     --st-approval: var(--info);
     --st-denied: var(--warning);

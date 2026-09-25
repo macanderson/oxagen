@@ -1,6 +1,6 @@
 // Organization › Workspaces (pages/organization.md): every workspace of the
-// organization, the archived ones beside the live ones, with Open, Edit and
-// Archive, and Create a workspace in the panel. The frame reads the list once
+// organization, the archived ones beside the live ones, with Open, Edit, Edit
+// avatar, and Archive, and Create a workspace in the panel. The frame reads the list once
 // (`list_workspaces {includeArchived:true}`).
 //
 // `list_workspaces` records a workspace's name, slug, namespace and archival.
@@ -42,6 +42,7 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { EditWorkspaceAvatar } from "./avatar-actions";
 import { CopyId } from "./copy-id";
 import { type ListRow, ListTable } from "./list-table";
 import { NotRecordedValue, note } from "./parts";
@@ -232,6 +233,7 @@ function Actions({
             workspace={workspace}
             facts={facts?.ok === true ? facts.value : null}
           />
+          <EditWorkspaceAvatar org={org} workspace={workspace} />
           <ArchiveWorkspace
             org={org}
             workspace={workspace}

@@ -1502,10 +1502,19 @@
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
     },
+    "update_org_settings": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — the Organization header's Edit avatar opens the avatar editor, which invokes update_org_settings with the avatar alone (features/organization/avatar-actions.tsx, features/organization/actions.ts)",
+      "testid": "edit-org-avatar",
+      "proof": "apps/app/src/features/organization/avatar-actions.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session-avatar-editor-four-subjects"
+    },
     "update_profile": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Account in the user menu on every organization page: the shell's Account dialog's Profile tab and its Avatar editor both invoke update_profile (features/shell/account-dialog.tsx, features/shell/avatar-dialog.tsx, features/shell/account-actions.ts)",
+      "entry": "Account in the user menu on every organization page: the shell's Account dialog's Profile tab and its Avatar editor both invoke update_profile (features/shell/account-dialog.tsx, features/shell/avatar-dialog.tsx over ui/avatar-editor.tsx, features/shell/account-actions.ts)",
       "testid": "open-account",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx",
       "verifiedAt": "2026-09-18",
@@ -1538,7 +1547,7 @@
     "update_workspace_settings": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] \u2014 the rev1 surface that invokes update_workspace_settings (features/organization/actions.ts)",
+      "entry": "/[org] \u2014 Organization \u203a Workspaces: Edit workspace, and Edit avatar on a live workspace row, both invoke update_workspace_settings (features/organization/workspace-actions.tsx, features/organization/avatar-actions.tsx, features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/workspaces.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"

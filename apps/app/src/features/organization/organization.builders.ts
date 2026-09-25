@@ -66,6 +66,7 @@ export function workspaceRow(overrides: Partial<Workspace> = {}): Workspace {
     slug: "core-platform",
     namespace: "core",
     name: "Core platform",
+    avatarUrl: null,
     role: "Owner",
     archivedAt: null,
     costCenter: null,

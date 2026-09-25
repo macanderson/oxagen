@@ -60,6 +60,16 @@
           },
           "name": {
             "type": "string"
+          },
+          "avatarUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -67,7 +77,8 @@
           "publicId",
           "slug",
           "namespace",
-          "name"
+          "name",
+          "avatarUrl"
         ],
         "additionalProperties": false
       },
@@ -90,6 +101,16 @@
             },
             "name": {
               "type": "string"
+            },
+            "avatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "role": {
               "anyOf": [
@@ -128,6 +149,7 @@
             "slug",
             "namespace",
             "name",
+            "avatarUrl",
             "role",
             "archivedAt",
             "costCenter"
