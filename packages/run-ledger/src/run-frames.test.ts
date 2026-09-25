@@ -19,6 +19,7 @@ import {
   filterFoldsByKind,
   foldTranscript,
   frameFolds,
+  stepFolds,
 } from "./transcript-steps";
 import type { AttemptEventReadRecord } from "./run-store";
 
@@ -301,6 +302,85 @@ describe("turnOrdinals", () => {
       turnOrdinals(ledger.map((f) => ({ ...f, turnIndex: null }))),
     ).toEqual([1, 1, 1, 1]);
     expect(turnOrdinals([])).toEqual([]);
+  });
+
+  const staged = (
+    runSeq: number,
+    eventType: string,
+    payload: Record<string, unknown> | null = null,
+  ) => ledgerFrame(event(runSeq, eventType, payload));
+
+  it("puts the frames that lead up to an indexed model call in that call's turn, and the tools the previous call asked for in the previous one (#3375)", () => {
+    const run = [
+      staged(1, "admission.run_admitted"),
+      staged(2, "model.engine_call_started"),
+      staged(3, "model.engine_call_completed"),
+      staged(4, "model.call_completed", { turn_index: 0 }),
+      staged(5, "tool.engine_call_started"),
+      staged(6, "tool.approval_recorded"),
+      staged(7, "tool.engine_call_completed"),
+      staged(8, "change.recorded"),
+      staged(9, "context.history_summarized"),
+      staged(10, "steering.manifest"),
+      staged(11, "model.engine_call_started"),
+      staged(12, "model.engine_call_completed"),
+      staged(13, "model.call_completed", { turn_index: 1 }),
+      staged(14, "tool.call_completed"),
+      staged(15, "terminal.attempt_terminated"),
+    ];
+    expect(turnOrdinals(run)).toEqual([
+      1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2,
+    ]);
+    // The steps fold reads the same numbering: the second model call's
+    // exchange is one step in turn 2, and the tool call before it is in 1.
+    const steps = stepFolds(run);
+    const at = (seq: string) =>
+      steps.find((fold) => fold.opening.seq === seq)?.turn;
+    expect(at("5")).toBe(1);
+    expect(at("11")).toBe(2);
+    // And the turns zoom opens turn 2 on the context the call was handed.
+    expect(
+      foldTranscript(run, "turns").map((fold) => [fold.key, fold.endSeq]),
+    ).toEqual([
+      ["1", "8"],
+      ["9", "15"],
+    ]);
+  });
+
+  it("carries a model call's lead-in back only as far as the previous call's last tool frame (#3375)", () => {
+    const run = [
+      staged(1, "model.call_completed", { turn_index: 0 }),
+      staged(2, "context.frames_selected"),
+      staged(3, "tool.call_completed"),
+      staged(4, "context.frames_selected"),
+      staged(5, "model.call_completed", { turn_index: 1 }),
+    ];
+    expect(turnOrdinals(run)).toEqual([1, 1, 1, 2, 2]);
+    // An indexed call straight after another carries nothing back.
+    expect(
+      turnOrdinals([
+        staged(1, "model.call_completed", { turn_index: 0 }),
+        staged(2, "model.call_completed", { turn_index: 1 }),
+      ]),
+    ).toEqual([1, 2]);
+    // Frames before the first indexed call stay in the first turn.
+    expect(
+      turnOrdinals([
+        staged(1, "context.frames_selected"),
+        staged(2, "model.engine_call_started"),
+        staged(3, "model.call_completed", { turn_index: 4 }),
+      ]),
+    ).toEqual([1, 1, 1]);
+  });
+
+  it("leaves a wrapped run's unindexed model frame in the turn before it, where ClickHouse counts it", () => {
+    const wrapped = [
+      tachoFrame(tachoRow(0, "llm_call", { turnSeq: 1 })),
+      tachoFrame(tachoRow(1, "context.assembled")),
+      tachoFrame(tachoRow(2, "llm_call")),
+      tachoFrame(tachoRow(3, "llm_call", { turnSeq: 2 })),
+    ];
+    expect(turnOrdinals(wrapped)).toEqual([1, 1, 1, 2]);
   });
 });
 

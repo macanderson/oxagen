@@ -17,8 +17,11 @@
  * names.
  */
 import {
+  type EvidenceStage,
+  isRunEventType,
   MODEL_CALL_EVENT_TYPES,
   type RunStepKind,
+  stageOfEventType,
   stepKindOfEventType,
   TOOL_CALL_EVENT_TYPES,
 } from "./event-payload-registry";
@@ -921,6 +924,20 @@ export function stepKind(frame: RunFrame): "model_call" | "tool_call" | null {
  * first frame and wherever the recorded turn index changes after that, so
  * every frame is in one. A subagent numbers its own turns, and those are not
  * the run's: its frames stay in the turn they were spawned in.
+ *
+ * Without boundaries, only some frames carry the index: the ledger writes it
+ * on `model.call_completed` and on nothing else. A frame without one is in
+ * the turn of the indexed frame before it, with one exception. The frames
+ * that lead straight up to an indexed model call belong to that call's turn:
+ * its write-ahead intention (`model.engine_call_started`), the engine's own
+ * receipt, and the context it was handed. The walk back from the call stops
+ * at the first frame that is not one of these, so a tool call the previous
+ * model call asked for stays in the previous turn (#3375).
+ *
+ * The exception reads ledger event types only. A wrapped session stamps its
+ * turn index on every frame it records inside a turn, so it has no lead-in to
+ * carry, and the per-turn count ClickHouse keeps for a wrapped run
+ * (`selectTachoTurnFacts`) opens each turn where its index first appears.
  */
 export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
   if (frames.some(opensRunTurn)) {
@@ -932,7 +949,7 @@ export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
   }
   let turn = 0;
   let lastIndex: number | null = null;
-  return frames.map((frame, index) => {
+  const ordinals: number[] = frames.map((frame, index) => {
     if (index === 0) {
       turn = 1;
       lastIndex = frame.turnIndex;
@@ -944,6 +961,43 @@ export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
     lastIndex = frame.turnIndex;
     return turn;
   });
+  ordinals.forEach((opened, index) => {
+    if (index === 0 || opened === ordinals[index - 1]) return;
+    // `index` opened a turn on its recorded index. Carry the frames that lead
+    // up to it into that turn. Every one is unindexed, so the walk never
+    // crosses the previous indexed frame.
+    for (let back = index - 1; back >= 0; back -= 1) {
+      const frame = frames[back] as RunFrame;
+      if (!leadsIntoModelCall(frame)) break;
+      ordinals[back] = opened;
+    }
+  });
+  return ordinals;
+}
+
+/**
+ * The ledger stages of the frames that prepare or make a model call: the
+ * `context` stage (the frames selected, the instructions applied, the
+ * steering manifest) and the `model` stage (the engine's intention and
+ * receipt).
+ */
+const MODEL_APPROACH_STAGES: ReadonlySet<EvidenceStage> = new Set([
+  "context",
+  "model",
+]);
+
+/**
+ * Whether an unindexed ledger frame on the run's own chain leads into the
+ * model call after it, rather than following the one before it. The stage is
+ * the registry's for the frame's type, the stage the store recorded it at.
+ */
+function leadsIntoModelCall(frame: RunFrame): boolean {
+  return (
+    frame.turnIndex === null &&
+    frame.chain === undefined &&
+    isRunEventType(frame.type) &&
+    MODEL_APPROACH_STAGES.has(stageOfEventType(frame.type))
+  );
 }
 
 // ── Subagent chains ─────────────────────────────────────────────────────────
