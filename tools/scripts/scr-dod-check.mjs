@@ -114,7 +114,7 @@ const CLOSING_KEYWORDS = [
   "resolved",
 ];
 
-const CLOSING_PATTERN = new RegExp(
+export const CLOSING_PATTERN = new RegExp(
   String.raw`\b(?:${CLOSING_KEYWORDS.join("|")})\b\s*:?\s+` +
     // Either the short form — an optional `owner/repo` prefix then `#number` —
     // or the full issue URL. GitHub honours both, and until the URL arm existed
@@ -176,10 +176,11 @@ const REFS_PATTERN = new RegExp(
 // This is a judgement about what *this checker* should read as a claim, not
 // a claim about GitHub's own keyword parser — GitHub's has no notion of
 // negation either, so the exact phrasing this excludes really can still
-// close the issue on merge. That is a real hazard, but it is GitHub's
-// parser's blind spot to fix, not something this gate can veto from the PR
-// side; forcing the PR to satisfy a DoD for an issue it explicitly disclaims
-// closing is the bug this excludes.
+// close the issue on merge. This gate still skips it, because forcing the PR
+// to satisfy a DoD for an issue it explicitly disclaims closing is the bug
+// this excludes. `check-closing-keywords.mjs` covers the hazard itself. It
+// fails the PR over the negated phrasing, so the author rewrites the sentence
+// before GitHub can act on it (#3680).
 const NEGATION_WORDS = new Set([
   "not",
   "never",
@@ -209,7 +210,7 @@ const NEGATION_WORDS = new Set([
 const NEGATION_WINDOW_WORDS = 4;
 
 /** Whether the text immediately before `matchIndex`, within the current clause, carries a negation. */
-function isNegated(text, matchIndex) {
+export function isNegated(text, matchIndex) {
   const before = text.slice(0, matchIndex);
   const clauseStart = Math.max(
     before.lastIndexOf("."),
@@ -249,7 +250,7 @@ function isNegated(text, matchIndex) {
  * Double-backtick spans are stripped before single, so a ``literal ` inside``
  * span is not mistaken for two single-backtick spans with prose between them.
  */
-function withoutNonProse(markdown) {
+export function withoutNonProse(markdown) {
   return markdown
     .replace(/```[\s\S]*?```/g, "")
     .replace(/<!--[\s\S]*?-->/g, "")

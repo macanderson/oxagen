@@ -2,7 +2,7 @@
 #
 # SCR-003: an issue closes only when every definition-of-done item is satisfied
 # and verified. The task issue template makes a DoD exist; this check makes it
-# binding. Two halves:
+# binding. Three parts:
 #
 #   1. A pull request must link the issue it closes (escape hatch: the
 #      `no-issue` label, for genuinely trivial changes) — or advance one with
@@ -12,6 +12,9 @@
 #      ticked before the PR can merge — which is what stops the close from
 #      happening early. `scr-dod-check.mjs`'s `linkedIssues`/`referencedIssues`
 #      hold the full state machine (closing / refs-only / neither).
+#   3. No PR body or commit message may put a negation before a closing
+#      keyword. GitHub ignores the negation and closes the issue anyway
+#      (#3680). `check-closing-keywords.mjs` holds that rule.
 #
 # ## Why this is a reusable workflow rather than five copies
 #
@@ -100,6 +103,8 @@ jobs:
           script: |
             const { linkedIssues, verdict, formatVerdict } = await import(
               `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
+            const { checkClosingKeywords, formatClosingKeywords } = await import(
+              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/check-closing-keywords.mjs`)
 
             // Read the pull request live rather than from the event payload.
             //
@@ -157,8 +162,30 @@ jobs:
               }
             }
 
-            const result = verdict({ body: pr.body, labels }, issues)
-            const summary = formatVerdict(result)
+            const dodResult = verdict({ body: pr.body, labels }, issues)
+
+            // GitHub closes an issue named after a closing keyword even when
+            // the sentence negates it: "This PR does not close #2972" closed
+            // P0 #2972 on merge (#3680). The DoD verdict above skips that
+            // phrasing, so this second check fails the PR over it instead.
+            // Commit messages count too, because a squash merge can carry
+            // them into the commit that lands on main.
+            const sources = [{ label: 'PR body', text: pr.body }]
+            try {
+              const commits = await github.paginate(github.rest.pulls.listCommits, {
+                ...context.repo, pull_number: pr.number, per_page: 100 })
+              for (const c of commits) {
+                sources.push({
+                  label: `commit ${c.sha.slice(0, 7)}`, text: c.commit.message })
+              }
+            } catch (error) {
+              core.warning(`Could not list the pull request's commits: ${error.message}`)
+            }
+            const closingResult = checkClosingKeywords(sources)
+
+            const result = { ok: dodResult.ok && closingResult.ok }
+            const summary = [formatVerdict(dodResult), formatClosingKeywords(closingResult)]
+              .filter(Boolean).join('\n\n')
             core.summary.addRaw(summary).write()
 
             // One sticky comment, edited in place. A fresh comment per push
