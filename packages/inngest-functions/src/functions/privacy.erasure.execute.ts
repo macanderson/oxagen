@@ -11,6 +11,47 @@ function anonymisedEmail(userId: string): string {
 }
 
 /**
+ * What `erase-clickhouse-rows` did: deleted the rows, found no address to
+ * match them by, or failed after Inngest's retries.
+ */
+type ClickhouseErase = "erased" | "no_address" | "failed";
+
+/** The summary sentence and the residual items the failure message names. */
+function clickhouseReport(outcome: ClickhouseErase): {
+  done: string;
+  residual: string[];
+} {
+  const unmatched =
+    "ClickHouse claude_sessions rows under a Claude Code address other than the account address, " +
+    "and rows in the operator endpoint's internal.claude_sessions, are not matched (ADR-183)";
+  switch (outcome) {
+    case "erased":
+      return {
+        done: "The subject's ClickHouse claude_sessions rows under the account address were deleted (ADR-183). ",
+        residual: [unmatched],
+      };
+    case "no_address":
+      return {
+        done: "",
+        residual: [
+          "ClickHouse claude_sessions was not erased: no account address was left to match, " +
+            "because an earlier run overwrote it, so rows may remain until the two-year TTL",
+          unmatched,
+        ],
+      };
+    case "failed":
+      return {
+        done: "",
+        residual: [
+          "ClickHouse claude_sessions was not erased: the erase failed after retries, " +
+            "so the account address was kept; re-run the request once ClickHouse answers",
+          unmatched,
+        ],
+      };
+  }
+}
+
+/**
  * GDPR Article 17 — right to erasure execution pipeline.
  *
  * Triggered by `privacy/erasure.execute` after the grace period elapses (or
@@ -45,10 +86,13 @@ function anonymisedEmail(userId: string): string {
  * handler marks the request `failed`. Do not add a `completed` transition
  * here until every store above is erased or anonymised under a defined policy.
  *
- * ClickHouse was a fourth item, and ADR-183 answered it. `claude_sessions`
- * (migration 0007) keeps `user_email` under its two-year TTL, and the
- * `erase-clickhouse-rows` step below deletes the subject's rows. `tacho_events`
- * holds no address since migration 0031 (#3072).
+ * ClickHouse was a fourth item, and ADR-183 answered most of it.
+ * `claude_sessions` (migration 0007) keeps `user_email` under its two-year
+ * TTL, and the `erase-clickhouse-rows` step below deletes the rows that hold
+ * the subject's account address. Rows under a different Claude Code address,
+ * and rows in the operator endpoint's `internal.claude_sessions`, are not
+ * matched, so the failure message names them. `tacho_events` holds no address
+ * since migration 0031 (#3072).
  *
  * ── What this function does ────────────────────────────────────────────────
  *
@@ -60,9 +104,13 @@ function anonymisedEmail(userId: string): string {
  *     runs before `execute-erasure` because that step overwrites the address.
  *     The address stays inside the step: Inngest stores a step's return value
  *     in its run state, so the step returns only whether it erased anything.
+ *     A ClickHouse failure that outlasts Inngest's retries does not stop the
+ *     auth purge. It keeps the address instead, so a re-run of the request
+ *     can still match the rows.
  *   - `execute-erasure` purges the auth-store PII that is plainly the
  *     subject's own, in one `withSystemDb` transaction:
- *       - `auth.users`: anonymise display_name, email, and avatar_url.
+ *       - `auth.users`: anonymise display_name, email, and avatar_url. The
+ *         email stays when the ClickHouse erase failed, for the re-run.
  *       - `auth.accounts`: delete OAuth tokens (plain and `*_enc`) and the
  *         password hash.
  *       - `auth.user_preferences`: delete the subject's preferences row.
@@ -138,28 +186,45 @@ export const [privacyErasureExecute, privacyErasureExecuteOnFailure] =
       // (ADR-183). This reads the address `execute-erasure` overwrites, so it
       // runs first. A run that finds only the anonymised address, because an
       // earlier run already overwrote it, logs that it had nothing to match.
+      // Inngest retries a failing step. Once it gives up, the failure is
+      // thrown here, and the auth purge below still runs with the address
+      // kept, so a re-run can erase the rows.
+      let clickhouseErase: ClickhouseErase | null = null;
       if (scope === "user") {
-        await step.run("erase-clickhouse-rows", async () => {
-          // tenancy: reads one auth.users row filtered by the event userId, the erasure subject; auth is global with no org_id.
-          const [subject] = await withSystemDb((tx) =>
-            tx
-              .select({ email: schema.users.email })
-              .from(schema.users)
-              .where(eq(schema.users.id, userId))
-              .limit(1),
+        try {
+          const { erased } = await step.run(
+            "erase-clickhouse-rows",
+            async () => {
+              // tenancy: reads one auth.users row filtered by the event userId, the erasure subject; auth is global with no org_id.
+              const [subject] = await withSystemDb((tx) =>
+                tx
+                  .select({ email: schema.users.email })
+                  .from(schema.users)
+                  .where(eq(schema.users.id, userId))
+                  .limit(1),
+              );
+              const email = subject?.email ?? "";
+              if (email === "" || email === anonymisedEmail(userId)) {
+                logger.warn(
+                  { requestId, userId },
+                  "privacy.erasure-execute: no address left to match in claude_sessions",
+                );
+                return { erased: false };
+              }
+              await eraseClaudeSessionRows(email);
+              return { erased: true };
+            },
           );
-          const email = subject?.email ?? "";
-          if (email === "" || email === anonymisedEmail(userId)) {
-            logger.warn(
-              { requestId, userId },
-              "privacy.erasure-execute: no address left to match in claude_sessions",
-            );
-            return { erased: false };
-          }
-          await eraseClaudeSessionRows(email);
-          return { erased: true };
-        });
+          clickhouseErase = erased ? "erased" : "no_address";
+        } catch (err) {
+          logger.error(
+            { requestId, userId, err },
+            "privacy.erasure-execute: claude_sessions erase failed, keeping the address for a re-run",
+          );
+          clickhouseErase = "failed";
+        }
       }
+      const keepAddress = clickhouseErase === "failed";
 
       // Step 3: partial erasure. Purge the clearly-owned, single-store auth PII
       // for USER scope. This is a real, immediate mitigation, NOT the full
@@ -180,7 +245,9 @@ export const [privacyErasureExecute, privacyErasureExecuteOnFailure] =
               .update(schema.users)
               .set({
                 displayName: "Deleted User",
-                email: anonymisedEmail(userId),
+                // A failed claude_sessions erase keeps the address. It is the
+                // only key a re-run can match those rows by (ADR-183).
+                ...(keepAddress ? {} : { email: anonymisedEmail(userId) }),
                 avatarUrl: null,
                 updatedAt: new Date(),
               })
@@ -209,19 +276,28 @@ export const [privacyErasureExecute, privacyErasureExecuteOnFailure] =
       // their data was fully erased when it was not. A NonRetriableError routes
       // to the on-failure handler, which marks the request `failed` with this
       // message for operator follow-up.
+      const clickhouse =
+        clickhouseErase === null ? null : clickhouseReport(clickhouseErase);
+      const residual = [
+        "Neo4j has no owner-scoped erase path, which needs a graph-layer delete-by-owner",
+        "the blob generated_assets cascade is pending (SOP §7), which needs enumerate-by-user and an @oxagen/storage delete",
+        "the org-scope Postgres cascade (created_by/updated_by across all tables, " +
+          "workspaces/plugins/billing/agents/chat/content) has ambiguous semantics and is not enumerated",
+        ...(clickhouse?.residual ?? []),
+      ];
       throw new NonRetriableError(
         "[privacy.erasure-execute] full cross-store erasure cascade not implemented " +
           `(OXA-1721); refusing to mark erasure request ${requestId} (scope=${scope}) ` +
           "as completed. " +
           (scope === "user"
-            ? "Owned auth PII was purged (users/accounts/user_preferences), and the " +
-              "subject's ClickHouse claude_sessions rows were deleted (ADR-183). "
+            ? keepAddress
+              ? "Owned auth PII was purged (users/accounts/user_preferences) except the account address. "
+              : "Owned auth PII was purged (users/accounts/user_preferences). "
             : "Org scope erases nothing yet. ") +
-          "STILL RESIDUAL, each blocked on a decision: " +
-          "(1) Neo4j has no owner-scoped erase path, which needs a graph-layer delete-by-owner; " +
-          "(2) the blob generated_assets cascade is pending (SOP §7), which needs enumerate-by-user and an @oxagen/storage delete; " +
-          "(3) the org-scope Postgres cascade (created_by/updated_by across all tables, " +
-          "workspaces/plugins/billing/agents/chat/content) has ambiguous semantics and is not enumerated.",
+          (clickhouse?.done ?? "") +
+          "STILL RESIDUAL: " +
+          residual.map((item, index) => `(${index + 1}) ${item}`).join("; ") +
+          ".",
       );
     },
   );

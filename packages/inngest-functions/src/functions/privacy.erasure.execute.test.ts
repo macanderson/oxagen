@@ -205,12 +205,16 @@ describe("privacyErasureExecute Inngest handler", () => {
       expect(message).toContain("Neo4j");
       expect(message).toContain("blob");
       expect(message).toContain("org-scope");
-      // ClickHouse is no longer residual: ADR-183 answered it, and the
-      // function erases the subject's claude_sessions rows.
+      // ADR-183: the rows under the account address were erased. The rows the
+      // account address cannot match stay residual, and the message says so.
       const residual = message.slice(message.indexOf("STILL RESIDUAL"));
-      expect(residual).not.toContain("ClickHouse");
       expect(residual).not.toContain("claude_telemetry");
-      expect(message).toContain("claude_sessions rows were deleted");
+      expect(residual).not.toContain("was not erased");
+      expect(residual).toContain("other than the account address");
+      expect(residual).toContain("internal.claude_sessions");
+      expect(message).toContain(
+        "claude_sessions rows under the account address were deleted",
+      );
     }
   });
 
@@ -251,30 +255,69 @@ describe("privacyErasureExecute Inngest handler", () => {
     );
   });
 
-  it("does not mark the request completed when the ClickHouse erase fails, and leaves the address in place for the retry", async () => {
+  it("still purges credentials when the ClickHouse erase fails, and keeps the address for a re-run", async () => {
+    // The step mock runs the body once, so this throw stands for the failure
+    // Inngest throws back into the function after its retries.
     mocks.eraseClaudeSessionRows.mockRejectedValueOnce(
       new Error("ClickHouse refused"),
     );
     const handler = getHandler("privacy.erasure-execute");
-    await expect(
-      handler({ event: { data: baseEvent }, step: makeStep() }),
-    ).rejects.toThrow("ClickHouse refused");
+    const error = await handler({
+      event: { data: baseEvent },
+      step: makeStep(),
+    }).then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+    expect(error).toBeInstanceOf(NonRetriableError);
+
     const updates = mocks.updateSet.mock.calls.map((c) => c[0] as UpdateCall);
-    expect(updates.some((c) => c.table.id === "users.id")).toBe(false);
+    const deletes = mocks.deleteFrom.mock.calls.map((c) => c[0] as DeleteCall);
+    // The auth purge ran: credentials and preferences are gone.
+    expect(deletes.some((c) => c.table.userId === "accounts.userId")).toBe(
+      true,
+    );
+    expect(
+      deletes.some((c) => c.table.userId === "userPreferences.userId"),
+    ).toBe(true);
+    // The identity row is scrubbed, but the address stays for the re-run.
+    const userUpdate = updates.find((c) => c.table.id === "users.id");
+    expect(userUpdate?.payload.displayName).toBe("Deleted User");
+    expect(userUpdate?.payload).not.toHaveProperty("email");
     expect(updates.some((c) => c.payload.status === "completed")).toBe(false);
+
+    const message = (error as Error).message;
+    expect(message).not.toContain("were deleted");
+    expect(message).toContain("except the account address");
+    const residual = message.slice(message.indexOf("STILL RESIDUAL"));
+    expect(residual).toContain("the erase failed after retries");
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: "req-1", userId: "user-1" }),
+      "privacy.erasure-execute: claude_sessions erase failed, keeping the address for a re-run",
+    );
   });
 
-  it("logs, and erases nothing, when the address was already overwritten by an earlier run", async () => {
+  it("logs, erases nothing, and reports the rows residual when the address was already overwritten", async () => {
     mocks.subjectEmail.value = "user-1@deleted.invalid";
     const handler = getHandler("privacy.erasure-execute");
-    await expect(
-      handler({ event: { data: baseEvent }, step: makeStep() }),
-    ).rejects.toBeInstanceOf(NonRetriableError);
+    const error = await handler({
+      event: { data: baseEvent },
+      step: makeStep(),
+    }).then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+    expect(error).toBeInstanceOf(NonRetriableError);
     expect(mocks.eraseClaudeSessionRows).not.toHaveBeenCalled();
     expect(mocks.loggerWarn).toHaveBeenCalledWith(
       { requestId: "req-1", userId: "user-1" },
       "privacy.erasure-execute: no address left to match in claude_sessions",
     );
+    // The audit record must not claim a deletion that did not happen.
+    const message = (error as Error).message;
+    expect(message).not.toContain("were deleted");
+    const residual = message.slice(message.indexOf("STILL RESIDUAL"));
+    expect(residual).toContain("no account address was left to match");
   });
 
   it("fails loud for org scope without touching users/accounts/preferences", async () => {
