@@ -5,7 +5,7 @@
  * table, with the WHERE rendered so the key each read pins is asserted, not
  * assumed.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
@@ -66,6 +66,7 @@ import {
   openAssistantRun,
   resolveAssistantRunIdentity,
 } from "./assistant-run";
+import { setRunSealedSender } from "./run-sealed-event";
 
 const dialect = new PgDialect();
 const render = (q: SQL) => dialect.sqlToQuery(q);
@@ -74,6 +75,7 @@ const render = (q: SQL) => dialect.sqlToQuery(q);
 
 const SCOPE = { orgId: "org-1", workspaceId: "ws-1" };
 const USER = "user-1";
+const MESSAGE = "55555555-5555-4555-8555-555555555555";
 const AGENT = {
   id: "11111111-1111-4111-8111-111111111111",
   versionId: "22222222-2222-4222-8222-222222222222",
@@ -451,6 +453,7 @@ describe("openAssistantRun", () => {
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "chat",
       instruction: "  explain run arun_1  ",
       maxSteps: 12,
@@ -470,6 +473,8 @@ describe("openAssistantRun", () => {
       ...SCOPE,
       surface: "chat",
       repositoryBindingRowId: null,
+      // The message the turn meters its model calls on (#4167).
+      originMessageId: MESSAGE,
       spec: expect.objectContaining({
         run_kind: "general",
         goal: "explain run arun_1",
@@ -514,6 +519,7 @@ describe("openAssistantRun", () => {
     await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "chat",
       instruction: "hi",
       maxSteps: 12,
@@ -550,6 +556,7 @@ describe("openAssistantRun", () => {
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "api-chat",
       instruction: "hi",
       maxSteps: 4,
@@ -647,6 +654,7 @@ describe("openAssistantRun", () => {
     const aborted = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "chat",
       instruction: "a",
       maxSteps: 1,
@@ -657,6 +665,7 @@ describe("openAssistantRun", () => {
     const failed = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "chat",
       instruction: "b",
       maxSteps: 1,
@@ -691,6 +700,7 @@ describe("openAssistantRun", () => {
     await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "chat",
       instruction: "a",
       maxSteps: 1,
@@ -711,6 +721,7 @@ describe("openAssistantRun", () => {
       openAssistantRun({
         ...SCOPE,
         userId: USER,
+        originMessageId: MESSAGE,
         surface: "chat",
         instruction: "a",
         maxSteps: 1,
@@ -736,6 +747,7 @@ describe("openAssistantRun", () => {
       openAssistantRun({
         ...SCOPE,
         userId: USER,
+        originMessageId: MESSAGE,
         surface: "chat",
         instruction: "a",
         maxSteps: 1,
@@ -759,6 +771,7 @@ describe("openAssistantRun", () => {
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "chat",
       instruction: "a",
       maxSteps: 1,
@@ -809,6 +822,7 @@ describe("openAssistantRun", () => {
       openAssistantRun({
         ...SCOPE,
         userId: USER,
+        originMessageId: MESSAGE,
         surface: "chat",
         instruction: "a",
         maxSteps: 1,
@@ -831,6 +845,7 @@ describe("openAssistantRun", () => {
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "chat",
       instruction: "hi",
       maxSteps: 4,
@@ -878,6 +893,7 @@ describe("openAssistantRun", () => {
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "chat",
       instruction: "hi",
       maxSteps: 4,
@@ -941,6 +957,7 @@ describe("openAssistantRun", () => {
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "chat",
       instruction: "hi",
       maxSteps: 4,
@@ -970,6 +987,7 @@ describe("openAssistantRun", () => {
       openAssistantRun({
         ...SCOPE,
         userId: USER,
+        originMessageId: MESSAGE,
         surface: "chat",
         instruction: "a",
         maxSteps: 1,
@@ -982,6 +1000,89 @@ describe("openAssistantRun", () => {
 });
 
 // ── frame bodies ──────────────────────────────────────────────────────────────
+
+describe("the seal asks the cost rollup to build the run's row (#4167)", () => {
+  afterEach(() => {
+    setRunSealedSender(null);
+  });
+
+  async function openRun(ledger: ReturnType<typeof fakeStore>) {
+    setupRun();
+    return openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      originMessageId: MESSAGE,
+      surface: "chat",
+      instruction: "what did that cost?",
+      maxSteps: 4,
+      toolAllowlist: ["recall_memory", "search_tools"],
+      store: ledger.store,
+    });
+  }
+
+  it("sends cost/run.sealed for the run once its seal has committed", async () => {
+    const ledger = fakeStore();
+    const sealsWhenSent: number[] = [];
+    const send = vi.fn(async () => {
+      sealsWhenSent.push(ledger.seals.length);
+    });
+    setRunSealedSender(send);
+    const recorder = await openRun(ledger);
+    expect(send).not.toHaveBeenCalled();
+
+    await recorder.seal({ status: "completed", text: "done" });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({
+      name: "cost/run.sealed",
+      data: {
+        runId: "arun_0123456789abcdef012345",
+        orgId: SCOPE.orgId,
+        workspaceId: SCOPE.workspaceId,
+      },
+    });
+    // After the commit, never before it: the rollup reads the sealed run.
+    expect(sealsWhenSent).toEqual([1]);
+  });
+
+  it("sends it for a failed or aborted turn too, since its tokens were spent", async () => {
+    const send = vi.fn(async () => undefined);
+    setRunSealedSender(send);
+    const aborted = await openRun(fakeStore());
+    await aborted.seal({ status: "aborted", reason: "budget" });
+    const failed = await openRun(fakeStore());
+    await failed.seal({ status: "failed", error: "engine unavailable" });
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("seals the run when the send fails, and when no sender is installed (negative)", async () => {
+    setRunSealedSender(async () => {
+      throw new Error("inngest is down");
+    });
+    const ledger = fakeStore();
+    await (await openRun(ledger)).seal({ status: "completed", text: "done" });
+    expect(ledger.seals).toHaveLength(1);
+
+    setRunSealedSender(null);
+    const bare = fakeStore();
+    await (await openRun(bare)).seal({ status: "completed", text: "done" });
+    expect(bare.seals).toHaveLength(1);
+  });
+
+  it("sends nothing when the seal itself fails (negative)", async () => {
+    const send = vi.fn(async () => undefined);
+    setRunSealedSender(send);
+    const ledger = fakeStore();
+    ledger.store.sealAttempt = async () => {
+      throw new Error("seal refused");
+    };
+    const recorder = await openRun(ledger);
+    await expect(
+      recorder.seal({ status: "completed", text: "done" }),
+    ).rejects.toThrow("seal refused");
+    expect(send).not.toHaveBeenCalled();
+  });
+});
 
 describe("the recorder hands the ledger the content its frames are about", () => {
   const decode = (body: { bytes: Uint8Array } | undefined) =>
@@ -1006,6 +1107,7 @@ describe("the recorder hands the ledger the content its frames are about", () =>
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "api-chat",
       instruction: "hi",
       maxSteps: 4,
@@ -1081,6 +1183,7 @@ describe("the recorder hands the ledger the content its frames are about", () =>
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "api-chat",
       instruction: "hi",
       maxSteps: 1,
@@ -1104,6 +1207,7 @@ describe("the recorder hands the ledger the content its frames are about", () =>
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "api-chat",
       instruction: "hi",
       maxSteps: 1,
@@ -1130,6 +1234,7 @@ describe("the recorder hands the ledger the content its frames are about", () =>
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "api-chat",
       instruction: "hi",
       maxSteps: 1,
@@ -1164,6 +1269,7 @@ describe("the recorder hands the ledger the content its frames are about", () =>
     const recorder = await openAssistantRun({
       ...SCOPE,
       userId: USER,
+      originMessageId: MESSAGE,
       surface: "api-chat",
       instruction: "hi",
       maxSteps: 1,

@@ -19,16 +19,16 @@ import { useEffect, useState } from "react";
 import { type ReplyCost, readReplyCost } from "./assistant-actions";
 
 /**
- * How long after the first read the line reads the record again. A rollup
- * event rebuilds a run's row 30 seconds after the run's latest frames
- * (`packages/inngest-functions/src/functions/cost.run-progress.ts`), and a
- * seal event rebuilds it at once (`cost.run-rollup.ts`). A minute covers the
- * debounce and the job's own run time without holding the line on "pending"
- * for longer than a person reads an answer.
- *
- * An assistant turn's seal sends neither event today, so its row waits for
- * the nightly sweep (`cost.daily-rollup.ts`) and the second read usually
- * finds it pending too. The line then says so, which is what the record says.
+ * How long after the first read the line reads the record again. The turn's
+ * seal sends `cost/run.sealed` (`packages/agent/src/runtime/assistant-run.ts`),
+ * and the rollup builds the run's row on it at once
+ * (`packages/inngest-functions/src/functions/cost.run-rollup.ts`). The seal
+ * runs just after the reply returns, so the first read usually finds no row
+ * and the second finds it. A minute covers the seal, the queue and the job's
+ * own run time without holding the line on "pending" for longer than a
+ * person reads an answer. A row that is still missing then (a lost event)
+ * waits for the nightly sweep, and the line says "pending", which is what
+ * the record says.
  */
 export const REPLY_COST_REREAD_MS = 60_000;
 

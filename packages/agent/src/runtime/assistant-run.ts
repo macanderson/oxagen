@@ -49,6 +49,7 @@ import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
+import { sendRunSealed } from "./run-sealed-event";
 import type { WorkspaceInstructionsFrame } from "./workspace-instructions";
 import type {
   TurnLedger,
@@ -176,6 +177,14 @@ export interface OpenAssistantRunArgs extends AssistantRunScope {
    * is calling them.
    */
   toolAllowlist: readonly string[];
+  /**
+   * The person's message that asked for the turn. The turn meters every model
+   * call on this id (`token_usage.execution_step_id`), so the run records it
+   * and the cost rollup reads the calls by it (#4167). Null for a run that
+   * no message asked for, such as an approval's resume run, whose message
+   * belongs to the turn that parked the call and is priced on that turn.
+   */
+  originMessageId: string | null;
   /** Test seams. Production leaves both unset. */
   store?: RunStore;
   now?: () => Date;
@@ -520,6 +529,7 @@ export async function openAssistantRun(
         spec,
         retentionPolicyRowId: identity.retention.rowId,
         repositoryBindingRowId: null,
+        originMessageId: args.originMessageId,
       }),
     );
     // From here the run row exists and the caller does not hold a recorder it
@@ -543,10 +553,18 @@ export async function openAssistantRun(
       await terminalizeUnattemptedRun(store, inScope, run.runId, err);
       throw err;
     }
-    const recorder = new Recorder(store, inScope, now, run, attempt.attemptId, {
-      agentId: identity.agentId,
-      agentVersionId: identity.agentVersionId,
-    });
+    const recorder = new Recorder(
+      store,
+      scope,
+      inScope,
+      now,
+      run,
+      attempt.attemptId,
+      {
+        agentId: identity.agentId,
+        agentVersionId: identity.agentVersionId,
+      },
+    );
     try {
       await recorder.append({
         eventType: "admission.run_admitted",
@@ -705,6 +723,7 @@ class Recorder implements AssistantRunRecorder {
 
   constructor(
     private readonly store: RunStore,
+    private readonly scope: AssistantRunScope,
     private readonly inScope: <T>(fn: () => Promise<T>) => Promise<T>,
     private readonly now: () => Date,
     run: { runId: string; publicId: string },
@@ -938,6 +957,16 @@ class Recorder implements AssistantRunRecorder {
           },
         },
       });
+    });
+    // After the commit, as every other seal path sends it: the rollup builds
+    // the run's cost row now rather than at the nightly sweep (#4167).
+    await sendRunSealed({
+      name: "cost/run.sealed",
+      data: {
+        runId: this.runPublicId,
+        orgId: this.scope.orgId,
+        workspaceId: this.scope.workspaceId,
+      },
     });
   }
 }
