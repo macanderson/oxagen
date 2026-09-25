@@ -59,6 +59,9 @@ describe("ask_assistant's side of the stop (#4164)", () => {
       runId: "arun_01k9",
       reply: "Two agents are",
       parkedCards: [],
+      // The turn's calls, which this contract requires (#4161). The stop is
+      // what this case is about, so the turn made none.
+      toolCalls: [],
     };
     expect(assistantAsk.output.parse(answer).stopped).toBe(false);
     expect(
