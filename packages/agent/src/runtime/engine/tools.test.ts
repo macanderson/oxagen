@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { jsonSchema, tool } from "ai";
 import { z } from "zod";
+import { ApprovalPendingError } from "../approval-pending";
 import {
   UnknownToolError,
   executeToolRequest,
@@ -151,6 +152,51 @@ describe("executeToolRequest", () => {
       { toolCallId: "r" },
     );
     expect(failed.output).toEqual({ error: { message: "upstream 500" } });
+  });
+
+  it("answers a parked call as a refusal and marks it parked for the host", async () => {
+    const parked = await executeToolRequest(
+      {
+        t: {
+          execute: async () => {
+            throw new ApprovalPendingError(
+              "create_workspace",
+              "0192f0c4-0000-7000-8000-000000000001",
+              "2026-09-25T12:05:00.000Z",
+              "apr_0a1b2c3d4e5f6g7h8j9k0m",
+            );
+          },
+        } as never,
+      },
+      "t",
+      {},
+      { toolCallId: "p" },
+    );
+    // The engine's closed vocabulary has no wait: it is told a refusal.
+    expect(parked.output).toEqual({
+      error: {
+        message: expect.stringContaining("is waiting for approval"),
+        class: "refused_by_policy",
+      },
+    });
+    expect(parked.failed).toBe(true);
+    expect(parked.parked).toEqual({
+      approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+    });
+    // A refusal that is not a park carries no marker.
+    const refused = await executeToolRequest(
+      {
+        t: {
+          execute: async () => {
+            throw new Error("approval denied for create_workspace");
+          },
+        } as never,
+      },
+      "t",
+      {},
+      { toolCallId: "r" },
+    );
+    expect(refused.parked).toBeUndefined();
   });
 
   it("throws UnknownToolError for a tool the turn did not advertise", async () => {
