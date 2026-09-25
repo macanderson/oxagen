@@ -142,6 +142,9 @@ const AGENT_ROLE_CHECKED_CONTRACTS = [
   "resolve_approval",
   "assign_agent_role",
   "revoke_agent_role",
+  // A rule-authoring turn (ADR-182) takes ask_assistant's roles, and asserts
+  // them before it asks for the turn.
+  "author_graph_rule",
 ] as const;
 
 const SRC = join(__dirname);

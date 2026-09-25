@@ -259,6 +259,7 @@ import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.ge
 import { assistantReplyGet } from "@oxagen/oxagen/contracts/assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "@oxagen/oxagen/contracts/assistant.reply_feedback.record";
 import { assistantTurnCancel } from "@oxagen/oxagen/contracts/assistant.turn.cancel";
+import { graphRuleAuthor } from "@oxagen/oxagen/contracts/graph.rule.author";
 import { toolsSearch } from "@oxagen/oxagen/contracts/tools.search";
 import { toolsLoad } from "@oxagen/oxagen/contracts/tools.load";
 import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
@@ -269,6 +270,7 @@ import { assistantEngineGetRoute } from "./assistant.engine.get";
 import { assistantReplyGetRoute } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecordRoute } from "./assistant.reply_feedback.record";
 import { assistantTurnCancelRoute } from "./assistant.turn.cancel";
+import { graphRuleAuthorRoute } from "./graph.rule.author";
 import { toolsSearchRoute } from "./tools.search";
 import { toolsLoadRoute } from "./tools.load";
 import { shellNavCountsGetRoute } from "./shell.nav_counts.get";
@@ -1196,6 +1198,37 @@ const ROUTES: ThinRoute[] = [
     capability: assistantTurnCancel.name,
     body: { turnId: "0192d4a8-7c1e-7a00-8000-0000000000f1" },
     invalidBody: { turnId: "not-a-uuid" },
+    jsonGuard: true,
+    status: 200,
+  },
+  // A rule authored across two sources as one goal-shaped turn (ADR-182).
+  {
+    file: "graph.rule.author",
+    route: graphRuleAuthorRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: graphRuleAuthor.name,
+    body: {
+      rule: {
+        relationshipType: "OWNS_ACCOUNT",
+        start: { label: "Person", source: "hubspot" },
+        end: { label: "Account", source: "stripe" },
+      },
+    },
+    expectedInput: {
+      rule: {
+        relationshipType: "OWNS_ACCOUNT",
+        start: { label: "Person", source: "hubspot" },
+        end: { label: "Account", source: "stripe" },
+      },
+      conversationId: null,
+    },
+    invalidBody: {
+      rule: {
+        relationshipType: "OWNS_ACCOUNT",
+        start: { label: "Person", source: "hubspot" },
+        end: { label: "Account", source: "hubspot" },
+      },
+    },
     jsonGuard: true,
     status: 200,
   },
