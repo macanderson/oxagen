@@ -113,6 +113,7 @@ The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `
 | `cursor` | string or null | the point to continue from; null when nothing lies past this page |
 | `complete` | boolean | false when the run has more than 10 000 frames, so the transcript is a prefix |
 | `counts` | object | the run's entries at the zoom read, counted over every entry that is not `quiet`, whatever the chips or query: `kinds` (entries per chip), `entries`, `errors` (entries that failed or were refused, or answer the errors chip), and `policy` (entries that answer the policy chip, except the harness checking itself). A quiet entry draws no row, so no count holds it. The unit is the entry: a model step that said two things counts once |
+| `counts.frames` | object | the same counts at `everything`, where each frame is its own entry, at every zoom: `kinds.policy` and `kinds.recall` (frames those chips keep) and `policy` (the decisions among them a rule or a person made). A reader that lists decisions or recalls frame by frame counts them from any read, so the Run page reads `steps` once and takes its tab badges from it. They need no words: only a prompt or a reply can turn quiet on its words, and neither is a policy or recall frame |
 | `figures` | object | the run's steps, calls and recorded time, whatever the zoom, chips or query (see Figures) |
 | `search` | object or absent | on a read with a `query`: `{ query, matched, unsearched }` (see Search) |
 | `entries[].matches` | string[] or absent | on a read with a `query`: where the entry matched, from `label`, `subject`, `target`, `request` and `response` |
@@ -145,21 +146,23 @@ Two facts need an entry's words, which the fold does not read: whether a prompt 
 
 A read with a `query` answers only the entries that hold it (#3942). The chips narrow the entries first, then the query, and the matches page on the same cursor as any other read. The search compares lowercased text, so `Retry` finds `RETRY_LIMIT`.
 
-An entry matches on any of five places, and `matches` lists each one that held the query:
+An entry matches on any of five places, and `matches` lists each one the search looked in that held the query:
 
 - `label` and `target`: the opening frame's label and the target its gate recorded.
 - `subject`: the tool the entry is about.
 - `request` and `response`: the text of each half, as far as `text: "full"` carries it (16 384 characters). For a half that carries an `assembly`, the text is its blocks: what the model said and thought, each tool it called with its input, and each result's summary.
 
-Label, subject and target are on the entry. The halves are in the evidence store, one read each, and a run can keep a body for every frame. So one read looks inside at most **2 000** halves (`TRANSCRIPT_SEARCH_HALF_MAX`), in entry order, and still matches the rest on label, subject and target.
+Label, subject and target are on the entry. The halves are in the evidence store, one read each, and a run can keep a body for every frame. So the search reads no half of an entry that already matched on its label, subject or target, and that entry's `matches` name only those. Of the other entries, one read looks inside at most **2 000** halves (`TRANSCRIPT_SEARCH_HALF_MAX`), in entry order, and still matches the rest on label, subject and target.
 
-`search` says what the query found over the whole run, not only the page:
+A read from a cursor searches only the entries it and the pages after it can still send: those past the cursor, and those before it that grew since they were sent. The pages before it searched the rest, so paging through a search reads each body once rather than once per page.
+
+`search` says what the query found over the entries the read searched: the whole run on a first page, and from the cursor on after it, never only the page:
 
 | Field | Type | Description |
 |---|---|---|
 | `search.query` | string | the query as searched: trimmed and lowercased |
 | `search.matched` | integer | entries that matched, after the chips |
-| `search.unsearched` | integer | halves that carried content the search could not look inside: kept as a digest only, not readable or no longer hashing to their digest, or past the 2 000-half bound. A prompt or reply kept as a digest only is no half of its entry, so it is not counted |
+| `search.unsearched` | integer | halves that carried content the search could not look inside: kept as a digest only, not readable or no longer hashing to their digest, or past the 2 000-half bound. A prompt or reply kept as a digest only is no half of its entry, so it is not counted, and neither is a half of an entry that matched on its label, subject or target |
 
 An entry whose only match sits in an unsearched half is not in the answer. A caller that sees `unsearched` above zero says the search was partial.
 

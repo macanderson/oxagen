@@ -23,9 +23,16 @@
 // the chips.
 //
 // A `query` narrows the entries the chips kept (`searchFolds`). Label, tool
-// and target are matched on the entry; each half's text is read from the
-// evidence store, at most TRANSCRIPT_SEARCH_HALF_MAX halves per read, and
-// `search.unsearched` counts the halves the read could not look inside.
+// and target are matched on the entry; each half of an entry they do not
+// match is read from the evidence store, at most TRANSCRIPT_SEARCH_HALF_MAX
+// halves per read, and `search.unsearched` counts the halves the read could
+// not look inside. A read from a cursor searches only the entries it can
+// still send (`unsentFolds`), so paging through a search reads each body
+// once rather than once per page.
+//
+// `counts.frames` carries the policy and recall counts at `everything`, one
+// entry per frame (`frameCounts`), at every zoom: the Run page reads `steps`
+// and takes its tab badges from there, with no second read of the run.
 //
 // Three things are computed over the whole run and not over the page: the
 // cumulative cost, which is a prefix sum from the run's first frame (§8.4),
@@ -61,6 +68,7 @@ import {
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import {
   filterFoldsByKind,
+  frameCounts,
   frameFolds,
   frameKey,
   markWords,
@@ -287,6 +295,25 @@ export function planTranscriptPage(
   const indexes = [...resent, ...fresh];
   for (const i of indexes) high = Math.max(high, (folds[i] as FoldSpan).end);
   return { indexes, through: fresh.at(-1) ?? through, high };
+}
+
+/**
+ * The folds a page read from a cursor can still send, the cursor given as
+ * frame positions in the run as read (`cursorPosition`): those that open
+ * after its `through` frame, and those at or before it whose last frame lies
+ * past `high`, which `planTranscriptPage` sends again. Every other fold was
+ * sent and has not changed since, so no page from this cursor on sends it.
+ * Null reads from the start, where every fold can be sent.
+ */
+export function unsentFolds<T extends { span: FoldSpan }>(
+  folds: readonly T[],
+  cursor: { throughAt: number; highAt: number } | null,
+): readonly T[] {
+  if (cursor === null) return folds;
+  return folds.filter(
+    (fold) =>
+      fold.span.open > cursor.throughAt || fold.span.end > cursor.highAt,
+  );
 }
 
 /**
@@ -655,19 +682,34 @@ export function createRunTranscriptGetHandler(
     if (input.zoom !== "turns")
       await markWords(all, (needed) => readWords(deps.bodies, scope, needed));
     // Counted over every entry at the zoom, whatever the chips or query, so
-    // a chip's count and the rows it shows agree.
-    const counts = transcriptCounts(all, TRANSCRIPT_KINDS);
+    // a chip's count and the rows it shows agree. The frames' own policy and
+    // recall counts ride every read, so a reader at `steps` never reads
+    // `everything` for them.
+    const counts = {
+      ...transcriptCounts(all, TRANSCRIPT_KINDS),
+      frames: frameCounts(shown),
+    };
     // The page's figures, over the steps of every frame read (ADR-182).
     const figures = transcriptFigures(shown, steps);
     const chipped = filterFoldsByKind(all, input.kinds);
+    // Where the reader stands, as frame positions in the run as read.
+    const at =
+      after === null
+        ? null
+        : {
+            throughAt: cursorPosition(shown, after.through),
+            highAt: cursorPosition(shown, after.high),
+          };
     // A query narrows what the chips kept, and the matches page on the same
     // cursor as any other read. Each half is searched as far as a full read
-    // carries it, so a match is one a reader can see.
+    // carries it, so a match is one a reader can see. A page read from a
+    // cursor searches only the entries it can still send (`unsentFolds`):
+    // the pages before it searched the rest, and a search reads bodies.
     const found =
       input.query === undefined
         ? null
         : await searchFolds(
-            chipped,
+            unsentFolds(chipped, at),
             input.query,
             async (frame) => {
               const body = await half(
@@ -709,28 +751,30 @@ export function createRunTranscriptGetHandler(
     // sequence alone no longer orders the frames of a run. The fold states
     // each entry's span in those positions.
     const spans = folds.map((fold) => fold.span);
+    const through =
+      after === null || at === null
+        ? -1
+        : foldThrough(
+            spans,
+            folds.map((fold) => frameKey(fold.opening)),
+            shown,
+            after.through,
+          );
     const plan = planTranscriptPage(
       spans,
-      after === null
-        ? null
-        : {
-            through: foldThrough(
-              spans,
-              folds.map((fold) => frameKey(fold.opening)),
-              shown,
-              after.through,
-            ),
-            high: cursorPosition(shown, after.high),
-          },
+      at === null ? null : { through, high: at.highAt },
       input.limit,
     );
     const page = plan.indexes.map((i) => folds[i] as TranscriptFold);
     // The cursor names frames by key, so it survives a later read that holds
-    // more frames, or hides one this read showed.
+    // more frames, or hides one this read showed. The reader's place in fold
+    // order moves only when the page sends a new entry: a page of grown
+    // entries alone leaves `through` where the cursor had it, which a fold
+    // before it (the one `foldThrough` falls back to) would move backward.
     const nextCursor = (): string =>
       encodeTranscriptCursor({
         through:
-          plan.through === -1
+          plan.through === through
             ? (after?.through ?? startKey)
             : frameKey((folds[plan.through] as TranscriptFold).opening),
         high:

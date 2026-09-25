@@ -673,6 +673,7 @@ describe("get_run_transcript", () => {
         entries: 0,
         errors: 0,
         policy: 0,
+        frames: { kinds: { policy: 0, recall: 0 }, policy: 0 },
       },
       figures: {
         steps: { model: 0, tool: 0 },
@@ -1002,8 +1003,12 @@ describe("get_run_transcript reassembly", () => {
     });
     expect(assembly?.partial).toBe(false);
     expect(assembly?.wire.bytes).toBe(Buffer.byteLength(wire, "utf8"));
-    // The point of the change: the page is a fraction of the transport.
-    expect(JSON.stringify(page).length).toBeLessThan(assembly?.wire.bytes ?? 0);
+    // The point of the change: the entry is a fraction of the transport.
+    // The run's counts and figures ride the page whatever its entries hold,
+    // so the entry is what is measured.
+    expect(JSON.stringify(page.entries[0]).length).toBeLessThan(
+      assembly?.wire.bytes ?? 0,
+    );
   });
 
   it("folds a long field in a tool call's input to its length", async () => {
@@ -1544,6 +1549,28 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     expect(later.counts).toEqual(all.counts);
   });
 
+  it("carries the frames' policy and recall counts at every zoom, as everything counts them", async () => {
+    const { transcript } = harness(governed);
+    const everything = await transcript(input({ zoom: "everything" }), ctx());
+    const atEverything = everything.counts;
+    const frames = {
+      kinds: {
+        policy: atEverything?.kinds.policy,
+        recall: atEverything?.kinds.recall,
+      },
+      policy: atEverything?.policy,
+    };
+    expect(frames).toEqual({ kinds: { policy: 1, recall: 0 }, policy: 1 });
+    expect(atEverything?.frames).toEqual(frames);
+    for (const zoom of ["steps", "turns"] as const) {
+      const out = await transcript(
+        input({ zoom, kinds: ["tools"], limit: 1 }),
+        ctx(),
+      );
+      expect(out.counts?.frames).toEqual(frames);
+    }
+  });
+
   it("reads a turn's closing message that repeats the model's streamed reply as an echo, and counts it nowhere", async () => {
     // The model's reply is kept as the stream it arrived in and the turn's
     // closing message as plain words: two digests, the same words.
@@ -1723,6 +1750,26 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       cut: null,
       items: [],
     });
+  });
+
+  it("reads a recall's body once per read, for its recall and never as a half", async () => {
+    const manifest = stored(
+      JSON.stringify({ included: 1, items: [{ id: "rec_1", tokens: 3 }] }),
+    );
+    const { transcript, getBody } = harness([
+      tachoRow(0, { kind: "steering.manifest", ...blank, ...manifest }),
+    ]);
+    for (const zoom of ["steps", "everything"] as const) {
+      getBody.mockClear();
+      const out = await transcript(input({ zoom }), ctx());
+      expect(out.entries[0]?.recall?.count).toBe(1);
+      // A recall is no call and no turn boundary, so it has no half to read.
+      expect(out.entries[0]?.request).toBeNull();
+      expect(out.entries[0]?.response).toBeNull();
+      expect(
+        getBody.mock.calls.filter(([, ref]) => ref === manifest.bytesRef),
+      ).toHaveLength(1);
+    }
   });
 
   it("does not parse a recall body that no longer hashes to its digest (negative)", async () => {
@@ -1981,8 +2028,9 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
       ctx(),
     );
     expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    // The Grep call matched on its target, so its halves were not read.
     expect(out.entries.map((e) => [e.key, e.matches])).toEqual([
-      ["1", ["target", "response"]],
+      ["1", ["target"]],
       ["3", ["response"]],
       ["5", ["response"]],
     ]);
@@ -2002,13 +2050,15 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
       ["1", ["label", "subject"]],
     ]);
     expect(getBody).not.toHaveBeenCalled();
-    // Each call's two halves were digests only. A prompt or reply kept as a
-    // digest is no half of its entry, so it is not counted.
-    expect(out.search).toMatchObject({ matched: 1, unsearched: 4 });
+    // The Read call's two halves were digests only. The Grep call matched
+    // on the entry, so its halves were not needed and are not counted. A
+    // prompt or reply kept as a digest is no half of its entry, so it is
+    // not counted either.
+    expect(out.search).toMatchObject({ matched: 1, unsearched: 2 });
   });
 
   it("narrows by the chips first, then the query, and pages the matches on the cursor", async () => {
-    const { transcript } = harness(run);
+    const { transcript, getBody } = harness(run);
     const tools = await transcript(
       input({ zoom: "steps", kinds: ["tools"], query: "retry" }),
       ctx(),
@@ -2019,6 +2069,7 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
       ctx(),
     );
     expect(first.entries.map((e) => e.key)).toEqual(["1", "3"]);
+    getBody.mockClear();
     const later = await transcript(
       input({
         zoom: "steps",
@@ -2030,7 +2081,77 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
     );
     expect(later.entries.map((e) => e.key)).toEqual(["5"]);
     expect(later.cursor).toBeNull();
-    expect(later.search).toEqual(first.search);
+    // A later page searches only what it can still send: the reply and the
+    // second prompt, whose body no longer hashes. The Read call's halves,
+    // which the first page searched, are not read again.
+    expect(later.search).toEqual({ query: "retry", matched: 1, unsearched: 1 });
+    const searched = getBody.mock.calls.map(([, ref]) => ref);
+    expect(searched).not.toContain(stored("RETRY_LIMIT = 3").bytesRef);
+    expect(searched).toContain(
+      stored("The runner calls retry three times.").bytesRef,
+    );
+  });
+
+  it("sends a match that grew behind the cursor once, and never moves the cursor back to it", async () => {
+    const live = { outcome: "running", sealedAt: null };
+    const grep = (over: Record<string, unknown>) => ({
+      toolName: "Grep",
+      toolStatus: "",
+      toolUseId: "tu_g",
+      turnSeq: 1,
+      ...over,
+    });
+    const before = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Find it."),
+      }),
+      tachoRow(1, {
+        kind: "tool_requested",
+        ...grep({}),
+        ...stored('{"pattern":"x"}'),
+      }),
+      tachoRow(2, {
+        kind: "tool_requested",
+        toolName: "Read",
+        toolStatus: "",
+        toolUseId: "tu_r",
+        turnSeq: 1,
+        ...stored('{"path":"retry.ts"}'),
+      }),
+    ];
+    const first = await harness(before, live).transcript(
+      input({ zoom: "steps", query: "retry" }),
+      ctx(),
+    );
+    expect(first.entries.map((e) => e.key)).toEqual(["2"]);
+    // The Grep call, before the cursor, gets its result, which holds the query.
+    const grown = [
+      ...before,
+      tachoRow(3, { kind: "tool_call", ...grep({}), ...stored("retry.ts:1") }),
+    ];
+    const { transcript } = harness(grown, live);
+    const second = await transcript(
+      input({
+        zoom: "steps",
+        query: "retry",
+        after: first.cursor ?? undefined,
+      }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => e.key)).toEqual(["1"]);
+    // Nothing new landed, so nothing is sent again, the Read call included.
+    const third = await transcript(
+      input({
+        zoom: "steps",
+        query: "retry",
+        after: second.cursor ?? undefined,
+      }),
+      ctx(),
+    );
+    expect(third.entries).toEqual([]);
   });
 
   it("answers an empty page for a query nothing holds, with the search and figures (negative)", async () => {

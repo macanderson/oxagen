@@ -126,6 +126,8 @@ export const TRANSCRIPT_SEARCH_HALF_MAX = 2_000;
  * its `target`, or the text of its `request` or `response` half. For a half
  * that carries an assembly, the text is its blocks: what the model said and
  * thought, each tool it called with the input, and each result's summary.
+ * An entry that matched on its label, subject or target has no half read, so
+ * its matches name only those.
  */
 export const TRANSCRIPT_MATCHES = [
   "label",
@@ -600,6 +602,26 @@ export const transcriptCountsSchema = z
     errors: z.number().int().nonnegative(),
     /** Decisions a rule or a person made; the harness checking itself is not one. */
     policy: z.number().int().nonnegative(),
+    /**
+     * The same counts at `everything`, where each frame is its own entry,
+     * for the chips and figures a reader lists frames by: `kinds.policy` and
+     * `kinds.recall` count the frames those chips keep, and `policy` the
+     * decisions among them a rule or a person made. They are carried at
+     * every zoom, so a reader that reads `steps` does not read `everything`
+     * again for them.
+     */
+    frames: z
+      .object({
+        kinds: z
+          .object({
+            policy: z.number().int().nonnegative(),
+            recall: z.number().int().nonnegative(),
+          })
+          .strict(),
+        policy: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -698,13 +720,20 @@ export const transcriptSearchSchema = z
   .object({
     /** The query as searched: trimmed and lowercased. */
     query: z.string(),
-    /** Entries that matched, after the chips; the page holds up to `limit` of them. */
+    /**
+     * Entries that matched, after the chips; the page holds up to `limit` of
+     * them. A read from a cursor searches only the entries it and the pages
+     * after it can still send (those past the cursor, and those before it
+     * that grew), so it counts those: the whole run on a first page.
+     */
     matched: count,
     /**
      * Halves that carried content the search could not look inside: kept as
      * a digest only, unreadable, or past `TRANSCRIPT_SEARCH_HALF_MAX`. An
      * entry whose only match would have been in one of them is not in
-     * `matched`.
+     * `matched`. The halves of an entry that matched on its label, subject
+     * or target are not needed and are not counted. Counted over the same
+     * entries as `matched`.
      */
     unsearched: count,
   })

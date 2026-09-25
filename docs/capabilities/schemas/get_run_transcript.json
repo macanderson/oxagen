@@ -2200,6 +2200,38 @@
           "policy": {
             "type": "integer",
             "minimum": 0
+          },
+          "frames": {
+            "type": "object",
+            "properties": {
+              "kinds": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "recall": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "policy",
+                  "recall"
+                ],
+                "additionalProperties": false
+              },
+              "policy": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "kinds",
+              "policy"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

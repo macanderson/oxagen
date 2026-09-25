@@ -1029,6 +1029,30 @@ export function transcriptCounts(
   return { kinds, entries, errors, policy };
 }
 
+/**
+ * The counts of the run's frames that a page reading at `steps` still needs
+ * from `everything`, where each frame is its own entry: how many the policy
+ * and recall chips keep, and how many of those decisions a rule or a person
+ * made. The Run page's tab badges count the frames its Governed actions,
+ * Policy and Context tabs list, and this lets one read at `steps` carry them.
+ *
+ * They are `transcriptCounts` at `everything`, not a second rule. They need
+ * no words (`markWords`): only a prompt or a reply can turn quiet on its
+ * words, and neither is a policy or recall frame.
+ */
+export interface FrameCounts {
+  kinds: { policy: number; recall: number };
+  policy: number;
+}
+
+export function frameCounts(frames: readonly RunFrame[]): FrameCounts {
+  const counts = transcriptCounts(frameFolds(frames), ["policy", "recall"]);
+  return {
+    kinds: { policy: counts.kinds.policy, recall: counts.kinds.recall },
+    policy: counts.policy,
+  };
+}
+
 /** A `tool_use` block of a model's reply, as far as claiming it needs. */
 export interface ToolUseRef {
   name: string;

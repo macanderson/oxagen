@@ -18,6 +18,7 @@ import type { AttemptEventReadRecord } from "./run-store";
 import {
   filterFoldsByKind,
   foldTranscript,
+  frameCounts,
   frameFolds,
   markWords,
   RECALL_ITEM_MAX,
@@ -1432,6 +1433,66 @@ describe("transcriptCounts", () => {
     expect(counts.errors).toBe(3);
     // The managed-settings check is the harness checking itself.
     expect(counts.policy).toBe(1);
+  });
+});
+
+describe("frameCounts", () => {
+  const frames = [
+    w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+    w(2, "steering.manifest", { turnSeq: 1 }),
+    // The harness checking itself: the policy chip keeps it, the Policy
+    // tab's count does not.
+    w(3, "policy_decision", {
+      turnSeq: 1,
+      policyDecision: "deny",
+      toolUseId: "t1",
+      body: JSON.stringify({ policy_source: "managed_settings" }),
+    }),
+    // One call with two decisions: one step at `steps`, two frames.
+    w(4, "policy_decision", {
+      turnSeq: 1,
+      policyDecision: "ask",
+      toolUseId: "t2",
+    }),
+    w(5, "approval_decision", {
+      turnSeq: 1,
+      policyDecision: "approve",
+      toolUseId: "t2",
+    }),
+    w(6, "tool_call", { turnSeq: 1, toolName: "Bash", toolUseId: "t2" }),
+    w(7, "turn_end", { turnSeq: 1, ...kept("reply") }),
+  ];
+
+  it("counts the policy and recall frames as `transcriptCounts` does at everything", () => {
+    const counts = frameCounts(frames);
+    expect(counts).toEqual({ kinds: { policy: 3, recall: 1 }, policy: 2 });
+    const everything = transcriptCounts(frameFolds(frames), TRANSCRIPT_KINDS);
+    expect(counts).toEqual({
+      kinds: {
+        policy: everything.kinds.policy,
+        recall: everything.kinds.recall,
+      },
+      policy: everything.policy,
+    });
+  });
+
+  it("is not the count at steps, where one call's decisions are one entry (negative)", () => {
+    const steps = transcriptCounts(stepFolds(frames), TRANSCRIPT_KINDS);
+    expect(steps.kinds.policy).toBe(2);
+    expect(frameCounts(frames).kinds.policy).toBe(3);
+  });
+
+  it("needs no words: marking the prompt and reply quiet changes no count it carries", async () => {
+    const folds = frameFolds(frames);
+    const before = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    await markWords(folds, reader({ "1": "  ", "7": "" }).read);
+    const after = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    // The words did change what the entries count.
+    expect(after.entries).toBe(before.entries - 2);
+    expect(frameCounts(frames)).toEqual({
+      kinds: { policy: after.kinds.policy, recall: after.kinds.recall },
+      policy: after.policy,
+    });
   });
 });
 

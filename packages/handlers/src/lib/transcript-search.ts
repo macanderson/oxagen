@@ -8,9 +8,11 @@
 //
 // Label, tool and target are on the entry. The halves' text is in the
 // evidence store, one read per half, and a run can keep a body for every
-// frame. So a search reads at most `halfMax` halves, in entry order, and
-// counts every half it could not look inside: one kept only as a digest, one
-// the store could not answer or that no longer hashes, and one past the
+// frame. So an entry that matched on its label, tool or target is not read
+// at all: it matched, and reading its halves would only say where else. The
+// search reads at most `halfMax` halves of the other entries, in entry order,
+// and counts every half it could not look inside: one kept only as a digest,
+// one the store could not answer or that no longer hashes, and one past the
 // bound. A half that carried no content has nothing to search and is not
 // counted.
 import type {
@@ -61,7 +63,9 @@ export interface TranscriptSearchResult {
 
 /**
  * The entries of `folds` that hold `query`, and where. `readText` answers a
- * half's searchable text, or null when it cannot be read.
+ * half's searchable text, or null when it cannot be read. An entry that
+ * matched on its label, tool or target has no half read, so its matches name
+ * only those.
  */
 export async function searchFolds(
   folds: readonly TranscriptFold[],
@@ -73,10 +77,21 @@ export async function searchFolds(
   const holds = (text: string | null | undefined) =>
     typeof text === "string" && text.toLowerCase().includes(needle);
 
+  // What each entry matched on itself, with no body read.
+  const onEntry = new Map<TranscriptFold, TranscriptMatch[]>();
+  for (const fold of folds) {
+    const where: TranscriptMatch[] = [];
+    if (holds(fold.opening.summary)) where.push("label");
+    if (holds(fold.subject)) where.push("subject");
+    if (holds(fold.opening.identity.target)) where.push("target");
+    if (where.length > 0) onEntry.set(fold, where);
+  }
+
   let unsearched = 0;
   let budget = limits.halfMax;
   const reads: { fold: TranscriptFold; slot: Slot; frame: RunFrame }[] = [];
   for (const fold of folds) {
+    if (onEntry.has(fold)) continue;
     for (const slot of ["request", "response"] as const) {
       const frame = fold[slot];
       if (frame === null || frame.body.bodyDigest === null) continue;
@@ -107,10 +122,7 @@ export async function searchFolds(
   const matched: TranscriptFold[] = [];
   const matches = new Map<TranscriptFold, TranscriptMatch[]>();
   for (const fold of folds) {
-    const where: TranscriptMatch[] = [];
-    if (holds(fold.opening.summary)) where.push("label");
-    if (holds(fold.subject)) where.push("subject");
-    if (holds(fold.opening.identity.target)) where.push("target");
+    const where: TranscriptMatch[] = [...(onEntry.get(fold) ?? [])];
     const slots = inHalves.get(fold);
     if (slots?.has("request")) where.push("request");
     if (slots?.has("response")) where.push("response");
