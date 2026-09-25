@@ -151,6 +151,9 @@ oxagen-e2e-smoke-*.json
 
 # Personal CLI settings scope (may contain MCP credentials) — never commit
 .oxagen/settings.local.json
+# One machine's workspace link (org and workspace ids, linkedAt, pull base
+# hashes). `oxagen init` adds this line to a repository it links (init.ts).
+.oxagen/workspace.json
 
 # Stella agent local state (context/memory DBs; the agent now lives in its
 # own repo — accidentally git-tracked in the past, pruned with crates/)
