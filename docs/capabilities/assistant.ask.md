@@ -44,6 +44,10 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 
 The run is admitted on the `chat` (SSE) or `api-chat` (API, MCP) surface, and `list_runs`, `list_recent_runs` and `search_tools` exclude both: the assistant is Oxagen's, and its turns never appear as the customer's runs.
 
+## Steering
+
+The system prompt carries the workspace's steering after the governance baseline. The steering assembler (`@oxagen/steering-assembler`) ranks the workspace's published context records and its configured instructions, fits them to 4,096 budget tokens, and cuts what does not fit (ADR-093 §7). The instructions carry SHOULD, so every published MUST record ranks above them. Before the engine is contacted, the run records a `steering.manifest` frame that names every item as included or cut, with the reason. A turn whose record read fails runs on the instructions alone, and the frame names `record` as unavailable.
+
 ## Tools
 
 The engine is declared every governed tool plus the two meta-tools. Each completion shows the provider the pinned belt, the meta-tools and what the model loaded by name, under `assertToolListFitsProvider` (#2611). A tool call runs through the materialised tool's own `execute`, where IAM, entitlement, tool RBAC, consent and approval apply; a governed write that needs a person parks and comes back in `parkedCards`.
