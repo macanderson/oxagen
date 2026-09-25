@@ -336,6 +336,62 @@ describe("validateInlineEventPayload", () => {
     ).toThrow(ForbiddenEventPayloadFieldError);
   });
 
+  // #4171: a summary carried in place of the messages older than the turn's
+  // window. The digest names the exact summary; its text is the frame's body.
+  it("accepts a history summary receipt in each of its three outcomes", () => {
+    const applied = validateInlineEventPayload("context.history_summarized", {
+      provider: "conversation_history",
+      outcome: "applied",
+      summary_digest: DIGEST_A,
+      summary_chars: 812,
+      covered_message_count: 80,
+      window_message_count: 40,
+      regenerated: true,
+    });
+    expect(applied.stage).toBe("context");
+    expect(retentionContentClassOf("context.history_summarized")).toBe(
+      "context_selection",
+    );
+    const stale = validateInlineEventPayload("context.history_summarized", {
+      provider: "conversation_history",
+      outcome: "stale",
+      summary_digest: DIGEST_B,
+      summary_chars: 640,
+      covered_message_count: 70,
+      window_message_count: 50,
+      regenerated: false,
+      reason_code: "summary_timeout",
+    });
+    expect(stale.eventType).toBe("context.history_summarized");
+    const unavailable = validateInlineEventPayload(
+      "context.history_summarized",
+      {
+        provider: "conversation_history",
+        outcome: "unavailable",
+        covered_message_count: 0,
+        window_message_count: 50,
+        regenerated: false,
+        reason_code: "summary_failed",
+      },
+    );
+    expect(unavailable.eventType).toBe("context.history_summarized");
+  });
+
+  it("rejects a history summary receipt that carries the summary text", () => {
+    expect(() =>
+      validateInlineEventPayload("context.history_summarized", {
+        provider: "conversation_history",
+        outcome: "applied",
+        summary_digest: DIGEST_A,
+        summary_chars: 12,
+        covered_message_count: 80,
+        window_message_count: 40,
+        regenerated: true,
+        summary_text: "The person's budget is $40.",
+      }),
+    ).toThrow(ForbiddenEventPayloadFieldError);
+  });
+
   it("accepts the in-app agent's engine receipts, keyed by the engine frame seq", () => {
     const model = validateInlineEventPayload("model.engine_call_completed", {
       engine_seq: 7,
