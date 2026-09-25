@@ -429,6 +429,13 @@ export class SessionRecorder {
    * WAL already held. See `continueFromDisk`.
    */
   readonly bornOnDisk: boolean = false;
+  /**
+   * Whether this recorder was opened from restored state: a `daemon.json`
+   * entry, or a tombstone a forgotten session resumes from. Like
+   * `bornOnDisk`, its chain was born past genesis, so a caller that rolls it
+   * back to birth must first check the WAL still ends there.
+   */
+  readonly bornRestored: boolean = false;
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -461,8 +468,10 @@ export class SessionRecorder {
     this.rootSessionUuid = options.parent?.rootSessionUuid ?? this.sessionUuid;
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
-    if (options.restore) this.restore(options.restore);
-    else this.bornOnDisk = this.continueFromDisk();
+    if (options.restore) {
+      this.restore(options.restore);
+      this.bornRestored = true;
+    } else this.bornOnDisk = this.continueFromDisk();
     this.birth = this.markChain();
   }
 

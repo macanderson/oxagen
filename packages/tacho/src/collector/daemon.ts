@@ -814,8 +814,10 @@ async function initializeDaemon(
     // A session with a WAL file is left alone: the model proxy runs off the
     // serial queue, and it may have opened and written that session while
     // the failed call was awaiting. The exception is a session born on a
-    // WAL file it continues (`continueFromDisk`): it goes back too, as long
-    // as that file still ends where it was born.
+    // WAL file it continues, either opened over it (`continueFromDisk`) or
+    // resumed from restored state such as a tombstone: it goes back too, as
+    // long as that file still ends where it was born. Left alone, a resumed
+    // chain keeps a cursor past the WAL's tail and the retry seals a gap.
     const marked = new Set(marks.map(({ session }) => session));
     const unmarked = registry.list().filter((session) => !marked.has(session));
     if (unmarked.length > 0) {
@@ -826,7 +828,7 @@ async function initializeDaemon(
           recorder.rollbackToBirth();
           continue;
         }
-        if (!recorder.bornOnDisk) continue;
+        if (!recorder.bornOnDisk && !recorder.bornRestored) continue;
         const born = recorder.birthCursor;
         const tail = context.chainTail?.(recorder.sessionUuid);
         if (
