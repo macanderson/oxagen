@@ -369,13 +369,19 @@ const PLATFORM_NAMED_ROWS: Readonly<
   },
   // The record wizard shows the label and file name a slug will get, using
   // the same pure functions the publish handler runs, so the preview matches.
-  // Both files check a slug against the pattern the contract enforces.
+  // Both files check a slug against the pattern the contract enforces, and
+  // both label inputs cap their text at the ceiling the contract enforces
+  // (ADR-178), the way Steer the fleet reads STEER_TEXT_MAX above.
   "src/features/create/record-wizard.tsx": {
     "@oxagen/oxagen/context-record-label": [
+      "CONTEXT_RECORD_LABEL_MAX",
       "CONTEXT_RECORD_LINEAGE",
       "contextRecordLabel",
       "contextRecordSlug",
     ],
+  },
+  "src/features/create/clone-editor.tsx": {
+    "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LABEL_MAX"],
   },
   "src/features/create/record-file.ts": {
     "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LINEAGE"],

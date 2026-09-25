@@ -3,6 +3,7 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.002-durability-first"
+label = "Choose the durable architecture"
 record_id = "rec_scr_002_durability_first_9af9f19591d4"
 record_hash = "sha256:a12c678c0d7d8d437307c67fd0e54a4e9c1b896fe90d482dfb0f36bc120825c9"
 kind = "rule"

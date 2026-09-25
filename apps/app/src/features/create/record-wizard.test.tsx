@@ -211,6 +211,14 @@ describe("the context-record wizard: describe", () => {
     expect(slug.value).toBe("custom-release");
   });
 
+  it("caps the label at 36 characters (ADR-178)", async () => {
+    mount();
+    await screen.findByTestId("wizard-desc");
+    const name = screen.getByLabelText<HTMLInputElement>(t("describe.name"));
+    expect(name.maxLength).toBe(36);
+    expect(t("describe.name")).toBe("Label");
+  });
+
   it("says why Next is disabled when the name gives no usable slug", async () => {
     mount();
     const field = await screen.findByTestId<HTMLTextAreaElement>("wizard-desc");
@@ -506,6 +514,20 @@ describe("the context-record wizard: pull request", () => {
     expect(openRecordPr).not.toHaveBeenCalled();
     expect(screen.queryByTestId("proposal-kept")).toBeNull();
     expect(primary().disabled).toBe(false);
+  });
+
+  it("says the slug is taken when another record or proposal holds it, and opens nothing (negative)", async () => {
+    proposeRecord.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "clone_name_taken",
+    });
+    await toPullRequest();
+    fireEvent.click(primary());
+    expect((await screen.findByTestId("pr-failure")).textContent).toBe(
+      t("failure.slugTaken"),
+    );
+    expect(openRecordPr).not.toHaveBeenCalled();
   });
 
   it("keeps the proposal when the open fails, and a retry opens it without proposing again (negative)", async () => {
