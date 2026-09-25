@@ -24,11 +24,16 @@ import {
   assistantPageContextSchema,
 } from "@oxagen/oxagen/contracts/assistant.ask";
 import { IntlProvider } from "@/test/intl";
+import type { askAssistant as AskAssistantAction } from "./assistant-actions";
 import { ENTITY_LABEL_MAX } from "./page-label";
 import { PageRecord } from "./page-record";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
-const askAssistant = vi.fn();
+/** What the flyout hands the server action: the route, the id and the label. */
+type SentInput = Parameters<typeof AskAssistantAction>[2];
+
+const askAssistant =
+  vi.fn<(org: string, ws: string, input: SentInput) => Promise<unknown>>();
 vi.mock("./assistant-actions", () => ({ askAssistant }));
 
 const pathname = vi.fn(() => "/acme/core-platform");
@@ -71,14 +76,13 @@ async function askFrom(url: string, page?: ReactNode) {
     </IntlProvider>,
   );
   await user.click(screen.getByRole("button", { name: "open assistant" }));
-  await user.type(
-    screen.getByTestId("assistant-composer"),
-    "why did it fail?",
-  );
+  await user.type(screen.getByTestId("assistant-composer"), "why did it fail?");
   await user.click(screen.getByTestId("assistant-send"));
   await screen.findByTestId("assistant-answer");
   expect(askAssistant).toHaveBeenCalledTimes(1);
-  return askAssistant.mock.calls[0]?.[2] as Record<string, unknown>;
+  const sent = askAssistant.mock.calls[0]?.[2];
+  if (sent === undefined) throw new Error("the flyout sent nothing");
+  return sent;
 }
 
 const RUN_URL = "/acme/core-platform/runs/arun_01k9";
