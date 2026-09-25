@@ -40,6 +40,12 @@ const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform", query: "" }));
 vi.mock("./command-actions", () => ({
   searchCommands: () => Promise.resolve({ ok: true, value: { rows: [] } }),
 }));
+// Opening the assistant reads stella's engine. Here the read never answers,
+// and an unanswered read holds nothing
+// (assistant-flyout.engine-health.test.tsx).
+vi.mock("./engine-actions", () => ({
+  readAssistantEngine: () => new Promise(() => undefined),
+}));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname.split("?")[0],
   // Both conventions, as in shell-client.test.tsx: `nav.query`, or a query

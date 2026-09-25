@@ -7601,6 +7601,14 @@ type Messages = {
         model: string;
         unavailable: string;
       };
+      engine: {
+        unreachable: string;
+        starting: string;
+        draining: string;
+        unconfigured: string;
+        check: string;
+        checking: string;
+      };
       retry: string;
     };
     avatar: {

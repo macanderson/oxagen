@@ -4,6 +4,8 @@
 // refuses every production edge to a `*.builders` module.
 import { readOk } from "@/data/read";
 import type { ApprovalItem } from "@/data/contracts/approvals";
+import type { AssistantEngine } from "@/data/contracts/shell";
+import type { ActionResult } from "@/server/kernel";
 import type { ShellData, WorkspaceApprovals } from "./shell-data";
 
 const SHELL_VIEWER = {
@@ -78,4 +80,14 @@ export function shellWorkspace(
     resolved: readOk({ items: [], more: false }),
     ...overrides,
   };
+}
+
+/**
+ * The flyout's engine read as `readAssistantEngine` answers it: a ready
+ * engine, with any field overridden.
+ */
+export function engineRead(
+  overrides: Partial<AssistantEngine> = {},
+): ActionResult<AssistantEngine> {
+  return { ok: true, value: { state: "ready", error: null, ...overrides } };
 }

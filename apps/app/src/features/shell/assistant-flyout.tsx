@@ -120,6 +120,10 @@ import {
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
+import {
+  ASSISTANT_ENGINE_REASON_ID,
+  AssistantEngineNotice,
+} from "./assistant-engine-notice";
 import { AssistantStreamingText } from "./assistant-streaming-text";
 import { AssistantThinking } from "./assistant-thinking";
 import {
@@ -133,6 +137,7 @@ import {
 import { parseShellPath } from "./nav";
 import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
+import { useEngineHealth } from "./use-engine-health";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
 import { SafeLink, useNavigate } from "@/ui/navigation";
@@ -434,6 +439,7 @@ export function AssistantFlyout() {
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   // A monotonic key per entry: two turns in the same millisecond would collide
   // on a clock-derived one, and React needs these stable across re-renders.
   const nextIdRef = useRef(0);
@@ -638,6 +644,10 @@ export function AssistantFlyout() {
 
   const navigate = useNavigate();
   const inWorkspace = scope !== null;
+  // Whether stella's engine can take a turn, read when the panel opens and
+  // held against Send while it cannot (#3227, use-engine-health.ts).
+  const engine = useEngineHealth(org, ws, assistantOpen);
+  const engineDown = engine.down !== null;
 
   function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -652,6 +662,8 @@ export function AssistantFlyout() {
   async function send(content: string, { fromDraft }: { fromDraft: boolean }) {
     if (
       pending ||
+      // An engine that reported itself down takes no turn. The draft stays.
+      engineDown ||
       content === "" ||
       content.length > ASSISTANT_CONTENT_MAX ||
       org === null ||
@@ -734,6 +746,9 @@ export function AssistantFlyout() {
           ...t,
           entries: [...t.entries, refused],
         }));
+        // The turn found the engine down, so read it again past the cache:
+        // the line above the composer then says so before the next question.
+        if (refusalKey(result) === "engine") void engine.check();
       }
     } catch {
       const unavailable: Entry = {
@@ -912,7 +927,7 @@ export function AssistantFlyout() {
                       <button
                         type="button"
                         data-testid="assistant-retry"
-                        disabled={pending}
+                        disabled={pending || engineDown}
                         onClick={() => {
                           void send(entry.question, { fromDraft: false });
                         }}
@@ -933,8 +948,15 @@ export function AssistantFlyout() {
       <div className="flex-none border-t border-border px-3 py-3">
         {inWorkspace ? (
           <form onSubmit={onSubmit}>
+            <AssistantEngineNotice
+              health={engine}
+              onRecovered={() => {
+                composerRef.current?.focus();
+              }}
+            />
             <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2">
               <textarea
+                ref={composerRef}
                 rows={2}
                 maxLength={ASSISTANT_CONTENT_MAX}
                 value={draft}
@@ -956,9 +978,16 @@ export function AssistantFlyout() {
               <button
                 type="submit"
                 aria-label={t("composer.send")}
-                aria-disabled={pending || draft.trim() === "" || undefined}
+                aria-disabled={
+                  pending || engineDown || draft.trim() === "" || undefined
+                }
+                aria-describedby={
+                  engineDown ? ASSISTANT_ENGINE_REASON_ID : undefined
+                }
                 data-testid="assistant-send"
-                className="mb-0.5 grid size-8 flex-none place-items-center rounded-md bg-gold text-on-gold focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60"
+                className={`mb-0.5 grid size-8 flex-none place-items-center rounded-md bg-gold text-on-gold focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 ${
+                  engineDown ? "cursor-not-allowed opacity-60" : ""
+                }`}
               >
                 <Send aria-hidden="true" className="size-4" />
               </button>
