@@ -140,6 +140,8 @@ function rowsFor(table: unknown, fields: Row, where: SQL | null): Row[] {
   }
   // The requester lookup: the person who wrote the turn's message.
   if (table === schema.messages) return [{ userId: USER_ID }];
+  // The belt's kill-switch read (#4189): no switch is set here.
+  if (table === schema.emergencyDenies) return [];
   throw new Error("unexpected table");
 }
 
@@ -170,6 +172,10 @@ function makeTx() {
             return chain;
           },
           limit: async () => rowsFor(table, fields, where),
+          // A read that awaits the query without a limit, as the kill-switch
+          // read does.
+          then: (resolve: (rows: Row[]) => unknown) =>
+            resolve(rowsFor(table, fields, where)),
         };
         return chain;
       },
