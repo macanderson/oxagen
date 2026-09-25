@@ -31,8 +31,18 @@ import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { PRICE_BOOK_LIST } from "@oxagen/database/schema";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
-import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { isSameModelIdentity } from "./model-identity";
+import {
+  and,
+  arrayOverlaps,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
+import { claimableNames, isSameModelIdentity } from "./model-identity";
 import { inTransaction } from "./internal/in-transaction";
 import {
   IMAGE_RATE_CARD,
@@ -535,6 +545,91 @@ export async function loadPriceBookInTenantScope(args: {
           eq(schema.priceEntries.orgId, args.orgId),
         ),
       ),
+  );
+  return rows.map(rowToEntry);
+}
+
+/**
+ * The part of an organization's book one read needs: the rows that could
+ * price one of `models` at some instant from `from` to `to`, inclusive.
+ */
+export interface PriceBookSlice {
+  orgId: string;
+  models: readonly string[];
+  from: Date;
+  to: Date;
+}
+
+/**
+ * The names a row's model or one of its aliases must carry to price one of
+ * `models`: each id's {@link claimableNames}, and its family's behind a
+ * `creator/` prefix, the fallback {@link resolvePriceEntryFromClassBook}
+ * tries. A row that carries none of these names can never be the resolver's
+ * answer for any of the ids.
+ */
+export function priceBookNames(models: readonly string[]): string[] {
+  const names = new Set<string>();
+  for (const id of models) {
+    for (const name of claimableNames(id)) names.add(name);
+    const slash = id.indexOf("/");
+    if (slash >= 0)
+      for (const name of claimableNames(id.slice(slash + 1))) names.add(name);
+  }
+  return [...names];
+}
+
+function sliceCondition(slice: PriceBookSlice) {
+  const names = priceBookNames(slice.models);
+  const t = schema.priceEntries;
+  return and(
+    or(isNull(t.orgId), eq(t.orgId, slice.orgId)),
+    or(inArray(t.model, names), arrayOverlaps(t.modelAliases, names)),
+    lte(t.effectiveFrom, slice.to),
+    or(isNull(t.effectiveTo), gt(t.effectiveTo, slice.from)),
+  );
+}
+
+/**
+ * The rows of the book that could price `slice.models` between `slice.from`
+ * and `slice.to`, through the system connection. A rollup job takes this
+ * rather than {@link loadPriceBook}.
+ *
+ * The whole book is every list row's full history. The hourly sync adds
+ * thousands of rows a day, and production held 28,246 on 2026-09-24. The cost
+ * rollup loaded all of them for every run it priced, then scanned them again
+ * for each token class of each frame. Four or five of those steps at once ran
+ * the API out of heap, and Inngest re-sent the same steps to each new process
+ * (#4202). A run prices a few models over a few hours, so it needs a few dozen
+ * of those rows.
+ *
+ * The span keeps a closed window that overlaps it, so a frame priced at the
+ * instant it ran still finds the rate of its own time. No models means no
+ * rows, answered without a query: an empty name list must never reach the
+ * store as a filter that selects nothing, or as no filter at all.
+ */
+export async function loadPriceBookSlice(
+  slice: PriceBookSlice,
+): Promise<PriceBook> {
+  if (slice.models.length === 0) return [];
+  // tenancy: system read because the cost rollup runs outside a tenant scope.
+  // sliceCondition keeps it filtered to the list rows and the orgId's own rows.
+  const rows = await withSystemDb((tx) =>
+    tx.select().from(schema.priceEntries).where(sliceCondition(slice)),
+  );
+  return rows.map(rowToEntry);
+}
+
+/**
+ * {@link loadPriceBookSlice} inside the caller's tenant scope, for a handler
+ * serving one organization's read, for the reason
+ * {@link loadPriceBookInTenantScope} gives.
+ */
+export async function loadPriceBookSliceInTenantScope(
+  slice: PriceBookSlice,
+): Promise<PriceBook> {
+  if (slice.models.length === 0) return [];
+  const rows = await withTenantDb((tx) =>
+    tx.select().from(schema.priceEntries).where(sliceCondition(slice)),
   );
   return rows.map(rowToEntry);
 }

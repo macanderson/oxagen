@@ -973,6 +973,43 @@ describe("get_run_transcript reassembly", () => {
     expect(assembly?.blocks.every((b) => b.cost === null)).toBe(true);
     expect(assembly?.blocks.reduce((sum, b) => sum + b.tokens, 0)).toBe(400);
   });
+
+  it("reads only the price rows for the page's models over the page's span", async () => {
+    // #4202. The page loaded the organization's whole price book, 28,246 rows
+    // in production, for every read, whatever its limit.
+    const { deps } = harness([
+      tachoRow(1, {
+        kind: "llm_call",
+        model: "claude-opus-5",
+        provider: "anthropic",
+        ts: "2026-09-11 09:00:10.000",
+        ...stored(modelStream(["first."]), "text/event-stream"),
+      }),
+      tachoRow(2, {
+        kind: "llm_call",
+        model: "claude-haiku-4.5",
+        provider: "anthropic",
+        ts: "2026-09-11 09:00:40.000",
+        ...stored(modelStream(["second."]), "text/event-stream"),
+      }),
+    ]);
+    const priceBook = vi.fn(() => Promise.resolve([]));
+    deps.priceBook = priceBook;
+
+    await createRunTranscriptGetHandler(deps)(
+      input({ zoom: "everything" }),
+      ctx(),
+    );
+
+    expect(priceBook).toHaveBeenCalledTimes(1);
+    // A frame names its model under its provider, the id `outputRate` prices.
+    expect(priceBook).toHaveBeenCalledWith({
+      orgId: ctx().orgId,
+      models: ["anthropic/claude-opus-5", "anthropic/claude-haiku-4.5"],
+      from: new Date("2026-09-11T09:00:10.000Z"),
+      to: new Date("2026-09-11T09:00:40.000Z"),
+    });
+  });
 });
 
 describe("get_run_transcript and one unreadable body", () => {
