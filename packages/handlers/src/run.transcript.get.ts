@@ -15,7 +15,13 @@
 // does not read, so they are added here: a recall entry's items, parsed from
 // the body it kept (`recallOf`), and each reply's `tool_use` blocks, which
 // name the tool step that recorded the call (`toolUseClaimer`) and what came
-// back. `counts` counts the run's entries at the zoom whatever the chips.
+// back. `counts` counts the run's entries at the zoom, and `figures` the
+// run's steps, calls and time (`transcriptFigures`), whatever the chips.
+//
+// A `query` narrows the entries the chips kept (`searchFolds`). Label, tool
+// and target are matched on the entry; each half's text is read from the
+// evidence store, at most TRANSCRIPT_SEARCH_HALF_MAX halves per read, and
+// `search.unsearched` counts the halves the read could not look inside.
 //
 // Three things are computed over the whole run and not over the page: the
 // cumulative cost, which is a prefix sum from the run's first frame (§8.4),
@@ -41,6 +47,8 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runTranscriptGet,
   type RunTranscriptGetOutput,
+  TRANSCRIPT_SEARCH_HALF_MAX,
+  TRANSCRIPT_TEXT_MAX,
   transcriptTextMax,
   type TranscriptEntry,
   type TranscriptEntryBody,
@@ -57,6 +65,7 @@ import {
   toolUseClaimer,
   TRANSCRIPT_KINDS,
   transcriptCounts,
+  transcriptFigures,
   type TranscriptDecision,
   type TranscriptFold,
   turnFolds,
@@ -71,6 +80,8 @@ import {
   resolvePriceEntry,
 } from "@oxagen/billing";
 import { assemblyView, readAssembly } from "./lib/transcript-assembly";
+import { mapConcurrent } from "./lib/map-concurrent";
+import { searchableText, searchFolds } from "./lib/transcript-search";
 import { digestBytes } from "@oxagen/tacho";
 import { logger } from "./logger";
 import {
@@ -366,27 +377,6 @@ async function half(
     : { ...base, text, truncated: false, assembly: null };
 }
 
-async function mapConcurrent<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const out: R[] = new Array<R>(items.length);
-  let next = 0;
-  async function worker(): Promise<void> {
-    for (;;) {
-      const index = next;
-      next += 1;
-      if (index >= items.length) return;
-      out[index] = await fn(items[index] as T);
-    }
-  }
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
-  );
-  return out;
-}
-
 /**
  * A recall frame's whole body as text, for `recallOf` to parse, or null when
  * none was kept, it cannot be read, it does not hash to its digest, or it is
@@ -579,10 +569,38 @@ export function createRunTranscriptGetHandler(
         : input.zoom === "turns"
           ? turnFolds(shown, steps)
           : frameFolds(shown);
-    const folds = filterFoldsByKind(all, input.kinds);
-    // Counted over every entry at the zoom, whatever the chips, so a chip's
-    // count and the rows it shows agree.
+    // Counted over every entry at the zoom, whatever the chips or query, so
+    // a chip's count and the rows it shows agree.
     const counts = transcriptCounts(all, TRANSCRIPT_KINDS);
+    // The page's figures, over the steps of every frame read (ADR-182).
+    const figures = transcriptFigures(shown, steps);
+    const chipped = filterFoldsByKind(all, input.kinds);
+    // A query narrows what the chips kept, and the matches page on the same
+    // cursor as any other read. Each half is searched as far as a full read
+    // carries it, so a match is one a reader can see.
+    const found =
+      input.query === undefined
+        ? null
+        : await searchFolds(
+            chipped,
+            input.query,
+            async (frame) => {
+              const body = await half(
+                deps.bodies,
+                scope,
+                frame,
+                TRANSCRIPT_TEXT_MAX,
+                () => null,
+              );
+              return body === null ? null : searchableText(body);
+            },
+            {
+              halfMax: TRANSCRIPT_SEARCH_HALF_MAX,
+              concurrency: BODY_CONCURRENCY,
+            },
+          );
+    const folds = found?.folds ?? chipped;
+    const search = found === null ? {} : { search: found.search };
 
     // Cumulative cost is a prefix over every frame of the run (§8.4), before
     // any chip filter. Building it from the filtered folds understated spend
@@ -645,6 +663,8 @@ export function createRunTranscriptGetHandler(
         cursor,
         complete: read.complete,
         counts,
+        figures,
+        ...search,
       };
     }
     const runStartedAt = Date.parse(run.item.startedAt);
@@ -758,6 +778,7 @@ export function createRunTranscriptGetHandler(
         durationMs: fold.durationMs,
         echoOf: fold.echoOf,
         recall: recalls[i] ?? null,
+        ...(found === null ? {} : { matches: found.matches.get(fold) }),
       };
     });
 
@@ -768,6 +789,8 @@ export function createRunTranscriptGetHandler(
       cursor,
       complete: read.complete,
       counts,
+      figures,
+      ...search,
     };
   };
 }

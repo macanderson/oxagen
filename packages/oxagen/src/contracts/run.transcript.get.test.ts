@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   runTranscriptGet,
   TRANSCRIPT_ENTRY_MAX,
+  TRANSCRIPT_QUERY_MAX,
   TRANSCRIPT_STEP_TEXT_MAX,
   TRANSCRIPT_TEXT_MAX,
   transcriptTextMax,
@@ -270,6 +271,119 @@ describe("what the fold states about an entry (ADR-182)", () => {
       runTranscriptGet.output.safeParse({
         ...out,
         counts: { ...counts, kinds: { nonsense: 1 } },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("search and figures (#3942, ADR-182)", () => {
+  const out = {
+    zoom: "steps",
+    kinds: [],
+    entries: [],
+    cursor: null,
+    complete: true,
+  };
+  const figures = {
+    steps: { model: 2, tool: 3 },
+    prompts: 1,
+    calls: {
+      count: 3,
+      failed: 1,
+      tools: [
+        { name: "Bash", calls: 2 },
+        { name: null, calls: 1 },
+      ],
+      families: [
+        {
+          family: "shell",
+          calls: 2,
+          share: 2 / 3,
+          ms: 900,
+          failed: 1,
+          tools: 1,
+        },
+        { family: "tool", calls: 1, share: 1 / 3, ms: 0, failed: 0, tools: 1 },
+      ],
+      batches: {
+        count: 2,
+        parallel: 1,
+        widest: 2,
+        fanOut: 1.5,
+        serialMs: 900,
+        togetherMs: 700,
+        histogram: [
+          { width: 1, batches: 1 },
+          { width: 2, batches: 1 },
+        ],
+      },
+    },
+    wall: { modelMs: 4_000, toolMs: 900, waitingMs: 60_000 },
+  };
+
+  it("trims a query, and refuses one of nothing but space or past its cap (negative)", () => {
+    const parsed = input({ query: "  README  " });
+    expect(parsed.success && parsed.data.query).toBe("README");
+    expect(input().success && input().data?.query).toBeUndefined();
+    expect(input({ query: "   " }).success).toBe(false);
+    expect(input({ query: "x".repeat(TRANSCRIPT_QUERY_MAX) }).success).toBe(
+      true,
+    );
+    expect(input({ query: "x".repeat(TRANSCRIPT_QUERY_MAX + 1) }).success).toBe(
+      false,
+    );
+  });
+
+  it("says where an entry matched, and refuses a place outside the set (negative)", () => {
+    expect(
+      transcriptEntrySchema.safeParse({
+        ...entry,
+        matches: ["label", "response"],
+      }).success,
+    ).toBe(true);
+    expect(
+      transcriptEntrySchema.safeParse({ ...entry, matches: ["body"] }).success,
+    ).toBe(false);
+    // An entry on a searched page matched somewhere.
+    expect(
+      transcriptEntrySchema.safeParse({ ...entry, matches: [] }).success,
+    ).toBe(false);
+  });
+
+  it("answers the run's figures and what a search found beside the page", () => {
+    const search = { query: "readme", matched: 4, unsearched: 2 };
+    expect(
+      runTranscriptGet.output.safeParse({ ...out, figures, search }).success,
+    ).toBe(true);
+    expect(
+      runTranscriptGet.output.safeParse({
+        ...out,
+        figures: { ...figures, calls: { ...figures.calls, batches: null } },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("refuses a family outside the vocabulary, a share past one, or a negative time (negative)", () => {
+    const family = figures.calls.families[0];
+    for (const bad of [
+      { ...family, family: "misc" },
+      { ...family, share: 1.5 },
+      { ...family, ms: -1 },
+    ]) {
+      expect(
+        runTranscriptGet.output.safeParse({
+          ...out,
+          figures: {
+            ...figures,
+            calls: { ...figures.calls, families: [bad] },
+          },
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      runTranscriptGet.output.safeParse({
+        ...out,
+        search: { query: "x", matched: -1, unsearched: 0 },
       }).success,
     ).toBe(false);
   });

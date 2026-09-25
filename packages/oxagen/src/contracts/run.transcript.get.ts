@@ -40,6 +40,18 @@
  * transcript shows the same steps as an unfiltered one, only fewer of them.
  * An empty selection keeps everything.
  *
+ * `query` searches the folded entries on the server (#3942): an entry
+ * matches when its label, its tool, its target, or the text of either half
+ * holds the query, ignoring case. The chips narrow first, then the query,
+ * and the matches page on the same cursor. A search reads bodies, so a read
+ * searches at most `TRANSCRIPT_SEARCH_HALF_MAX` halves and says in
+ * `search.unsearched` how many halves it could not search.
+ *
+ * `counts` and `figures` are counted over the whole run read, whatever the
+ * chips or the query, so a reader's counts and figures never move when it
+ * narrows the transcript. They share the read's frame cap: when `complete`
+ * is false they cover a prefix of the run.
+ *
  * A `digest_only` recording produces halves with `text: null` and
  * `fidelity: "digest_only"`, and the transcript says so on every half; the
  * interface renders that word and nothing stronger (§8.4).
@@ -97,6 +109,32 @@ export function transcriptTextMax(
   if (text === "excerpt") return TRANSCRIPT_STEP_TEXT_MAX;
   return zoom === "everything" ? TRANSCRIPT_TEXT_MAX : TRANSCRIPT_STEP_TEXT_MAX;
 }
+
+/** The longest search a read takes, in characters. */
+export const TRANSCRIPT_QUERY_MAX = 200;
+
+/**
+ * The most halves one search reads to look inside. A search can reach every
+ * body a run kept, which is up to one per frame. Past this the read stops
+ * reading bodies, still matches the rest on their label, tool and target,
+ * and counts the halves it did not read in `search.unsearched`.
+ */
+export const TRANSCRIPT_SEARCH_HALF_MAX = 2_000;
+
+/**
+ * Where a search found the query in an entry: its `label`, its `subject`,
+ * its `target`, or the text of its `request` or `response` half. For a half
+ * that carries an assembly, the text is its blocks: what the model said and
+ * thought, each tool it called with the input, and each result's summary.
+ */
+export const TRANSCRIPT_MATCHES = [
+  "label",
+  "subject",
+  "target",
+  "request",
+  "response",
+] as const;
+export const transcriptMatchSchema = z.enum(TRANSCRIPT_MATCHES);
 
 /**
  * The chips the Transcript tab filters on, in the order the page draws them
@@ -516,6 +554,15 @@ export const transcriptEntrySchema = z
     echoOf: z.string().nullable().optional(),
     /** What a recall entry put in front of the model; null on other entries. */
     recall: transcriptRecallSchema.nullable().optional(),
+    /**
+     * Where the read's `query` was found in this entry, so a reader opens
+     * the part that matched. Absent on a read with no query.
+     */
+    matches: z
+      .array(transcriptMatchSchema)
+      .min(1)
+      .max(TRANSCRIPT_MATCHES.length)
+      .optional(),
   })
   .strict();
 
@@ -536,11 +583,118 @@ export const transcriptCountsSchema = z
   })
   .strict();
 
+const count = z.number().int().nonnegative();
+const ms = z.number().int().nonnegative();
+
+/** One tool family's share of the run's tool calls. */
+export const transcriptFamilyFigureSchema = z
+  .object({
+    family: toolFamilySchema,
+    calls: count,
+    /** The family's calls over every tool call in the run, 0 to 1. */
+    share: z.number().min(0).max(1),
+    /** The calls' own time summed, in milliseconds. */
+    ms,
+    failed: count,
+    /** Distinct tool names in the family. */
+    tools: count,
+  })
+  .strict();
+
+/**
+ * The tool calls between two model steps, which one model reply asked for
+ * at once. A turn boundary closes a batch too.
+ */
+export const transcriptBatchFiguresSchema = z
+  .object({
+    count,
+    /** Batches that ran more than one call. */
+    parallel: count,
+    /** The most calls one batch held. */
+    widest: count,
+    /** Calls per batch. */
+    fanOut: z.number().nonnegative(),
+    /** Every call's own time summed: what one at a time would have taken. */
+    serialMs: ms,
+    /** Each batch's first start to its last end, summed: what it did take. */
+    togetherMs: ms,
+    /** How many batches held each number of calls, fewest calls first. */
+    histogram: z.array(
+      z.object({ width: z.number().int().positive(), batches: count }).strict(),
+    ),
+  })
+  .strict();
+
+/**
+ * The run's figures, counted on the server over the `steps` fold of every
+ * frame read, whatever the zoom, chips or query (ADR-182). A call's own time
+ * leaves out the approval waits inside it, and a call with no result adds
+ * none.
+ *
+ * The run's wall clock is not here: it runs to the run's end, or on a live
+ * run to the instant it is read, which only the reader knows. What the parts
+ * below leave of it is the harness's.
+ */
+export const transcriptFiguresSchema = z
+  .object({
+    steps: z.object({ model: count, tool: count }).strict(),
+    /** The times the operator prompted the run, the first prompt included. */
+    prompts: count,
+    calls: z
+      .object({
+        count,
+        /** Calls that failed, or that a rule, a person or the harness refused. */
+        failed: count,
+        /**
+         * Calls per tool, by the tool's name without a gateway's harness
+         * prefix, most called first. `name` is null for calls whose record
+         * named no tool.
+         */
+        tools: z.array(
+          z.object({ name: z.string().nullable(), calls: count }).strict(),
+        ),
+        /** Most called first. */
+        families: z.array(transcriptFamilyFigureSchema),
+        /** Null for a run that called no tool. */
+        batches: transcriptBatchFiguresSchema.nullable(),
+      })
+      .strict(),
+    /** Where the recorded time went, in milliseconds. */
+    wall: z
+      .object({
+        /** Model steps, first frame to last. */
+        modelMs: ms,
+        /** Tool calls' own time, less the approval waits inside them. */
+        toolMs: ms,
+        /** From each approval request to the frame after it. */
+        waitingMs: ms,
+      })
+      .strict(),
+  })
+  .strict();
+
+/** What a read's `query` found, over the whole run and not only the page. */
+export const transcriptSearchSchema = z
+  .object({
+    /** The query as searched: trimmed and lowercased. */
+    query: z.string(),
+    /** Entries that matched, after the chips; the page holds up to `limit` of them. */
+    matched: count,
+    /**
+     * Halves that carried content the search could not look inside: kept as
+     * a digest only, unreadable, or past `TRANSCRIPT_SEARCH_HALF_MAX`. An
+     * entry whose only match would have been in one of them is not in
+     * `matched`.
+     */
+    unsearched: count,
+  })
+  .strict();
+
 export const runTranscriptGet = registerCapability({
   name: "get_run_transcript",
   domain: "run",
   description:
-    "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost.",
+    "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries, and carries the run's counts and figures.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -566,6 +720,12 @@ export const runTranscriptGet = registerCapability({
       after: z.string().max(256).optional(),
       /** How much of each body to carry; omitted takes the zoom's cap. */
       text: transcriptTextSchema.optional(),
+      /**
+       * Words to search the entries for, ignoring case; omitted reads every
+       * entry. Surrounding space is trimmed, and a query of nothing but
+       * space is refused.
+       */
+      query: z.string().trim().min(1).max(TRANSCRIPT_QUERY_MAX).optional(),
       limit: z
         .number()
         .int()
@@ -589,6 +749,10 @@ export const runTranscriptGet = registerCapability({
       complete: z.boolean(),
       /** The run's entries counted at this zoom, whatever the chips. */
       counts: transcriptCountsSchema.optional(),
+      /** The run's figures, whatever the zoom, chips or query. */
+      figures: transcriptFiguresSchema.optional(),
+      /** What the query found; absent on a read with no query. */
+      search: transcriptSearchSchema.optional(),
     })
     .strict(),
 });
@@ -605,3 +769,6 @@ export type TranscriptToolVerdict = z.output<typeof toolVerdictSchema>;
 export type TranscriptText = z.output<typeof transcriptTextSchema>;
 export type TranscriptRecallView = z.output<typeof transcriptRecallSchema>;
 export type TranscriptCountsView = z.output<typeof transcriptCountsSchema>;
+export type TranscriptFiguresView = z.output<typeof transcriptFiguresSchema>;
+export type TranscriptSearchView = z.output<typeof transcriptSearchSchema>;
+export type TranscriptMatch = z.output<typeof transcriptMatchSchema>;

@@ -672,6 +672,12 @@ describe("get_run_transcript", () => {
         errors: 0,
         policy: 0,
       },
+      figures: {
+        steps: { model: 0, tool: 0 },
+        prompts: 0,
+        calls: { count: 0, failed: 0, tools: [], families: [], batches: null },
+        wall: { modelMs: 0, toolMs: 0, waitingMs: 0 },
+      },
     });
   });
 
@@ -1775,5 +1781,194 @@ describe("toolResultsOf and withToolUseFacts", () => {
       { ...base, kind: "text", text: "x", truncated: false },
     ]);
     expect(withToolUseFacts(textOnly, claim, new Map())).toBe(textOnly);
+  });
+});
+
+describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  // The Read call's request was kept as a digest only; its result was kept.
+  const readRequest = { ...stored('{"path":"src/limits.ts"}'), bytesRef: "" };
+  const forged = stored("the real words");
+  objects.set(forged.bytesRef, {
+    bytes: enc.encode("words the record does not vouch for"),
+    contentType: "text/plain",
+  });
+  const run = [
+    tachoRow(0, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Find the flaky test."),
+    }),
+    tachoRow(1, {
+      kind: "tool_requested",
+      toolName: "Grep",
+      toolStatus: "",
+      toolUseId: "tu_g",
+      turnSeq: 1,
+      body: JSON.stringify({ tool_target: "packages/Retry" }),
+      ...stored('{"pattern":"flaky"}'),
+    }),
+    tachoRow(2, {
+      kind: "tool_call",
+      toolName: "Grep",
+      toolUseId: "tu_g",
+      turnSeq: 1,
+      ...stored("src/runner.test.ts:12: it.retry(3)"),
+    }),
+    tachoRow(3, {
+      kind: "tool_requested",
+      toolName: "Read",
+      toolStatus: "",
+      toolUseId: "tu_r",
+      turnSeq: 1,
+      ...readRequest,
+    }),
+    tachoRow(4, {
+      kind: "tool_call",
+      toolName: "Read",
+      toolUseId: "tu_r",
+      turnSeq: 1,
+      ...stored("RETRY_LIMIT = 3"),
+    }),
+    tachoRow(5, {
+      kind: "turn_end",
+      ...blank,
+      turnSeq: 1,
+      ...stored("The runner calls retry three times."),
+    }),
+    // A body that no longer hashes to its digest is not searched.
+    tachoRow(6, { kind: "turn_start", ...blank, turnSeq: 2, ...forged }),
+  ];
+
+  it("finds the query in any half, ignoring case, and says where it matched", async () => {
+    const { transcript } = harness(run);
+    const out = await transcript(
+      input({ zoom: "steps", query: "  RETRY " }),
+      ctx(),
+    );
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.entries.map((e) => [e.key, e.matches])).toEqual([
+      ["1", ["target", "response"]],
+      ["3", ["response"]],
+      ["5", ["response"]],
+    ]);
+    // The digest-only request and the half that no longer hashes.
+    expect(out.search).toEqual({ query: "retry", matched: 3, unsearched: 2 });
+  });
+
+  it("matches the label and the tool on the entry, with no body read", async () => {
+    const { transcript, getBody } = harness(
+      run.map((r) => ({ ...r, bytesRef: "" })),
+    );
+    const out = await transcript(
+      input({ zoom: "steps", query: "grep" }),
+      ctx(),
+    );
+    expect(out.entries.map((e) => [e.key, e.matches])).toEqual([
+      ["1", ["label", "subject"]],
+    ]);
+    expect(getBody).not.toHaveBeenCalled();
+    // Each call's two halves were digests only. A prompt or reply kept as a
+    // digest is no half of its entry, so it is not counted.
+    expect(out.search).toMatchObject({ matched: 1, unsearched: 4 });
+  });
+
+  it("narrows by the chips first, then the query, and pages the matches on the cursor", async () => {
+    const { transcript } = harness(run);
+    const tools = await transcript(
+      input({ zoom: "steps", kinds: ["tools"], query: "retry" }),
+      ctx(),
+    );
+    expect(tools.entries.map((e) => e.key)).toEqual(["1", "3"]);
+    const first = await transcript(
+      input({ zoom: "steps", query: "retry", limit: 2 }),
+      ctx(),
+    );
+    expect(first.entries.map((e) => e.key)).toEqual(["1", "3"]);
+    const later = await transcript(
+      input({
+        zoom: "steps",
+        query: "retry",
+        limit: 2,
+        after: first.cursor ?? undefined,
+      }),
+      ctx(),
+    );
+    expect(later.entries.map((e) => e.key)).toEqual(["5"]);
+    expect(later.cursor).toBeNull();
+    expect(later.search).toEqual(first.search);
+  });
+
+  it("answers an empty page for a query nothing holds, with the search and figures (negative)", async () => {
+    const { transcript } = harness(run);
+    const out = await transcript(
+      input({ zoom: "steps", query: "nowhere" }),
+      ctx(),
+    );
+    expect(out.entries).toEqual([]);
+    expect(out.search).toEqual({ query: "nowhere", matched: 0, unsearched: 2 });
+    expect(out.figures?.calls.count).toBe(2);
+  });
+
+  it("carries no search and no matches on a read with no query (negative)", async () => {
+    const { transcript } = harness(run);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(out.search).toBeUndefined();
+    expect(out.entries.every((e) => e.matches === undefined)).toBe(true);
+  });
+
+  it("counts the run's figures over its steps, whatever the zoom, chips or query", async () => {
+    const { transcript } = harness(run);
+    const steps = await transcript(input({ zoom: "steps" }), ctx());
+    expect(steps.figures).toEqual({
+      steps: { model: 0, tool: 2 },
+      prompts: 2,
+      calls: {
+        count: 2,
+        failed: 0,
+        tools: [
+          { name: "Grep", calls: 1 },
+          { name: "Read", calls: 1 },
+        ],
+        families: [
+          {
+            family: "read",
+            calls: 1,
+            share: 0.5,
+            ms: 1_000,
+            failed: 0,
+            tools: 1,
+          },
+          {
+            family: "search",
+            calls: 1,
+            share: 0.5,
+            ms: 1_000,
+            failed: 0,
+            tools: 1,
+          },
+        ],
+        batches: {
+          count: 1,
+          parallel: 1,
+          widest: 2,
+          fanOut: 2,
+          serialMs: 2_000,
+          togetherMs: 3_000,
+          histogram: [{ width: 2, batches: 1 }],
+        },
+      },
+      wall: { modelMs: 0, toolMs: 2_000, waitingMs: 0 },
+    });
+    for (const over of [
+      { zoom: "everything" },
+      { zoom: "turns" },
+      { zoom: "steps", kinds: ["seal"] },
+      { zoom: "steps", query: "retry", limit: 1 },
+    ]) {
+      const out = await transcript(input(over), ctx());
+      expect(out.figures).toEqual(steps.figures);
+    }
   });
 });
