@@ -8,6 +8,15 @@
  * (deletedAt IS NOT NULL) are rejected. Expired keys are rejected with a
  * distinct result so callers can surface a meaningful error.
  *
+ * One deleted key gets its own answer: a Tacho host's key that revoking the
+ * host retired. Revoking a host deletes its keys and marks the host row
+ * `revoked` in one transaction (`revokeHostEnrollment`,
+ * @oxagen/database/member-lifecycle), so the host's next request carries a
+ * key no live lookup finds. Answered `invalid`, the host could not tell a
+ * revocation from a fault and kept retrying for ever. When the key's hash
+ * matches and a revoked host names it, the answer is `host_revoked`, which
+ * the API serves as 403 with that reason so the host stops shipping.
+ *
  * IMPORTANT: the lookup prefix is a FIXED-LENGTH leading WINDOW, never a split
  * on the first "_". The base64url secret can itself contain "_", and every real
  * key begins with the literal "ox_" — splitting on the first underscore would
@@ -50,8 +59,12 @@
  * API middleware, MCP handler, CLI, or tests.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
+import {
+  TACHO_GATEWAY_SCOPE_PURPOSE,
+  TACHO_HOST_SCOPE_PURPOSE,
+} from "@oxagen/database/member-lifecycle";
 import { orgHasSso } from "../sso/entitlement";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
@@ -102,7 +115,12 @@ export type ApiKeyResolutionError =
    * not a member the organization's identity provider has vouched for (and is
    * not an Owner). The key is genuine. The organization's policy refuses it.
    */
-  | { kind: "sso_required" };
+  | { kind: "sso_required" }
+  /**
+   * The key is a Tacho host's, and an operator revoked that host, which
+   * retired the key. No retry changes the answer, so the host stops.
+   */
+  | { kind: "host_revoked" };
 
 function scopePurposeOf(scope: unknown): string | null {
   return typeof scope === "object" &&
@@ -111,6 +129,34 @@ function scopePurposeOf(scope: unknown): string | null {
     typeof scope.purpose === "string"
     ? scope.purpose
     : null;
+}
+
+/** The enrollment a Tacho host or gateway key names, or null for any other key. */
+function hostEnrollmentOf(scope: unknown): string | null {
+  const purpose = scopePurposeOf(scope);
+  if (
+    purpose !== TACHO_HOST_SCOPE_PURPOSE &&
+    purpose !== TACHO_GATEWAY_SCOPE_PURPOSE
+  )
+    return null;
+  const enrollment = (scope as { host_enrollment_id?: unknown })
+    .host_enrollment_id;
+  return typeof enrollment === "string" && enrollment !== ""
+    ? enrollment
+    : null;
+}
+
+/**
+ * Whether a stored hex hash names the raw key whose digest is `computed`.
+ * `timingSafeEqual` throws RangeError when the two buffers differ in length.
+ * A corrupted, truncated or odd-length stored hash would otherwise crash the
+ * auth path with a 500 instead of a clean auth failure, so the length is
+ * checked first: a mismatch can never be a valid key.
+ */
+function hashMatches(stored: string, computed: Buffer): boolean {
+  const storedBuf = Buffer.from(stored, "hex");
+  if (storedBuf.length !== computed.length) return false;
+  return timingSafeEqual(storedBuf, computed);
 }
 
 export type ApiKeyResolution =
@@ -164,16 +210,13 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
     }),
   );
 
-  if (!row) return { ok: false, kind: "invalid" };
-  const storedHashBuf = Buffer.from(row.keyHash, "hex");
   const computedHashBuf = Buffer.from(hash, "hex");
-  // `timingSafeEqual` throws RangeError when the two buffers differ in length.
-  // A corrupted/truncated/odd-length `keyHash` in the DB would otherwise crash
-  // the auth path with a 500 instead of a clean auth failure. Guard the length
-  // first (a mismatch can never be a valid key) and return `invalid`.
-  if (storedHashBuf.length !== computedHashBuf.length)
-    return { ok: false, kind: "invalid" };
-  if (!timingSafeEqual(storedHashBuf, computedHashBuf))
+  if (!row) {
+    return (await revokedHostKey(prefix, computedHashBuf))
+      ? { ok: false, kind: "host_revoked" }
+      : { ok: false, kind: "invalid" };
+  }
+  if (!hashMatches(row.keyHash, computedHashBuf))
     return { ok: false, kind: "invalid" };
   if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
     return { ok: false, kind: "expired" };
@@ -244,6 +287,50 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
     workspaceId: row.workspaceId,
     userId,
   };
+}
+
+/**
+ * Whether the raw key is a deleted key of a Tacho host an operator revoked.
+ * See the module comment. The deleted row must match the raw key's hash, so
+ * a guess at a prefix learns nothing, and a revoked host row must name it:
+ * by `api_key_id` for the host's control-plane key (a legacy key carries no
+ * scope), or by the enrollment id a host or gateway key's scope records.
+ * A key deleted for any other reason stays `invalid`.
+ */
+async function revokedHostKey(
+  prefix: string,
+  computedHash: Buffer,
+): Promise<boolean> {
+  // tenancy: identity resolution before a tenant scope exists, the same prefix lookup as the live one over deleted rows; its orgId is used only after the row is verified by the raw key's hash.
+  const retired = await withSystemDb((tx) =>
+    tx.query.apiKeys.findFirst({
+      where: and(
+        eq(schema.apiKeys.keyPrefix, prefix),
+        isNotNull(schema.apiKeys.deletedAt),
+      ),
+      orderBy: [desc(schema.apiKeys.deletedAt)],
+      columns: { id: true, keyHash: true, orgId: true, scope: true },
+    }),
+  );
+  if (!retired || !hashMatches(retired.keyHash, computedHash)) return false;
+  const enrollment = hostEnrollmentOf(retired.scope);
+  // tenancy: identity resolution before a tenant scope exists; filtered by the orgId of the key just verified by its hash.
+  const host = await withSystemDb((tx) =>
+    tx.query.tachoHosts.findFirst({
+      where: and(
+        eq(schema.tachoHosts.orgId, retired.orgId),
+        eq(schema.tachoHosts.status, "revoked"),
+        enrollment === null
+          ? eq(schema.tachoHosts.apiKeyId, retired.id)
+          : or(
+              eq(schema.tachoHosts.apiKeyId, retired.id),
+              eq(schema.tachoHosts.publicId, enrollment),
+            ),
+      ),
+      columns: { id: true },
+    }),
+  );
+  return host !== undefined;
 }
 
 /**

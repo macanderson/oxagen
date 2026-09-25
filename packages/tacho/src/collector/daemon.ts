@@ -1366,6 +1366,14 @@ async function initializeDaemon(
     // control plane 403s a batch containing any of them, and a 403 is
     // retryable, so without this the queue wedges forever.
     hostEnrollmentId: host.host_enrollment_id,
+    // A revoked host fetches no control envelope, so the revoked status
+    // arrives only as the refusal. Recorded here, the hooks and the model
+    // proxy refuse from it and `tacho status` shows it (#3944).
+    onHostRevoked: () => {
+      host = applyControlFacts(paths.hostFile, host, {
+        host_status: "revoked",
+      });
+    },
     // Hosts that lost the control plane together do not retry in step.
     jitter: Math.random,
     // Asked at ship time, not only at append time. A body appended under
@@ -1474,6 +1482,9 @@ async function initializeDaemon(
   // --- end transcript tailer ---------------------------------------------
 
   async function sendAcks(): Promise<void> {
+    // A revoked host's poll is refused on every attempt and never clears,
+    // so it stops with the shipper rather than logging a failure a minute.
+    if (shipper.hostRevoked) return;
     // A message whose session sealed before a boundary reached it is
     // `expired`; left unsent, the operator reads it as still on its way.
     pendingAcks.push(...registry.takeExpiredOnSeal());

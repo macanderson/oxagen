@@ -24,6 +24,7 @@ const mockQuery = {
   workspaces: { findFirst: vi.fn() },
   workspaceUsers: { findFirst: vi.fn() },
   orgSecurityPolicy: { findFirst: vi.fn() },
+  tachoHosts: { findFirst: vi.fn() },
 };
 
 // Mock for Drizzle query builder used in resolveOrgScope (org.ts)
@@ -418,6 +419,75 @@ describe("resolveApiKey", () => {
   });
 
   // -------------------------------------------------------------------------
+  // A revoked Tacho host's key (#3944, S-04). Revoking a host deletes its
+  // keys, so the live lookup finds nothing. The host must hear that it was
+  // revoked, not that its key is unknown, or it retries for ever.
+  // -------------------------------------------------------------------------
+  const ENROLLMENT = "tch_abcdefghijklmnopqrstuv";
+  const retiredHostKey = (over: Record<string, unknown> = {}) => ({
+    id: "aky_host",
+    keyHash: sha256hex(RAW_KEY),
+    orgId: "org_abc",
+    scope: { purpose: "tacho_host_v1", host_enrollment_id: ENROLLMENT },
+    ...over,
+  });
+
+  it("answers host_revoked for a revoked host's retired key", async () => {
+    mockQuery.apiKeys.findFirst
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(retiredHostKey());
+    mockQuery.tachoHosts.findFirst.mockResolvedValueOnce({ id: "tch_row" });
+    const result = await resolveApiKey(RAW_KEY);
+    expect(result).toEqual({ ok: false, kind: "host_revoked" });
+    expect(mockQuery.tachoHosts.findFirst).toHaveBeenCalledTimes(1);
+    // The workspace and membership reads belong to a live key only.
+    expect(mockQuery.workspaces.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("answers host_revoked for the gateway key the same enrollment minted", async () => {
+    mockQuery.apiKeys.findFirst
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(
+        retiredHostKey({
+          id: "aky_gateway",
+          scope: {
+            purpose: "tacho_gateway_v1",
+            host_enrollment_id: ENROLLMENT,
+          },
+        }),
+      );
+    mockQuery.tachoHosts.findFirst.mockResolvedValueOnce({ id: "tch_row" });
+    expect(await resolveApiKey(RAW_KEY)).toEqual({
+      ok: false,
+      kind: "host_revoked",
+    });
+  });
+
+  it("stays invalid when the retired key's hash does not match (negative)", async () => {
+    mockQuery.apiKeys.findFirst
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(
+        retiredHostKey({ keyHash: sha256hex(`${RAW_KEY}_other`) }),
+      );
+    expect(await resolveApiKey(RAW_KEY)).toEqual({
+      ok: false,
+      kind: "invalid",
+    });
+    expect(mockQuery.tachoHosts.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("stays invalid for a deleted key no revoked host names (negative)", async () => {
+    mockQuery.apiKeys.findFirst
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(retiredHostKey({ id: "aky_plain", scope: {} }));
+    mockQuery.tachoHosts.findFirst.mockResolvedValueOnce(undefined);
+    expect(await resolveApiKey(RAW_KEY)).toEqual({
+      ok: false,
+      kind: "invalid",
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // The scope purpose decides who the bearer is.
   // -------------------------------------------------------------------------
   const cliKeyRow = (createdById: string | null = "user_approver") => ({
@@ -800,8 +870,22 @@ describe("resolveApiKey", () => {
     expect(apiKeyPrefix(RAW_KEY)).not.toBe("ox");
   });
 
-  it("calls the DB exactly once for a well-formed key (the prefix window passes the malformed guard)", async () => {
+  it("reaches the DB for a well-formed key (the prefix window passes the malformed guard)", async () => {
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce(undefined);
+    await resolveApiKey(RAW_KEY);
+    // The live lookup, then, because it found nothing, the lookup of a
+    // revoked host's retired key. Both read by the same indexed prefix.
+    expect(mockQuery.apiKeys.findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads the key table once when the live lookup finds a row", async () => {
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+      id: "aky_once",
+      keyHash: sha256hex(`${RAW_KEY}_other`),
+      orgId: "org_1",
+      workspaceId: "wrk_1",
+      expiresAt: null,
+    });
     await resolveApiKey(RAW_KEY);
     expect(mockQuery.apiKeys.findFirst).toHaveBeenCalledTimes(1);
   });

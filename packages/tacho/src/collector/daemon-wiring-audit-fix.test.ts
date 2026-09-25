@@ -103,6 +103,10 @@ function fakePlane(etag: string) {
   const queue: DeliveredCommand[] = [];
   const acks: CommandAcknowledgement[] = [];
   let bundle: PolicyBundle | undefined;
+  // Once set, every request is refused the way the API refuses the key a
+  // revoke retired: 403 with the reason `host_revoked`.
+  let revoked = false;
+  const requests: string[] = [];
   const control = (): ControlEnvelope => ({
     host_status: "active",
     deny_generation: { org: 1, workspace: 1 },
@@ -111,6 +115,22 @@ function fakePlane(etag: string) {
   });
   const fetch: FetchLike = async (url, init) => {
     const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
+    requests.push(url);
+    if (revoked) {
+      return {
+        ok: false,
+        status: 403,
+        text: async () =>
+          JSON.stringify({
+            error: {
+              code: "forbidden",
+              reason: "host_revoked",
+              message: "Forbidden: Tacho host enrollment revoked",
+            },
+            requestId: "req_revoked",
+          }),
+      };
+    }
     if (url.endsWith("/events")) {
       const events = body["events"] as TachoEvent[];
       return {
@@ -152,9 +172,13 @@ function fakePlane(etag: string) {
   return {
     fetch,
     acks,
+    requests,
     queue: (delivered: DeliveredCommand) => queue.push(delivered),
     offerBundle: (next: PolicyBundle) => {
       bundle = next;
+    },
+    revoke: () => {
+      revoked = true;
     },
   };
 }
@@ -533,6 +557,50 @@ describe("the daemon's audit wiring", () => {
       hookSpecificOutput: {
         permissionDecision: "deny",
         permissionDecisionReason: expect.stringContaining("suspended"),
+      },
+    });
+  });
+
+  it("marks the host revoked, stops shipping and refuses tools once the control plane answers host_revoked", async () => {
+    // A revoke retires the host's key, so no control envelope can carry the
+    // revoked status. The refusal is the only word the host gets (#3944).
+    const { handle, plane, paths } = await boot();
+    await handle.api.handleHook(hook("SessionStart"));
+    plane.revoke();
+    const before = plane.requests.length;
+    await handle.tick();
+    expect(handle.shipper.hostRevoked).toBe(true);
+    expect(handle.host().host_status).toBe("revoked");
+    expect(
+      (
+        JSON.parse(readFileSync(paths.hostFile, "utf8")) as Record<
+          string,
+          unknown
+        >
+      )["host_status"],
+    ).toBe("revoked");
+    expect(handle.api.status()).toMatchObject({
+      host_status: "revoked",
+      last_error: expect.stringContaining("revoked this host's enrollment"),
+    });
+    // One refused ingest, and then nothing more goes to the control plane:
+    // no ingest and no command poll.
+    await handle.tick();
+    await handle.tick();
+    expect(plane.requests.slice(before)).toEqual([
+      expect.stringMatching(/\/events$/),
+    ]);
+    const response = await handle.api.handleHook(
+      hook("PreToolUse", {
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/README.md" },
+        tool_use_id: "toolu_revoked",
+      }),
+    );
+    expect(response).toMatchObject({
+      hookSpecificOutput: {
+        permissionDecision: "deny",
+        permissionDecisionReason: expect.stringContaining("revoked"),
       },
     });
   });

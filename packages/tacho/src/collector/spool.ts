@@ -107,6 +107,13 @@ export interface ShipperOptions {
    */
   jitter?: () => number;
   /**
+   * Called once when the control plane answers that an operator revoked this
+   * host (`host_revoked`). The daemon marks the host revoked, so the hooks
+   * and the model proxy refuse as they would for a revoked status delivered
+   * in a control envelope, which a revoked host can no longer fetch.
+   */
+  onHostRevoked?: () => void;
+  /**
    * This host's current enrollment id. Events recorded under a PREVIOUS
    * enrollment can never be accepted — the control plane rejects a whole batch
    * with 403 "event names another host" if any event in it names a different
@@ -165,6 +172,33 @@ const SESSION_OWNED_ELSEWHERE = "session belongs to another host";
 function sessionOwnedElsewhere(error: ControlError): boolean {
   return error.status === 403 && error.body.includes(SESSION_OWNED_ELSEWHERE);
 }
+
+/**
+ * The reason the control plane gives a revoked host's requests: the 403 that
+ * `resolveEnrolledHost` (@oxagen/handlers) answers for a live key on a
+ * revoked host, and the one the API's auth middleware answers for the key a
+ * revoke retired. Matched on the envelope's `error.reason`, which both keep
+ * in step with this string (`TACHO_HOST_REVOKED`).
+ */
+const HOST_REVOKED = "host_revoked";
+function hostRevoked(error: ControlError): boolean {
+  if (error.status !== 403) return false;
+  try {
+    const parsed = JSON.parse(error.body) as {
+      error?: { reason?: unknown };
+    } | null;
+    return parsed?.error?.reason === HOST_REVOKED;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What `tacho status` shows once the control plane has said this host is
+ * revoked: what happened, where the events are, and what to run.
+ */
+export const HOST_REVOKED_MESSAGE =
+  "an operator revoked this host's enrollment, so the collector stopped shipping. Recorded events stay in the local spool. Run `tacho unenroll` to remove the hooks and the service.";
 
 /**
  * Whether a refusal is about one session that cannot land yet: a subagent
@@ -233,6 +267,12 @@ export class Shipper {
   >();
   /** Events quarantined since the last batch the control plane accepted. */
   private consecutiveQuarantines = 0;
+  /**
+   * Set when the control plane answered `host_revoked`. A revocation never
+   * clears on a retry, so nothing more is sent. In memory only: after a
+   * restart one refusal finds it again.
+   */
+  private revoked = false;
   /** The drain in flight, so a second caller waits instead of racing it. */
   private draining: Promise<ShipResult> | undefined;
   lastSuccessAt: number | undefined;
@@ -248,9 +288,26 @@ export class Shipper {
     return this.consecutiveFailures === 0 && this.lastSuccessAt !== undefined;
   }
 
-  /** Whether backoff allows an attempt now. */
+  /** Whether the control plane has said an operator revoked this host. */
+  get hostRevoked(): boolean {
+    return this.revoked;
+  }
+
+  /** Whether backoff allows an attempt now. A revoked host never ships again. */
   ready(): boolean {
-    return this.options.now() >= this.nextAttemptAt;
+    return !this.revoked && this.options.now() >= this.nextAttemptAt;
+  }
+
+  /**
+   * Stop for good: the control plane said an operator revoked this host.
+   * Nothing is marked shipped or quarantined, so the WAL keeps every event.
+   */
+  private stopRevoked(): void {
+    if (this.revoked) return;
+    this.revoked = true;
+    this.lastError = HOST_REVOKED_MESSAGE;
+    this.options.log(`ingest refused: ${HOST_REVOKED_MESSAGE}`);
+    this.options.onHostRevoked?.();
   }
 
   private succeed(): void {
@@ -384,7 +441,7 @@ export class Shipper {
    * Re-enrolling a host mints a new `host_enrollment_id` and leaves whatever is
    * still spooled stamped with the old one. The control plane rejects a batch
    * with 403 if ANY event in it names a different host, and the Shipper treats
-   * 403 as retryable — correctly, since a revoked key is also a 403 — so a
+   * a 403 as retryable unless it names a revocation (`host_revoked`), so a
    * single orphaned event at the head of the WAL wedges the queue permanently
    * and every valid event behind it stops too. Observed on a real host: five
    * enrollment ids in one WAL, 30,206 of 45,135 events unshippable, nothing
@@ -770,7 +827,14 @@ export class Shipper {
         this.succeed();
         return this.shipBatch(batch, bodies);
       }
-      // 401/403 (revoked or denied key), 429, 5xx: keep the batch, back off.
+      if (error instanceof ControlError && hostRevoked(error)) {
+        // An operator revoked this host. Backing off would retry a refusal
+        // that never clears, for ever, while the WAL grows. Stop instead,
+        // and keep the batch where it is.
+        this.stopRevoked();
+        return { shipped: 0, quarantined: 0, reachable: true };
+      }
+      // 401, a 403 that names no revocation, 429, 5xx: keep the batch, back off.
       this.fail(error);
       this.options.log(`ingest failed: ${this.lastError ?? "unknown"}`);
       return {
