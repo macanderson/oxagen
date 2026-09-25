@@ -94,6 +94,15 @@ vi.mock("@oxagen/iam", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/iam")>()),
   readActiveEmergencyDenies,
 }));
+// The belt drops a capability the person's roles do not grant (#4194), and it
+// reads those roles through Postgres, which the stand-in transaction cannot
+// answer. The recorded turns ask as the workspace's Owner, so the person holds
+// Owner in the org and the workspace.
+vi.mock("@oxagen/iam/org-role", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/iam/org-role")>()),
+  resolveActorOrgRoles: async () => ["Owner"],
+  resolveActorWorkspaceRoles: async () => ["Owner"],
+}));
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const withTenantDb = async (fn: (tx: unknown) => unknown) => fn({});
