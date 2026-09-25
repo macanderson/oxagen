@@ -175,6 +175,66 @@ jobs:
               core.notice(`Filed drift issue #${created.data.number}`)
             }
 
+      # The drift issue's definition of done says this check is green, so a
+      # green run closes it (#2978). The step reads `drifted == 'false'`, which
+      # the script writes only after it read all five repos. An empty output
+      # means the check could not run, and that must never close the issue.
+      - name: Close the drift issue once the corpus is clean
+        if: steps.check.outcome == 'success' && steps.check.outputs.drifted == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const MARKER = '<!-- scr-corpus-drift -->'
+
+            const existing = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open "${MARKER}" in:body`,
+            })
+
+            // The same confirmation as the filing step: search returns
+            // candidates, and only a body that carries the marker in its prose
+            // is the drift issue. An issue quoting it in backticks stays open.
+            const { confirmMarkedIssues, decideCloseAction } = await import(
+              `${process.env.GITHUB_WORKSPACE}/tools/scripts/scr-drift-issue.mjs`
+            )
+
+            const confirmed = await confirmMarkedIssues(
+              existing.data.items,
+              async (n) => {
+                const { data } = await github.rest.issues.get({
+                  ...context.repo,
+                  issue_number: n,
+                })
+                return data.body
+              },
+              MARKER,
+            )
+
+            const decision = decideCloseAction(confirmed)
+
+            if (decision.action === 'abort') {
+              core.setFailed(decision.reason)
+              return
+            }
+
+            if (decision.action === 'noop') {
+              core.notice('No open drift issue to close.')
+              return
+            }
+
+            const number = decision.number
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: number,
+              body: `Corpus clean as of ${context.sha}. Closed by [scr-corpus-check run ${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
+            })
+            await github.rest.issues.update({
+              ...context.repo,
+              issue_number: number,
+              state: 'closed',
+              state_reason: 'completed',
+            })
+            core.notice(`Closed drift issue #${number}`)
+
       - name: Fail the run when drift is present
         if: steps.check.outputs.drifted == 'true'
         run: |

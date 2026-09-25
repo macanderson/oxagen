@@ -99,3 +99,27 @@ export function decideDriftAction(confirmed) {
   }
   return { action: "create" };
 }
+
+/**
+ * What the job should do about the confirmed set once the check is green.
+ *
+ * The drift issue's definition of done says `scr-corpus-check` is green. Until
+ * this ran, nothing closed the issue when that became true, so a clean corpus
+ * still showed an open drift report (#2978). The close follows the same rules
+ * as the update: only an issue confirmed by {@link confirmMarkedIssues} is a
+ * candidate, so an issue that quotes the marker in backticks is never closed.
+ * Two confirmed issues stop the job for the reason {@link decideDriftAction}
+ * gives, because closing both could close a live issue by mistake.
+ *
+ * @returns `{ action: "close", number }`, `{ action: "noop" }`, or
+ *          `{ action: "abort", reason }`
+ */
+export function decideCloseAction(confirmed) {
+  if (confirmed.length > 1) {
+    return { action: "abort", reason: decideDriftAction(confirmed).reason };
+  }
+  if (confirmed.length === 1) {
+    return { action: "close", number: confirmed[0] };
+  }
+  return { action: "noop" };
+}

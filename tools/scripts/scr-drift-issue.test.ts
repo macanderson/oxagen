@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   MARKER,
   confirmMarkedIssues,
+  decideCloseAction,
   decideDriftAction,
 } from "./scr-drift-issue.mjs";
 
@@ -73,7 +74,9 @@ describe("confirmMarkedIssues", () => {
     const got = await confirmMarkedIssues(
       [{ number: 2699 }],
       reader({
-        2699: ["The body starts with:", "", "```html", MARKER, "```"].join("\n"),
+        2699: ["The body starts with:", "", "```html", MARKER, "```"].join(
+          "\n",
+        ),
       }),
     );
     expect(got).toEqual([]);
@@ -144,5 +147,54 @@ describe("decideDriftAction", () => {
     expect(reason).toMatch(/backticks/);
     expect(reason).toMatch(/genuine duplicate/);
     expect(reason).not.toMatch(/Close all but one/);
+  });
+});
+
+describe("decideCloseAction", () => {
+  it("closes the one marked issue once the corpus is clean", () => {
+    expect(decideCloseAction([2673])).toEqual({
+      action: "close",
+      number: 2673,
+    });
+  });
+
+  it("does nothing when no issue is marked", () => {
+    expect(decideCloseAction([])).toEqual({ action: "noop" });
+  });
+
+  it("aborts rather than closing two marked issues", () => {
+    // Closing both could close a live issue that carries the marker by
+    // mistake. The reader gets the same instructions as the filing step.
+    const got = decideCloseAction([2673, 2699]);
+    expect(got.action).toBe("abort");
+    expect(got.reason).toContain("2673");
+    expect(got.reason).toContain("2699");
+    expect(got.reason).toMatch(/backticks/);
+  });
+
+  it("never closes an issue that only quotes the marker in backticks", async () => {
+    // The #2699 shape on the close path: the report is gone and the issue
+    // documenting the check is still open. It must survive a green run.
+    const confirmed = await confirmMarkedIssues(
+      [{ number: 2699 }],
+      reader({
+        2699: "Look for an open issue with the `" + MARKER + "` marker.",
+      }),
+    );
+    expect(decideCloseAction(confirmed)).toEqual({ action: "noop" });
+  });
+
+  it("closes the real report and leaves the documenting issue open", async () => {
+    const confirmed = await confirmMarkedIssues(
+      [{ number: 2673 }, { number: 2699 }],
+      reader({
+        2673: `${MARKER}\n### Context\n\nThe SCR corpus has drifted.`,
+        2699: "Look for an issue with the `" + MARKER + "` marker.",
+      }),
+    );
+    expect(decideCloseAction(confirmed)).toEqual({
+      action: "close",
+      number: 2673,
+    });
   });
 });
