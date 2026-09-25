@@ -927,8 +927,9 @@ async function sessionCommits(
   // Committer dates are whole seconds. A commit made in the same second as
   // the first read counts.
   const since = Math.floor(firstReadAt / 1000);
-  const newestFirst = range.split("\0").reverse();
-  for (const record of newestFirst) {
+  // `git log` lists newest first. Reversed, so the list stays oldest first.
+  const oldestFirst = range.split("\0").reverse();
+  for (const record of oldestFirst) {
     const [sha, seconds, ...rest] = record.trim().split(" ");
     if (sha === undefined || sha.length === 0 || seconds === undefined)
       continue;
