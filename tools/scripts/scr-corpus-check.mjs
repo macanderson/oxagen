@@ -3,7 +3,7 @@
 //
 // ADR-038 replicated docs/scr/ across five org repos and accepted drift as
 // the cost. ADR-137 retired that corpus. Standing decisions live in oxagen's
-// AGENTS.md (ADR-181), and a connected repository is steered from the
+// AGENTS.md, and a connected repository is steered from the
 // workspace. A file under docs/scr/ in any of the five repos is the
 // old copy coming back.
 //
@@ -83,7 +83,7 @@ export function buildReport(trees) {
   }
 
   const summary = [
-    "Standing decisions live in oxagen's `AGENTS.md` (ADR-137, ADR-181). " +
+    "Standing decisions live in oxagen's `AGENTS.md` (ADR-137). " +
       `\`${CORPUS_PATH}/\` is not copied.`,
     "",
     ...lines,
