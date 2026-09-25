@@ -42,6 +42,7 @@ const source: DataSource = {
     preferences,
     counts: refuse,
     notifications: refuse,
+    assistantEngine: refuse,
   },
   runs: {
     list: refuse,
