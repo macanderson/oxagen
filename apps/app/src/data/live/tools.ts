@@ -66,6 +66,7 @@ export const tools: DataSource["tools"] = {
       input: {
         ...(q.category === null ? {} : { category: q.category }),
         ...(q.cursor === null ? {} : { cursor: q.cursor }),
+        ...(q.serverId === null ? {} : { serverId: q.serverId }),
       },
       page: "tools",
     });

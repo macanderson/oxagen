@@ -3,7 +3,9 @@
 // page that did not load, a roster that did not load, a registry whose total
 // is unknown, the category chips in the order and with the counts the page's
 // versions carry, the chip that is pressed and what pressing it again does,
-// and the empty page with and without a filter. The page suite
+// the provider chips the roster draws and the links that keep each filter,
+// the provider's icon in its row, and the empty page with and without a
+// filter. The page suite
 // (tools.test.tsx) walks the ideal state through the whole page. axe checks
 // the state each test ends in (INV-26).
 import {
@@ -34,7 +36,9 @@ vi.mock("./actions", () => ({
 
 const { Registry } = await import("./registry");
 const { mcpServerList, toolVersionPage } = await import("./tools.builders");
-const { toolVersionListOutput } = await import("@/test/tools-outputs");
+const { mcpServerListOutput, toolVersionListOutput } = await import(
+  "@/test/tools-outputs"
+);
 
 const at = { org: "acme", ws: "core-platform" };
 const TOOLS = "/acme/core-platform/tools";
@@ -70,6 +74,7 @@ type Props = {
   total?: Page | null;
   servers?: Read<ReturnType<typeof mcpServerList>>;
   category?: string | null;
+  provider?: string | null;
   cursor?: string | null;
   canImport?: boolean;
 };
@@ -79,6 +84,7 @@ function renderRegistry({
   total = toolVersionPage(),
   servers = readOk(mcpServerList()),
   category = null,
+  provider = null,
   cursor = null,
   canImport = true,
 }: Props = {}) {
@@ -89,6 +95,7 @@ function renderRegistry({
         orgRole={canImport ? "owner" : "member"}
         names="labels"
         category={category}
+        provider={provider}
         cursor={cursor}
         canImport={canImport}
         canClassify={canImport}
@@ -107,6 +114,23 @@ function chip(category: string): HTMLElement {
   if (!(node instanceof HTMLElement)) throw new Error(`no chip ${category}`);
   return node;
 }
+const providerChips = () =>
+  within(screen.getByRole("group", { name: t("providers") }));
+function providerChip(id: string): HTMLElement {
+  const node = document.querySelector(`[data-provider="${id}"]`);
+  if (!(node instanceof HTMLElement)) throw new Error(`no provider chip ${id}`);
+  return node;
+}
+const STRIPE = "mcs_01k5s1";
+const GITHUB = "mcs_01k5s2";
+const STRIPE_ICON = "https://stripe.example/icon.png";
+/** The roster with Stripe's icon set and GitHub's left unset. */
+const rosterWithIcon = () =>
+  mcpServerList({
+    servers: mcpServerListOutput().servers.map((server) =>
+      server.publicId === STRIPE ? { ...server, iconUrl: STRIPE_ICON } : server,
+    ),
+  });
 const facetNote = () =>
   document.querySelector('[data-state="facets-declared"]')?.textContent;
 
@@ -277,5 +301,138 @@ describe("Registry › empty", () => {
       "empty",
     );
     expect(screen.queryByText(t("emptyRegistry"))).not.toBeInTheDocument();
+  });
+});
+
+describe("Registry › provider icon", () => {
+  it("shows the provider's icon before its name, and its initial when it has none", () => {
+    renderRegistry({ servers: readOk(rosterWithIcon()) });
+    const stripeButton = screen.getByRole("button", { name: "Open Stripe" });
+    expect(
+      stripeButton.querySelector('[data-provider-icon="image"]'),
+    ).toHaveAttribute("src", STRIPE_ICON);
+    const githubButton = screen.getByRole("button", { name: "Open GitHub" });
+    expect(
+      githubButton.querySelector('[data-provider-icon="initial"]'),
+    ).toHaveTextContent("G");
+  });
+});
+
+describe("Registry › provider chips", () => {
+  it("draws every provider on the roster, in roster order, each counted from the unfiltered registry", () => {
+    renderRegistry({ servers: readOk(rosterWithIcon()) });
+    const ids = [...document.querySelectorAll("[data-provider]")].map((node) =>
+      node.getAttribute("data-provider"),
+    );
+    expect(ids).toEqual(["all", STRIPE, GITHUB]);
+    expect(providerChip("all")).toHaveTextContent(
+      new RegExp(`^${t("allProviders")}$`),
+    );
+    expect(providerChip(STRIPE)).toHaveTextContent(/Stripe1$/);
+    expect(providerChip(GITHUB)).toHaveTextContent(/GitHub1$/);
+    expect(
+      providerChip(STRIPE).querySelector('[data-provider-icon="image"]'),
+    ).toHaveAttribute("src", STRIPE_ICON);
+    expect(providerChip("all")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("offers a provider whose versions are all on a later page, and counts none while the total is unknown", () => {
+    // The page shows Stripe's version alone; GitHub is still offered, because
+    // the chips come from the roster, not from the rows.
+    renderRegistry({
+      read: readOk(toolVersionPage({ items: [stripe()] })),
+      total: toolVersionPage({ nextCursor: "cur_2" }),
+    });
+    expect(providerChip(GITHUB)).toHaveTextContent(/GitHub$/);
+    expect(providerChip(STRIPE)).toHaveTextContent(/Stripe$/);
+  });
+
+  it("narrows to a provider when its chip is pressed, keeping the tag and starting at page one", () => {
+    renderRegistry({ category: "moves_money", cursor: "cur_2" });
+    fireEvent.click(providerChip(GITHUB));
+    expect(router.push).toHaveBeenCalledWith(
+      `${TOOLS}?category=moves_money&provider=${GITHUB}`,
+    );
+  });
+
+  it("presses the provider in effect, and pressing it or All providers clears only that filter", () => {
+    renderRegistry({
+      category: "moves_money",
+      provider: STRIPE,
+      read: readOk(toolVersionPage({ items: [stripe()] })),
+    });
+    expect(providerChip(STRIPE)).toHaveAttribute("aria-pressed", "true");
+    expect(providerChip("all")).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(providerChip(STRIPE));
+    expect(router.push).toHaveBeenLastCalledWith(
+      `${TOOLS}?category=moves_money`,
+    );
+    fireEvent.click(providerChip("all"));
+    expect(router.push).toHaveBeenLastCalledWith(
+      `${TOOLS}?category=moves_money`,
+    );
+  });
+
+  it("keeps the provider on the tag chips, the names toggle, and the next page", () => {
+    renderRegistry({
+      provider: STRIPE,
+      read: readOk(toolVersionPage({ items: [stripe()], nextCursor: "cur_2" })),
+    });
+    fireEvent.click(chip("moves_money"));
+    expect(router.push).toHaveBeenLastCalledWith(
+      `${TOOLS}?category=moves_money&provider=${STRIPE}`,
+    );
+    fireEvent.click(chip("all"));
+    expect(router.push).toHaveBeenLastCalledWith(`${TOOLS}?provider=${STRIPE}`);
+    fireEvent.click(screen.getByRole("button", { name: "API names" }));
+    expect(router.push).toHaveBeenLastCalledWith(
+      `${TOOLS}?provider=${STRIPE}&names=api`,
+    );
+    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
+      "href",
+      `${TOOLS}?provider=${STRIPE}&cursor=cur_2`,
+    );
+  });
+
+  it("draws no provider chips when the roster did not load", () => {
+    renderRegistry({ servers: readError("tool_registry_unavailable", 503) });
+    expect(
+      screen.queryByRole("group", { name: t("providers") }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the chip that clears a provider filter when the roster did not load", () => {
+    renderRegistry({
+      provider: STRIPE,
+      servers: readError("tool_registry_unavailable", 503),
+    });
+    expect(providerChips().getAllByRole("button")).toHaveLength(1);
+    fireEvent.click(providerChip("all"));
+    expect(router.push).toHaveBeenCalledWith(TOOLS);
+  });
+});
+
+describe("Registry › empty by provider", () => {
+  it("says the provider supplied nothing when a provider narrows it", () => {
+    renderRegistry({
+      provider: STRIPE,
+      read: readOk(toolVersionPage({ items: [] })),
+    });
+    expect(screen.getByText(t("emptyProvider"))).toHaveAttribute(
+      "data-state",
+      "empty",
+    );
+  });
+
+  it("says the provider has no version with the tag when both narrow it", () => {
+    renderRegistry({
+      provider: STRIPE,
+      category: "changes_access",
+      read: readOk(toolVersionPage({ items: [] })),
+    });
+    expect(screen.getByText(t("emptyProviderCategory"))).toHaveAttribute(
+      "data-state",
+      "empty",
+    );
   });
 });

@@ -9193,6 +9193,8 @@ type Messages = {
       title: string;
       categories: string;
       allCategories: string;
+      providers: string;
+      allProviders: string;
       categoriesNote: string;
       allOnPage: string;
       categoriesDeclaredNote: string;
@@ -9200,6 +9202,8 @@ type Messages = {
       unclassified: string;
       noTags: string;
       emptyCategory: string;
+      emptyProvider: string;
+      emptyProviderCategory: string;
       gateNote: string;
       columns: {
         version: string;

@@ -378,8 +378,8 @@ export const routes = {
     }),
   /**
    * Tools; its tabs are path segments (`/tools/providers`), as the mockup's
-   * route names them, and the first tab is the bare path. A category chip, the
-   * API-names toggle and a cursor are query values.
+   * route names them, and the first tab is the bare path. A category chip, a
+   * provider chip, the API-names toggle and a cursor are query values.
    */
   tools: (
     org: string,
@@ -387,6 +387,7 @@ export const routes = {
     q: {
       tab?: "toolbelts" | "providers" | "policy" | "switches";
       category?: string;
+      provider?: string;
       names?: string;
       cursor?: string;
     } = {},
@@ -395,7 +396,12 @@ export const routes = {
       q.tab === undefined
         ? pathOf(org, ws, "tools")
         : pathOf(org, ws, "tools", q.tab),
-      { category: q.category, names: q.names, cursor: q.cursor },
+      {
+        category: q.category,
+        provider: q.provider,
+        names: q.names,
+        cursor: q.cursor,
+      },
     ),
   /**
    * Repositories; its tabs are path segments (`/repositories/changes`), as the

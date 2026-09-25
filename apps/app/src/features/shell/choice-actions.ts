@@ -73,7 +73,7 @@ export async function chooseToolPatterns(
 ): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org, ws);
   const list = await walk(PAGE_BOUND, (cursor) =>
-    dataSource().tools.versions(ctx, { category: null, cursor }),
+    dataSource().tools.versions(ctx, { category: null, cursor, serverId: null }),
   );
   if (!list.ok) return readToActionResult<OptionPage>(list.read);
   const every = new Map<string, PickerOption>();
@@ -105,7 +105,7 @@ export async function chooseServerTools(
 ): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org, ws);
   const list = await walk(PAGE_BOUND, (cursor) =>
-    dataSource().tools.versions(ctx, { category: null, cursor }),
+    dataSource().tools.versions(ctx, { category: null, cursor, serverId: null }),
   );
   if (!list.ok) return readToActionResult<OptionPage>(list.read);
   const names = new Map<string, PickerOption>();
@@ -253,7 +253,7 @@ export async function chooseSwitchTargets(
     );
   }
   const list = await walk(PAGE_BOUND, (cursor) =>
-    dataSource().tools.versions(ctx, { category: null, cursor }),
+    dataSource().tools.versions(ctx, { category: null, cursor, serverId: null }),
   );
   if (!list.ok) return readToActionResult<OptionPage>(list.read);
   return loaded(

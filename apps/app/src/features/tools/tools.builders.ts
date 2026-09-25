@@ -150,6 +150,7 @@ type ToolsReads = {
     | ((q: {
         category: string | null;
         cursor: string | null;
+        serverId: string | null;
       }) => Read<ToolVersionPage>);
   grants?: Read<CredentialGrantPage>;
   killSwitches?: Read<KillSwitchBoard>;
