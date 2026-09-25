@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   waitForApproval: vi.fn(),
   assertOrgRole: vi.fn(),
   promptConfig: vi.fn(),
+  publishedSteering: vi.fn(),
+  steeringManifest: vi.fn(),
   // The catalog, as `supportsReasoning` reads it: keyed by gateway ids, so a
   // bare vendor spelling is an id it cannot describe and answers false for.
   supportsReasoning: vi.fn((id: string) => id.includes("/")),
@@ -45,19 +47,6 @@ vi.mock("@oxagen/ai", () => ({
   resolveModelFundingSource: mocks.resolveModelFundingSource,
   loadEffectiveModelDefaults: mocks.loadEffectiveModelDefaults,
   loadWorkspacePromptConfigSafe: async () => mocks.promptConfig(),
-  // The registry's own rule (packages/ai/src/prompts/registry.ts): the
-  // governance baseline is append-only, and the workspace's instructions are
-  // appended under their header. The fake keeps that shape so a test can see
-  // what the prompt actually carried.
-  resolvePrompt: (a: {
-    baseline: string;
-    config?: { additionalInstructions?: string | null } | null;
-  }) => {
-    const extra = a.config?.additionalInstructions?.trim();
-    return extra
-      ? `${a.baseline}\n\n---\n\n## Workspace instructions\n\n${extra}`
-      : a.baseline;
-  },
   selectModel: (s: Selector) => ({ modelId: wireIdFor(s) }),
   modelIdOf: (m: { modelId: string }) => m.modelId,
   // The real `modelIdentityFor`, in miniature: on a direct-vendor key the
@@ -139,6 +128,12 @@ vi.mock("./approval", () => ({
 vi.mock("./assistant-recall", () => ({
   recallWorkspaceMemoryMessage: mocks.recall,
 }));
+// The registry read only. The assembly is the real one, so a test sees the
+// text and the manifest the turn would produce.
+vi.mock("./published-steering", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./published-steering")>();
+  return { ...real, readPublishedSteeringCandidates: mocks.publishedSteering };
+});
 vi.mock("./assistant-run", async (importOriginal) => {
   const real = await importOriginal<typeof import("./assistant-run")>();
   return {
@@ -191,11 +186,12 @@ import {
   prepareAssistantTurn,
   type AssistantTurnHooks,
 } from "./assistant-turn";
-import { LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
 import {
-  WORKSPACE_INSTRUCTIONS_MAX_CHARS,
-  WORKSPACE_INSTRUCTIONS_PRECEDENCE,
-} from "./workspace-instructions";
+  ASSISTANT_STEERING_BUDGET_TOKENS,
+  type AssistantSteeringFrame,
+  WORKSPACE_INSTRUCTIONS_ID,
+} from "./assistant-steering";
+import { LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
 
 const CTX = {
   orgId: "org-1",
@@ -361,13 +357,18 @@ const GOVERNED_TOOLS = {
 
 /** Every outcome the run recorder was sealed with, per test. */
 let sealCalls: unknown[] = [];
-/** Every workspace-instructions frame the run recorder was given, per test. */
-let instructionFrames: unknown[] = [];
+/** Every steering manifest frame the run recorder was given, per test. */
+const steeringFrames = (): AssistantSteeringFrame[] =>
+  mocks.steeringManifest.mock.calls.map(
+    (call) => call[0] as AssistantSteeringFrame,
+  );
 
 beforeEach(() => {
   vi.clearAllMocks();
   setup();
   mocks.promptConfig.mockReturnValue({});
+  mocks.publishedSteering.mockResolvedValue([]);
+  mocks.steeringManifest.mockResolvedValue(undefined);
   mocks.assertOrgRole.mockImplementation(async () => {
     mocks.log.push("roles");
     return "Owner";
@@ -410,7 +411,6 @@ beforeEach(() => {
     };
   });
   sealCalls = [];
-  instructionFrames = [];
   mocks.openAssistantRun.mockImplementation(async () => {
     mocks.log.push("open-run");
     const receipts: unknown[] = [];
@@ -420,10 +420,7 @@ beforeEach(() => {
       agentId: AGENT_ID,
       agentVersionId: AGENT_VERSION_ID,
       receipts,
-      workspaceInstructions: async (frame: unknown) => {
-        mocks.log.push("instructions");
-        instructionFrames.push(frame);
-      },
+      steeringManifest: mocks.steeringManifest,
       modelCall: async (r: unknown) => {
         receipts.push({ kind: "model", ...(r as object) });
       },
@@ -837,100 +834,122 @@ describe("the prepared turn", () => {
     expect(captured.updates).toHaveLength(0);
   });
 
-  // #3303: the workspace's extra instructions are steering. Before this they
-  // reached the model with no budget and left no line in the run's record, so
-  // nobody could audit what the workspace had told the agent.
-  describe("workspace instructions", () => {
+  // #4158: published steering and the workspace's instructions reach the
+  // prompt through the one assembler, and the run records what it kept and
+  // cut before the engine is asked anything (ADR-093 §7). Before, the
+  // instructions were refused whole past 8,000 characters and published
+  // records never reached the assistant.
+  describe("steering", () => {
     const INSTRUCTIONS = "Answer in British English and cite the run id.";
+    const RECORD = {
+      id: "ask-before-deleting",
+      kind: "record",
+      force: "must",
+      body: "Ask before deleting data. (rule; ask-before-deleting)",
+      recordedAt: "2026-09-10T00:00:00.000Z",
+    };
+    const systemOf = (): string =>
+      mocks.runGovernedTurn.mock.calls[0]![0].system as string;
 
-    it("carries checked instructions under their header, with the precedence note after them, and records them by digest", async () => {
+    it("carries published steering and the instructions in the prompt, and records the manifest before the engine", async () => {
+      mocks.publishedSteering.mockResolvedValue([RECORD]);
       mocks.promptConfig.mockReturnValue({
         additionalInstructions: INSTRUCTIONS,
       });
       await runTurn(request);
 
-      const system = mocks.runGovernedTurn.mock.calls[0]![0].system as string;
+      const system = systemOf();
       expect(system.startsWith("GOVERNANCE Acme/Core")).toBe(true);
-      expect(system).toContain(INSTRUCTIONS);
-      // A published `must` record outranks them, and the prompt says so after
-      // them rather than leaving the model to decide.
-      expect(system.indexOf(WORKSPACE_INSTRUCTIONS_PRECEDENCE)).toBeGreaterThan(
+      expect(system).toContain(
+        "- Ask before deleting data. (rule; ask-before-deleting)",
+      );
+      expect(system).toContain(`- Workspace instructions: ${INSTRUCTIONS}`);
+      // The published MUST record is listed before the instructions.
+      expect(system.indexOf("Ask before deleting")).toBeLessThan(
         system.indexOf(INSTRUCTIONS),
       );
 
-      expect(instructionFrames).toEqual([
-        {
-          outcome: "applied",
-          digest: digestJcs(INSTRUCTIONS),
-          chars: INSTRUCTIONS.length,
-          budgetChars: WORKSPACE_INSTRUCTIONS_MAX_CHARS,
-          text: INSTRUCTIONS,
-        },
+      const [frame, ...rest] = steeringFrames();
+      expect(rest).toEqual([]);
+      expect(frame!.manifest.items.map((i) => [i.id, i.outcome])).toEqual([
+        ["ask-before-deleting", "included"],
+        [WORKSPACE_INSTRUCTIONS_ID, "included"],
       ]);
-      // Recorded before the engine is asked anything, so a turn that then
-      // fails still says what the model was told.
-      expect(mocks.log.indexOf("instructions")).toBeGreaterThan(
-        mocks.log.indexOf("open-run"),
+      expect(frame!.manifest.text_digest).toMatch(/^sha256:/);
+      expect(frame!.instructionsDigest).toBe(digestJcs(INSTRUCTIONS));
+      expect(frame!.unavailableKinds).toEqual([]);
+      // After the run is admitted and before the engine is asked anything,
+      // so a turn that then fails still says what steered it.
+      const order = (fn: { mock: { invocationCallOrder: number[] } }) =>
+        fn.mock.invocationCallOrder[0]!;
+      expect(order(mocks.steeringManifest)).toBeGreaterThan(
+        order(mocks.openAssistantRun),
       );
-      expect(mocks.log.indexOf("instructions")).toBeLessThan(
-        mocks.log.indexOf("engine"),
+      expect(order(mocks.steeringManifest)).toBeLessThan(
+        order(mocks.runGovernedTurn),
       );
     });
 
-    it("refuses instructions past the budget: the prompt carries none and the record says why (negative)", async () => {
-      const oversized = "x".repeat(WORKSPACE_INSTRUCTIONS_MAX_CHARS + 1);
+    it("cuts instructions past the budget: the prompt carries the records and the manifest names the cut (negative)", async () => {
+      const oversized = "x".repeat(ASSISTANT_STEERING_BUDGET_TOKENS * 4 + 1);
+      mocks.publishedSteering.mockResolvedValue([RECORD]);
       mocks.promptConfig.mockReturnValue({
         additionalInstructions: oversized,
       });
       await runTurn(request);
 
-      const system = mocks.runGovernedTurn.mock.calls[0]![0].system as string;
-      expect(system).toBe("GOVERNANCE Acme/Core");
+      const system = systemOf();
+      expect(system).toContain("Ask before deleting data.");
       expect(system).not.toContain("xxxx");
-      expect(instructionFrames).toEqual([
-        {
-          outcome: "refused",
-          reasonCode: "over_budget",
-          digest: digestJcs(oversized),
-          chars: oversized.length,
-          budgetChars: WORKSPACE_INSTRUCTIONS_MAX_CHARS,
-          text: oversized,
-        },
-      ]);
+      const [frame] = steeringFrames();
+      expect(
+        frame!.manifest.items.find((i) => i.id === WORKSPACE_INSTRUCTIONS_ID),
+      ).toMatchObject({ outcome: "cut", reason: "budget" });
+      expect(frame!.instructionsDigest).toBe(digestJcs(oversized));
+      expect(mocks.runGovernedTurn).toHaveBeenCalledTimes(1);
     });
 
-    it("writes no frame for a workspace that configured none (negative)", async () => {
+    it("records an empty manifest when nothing steers, and sends the baseline alone (negative)", async () => {
       await runTurn(request);
-      expect(instructionFrames).toEqual([]);
-      expect(mocks.log).not.toContain("instructions");
+      expect(systemOf()).toBe("GOVERNANCE Acme/Core");
+      const [frame] = steeringFrames();
+      expect(frame!.manifest).toMatchObject({
+        included: 0,
+        cut: 0,
+        text_digest: null,
+        items: [],
+      });
+      expect(frame!.instructionsDigest).toBeNull();
     });
 
-    it("does not run the turn when the record will not take the instructions", async () => {
+    it("runs on the instructions alone when the registry does not answer, and the manifest says so", async () => {
+      mocks.publishedSteering.mockRejectedValue(new Error("registry is down"));
       mocks.promptConfig.mockReturnValue({
         additionalInstructions: INSTRUCTIONS,
       });
-      mocks.openAssistantRun.mockImplementationOnce(async () => ({
-        runId: "run-uuid",
-        runPublicId: "arun_0123456789abcdef012345",
-        agentId: AGENT_ID,
-        agentVersionId: AGENT_VERSION_ID,
-        receipts: [],
-        workspaceInstructions: async () => {
-          throw new Error("ledger refused the instructions frame");
-        },
-        seal: async (outcome: unknown) => {
-          sealCalls.push(outcome);
-        },
-      }));
+      await runTurn(request);
+
+      expect(systemOf()).toContain(INSTRUCTIONS);
+      const [frame] = steeringFrames();
+      expect(frame!.unavailableKinds).toEqual(["record"]);
+      expect(frame!.manifest.items.map((i) => i.id)).toEqual([
+        WORKSPACE_INSTRUCTIONS_ID,
+      ]);
+    });
+
+    it("does not run the turn when the record will not take the manifest", async () => {
+      mocks.steeringManifest.mockRejectedValueOnce(
+        new Error("ledger refused the steering frame"),
+      );
 
       await expect(runTurn(request)).rejects.toThrow(
-        "ledger refused the instructions frame",
+        "ledger refused the steering frame",
       );
       expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
       // The run is sealed rather than left open, the same as any other
       // preflight refusal after admission.
       expect(sealCalls).toEqual([
-        { status: "failed", error: "ledger refused the instructions frame" },
+        { status: "failed", error: "ledger refused the steering frame" },
       ]);
     });
   });

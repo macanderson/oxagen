@@ -128,6 +128,13 @@ export interface RunContext {
   runId?: string;
   /** The forces this injection point delivers. Defaults to the prefix's. */
   delivers?: readonly SteeringForce[];
+  /**
+   * The line the text opens with. Defaults to `STEERING_HEADER`, the wording
+   * the policy bundle has carried since ADR-091. A surface whose candidates
+   * are not all published records names its sources here. The header counts
+   * against the budget like any other line.
+   */
+  header?: string;
   candidates: readonly SteeringCandidate[];
 }
 
@@ -283,7 +290,7 @@ export function assembleSteering(
     }
   }
 
-  const lines: string[] = [STEERING_HEADER];
+  const lines: string[] = [run.header ?? STEERING_HEADER];
   let current: SteeringForce | null = null;
   let included = 0;
   let cutForBudget = 0;

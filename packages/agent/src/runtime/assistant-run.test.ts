@@ -10,6 +10,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import {
+  digestOfCanonicalJson,
   RETENTION_CONTENT_CLASSES,
   validateInlineEventPayload,
 } from "@oxagen/run-ledger";
@@ -78,6 +79,7 @@ import {
   readAssistantAgentState,
   resolveAssistantRunIdentity,
 } from "./assistant-run";
+import { assembleAssistantSteering } from "./assistant-steering";
 import { resourceScopeDigestOf } from "@oxagen/iam";
 
 const dialect = new PgDialect();
@@ -1321,6 +1323,91 @@ describe("the recorder hands the ledger the content its frames are about", () =>
       }),
     ).resolves.toBeUndefined();
     expect(bodyOf(ledger.batches, "model.engine_call_started")).toBeUndefined();
+  });
+});
+
+// #4158: what the assembler put in the turn's prompt, and what it cut, on the
+// run as the frame kind a wrapped agent's host seals for the same account.
+describe("the steering manifest frame", () => {
+  const decode = (body: { bytes: Uint8Array } | undefined) =>
+    body === undefined ? undefined : new TextDecoder().decode(body.bytes);
+  const manifestEvent = (batches: readonly AppendAttemptBatchInput[]) =>
+    batches.find((b) => b.events[0]!.eventType === "steering.manifest")
+      ?.events[0];
+
+  async function recorder() {
+    setupRun();
+    const ledger = fakeStore();
+    const run = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "hi",
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    return { ledger, run };
+  }
+
+  const RECORD = {
+    id: "ask-before-deleting",
+    kind: "record" as const,
+    force: "must" as const,
+    body: "Ask before deleting data. (rule; ask-before-deleting)",
+    recordedAt: "2026-09-10T00:00:00.000Z",
+  };
+
+  it("carries the summary inline, the manifest as its body, and passes the ledger's registry", async () => {
+    const { ledger, run } = await recorder();
+    const steering = assembleAssistantSteering({
+      ...SCOPE,
+      records: [RECORD],
+      promptConfig: { additionalInstructions: "Answer in British English." },
+    });
+    await run.steeringManifest(steering);
+
+    const event = manifestEvent(ledger.batches)!;
+    expect(event.payload).toEqual({
+      schema: "oxagen.steering.manifest/1",
+      delivers: ["must", "should"],
+      budget_tokens: steering.manifest.budget_tokens,
+      spent_tokens: steering.manifest.spent_tokens,
+      included: 2,
+      cut: 0,
+      text_digest: steering.manifest.text_digest,
+      manifest_digest: digestOfCanonicalJson(steering.manifest),
+      instructions_digest: steering.instructionsDigest,
+    });
+    // The real store validates every payload against the registry before it
+    // writes; the fake does not, so the check is made here.
+    expect(
+      validateInlineEventPayload("steering.manifest", event.payload).stage,
+    ).toBe("context");
+    expect(JSON.parse(decode(event.body)!)).toEqual(steering.manifest);
+    expect(event.body!.contentType).toBe("application/json");
+  });
+
+  it("names a source that did not answer, and no instructions digest when none were configured", async () => {
+    const { ledger, run } = await recorder();
+    await run.steeringManifest(
+      assembleAssistantSteering({
+        ...SCOPE,
+        records: [],
+        promptConfig: null,
+        unavailableKinds: ["record"],
+      }),
+    );
+    const payload = manifestEvent(ledger.batches)!.payload as Record<
+      string,
+      unknown
+    >;
+    expect(payload["unavailable_kinds"]).toEqual(["record"]);
+    expect(payload).not.toHaveProperty("instructions_digest");
+    expect(payload["text_digest"]).toBeNull();
+    expect(
+      validateInlineEventPayload("steering.manifest", payload).eventType,
+    ).toBe("steering.manifest");
   });
 });
 

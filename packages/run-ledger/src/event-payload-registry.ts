@@ -46,6 +46,11 @@
  * validation. Treat a failing vector as a merge blocker, never as a test to
  * update.
  */
+import {
+  STEERING_MANIFEST_SCHEMA,
+  steeringForceSchema,
+  steeringItemKindSchema,
+} from "@oxagen/tacho";
 import { z } from "zod";
 import {
   canonicalJson,
@@ -262,6 +267,10 @@ const contextFramesSelectedSchema = z
  * steering that changes how the agent behaves, which the record has to name
  * or a reader cannot tell what the model was told. The digest identifies the
  * exact text; the text itself rides the frame's body, never this payload.
+ *
+ * No producer writes this type since the in-app agent's steering went through
+ * the assembler (`steering.manifest` below, #4158). It stays registered so
+ * the runs sealed before that change still validate.
  */
 const contextInstructionsAppliedSchema = z
   .object({
@@ -273,6 +282,46 @@ const contextInstructionsAppliedSchema = z
     budget_chars: countSchema,
     /** Set when the outcome is `refused`; why the prompt carries none. */
     reason_code: reasonCodeSchema.optional(),
+  })
+  .strict();
+
+/**
+ * What the steering assembler (`@oxagen/steering-assembler`, ADR-093) put in
+ * front of the model, and what it cut. The in-app agent writes one before the
+ * engine is asked anything. A wrapped agent's host seals a frame of the same
+ * kind into its own chain, so a reader asks one question of both kinds of
+ * run.
+ *
+ * The payload is the manifest's summary. The manifest itself, one item per
+ * candidate with its outcome and the reason for a cut, rides the frame's
+ * body, and `manifest_digest` commits the chain to it, so a body that was
+ * redacted or not retained can still be checked against the record.
+ */
+const steeringManifestRecordedSchema = z
+  .object({
+    schema: z.literal(STEERING_MANIFEST_SCHEMA),
+    /** The forces this injection point delivers; the rest are cut for tier. */
+    delivers: z.array(steeringForceSchema).max(4),
+    budget_tokens: countSchema,
+    spent_tokens: countSchema,
+    included: countSchema,
+    cut: countSchema,
+    /** Digest of the text the model read; null when nothing was included. */
+    text_digest: sha256DigestSchema.nullable(),
+    /** Digest of the manifest's canonical JSON, the frame's body. */
+    manifest_digest: sha256DigestSchema,
+    /** The workspace instructions that were a candidate, by digest. */
+    instructions_digest: sha256DigestSchema.optional(),
+    /**
+     * Source families whose read failed, so the turn ran without their
+     * items. Absent when every source answered: "the registry was
+     * unreachable" must not read as "the workspace published nothing".
+     */
+    unavailable_kinds: z
+      .array(steeringItemKindSchema)
+      .min(1)
+      .max(7)
+      .optional(),
   })
   .strict();
 
@@ -619,6 +668,11 @@ export const EVENT_TYPE_REGISTRY = {
     stage: "context",
     contentClass: "context_selection",
     schema: contextInstructionsAppliedSchema,
+  },
+  "steering.manifest": {
+    stage: "context",
+    contentClass: "context_selection",
+    schema: steeringManifestRecordedSchema,
   },
   "model.call_completed": {
     stage: "model",

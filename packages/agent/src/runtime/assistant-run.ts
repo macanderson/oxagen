@@ -36,6 +36,7 @@ import { digestJcs } from "@oxagen/run-evidence";
 import {
   canonicalJson,
   createPostgresRunStore,
+  digestOfCanonicalJson,
   parseRunSpecV2,
   RETENTION_CONTENT_CLASSES,
   TERMINAL_EVENT_TYPE,
@@ -54,7 +55,7 @@ import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
-import type { WorkspaceInstructionsFrame } from "./workspace-instructions";
+import type { AssistantSteeringFrame } from "./assistant-steering";
 import type {
   TurnLedger,
   TurnLedgerModelCall,
@@ -196,9 +197,6 @@ export type AssistantRunReceipt =
   | ({ kind: "model" } & TurnLedgerModelCall)
   | ({ kind: "tool" } & TurnLedgerToolCall);
 
-/** Where the checked instructions came from, as the frame's payload names it. */
-export const WORKSPACE_INSTRUCTIONS_PROVIDER = "workspace_prompt_config";
-
 /** A recorded assistant run: the ledger hook the turn writes through, plus its ids. */
 export interface AssistantRunRecorder extends TurnLedger {
   readonly runId: string;
@@ -217,11 +215,11 @@ export interface AssistantRunRecorder extends TurnLedger {
    */
   readonly receipts: readonly AssistantRunReceipt[];
   /**
-   * The workspace instructions this turn's prompt carried, or the ones it
-   * refused (#3303). Written before the engine is asked anything, so the
+   * What the steering assembler put in this turn's prompt and what it cut
+   * (ADR-093, #4158). Written before the engine is asked anything, so the
    * record states what the model was told even when the turn then fails.
    */
-  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void>;
+  steeringManifest(frame: AssistantSteeringFrame): Promise<void>;
 }
 
 /** What admission resolved about who acts and under which retention policy. */
@@ -816,25 +814,35 @@ class Recorder implements AssistantRunRecorder {
   }
 
   /**
-   * The workspace's standing instructions as a context frame: the digest of
-   * the exact text, its length against the budget it was checked under, and
-   * whether the prompt carried it. The text itself is the frame's body, so a
-   * reader of the run can see what the workspace told the agent without the
-   * payload carrying content.
+   * The assembler's manifest as a `steering.manifest` frame, the kind a
+   * wrapped agent's host seals for the same account. The payload is the
+   * manifest's summary and digests: the text the model read, the manifest
+   * itself, and the workspace instructions when they were a candidate. The
+   * manifest, one item per candidate with its outcome and the reason for a
+   * cut, is the frame's body, which the Run page's Context tab reads.
    */
-  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void> {
-    const eventType = "context.instructions_applied";
+  steeringManifest(frame: AssistantSteeringFrame): Promise<void> {
+    const eventType = "steering.manifest";
+    const { manifest } = frame;
     return this.append({
       eventType,
       payload: {
-        provider: WORKSPACE_INSTRUCTIONS_PROVIDER,
-        outcome: frame.outcome,
-        instructions_digest: frame.digest,
-        instructions_chars: frame.chars,
-        budget_chars: frame.budgetChars,
-        ...(frame.reasonCode ? { reason_code: frame.reasonCode } : {}),
+        schema: manifest.schema,
+        delivers: manifest.delivers,
+        budget_tokens: manifest.budget_tokens,
+        spent_tokens: manifest.spent_tokens,
+        included: manifest.included,
+        cut: manifest.cut,
+        text_digest: manifest.text_digest,
+        manifest_digest: digestOfCanonicalJson(manifest),
+        ...(frame.instructionsDigest
+          ? { instructions_digest: frame.instructionsDigest }
+          : {}),
+        ...(frame.unavailableKinds.length > 0
+          ? { unavailable_kinds: [...frame.unavailableKinds] }
+          : {}),
       },
-      body: jsonBody(eventType, frame.text),
+      body: jsonBody(eventType, manifest),
     });
   }
 
