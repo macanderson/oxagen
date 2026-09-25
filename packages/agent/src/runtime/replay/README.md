@@ -98,7 +98,7 @@ Two paths differ from that order:
 
 1. Copy the closest fixture to a new file. Give it the next number and a name that says what the person asked.
 2. Write the `question`, the `frames`, the `handlers` and any closed `gates`.
-3. Set `expect` to empty arrays and an empty `answer`.
+3. Set `expect` to empty arrays and an empty `answer`. If the turn calls `load_tools`, add `"loadUnknown": []`. The test pins that field only when the fixture has it.
 4. Write what the turn produces into the fixture:
 
    ```sh
