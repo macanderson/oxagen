@@ -26,21 +26,6 @@ auth:
           validation:
             required: true
 
-    - id: bearer_token
-      kind: api_key
-      displayName: Bearer Token
-      fields:
-        - key: apiKey
-          label: Bearer Token
-          widget: secret
-          description: Static bearer token that the sending service includes in the Authorization header.
-          validation:
-            required: true
-
-    - id: public
-      kind: none
-      displayName: No Authentication (public endpoint)
-
 config:
   fields:
     - key: recordTypes

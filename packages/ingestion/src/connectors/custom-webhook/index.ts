@@ -26,6 +26,13 @@ const connectionConfigSchema = z.object({
 
 type Config = typeof connectionConfigSchema;
 
+// The auth scheme ids in schema.yaml that verifyWebhook enforces. The wizard
+// used to also offer `bearer_token` and `public`, which verifyWebhook never
+// implemented: it checks only an HMAC `sha256=` header and rejects a delivery
+// when no secret is set, so a connection under either scheme rejected every
+// delivery without a warning. A test holds schema.yaml to this list.
+export const VERIFIED_AUTH_SCHEME_IDS = ["hmac_sha256_header"] as const;
+
 function asRecord(raw: unknown): Record<string, unknown> {
   return raw !== null && typeof raw === "object"
     ? (raw as Record<string, unknown>)
@@ -37,7 +44,9 @@ const customWebhook: ConnectorDefinition<Config> = {
   displayName: "Generic Webhook",
   description: "Receive and ingest events from any HTTP webhook source.",
   icon: "webhook",
-  supportedAuthSchemes: ["bearer_token", "api_key", "public"],
+  // The HMAC scheme is an `api_key` credential: the shared secret. The
+  // install handler stores the first entry as the connection's scheme.
+  supportedAuthSchemes: ["api_key"],
   deliveryMethod: "webhook",
   connectionConfigSchema,
 

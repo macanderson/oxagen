@@ -1,7 +1,10 @@
 import { createHmac } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { customSql } from "../custom-sql/index";
-import { customWebhook } from "../custom-webhook/index";
+import {
+  customWebhook,
+  VERIFIED_AUTH_SCHEME_IDS,
+} from "../custom-webhook/index";
 import { loadBuiltInSchema } from "../../connector-schema-loader";
 
 // ── Custom SQL ────────────────────────────────────────────────────────────────
@@ -195,5 +198,30 @@ describe("custom-webhook connector – connectionConfigSchema (#1875)", () => {
       customWebhook.connectionConfigSchema.shape,
     );
     expect(wizardKeys.sort()).toEqual(declaredKeys.sort());
+  });
+});
+
+describe("custom-webhook connector – auth schemes", () => {
+  // The wizard offered bearer_token and public, which verifyWebhook never
+  // implemented, so a connection under either rejected every delivery.
+  it("offers in the setup wizard only the auth schemes verifyWebhook enforces", () => {
+    const schema = loadBuiltInSchema("custom-webhook");
+    const offered = (schema?.auth?.schemes ?? []).map((s) => s.id);
+    expect(offered.sort()).toEqual([...VERIFIED_AUTH_SCHEME_IDS].sort());
+  });
+
+  it("collects in every offered scheme the secret verifyWebhook needs", () => {
+    const schema = loadBuiltInSchema("custom-webhook");
+    for (const scheme of schema?.auth?.schemes ?? []) {
+      expect(scheme.fields?.map((f) => f.key)).toContain("apiKey");
+    }
+  });
+
+  it("declares only the credential kind the offered schemes collect", () => {
+    const schema = loadBuiltInSchema("custom-webhook");
+    const kinds = [
+      ...new Set((schema?.auth?.schemes ?? []).map((s) => s.kind)),
+    ];
+    expect(customWebhook.supportedAuthSchemes).toEqual(kinds);
   });
 });
