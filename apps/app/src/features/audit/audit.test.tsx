@@ -269,7 +269,9 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockReturnValue(NOW);
   events.mockReset();
   preferences.mockReset();
-  preferences.mockResolvedValue(readOk({ timeZone: "America/Los_Angeles" }));
+  preferences.mockResolvedValue(
+    readOk({ timeZone: "America/Los_Angeles", enterToSubmit: false }),
+  );
   exportEvents.mockReset();
   retention.mockReset();
   retention.mockResolvedValue(readOk(POLICY));
