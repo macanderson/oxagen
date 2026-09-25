@@ -679,7 +679,7 @@
                     "anyOf": [
                       {
                         "type": "integer",
-                        "minimum": 0
+                        "exclusiveMinimum": 0
                       },
                       {
                         "type": "null"
