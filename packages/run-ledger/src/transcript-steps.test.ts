@@ -454,6 +454,38 @@ describe("pairing a model call's halves", () => {
   });
 });
 
+// Finding P3-8 of the ADR-182 review: rule 2 rescanned a key's every frame
+// for each request, so a key sealed many times folded in quadratic time. A
+// read holds up to 10,000 frames (TRANSCRIPT_FRAME_CAP).
+describe("a key sealed on every frame of a full read", () => {
+  it("pairs each request with the next response no other request took, in linear time", () => {
+    const half = 5_000;
+    const frames = [
+      ...Array.from({ length: half }, (_, i) =>
+        w(i, "model.request", { model: "m", toolUseId: "m1" }),
+      ),
+      ...Array.from({ length: half }, (_, i) =>
+        w(half + i, "model.response", { model: "m", toolUseId: "m1" }),
+      ),
+    ];
+    const started = performance.now();
+    const folded = stepFolds(frames);
+    const ms = performance.now() - started;
+    expect(folded).toHaveLength(half);
+    expect(
+      folded.every(
+        (fold, i) =>
+          fold.members.length === 2 &&
+          fold.members[1]?.seq === String(half + i),
+      ),
+    ).toBe(true);
+    // Measured on 2026-09-25: the quadratic scan took about 600 ms here and
+    // the linear one about 100 ms. The bound is loose so a slow runner does
+    // not fail it; the pairing above is what the test pins.
+    expect(ms).toBeLessThan(1_500);
+  });
+});
+
 describe("a call key sealed twice (#3994)", () => {
   // The reproduction from #3994: two requests and two results on one key. A
   // PreToolUse hook delivered twice writes the request twice (tacho

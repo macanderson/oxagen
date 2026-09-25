@@ -312,16 +312,40 @@ interface Group {
   tag: Tag;
 }
 
-/** The steps of the frames in `[from, to)`, one turn's worth. */
+/**
+ * The steps of the frames in `[from, to)`, one turn's worth. Linear in the
+ * frames: the frames are visited in order and a frame, once claimed, stays
+ * claimed, so each index below is walked forward and never rescanned.
+ */
 function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
   const byKey = new Map<string, number[]>();
+  /**
+   * Keyed frames by key, type and chain, in order, each with how far a
+   * search has passed. Rule 2 asks for the first one after a request that no
+   * step took. The requests come in order and a claim is never undone, so
+   * what one search passed no later search wants.
+   */
+  const byClose = new Map<string, { list: number[]; next: number }>();
+  const closeKey = (key: string, type: string, chain: string) =>
+    `${key}\u0000${type}\u0000${chain}`;
   for (let i = from; i < to; i += 1) {
-    const key = callOf(frames[i] as RunFrame);
+    const frame = frames[i] as RunFrame;
+    const key = callOf(frame);
     if (key === null) continue;
     const list = byKey.get(key);
     if (list === undefined) byKey.set(key, [i]);
     else list.push(i);
+    const close = closeKey(key, frame.type, chainOf(frame));
+    const entry = byClose.get(close);
+    if (entry === undefined) byClose.set(close, { list: [i], next: 0 });
+    else entry.list.push(i);
   }
+  /**
+   * Keys and chains rule 1 found no tool call for. Frames are only ever
+   * claimed, so a key that holds no unclaimed tool call from one frame on
+   * holds none from any later frame either.
+   */
+  const noCall = new Set<string>();
   const claimed = new Set<number>();
   const at = (i: number) => frames[i] as RunFrame;
 
@@ -347,6 +371,8 @@ function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
     const key = callOf(first);
     if (key === null || stepKind(first) === "model_call") return null;
     const chain = chainOf(first);
+    const dead = `${key}\u0000${chain}`;
+    if (noCall.has(dead)) return null;
     const indexes = (byKey.get(key) ?? []).filter(
       (j) =>
         j >= i &&
@@ -354,7 +380,10 @@ function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
         stepKind(at(j)) !== "model_call" &&
         chainOf(at(j)) === chain,
     );
-    if (!indexes.some((j) => stepKind(at(j)) === "tool_call")) return null;
+    if (!indexes.some((j) => stepKind(at(j)) === "tool_call")) {
+      noCall.add(dead);
+      return null;
+    }
     return { indexes: withEffects(indexes, key, chain), tag: "tool" };
   };
 
@@ -374,11 +403,16 @@ function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
         ? j
         : null;
     }
-    for (const j of byKey.get(key) ?? []) {
-      if (j <= i || claimed.has(j)) continue;
-      if (at(j).type === type && chainOf(at(j)) === chainOf(first)) return j;
-    }
-    return null;
+    const entry = byClose.get(closeKey(key, type, chainOf(first)));
+    if (entry === undefined) return null;
+    const { list } = entry;
+    while (
+      entry.next < list.length &&
+      ((list[entry.next] as number) <= i ||
+        claimed.has(list[entry.next] as number))
+    )
+      entry.next += 1;
+    return list[entry.next] ?? null;
   };
 
   const pairGroup = (i: number): Group => {

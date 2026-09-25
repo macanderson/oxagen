@@ -120,17 +120,47 @@ const startOf = (fold: TranscriptFold) => fold.opening.observedAt.getTime();
 const endOf = (fold: TranscriptFold) => fold.last.observedAt.getTime();
 
 /**
- * The waits a step's span holds. A parked call's step runs from its request
- * to its result, so it holds the time a person took to answer. The wait is
- * found by where it falls, since the approval frame may be the call's own or
- * a step of its own.
+ * The waits, sorted by when each began, with a running sum, so the waits a
+ * span holds are two binary searches rather than a pass over every wait.
  */
-function waitIn(fold: TranscriptFold, waits: readonly Wait[]): number {
-  const from = startOf(fold);
-  const to = endOf(fold);
-  let sum = 0;
-  for (const wait of waits) if (wait.at >= from && wait.at < to) sum += wait.ms;
-  return sum;
+interface WaitIndex {
+  at: number[];
+  /** `sums[i]` is the waits before `at[i]` summed; one longer than `at`. */
+  sums: number[];
+}
+
+function waitIndex(waits: readonly Wait[]): WaitIndex {
+  const sorted = [...waits].sort((a, b) => a.at - b.at);
+  const sums = [0];
+  for (const wait of sorted)
+    sums.push((sums[sums.length - 1] as number) + wait.ms);
+  return { at: sorted.map((wait) => wait.at), sums };
+}
+
+/** The first index whose time is at or after `time`: a binary search. */
+function lowerBound(times: readonly number[], time: number): number {
+  let low = 0;
+  let high = times.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if ((times[mid] as number) < time) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+/**
+ * The waits a step's span holds: those that began at or after its start and
+ * before its end. A parked call's step runs from its request to its result,
+ * so it holds the time a person took to answer. The wait is found by where
+ * it falls, since the approval frame may be the call's own or a step of its
+ * own.
+ */
+function waitIn(fold: TranscriptFold, waits: WaitIndex): number {
+  const from = lowerBound(waits.at, startOf(fold));
+  const to = lowerBound(waits.at, endOf(fold));
+  if (to <= from) return 0;
+  return (waits.sums[to] as number) - (waits.sums[from] as number);
 }
 
 interface Call {
@@ -147,10 +177,7 @@ interface Call {
  * The tool calls in step order, each with its batch. A model step closes the
  * batch, and so does a turn boundary: the next turn opens on a prompt.
  */
-function callsOf(
-  steps: readonly TranscriptFold[],
-  waits: readonly Wait[],
-): Call[] {
+function callsOf(steps: readonly TranscriptFold[], waits: WaitIndex): Call[] {
   const calls: Call[] = [];
   let batch = -1;
   let open = false;
@@ -283,7 +310,7 @@ export function transcriptFigures(
   steps: readonly TranscriptFold[],
 ): TranscriptFigures {
   const waits = waitsOf(frames);
-  const calls = callsOf(steps, waits);
+  const calls = callsOf(steps, waitIndex(waits));
   let model = 0;
   let tool = 0;
   let prompts = 0;

@@ -175,6 +175,27 @@ describe("transcriptFigures", () => {
     expect(f.wall).toEqual({ modelMs: 0, toolMs: 4_000, waitingMs: 60_000 });
   });
 
+  it("takes off every wait inside a call, whatever order the waits were recorded in", () => {
+    // Waits are summed from an index sorted by time (finding P3-8 of the
+    // ADR-182 review). A spliced chain can record a later wait first.
+    const f = figuresOf([
+      w(0, 0, "tool_requested", { toolName: "deploy", toolUseId: "a" }),
+      w(1, 100, "tool_call", {
+        toolName: "deploy",
+        toolStatus: "ok",
+        toolUseId: "a",
+      }),
+      w(2, 90, "approval_request"),
+      w(3, 95, "notification"),
+      w(4, 10, "approval_request"),
+      w(5, 30, "notification"),
+      // Begins at the call's last frame, so it is not inside the call.
+      w(6, 100, "approval_request"),
+      w(7, 101, "notification"),
+    ]);
+    expect(f.wall).toEqual({ modelMs: 0, toolMs: 75_000, waitingMs: 26_000 });
+  });
+
   it("gives a one-frame tool call no time of its own, and sums families and the serial time without it", () => {
     const f = figuresOf([
       w(0, 0, "turn_start"),
