@@ -408,6 +408,9 @@ describe("resolve_approval: a turn answering its own parked write", () => {
       approvalId: APPROVAL_PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      // The parked write stored its call, so approving it queues the call
+      // (#4213); nothing has run it yet.
+      execution: { status: "queued", runId: null, reason: null },
     });
     expect(store.row).toMatchObject({
       resolution: "approved",
