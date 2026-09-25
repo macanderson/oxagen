@@ -183,10 +183,11 @@ close, not the end.
   says so.
 - A resumed Claude Code session that sat idle for twelve hours reads as closed
   until its next frame lands.
-- Ledger runs (`arun_…`) get no running rollup and no reaper. The in-app
-  assistant seals its run when the turn settles, and a run whose API process
-  died mid-turn stays open. That needs a `sealAttempt` with status
-  `abandoned` on the ledger (#3988).
+- Ledger runs (`arun_…`) get no running rollup. The in-app assistant seals
+  its run when the turn settles. A run whose process died mid-turn stayed
+  open until ADR-XXX: `evidence.assistant-run-abandon` now seals it
+  `abandoned` once it records nothing for twelve minutes, and that seal is
+  final (#3988).
 - The daemon's gaps stay. A root `SessionEnd` still does not finalize open
   subagent chains, Codex and Cursor still carry no pid, and Claude Code's
   `SessionEnd` still has no spool. The idle close bounds each at twelve hours
