@@ -15,21 +15,37 @@
  * spend at the window's tail; a monthly window starts on a day boundary and
  * is exact.
  *
- * Both functions default to the system connection with explicit org and
- * workspace predicates: the gateway recorder runs outside a tenant scope (the
- * AI SDK fires `onFinish` after the request's scope is gone), and an
- * org-level ceiling sums every workspace's rows, which a workspace-scoped
- * session could not see. `recordSpend` also takes the caller's transaction.
- * Tacho ingest passes its tenant transaction, so the counter and the batch
- * commit or roll back together. The `tenant_isolation` policy on
- * `billing.spend_counters` admits that write because the row names the
- * transaction's own org and workspace.
+ * Both functions run on the SHARED plane. ADR-042 §2 and ADR-134 keep
+ * platform billing there, and a dedicated data plane carries only tenant
+ * data. The gate reads through `withSystemDb` with explicit org and
+ * workspace predicates, because an org-level ceiling sums every workspace's
+ * rows, which a workspace-scoped session could not see.
+ *
+ * `recordSpend` takes the caller's transaction and joins it when that
+ * transaction is on the shared plane: tacho ingest (#3825) and usage
+ * settlement pass theirs, so the counter and the batch commit or roll back
+ * together. The `tenant_isolation` policy on `billing.spend_counters`
+ * admits that write because the row names the transaction's own org and
+ * workspace. When the caller's transaction is on an organisation's dedicated
+ * plane (#4306), the write opens its own shared-plane transaction instead,
+ * so it lands in the counter the gate reads. It runs before the caller
+ * commits, so a failed counter write still rolls the caller back. The one
+ * gap is a caller whose commit fails after the counter committed: its retry
+ * counts the cost again, an over-count that makes the gate stricter.
  */
-import { schema, withSystemDb, type Tx } from "@oxagen/database";
+import {
+  ambientPlaneKey,
+  schema,
+  withSystemDb,
+  type Tx,
+} from "@oxagen/database";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { inTransaction } from "./internal/in-transaction";
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+/** The plane key `withSystemDb` and a shared-plane `withTenantDb` run under. */
+const SHARED_PLANE = "shared";
 
 /** The UTC calendar day of an instant, as `YYYY-MM-DD`. */
 function utcDay(at: Date): string {
@@ -62,8 +78,15 @@ export async function recordSpend(
         spent_micros = ${schema.spendCounters}.spent_micros + EXCLUDED.spent_micros,
         updated_at = now()
     `);
+  // The caller's transaction is joined only on the shared plane, where the
+  // gate reads. `ambientPlaneKey` names the plane of the innermost seam that
+  // opened a transaction, which is the one `transaction` belongs to.
+  const joinable =
+    transaction !== undefined && (await ambientPlaneKey()) === SHARED_PLANE
+      ? transaction
+      : undefined;
   // tenancy: global billing counters use the authenticated ingestion caller's orgId and workspaceId.
-  await inTransaction(transaction, run, withSystemDb);
+  await inTransaction(joinable, run, withSystemDb);
 }
 
 /**

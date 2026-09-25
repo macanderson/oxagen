@@ -2363,6 +2363,9 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     // why a counter write made after the commit, once lost, was never made
     // again. This is the last write here, so the counter row stays locked for
     // the shortest time. The batch counts on the UTC day of this request.
+    // For an organisation on a dedicated plane, `recordSpend` writes the
+    // shared-plane counter in its own transaction before this one commits
+    // (ADR-042 §2), so a failed write still rolls the batch back.
     if (batchSpendMicros > 0n) {
       await recordSpend(
         {
