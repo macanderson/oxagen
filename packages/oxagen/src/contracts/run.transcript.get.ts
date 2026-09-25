@@ -572,7 +572,9 @@ export const transcriptEntrySchema = z
      * True when the entry has nothing to show a reader beyond its frames: a
      * prompt or reply with no words to show, a reply that repeats words the
      * reader was just shown (`echoOf`), or an event with no decision and no
-     * failure. `counts` counts no quiet entry.
+     * failure. `counts` counts no quiet entry. The words are read at `steps`
+     * only: at `everything` a prompt or reply is quiet only when it kept no
+     * half at all, so one whose words are blank or repeat is not quiet there.
      */
     quiet: z.boolean().optional(),
     /**
@@ -612,7 +614,8 @@ export const transcriptEntrySchema = z
      * operator's prompt; on any chain, the model step or reply said last
      * before it, such as a turn's closing message that repeats the model's
      * last text block. The words are compared, not the digests. Null
-     * otherwise. An entry that repeats another is `quiet`.
+     * otherwise, and always null at `everything`, where the words are not
+     * read. An entry that repeats another is `quiet`.
      */
     echoOf: z.string().nullable().optional(),
     /** What a recall entry put in front of the model; null on other entries. */
@@ -647,7 +650,8 @@ const transcriptKindCountsSchema = z
  * What the whole run holds at the zoom read, counted over every entry that is
  * not `quiet`, whatever the chips pressed, so a chip's count and the entries
  * the page draws under it agree. The unit is the entry: a model step that
- * said two things counts once.
+ * said two things counts once. At `everything` the words are not read, so
+ * there a prompt or reply whose words are blank or repeat still counts.
  */
 export const transcriptCountsSchema = z
   .object({

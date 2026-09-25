@@ -15,12 +15,19 @@
 // does not read, so the bodies are read here and the rule that needs them
 // runs over what was read: which prompts and replies have nothing to show,
 // and which reply repeats words the reader was just shown (`markWords`, over
-// the words `readWords` reads for the whole run); a recall entry's items,
-// parsed from the body it kept (`recallOf`); and each reply's `tool_use`
-// blocks, which name the tool step that recorded the call (`toolUseClaimer`)
-// and what came back. `counts` counts the run's entries at the zoom, and
+// the words `readWords` reads for the whole run at `steps`); a recall
+// entry's items, parsed from the body it kept (`recallOf`); and each reply's
+// `tool_use` blocks, which name the tool step that recorded the call
+// (`toolUseClaimer`) and what came back. `counts` counts the run's entries at the zoom, and
 // `figures` the run's steps, calls and time (`transcriptFigures`), whatever
 // the chips.
+//
+// What a body says is kept per process (`WordsCache`, keyed by tenant, body
+// reference and digest), because a body never changes. So a read reads the
+// words of only the bodies no earlier read in the process has read, and a
+// prompt or reply half on the page is served from what the words read kept
+// rather than read again. A read's body cost is its page's model and tool
+// halves plus the bodies it has not read before, not the whole run's.
 //
 // A `query` narrows the entries the chips kept (`searchFolds`). Label, tool
 // and target are matched on the entry; each half of an entry they do not
@@ -102,6 +109,11 @@ import {
 import { assemblyView, readAssembly } from "./lib/transcript-assembly";
 import { mapConcurrent } from "./lib/map-concurrent";
 import { searchableText, searchFolds } from "./lib/transcript-search";
+import {
+  type BodyWords,
+  createWordsCache,
+  type WordsCache,
+} from "./lib/transcript-words-cache";
 import { digestBytes } from "@oxagen/tacho";
 import { logger } from "./logger";
 import {
@@ -155,6 +167,12 @@ export type RunTranscriptGetDeps = RunReadDeps & {
    * view (#3526).
    */
   priceBook: (slice: PriceBookSlice) => Promise<PriceBook>;
+  /**
+   * What the bodies this process has read say (`createWordsCache`). Omitted,
+   * the handler keeps its own, so the one handler a process serves from keeps
+   * one cache for every read.
+   */
+  words?: WordsCache;
 };
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -387,6 +405,29 @@ async function readBody(
   }
 }
 
+/** What a body the store answered says, for the words cache. */
+function bodyWords(body: {
+  text: string;
+  assembly: MessageAssembly | null;
+}): BodyWords {
+  if (body.assembly === null) return { stream: false, text: body.text };
+  const blocks = body.assembly.blocks.filter(
+    (block) => block.kind === "text" && block.text.trim() !== "",
+  );
+  const last = blocks[blocks.length - 1];
+  return { stream: true, last: last?.kind === "text" ? last.text : null };
+}
+
+/**
+ * The words `fold` shows from its words half's body: the text of a body that
+ * is not a model stream, and of a stream only a model step's last text block.
+ * A prompt or reply kept as a stream is shown no text, so it shows no words.
+ */
+function wordsOf(fold: TranscriptFold, words: BodyWords): TranscriptWords {
+  if (!words.stream) return words.text;
+  return fold.node === "model" ? words.last : null;
+}
+
 /**
  * One half of the exchange.
  *
@@ -401,6 +442,7 @@ async function half(
   frame: RunFrame | null,
   textMax: number,
   outputRate: (frame: RunFrame) => number | null,
+  cache: WordsCache | null,
 ): Promise<TranscriptEntryBody | null> {
   if (frame === null) return null;
   const { bodyRef, bodyDigest, fidelity, redactions } = frame.body;
@@ -419,9 +461,17 @@ async function half(
     })),
     fidelity,
   };
-  const body = await readBody(bodies, scope, frame);
+  // A body that is not a model stream is its words, whole, and the words
+  // cache keeps them once any read has read them: `markWords` over the whole
+  // run, an earlier page, or a search.
+  const kept = cache?.get(scope, frame);
+  const body =
+    kept !== undefined && !kept.stream
+      ? { text: kept.text, assembly: null }
+      : await readBody(bodies, scope, frame);
   if (body === null)
     return { ...base, text: null, truncated: false, assembly: null };
+  if (kept === undefined) cache?.set(scope, frame, bodyWords(body));
   if (body.assembly !== null) {
     return {
       ...base,
@@ -444,21 +494,30 @@ async function half(
  * no text. A model step shows the last text block of its reply, or the
  * reply's text where the recorder assembled none.
  *
- * At most `halfMax` halves are read, in the order given. An entry past the
- * bound is left out of the answer, so `markWords` leaves it as the fold said.
- * A half with no kept body shows no words and costs no read.
+ * A body `cache` already holds costs no read, and every body read is kept in
+ * it. At most `halfMax` halves are read, in the order given; a cached half
+ * does not count against the bound. An entry past the bound is left out of
+ * the answer, so `markWords` leaves it as the fold said. A half with no kept
+ * body shows no words and costs no read.
  */
 export async function readWords(
   bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
   scope: RunScope,
   needed: readonly TranscriptFold[],
-  halfMax: number = TRANSCRIPT_WORDS_HALF_MAX,
+  options: { halfMax?: number; cache?: WordsCache | null } = {},
 ): Promise<Map<TranscriptFold, TranscriptWords>> {
+  const halfMax = options.halfMax ?? TRANSCRIPT_WORDS_HALF_MAX;
+  const cache = options.cache ?? null;
   const words = new Map<TranscriptFold, TranscriptWords>();
   const reads: { fold: TranscriptFold; frame: RunFrame }[] = [];
   for (const fold of needed) {
     const frame = wordsHalf(fold);
-    if (frame === null || frame.body.bodyRef === null) words.set(fold, null);
+    if (frame === null || frame.body.bodyRef === null) {
+      words.set(fold, null);
+      continue;
+    }
+    const kept = cache?.get(scope, frame);
+    if (kept !== undefined) words.set(fold, wordsOf(fold, kept));
     else if (reads.length < halfMax) reads.push({ fold, frame });
   }
   const said = await mapConcurrent(
@@ -467,13 +526,9 @@ export async function readWords(
     async ({ fold, frame }): Promise<TranscriptWords> => {
       const body = await readBody(bodies, scope, frame);
       if (body === null) return null;
-      if (body.assembly === null) return body.text;
-      if (fold.node !== "model") return null;
-      const blocks = body.assembly.blocks.filter(
-        (block) => block.kind === "text" && block.text.trim() !== "",
-      );
-      const last = blocks[blocks.length - 1];
-      return last?.kind === "text" ? last.text : null;
+      const read = bodyWords(body);
+      cache?.set(scope, frame, read);
+      return wordsOf(fold, read);
     },
   );
   reads.forEach(({ fold }, i) => words.set(fold, said[i] ?? null));
@@ -648,6 +703,7 @@ function entryEffort(fold: TranscriptFold): string | null {
 export function createRunTranscriptGetHandler(
   deps: RunTranscriptGetDeps,
 ): CapabilityHandler<typeof runTranscriptGet> {
+  const words = deps.words ?? createWordsCache();
   return async (input, ctx): Promise<RunTranscriptGetOutput> => {
     const after =
       input.after === undefined ? null : decodeTranscriptCursor(input.after);
@@ -679,11 +735,22 @@ export function createRunTranscriptGetHandler(
           ? turnFolds(shown, steps)
           : frameFolds(shown);
     // Which prompts and replies show nothing, and which reply repeats words
-    // the reader was just shown, need their words. They are read over the
-    // whole run, before the counts, so an entry that draws no row counts
-    // nowhere. A turn is a group, and nothing in it is settled this way.
-    if (input.zoom !== "turns")
-      await markWords(all, (needed) => readWords(deps.bodies, scope, needed));
+    // the reader was just shown, need their words. At `steps`, the zoom the
+    // Run page draws rows from, they are read over the whole run, before the
+    // counts, so an entry that draws no row counts nowhere. The words cache
+    // answers every body an earlier read read, so a later page or a live
+    // tail read reads only the bodies that are new.
+    //
+    // `turns` is a group, and nothing in it is settled this way. At
+    // `everything`, one entry per frame, the words are not read either: the
+    // Run page reads it only to list decisions, recalls and governed actions,
+    // which never turn quiet on words, and `counts.frames` needs none. There
+    // a prompt or reply is quiet only where the fold says so, `echoOf` is
+    // null, and `counts` counts every prompt and reply the fold keeps.
+    if (input.zoom === "steps")
+      await markWords(all, (needed) =>
+        readWords(deps.bodies, scope, needed, { cache: words }),
+      );
     // Counted over every entry at the zoom, whatever the chips or query, so
     // a chip's count and the rows it shows agree. The frames' own policy and
     // recall counts ride every read, so a reader at `steps` never reads
@@ -721,6 +788,7 @@ export function createRunTranscriptGetHandler(
                 frame,
                 TRANSCRIPT_TEXT_MAX,
                 () => null,
+                words,
               );
               return body === null ? null : searchableText(body);
             },
@@ -828,6 +896,7 @@ export function createRunTranscriptGetHandler(
           fold.request,
           textMax,
           outputRate,
+          words,
         ),
         response: await half(
           deps.bodies,
@@ -835,6 +904,7 @@ export function createRunTranscriptGetHandler(
           fold.response,
           textMax,
           outputRate,
+          words,
         ),
       }),
     );

@@ -1179,7 +1179,7 @@ describe("get_run_transcript and one unreadable body", () => {
   // a transient failure) used to reject the whole page, and with it the
   // Policy, Context and stats tabs that read the same page.
   it("answers the page with that half unread and every other half read", async () => {
-    const { transcript, getBody } = harness([
+    const rows = [
       tachoRow(0, {
         kind: "turn_start",
         toolName: "",
@@ -1195,10 +1195,18 @@ describe("get_run_transcript and one unreadable body", () => {
         contentDigest: `sha256:${"5".repeat(64)}`,
         bytesRef: `evb:v1:k:${"5".repeat(64)}`,
       }),
-    ]);
+    ];
+    // Each body is read once, at either zoom. At `steps` the prompt is read
+    // for its words (`readWords`), and the page's half is answered from the
+    // words cache rather than read a second time.
+    for (const zoom of ["steps", "everything"] as const) {
+      const { transcript, getBody } = harness(rows);
+      await transcript(input({ zoom }), ctx());
+      expect(getBody).toHaveBeenCalledTimes(2);
+      expect(new Set(getBody.mock.calls.map(([, ref]) => ref)).size).toBe(2);
+    }
+    const { transcript } = harness(rows);
     const out = await transcript(input({ zoom: "everything" }), ctx());
-    // The prompt is read for its words (`readWords`) and for the page.
-    expect(getBody).toHaveBeenCalledTimes(3);
     expect(out.entries.map((e) => e.request?.text ?? null)).toEqual([
       "Fix the build.",
       null,
@@ -1645,18 +1653,52 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       }),
     ];
     const { transcript } = harness(rows);
-    for (const zoom of ["steps", "everything"] as const) {
-      const out = await transcript(input({ zoom }), ctx());
-      expect(
-        out.entries.map((e) => [e.key, e.node, e.quiet, e.echoOf]),
-      ).toEqual([
-        ["0", "prompt", false, null],
-        ["1", "model", false, null],
-        ["2", "reply", true, "1"],
-      ]);
-      expect(out.counts).toMatchObject({ entries: 2 });
-      expect(out.counts?.kinds).toMatchObject({ prompt: 1, responses: 1 });
-    }
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(out.entries.map((e) => [e.key, e.node, e.quiet, e.echoOf])).toEqual([
+      ["0", "prompt", false, null],
+      ["1", "model", false, null],
+      ["2", "reply", true, "1"],
+    ]);
+    expect(out.counts).toMatchObject({ entries: 2 });
+    expect(out.counts?.kinds).toMatchObject({ prompt: 1, responses: 1 });
+  });
+
+  it("reads no words at everything, so an echo there is left as the fold said (negative)", async () => {
+    // `everything` lists frames for the Actions, Policy and Context tabs,
+    // none of which a word turns quiet. Reading every prompt and reply of the
+    // run there would cost the bodies and settle nothing any of them draws.
+    const rows = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+      tachoRow(1, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+    ];
+    const { transcript, getBody } = harness(rows);
+    const out = await transcript(
+      input({ zoom: "everything", limit: 1 }),
+      ctx(),
+    );
+    // Only the page's one half is read.
+    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
+      stored("Ship it.").bytesRef,
+    ]);
+    const next = await transcript(
+      input({ zoom: "everything", after: out.cursor ?? undefined }),
+      ctx(),
+    );
+    expect(next.entries.map((e) => [e.key, e.quiet, e.echoOf])).toEqual([
+      ["1", false, null],
+    ]);
+    expect(out.counts?.kinds).toMatchObject({ prompt: 1, responses: 1 });
+    expect(out.counts?.entries).toBe(2);
   });
 
   it("keeps a closing message that says something new, and reads a blank prompt as showing nothing (negative)", async () => {
@@ -1730,7 +1772,7 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     expect(getBody).toHaveBeenCalledTimes(3);
 
     getBody.mockClear();
-    const bounded = await readWords(deps.bodies, SCOPE, folds, 1);
+    const bounded = await readWords(deps.bodies, SCOPE, folds, { halfMax: 1 });
     expect(getBody).toHaveBeenCalledTimes(1);
     expect(folds.map((fold) => bounded.has(fold))).toEqual([
       true,
@@ -2181,7 +2223,9 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
       turnSeq: 1,
       ...stored("The runner calls retry three times."),
     }),
-    // A body that no longer hashes to its digest is not searched.
+    // A prompt whose body no longer hashes to its digest shows no words, so
+    // it is quiet (`markWords`), draws no row, and the search skips it: it is
+    // neither matched nor counted as unsearched.
     tachoRow(6, { kind: "turn_start", ...blank, turnSeq: 2, ...forged }),
   ];
 
@@ -2198,8 +2242,9 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
       ["3", ["response"]],
       ["5", ["response"]],
     ]);
-    // The digest-only request and the half that no longer hashes.
-    expect(out.search).toEqual({ query: "retry", matched: 3, unsearched: 2 });
+    // The Read call's digest-only request. The prompt that no longer hashes
+    // is quiet, so it is not searched and not counted.
+    expect(out.search).toEqual({ query: "retry", matched: 3, unsearched: 1 });
   });
 
   it("matches the label and the tool on the entry, with no body read", async () => {
@@ -2245,15 +2290,14 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
     );
     expect(later.entries.map((e) => e.key)).toEqual(["5"]);
     expect(later.cursor).toBeNull();
-    // A later page searches only what it can still send: the reply and the
-    // second prompt, whose body no longer hashes. The Read call's halves,
-    // which the first page searched, are not read again.
-    expect(later.search).toEqual({ query: "retry", matched: 1, unsearched: 1 });
+    // A later page searches only what it can still send: the reply. The
+    // second prompt, whose body no longer hashes, is quiet and not searched.
+    expect(later.search).toEqual({ query: "retry", matched: 1, unsearched: 0 });
+    // The reply's words were read by the first page's word read, so the
+    // search and the page answer it from the words cache. The only body read
+    // again is the one that did not hash, which was never kept.
     const searched = getBody.mock.calls.map(([, ref]) => ref);
-    expect(searched).not.toContain(stored("RETRY_LIMIT = 3").bytesRef);
-    expect(searched).toContain(
-      stored("The runner calls retry three times.").bytesRef,
-    );
+    expect(new Set(searched)).toEqual(new Set([forged.bytesRef]));
   });
 
   it("sends a match that grew behind the cursor once, and never moves the cursor back to it", async () => {
@@ -2325,7 +2369,7 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
       ctx(),
     );
     expect(out.entries).toEqual([]);
-    expect(out.search).toEqual({ query: "nowhere", matched: 0, unsearched: 2 });
+    expect(out.search).toEqual({ query: "nowhere", matched: 0, unsearched: 1 });
     expect(out.figures?.calls.count).toBe(2);
   });
 
@@ -2388,5 +2432,100 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
       const out = await transcript(input(over), ctx());
       expect(out.figures).toEqual(steps.figures);
     }
+  });
+});
+
+describe("get_run_transcript reads each body once per process (ADR-182)", () => {
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  /** One turn: the operator's prompt, a streamed model reply, a closing message. */
+  const turn = (n: number) => [
+    tachoRow(n * 3, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: n + 1,
+      ...stored(`Prompt ${n}.`),
+    }),
+    tachoRow(n * 3 + 1, {
+      kind: "llm_call",
+      ...blank,
+      model: "claude-opus-5",
+      provider: "anthropic",
+      turnSeq: n + 1,
+      ...stored(modelStream([`Streamed ${n}.`]), "text/event-stream"),
+    }),
+    tachoRow(n * 3 + 2, {
+      kind: "turn_end",
+      ...blank,
+      turnSeq: n + 1,
+      ...stored(`Closing ${n}.`),
+    }),
+  ];
+  /** Every body reference the entries' halves name. */
+  const pageRefs = (page: { entries: TranscriptEntryRefs[] }) =>
+    new Set(
+      page.entries.flatMap((entry) =>
+        [entry.request?.bytesRef, entry.response?.bytesRef].filter(
+          (ref): ref is string => typeof ref === "string",
+        ),
+      ),
+    );
+  type TranscriptEntryRefs = {
+    request: { bytesRef: string | null } | null;
+    response: { bytesRef: string | null } | null;
+  };
+
+  it("reads no body outside its page on a second cursor read of a sealed run", async () => {
+    const rows = [0, 1, 2, 3].flatMap(turn);
+    const { transcript, getBody } = harness(rows);
+    const first = await transcript(input({ zoom: "steps", limit: 3 }), ctx());
+    // The first read reads the whole run's words, once each. The only body
+    // it reads twice is its page's model stream: the words read keeps only
+    // its last text block, and the page shows the whole message.
+    const firstRefs = getBody.mock.calls.map(([, ref]) => ref);
+    const twice = firstRefs.filter((ref, i) => firstRefs.indexOf(ref) !== i);
+    expect(twice).toEqual([
+      stored(modelStream(["Streamed 0."]), "text/event-stream").bytesRef,
+    ]);
+
+    getBody.mockClear();
+    const second = await transcript(
+      input({ zoom: "steps", limit: 3, after: first.cursor ?? undefined }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => e.key)).toEqual(["3", "4", "5"]);
+    const read = getBody.mock.calls.map(([, ref]) => ref);
+    const onPage = pageRefs(second);
+    expect(read.filter((ref) => !onPage.has(ref))).toEqual([]);
+    // The page's prompt and closing message were read for their words, so
+    // only its model stream, which a words read does not keep whole, is
+    // read again.
+    expect(read).toEqual([
+      stored(modelStream(["Streamed 1."]), "text/event-stream").bytesRef,
+    ]);
+    // What the read settled is what a read with no cache settles.
+    const fresh = await harness(rows).transcript(
+      input({ zoom: "steps", limit: 3, after: first.cursor ?? undefined }),
+      ctx(),
+    );
+    expect(second).toEqual(fresh);
+  });
+
+  it("reads only the new bodies on a live run's tail read", async () => {
+    const rows = [0, 1].flatMap(turn);
+    const { transcript, getBody } = harness(rows, {
+      outcome: "running",
+      sealedAt: null,
+    });
+    const head = await transcript(input({ zoom: "steps" }), ctx());
+    rows.push(...turn(2));
+    getBody.mockClear();
+    const tail = await transcript(
+      input({ zoom: "steps", after: head.cursor ?? undefined }),
+      ctx(),
+    );
+    expect(tail.entries.map((e) => e.key)).toEqual(["6", "7", "8"]);
+    const read = new Set(getBody.mock.calls.map(([, ref]) => ref));
+    const landed = new Set(turn(2).map((row) => row.bytesRef as string));
+    expect([...read].filter((ref) => !landed.has(ref))).toEqual([]);
   });
 });

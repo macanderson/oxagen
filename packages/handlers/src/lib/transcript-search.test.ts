@@ -212,4 +212,32 @@ describe("searchFolds", () => {
     expect(readText.mock.calls.map(([frame]) => frame.seq)).toEqual(["0", "1"]);
     expect(out.folds.map((fold) => fold.key)).toEqual(["1"]);
   });
+
+  it("skips a quiet entry: no match, no half read, and none of the bound spent", async () => {
+    // A reply that repeats the prompt draws no row (`markWords`), so a search
+    // that matched it would count a row the reader is never shown.
+    const folds = stepFolds([result(0), result(1), result(2)]);
+    (folds[0] as (typeof folds)[number]).quiet = true;
+    const readText = vi.fn((_frame: RunFrame) => Promise.resolve("hit"));
+    const out = await searchFolds(folds, "hit", readText, {
+      halfMax: 2,
+      concurrency: 1,
+    });
+    expect(readText.mock.calls.map(([frame]) => frame.seq)).toEqual(["1", "2"]);
+    expect(out.folds.map((fold) => fold.key)).toEqual(["1", "2"]);
+    expect(out.search).toEqual({ query: "hit", matched: 2, unsearched: 0 });
+  });
+
+  it("does not match a quiet entry on its label or tool either (negative)", async () => {
+    const folds = stepFolds([result(0), result(1)]);
+    (folds[1] as (typeof folds)[number]).quiet = true;
+    const out = await searchFolds(
+      folds,
+      "read",
+      () => Promise.resolve(null),
+      limits,
+    );
+    expect(out.folds.map((fold) => fold.key)).toEqual(["0"]);
+    expect(out.search.matched).toBe(1);
+  });
 });

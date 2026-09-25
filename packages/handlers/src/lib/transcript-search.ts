@@ -15,6 +15,11 @@
 // one the store could not answer or that no longer hashes, and one past the
 // bound. A half that carried no content has nothing to search and is not
 // counted.
+//
+// An entry the fold or `markWords` marked `quiet` draws no row, so the search
+// skips it: it cannot match, it reads no half and it spends none of the bound.
+// A match is one a reader can see, and `matched` counts only rows a reader is
+// shown.
 import type {
   TranscriptEntryBody,
   TranscriptMatch,
@@ -65,7 +70,7 @@ export interface TranscriptSearchResult {
  * The entries of `folds` that hold `query`, and where. `readText` answers a
  * half's searchable text, or null when it cannot be read. An entry that
  * matched on its label, tool or target has no half read, so its matches name
- * only those.
+ * only those. A `quiet` entry is not searched at all.
  */
 export async function searchFolds(
   folds: readonly TranscriptFold[],
@@ -79,7 +84,8 @@ export async function searchFolds(
 
   // What each entry matched on itself, with no body read.
   const onEntry = new Map<TranscriptFold, TranscriptMatch[]>();
-  for (const fold of folds) {
+  const shown = folds.filter((fold) => !fold.quiet);
+  for (const fold of shown) {
     const where: TranscriptMatch[] = [];
     if (holds(fold.opening.summary)) where.push("label");
     if (holds(fold.subject)) where.push("subject");
@@ -90,7 +96,7 @@ export async function searchFolds(
   let unsearched = 0;
   let budget = limits.halfMax;
   const reads: { fold: TranscriptFold; slot: Slot; frame: RunFrame }[] = [];
-  for (const fold of folds) {
+  for (const fold of shown) {
     if (onEntry.has(fold)) continue;
     for (const slot of ["request", "response"] as const) {
       const frame = fold[slot];
@@ -121,7 +127,7 @@ export async function searchFolds(
 
   const matched: TranscriptFold[] = [];
   const matches = new Map<TranscriptFold, TranscriptMatch[]>();
-  for (const fold of folds) {
+  for (const fold of shown) {
     const where: TranscriptMatch[] = [...(onEntry.get(fold) ?? [])];
     const slots = inHalves.get(fold);
     if (slots?.has("request")) where.push("request");

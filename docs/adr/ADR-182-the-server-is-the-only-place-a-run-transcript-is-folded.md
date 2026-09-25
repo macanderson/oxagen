@@ -89,6 +89,14 @@ fold, and the client fold introduced with #3345.
   and say so when a run passes it, as they did before.
 - A search can read every retained body of a run, so it is bounded per read
   and says what it left unsearched.
+- At `steps`, which prompts and replies draw nothing, and which reply repeats
+  words just shown, are settled from their words over the whole run, so the
+  counts match the rows. A body never changes, so the server keeps each
+  body's words per process, keyed by tenant, reference and digest, and a
+  later page or live read reads only the bodies it has not read. `everything`
+  and `turns` read no words. Recording each body's trimmed-words digest and a
+  blank flag at ingest would let the read compare digests and read no body
+  for this; that needs a ClickHouse column and waits on its own issue.
 - A chip selects what the Run page draws under it, so a chip's count in
   `counts.kinds` is the count of what the chip shows. `prompt` is the
   operator's prompt and no longer a model call's request, `responses` takes
