@@ -1782,3 +1782,48 @@ export const contextAppends = agentSchema.table(
     ),
   }),
 );
+
+// The repository sync (ADR-184): one row per workspace saying which commit of
+// the main repository's production branch the registry last matched, and what
+// was wrong with the record files at that commit. The webhook stamps
+// `requested_at` when a push or a merge arrives, so a reader can tell a sync
+// that is on its way from one that finished.
+export const contextSyncState = agentSchema.table(
+  "context_sync_state",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    provider: text("provider"),
+    repository: text("repository"),
+    branch: text("branch"),
+    headSha: text("head_sha"),
+    // The newest commit at that head that changed `.oxagen/rules/`. A push
+    // that leaves it where it was changes no record, and the sync reads
+    // nothing more.
+    rulesSha: text("rules_sha"),
+    status: text("status").notNull().default("pending"),
+    findings: jsonb("findings").notNull().default(sql`'[]'::jsonb`),
+    error: text("error"),
+    requestedAt: timestamp("requested_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    syncedAt: timestamp("synced_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    workspaceUniq: uniqueIndex("context_sync_state_workspace_uq").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    statusCheck: check(
+      "context_sync_state_status_check",
+      sql`${t.status} IN ('pending', 'synced', 'problems', 'failed')`,
+    ),
+  }),
+);

@@ -56,7 +56,8 @@ name: Desktop
 #   version into the checkout, and `publish` uploads the installers under
 #   `desktop/<version>/`. A build has no tag, no GitHub release and no update
 #   feed entry: installed apps still update on releases only. The release
-#   commit itself is skipped here, because its tag publishes it.
+#   commit itself is skipped here, because its tag publishes it, and so is
+#   a commit older than the desktop.yml this run executes (see `plan`).
 #
 # Either way, `publish-downloads.mjs` moves the version-free `latest/` links,
 # `latest.json` and the page only when the version is the newest the host has
@@ -138,14 +139,41 @@ jobs:
       - uses: ./.github/actions/pnpm-install
         if: github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.preview)
 
+      # A deploy dispatches this workflow on main with the deployed commit as
+      # `sha`, so the steps run from main's tip while the tree they build is
+      # the deployed commit. When desktop.yml changed in between, a step can
+      # call a file that tree does not have: the deploy build of bc9256b ran
+      # 7b3a2a6's workflow and failed on smoke-macos-bundle.sh, which 7b3a2a6
+      # added. Such a build is skipped rather than run against steps written
+      # for a newer tree. The deploy of the commit that changed desktop.yml
+      # builds and publishes, and the `latest/` links only move forward.
       - name: Choose the version
         id: plan
         env:
           PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
           PREVIEW: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish && inputs.preview }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH" = "true" ] && [ "$WORKFLOW_SHA" != "$(git rev-parse HEAD)" ]; then
+            git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null \
+              || git fetch --no-tags origin "$WORKFLOW_SHA"
+            # 0: the same file, 1: it differs; anything else is a git error,
+            # which fails the run rather than reading as "differs".
+            differs=0
+            git diff --quiet "$WORKFLOW_SHA" HEAD -- .github/workflows/desktop.yml || differs=$?
+            if [ "$differs" -gt 1 ]; then
+              echo "::error::could not compare desktop.yml at $WORKFLOW_SHA with $(git rev-parse HEAD)"
+              exit 1
+            fi
+            if [ "$differs" -eq 1 ]; then
+              echo "::notice::desktop.yml changed after $(git rev-parse --short HEAD) (this run's workflow is $WORKFLOW_SHA); the deploy of the commit that changed it publishes the installers"
+              echo "channel=skip" >> "$GITHUB_OUTPUT"
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
           if [[ "$GITHUB_REF" == refs/tags/desktop-v* ]]; then
             {
               echo "version=${GITHUB_REF_NAME#desktop-v}"
@@ -386,6 +414,20 @@ jobs:
           prerelease: false
           includeUpdaterJson: ${{ steps.updater.outputs.signed == 'true' }}
 
+      # The signed bundle's binaries start under the hardened runtime with the
+      # entitlements the bundle carries: both sidecars answer --version from
+      # inside the .app, and the app stays up for 20 seconds. The plist keeps
+      # library validation on (#3214), so a dependency that needs a
+      # third-party dynamic library fails here, before anything publishes.
+      # apps/desktop/src-tauri/entitlements.md has the reasoning.
+      - name: Start the bundle's sidecars and app
+        if: runner.os == 'macOS'
+        shell: bash
+        run: >-
+          bash apps/desktop/scripts/smoke-macos-bundle.sh
+          "apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/macos/Oxagen.app"
+          apps/desktop/src-tauri/entitlements.plist
+
       # The bare CLI binaries next to the bundles, each with a .sha256, so the
       # Homebrew formula and the Scoop manifest in tools/packaging can install
       # tacho + oxagen without the app; on macOS the .dmg gets one too, for the
@@ -488,7 +530,7 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
         run: |
           curl -fsS -o /dev/null "https://downloads.oxagen.sh/desktop/$VERSION/SHA256SUMS.txt"
-          for i in 1 2 3 4 5 6; do
+          for _ in 1 2 3 4 5 6; do
             if curl -fsS "https://downloads.oxagen.sh/latest.json" -o latest.json &&
               node apps/desktop/scripts/check-latest.mjs latest.json "$VERSION"; then
               exit 0

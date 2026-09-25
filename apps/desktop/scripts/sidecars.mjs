@@ -37,7 +37,17 @@ function hostTriple() {
   return match[1];
 }
 
-const triple = tripleArg >= 0 ? argv[tripleArg + 1] : hostTriple();
+// `--triple` with nothing after it used to name the files `tacho-undefined`,
+// which Tauri then could not find.
+const tripleValue = tripleArg >= 0 ? argv[tripleArg + 1] : undefined;
+if (
+  tripleArg >= 0 &&
+  (tripleValue === undefined || tripleValue.startsWith("-"))
+) {
+  console.error("--triple needs a target triple, such as aarch64-apple-darwin");
+  process.exit(2);
+}
+const triple = tripleValue ?? hostTriple();
 const exe = process.platform === "win32" ? ".exe" : "";
 const outDir = join(app, "src-tauri", "binaries");
 mkdirSync(outDir, { recursive: true });
