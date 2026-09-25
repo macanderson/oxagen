@@ -1220,6 +1220,33 @@ describe("readAssignableRoles", () => {
       code: "org.admin",
     });
   });
+
+  // list_iam_roles asserts no role, so the action holds the Owner or Admin
+  // line itself (#3525). An Owner reads the catalogue as an Admin does.
+  it.each(["member", "billing", "compliance", "viewer"] as const)(
+    "refuses a %s before the catalogue is read (negative)",
+    async (orgRole) => {
+      requireViewer.mockResolvedValue({ ...ctx, orgRole });
+      expect(await readAssignableRoles("acme", "core-platform")).toEqual({
+        ok: false,
+        reason: "denied",
+        code: "org_role_required",
+      });
+      expect(kernelRead).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reads the catalogue for an org Owner", async () => {
+    requireViewer.mockResolvedValue({ ...ctx, orgRole: "owner" });
+    kernelRead.mockResolvedValue(
+      catalogue([roleRow("Agent Observer", { isSystemDefault: true })]),
+    );
+    expect(await readAssignableRoles("acme", "core-platform")).toMatchObject({
+      ok: true,
+      value: { roles: [{ name: "Agent Observer" }] },
+    });
+    expect(kernelRead).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("readAgentRoleNames", () => {
