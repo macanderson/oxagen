@@ -52,7 +52,6 @@ describe("messages/shell.json", () => {
       "account",
       "approvals",
       "assistant",
-      "avatar",
       "choices",
       "commands",
       "denied",
