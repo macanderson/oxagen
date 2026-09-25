@@ -15,9 +15,9 @@ import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { parseProviderUrl } from "@/shared/provider-url";
 import { FormAlert } from "@/ui/form-feedback";
 import { ProviderLink } from "@/ui/navigation";
+import { ProviderIcon } from "@/ui/provider-icon";
 import { useActionFailure } from "./action-failure";
 import { searchRegistry } from "./provider-auth-actions";
-import { ProviderIcon } from "./provider-icon";
 import type { ToolsAt } from "./view";
 
 const TESTID = "registry-browser";
