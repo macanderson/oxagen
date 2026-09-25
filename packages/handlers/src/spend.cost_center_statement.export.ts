@@ -10,6 +10,7 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   COST_CENTER_STATEMENT_COLUMNS,
+  COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT,
   type CostCenterStatementLine,
   type spendCostCenterStatementExport,
   type SpendCostCenterStatementExportOutput,
@@ -18,22 +19,42 @@ import {
   dayBounds,
   foldBasis,
   microsToCentsHalfEven,
-  runTotalsRowToRecord,
   UNASSIGNED_COST_CENTER_KEY,
   type CostBasis,
   type RunTotalsRecord,
 } from "@oxagen/billing";
 import { schema, withOrgDb } from "@oxagen/database";
-import { and, asc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
 import { cost } from "./spend.shared";
 import { csvField, monthBounds } from "./spend.statement.export";
 
+/** The columns of a run row the statement reads. The rest, `breakdown` included, it never needs. */
+export type StatementRun = Pick<
+  RunTotalsRecord,
+  "runId" | "startedAt" | "costCenter" | "costMicros" | "costBasis" | "currency"
+>;
+
+/** The last run of the previous page. `startedAt` is RFC 3339 at millisecond precision. */
+export interface StatementCursor {
+  startedAt: string;
+  runId: string;
+}
+
+/** How many run rows one page of the statement read holds. */
+export const COST_CENTER_STATEMENT_PAGE_SIZE = 5_000;
+
 export type CostCenterStatementDeps = {
-  /** Every run row of the organization, across its workspaces, that started in [from, to]. */
-  readRunTotals: (
+  /**
+   * One page of the organization's run rows, across its workspaces, that
+   * started in [from, to]: oldest first by (startedAt, runId), after `after`
+   * when given, at most `limit` rows.
+   */
+  readRunTotalsPage: (
     orgId: string,
-    q: { from: string; to: string },
-  ) => Promise<RunTotalsRecord[]>;
+    q: { from: string; to: string; limit: number; after?: StatementCursor },
+  ) => Promise<StatementRun[]>;
+  /** Rows per page, or {@link COST_CENTER_STATEMENT_PAGE_SIZE} when absent. */
+  pageSize?: number;
 };
 
 const totals = schema.runTotals;
@@ -41,28 +62,76 @@ const totals = schema.runTotals;
 /** Who may read the organization-wide statement: the people accountable for the bill. */
 const STATEMENT_READERS = { org: ["Owner", "Admin", "Billing"] } as const;
 
-async function readOrgRunTotals(
+async function readOrgRunTotalsPage(
   orgId: string,
-  q: { from: string; to: string },
-): Promise<RunTotalsRecord[]> {
+  q: { from: string; to: string; limit: number; after?: StatementCursor },
+): Promise<StatementRun[]> {
   const { start } = dayBounds(q.from);
   const { next } = dayBounds(q.to);
+  // The cursor travels at millisecond precision, so the order and the
+  // comparison truncate the microseconds Postgres keeps, as
+  // listRunsWithIncompleteCost does.
+  const startedMs = sql<Date>`date_trunc('milliseconds', ${totals.startedAt})`;
   // An organization-wide read: withOrgDb widens the SELECT to every workspace
   // of the organization and RLS still fences org_id (ADR-086).
   const rows = await withOrgDb((tx) =>
     tx
-      .select()
+      .select({
+        runId: totals.runId,
+        startedAt: totals.startedAt,
+        costCenter: totals.costCenter,
+        costMicros: totals.costMicros,
+        costBasis: totals.costBasis,
+        currency: totals.currency,
+      })
       .from(totals)
       .where(
         and(
           eq(totals.orgId, orgId),
           gte(totals.startedAt, start),
           lt(totals.startedAt, next),
+          q.after === undefined
+            ? undefined
+            : sql`(${startedMs}, ${totals.runId}) > (${q.after.startedAt}::timestamptz, ${q.after.runId})`,
         ),
       )
-      .orderBy(asc(totals.startedAt), asc(totals.runId)),
+      .orderBy(asc(startedMs), asc(totals.runId))
+      .limit(q.limit),
   );
-  return rows.map(runTotalsRowToRecord);
+  return rows.map((r) => ({
+    ...r,
+    costBasis: r.costBasis as CostBasis | null,
+  }));
+}
+
+/**
+ * Every run row of the month, page by page, handed to `visit` in store order.
+ * No page is kept once visited, so the read holds one page at a time.
+ */
+async function forEachRun(
+  deps: CostCenterStatementDeps,
+  orgId: string,
+  bounds: { from: string; to: string },
+  visit: (run: StatementRun) => void,
+): Promise<void> {
+  const limit = deps.pageSize ?? COST_CENTER_STATEMENT_PAGE_SIZE;
+  let after: StatementCursor | undefined;
+  for (;;) {
+    const page = await deps.readRunTotalsPage(orgId, {
+      ...bounds,
+      limit,
+      after,
+    });
+    for (const run of page) visit(run);
+    const last = page.at(-1);
+    if (page.length < limit || last === undefined) return;
+    // A store that ignored the cursor would hand back the same page for ever.
+    if (after !== undefined && last.runId === after.runId)
+      throw new Error(
+        `export_cost_center_statement: run page did not advance past ${after.runId}`,
+      );
+    after = { startedAt: last.startedAt.toISOString(), runId: last.runId };
+  }
 }
 
 interface LineAccumulator {
@@ -74,7 +143,7 @@ interface LineAccumulator {
   runIds: string[];
 }
 
-function accumulate(into: LineAccumulator, run: RunTotalsRecord): void {
+function accumulate(into: LineAccumulator, run: StatementRun): void {
   into.runs += 1;
   into.runIds.push(run.runId);
   into.currency = run.currency;
@@ -142,24 +211,34 @@ export function createCostCenterStatementHandler(
     // non-enterprise humans, so the org role is enforced here (INV-29).
     const userId = await resolveActingUserId(ctx);
     await assertOrgRole({ ...ctx, userId }, STATEMENT_READERS);
-    const runs = await deps.readRunTotals(ctx.orgId, monthBounds(input.month));
     const byCenter = new Map<string, LineAccumulator>();
     const all = empty();
-    for (const run of runs) {
+    await forEachRun(deps, ctx.orgId, monthBounds(input.month), (run) => {
       const key = run.costCenter ?? UNASSIGNED_COST_CENTER_KEY;
       const acc = byCenter.get(key) ?? empty();
       accumulate(acc, run);
       byCenter.set(key, acc);
       accumulate(all, run);
-    }
+    });
+    // The CSV lists every run id. The data lists the oldest few per line and
+    // counts the rest, so one response does not carry every id twice.
+    const allRunIds = new Map<string, readonly string[]>();
     const lines: CostCenterStatementLine[] = [...byCenter.entries()]
-      .map(([costCenter, acc]) => ({
-        costCenter,
-        runs: acc.runs,
-        unpricedRuns: acc.unpriced,
-        cost: cost(acc.micros, acc.currency, acc.basis),
-        runIds: acc.runIds,
-      }))
+      .map(([costCenter, acc]) => {
+        allRunIds.set(costCenter, acc.runIds);
+        const listed = acc.runIds.slice(
+          0,
+          COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT,
+        );
+        return {
+          costCenter,
+          runs: acc.runs,
+          unpricedRuns: acc.unpriced,
+          cost: cost(acc.micros, acc.currency, acc.basis),
+          runIds: listed,
+          runIdsOmitted: acc.runIds.length - listed.length,
+        };
+      })
       .sort(compareLines);
     const total = {
       runs: all.runs,
@@ -175,7 +254,7 @@ export function createCostCenterStatementHandler(
           l.runs,
           l.unpricedRuns,
           l.cost,
-          l.runIds,
+          allRunIds.get(l.costCenter) ?? [],
         ),
       ),
       // The total line lists no run ids: every one is on a line above it.
@@ -193,5 +272,5 @@ export function createCostCenterStatementHandler(
 }
 
 export const spendCostCenterStatementHandler = createCostCenterStatementHandler(
-  { readRunTotals: readOrgRunTotals },
+  { readRunTotalsPage: readOrgRunTotalsPage },
 );

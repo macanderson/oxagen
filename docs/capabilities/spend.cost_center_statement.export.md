@@ -43,9 +43,12 @@ A line:
 | `runs` | integer | runs charged to the line |
 | `unpricedRuns` | integer | runs on the line that no frame priced |
 | `cost` | object or null | `{ micros, currency, basis }`, null when no run on the line was priced |
-| `runIds` | string[] | every run on the line, oldest first |
+| `runIds` | string[] | the oldest 100 runs on the line, oldest first |
+| `runIdsOmitted` | integer | runs on the line that `runIds` leaves out |
 
-Columns: `line, cost_center, runs, unpriced_runs, cost_micros, cost_cents, currency, basis, run_ids`. The `run_ids` field holds the ids separated by spaces. The `total` line leaves `cost_center` and `run_ids` empty, because every run is on a line above it.
+Columns: `line, cost_center, runs, unpriced_runs, cost_micros, cost_cents, currency, basis, run_ids`. The `run_ids` field holds every run id on the line, separated by spaces. The `lines` data lists at most 100 per line so a busy month does not carry every id twice. The CSV is the complete record. The `total` line leaves `cost_center` and `run_ids` empty, because every run is on a line above it.
+
+The handler reads the month's run rows in pages of 5,000, oldest first by start time and run id, and selects only the columns the statement uses.
 
 ## Reconciliation
 

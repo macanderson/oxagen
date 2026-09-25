@@ -28,6 +28,7 @@ describe("export_cost_center_statement contract", () => {
           unpricedRuns: 0,
           cost,
           runIds: ["tse_1"],
+          runIdsOmitted: 0,
         },
       ],
       total: { runs: 1, unpricedRuns: 0, cost },
