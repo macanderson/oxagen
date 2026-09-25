@@ -56,6 +56,8 @@ type Base = { key: string; label: string; url: GitHubUrl | null };
  * Each branch the run's pull requests merge into, once per repository. The
  * repository is named only when the pull requests span more than one, so a
  * run in one repository reads `main`, not `acme/platform:main`.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function basesOf(pulls: readonly Pull[]): Base[] {
   const repos = new Set(pulls.map((pr) => pr.repository.url));

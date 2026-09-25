@@ -83,8 +83,11 @@ function commandsFor(paused: boolean): readonly Command[] {
  * How often the page re-reads a run after a pause or resume was queued, and
  * how many times. A host applies a command on its next poll, so a minute
  * covers a live host; past it, the status is left to the next reload.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export const HALT_FOLLOW_EVERY_MS = 4_000;
+/** @internal Exported for its unit test; nothing outside this module imports it. */
 export const HALT_FOLLOW_READS = 15;
 
 /**
