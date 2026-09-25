@@ -1,6 +1,6 @@
 # Harness and repository coverage
 
-Checked against `main` at `7245b8825` on 2026-09-22. The Contained column was rechecked at `d5c7084f9` on 2026-09-24. This is a source audit, not a live harness certification. The recovered draft included a scratch enrollment transcript from a fake control plane; it is not evidence that a real harness ran its hooks. No new enrollment test was run for this audit.
+Checked against `main` at `7245b8825` on 2026-09-22. The Contained column was rechecked at `d5c7084f9` on 2026-09-24. The MCP gateway column was checked at `7dfcd0b95` on 2026-09-25. This is a source audit, not a live harness certification. The recovered draft included a scratch enrollment transcript from a fake control plane; it is not evidence that a real harness ran its hooks. No new enrollment test was run for this audit.
 
 The [model gateway audit](../audits/2026-09-21-model-gateway-arming.md) explains the routing and bypass mechanisms. Its original Stella row predates the Anthropic base-URL writer. This page uses the current writer and separates code that installs hooks from evidence that a particular installation executes them.
 
@@ -8,14 +8,14 @@ The [model gateway audit](../audits/2026-09-21-model-gateway-arming.md) explains
 
 Each source abbreviation below links to the implementation. “Metered” and “budget” cover calls that pass through the model proxy. An operator can still change a local setting or call a provider directly. “Contained” names the harnesses the contained launcher can start ([ADR-152](../adr/ADR-152-the-contained-launcher-measures-a-docker-container-and-the-server-decides-the-tier.md)). A run reaches that tier only when started with `tacho run --contained`. A hooked run on a laptop is not contained. No production contained run is recorded yet.
 
-| Harness | Recorded | Metered | Can deny | Can ask | Enforced budget | Model list | Contained |
-|---|---|---|---|---|---|---|---|
-| Claude Code | 33 configured events: 5 command hooks and 28 HTTP events [C] | Routed Anthropic calls [M] | PreToolUse denial [H] | Native permission prompt via `ask` [H] | Routed session ceiling, and the agent's UTC-day ceiling on a host that advertises `daily_budget`, when the mandate enables them [B], [D] | Routed calls refused with `model_not_permitted` when the workspace arms its lists [L] | Linux with Docker only, through `tacho run --contained` [T], [R] |
-| Codex | 12 command events [X]; hooks must be trusted [O] | Routed OpenAI calls [M] | PreToolUse denial [H], [O] | Unsupported: the current client forwards `ask`, which Codex ignores after reporting a hook error [H], [O] | Routed session ceiling, and the agent's UTC-day ceiling on a host that advertises `daily_budget`, when the mandate enables them [B], [D] | Routed calls, as for Claude Code [L] | Linux with Docker only, as for Claude Code [T], [R] |
-| Cursor | 10 configured events [U] | No configured model route [M] | Tool, prompt, and subagent refusals [U] | Converted to deny with an explanation [U] | None. Cursor's model calls do not reach the proxy, so neither the session nor the day ceiling holds [M] | None. Out of scope: Cursor documents no base URL the proxy could take, so no list is checked [M] | No contained tier [T] |
-| Stella | 8 command events; no SessionEnd [S] | Anthropic provider route only [M] | Native deny [A] | Native `require_approval` [A] | Routed Anthropic session ceiling only with exactly one live Stella session [B], [M]. The day ceiling covers every routed Anthropic call, attributed or not [D] | Anthropic route only [L], [M] | No contained tier [T] |
-| Gemini CLI, not verified by enrollment | No Oxagen adapter [W]; vendor has hooks [G] | No Oxagen route [M]; API-key base-URL extension exists [GC] | Not implemented; vendor BeforeTool can refuse [G] | No native ask in the documented decision schema [G] | Not implemented; BeforeModel can refuse a call [G] | Not implemented [M] | No Oxagen contained tier [T] |
-| Aider, not verified by enrollment | No Oxagen adapter [W]; history files offer an extension point [AI] | No Oxagen route [M]; OpenAI base-URL option exists [AI] | No pre-action hook documented in its options [AI] | No documented pre-action approval adapter [AI] | Not implemented; a future proxy route could gate model calls [AI], [B] | Not implemented [M] | No Oxagen contained tier [T] |
+| Harness | Recorded | Metered | Can deny | Can ask | Enforced budget | Model list | Contained | MCP gateway |
+|---|---|---|---|---|---|---|---|---|
+| Claude Code | 33 configured events: 5 command hooks and 28 HTTP events [C] | Routed Anthropic calls [M] | PreToolUse denial [H] | Native permission prompt via `ask` [H] | Routed session ceiling, and the agent's UTC-day ceiling on a host that advertises `daily_budget`, when the mandate enables them [B], [D] | Routed calls refused with `model_not_permitted` when the workspace arms its lists [L] | Linux with Docker only, through `tacho run --contained` [T], [R] | Not routed. `PreToolUse` checks `mcp__*` calls [H]. claude.ai connectors, Agent SDK `sdk` servers, and built-in tools cannot route [CCM] |
+| Codex | 12 command events [X]; hooks must be trusted [O] | Routed OpenAI calls [M] | PreToolUse denial [H], [O] | Unsupported: the current client forwards `ask`, which Codex ignores after reporting a hook error [H], [O] | Routed session ceiling, and the agent's UTC-day ceiling on a host that advertises `daily_budget`, when the mandate enables them [B], [D] | Routed calls, as for Claude Code [L] | Linux with Docker only, as for Claude Code [T], [R] | Not routed. `PreToolUse` checks `mcp__*` calls [H]. Apps, connectors, and hosted web search cannot route [CXM] |
+| Cursor | 10 configured events [U] | No configured model route [M] | Tool, prompt, and subagent refusals [U] | Converted to deny with an explanation [U] | None. Cursor's model calls do not reach the proxy, so neither the session nor the day ceiling holds [M] | None. Out of scope: Cursor documents no base URL the proxy could take, so no list is checked [M] | No contained tier [T] | Not routed. Enrollment writes no `mcp.json` [CW]. Cloud Agents, Browser, Web search, and Fetch cannot route [CUM] |
+| Stella | 8 command events; no SessionEnd [S] | Anthropic provider route only [M] | Native deny [A] | Native `require_approval` [A] | Routed Anthropic session ceiling only with exactly one live Stella session [B], [M]. The day ceiling covers every routed Anthropic call, attributed or not [D] | Anthropic route only [L], [M] | No contained tier [T] | Not routed. Servers live only in each workspace's `.stella/mcp.toml`, so no user-scope route exists [SM] |
+| Gemini CLI, not verified by enrollment | No Oxagen adapter [W]; vendor has hooks [G] | No Oxagen route [M]; API-key base-URL extension exists [GC] | Not implemented; vendor BeforeTool can refuse [G] | No native ask in the documented decision schema [G] | Not implemented; BeforeModel can refuse a call [G] | Not implemented [M] | No Oxagen contained tier [T] | No Oxagen route [W] |
+| Aider, not verified by enrollment | No Oxagen adapter [W]; history files offer an extension point [AI] | No Oxagen route [M]; OpenAI base-URL option exists [AI] | No pre-action hook documented in its options [AI] | No documented pre-action approval adapter [AI] | Not implemented; a future proxy route could gate model calls [AI], [B] | Not implemented [M] | No Oxagen contained tier [T] | Not assessed |
 
 [C]: ../../packages/tacho/src/host/settings-writer.ts
 [X]: ../../packages/tacho/src/host/codex-writer.ts
@@ -34,6 +34,12 @@ Each source abbreviation below links to the implementation. “Metered” and �
 [G]: https://geminicli.com/docs/hooks/reference/
 [GC]: https://geminicli.com/docs/reference/configuration/
 [AI]: https://aider.chat/docs/config/options.html
+[CW]: ../../packages/tacho/src/host/cursor-writer.ts
+[MG]: ../../packages/tacho/src/collector/mcp-gateway.ts
+[CCM]: https://code.claude.com/docs/en/mcp
+[CXM]: https://learn.chatgpt.com/docs/extend/mcp
+[CUM]: https://cursor.com/docs/mcp
+[SM]: https://github.com/macanderson/stella/blob/main/crates/stella-cli/src/agent.rs
 
 Claude Desktop is a connected gateway harness, not one of the four wrapped harnesses in [wire.ts][W]. Custom-agent integrations speak the hook protocol themselves; see [the wrapped-agent examples](https://github.com/macanderson/oxagen-wrapped-agents). Neither path inherits the lifecycle coverage of a native adapter.
 
@@ -44,6 +50,27 @@ The current enrollment writer installs hooks but does not persist their trust. C
 ### Cursor and Stella
 
 Cursor's adapter refuses an ask because its pre-tool protocol cannot provide the requested approval behavior. Enrollment writes no Cursor model route, so its recorded tool activity does not establish metered spend or a budget ceiling. The per-run budget, the per-day budget (ADR-160) and the workspace model list therefore do not apply to Cursor, and Oxagen does not plan a Cursor model route on the current CLI. Stella's writer routes its Anthropic provider; another provider can bypass that route. Stella supplies no session identifier. The proxy attributes a request only when exactly one Stella session is live on the host. With two or more, it records the call as unattributed and skips the session ceiling in the audited revision. Operators cannot rely on a per-session ceiling for concurrent Stella processes. Stella has no SessionEnd hook, so the collector uses process lifecycle evidence to close its sessions. See the adapters above and [the collector](../../packages/tacho/src/collector/daemon.ts).
+
+### MCP gateway
+
+The MCP gateway in [the collector][MG] serves Oxagen's own read-only tools to Claude Desktop and to nothing else. It forwards each call to Oxagen's MCP server and cannot front a third-party server. Claude Code, Codex, Cursor, and Stella call the MCP servers you configure directly. Their `PreToolUse` hooks record and can refuse each `mcp__*` call, client-attested like any other tool call. No wrapped run reaches the `gateway` tier through MCP today.
+
+Routing those calls is #3299 item 6. [The MCP gateway plan](https://github.com/macanderson/roadmap/blob/main/docs/mcp-gateway-plan.md) gives each server its own loopback relay under its original name, and adds a third way for a run to earn `gateway` at ingest. When a phase ships, this column changes in the same pull request.
+
+Some MCP calls can never pass through a local gateway, because the vendor runs the tool:
+
+| Harness | Surface | Why |
+|---|---|---|
+| Claude Code | claude.ai connectors | The desktop app runs them in-process as `sdk` servers, and cloud sessions call them from Anthropic's infrastructure [CCM] |
+| Claude Code | Agent SDK `type: "sdk"` servers | They run in-process and skip every managed MCP control |
+| Claude Code | `WebSearch`, `WebFetch`, Claude in Chrome, the `ide` server | Built-in tools, not MCP traffic. `WebSearch` runs on Anthropic's backend |
+| Codex | Apps and connectors | Codex registers a hosted `codex_apps` server, and connectors use service-side connections [CXM] |
+| Codex | Hosted `WebSearch` | No hook fires for it |
+| Cursor | Cloud Agents | Team MCP servers run in Cursor's cloud, and MCP hooks are deferred there [CUM] |
+| Cursor | Browser, Web search, Fetch | Built-in, or an in-process extension |
+| Claude Desktop | Remote connectors | Anthropic's cloud calls them |
+
+Stella's limit is Oxagen's own. Stella reads MCP servers only from `.stella/mcp.toml` inside each workspace and from plugins, and it skips the workspace file in an untrusted checkout. Oxagen does not write into repositories, so Stella cannot be routed until it gains a user-scope and managed-scope server list [SM].
 
 ### Gemini CLI extension
 
