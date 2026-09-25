@@ -586,7 +586,7 @@
           "title": "Instructions",
           "aside": "[instructions] body",
           "label": "Instructions",
-          "hint": "Compiled into the harness file beside this one. Keep credentials and personal data out of it: nothing checks for them before a commit."
+          "hint": "Saved in this definition file only. Saving does not regenerate a harness file from it. Keep credentials and personal data out of it: nothing checks for them before a commit."
         },
         "harness": {
           "title": "Harness",
