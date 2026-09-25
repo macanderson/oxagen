@@ -27,7 +27,6 @@
  *   cancelled before it answered, writes an empty body (`null`) rather than
  *   none. An absent body therefore always means content was lost.
  */
-import { LLM_CALL_DUPLICATE_OF_ATTR } from "../claude-code/llm-call-dedupe";
 
 export const REPLAY_GRADES = ["inspect", "view", "fork", "retry"] as const;
 export type ReplayGrade = (typeof REPLAY_GRADES)[number];
@@ -127,6 +126,13 @@ export function isContentBearingFrame(type: string): boolean {
  */
 export const REQUEST_BODY_OMITTED_ATTR = "oxagen.request_body_omitted";
 export const RESPONSE_BODY_OMITTED_ATTR = "oxagen.response_body_omitted";
+
+/**
+ * The attr a later sighting of a model call carries, naming the source that
+ * sealed the call first (`claude-code/llm-call-dedupe.ts`). It lives here so
+ * the grading rule reads no harness adapter.
+ */
+export const LLM_CALL_DUPLICATE_OF_ATTR = "oxagen.llm_call_duplicate_of";
 
 /** What the completeness rule reads off one frame, from either recorder. */
 export interface FrameBodyFacts {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LLM_CALL_DUPLICATE_OF_ATTR } from "../claude-code/llm-call-dedupe";
+import { LLM_CALL_DUPLICATE_OF_ATTR as DEDUPE_ATTR } from "../claude-code/llm-call-dedupe";
 import {
   bodyIsPartial,
   COMPLETENESS_GAP_KINDS,
@@ -11,6 +11,7 @@ import {
   isContentBearingFrame,
   isLaterSighting,
   isReplayGrade,
+  LLM_CALL_DUPLICATE_OF_ATTR,
   REPLAY_GRADES,
   REQUEST_BODY_OMITTED_ATTR,
   RESPONSE_BODY_OMITTED_ATTR,
@@ -279,6 +280,8 @@ describe("frameOwesBody", () => {
     );
     expect(isLaterSighting({})).toBe(false);
     expect(isLaterSighting(undefined)).toBe(false);
+    // The recorder's dedupe stamps the attr the rule reads.
+    expect(DEDUPE_ATTR).toBe(LLM_CALL_DUPLICATE_OF_ATTR);
     expect(bodyIsPartial({ [REQUEST_BODY_OMITTED_ATTR]: "too_large" })).toBe(
       true,
     );
