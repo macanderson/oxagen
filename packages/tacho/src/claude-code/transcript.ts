@@ -554,6 +554,11 @@ export function normalizeTranscriptLine(
       // Claude Code writes this line when the session opens a pull request.
       // It is the one record that ties a PR to a run with certainty; a PR
       // found by branch name is a guess.
+      //
+      // The attrs use the dotted names the `pr_open` effect frame uses
+      // (`pullRequestAttrs`, tools.ts), so one read covers both frames.
+      // Frames stored before the change carry `pr_url`, `pr_number` and
+      // `pr_repository`, and the readers still accept them.
       const url = s(record["prUrl"]);
       const number = n(record["prNumber"]);
       if (url === undefined || number === undefined)
@@ -565,10 +570,10 @@ export function normalizeTranscriptLine(
             "oxagen:pr_link",
             {},
             {
-              pr_number: String(number),
-              pr_url: url,
+              "pr.number": String(number),
+              "pr.url": url,
               ...(repository !== undefined
-                ? { pr_repository: repository }
+                ? { "pr.repository": repository }
                 : {}),
             },
           ),
