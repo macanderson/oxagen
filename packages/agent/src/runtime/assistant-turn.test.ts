@@ -302,9 +302,10 @@ function setup(over: Partial<World> = {}) {
   );
 }
 
+// `list_runs` is one of the interactive agent's pins; `set_budget` is not.
 const GOVERNED_TOOLS = {
-  recall_memory: {
-    description: "Recall",
+  list_runs: {
+    description: "List runs",
     inputSchema: {},
     execute: async () => 1,
   },
@@ -355,7 +356,7 @@ beforeEach(() => {
     mocks.log.push("materialize");
     return {
       tools: GOVERNED_TOOLS,
-      nameMap: { recall_memory: "recall_memory", set_budget: "set_budget" },
+      nameMap: { list_runs: "list_runs", set_budget: "set_budget" },
       mutatingToolNames: ["set_budget"],
       governance: {},
     };
@@ -599,7 +600,7 @@ describe("the prepared turn", () => {
       // The spec's tool policy is what the turn actually holds — the
       // materialised capabilities and the belt's two meta-tools. An empty
       // allowlist would read "no tools" on a run whose job is calling them.
-      toolAllowlist: ["recall_memory", "set_budget", SEARCH_TOOLS, LOAD_TOOLS],
+      toolAllowlist: ["list_runs", "set_budget", SEARCH_TOOLS, LOAD_TOOLS],
     });
 
     // The engine is declared the whole belt plus the meta-tools; the model is
@@ -607,10 +608,10 @@ describe("the prepared turn", () => {
     // run is the ledger; the page context and the memory ride as context.
     const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
     expect(Object.keys(turnInput.tools).sort()).toEqual(
-      [LOAD_TOOLS, SEARCH_TOOLS, "recall_memory", "set_budget"].sort(),
+      [LOAD_TOOLS, SEARCH_TOOLS, "list_runs", "set_budget"].sort(),
     );
     expect(Object.keys(turnInput.modelTools()).sort()).toEqual(
-      [LOAD_TOOLS, SEARCH_TOOLS, "recall_memory"].sort(),
+      [LOAD_TOOLS, SEARCH_TOOLS, "list_runs"].sort(),
     );
     expect(turnInput.ledger.runPublicId).toBe("arun_0123456789abcdef012345");
     expect(turnInput.principal).toBe("user-1");
