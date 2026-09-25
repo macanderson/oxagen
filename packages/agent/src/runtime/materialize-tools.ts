@@ -50,6 +50,7 @@ import { getOxagenRegistry, type RegistryCapability } from "../registry-loader";
 import {
   createKillSwitchGate,
   KillSwitchDeniedError,
+  type ActingAgent,
   type KillSwitchGate,
 } from "./kill-switch-gate";
 import { decideCapabilityForBelt, decideMcpToolForBelt } from "./toolbelt";
@@ -197,6 +198,14 @@ export interface MaterializeOptions {
   approvalMode?: "wait" | "park";
   /** Seam for tests; defaults to the Postgres-backed gate. */
   killSwitchGate?: KillSwitchGate;
+  /**
+   * The managed agent a person's turn runs as: the in-app assistant passes
+   * its `qa-chat` agent. A kill switch on that agent, or a deny naming its
+   * principal, then leaves the tool off the belt and refuses the call. Tools
+   * still run as the person. Every other caller omits it, so a switch on the
+   * assistant never reaches a person's own calls.
+   */
+  actingAgent?: ActingAgent;
   /**
    * A mutable box the caller fills in AFTER materialization, once the run
    * this turn opened is known. `runPreparedTurn` calls `materializeTools`
@@ -509,7 +518,8 @@ export async function materializeTools(
   // generation before it runs and reloads the switches when it moved, so a
   // flip takes effect at the next call boundary for every tool on the belt.
   const killSwitches: KillSwitchGate =
-    opts.killSwitchGate ?? createKillSwitchGate(ctx);
+    opts.killSwitchGate ??
+    createKillSwitchGate(ctx, undefined, opts.actingAgent ?? null);
 
   // Register a tool under a model-safe alias and record the reverse mapping.
   // Sanitizing collapses distinct chars to "_", so two real names could in
@@ -645,6 +655,7 @@ export async function materializeTools(
       now: agentRunNow,
       clientIp: ctx.clientIp ?? null,
       emergencyDenies,
+      actingAgent: opts.actingAgent ?? null,
       entitledPluginIds: await entitledPluginIdsFor(cap),
     });
     if (decision.outcome === "deny") continue;

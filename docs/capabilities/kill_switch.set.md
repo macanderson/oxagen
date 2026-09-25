@@ -22,7 +22,11 @@ A switch is enforced in two places, and they are not the whole product:
 - **The tool gateway's per-turn gate** (`packages/agent/src/runtime/kill-switch-gate.ts`). Every tool `materializeTools` presents — a capability the in-app agent may call, and every external MCP tool — is checked against the switches that are on, before the call and again after a person answers an approval or consent card. This is the path that matches `tool_server`, `connection` and `class` switches.
 - **The kernel's agent-run IAM check** (`checkAgentRunIAM`, `packages/iam/src/check-iam.ts`). Emergency denies are consulted here for a call whose context carries an agent run.
 
-A `tool_version` switch on a capability also takes that capability off the list `materializeTools` builds (`packages/agent/src/runtime/toolbelt.ts`), so the model is not shown a tool that every call would refuse. That holds for an agent run and for the in-app agent, which lists its tools as the person who asked. An `agent`, `operator`, `workspace`, `org` or `class` switch leaves the capability list as it is, and the per-turn gate refuses each call it reaches.
+The list `materializeTools` builds (`packages/agent/src/runtime/toolbelt.ts`) also leaves out a capability that an active deny names by its capability id, so the model is not shown a tool that every call would refuse. That holds for an agent run and for the in-app agent, which lists its tools as the person who asked.
+
+The in-app agent also answers to the agent it runs as, the workspace's assistant agent. An `agent` switch on that agent refuses the whole turn before anything is written: `ask_assistant` answers `forbidden` with reason `kill_switch`. A switch flipped after that check still reaches the turn: the list leaves out the tools it cuts, and the per-turn gate refuses the calls it reaches. A person's own calls from the app do not answer to that switch.
+
+An `operator`, `workspace`, `org` or `class` switch leaves the capability list as it is, and the per-turn gate refuses each call it reaches.
 
 A switch **does not** stop a caller that carries neither. A customer agent holding an Oxagen API key against `api.oxagen.sh` or `mcp.oxagen.sh` invokes capabilities with `principalKind: "human"` and no `agentRun`, so `checkIAM` never reaches `checkAgentRunIAM` and no emergency deny is consulted. An `org`, `operator`, `workspace` or `class` switch therefore does not stop that traffic. Governing it means an IAM policy or revoking the key.
 

@@ -14,7 +14,7 @@ vi.mock("@oxagen/oxagen/plugins", () => ({
   pluginForContract: pluginMocks.pluginForContract,
 }));
 
-import type { ActiveEmergencyDeny } from "@oxagen/iam";
+import { resourceScopeDigestOf, type ActiveEmergencyDeny } from "@oxagen/iam";
 import {
   createAgentRunResolution,
   type AgentAuthzSnapshot,
@@ -281,6 +281,54 @@ describe("decideCapabilityForBelt", () => {
     expect(
       decideCapabilityForBelt(READ, env({ emergencyDenies: [byCapability] }))
         .outcome,
+    ).toBe("allow");
+  });
+
+  it("the assistant's turn answers to the agent it runs as: a deny naming its principal, or an agent switch on it", () => {
+    const actingAgent = { agentId: "agt_assistant", principalId: AGENT_PRN };
+    const byPrincipal: ActiveEmergencyDeny = {
+      publicId: "edn_1",
+      denyKind: "capability",
+      capabilityId: READ.name,
+      resourceScopeDigest: null,
+      principalId: AGENT_PRN,
+      reason: "incident",
+    };
+    const agentSwitch: ActiveEmergencyDeny = {
+      publicId: "edn_2",
+      denyKind: "resource_scope",
+      capabilityId: null,
+      resourceScopeDigest: resourceScopeDigestOf({
+        kind: "agent",
+        id: actingAgent.agentId,
+      }),
+      principalId: null,
+      reason: "incident",
+    };
+    for (const deny of [byPrincipal, agentSwitch]) {
+      expect(
+        decideCapabilityForBelt(
+          READ,
+          env({ actingAgent, emergencyDenies: [deny] }),
+        ),
+      ).toMatchObject({ outcome: "deny", rule: "kill_switch" });
+      // A person's own turn names no acting agent, and neither reaches it.
+      expect(
+        decideCapabilityForBelt(READ, env({ emergencyDenies: [deny] })).outcome,
+      ).toBe("allow");
+    }
+    const otherAgent = {
+      ...agentSwitch,
+      resourceScopeDigest: resourceScopeDigestOf({
+        kind: "agent",
+        id: "agt_someone_else",
+      }),
+    };
+    expect(
+      decideCapabilityForBelt(
+        READ,
+        env({ actingAgent, emergencyDenies: [otherAgent] }),
+      ).outcome,
     ).toBe("allow");
   });
 

@@ -54,6 +54,7 @@ The engine is declared every governed tool plus the two meta-tools. Each complet
 |---|---|---|
 | `not_found` (reason `conversation_not_found`) | 404 | `conversationId` names no conversation in this workspace |
 | `forbidden` (reason `no_principal`, `org_role_required`) | 403 | the caller carries no person to ask as, or the person holds none of the contract's roles |
+| `forbidden` (reason `kill_switch`) | 403 | an `agent` kill switch is on for the workspace's assistant agent; the turn is refused before anything is written, and the message names the switch and its reason |
 | `engine_unavailable` | 503 | `stella-serve` is not configured or could not be reached; nothing falls back to an in-process loop (ADR-053 §4) |
 | `assistant_run_not_recorded` | 503 | the ledger could not admit the turn, or a receipt could not be written; the assistant does not answer from a path that was not recorded |
 | `engine_aborted` | 409 | the turn was cancelled before it answered (a per-turn budget stop); nothing is saved as a reply |

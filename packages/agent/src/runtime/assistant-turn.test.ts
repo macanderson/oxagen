@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@oxagen/database";
 import { digestJcs } from "@oxagen/run-evidence";
+import { resourceScopeDigestOf } from "@oxagen/iam";
 import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   materializeTools: vi.fn(),
   runGovernedTurn: vi.fn(),
   openAssistantRun: vi.fn(),
+  readAssistantAgentState: vi.fn(),
   recall: vi.fn(),
   createApprovalRequest: vi.fn(),
   waitForApproval: vi.fn(),
@@ -139,7 +141,11 @@ vi.mock("./assistant-recall", () => ({
 }));
 vi.mock("./assistant-run", async (importOriginal) => {
   const real = await importOriginal<typeof import("./assistant-run")>();
-  return { ...real, openAssistantRun: mocks.openAssistantRun };
+  return {
+    ...real,
+    openAssistantRun: mocks.openAssistantRun,
+    readAssistantAgentState: mocks.readAssistantAgentState,
+  };
 });
 vi.mock("./materialize-tools", async (importOriginal) => {
   const real = await importOriginal<typeof import("./materialize-tools")>();
@@ -178,6 +184,7 @@ vi.mock("./plugin-type", async (importOriginal) => {
 
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import {
+  AssistantStoppedError,
   AssistantTurnNeedsUserError,
   AssistantTurnRefusedError,
   ConversationNotFoundError,
@@ -203,6 +210,12 @@ const CONVERSATION = "0192d4a8-7c1e-7a00-8000-0000000000c1";
 const AGENT_ID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const AGENT_VERSION_ID = "0192d4a8-7c1e-7a00-8000-0000000000a2";
 const EXECUTION_ID = "0192d4a8-7c1e-7a00-8000-0000000000e1";
+/** The workspace's assistant agent, as `readAssistantAgentState` answers. */
+const ASSISTANT = {
+  agentId: "agt_assistant",
+  principalId: "prn_assistant",
+  stoppedBy: null,
+};
 
 interface World {
   conversationExists: boolean;
@@ -385,6 +398,7 @@ beforeEach(() => {
         },
   );
   mocks.recall.mockResolvedValue({ role: "user", content: "[memory]" });
+  mocks.readAssistantAgentState.mockResolvedValue(ASSISTANT);
   mocks.materializeTools.mockImplementation(async () => {
     mocks.log.push("materialize");
     return {
@@ -458,6 +472,28 @@ describe("prepareAssistantTurn", () => {
     });
     expect(captured.inserts).toHaveLength(0);
     expect(mocks.openAssistantRun).not.toHaveBeenCalled();
+  });
+
+  // R4 (#3370): an operator's `agent` kill switch on the assistant stops the
+  // whole turn, before who pays is resolved and before anything is written.
+  it("refuses a turn whose assistant agent is switched off, before funding and before any write", async () => {
+    mocks.readAssistantAgentState.mockResolvedValueOnce({
+      ...ASSISTANT,
+      stoppedBy: { publicId: "edn_stop", reason: "incident 42" },
+    });
+    await expect(prepareAssistantTurn(request)).rejects.toSatisfy(
+      (e) =>
+        e instanceof AssistantStoppedError &&
+        e.code === "kill_switch" &&
+        e.switchId === "edn_stop" &&
+        e.message.includes("incident 42"),
+    );
+    expect(mocks.log).toEqual(["roles"]);
+    expect(mocks.resolveModelFundingSource).not.toHaveBeenCalled();
+    expect(mocks.evaluateTurnCreditGate).not.toHaveBeenCalled();
+    expect(captured.inserts).toHaveLength(0);
+    expect(mocks.openAssistantRun).not.toHaveBeenCalled();
+    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
   });
 
   describe("the model's identity on the organisation's own key (#3314)", () => {
@@ -604,6 +640,12 @@ describe("the prepared turn", () => {
       executionStepId: "msg-user",
     });
     expect(materializeOpts).toMatchObject({ approvalMode: "park" });
+    // The agent the turn runs as, so a switch on it reaches the belt and the
+    // call gate. The tools still run as the person.
+    expect(materializeOpts.actingAgent).toEqual({
+      agentId: "agt_assistant",
+      principalId: "prn_assistant",
+    });
     // finding 9 (macanderson/oxagen#3370): materializeTools runs before
     // openAssistantRun opens the run, so a tool call parked mid-turn reads
     // the run from a mutable ref rather than from `ctx.agentRun`, which is
@@ -1195,7 +1237,44 @@ describe("the belt the engine is handed", () => {
     expect(execution![2]).not.toHaveProperty("agentRun");
   });
 
-  it("keeps a tool whose deny names a principal, since a person's turn carries none (negative)", async () => {
+  it("leaves out a tool a deny names by the assistant agent's principal", async () => {
+    mocks.readActiveEmergencyDenies.mockResolvedValue([
+      killSwitch("prn_assistant"),
+    ]);
+    await runTurn(request);
+    const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+    expect(Object.keys(turnInput.tools)).not.toContain("set_budget");
+    expect(Object.keys(turnInput.tools)).toContain("recall_memory");
+  });
+
+  it("leaves out every capability when the assistant agent is switched off after the turn began", async () => {
+    // The turn's own check read no switch; the listing reads one. That is a
+    // flip between the two reads, and the belt still honours it.
+    mocks.readActiveEmergencyDenies.mockResolvedValue([
+      {
+        publicId: "edn_agent",
+        denyKind: "resource_scope",
+        capabilityId: null,
+        resourceScopeDigest: resourceScopeDigestOf({
+          kind: "agent",
+          id: "agt_assistant",
+        }),
+        principalId: null,
+        reason: "incident",
+      },
+    ]);
+    await runTurn(request);
+    const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+    expect(Object.keys(turnInput.tools).sort()).toEqual(
+      [LOAD_TOOLS, SEARCH_TOOLS].sort(),
+    );
+    expect(mocks.openAssistantRun.mock.calls[0]![0].toolAllowlist).toEqual([
+      SEARCH_TOOLS,
+      LOAD_TOOLS,
+    ]);
+  });
+
+  it("keeps a tool whose deny names another principal (negative)", async () => {
     mocks.readActiveEmergencyDenies.mockResolvedValue([
       killSwitch("prn_someone_else"),
     ]);
