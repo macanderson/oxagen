@@ -352,20 +352,19 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
       // Undefined means `rev-parse HEAD` did not answer, which covers a
       // directory that is not a repository AND a repository whose first
       // commit has not been made. The second is a real worktree full of real
-      // creates, and `readWorkingTreeChanges` has its own fallback for an
-      // absent HEAD, so the reconciliation still runs. Its own status read
-      // is what tells the two apart: a non-repository answers nothing and
-      // seals no frame. There is simply no git context to note for either.
+      // creates, and `readSessionChanges` has its own fallback for an absent
+      // HEAD, so the reconciliation still runs. Its own status read is what
+      // tells the two apart: a non-repository answers nothing and seals no
+      // frame. There is simply no git context to note for either.
       // The first read that answers in this worktree fixes the session's
       // baseline. Later reads find the session's own commits after it rather
       // than measuring from a `HEAD` those commits keep moving
-      // (`readSessionChanges`). The baseline is held
-      // per repository root: `rememberBaseline` puts back the one the
-      // session holds for this root, so a `cd` inside one repository keeps
-      // it and a move to another root captures that tree's HEAD, or finds
-      // the one taken there before. A root with no baseline and no HEAD
-      // leaves none in force, so this read never diffs against a commit in
-      // another repository.
+      // (`readSessionChanges`). The baseline is held per repository root:
+      // `rememberBaseline` puts back the one the session holds for this
+      // root, so a `cd` inside one repository keeps it and a move to another
+      // root captures that tree's HEAD, or finds the one taken there before.
+      // A root with no baseline and no HEAD leaves none in force, so this
+      // read never diffs against a commit in another repository.
       rememberBaseline(session, cwd, facts?.head_sha);
       if (facts === undefined && !due) continue;
       found.push({
