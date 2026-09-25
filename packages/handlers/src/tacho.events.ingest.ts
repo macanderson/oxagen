@@ -125,6 +125,7 @@ import {
 } from "./lib/tacho-session-succession";
 import {
   type BodyRejection,
+  countBodyFrames,
   countContentFrames,
   sealTachoSession,
   verifyBatchBodies,
@@ -1587,10 +1588,9 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         (body) =>
           body.sessionUuid === sessionUuid && freshIds.has(body.eventIdIdem),
       );
-      const bodyFrames = freshBodies.length;
-      const toolBodyFrames = freshBodies.filter(
-        (body) => body.kind === "tool_call",
-      ).length;
+      // A half body is stored and served, and does not count as its frame's
+      // body, so a half-captured model call seals `body_missing`.
+      const { bodyFrames, toolBodyFrames } = countBodyFrames(freshBodies);
       // The tier this batch leaves the session on, derived once from the
       // control plane's own records so the row and the seal cannot disagree
       // and neither is read off the batch (discussion_r4036718127, P1).

@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { LLM_CALL_DUPLICATE_OF_ATTR } from "../claude-code/llm-call-dedupe";
 import {
+  bodyIsPartial,
   COMPLETENESS_GAP_KINDS,
   computeReplayGrade,
   explainReplayGrade,
+  frameOwesBody,
   gradeAllows,
   isCompletenessGapKind,
   isContentBearingFrame,
+  isLaterSighting,
   isReplayGrade,
   REPLAY_GRADES,
+  REQUEST_BODY_OMITTED_ATTR,
+  RESPONSE_BODY_OMITTED_ATTR,
   replayGradeRank,
   sealTachoSession,
 } from "./replay-grade";
@@ -228,6 +234,64 @@ describe("isContentBearingFrame", () => {
       expect(isContentBearingFrame(type)).toBe(true);
     }
     expect(isContentBearingFrame("turn_start")).toBe(false);
+  });
+});
+
+describe("frameOwesBody", () => {
+  const DIGEST = `sha256:${"a".repeat(64)}`;
+
+  it("owes a body on every content-bearing kind, with or without a digest", () => {
+    for (const type of [
+      "model.engine_call_started",
+      "model.engine_call_completed",
+      "tool.engine_call_started",
+      "tool.engine_call_completed",
+      "llm_call",
+      "tool_call",
+    ]) {
+      expect(frameOwesBody({ type, digest: null })).toBe(true);
+      expect(frameOwesBody({ type, digest: DIGEST })).toBe(true);
+    }
+  });
+
+  it("owes a body on any other kind only when its producer chained a digest", () => {
+    expect(frameOwesBody({ type: "turn_start", digest: null })).toBe(false);
+    expect(frameOwesBody({ type: "turn_start", digest: DIGEST })).toBe(true);
+  });
+
+  it("owes nothing on a later sighting of a model call that chained no digest", () => {
+    // The OTel copy of a call the proxy sealed first: the proxy's frame holds
+    // the call's content, and counting this one sealed every proxied session
+    // with the OTel exporter on `body_missing`.
+    expect(
+      frameOwesBody({ type: "llm_call", digest: null, laterSighting: true }),
+    ).toBe(false);
+    // A later sighting that brings a body still owes it, so a retained body
+    // always belongs to a frame the session counts.
+    expect(
+      frameOwesBody({ type: "llm_call", digest: DIGEST, laterSighting: true }),
+    ).toBe(true);
+  });
+
+  it("reads a later sighting and a partial body off a wrapped frame's attrs", () => {
+    expect(isLaterSighting({ [LLM_CALL_DUPLICATE_OF_ATTR]: "collector" })).toBe(
+      true,
+    );
+    expect(isLaterSighting({})).toBe(false);
+    expect(isLaterSighting(undefined)).toBe(false);
+    expect(bodyIsPartial({ [REQUEST_BODY_OMITTED_ATTR]: "too_large" })).toBe(
+      true,
+    );
+    expect(bodyIsPartial({ [RESPONSE_BODY_OMITTED_ATTR]: "not_decoded" })).toBe(
+      true,
+    );
+    expect(bodyIsPartial({ "oxagen.response_digest": "sha256:x" })).toBe(false);
+    expect(bodyIsPartial(undefined)).toBe(false);
+  });
+
+  it("spells the omission attrs the way the proxy writes them", () => {
+    expect(REQUEST_BODY_OMITTED_ATTR).toBe("oxagen.request_body_omitted");
+    expect(RESPONSE_BODY_OMITTED_ATTR).toBe("oxagen.response_body_omitted");
   });
 });
 

@@ -793,33 +793,33 @@ function wire(db: FakeDb): void {
                     deviceKeyFingerprint: row["deviceKeyFingerprint"],
                   }))
                 : tableName(table) === "sessions"
-                ? // The ownership read before any body is written: which
-                  // host opened each session the batch names, and its
-                  // recorded head for a successor's chain test.
-                  [...db.sessions.values()].map((row) => ({
-                    sessionUuid: row["sessionUuid"],
-                    hostId: row["hostId"],
-                    seqCount: row["seqCount"],
-                    lastHash: row["lastHash"],
-                  }))
-                : tableName(table) === "contained_launches"
-                  ? db.containedLaunches
-                  : tableName(table) === "context_promotions"
-                    ? [{ ledger: 0, steering: 0 }]
-                    : tableName(table) === "session_files"
-                      ? // The rollup reads this session's existing rows to keep
-                        // one file on one row across batches, so the fixture
-                        // holds them rather than answering with another table's
-                        // shape.
-                        db.files.map((row) => ({
-                          path: row["path"],
-                          repoRelativePath: row["repoRelativePath"],
-                        }))
-                      : db.gatewayChains.map((row) => ({
-                          chain: row.chainSessionUuid,
-                          at: row.lastSeenAt,
-                          genesisHash: row.chainGenesisHash,
-                        })),
+                  ? // The ownership read before any body is written: which
+                    // host opened each session the batch names, and its
+                    // recorded head for a successor's chain test.
+                    [...db.sessions.values()].map((row) => ({
+                      sessionUuid: row["sessionUuid"],
+                      hostId: row["hostId"],
+                      seqCount: row["seqCount"],
+                      lastHash: row["lastHash"],
+                    }))
+                  : tableName(table) === "contained_launches"
+                    ? db.containedLaunches
+                    : tableName(table) === "context_promotions"
+                      ? [{ ledger: 0, steering: 0 }]
+                      : tableName(table) === "session_files"
+                        ? // The rollup reads this session's existing rows to keep
+                          // one file on one row across batches, so the fixture
+                          // holds them rather than answering with another table's
+                          // shape.
+                          db.files.map((row) => ({
+                            path: row["path"],
+                            repoRelativePath: row["repoRelativePath"],
+                          }))
+                        : db.gatewayChains.map((row) => ({
+                            chain: row.chainSessionUuid,
+                            at: row.lastSeenAt,
+                            genesisHash: row.chainGenesisHash,
+                          })),
             leftJoin: () => ({ where: async () => [] }),
           }),
         }),
@@ -1981,9 +1981,7 @@ describe("ingest_tacho_events", () => {
 
   describe("a successor enrollment (ADR-179)", () => {
     /** The fixture's host, preceded by a revoked enrollment of the same machine. */
-    function withPredecessor(
-      overrides: Record<string, unknown> = {},
-    ): FakeDb {
+    function withPredecessor(overrides: Record<string, unknown> = {}): FakeDb {
       const db = fakeDb();
       db.hosts.push({
         ...(db.hosts[0] as Record<string, unknown>),
@@ -2055,25 +2053,31 @@ describe("ingest_tacho_events", () => {
     it.each([
       ["a live predecessor", { status: "active" }],
       ["another machine", { deviceKeyFingerprint: `sha256:${"e".repeat(64)}` }],
-      ["another workspace", { workspaceId: "33333333-3333-4333-8333-333333333333" }],
-    ])("refuses the session from %s and writes none of the batch", async (_, overrides) => {
-      const db = withPredecessor(overrides);
-      wire(db);
-      const events = resealed(() => HOST_PUBLIC);
-      heldByPredecessor(db, events);
-      await expect(
-        tachoEventsIngestHandler(
-          {
-            schema: "tacho.batch.v1",
-            host_enrollment_id: HOST_PUBLIC,
-            events: events.slice(3),
-          },
-          CONTEXT,
-        ),
-      ).rejects.toThrow(/session belongs to another host/);
-      expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
-      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
-    });
+      [
+        "another workspace",
+        { workspaceId: "33333333-3333-4333-8333-333333333333" },
+      ],
+    ])(
+      "refuses the session from %s and writes none of the batch",
+      async (_, overrides) => {
+        const db = withPredecessor(overrides);
+        wire(db);
+        const events = resealed(() => HOST_PUBLIC);
+        heldByPredecessor(db, events);
+        await expect(
+          tachoEventsIngestHandler(
+            {
+              schema: "tacho.batch.v1",
+              host_enrollment_id: HOST_PUBLIC,
+              events: events.slice(3),
+            },
+            CONTEXT,
+          ),
+        ).rejects.toThrow(/session belongs to another host/);
+        expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
+        expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+      },
+    );
 
     it("refuses frames naming an enrollment the host does not succeed", async () => {
       const db = withPredecessor({ status: "active" });
@@ -2110,7 +2114,10 @@ describe("ingest_tacho_events", () => {
     it("accepts a successor's re-sent frames and leaves the session where it is", async () => {
       const db = withPredecessor();
       wire(db);
-      heldByPredecessor(db, resealed(() => PREDECESSOR_PUBLIC));
+      heldByPredecessor(
+        db,
+        resealed(() => PREDECESSOR_PUBLIC),
+      );
       // A seq-0 frame with a valid genesis link and its own correct hash,
       // but not the frame the predecessor recorded. It carries nothing past
       // the recorded head, so it cannot prove the successor continues it.
@@ -6059,6 +6066,7 @@ describe("a run's first prompt", () => {
       eventIdIdem: event.event_id_idem,
       sessionUuid: event.session_uuid,
       kind: event.kind,
+      partial: false,
       digest: digestBytes(text),
       contentType: "text/plain",
       bytes: new TextEncoder().encode(text),
@@ -6083,6 +6091,7 @@ describe("a run's first prompt", () => {
           eventIdIdem: own.event_id_idem,
           sessionUuid: own.session_uuid,
           kind: own.kind,
+          partial: false,
           digest: "sha256:x",
           contentType: "application/octet-stream",
           bytes: new Uint8Array([0xff, 0xfe, 0xfd]),

@@ -109,6 +109,10 @@ import {
   type FrameBody,
   jsonContent,
 } from "../evidence/frame-body";
+import {
+  REQUEST_BODY_OMITTED_ATTR,
+  RESPONSE_BODY_OMITTED_ATTR,
+} from "../evidence/replay-grade";
 import type { HeldCredential } from "../host/credential-store";
 import {
   looksLikeRunToken,
@@ -439,7 +443,10 @@ class BodyCapture {
  * JSON. A reader who wants structure parses the member; one who wants to check
  * the body against what crossed the wire can, which re-serialising would cost
  * them. JCS drops an absent member, so a call whose response was too large to
- * hold ships `{"request":...}` alone.
+ * hold ships `{"request":...}` alone. That half still replays, so it ships.
+ * The frame names the missing half (`RESPONSE_BODY_OMITTED_ATTR`,
+ * `REQUEST_BODY_OMITTED_ATTR`), and the seal counts it as a frame missing its
+ * body, so the replay grade stays below `view`.
  */
 function exchangeContent(
   request: string | undefined,
@@ -1581,10 +1588,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                 // refused it, so `model` above may be a duplicate the vendor
                 // never ran. The frame says so rather than reading as pinned.
                 ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
+                // A half left out of the body. The seal reads these two attrs
+                // (`bodyIsPartial`), so a call with half a body grades as one
+                // missing its body rather than as a whole capture.
                 ...(fold !== undefined && requestContentText === undefined
-                  ? { "oxagen.request_body_omitted": "too_large" }
+                  ? { [REQUEST_BODY_OMITTED_ATTR]: "too_large" }
                   : fold === undefined && sent === undefined && body.length > 0
-                    ? { "oxagen.request_body_omitted": "not_decoded" }
+                    ? { [REQUEST_BODY_OMITTED_ATTR]: "not_decoded" }
                     : {}),
                 ...(fold !== undefined
                   ? {
@@ -1604,7 +1614,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                     }
                   : {}),
                 ...(responseOmitted !== undefined
-                  ? { "oxagen.response_body_omitted": responseOmitted }
+                  ? { [RESPONSE_BODY_OMITTED_ATTR]: responseOmitted }
                   : {}),
                 ...(abortReason !== undefined
                   ? { "oxagen.interrupted": "1" }

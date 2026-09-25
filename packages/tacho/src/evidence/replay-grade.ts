@@ -10,7 +10,24 @@
  *
  * This module is pure so the ledger seal, the tacho seal and the handlers that
  * gate on a grade all run the same function.
+ *
+ * It also holds the one rule for what a recording owes a `view` reader, which
+ * both seals, the Chain tab and the fork gate read (`frameOwesBody`,
+ * `bodyIsPartial`):
+ *
+ * - A frame owes a body when its kind carries content
+ *   (`isContentBearingFrame`) or when its producer chained a content digest.
+ *   The write-ahead halves count, so a prompt dropped for size is a gap.
+ * - A later sighting of a model call another frame already records owes
+ *   nothing: the call's content is owed once, by the frame that sealed first.
+ * - A body counts only when it holds everything its frame carried. A body the
+ *   producer marked as missing a half is kept and served, and the frame still
+ *   counts as missing its body.
+ * - A producer with nothing to put in a body, such as a model call that was
+ *   cancelled before it answered, writes an empty body (`null`) rather than
+ *   none. An absent body therefore always means content was lost.
  */
+import { LLM_CALL_DUPLICATE_OF_ATTR } from "../claude-code/llm-call-dedupe";
 
 export const REPLAY_GRADES = ["inspect", "view", "fork", "retry"] as const;
 export type ReplayGrade = (typeof REPLAY_GRADES)[number];
@@ -100,6 +117,66 @@ const CONTENT_BEARING_FRAME_TYPES: ReadonlySet<string> = new Set([
 
 export function isContentBearingFrame(type: string): boolean {
   return CONTENT_BEARING_FRAME_TYPES.has(type);
+}
+
+/**
+ * The attrs the model proxy stamps on an `llm_call` whose body holds one half
+ * of the exchange: the request or the response was past the size cap, or came
+ * in an encoding the proxy could not decode (`collector/model-proxy.ts`). The
+ * value says why (`too_large`, `not_decoded`).
+ */
+export const REQUEST_BODY_OMITTED_ATTR = "oxagen.request_body_omitted";
+export const RESPONSE_BODY_OMITTED_ATTR = "oxagen.response_body_omitted";
+
+/** What the completeness rule reads off one frame, from either recorder. */
+export interface FrameBodyFacts {
+  /** The ledger's event type, or a wrapped session's event kind. */
+  type: string;
+  /** The content digest the producer chained, or null when it chained none. */
+  digest: string | null;
+  /**
+   * The frame is a later sighting of a model call that another frame already
+   * records (`oxagen.llm_call_duplicate_of`, see `isLaterSighting`). The OTel
+   * exporter's copy of a call the proxy sealed carries no bytes, and the
+   * proxy's frame owes the body.
+   */
+  laterSighting?: boolean;
+}
+
+/**
+ * Does this frame owe a `view` reader a body? A frame that owes one and has
+ * no body retained is a `body_missing` gap. This is the whole rule; every
+ * reader that derives the gap calls it.
+ *
+ * A frame that chained a digest owes its body even when it is a later
+ * sighting, so a body a session retains always belongs to a frame this
+ * counts. The session row's `body_frames <= content_frames` check relies on
+ * that.
+ */
+export function frameOwesBody(frame: FrameBodyFacts): boolean {
+  if (frame.digest !== null) return true;
+  return isContentBearingFrame(frame.type) && frame.laterSighting !== true;
+}
+
+/** Is this wrapped frame a later sighting of a model call already sealed? */
+export function isLaterSighting(
+  attrs: Readonly<Record<string, string>> | undefined,
+): boolean {
+  return attrs?.[LLM_CALL_DUPLICATE_OF_ATTR] !== undefined;
+}
+
+/**
+ * Does the body a wrapped frame kept hold only part of its content? Such a
+ * body is still stored and served, and it does not count toward the
+ * session's `body_frames`, so the session seals with `body_missing`.
+ */
+export function bodyIsPartial(
+  attrs: Readonly<Record<string, string>> | undefined,
+): boolean {
+  return (
+    attrs?.[REQUEST_BODY_OMITTED_ATTR] !== undefined ||
+    attrs?.[RESPONSE_BODY_OMITTED_ATTR] !== undefined
+  );
 }
 
 export interface ReplayGradeInput {

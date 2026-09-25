@@ -185,6 +185,33 @@ describe("missingBodies", () => {
     ] as never[];
     expect(missingBodies(frames)).toBe(2);
   });
+
+  it("does not count the OTel copy of a model call the proxy sealed with its body", () => {
+    // The seal no longer counts that copy (`frameOwesBody`), so counting it
+    // here showed a `body_missing` rung the recorded grade does not have.
+    const frames = [
+      {
+        type: "llm_call",
+        body: { bodyRef: "evb:1", bodyDigest: "sha256:a" },
+        llmCall: { duplicateOf: null, keys: [], source: "collector" },
+      },
+      {
+        type: "llm_call",
+        body: { bodyRef: null, bodyDigest: null },
+        llmCall: { duplicateOf: "collector", keys: [], source: "otel_log" },
+      },
+    ] as never[];
+    expect(missingBodies(frames)).toBe(0);
+    // A first sighting with no bytes is still missing its body.
+    const otelOnly = [
+      {
+        type: "llm_call",
+        body: { bodyRef: null, bodyDigest: null },
+        llmCall: { duplicateOf: null, keys: [], source: "otel_log" },
+      },
+    ] as never[];
+    expect(missingBodies(otelOnly)).toBe(1);
+  });
 });
 
 describe("get_run_chain", () => {

@@ -973,7 +973,13 @@ class Recorder implements AssistantRunRecorder {
       // frames would double the largest bytes a turn writes. This is the
       // frame `isContentBearingFrame` requires a body on, which is what
       // carries a run from `inspect` to `view`.
-      body: jsonBody(eventType, record.response),
+      //
+      // A call that was cancelled, refused by the budget, or failed before
+      // the provider answered has no response, and its body is `null`: the
+      // provider returned nothing, and the record says so. `toolCall` does
+      // the same with a denied call's missing error. Writing no body at all
+      // read as lost content, and sealed a fully recorded run `inspect`.
+      body: jsonBody(eventType, record.response ?? null),
     });
   }
 
