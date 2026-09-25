@@ -254,6 +254,7 @@ export function releaseTranscript(): RunTranscript {
               seq: String(seq),
               decision: spec.decision,
               type: spec.type,
+              harness: false,
               at: at(spec.ms),
             },
       cost:
