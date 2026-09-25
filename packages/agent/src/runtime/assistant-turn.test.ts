@@ -302,7 +302,7 @@ function setup(over: Partial<World> = {}) {
   );
 }
 
-// `list_runs` is one of the interactive agent's pins; `set_budget` is not.
+// `list_runs` is one of the interactive agent's pins. `set_budget` is not.
 const GOVERNED_TOOLS = {
   list_runs: {
     description: "List runs",

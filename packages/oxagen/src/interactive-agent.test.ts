@@ -58,7 +58,7 @@ describe("interactive-agent config builder", () => {
     expect(instructions).toContain("search_tools");
     expect(instructions).toContain("load_tools");
     expect(instructions).not.toMatch(/sandbox|shell|file system/i);
-    expect(instructions).not.toMatch(/[–—]/);
+    expect(instructions).not.toMatch(/[\u2013\u2014]/);
   });
 });
 
