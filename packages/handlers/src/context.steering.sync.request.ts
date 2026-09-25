@@ -7,7 +7,7 @@
 // or a pull request closed, and the sync reads the branch for itself. So this
 // only has to find the workspaces whose main repository the delivery is about,
 // and whose production branch it touched, and ask each for a sync.
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { eventClient } from "./event-client";
@@ -59,6 +59,76 @@ export function githubDeliveryBranch(
   return null;
 }
 
+/** How the routing reaches organizations whose Postgres is a dedicated plane. */
+export interface DedicatedPlaneDeps {
+  /** Every workspace of an organization on a dedicated plane. */
+  dedicatedScopes(): Promise<SyncScope[]>;
+  /**
+   * The approved production branch of the workspace's main head for this
+   * GitHub repository id, read on the workspace's own plane, or null.
+   */
+  mainRefOnPlane(
+    scope: SyncScope,
+    repositoryId: string,
+  ): Promise<string | null>;
+}
+
+const dedicatedPlaneDeps: DedicatedPlaneDeps = {
+  dedicatedScopes: () =>
+    // tenancy: webhook routing has to learn which organizations live on a
+    // dedicated plane before it can scope anything. It reads only org_id and
+    // workspace_id from the control plane, filtered to live dedicated
+    // Postgres planes, and reads no tenant row.
+    withSystemDb((tx) =>
+      tx
+        .select({
+          orgId: schema.workspaces.orgId,
+          workspaceId: schema.workspaces.id,
+        })
+        .from(schema.workspaces)
+        .innerJoin(
+          schema.dataPlanes,
+          eq(schema.dataPlanes.orgId, schema.workspaces.orgId),
+        )
+        .where(
+          and(
+            eq(schema.dataPlanes.kind, "postgres"),
+            eq(schema.dataPlanes.mode, "dedicated"),
+            isNull(schema.dataPlanes.deletedAt),
+          ),
+        ),
+    ),
+  mainRefOnPlane: (scope, repositoryId) =>
+    runInTenantScope(scope, () =>
+      withTenantDb(async (tx) => {
+        const [row] = await tx
+          .select({ ref: schema.repositoryBindings.configuredDefaultRef })
+          .from(schema.repositoryBindingHeads)
+          .innerJoin(
+            schema.repositoryBindings,
+            eq(
+              schema.repositoryBindings.id,
+              schema.repositoryBindingHeads.currentBindingId,
+            ),
+          )
+          .where(
+            and(
+              eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+              eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+              eq(schema.repositoryBindingHeads.provider, "github"),
+              eq(
+                schema.repositoryBindingHeads.providerRepositoryId,
+                repositoryId,
+              ),
+              eq(schema.repositoryBindingHeads.role, "main"),
+            ),
+          )
+          .limit(1);
+        return row?.ref ?? null;
+      }),
+    ),
+};
+
 /**
  * The workspaces a GitHub `push` or `pull_request` delivery asks to sync: every
  * workspace whose main repository is the delivery's repository, by GitHub's
@@ -68,11 +138,14 @@ export function githubDeliveryBranch(
  * is found through its connection's `delivery_config`, as the ingestion
  * routing finds it, and its production branch is the repository's default.
  */
-export async function githubSyncTargets(args: {
-  eventName: string;
-  body: Record<string, unknown>;
-  installationId: string | null;
-}): Promise<SyncScope[]> {
+export async function githubSyncTargets(
+  args: {
+    eventName: string;
+    body: Record<string, unknown>;
+    installationId: string | null;
+  },
+  deps: DedicatedPlaneDeps = dedicatedPlaneDeps,
+): Promise<SyncScope[]> {
   const branch = githubDeliveryBranch(args.eventName, args.body);
   if (!branch) return [];
   const repository = (args.body.repository ?? {}) as {
@@ -119,6 +192,15 @@ export async function githubSyncTargets(args: {
         orgId: row.orgId,
         workspaceId: row.workspaceId,
       });
+
+  // An organization on a dedicated Postgres plane (ADR-042) keeps its binding
+  // heads on that plane, out of the shared read above. Each of its
+  // workspaces is asked in its own scope.
+  for (const scope of await deps.dedicatedScopes()) {
+    if (targets.has(scope.workspaceId)) continue;
+    const ref = await deps.mainRefOnPlane(scope, repositoryId);
+    if (ref === branch) targets.set(scope.workspaceId, scope);
+  }
 
   const fullName = str(repository.full_name);
   if (

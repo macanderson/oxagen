@@ -7,7 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 const mocks = vi.hoisted(() => ({
+  // What the sweep's three sources answer: main binding heads on the shared
+  // plane, legacy wizard connections, and dedicated-plane workspaces.
   heads: [] as { orgId: string; workspaceId: string }[],
+  legacy: [] as { orgId: string; workspaceId: string }[],
+  dedicated: [] as { orgId: string; workspaceId: string }[],
   where: [] as unknown[],
   configs: [] as { options: unknown; trigger: unknown }[],
 }));
@@ -21,13 +25,20 @@ vi.mock("@oxagen/database", async (original) => {
           from: () => ({
             where: (where: unknown) => {
               mocks.where.push(where);
-              return Promise.resolve(mocks.heads);
+              // In call order: the binding heads, then the legacy
+              // connections.
+              return Promise.resolve(
+                mocks.where.length === 1 ? mocks.heads : mocks.legacy,
+              );
             },
           }),
         }),
       }),
   };
 });
+vi.mock("../lib/assistant-run-abandon", () => ({
+  listDedicatedPlaneScopes: async () => mocks.dedicated,
+}));
 vi.mock("../create-function", () => ({
   createFunction: (options: unknown, trigger: unknown, handler: unknown) => {
     mocks.configs.push({ options, trigger });
@@ -90,6 +101,8 @@ const runner = vi.fn();
 
 beforeEach(() => {
   mocks.heads.length = 0;
+  mocks.legacy.length = 0;
+  mocks.dedicated.length = 0;
   mocks.where.length = 0;
   runner.mockReset();
   runner.mockResolvedValue(result());
@@ -218,6 +231,41 @@ describe("steering/sync-sweep", () => {
     const step = fakeStep();
     await expect(runSweep(step)).resolves.toEqual({ requested: 0 });
     expect(step.sendEvent).not.toHaveBeenCalled();
+  });
+
+  // Every customer, not only those whose binding lives on the shared plane:
+  // a workspace the legacy sources wizard connected has no binding head, and
+  // an organization on a dedicated Postgres plane keeps its heads there.
+  it("also asks legacy-connected and dedicated-plane workspaces, once each", async () => {
+    const legacy = {
+      orgId: SCOPE.orgId,
+      workspaceId: "0192d4a8-7c1e-7a00-8000-0000000c0e03",
+    };
+    const dedicated = {
+      orgId: "0192d4a8-7c1e-7a00-8000-00000000d0d0",
+      workspaceId: "0192d4a8-7c1e-7a00-8000-0000000c0e04",
+    };
+    mocks.heads.push(SCOPE);
+    mocks.legacy.push(legacy, SCOPE);
+    mocks.dedicated.push(dedicated);
+    const step = fakeStep();
+    await expect(runSweep(step)).resolves.toEqual({ requested: 3 });
+    const sent = (step.sendEvent as ReturnType<typeof vi.fn>).mock
+      .calls[0]![1] as {
+      data: { workspaceId: string };
+    }[];
+    expect(sent.map((e) => e.data.workspaceId).sort()).toEqual(
+      [SCOPE.workspaceId, legacy.workspaceId, dedicated.workspaceId].sort(),
+    );
+  });
+
+  it("reads legacy connections only for workspaces with no main head", async () => {
+    await runSweep(fakeStep());
+    const query = new PgDialect().sqlToQuery(
+      mocks.where[1] as Parameters<PgDialect["sqlToQuery"]>[0],
+    );
+    expect(query.sql).toContain("not exists");
+    expect(query.sql).toContain("'main'");
   });
 });
 

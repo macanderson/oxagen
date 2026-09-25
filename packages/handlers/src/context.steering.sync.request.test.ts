@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { logger } from "./logger";
 import {
   githubDeliveryBranch,
+  githubSyncTargets,
   requestSteeringSync,
   type SteeringSyncEvent,
   type SyncScope,
@@ -14,6 +15,25 @@ import {
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+// The shared plane holds no binding head for these tests: every chain the
+// routing builds resolves to no rows.
+vi.mock("@oxagen/database", async (original) => {
+  const real = await original<typeof import("@oxagen/database")>();
+  const empty = (): unknown =>
+    new Proxy(
+      {},
+      {
+        get: (_t, key) =>
+          key === "then"
+            ? (resolve: (rows: unknown[]) => void) => resolve([])
+            : () => empty(),
+      },
+    );
+  return {
+    ...real,
+    withSystemDb: async (fn: (tx: unknown) => unknown) => fn(empty()),
+  };
+});
 // The real client is built at import. These tests inject `send`, so the
 // default one must never be reached.
 vi.mock("./event-client", () => ({
@@ -211,5 +231,43 @@ describe("requestSteeringSync", () => {
     await expect(requestSteeringSync([A], "push", d)).rejects.toThrow(
       "inngest 503",
     );
+  });
+});
+
+describe("githubSyncTargets on a dedicated plane", () => {
+  const PUSH = {
+    ref: "refs/heads/main",
+    repository: {
+      id: 4242,
+      full_name: "acme/platform",
+      default_branch: "main",
+    },
+  };
+
+  // An organization on a dedicated Postgres plane keeps its binding heads on
+  // that plane, where the shared read never looks. Its workspace is found by
+  // asking its own plane, and only when that plane's head approves the
+  // branch the push touched.
+  it("finds a dedicated-plane workspace through its own plane", async () => {
+    const mainRefOnPlane = vi.fn(async (scope: SyncScope) =>
+      scope.workspaceId === B.workspaceId ? "main" : null,
+    );
+    const targets = await githubSyncTargets(
+      { eventName: "push", body: PUSH, installationId: "555" },
+      { dedicatedScopes: async () => [A, B], mainRefOnPlane },
+    );
+    expect(targets).toEqual([B]);
+    expect(mainRefOnPlane).toHaveBeenCalledWith(B, "4242");
+  });
+
+  it("asks nothing of a dedicated workspace whose head approves another branch", async () => {
+    const targets = await githubSyncTargets(
+      { eventName: "push", body: PUSH, installationId: "555" },
+      {
+        dedicatedScopes: async () => [A],
+        mainRefOnPlane: async () => "production",
+      },
+    );
+    expect(targets).toEqual([]);
   });
 });

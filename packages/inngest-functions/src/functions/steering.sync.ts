@@ -1,6 +1,8 @@
 import { schema, withSystemDb } from "@oxagen/database";
 import { NonRetriableError } from "@oxagen/functions";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { listDedicatedPlaneScopes } from "../lib/assistant-run-abandon";
+
 import { createFunction } from "../create-function";
 import { steeringSyncRunner } from "../lib/steering-sync-runner";
 
@@ -79,20 +81,53 @@ export const [steeringSyncSweep] = createFunction(
   { id: "steering/sync-sweep", retries: 1, concurrency: { limit: 1 } },
   { cron: "*/5 * * * *" },
   async ({ step }) => {
-    // tenancy: scheduled global sweep across all orgs; it reads only the
-    // org_id and workspace_id of each main binding head, and every sync it
-    // requests re-enters that workspace's scope before reading or writing.
-    const heads = await step.run("list-main-repositories", () =>
-      withSystemDb((tx) =>
-        tx
-          .selectDistinct({
-            orgId: schema.repositoryBindingHeads.orgId,
-            workspaceId: schema.repositoryBindingHeads.workspaceId,
-          })
-          .from(schema.repositoryBindingHeads)
-          .where(eq(schema.repositoryBindingHeads.role, "main")),
-      ),
-    );
+    const heads = await step.run("list-steered-workspaces", async () => {
+      const [bound, legacy, dedicated] = await Promise.all([
+        // tenancy: scheduled global sweep across all orgs; it reads only the
+        // org_id and workspace_id of each main binding head on the shared
+        // plane, and every sync it requests re-enters that workspace's scope.
+        withSystemDb((tx) =>
+          tx
+            .selectDistinct({
+              orgId: schema.repositoryBindingHeads.orgId,
+              workspaceId: schema.repositoryBindingHeads.workspaceId,
+            })
+            .from(schema.repositoryBindingHeads)
+            .where(eq(schema.repositoryBindingHeads.role, "main")),
+        ),
+        // tenancy: scheduled global sweep across all orgs; a workspace the
+        // legacy sources wizard connected has no binding head, only a live
+        // GitHub connection naming owner and repo. Only org_id and
+        // workspace_id are read, and the sync re-enters that scope.
+        withSystemDb((tx) =>
+          tx
+            .selectDistinct({
+              orgId: schema.sourceConnections.orgId,
+              workspaceId: schema.sourceConnections.workspaceId,
+            })
+            .from(schema.sourceConnections)
+            .where(
+              and(
+                eq(schema.sourceConnections.connectorId, "github"),
+                eq(schema.sourceConnections.status, "connected"),
+                isNull(schema.sourceConnections.deletedAt),
+                sql`${schema.sourceConnections.deliveryConfig} ->> 'owner' is not null`,
+                sql`${schema.sourceConnections.deliveryConfig} ->> 'repo' is not null`,
+                sql`not exists (select 1 from ${schema.repositoryBindingHeads} h where h.workspace_id = ${schema.sourceConnections.workspaceId} and h.role = 'main')`,
+              ),
+            ),
+        ),
+        // An organization on a dedicated Postgres plane (ADR-042) keeps its
+        // binding heads there, out of both reads above. Every workspace of
+        // one is asked; a workspace with no main repository answers
+        // no_repository and writes nothing.
+        listDedicatedPlaneScopes(),
+      ]);
+      const all = new Map<string, { orgId: string; workspaceId: string }>();
+      for (const h of [...bound, ...legacy, ...dedicated])
+        all.set(h.workspaceId, { orgId: h.orgId, workspaceId: h.workspaceId });
+      return [...all.values()];
+    });
     if (heads.length === 0) return { requested: 0 };
     await step.sendEvent(
       "request-syncs",
