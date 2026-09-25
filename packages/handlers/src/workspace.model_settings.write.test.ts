@@ -42,6 +42,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { workspaceModelSettingsWriteHandler } from "./workspace.model_settings.write";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,5 +122,20 @@ describe("workspaceModelSettingsWriteHandler (@oxagen/handlers)", () => {
     const result = await workspaceModelSettingsWriteHandler({}, CTX);
     expect(mocks.updateSet).toHaveBeenCalledTimes(1);
     expect(result.defaultTextTier).toBe("fast");
+  });
+});
+
+// Witness for the role gate (#4194). The kernel's IAM check allows every
+// capability for a non-enterprise org, so without the handler's
+// assertContractRole call this Member would get through and the test fails.
+describe("update_model_settings role gate", () => {
+  beforeEach(() => resetRoleGate());
+
+  it("refuses a workspace Member as forbidden and reads no tenant data", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      workspaceModelSettingsWriteHandler({ defaultTextTier: "fast" }, CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.updateSet).not.toHaveBeenCalled();
   });
 });

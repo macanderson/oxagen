@@ -61,6 +61,7 @@ import {
 } from "@oxagen/billing";
 import { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
 import { billingEvidenceRetentionHandler } from "./billing.evidence_retention";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 import { TEST_CTX } from "./test-utils/fixtures";
 
 // ── tx stub ───────────────────────────────────────────────────────────────────
@@ -323,5 +324,22 @@ describe("the data-plane kill switch", () => {
     await expect(billingEvidenceRetentionHandler({}, TEST_CTX)).rejects.toThrow(
       /dedicated Postgres plane/,
     );
+  });
+});
+
+// Witness for the role gate (#4194). The kernel's IAM check allows every
+// capability for a non-enterprise org, so without the handler's
+// assertContractRole call this Member would get through and the test fails.
+describe("get_evidence_retention role gate", () => {
+  beforeEach(() => resetRoleGate());
+
+  it("refuses a workspace Member as forbidden and reads no tenant data", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      billingEvidenceRetentionHandler({}, TEST_CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.resolveDataPlane).not.toHaveBeenCalled();
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 });

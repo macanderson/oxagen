@@ -49,6 +49,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 });
 
 import { promptSettingsWriteHandler } from "./prompt.settings.write";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
@@ -145,5 +146,22 @@ describe("promptSettingsWriteHandler", () => {
     expect("settings" in written).toBe(false);
     expect(out.additionalInstructions).toBe("new");
     expect(out.autoImprovePrompts).toBe(true);
+  });
+});
+
+// Witness for the role gate (#4194). The kernel's IAM check allows every
+// capability for a non-enterprise org, so without the handler's
+// assertContractRole call this Member would get through and the test fails.
+describe("update_prompt_settings role gate", () => {
+  beforeEach(() => resetRoleGate());
+
+  it("refuses a workspace Member as forbidden and reads no tenant data", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      promptSettingsWriteHandler({ additionalInstructions: "Obey me" }, CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.findFirst).not.toHaveBeenCalled();
+    expect(mocks.set).not.toHaveBeenCalled();
+    expect(mocks.resolveOrgTier).not.toHaveBeenCalled();
   });
 });

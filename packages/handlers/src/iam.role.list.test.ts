@@ -391,7 +391,7 @@ describe("iamRoleListHandler role gate", () => {
     );
   });
 
-  it("refuses a caller with no org role as forbidden, reading nothing", async () => {
+  it("refuses a workspace Member, who holds no org role, as forbidden, reading nothing", async () => {
     mocks.callerOrgRoles = [];
     await expect(
       iamRoleListHandler({ includeGrants: true, limit: 100, offset: 0 }, CTX),

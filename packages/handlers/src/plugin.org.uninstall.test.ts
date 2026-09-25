@@ -84,6 +84,7 @@ vi.mock("@oxagen/database/security", () => ({
 }));
 
 import { handler } from "./plugin.org.uninstall";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 import { schema } from "@oxagen/database";
 
 const ctx = {
@@ -177,5 +178,22 @@ describe("plugin.org.uninstall", () => {
       schema.toolVersions,
       schema.emergencyDenies,
     ]);
+  });
+});
+
+// Witness for the role gate (#4194). The kernel's IAM check allows every
+// capability for a non-enterprise org, so without the handler's
+// assertContractRole call this Member would get through and the test fails.
+describe("uninstall_plugin role gate", () => {
+  beforeEach(() => resetRoleGate());
+
+  it("refuses a workspace Member as forbidden and reads no tenant data", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      handler({ orgListingId: "porg-1" }, ctx as never),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(state.selects).toEqual([]);
+    expect(state.updates).toEqual([]);
+    expect(state.deletes).toEqual([]);
   });
 });
