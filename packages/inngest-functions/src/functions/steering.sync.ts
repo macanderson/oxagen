@@ -33,7 +33,7 @@ async function runOnce(
 }
 
 /**
- * The repository sync for one workspace (ADR-182): make the context registry
+ * The repository sync for one workspace (ADR-184): make the context registry
  * match the record files on the main repository's production branch.
  *
  * The GitHub and GitLab webhooks send `steering/sync.requested` on a push or a

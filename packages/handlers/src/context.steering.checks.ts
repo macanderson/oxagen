@@ -260,7 +260,7 @@ function checkLineageUniqueness(ctx: CheckContext): CheckOutcome {
     };
   }
   // The lineage inside the file is the record's identity, not the file's
-  // name (ADR-182). Any `.toml` file under the rules directory can hold it.
+  // name (ADR-184). Any `.toml` file under the rules directory can hold it.
   if (!ctx.path.startsWith(`${RULES_DIR}/`) || !ctx.path.endsWith(".toml")) {
     return {
       ok: false,

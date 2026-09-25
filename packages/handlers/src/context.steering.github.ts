@@ -471,7 +471,7 @@ export function assertProductionBase(
  * a merge of `main` into the branch, or a review bot's suggestion accepted
  * into the record file. Running the checks again cannot help, because a
  * merged pull request's head never moves again. The production branch now
- * holds whatever merged, and the repository sync (ADR-182) publishes that:
+ * holds whatever merged, and the repository sync (ADR-184) publishes that:
  * the record file is the record. This refusal says so, and the handlers ask
  * for the sync before they throw it.
  */

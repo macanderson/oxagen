@@ -88,7 +88,7 @@ type Events = {
     };
   };
 
-  // The repository sync (ADR-182): make one workspace's context registry
+  // The repository sync (ADR-184): make one workspace's context registry
   // match its main repository's production branch. Sent by the GitHub and
   // GitLab webhooks on a push or a merge, and by the five-minute sweep.
   "steering/sync.requested": {

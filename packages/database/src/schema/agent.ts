@@ -1783,7 +1783,7 @@ export const contextAppends = agentSchema.table(
   }),
 );
 
-// The repository sync (ADR-182): one row per workspace saying which commit of
+// The repository sync (ADR-184): one row per workspace saying which commit of
 // the main repository's production branch the registry last matched, and what
 // was wrong with the record files at that commit. The webhook stamps
 // `requested_at` when a push or a merge arrives, so a reader can tell a sync

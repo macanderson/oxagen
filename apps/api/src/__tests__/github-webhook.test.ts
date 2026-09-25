@@ -11,7 +11,7 @@
  * - Repo mismatch → 200 { dispatched: 0 }
  * - parseWebhookEvent returns [] → 200 { dispatched: 0 }
  * - entity.received event shape (sourceRecordType + unwrapped record)
- * - push / pull_request → steering sync request (ADR-182); its failure never
+ * - push / pull_request → steering sync request (ADR-184); its failure never
  *   changes the response
  */
 
@@ -94,7 +94,7 @@ vi.mock("@oxagen/ingestion/connectors", () => ({
   getConnector: mocks.getConnector,
 }));
 
-// The steering sync request (ADR-182) reads the repository binding registry
+// The steering sync request (ADR-184) reads the repository binding registry
 // and sends its own event. Its matching logic has its own suite; here it is
 // a seam, so these tests assert what the route hands it and that its failure
 // never reaches GitHub.
@@ -606,7 +606,7 @@ describe("github app webhook – routing & dispatch", () => {
   });
 });
 
-describe("github app webhook – steering sync request (ADR-182)", () => {
+describe("github app webhook – steering sync request (ADR-184)", () => {
   const TARGETS = [
     { orgId: "org-1", workspaceId: "ws-1" },
     { orgId: "org-2", workspaceId: "ws-2" },

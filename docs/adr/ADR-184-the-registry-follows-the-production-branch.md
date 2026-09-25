@@ -1,4 +1,4 @@
-# ADR-182: The context registry follows the production branch
+# ADR-184: The context registry follows the production branch
 
 - **Status:** Accepted
 - **Date:** 2026-09-25

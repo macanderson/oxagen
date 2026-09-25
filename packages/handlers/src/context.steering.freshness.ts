@@ -53,7 +53,7 @@ export function createGetSteeringFreshnessHandler(
   deps: Pick<SteeringDeps, "store"> & {
     /** The connection seam; injected so a test can answer without a database. */
     readConnection?: typeof readSteeringConnection;
-    /** The repository sync's state (ADR-182); injected for the same reason. */
+    /** The repository sync's state (ADR-184); injected for the same reason. */
     readSyncState?: SyncStore["readState"];
   },
 ): CapabilityHandler<typeof contextSteeringFreshness> {

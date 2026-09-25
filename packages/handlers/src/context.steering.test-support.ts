@@ -451,7 +451,7 @@ export class MemoryStore implements SteeringStore {
       .filter((v) => v.recordId === record.id)
       .sort((a, b) => b.version - a.version)[0];
     // As the Postgres store does: bytes the repository sync already
-    // published are reused, not written again (ADR-182).
+    // published are reused, not written again (ADR-184).
     const reused = existing
       ? this.versions.find(
           (v) =>
@@ -1008,7 +1008,7 @@ export function harness(files: Record<string, string> = {}): Harness {
 }
 
 /**
- * The repository sync's store (ADR-182) over a `MemoryStore`'s own arrays, so
+ * The repository sync's store (ADR-184) over a `MemoryStore`'s own arrays, so
  * a test can run `merge_context_pr` and the sync against one registry and see
  * whether they agree. `apply` writes versions and ledger links the way the
  * Postgres store does: one version per publication, the chain digest over the

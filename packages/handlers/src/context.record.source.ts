@@ -57,7 +57,7 @@ export async function readRecordFromRepo(
   lineageId: string,
   /**
    * Where the registry last saw the file. A person can rename or move a
-   * record file (ADR-182), so the stored path wins over the one the lineage
+   * record file (ADR-184), so the stored path wins over the one the lineage
    * would derive; the derived one is for a record the registry has not seen.
    */
   knownPath?: string | null,

@@ -241,7 +241,7 @@ export function Repositories({
     UNCONNECTED.has(reachable.failure.code);
   const openCount = changes.kind === "ready" ? changes.value.open : 0;
   // A Context PR can merge or close on the repository host at any moment, and
-  // the repository sync moves its change within seconds (ADR-182). While one
+  // the repository sync moves its change within seconds (ADR-184). While one
   // is open, re-read the list so the new state shows up without a reload.
   useEffect(() => {
     if (openCount === 0) return;

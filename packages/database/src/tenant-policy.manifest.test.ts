@@ -254,7 +254,7 @@ describe("tenant policy manifest", () => {
     // 123 adds the SCIM token, group and group-member tables (#3734).
     // 125 adds billing.gau_ledger and billing.prepaid_orders (ADR-165).
     // 126 adds ingestion.working_copies (record_working_copy).
-    // 127 adds agent.context_sync_state (the repository sync, ADR-182).
+    // 127 adds agent.context_sync_state (the repository sync, ADR-184).
     expect(POLICY_MANIFEST.length).toBe(127);
   });
 

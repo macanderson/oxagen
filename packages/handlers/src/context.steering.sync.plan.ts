@@ -1,4 +1,4 @@
-// context.steering.sync.plan.ts: what the repository sync (ADR-182) changes
+// context.steering.sync.plan.ts: what the repository sync (ADR-184) changes
 // in the registry, worked out from the record files on the production branch
 // and the registry rows, with no I/O. `context.steering.sync.ts` reads both
 // sides and writes the plan; this file decides.

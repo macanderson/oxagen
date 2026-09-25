@@ -1,4 +1,4 @@
-// The durable repository sync (ADR-182): one sync per requested workspace,
+// The durable repository sync (ADR-184): one sync per requested workspace,
 // a second forced one after a merge's grace window, and the five-minute sweep
 // that catches a webhook delivery that never arrived. The runner is the seam
 // `@oxagen/handlers` installs at boot, so these tests install a fake one and

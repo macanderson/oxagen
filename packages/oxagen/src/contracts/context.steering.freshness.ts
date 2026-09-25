@@ -76,7 +76,7 @@ export const steeringSyncFinding = z.object({
   message: z.string(),
 });
 
-/** Where the repository sync stands for the workspace (ADR-182). */
+/** Where the repository sync stands for the workspace (ADR-184). */
 export const steeringSyncState = z.object({
   /**
    * `pending` while a push or merge has asked for a sync that has not
@@ -188,7 +188,7 @@ export const contextSteeringFreshness = registerCapability({
     /** The workspace's two gates. Both off unless the workspace turned one on. */
     policy: steeringGatePolicy,
     /**
-     * The repository sync (ADR-182): which production-branch commit the
+     * The repository sync (ADR-184): which production-branch commit the
      * registry last matched, and what was wrong with the record files there.
      * Null until the workspace's first sync is requested. Optional, so a
      * client built before the field keeps parsing.

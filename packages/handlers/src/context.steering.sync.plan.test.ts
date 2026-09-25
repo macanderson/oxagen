@@ -1,5 +1,5 @@
 /**
- * The repository sync's planner (ADR-182): what the registry must change to
+ * The repository sync's planner (ADR-184): what the registry must change to
  * match the record files on the production branch. Pure, so every case here
  * is a file tree and a registry in, a plan out.
  *

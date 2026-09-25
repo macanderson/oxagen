@@ -190,7 +190,7 @@ export const SteeringFreshness = z.object({
     blockStaleRuns: z.boolean(),
   }),
   /**
-   * The repository sync (ADR-182): the production-branch commit the registry
+   * The repository sync (ADR-184): the production-branch commit the registry
    * last matched and what was wrong with the record files there. Null before
    * the workspace's first sync.
    */

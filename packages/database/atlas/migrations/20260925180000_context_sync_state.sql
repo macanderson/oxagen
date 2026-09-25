@@ -1,4 +1,4 @@
--- The repository sync (ADR-182): one row per workspace saying which commit of
+-- The repository sync (ADR-184): one row per workspace saying which commit of
 -- the main repository's production branch the context registry last matched,
 -- and what was wrong with the record files at that commit. Tenant-isolated like
 -- every org-scoped table.

@@ -80,7 +80,7 @@ export interface GitLabWebhookDeps {
   now(): Date;
   runInScope<T>(scope: WebhookScope, fn: () => Promise<T>): Promise<T>;
   /**
-   * Ask for the repository sync (ADR-182). A push or a merge on GitLab can
+   * Ask for the repository sync (ADR-184). A push or a merge on GitLab can
    * change the records in force, and the sync reads the branch itself.
    */
   requestSync?(scope: WebhookScope, reason: string): Promise<void>;
@@ -204,7 +204,7 @@ export async function handleGitLabWebhook(
         iid: event.iid,
       });
       if (mr.state === "merged")
-        // The repository sync publishes what merged (ADR-182). A merge made
+        // The repository sync publishes what merged (ADR-184). A merge made
         // from Oxagen publishes itself first, and the sync finds nothing left.
         return {
           status: 202,

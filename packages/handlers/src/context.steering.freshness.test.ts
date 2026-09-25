@@ -181,7 +181,7 @@ describe("get_steering_freshness handler", () => {
     });
   });
 
-  it("carries the repository sync's state and its findings (ADR-182)", async () => {
+  it("carries the repository sync's state and its findings (ADR-184)", async () => {
     stubReads(null);
     const finding = {
       level: "error" as const,

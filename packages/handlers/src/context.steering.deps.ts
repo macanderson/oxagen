@@ -30,7 +30,7 @@ export interface SteeringDeps {
   now: () => Date;
   emit: (event: SecurityEventInput) => void;
   /**
-   * Ask for the repository sync now (ADR-182). A Context PR the host merged
+   * Ask for the repository sync now (ADR-184). A Context PR the host merged
    * at a commit Oxagen never checked is published from the production branch
    * by the sync, and a person pressing Merge on it should not wait for the
    * sweep. Absent in tests that do not exercise it.

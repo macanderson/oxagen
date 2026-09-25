@@ -1,5 +1,5 @@
 /**
- * The repository sync (ADR-182) end to end, over the in-memory registry and a
+ * The repository sync (ADR-184) end to end, over the in-memory registry and a
  * fake GitHub with commits: a push, a merge on GitHub, a rename, a deletion
  * and a broken file each leave the registry matching the production branch,
  * and each problem reaches the sync state and the commit's check.

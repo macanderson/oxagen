@@ -133,7 +133,7 @@ export function createOpenContextPrHandler(
     }
 
     // A revision is written where the record's file lives now. A person can
-    // rename or move a record file on the host (ADR-182), and a revision
+    // rename or move a record file on the host (ADR-184), and a revision
     // written to the derived path would leave a second file holding the same
     // lineage. A record the registry has never seen takes the derived path.
     const held = await deps.store.findRecord(scope, row.lineageId);

@@ -59,7 +59,7 @@ export const contextRecordPromoteHandler: CapabilityHandler<
         message: `[context.record.promote] Record "${input.record_id}" not found in this workspace.`,
       });
     // A record whose file lives on the production branch follows the
-    // repository (ADR-182). Retiring or pinning it here would hold only until
+    // repository (ADR-184). Retiring or pinning it here would hold only until
     // the next sync read the file back, and then silently revert, so the
     // change is refused and pointed at the file.
     if (isRepositoryRecord(record.path))

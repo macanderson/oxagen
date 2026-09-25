@@ -1864,7 +1864,7 @@ describe("one change on the Changes tab", () => {
 
 describe("page reads", () => {
   // A Context PR can merge or close on GitHub at any moment, and the
-  // repository sync moves it within seconds (ADR-182). The list re-reads
+  // repository sync moves it within seconds (ADR-184). The list re-reads
   // while one is open, so the new state shows without a reload.
   it("re-reads the changes every ten seconds while a Context PR is open", async () => {
     const every = vi.spyOn(window, "setInterval");

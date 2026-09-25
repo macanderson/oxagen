@@ -23,7 +23,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
     const { eventClient } = await import("./event-client");
     await eventClient.send(event);
   });
-  // The durable repository sync (ADR-182) lives in @oxagen/inngest-functions,
+  // The durable repository sync (ADR-184) lives in @oxagen/inngest-functions,
   // which cannot import this package. The sync itself is installed here, and
   // loaded on the first run, not at boot.
   setSteeringSyncRunner(async (scope, options) => {

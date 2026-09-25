@@ -171,7 +171,7 @@ describe("the six §10.3 checks", () => {
   });
 
   it("lineage_uniqueness: accepts the record in any .toml file under the rules directory", () => {
-    // The lineage inside the file is the record's identity (ADR-182). A team
+    // The lineage inside the file is the record's identity (ADR-184). A team
     // that renames a file, or groups files in a folder, has not changed which
     // record it holds.
     for (const path of [
@@ -232,7 +232,7 @@ describe("the six §10.3 checks", () => {
   });
 
   it("lineage_uniqueness: does not hold a record published outside the rules directory against a new file", () => {
-    // Characterization of the ADR-182 change, not a rule stated anywhere
+    // Characterization of the ADR-184 change, not a rule stated anywhere
     // else: a published path outside .oxagen/rules/ (a record the sync can
     // never read back) no longer blocks the lineage, and neither does a
     // published record with no path.

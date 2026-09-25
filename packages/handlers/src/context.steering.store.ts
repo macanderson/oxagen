@@ -908,7 +908,7 @@ export const postgresSteeringStore: SteeringStore = {
     const { scope, proposal } = input;
     return withTenantDb(async (tx) => {
       // The repository sync publishes the same merge when its push arrives
-      // (ADR-182). One lock per workspace orders the two, and whichever runs
+      // (ADR-184). One lock per workspace orders the two, and whichever runs
       // second finds the content already published.
       await lockWorkspacePublication(tx, scope.workspaceId);
       // Take the lock the INSERT below will take anyway, BEFORE probing.
@@ -1013,7 +1013,7 @@ export const postgresSteeringStore: SteeringStore = {
       }
 
       // The repository sync can publish this same merge first, when its push
-      // reaches the lock before this call does (ADR-182). The bytes are then
+      // reaches the lock before this call does (ADR-184). The bytes are then
       // already the version in force, and this publication adds the
       // reviewer's promotion to it rather than a second copy of them.
       let reused: { id: string; version: number } | null = null;

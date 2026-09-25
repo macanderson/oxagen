@@ -1,5 +1,5 @@
 // context.steering.publication.ts: the two writes every publication makes,
-// shared by `merge_context_pr` and the repository sync (ADR-061, ADR-182). A
+// shared by `merge_context_pr` and the repository sync (ADR-061, ADR-184). A
 // new version of a record, and the next link in the record's promotion chain.
 // Both callers run these inside one transaction that holds the workspace's
 // publication lock, so a merge from Oxagen and a sync triggered by the same

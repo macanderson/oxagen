@@ -1,5 +1,5 @@
 // context.steering.sync.store.ts: the Postgres side of the repository sync
-// (ADR-182). The per-workspace sync state, and the one transaction that reads
+// (ADR-184). The per-workspace sync state, and the one transaction that reads
 // the registry, plans against it and writes the plan under the workspace's
 // publication lock, so a merge from Oxagen and a sync never interleave.
 import {

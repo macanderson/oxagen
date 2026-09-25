@@ -28,7 +28,7 @@
  *      (pause connections on uninstall/suspend), ack.
  *   2b. `push` / `pull_request` → ask every workspace whose main repository
  *      this is, on the branch the delivery touched, for a steering sync
- *      (ADR-182). The sync reads the branch itself.
+ *      (ADR-184). The sync reads the branch itself.
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
  *   4. Ask the connector to extract ingestable (sourceRecordType, record) pairs.
  *   5. Fan out one `ingestion/entity.received` per (connection × record). The
@@ -262,7 +262,7 @@ githubAppWebhookRoute.post("/", async (c) => {
     return c.json({ received: true, lifecycle: eventName, action }, 200);
   }
 
-  // ── Steering: the repository sync (ADR-182) ─────────────────────────────
+  // ── Steering: the repository sync (ADR-184) ─────────────────────────────
   // A push to a workspace's production branch, or a pull request that closed
   // or moved against it, can change the records in force. The sync reads the
   // branch itself, so this only finds the workspaces and asks. It runs before

@@ -1,4 +1,4 @@
-// context.steering.sync.ts: the repository sync (ADR-182). The record files on
+// context.steering.sync.ts: the repository sync (ADR-184). The record files on
 // the main repository's production branch are the records in force; the
 // registry mirrors them for listing, the ledger, and the policy bundle every
 // wrapped agent receives. This makes the mirror match the branch, whatever

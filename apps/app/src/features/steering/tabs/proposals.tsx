@@ -85,7 +85,7 @@ export async function ProposalsTab({
       : null,
   ]);
   // A Context PR can merge or close on the repository host at any moment, and
-  // the repository sync moves the proposal within seconds (ADR-182). While
+  // the repository sync moves the proposal within seconds (ADR-184). While
   // one is open, the page re-reads itself so the change shows up here.
   const waiting =
     read.ok && read.value.proposals.some((p) => OPEN_PR_STATUSES.has(p.status));

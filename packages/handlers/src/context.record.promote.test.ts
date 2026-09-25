@@ -381,7 +381,7 @@ describe("context.record.promote handler", () => {
   });
 
   // The repository is the source for a record whose file lives under
-  // .oxagen/rules/ (ADR-182). A retire here would last until the next sync
+  // .oxagen/rules/ (ADR-184). A retire here would last until the next sync
   // read the file back, then silently revert, so it is refused and pointed
   // at the file, and nothing is written.
   it("refuses to retire a record whose file lives in the repository", async () => {

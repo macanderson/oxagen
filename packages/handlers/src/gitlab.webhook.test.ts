@@ -242,7 +242,7 @@ describe("GitLab webhook: project moves", () => {
   });
 });
 
-describe("GitLab webhook: the repository sync (ADR-182)", () => {
+describe("GitLab webhook: the repository sync (ADR-184)", () => {
   const SCOPE = {
     orgId: CONNECTION.orgId,
     workspaceId: CONNECTION.workspaceId,

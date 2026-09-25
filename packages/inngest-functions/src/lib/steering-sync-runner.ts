@@ -1,5 +1,5 @@
 // steering-sync-runner.ts: the seam between the durable steering sync
-// (functions/steering.sync.ts) and the code that performs it (ADR-182).
+// (functions/steering.sync.ts) and the code that performs it (ADR-184).
 //
 // The sync reads the main repository and writes the context registry through
 // `@oxagen/handlers`, and `@oxagen/handlers` depends on this package, so this

@@ -53,7 +53,7 @@ force = "should"
 ```
 
 - The `lineage_id` inside the file is the record's identity, not the file's
-  name (ADR-182). Oxagen writes a new record to `.oxagen/rules/<lineage>.toml`
+  name (ADR-184). Oxagen writes a new record to `.oxagen/rules/<lineage>.toml`
   and a revision to the record's current path. A person can rename or move the
   file anywhere under `.oxagen/rules/`, and the repository sync follows it.
   The branch is `context/<lineage>`.
@@ -71,7 +71,7 @@ force = "should"
   it first (ADR-178). It need not be unique and it can change. The lineage id
   is derived from it when the record is created and is unique in the
   workspace. It changes only when someone edits `lineage_id` in the file, and
-  then the record keeps its id and takes the new lineage (ADR-182). A file
+  then the record keeps its id and takes the new lineage (ADR-184). A file
   written before ADR-178 has no `label`, and readers derive one from the
   lineage.
 - Apart from `label`, only members Stella's `Record` struct carries enter the
@@ -124,7 +124,7 @@ whose body names the proposal, when the row never recorded its number) and
 deletes its branch, and writes `rejected` only to a proposal that is not
 merged.
 
-The repository sync (ADR-182, `packages/handlers/src/context.steering.sync.ts`)
+The repository sync (ADR-184, `packages/handlers/src/context.steering.sync.ts`)
 covers every change that does not go through `merge_context_pr`. A `push` or
 `pull_request` delivery, a merged GitLab merge request, and a sweep every five
 minutes each request `steering/sync.requested`. The sync reads every file under

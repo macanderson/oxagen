@@ -1,7 +1,7 @@
 // audit-exempt: a webhook-driven trigger; it stamps when a sync was requested and sends the sync event. The sync's own publications go to the promotions ledger.
 //
 // context.steering.sync.request.ts: which workspaces a host delivery asks to
-// sync (ADR-182), and the request itself.
+// sync (ADR-184), and the request itself.
 //
 // A delivery never says what changed in the registry. It says a branch moved
 // or a pull request closed, and the sync reads the branch for itself. So this

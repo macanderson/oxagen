@@ -1,5 +1,5 @@
 // Which GitHub deliveries can move a workspace's steering, and the sync
-// request itself (ADR-182). A delivery that names the wrong branch syncs the
+// request itself (ADR-184). A delivery that names the wrong branch syncs the
 // wrong thing or nothing at all, and a request that drops its event leaves a
 // merged record out of force until the five-minute sweep finds it.
 import { describe, expect, it, vi } from "vitest";
