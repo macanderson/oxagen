@@ -1588,6 +1588,19 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     });
   });
 
+  it("does not parse a recall body that no longer hashes to its digest (negative)", async () => {
+    const claimed = stored(JSON.stringify({ included: 9, items: [] }));
+    objects.set(claimed.bytesRef, {
+      bytes: enc.encode(JSON.stringify({ included: 1, items: [] })),
+      contentType: "application/json",
+    });
+    const { transcript } = harness([
+      tachoRow(0, { kind: "steering.manifest", ...blank, ...claimed }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(out.entries[0]?.recall?.count).toBeNull();
+  });
+
   it("names the tool step that recorded each call a reply made, and none for a call nobody recorded", async () => {
     const { transcript } = harness([
       tachoRow(1, {
