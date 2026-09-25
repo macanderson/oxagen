@@ -119,8 +119,13 @@ import {
   assistantDraftOf,
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
-import { askAssistant, type ParkedCard } from "./assistant-actions";
+import {
+  askAssistant,
+  type ParkedCard,
+  type ToolCallSummary,
+} from "./assistant-actions";
 import { AssistantStreamingText } from "./assistant-streaming-text";
+import { AssistantToolCalls } from "./assistant-tool-calls";
 import { AssistantThinking } from "./assistant-thinking";
 import {
   ASSISTANT_MIN_WIDTH,
@@ -146,6 +151,7 @@ type Entry =
       text: string;
       runId: string;
       parked: readonly ParkedCard[];
+      toolCalls: readonly ToolCallSummary[];
     }
   | {
       kind: "refused";
@@ -701,6 +707,7 @@ export function AssistantFlyout() {
           text: result.value.reply,
           runId: result.value.runId,
           parked: result.value.parkedCards,
+          toolCalls: result.value.toolCalls,
         };
         updateThread(asked, (t) => ({
           ...t,
@@ -876,6 +883,7 @@ export function AssistantFlyout() {
                         entry.runId
                       )}
                     </p>
+                    <AssistantToolCalls calls={entry.toolCalls} />
                     {entry.parked.length === 0 ? null : (
                       <p
                         data-testid="assistant-parked"

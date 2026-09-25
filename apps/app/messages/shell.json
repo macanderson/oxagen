@@ -291,6 +291,19 @@
       "thinking": "Working…",
       "recordedAs": "recorded as",
       "parked": "{count, plural, one {# write is waiting on a person} other {# writes are waiting on a person}}. Approve or deny them on Fleet.",
+      "toolCalls": {
+        "summary": "{count, plural, one {# tool call} other {# tool calls}}",
+        "outcome": {
+          "completed": "Completed",
+          "failed": "Failed",
+          "denied": "Denied",
+          "cancelled": "Cancelled",
+          "parked": "Waiting for approval"
+        },
+        "tool": "Tool",
+        "callId": "Call id",
+        "approvalId": "Approval id"
+      },
       "needsWorkspace": "stella works inside one workspace. Open a workspace to ask stella something.",
       "intro": {
         "title": "Ask stella",

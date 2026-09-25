@@ -23,12 +23,27 @@ export type ParkedCard = {
   expiresAt: string;
 };
 
+/**
+ * One tool call behind a reply (#4161). `parked` is a governed write waiting
+ * on a person; `approvalId` names its approval, and is null for every other
+ * outcome.
+ */
+export type ToolCallSummary = {
+  toolCallId: string;
+  toolName: string;
+  outcome: "completed" | "failed" | "denied" | "cancelled" | "parked";
+  durationMs: number;
+  approvalId: string | null;
+};
+
 export type AssistantTurn = {
   conversationId: string;
   /** `arun_…`: the run this turn was recorded as; the Run page opens it. */
   runId: string;
   reply: string;
   parkedCards: readonly ParkedCard[];
+  /** Every tool call the turn made, in the order it made them. */
+  toolCalls: readonly ToolCallSummary[];
 };
 
 /**
