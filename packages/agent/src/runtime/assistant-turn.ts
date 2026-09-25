@@ -27,7 +27,6 @@ import {
   modelIdOf,
   resolveModelFundingSource,
   resolveModelIdentity,
-  resolvePrompt,
   selectModel,
   supportsReasoning,
   type ModelFundingSource,
@@ -72,6 +71,10 @@ import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { recallWorkspaceMemoryMessage } from "./assistant-recall";
 import {
+  assistantSystemPrompt,
+  loadAssistantSteering,
+} from "./assistant-steering";
+import {
   openAssistantRun,
   readAssistantAgentState,
   type AssistantAgentState,
@@ -90,11 +93,6 @@ import {
 } from "./materialize-tools";
 import { pageContextMessage } from "./page-context";
 import { createToolBelt, LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
-import {
-  checkWorkspaceInstructions,
-  promptConfigWithCheckedInstructions,
-  workspaceInstructionsFrame,
-} from "./workspace-instructions";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
@@ -456,23 +454,12 @@ async function runPreparedTurn(
   );
   hooks.onTools?.(materialised.nameMap);
   const names = await resolveScopeNames(scope, request);
-  // The workspace's standing instructions, checked before the prompt carries
-  // them (#3303). Over the budget they are refused whole and the prompt
-  // carries none; within it they carry a precedence note saying what they
-  // cannot do. Either way the run's record names them by digest below.
-  const instructions = checkWorkspaceInstructions(promptConfig);
-  if (instructions.outcome === "refused") {
-    logger.warn(
-      {
-        ...scope,
-        requestId: ctx.requestId,
-        chars: instructions.chars,
-        budgetChars: instructions.budgetChars,
-        reasonCode: instructions.reasonCode,
-      },
-      "workspace instructions are past the prompt budget; this turn carries none",
-    );
-  }
+  // Published steering and the workspace's instructions, ranked and fitted
+  // to one budget by the assembler (ADR-093 §7, #4158). What does not fit is
+  // cut and named in the manifest the run records below.
+  const steering = await inScope(() =>
+    loadAssistantSteering({ ...scope, promptConfig, requestId: ctx.requestId }),
+  );
 
   const budgetPolicy = await resolveBudgetPolicy(request, capCtx);
   const budgetGuard = createTurnBudgetGuard(budgetPolicy, p.modelId, {
@@ -571,12 +558,11 @@ async function runPreparedTurn(
   // runGovernedTurn cannot reject after a seal.
   let turn: Awaited<ReturnType<typeof runGovernedTurn>>;
   try {
-    // Before the engine, so the record states what the workspace told the
-    // agent even for a turn that then fails. A ledger that will not take this
-    // frame refuses the turn here, the same as any other receipt it will not
-    // take: steering the record cannot account for is what #3303 is about.
-    const instructionsFrame = workspaceInstructionsFrame(instructions);
-    if (instructionsFrame) await run.workspaceInstructions(instructionsFrame);
+    // Before the engine, so the record states what steered the agent even
+    // for a turn that then fails. A ledger that will not take this frame
+    // refuses the turn here, the same as any other receipt it will not take:
+    // steering the record cannot account for is what #3303 is about.
+    await run.steeringManifest(steering);
     turn = await runGovernedTurn({
       telemetry: {
         ...scope,
@@ -593,18 +579,16 @@ async function runPreparedTurn(
       ...(funding.modelKey ? { credential: funding.modelKey } : {}),
       governance: { ...materialised.governance, ...belt.governance },
       principal: userId,
-      system: resolvePrompt({
-        key: "chat.system",
-        baseline: buildChatSystemPrompt({
+      // The assembled steering, never the raw instructions column.
+      system: assistantSystemPrompt(
+        buildChatSystemPrompt({
           orgSlug: request.orgSlug,
           workspaceSlug: request.workspaceSlug,
           orgName: names.orgName,
           workspaceName: names.workspaceName,
         }),
-        // The checked block, never the raw column: a refusal leaves nothing
-        // for `resolvePrompt` to append.
-        config: promptConfigWithCheckedInstructions(promptConfig, instructions),
-      }),
+        steering,
+      ),
       history,
       contextMessages: [
         pageContextMessage(request.pageContext),
