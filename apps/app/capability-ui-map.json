@@ -342,6 +342,15 @@
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-mc-3-schemas"
     },
+    "get_assistant_engine": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "every workspace page: opening the assistant flyout reads get_assistant_engine for the workspace in the URL, and while the engine reports any state but ready the line above the composer names it, Send is held with that sentence as its description, and Check again and a window focus read it again (features/shell/use-engine-health.ts, features/shell/assistant-engine-notice.tsx, features/shell/engine-actions.ts, data/live/shell.ts, data/live/mappers/shell.ts)",
+      "testid": "assistant-engine-down",
+      "proof": "apps/app/src/features/shell/assistant-flyout.engine-health.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
+    },
     "get_assistant_reply": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/layout.tsx",

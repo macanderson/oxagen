@@ -55,6 +55,11 @@ vi.mock("./assistant-stream-client", () => ({
 vi.mock("./assistant-actions", () => ({
   readAssistantReply: vi.fn<typeof ReadAssistantReply>(),
 }));
+// The engine read has its own file (assistant-flyout.engine-health.test.tsx).
+// Here it never answers, so nothing but a turn in flight holds Send.
+vi.mock("./engine-actions", () => ({
+  readAssistantEngine: () => new Promise(() => undefined),
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/acme/core-platform",

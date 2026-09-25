@@ -7708,6 +7708,14 @@ type Messages = {
         ended: string;
         unread: string;
       };
+      engine: {
+        unreachable: string;
+        starting: string;
+        draining: string;
+        unconfigured: string;
+        check: string;
+        checking: string;
+      };
       retry: string;
     };
     avatar: {

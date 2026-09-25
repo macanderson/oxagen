@@ -408,6 +408,14 @@
         "ended": "This turn ended without a reply. The run records why.",
         "unread": "The reply could not be loaded. Try again."
       },
+      "engine": {
+        "unreachable": "stella’s engine could not be reached. Send is off until it answers.",
+        "starting": "stella’s engine is starting. Send is off until it is ready.",
+        "draining": "stella’s engine is shutting down and takes no new questions. Send is off until it is ready again.",
+        "unconfigured": "This deployment names no engine for stella. Send is off until it does.",
+        "check": "Check again",
+        "checking": "Checking…"
+      },
       "retry": "Ask again"
     },
     "avatar": {
