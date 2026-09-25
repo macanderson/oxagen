@@ -163,12 +163,12 @@
             "properties": {
               "per_run_micros": {
                 "type": "integer",
-                "minimum": 0,
+                "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
               },
               "per_day_micros": {
                 "type": "integer",
-                "minimum": 0,
+                "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
               }
             },
