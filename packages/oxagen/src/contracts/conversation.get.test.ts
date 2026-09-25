@@ -15,6 +15,7 @@ const MESSAGE = {
       expiresAt: "2026-09-25T10:05:00.000Z",
     },
   ],
+  stopped: false,
 };
 
 const CONVERSATION = {
@@ -77,6 +78,21 @@ describe("get_conversation contract", () => {
     expect(conversationGet.output.parse({ conversation: null })).toEqual({
       conversation: null,
     });
+  });
+
+  it("carries a stopped reply, and refuses a message that does not say whether it was stopped (negative)", () => {
+    const stopped = { ...MESSAGE, stopped: true };
+    expect(
+      conversationGet.output.parse({
+        conversation: { ...CONVERSATION, messages: [stopped] },
+      }).conversation?.messages[0]?.stopped,
+    ).toBe(true);
+    const { stopped: _omitted, ...unsaid } = MESSAGE;
+    expect(
+      conversationGet.output.safeParse({
+        conversation: { ...CONVERSATION, messages: [unsaid] },
+      }).success,
+    ).toBe(false);
   });
 
   it("refuses a message role the thread never carries and a malformed parked card (negative)", () => {

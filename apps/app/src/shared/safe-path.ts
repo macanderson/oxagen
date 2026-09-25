@@ -315,6 +315,13 @@ export const routes = {
    */
   accountExport: (org: string, exportId: string): SafePath =>
     pathOf(org, "account", "export", exportId),
+  /**
+   * The route the flyout's Stop control posts to. It is a route rather than a
+   * server action because the question it stops is itself a pending server
+   * action, and the actions of one page run one at a time (#4164).
+   */
+  assistantStop: (org: string, ws: string): SafePath =>
+    pathOf(org, ws, "assistant", "stop"),
   /** The signed export of Audit's events over the same query values. */
   auditExport: (
     org: string,

@@ -33,6 +33,7 @@ function toThreadMessage(message: StoredMessage): ThreadMessage | null {
     text: message.content,
     runId: message.runId,
     parked: message.parkedCards,
+    stopped: message.stopped,
   };
 }
 

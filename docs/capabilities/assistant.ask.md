@@ -26,6 +26,7 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 | `conversationId` | `cnv_` public id, uuid, or null | no | the conversation to continue, by the `cnv_` id every conversation capability takes (`get_conversation` reads it back) or by the internal id `conversationId` below carries; null opens a new conversation. A conversation that is not yours, or is deleted or archived, is `not_found` |
 | `content` | string | yes | 1 to 32 KiB, the cap every chat ingress shares |
 | `pageContext` | object or null | no | `{ route, orgSlug, workspaceSlug, entityId, entityLabel }`: where the person was when they asked, and the record on screen. Null for a caller with no page. See [Page context](#page-context) |
+| `turnId` | uuid | no | a name the caller mints for this turn so it can stop it with [`cancel_assistant_turn`](assistant.turn.cancel.md). Omitted, the turn can still end on a disconnect or a budget stop, but nobody can stop it by name. See [Stopping a turn](#stopping-a-turn) |
 | `goal` | object | no | `{ statement, maxRounds }`: `statement` is 1 to 2,000 characters, trimmed; `maxRounds` is 1 to 4, default 3. Omitted runs one ordinary turn. See [Goal-shaped turns](#goal-shaped-turns) |
 
 ### Page context
@@ -54,6 +55,7 @@ A label is untrusted text: an agent, a model, or a person wrote it. The turn giv
 | `runId` | string | `arun_…`, the run the turn was recorded as; `get_run` opens it |
 | `reply` | string | the assistant's reply, whole |
 | `parkedCards` | array | one `{ approvalId, capability, expiresAt }` per governed write the turn opened that waits on a person, in park order; empty when nothing parked. A turn can park more than one, and each has its own five-minute expiry, so all of them are returned |
+| `stopped` | boolean | true when the person stopped the turn with `cancel_assistant_turn`; `reply` is then what the engine wrote before the stop, and may be empty. False otherwise |
 
 ## Conversation
 
@@ -61,9 +63,17 @@ A turn continues a conversation only when it is the asker's own, in this workspa
 
 ## Recording
 
-`openAssistantRun` (`@oxagen/agent`) admits the turn before the engine is contacted: the workspace's managed interactive agent acting through the `oxagen.assistant` service principal, the asking person's human principal as the initiating principal, a pinned authorization snapshot and a digest-only retention policy. Every provider and tool request the host answers is recorded first as `model.engine_call_completed` or `tool.engine_call_completed`, keyed by the engine frame's `seq`; the belt meta-tools `search_tools` and `load_tools` are recorded through the tool receipt. A tool receipt's outcome is `completed`, `failed`, `denied`, `cancelled` or `parked`. `denied` means a gate or a person refused the call. `parked` means the call did not run and waits on a person's approval, and the receipt names that approval's public id (`approval_public_id`, `apr_…`). The engine is told `refused_by_policy` for a parked call, because its error vocabulary has no wait. A goal-shaped turn also records each round's verdict as `verification.goal_verdict`: the round, whether the goal was met, the digests of the goal and of the verifier's reasoning, and the verifier's cost, with the goal and the reasoning as the frame's body. Every verdict is written before the seal, and a verdict that cannot be written cancels the turn. The run spec's goal is the goal statement when one is set. The seal carries verdict `waived` for a completed turn, `cancelled` for an aborted one and `failed` for an engine failure.
+`openAssistantRun` (`@oxagen/agent`) admits the turn before the engine is contacted: the workspace's managed interactive agent acting through the `oxagen.assistant` service principal, the asking person's human principal as the initiating principal, a pinned authorization snapshot and a digest-only retention policy. Every provider and tool request the host answers is recorded first as `model.engine_call_completed` or `tool.engine_call_completed`, keyed by the engine frame's `seq`; the belt meta-tools `search_tools` and `load_tools` are recorded through the tool receipt. A tool receipt's outcome is `completed`, `failed`, `denied`, `cancelled` or `parked`. `denied` means a gate or a person refused the call. `parked` means the call did not run and waits on a person's approval, and the receipt names that approval's public id (`approval_public_id`, `apr_…`). The engine is told `refused_by_policy` for a parked call, because its error vocabulary has no wait. A goal-shaped turn also records each round's verdict as `verification.goal_verdict`: the round, whether the goal was met, the digests of the goal and of the verifier's reasoning, and the verifier's cost, with the goal and the reasoning as the frame's body. Every verdict is written before the seal, and a verdict that cannot be written cancels the turn. The run spec's goal is the goal statement when one is set. The seal carries verdict `waived` for a completed turn, `cancelled` for an aborted one and `failed` for an engine failure. A turn the person stopped is sealed `cancelled` with the reason `stopped by the person who asked`.
 
 The run is admitted on the `chat` (SSE) or `api-chat` (API, MCP) surface, and `list_runs`, `list_recent_runs` and `search_tools` exclude both: the assistant is Oxagen's, and its turns never appear as the customer's runs.
+
+## Stopping a turn
+
+A caller that passes `turnId` can stop the turn with [`cancel_assistant_turn`](assistant.turn.cancel.md) (#4164). The turn registers under the person who asked, in this workspace, once the gates have named them, and drops out when it ends. Only that person's stop reaches it.
+
+A stopped turn cancels its engine turn, seals its run `cancelled`, and still answers: `reply` is the text written before the stop, saved with message status `stopped`, and `stopped` is true. A tool call that already ran is not undone, and a write that parked stays in `parkedCards`.
+
+A disconnect or a per-turn budget stop also aborts the turn, and seals it `cancelled`, but it refuses with `engine_aborted` and saves no reply. Closing the flyout or leaving the page is neither. The app does not tie the turn to the page, so the turn runs to its end and its reply is on the record when the person comes back (ADR-092, #3292).
 
 ## Goal-shaped turns
 
@@ -90,7 +100,7 @@ The engine is declared every governed tool plus the two meta-tools. Each complet
 | `forbidden` (reason `kill_switch`) | 403 | an `agent` kill switch is on for the workspace's assistant agent; the turn is refused before anything is written, and the message names the switch and its reason |
 | `engine_unavailable` | 503 | `stella-serve` is not configured or could not be reached; nothing falls back to an in-process loop (ADR-053 §4) |
 | `assistant_run_not_recorded` | 503 | the ledger could not admit the turn, or a receipt could not be written; the assistant does not answer from a path that was not recorded |
-| `engine_aborted` | 409 | the turn was cancelled before it answered (a per-turn budget stop); nothing is saved as a reply |
+| `engine_aborted` | 409 | the turn was cancelled before it answered by a client disconnect or a per-turn budget stop; nothing is saved as a reply. A stop the person asked for is not an error: see [Stopping a turn](#stopping-a-turn) |
 | `insufficient_credits`, `billing_suspended`, `assistant_spend_cap` | 402 | the platform-funded turn credit gate refused the turn |
 
 On the SSE route a failure after the turn is prepared arrives as an `error` event carrying the code (or the handler refusal's reason), followed by `event: done` with `[DONE]`.
