@@ -87,14 +87,17 @@ vi.mock("../plugin-type", async (importOriginal) => ({
 // The belt reads the active emergency denies once per turn (R4, #3370). The
 // fake answers from the fixture's kill switches, and the tenant seam hands it
 // a stand-in transaction because nothing else on this path reads Postgres.
+// The org-wide seam is the same function (ADR-086), so a handler's role gate
+// that reads through withOrgDb gets the stand-in too.
 vi.mock("@oxagen/iam", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/iam")>()),
   readActiveEmergencyDenies,
 }));
-vi.mock("@oxagen/database", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@oxagen/database")>()),
-  withTenantDb: async (fn: (tx: unknown) => unknown) => fn({}),
-}));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  const withTenantDb = async (fn: (tx: unknown) => unknown) => fn({});
+  return { ...real, withTenantDb, withOrgDb: withTenantDb };
+});
 vi.mock("@oxagen/plugins", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/plugins")>()),
   listEntitledCapabilityPluginIds: async () => new Set<string>(),
