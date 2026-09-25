@@ -1893,6 +1893,18 @@ export function buildCompactSealedAttemptsSql(): SQL {
 }
 
 /**
+ * Orders two frames by `run_seq`, which the driver returns as a string. Equal
+ * keys compare as 0. Frames of different runs can share a `run_seq`, and a
+ * comparator that never returns 0 leaves their order to the engine.
+ */
+function byRunSeq(a: { runSeq: string }, b: { runSeq: string }): number {
+  const left = BigInt(a.runSeq);
+  const right = BigInt(b.runSeq);
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
+/**
  * A compacted attempt's frames past `afterRunSeq`, read back from its
  * segment. A line the segment holds that is not a frame of ours fails the
  * read: a segment is the same bytes the seal wrote, and one that does not
@@ -2751,9 +2763,7 @@ export function createPostgresRunStore(
         restored.push(...framesFromSegment(seal, bytes, afterRunSeq));
         if (restored.length >= limit) break;
       }
-      return [...restored, ...hot]
-        .sort((a, b) => (BigInt(a.runSeq) < BigInt(b.runSeq) ? -1 : 1))
-        .slice(0, limit);
+      return [...restored, ...hot].sort(byRunSeq).slice(0, limit);
     },
 
     async readToolCallsForRuns(runPublicIds) {
@@ -2802,7 +2812,7 @@ export function createPostgresRunStore(
       }
       // Compacted attempts sealed before any attempt still in the hot table,
       // so sorting on `run_seq` puts each run's calls in the order recorded.
-      frames.sort((a, b) => (BigInt(a.runSeq) < BigInt(b.runSeq) ? -1 : 1));
+      frames.sort(byRunSeq);
       for (const frame of frames) {
         const call = toolCallRecordOf(frame.runSeq, frame.payload);
         if (typeof call === "string") {
