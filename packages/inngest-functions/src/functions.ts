@@ -1,4 +1,5 @@
 import { contextLabelsBackfill } from "./functions/context.labels-backfill";
+import { steeringSync, steeringSyncSweep } from "./functions/steering.sync";
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
@@ -64,6 +65,8 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
   contextLabelsBackfill,
+  steeringSync,
+  steeringSyncSweep,
   billingDunningSweep,
   billingGauClose,
   billingUsageDelivery,

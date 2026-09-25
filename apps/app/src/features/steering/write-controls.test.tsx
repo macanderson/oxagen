@@ -307,7 +307,7 @@ describe("the sentence for each refusal", () => {
     ],
     [
       { reason: "conflict", code: "merged_outside_oxagen" },
-      "so Oxagen published nothing. Running the checks again cannot fix it.",
+      "Oxagen publishes what the production branch holds",
     ],
     [
       { reason: "conflict", code: "already_merged" },

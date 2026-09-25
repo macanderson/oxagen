@@ -84,6 +84,12 @@ import {
   wizardStep,
   workspaceUrl,
 } from "./commands";
+import {
+  promptVisible,
+  startUpdateWatch,
+  type UpdateOffer,
+  type UpdateWatch,
+} from "./update-watch";
 import { checkForUpdate, describeCheck, installUpdate } from "./updater";
 
 const WRAP_AGENT_URL = "https://docs.oxagen.sh/docs/cli/wrap-an-agent";
@@ -173,6 +179,55 @@ export function App() {
   // machine, so it has its own flag rather than `busy`: holding `busy` froze
   // every control for as long as the feed took to answer.
   const [checking, setChecking] = useState(false);
+  // What the update watch found on its own. The prompt asks, and only the
+  // Install click downloads and relaunches.
+  const [updatePrompt, setUpdatePrompt] = useState<UpdateOffer | null>(null);
+  // The watch reads these between renders: it holds off the feed while an
+  // install runs or a check the person started is out. doCheckUpdate and
+  // doInstallUpdate set and clear them where they start and end, because
+  // this effect runs one commit later, and a background check that resolved
+  // in between would replace the install's caption. The effect keeps them in
+  // step with the state.
+  const updateGateRef = useRef({ installing: false, checking: false });
+  useEffect(() => {
+    updateGateRef.current = { installing: busy === "update", checking };
+  }, [busy, checking]);
+  const watchRef = useRef<UpdateWatch | null>(null);
+  // The watch starts once the running version is known: at launch, then
+  // hourly, and on a focus 15 minutes or more after the last check.
+  const appVersion = state?.app_version ?? null;
+  useEffect(() => {
+    if (appVersion === null) return;
+    const watch = startUpdateWatch({
+      currentVersion: appVersion,
+      check: checkForUpdate,
+      paused: () =>
+        updateGateRef.current.installing || updateGateRef.current.checking,
+      offer: (offer) => {
+        setUpdate({
+          caption: describeCheck({
+            available: true,
+            version: offer.version,
+            currentVersion: offer.currentVersion,
+          }),
+          offered: offer.update,
+        });
+        setUpdatePrompt(offer);
+      },
+      now: Date.now,
+      setInterval: (run, ms) => window.setInterval(run, ms),
+      clearInterval: (id) => window.clearInterval(id),
+      addEventListener: (type, listener) =>
+        window.addEventListener(type, listener),
+      removeEventListener: (type, listener) =>
+        window.removeEventListener(type, listener),
+    });
+    watchRef.current = watch;
+    return () => {
+      watch.stop();
+      watchRef.current = null;
+    };
+  }, [appVersion]);
   const pollRef = useRef<number | null>(null);
   // The last `tacho status` failure shown, so a failure that repeats on
   // every poll is reported once rather than re-raised every 20 s.
@@ -831,10 +886,13 @@ export function App() {
 
   async function doCheckUpdate() {
     if (!state || checking) return;
+    updateGateRef.current.checking = true;
     setChecking(true);
     setUpdate({ caption: "checking…", offered: null });
     try {
       const r = await checkForUpdate(state.app_version);
+      // The masthead now offers this version, so the watch need not.
+      if (r.update) watchRef.current?.handled(r.update.version);
       setUpdate({ caption: describeCheck(r.result), offered: r.update });
     } catch (e) {
       setUpdate({ caption: null, offered: null });
@@ -842,12 +900,15 @@ export function App() {
         `Update check failed: ${e instanceof Error ? e.message : String(e)}`,
       );
     } finally {
+      updateGateRef.current.checking = false;
       setChecking(false);
     }
   }
   async function doInstallUpdate() {
     const offered = update.offered;
     if (!offered) return;
+    updateGateRef.current.installing = true;
+    setUpdatePrompt(null);
     setBusy("update");
     setError(null);
     setNotice(null);
@@ -857,6 +918,10 @@ export function App() {
       const { relaunched } = await installUpdate(offered, (line) =>
         setLog((prev) => [...prev, { text: line, err: false }]),
       );
+      // The version is on disk now. If the relaunch failed, the running
+      // binary is still the old one and the feed still offers this version,
+      // so the watch must not prompt to install it again.
+      watchRef.current?.handled(offered.version);
       if (!relaunched) {
         setUpdate({
           caption: `v${offered.version} installed; quit and reopen Oxagen`,
@@ -865,6 +930,7 @@ export function App() {
         setNotice(
           `Version ${offered.version} is installed. Quit Oxagen and open it again to use it.`,
         );
+        updateGateRef.current.installing = false;
         setBusy(null);
       }
     } catch (e) {
@@ -879,6 +945,7 @@ export function App() {
         }),
         offered,
       });
+      updateGateRef.current.installing = false;
       setBusy(null);
     }
   }
@@ -1952,6 +2019,43 @@ export function App() {
             {notice}
           </div>
         )}
+        {updatePrompt &&
+          promptVisible(
+            updatePrompt,
+            update.offered?.version ?? null,
+            busy === "update",
+          ) && (
+            <section
+              className="panel"
+              aria-label="Update available"
+              role="status"
+            >
+              <p className="eyebrow">Update</p>
+              <p className="headline">
+                Oxagen {updatePrompt.version} is available
+              </p>
+              <p className="sub">
+                You are on {updatePrompt.currentVersion}. Install downloads the
+                new version, checks its signature, and relaunches Oxagen.
+              </p>
+              <div className="row">
+                <button
+                  type="button"
+                  onClick={doInstallUpdate}
+                  disabled={busy !== null || checking}
+                >
+                  Install and relaunch
+                </button>
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => setUpdatePrompt(null)}
+                >
+                  Later
+                </button>
+              </div>
+            </section>
+          )}
         {state === null ? (
           <p className="sub">Reading this machine…</p>
         ) : state.host_error ? (
