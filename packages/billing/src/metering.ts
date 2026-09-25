@@ -193,8 +193,12 @@ export async function assertCanStartTurn(
   // (Stripe/DB hiccup) must never block the turn or surface as an unclassified
   // error; the balance check below is the real gate and will refuse cleanly
   // with InsufficientCreditsError if no credits ended up available.
+  // When no credit was granted, the reload already read the balance, and
+  // that read is reused below instead of a second one (#2976).
+  let balanceRead: bigint | undefined;
   try {
-    await maybeAutoReload(orgId);
+    const reload = await maybeAutoReload(orgId);
+    if (!reload.reloaded) balanceRead = reload.balanceCents;
   } catch (err) {
     logger.error(
       { orgId, err: err instanceof Error ? err.message : String(err) },
@@ -207,7 +211,7 @@ export async function assertCanStartTurn(
   // on; the shortfall is kept as a debt (consumeCredits' carryShortfall), and
   // an org still in debt has nothing left to spend.
   const [lots, owed] = await Promise.all([
-    effectiveBalance(orgId),
+    balanceRead ?? effectiveBalance(orgId),
     owedCredits(orgId),
   ]);
   const balance = lots - owed;
