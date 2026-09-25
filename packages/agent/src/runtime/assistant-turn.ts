@@ -65,7 +65,7 @@ import {
 import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { INTERACTIVE_AGENT_CAPABILITIES } from "@oxagen/oxagen/interactive-agent";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
@@ -124,6 +124,7 @@ export interface AssistantTurnRequest {
   surface: AssistantRunSurface;
   orgSlug: string;
   workspaceSlug: string;
+  /** The conversation to continue: its internal id or its `cnv_` public id. */
   conversationId: string | null;
   content: string;
   pageContext: AssistantPageContext | null;
@@ -164,6 +165,8 @@ export interface AssistantTurnHooks {
 
 export interface AssistantTurnResult {
   conversationId: string;
+  /** `cnv_…`: the same conversation by the id `get_conversation` takes. */
+  conversationPublicId: string;
   userMessageId: string;
   assistantMessageId: string;
   /** `arun_…` */
@@ -332,11 +335,12 @@ async function runPreparedTurn(
     runInTenantScope(scope, fn);
   // The conversation and the person's message, before anything else is
   // spent: a turn that fails after this leaves the question on the record.
-  const { conversationId, userMessageId, history } = await inScope(() =>
-    withTenantDb((tx) =>
-      appendUserMessage(tx, scope, userId, request, p.request.surface),
-    ),
-  );
+  const { conversationId, conversationPublicId, userMessageId, history } =
+    await inScope(() =>
+      withTenantDb((tx) =>
+        appendUserMessage(tx, scope, userId, request, p.request.surface),
+      ),
+    );
   // The person's message names the turn everywhere: `token_usage`, the
   // approval rows' message id (which `resolve_approval` follows back to the
   // person who asked), the memory recall's execution ref.
@@ -605,6 +609,7 @@ async function runPreparedTurn(
       appendAssistantMessage(tx, scope, userId, conversationId, reply, {
         surface: request.surface,
         runId: run.runPublicId,
+        parkedCards: parked,
       }),
     ),
   );
@@ -625,6 +630,7 @@ async function runPreparedTurn(
 
   return {
     conversationId,
+    conversationPublicId,
     userMessageId,
     assistantMessageId,
     runId: run.runPublicId,
@@ -769,36 +775,66 @@ type ChatMessageExecutionStep = NonNullable<
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
 type Scope = { orgId: string; workspaceId: string };
 
+/** A `cnv_` public id; anything else `conversationId` carries is the uuid. */
+const CONVERSATION_PUBLIC_ID = /^cnv_/i;
+
 /**
  * Resolve or open the conversation and append the person's message, then
  * load the prior turns as the transcript, newest last, without the message
  * just written.
+ *
+ * A turn continues only a conversation the person asking may continue: in
+ * this org and workspace, theirs, not deleted and not archived. The rule is
+ * the one `list_conversations`, `rename_conversation` and `get_conversation`
+ * apply, and it is checked before anything is written. Until #4163 the lookup
+ * matched on the tenant alone, so a member who held another member's
+ * conversation id could append a question to it, read its history back as the
+ * model's transcript, and continue a thread its owner had deleted. Each case
+ * answers `ConversationNotFoundError`, which says nothing about whether the
+ * row exists.
+ *
+ * Exported for its own test (`assistant-turn.conversation.test.ts`); the turn
+ * is its only production caller.
  */
-async function appendUserMessage(
+export async function appendUserMessage(
   tx: Tx,
   scope: Scope,
   userId: string,
-  request: AssistantTurnRequest,
+  request: Pick<
+    AssistantTurnRequest,
+    "conversationId" | "content" | "pageContext"
+  >,
   surface: AssistantRunSurface,
 ): Promise<{
   conversationId: string;
+  conversationPublicId: string;
   userMessageId: string;
   history: ModelMessage[];
 }> {
-  let conversationId = request.conversationId;
-  if (conversationId) {
+  let conversation: { id: string; publicId: string };
+  const named = request.conversationId;
+  if (named) {
     const [existing] = await tx
-      .select({ id: schema.conversations.id })
+      .select({
+        id: schema.conversations.id,
+        publicId: schema.conversations.publicId,
+      })
       .from(schema.conversations)
       .where(
         and(
-          eq(schema.conversations.id, conversationId),
+          CONVERSATION_PUBLIC_ID.test(named)
+            ? eq(schema.conversations.publicId, named)
+            : eq(schema.conversations.id, named),
           eq(schema.conversations.orgId, scope.orgId),
           eq(schema.conversations.workspaceId, scope.workspaceId),
+          eq(schema.conversations.userId, userId),
+          isNull(schema.conversations.deletedAt),
+          isNull(schema.conversations.archivedAt),
         ),
       )
       .limit(1);
-    if (!existing) throw new ConversationNotFoundError(conversationId);
+    if (!existing) throw new ConversationNotFoundError(named);
+    conversation = existing;
   } else {
     const [created] = await tx
       .insert(schema.conversations)
@@ -810,10 +846,14 @@ async function appendUserMessage(
         createdById: userId,
         updatedById: userId,
       })
-      .returning({ id: schema.conversations.id });
+      .returning({
+        id: schema.conversations.id,
+        publicId: schema.conversations.publicId,
+      });
     if (!created) throw new Error("conversation insert returned no row");
-    conversationId = created.id;
+    conversation = created;
   }
+  const conversationId = conversation.id;
 
   const rows = await tx
     .select({ role: schema.messages.role, content: schema.messages.content })
@@ -852,17 +892,33 @@ async function appendUserMessage(
     })
     .returning({ id: schema.messages.id });
   if (!userMessage) throw new Error("message insert returned no row");
-  return { conversationId, userMessageId: userMessage.id, history };
+  return {
+    conversationId,
+    conversationPublicId: conversation.publicId,
+    userMessageId: userMessage.id,
+    history,
+  };
 }
 
-async function appendAssistantMessage(
+/**
+ * Persist the reply with the run it was recorded as and, when the turn parked
+ * governed writes, the parked cards, so a thread read back after a reload
+ * (`get_conversation`) shows the notice the turn returned. Then move the
+ * conversation's active leaf to it.
+ */
+export async function appendAssistantMessage(
   tx: Tx,
   scope: Scope,
   userId: string,
   conversationId: string,
   reply: string,
-  metadata: { surface: AssistantRunSurface; runId: string },
+  metadata: {
+    surface: AssistantRunSurface;
+    runId: string;
+    parkedCards: readonly AssistantParkedCard[];
+  },
 ): Promise<string> {
+  const { parkedCards, ...recorded } = metadata;
   const [assistantMessage] = await tx
     .insert(schema.messages)
     .values({
@@ -871,7 +927,11 @@ async function appendAssistantMessage(
       role: "assistant",
       content: reply,
       contentBlocks: [],
-      metadata: { status: "complete", ...metadata },
+      metadata: {
+        status: "complete",
+        ...recorded,
+        ...(parkedCards.length > 0 ? { parkedCards } : {}),
+      },
       createdById: userId,
       updatedById: userId,
     })
@@ -884,7 +944,10 @@ async function appendAssistantMessage(
   return assistantMessage.id;
 }
 
-/** The conversation the caller named is not in this workspace. */
+/**
+ * The conversation the caller named is not one this person may continue in
+ * this workspace: missing, another member's, deleted or archived.
+ */
 export class ConversationNotFoundError extends Error {
   override readonly name = "ConversationNotFoundError";
   readonly code = "not_found" as const;

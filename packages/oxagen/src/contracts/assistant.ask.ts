@@ -32,6 +32,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { CHAT_CONTENT_MAX_CHARS } from "./chat.message.send";
+import { conversationPublicIdSchema } from "./conversation.list";
 
 /** Where the person was when they asked: the route key and the tenant slugs. */
 export const assistantPageContextSchema = z
@@ -81,8 +82,16 @@ export const assistantAsk = registerCapability({
   },
   input: z
     .object({
-      /** Null opens a new conversation. */
-      conversationId: z.string().uuid().nullable().default(null),
+      /**
+       * The conversation to continue, by its `cnv_` public id (what
+       * `list_conversations` and `get_conversation` return, and what
+       * `conversationPublicId` below carries) or by the internal id this
+       * output has always carried. Null opens a new conversation.
+       */
+      conversationId: z
+        .union([z.string().uuid(), conversationPublicIdSchema])
+        .nullable()
+        .default(null),
       /** 1 to 32 KiB: the cap every chat ingress shares. */
       content: z.string().min(1).max(CHAT_CONTENT_MAX_CHARS),
       /** Null when the caller has no page (the API, MCP). */
@@ -92,6 +101,11 @@ export const assistantAsk = registerCapability({
   output: z
     .object({
       conversationId: z.string().uuid(),
+      /**
+       * `cnv_…`: the same conversation by the public id every conversation
+       * capability takes. Read it back with `get_conversation`.
+       */
+      conversationPublicId: conversationPublicIdSchema,
       userMessageId: z.string().uuid(),
       assistantMessageId: z.string().uuid(),
       /** `arun_…`: the run this turn was recorded as; `get_run` opens it. */
