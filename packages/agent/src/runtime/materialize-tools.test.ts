@@ -578,6 +578,7 @@ describe("materializeTools", () => {
   });
 
   it("parks the call under approvalMode park: the request is created, the event fires, nothing waits and the handler never runs", async () => {
+    mocks.insertToolInvocation.mockClear();
     mocks.createApprovalRequest.mockClear();
     mocks.createApprovalRequest.mockResolvedValueOnce({
       approvalId: "appr_x",
@@ -623,6 +624,17 @@ describe("materializeTools", () => {
     expect(mocks.waitForApproval).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
     expect(events).toHaveLength(1);
+    // `tool_invocations` records the call as parked, not as a failure with
+    // the park's class, so failure rates leave it out.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledOnce();
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability_name: FIXTURE[2]!.name,
+        status: "parked",
+        error_class: null,
+        required_approval: 1,
+      }),
+    );
   });
 
   it("attaches a parked approval to the run set on runIdRef AFTER materialization, not the run captured at materialize time (finding 9, negative)", async () => {
@@ -714,6 +726,7 @@ describe("materializeTools", () => {
   });
 
   it("denied approval throws and the handler never runs", async () => {
+    mocks.insertToolInvocation.mockClear();
     mocks.createApprovalRequest.mockClear();
     mocks.waitForApproval.mockClear();
     mocks.waitForApproval.mockResolvedValueOnce({
@@ -743,6 +756,10 @@ describe("materializeTools", () => {
       ).execute({ y: 1 }),
     ).rejects.toThrow(/approval denied/);
     expect(invoke).not.toHaveBeenCalled();
+    // A person's no is still a failure in `tool_invocations` (negative).
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", error_class: "Error" }),
+    );
   });
 
   it("form.fill (non-agent.* name) dispatches through kernel invoke without 'No handler registered'", async () => {
@@ -1059,6 +1076,11 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     expect(onApprovalRequired).toHaveBeenCalledOnce();
     expect(fakeExecute).not.toHaveBeenCalled();
     expect(emitExternalCapabilityOutcome).not.toHaveBeenCalled();
+    // One `tool_invocations` row, saying parked rather than failed.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledOnce();
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "parked", error_class: null }),
+    );
   });
 
   it("refuses IAM revoked during an external approval or consent wait", async () => {

@@ -72,6 +72,24 @@ function byteSize(v: unknown): number {
   }
 }
 
+/**
+ * How a call that threw ends in `tool_invocations`. A call parked for a
+ * person's approval is `parked` with no error class: it did not fail, and it
+ * used to land as `failed` / `ApprovalPendingError`, which counted every
+ * parked write as a tool failure. Anything else is `failed` with its class.
+ */
+function thrownOutcome(
+  err: unknown,
+  fallbackClass: string,
+): Pick<ToolInvocationRow, "status" | "error_class"> {
+  if (err instanceof ApprovalPendingError)
+    return { status: "parked", error_class: null };
+  return {
+    status: "failed",
+    error_class: err instanceof Error ? err.name : fallbackClass,
+  };
+}
+
 // Central factory for tool invocation telemetry rows.
 // Keeps the 15+ shared fields in one place and makes varying fields explicit,
 // preventing silent desync across the five call sites in materializeTools.
@@ -813,6 +831,9 @@ export async function materializeTools(
             }
             return result;
           } catch (err) {
+            // The approval gate above throws its park inside this try, so a
+            // parked call ends here too, and is recorded as parked.
+            const ended = thrownOutcome(err, "UnknownError");
             try {
               await insertToolInvocation(
                 buildInvocationPayload(
@@ -825,11 +846,10 @@ export async function materializeTools(
                     inputBytes,
                   },
                   {
-                    status: "failed",
+                    status: ended.status,
                     outputBytes: 0,
                     latencyMs: Date.now() - startedAt,
-                    errorClass:
-                      err instanceof Error ? err.name : "UnknownError",
+                    errorClass: ended.error_class,
                   },
                 ),
               );
@@ -1195,6 +1215,8 @@ export async function materializeTools(
                 try {
                   await admitExternalDecision(options);
                 } catch (error) {
+                  // A rule's approval parks here under `approvalMode: "park"`.
+                  const ended = thrownOutcome(error, "ExternalDecisionRefused");
                   try {
                     await insertToolInvocation(
                       buildInvocationPayload(
@@ -1206,13 +1228,10 @@ export async function materializeTools(
                           inputBytes: byteSize(input),
                         },
                         {
-                          status: "failed",
+                          status: ended.status,
                           outputBytes: 0,
                           latencyMs: Date.now() - startedAt,
-                          errorClass:
-                            error instanceof Error
-                              ? error.name
-                              : "ExternalDecisionRefused",
+                          errorClass: ended.error_class,
                         },
                       ),
                     );
