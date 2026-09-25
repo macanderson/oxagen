@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { assertCleanTree, releaseFilesToStage } from "./release";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  assertCleanTree,
+  completeViaGateway,
+  GATEWAY_TIMEOUT_MS,
+  releaseFilesToStage,
+} from "./release";
 
 const ROOT = "/repo";
 
@@ -66,5 +71,58 @@ describe("releaseFilesToStage", () => {
     expect(
       releaseFilesToStage(ROOT, ["package.json", `${ROOT}/package.json`]),
     ).toEqual(["package.json"]);
+  });
+});
+
+describe("completeViaGateway", () => {
+  const messages = [{ role: "user" as const, content: "notes" }];
+  let savedKey: string | undefined;
+
+  beforeEach(() => {
+    savedKey = process.env.AI_GATEWAY_API_KEY;
+    process.env.AI_GATEWAY_API_KEY = "test-key";
+  });
+
+  afterEach(() => {
+    if (savedKey === undefined) delete process.env.AI_GATEWAY_API_KEY;
+    else process.env.AI_GATEWAY_API_KEY = savedKey;
+    vi.unstubAllGlobals();
+  });
+
+  /** A gateway that accepts the request and never answers until aborted. */
+  function stubHungGateway() {
+    const fetchMock = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(init.signal?.reason),
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("aborts a hung gateway call with a TimeoutError", async () => {
+    stubHungGateway();
+    await expect(completeViaGateway(messages, 20)).rejects.toMatchObject({
+      name: "TimeoutError",
+    });
+  });
+
+  it("sends a timeout signal on the default call", () => {
+    const fetchMock = stubHungGateway();
+    void completeViaGateway(messages).catch(() => {});
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    expect(init?.signal?.aborted).toBe(false);
+    expect(GATEWAY_TIMEOUT_MS).toBeGreaterThan(0);
+  });
+
+  it("returns null without calling the gateway when no key is set", async () => {
+    delete process.env.AI_GATEWAY_API_KEY;
+    const fetchMock = stubHungGateway();
+    await expect(completeViaGateway(messages)).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

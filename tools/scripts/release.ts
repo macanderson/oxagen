@@ -96,6 +96,12 @@ import {
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const NOTES_MAX_TOKENS = 8192; // headroom so large releases don't truncate mid-section
+/**
+ * How long one gateway call may take before it is aborted. A hung gateway
+ * otherwise holds the release open indefinitely; the abort throws, and
+ * generateNotes falls back to commit-log notes.
+ */
+export const GATEWAY_TIMEOUT_MS = 120_000;
 
 type Bump = "patch" | "minor" | "major";
 
@@ -249,9 +255,12 @@ function collectHistory(
 
 /** Vercel AI Gateway (AI_GATEWAY_API_KEY): the platform's single AI path. Hits
  * an Anthropic Claude model (OXAGEN_LLM_BALANCED) via the gateway's
- * OpenAI-compatible endpoint. Returns null when no gateway key is configured. */
-async function completeViaGateway(
+ * OpenAI-compatible endpoint. Returns null when no gateway key is configured.
+ * The request and its body read are aborted after `timeoutMs`, which rejects
+ * with a `TimeoutError`. */
+export async function completeViaGateway(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  timeoutMs: number = GATEWAY_TIMEOUT_MS,
 ): Promise<string | null> {
   const key = deQuote(env.AI_GATEWAY_API_KEY);
   if (!key) return null;
@@ -268,6 +277,7 @@ async function completeViaGateway(
       temperature: 0.2,
       messages,
     }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`gateway ${res.status} ${await res.text()}`);
   const json = (await res.json()) as {
