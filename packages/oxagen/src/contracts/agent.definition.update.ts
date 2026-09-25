@@ -20,6 +20,7 @@ export const agentDefinitionUpdate = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "mutation" },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
