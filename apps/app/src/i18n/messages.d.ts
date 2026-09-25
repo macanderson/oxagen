@@ -7811,6 +7811,32 @@ type Messages = {
       permission: string;
       unnamed: string;
     };
+    choices: {
+      tool: {
+        context: string;
+        everyVersion: string;
+        oneVersion: string;
+        pinnedLabel: string;
+        source: {
+          builtin: string;
+          custom: string;
+          mcp: string;
+          foundry: string;
+        };
+        effect: {
+          read: string;
+          write: string;
+          irreversible: string;
+          undeclared: string;
+        };
+        risk: {
+          low: string;
+          medium: string;
+          high: string;
+          critical: string;
+        };
+      };
+    };
   };
   skills: {
     lede: string;
