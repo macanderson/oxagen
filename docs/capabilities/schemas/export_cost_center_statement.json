@@ -104,7 +104,12 @@
               "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "maxItems": 100
+            },
+            "runIdsOmitted": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
@@ -112,7 +117,8 @@
             "runs",
             "unpricedRuns",
             "cost",
-            "runIds"
+            "runIds",
+            "runIdsOmitted"
           ],
           "additionalProperties": false
         }

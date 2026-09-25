@@ -9,7 +9,8 @@
 // revokes carries the same member `request_mandate`, `grant_mandate` and
 // `update_mandate_limits` now refuse to widen. Nothing is
 // deleted: runs keep the agent's key and principal. Retiring a retired
-// agent answers the recorded retirement without a write.
+// agent answers the recorded retirement, and revokes only the mandates it
+// still holds (#3446).
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
@@ -63,6 +64,23 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
       .for("update");
     const now = new Date();
     if ((locked?.status ?? agent.status) === "archived") {
+      // An agent archived before retirement revoked mandates (#3437), or
+      // archived by a direct write, can still hold active or draft mandates
+      // against its principal. Revoke those here, and leave the agent and
+      // principal rows as they are (#3446). A clean retired agent holds none,
+      // so a repeat retirement still writes nothing.
+      let mandates = 0;
+      if (agent.principalId) {
+        const revoked = await revokeAgentMandates(tx, {
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          principalId: agent.principalId,
+          userId,
+          reason,
+          now,
+        });
+        mandates = revoked.length;
+      }
       // The retirement below is the last identity write an archived agent
       // takes, so its `updated_at` is the instant recorded then. Reads it
       // from the row just locked, not the pre-lock `agent` snapshot, which
@@ -72,7 +90,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
         already: true,
         credentials: 0,
         hosts: 0,
-        mandates: 0,
+        mandates,
         retiredAt: locked?.validUntil ?? locked?.updatedAt ?? agent.updatedAt,
       };
     }
@@ -188,19 +206,6 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
         requestId: ctx.requestId ?? null,
       });
     }
-    if (result.mandates > 0) {
-      emitSecurityEvent({
-        eventType: "mandate.revoked",
-        actorUserId: userId,
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        capability: agentRetire.name,
-        outcome: "success",
-        ip: null,
-        userAgent: null,
-        requestId: ctx.requestId ?? null,
-      });
-    }
     logger.info(
       {
         orgId: ctx.orgId,
@@ -211,6 +216,21 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
       },
       "agent.retire: identity retired",
     );
+  }
+  // Emitted outside the `already` branch: a repeat retirement of an agent
+  // archived with live mandates still revokes them (#3446).
+  if (result.mandates > 0) {
+    emitSecurityEvent({
+      eventType: "mandate.revoked",
+      actorUserId: userId,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      capability: agentRetire.name,
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: ctx.requestId ?? null,
+    });
   }
 
   return {

@@ -7,6 +7,10 @@
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import type { AttemptEventReadRecord, AttemptRecord } from "@oxagen/run-ledger";
+import {
+  RunNotWritableError,
+  RunStoreStateError,
+} from "@oxagen/run-ledger/run-errors";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
@@ -278,6 +282,37 @@ describe("fork_run", () => {
     await expect(
       open.fork({ runId: LEDGER_ID, fromSeq: "1" }, ctx()),
     ).rejects.toSatisfy(conflict("run_not_sealed"));
+  });
+
+  it("answers conflict when a cancel or a pause wins the run lock (negative)", async () => {
+    for (const reason of ["cancelled", "paused"] as const) {
+      const { fork, createAttempt } = harness({});
+      createAttempt.mockRejectedValueOnce(
+        new RunNotWritableError(RUN_UUID, reason, `run ${RUN_UUID} ${reason}`),
+      );
+      await expect(
+        fork({ runId: LEDGER_ID, fromSeq: "2" }, ctx()),
+      ).rejects.toSatisfy(conflict("run_not_writable"));
+    }
+  });
+
+  it("answers conflict when the run holds its pinned max_attempts (negative)", async () => {
+    const { fork, createAttempt } = harness({});
+    createAttempt.mockRejectedValueOnce(
+      new RunNotWritableError(RUN_UUID, "attempts_exhausted", "max 3"),
+    );
+    await expect(
+      fork({ runId: LEDGER_ID, fromSeq: "2" }, ctx()),
+    ).rejects.toSatisfy(conflict("run_attempts_exhausted"));
+  });
+
+  it("rethrows a store fault unchanged, so it stays a 500", async () => {
+    const { fork, createAttempt } = harness({});
+    const fault = new RunStoreStateError("attempt insert returned no row");
+    createAttempt.mockRejectedValueOnce(fault);
+    await expect(fork({ runId: LEDGER_ID, fromSeq: "2" }, ctx())).rejects.toBe(
+      fault,
+    );
   });
 
   it("is not_found for a run outside the workspace (negative)", async () => {

@@ -25,7 +25,22 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 |---|---|---|---|
 | `conversationId` | uuid or null | no | null opens a new conversation; an id outside the workspace is `not_found` |
 | `content` | string | yes | 1 to 32 KiB, the cap every chat ingress shares |
-| `pageContext` | object or null | no | `{ route, orgSlug, workspaceSlug, entityId }` — where the person was when they asked; null for a caller with no page |
+| `pageContext` | object or null | no | `{ route, orgSlug, workspaceSlug, entityId, entityLabel }`: where the person was when they asked, and the record on screen. Null for a caller with no page. See [Page context](#page-context) |
+
+### Page context
+
+| Field | Type | Required | Constraint |
+|---|---|---|---|
+| `route` | string | yes | 1 to 64 characters, the app's route key (`fleet`, `runs`, `spend`) |
+| `orgSlug`, `workspaceSlug` | string | yes | 1 to 128 characters each |
+| `entityId` | string or null | no | 1 to 256 characters, the id of the record on screen; defaults to null |
+| `entityLabel` | string or null | no | 1 to 256 characters, the record's name as the page drew it; defaults to null, so a caller that sends no label still validates |
+
+The app's pages declare their record with `<PageRecord>`: the Run page sends the run's name (else its task reference), the agent page the agent's registered name, the Mandate page the mandate's purpose, and the Runtimes page the host's name. The flyout sends a label only beside the id it names, and cuts one past 256 characters to 255 and an ellipsis, so a long harness title or mandate purpose never refuses the question.
+
+The cap holds these sources whole: a hostname (253), a steering record's title (200), an agent's name (128), and a run's generated name or derived title (80). A mandate's purpose (2,000), a harness's own session title, and a ledger run's task reference can run longer. The contract refuses a label past 256 from any other caller rather than rewriting it.
+
+A label is untrusted text: an agent, a model, or a person wrote it. The turn gives the model the page context as one line of system-injected context. It prints the id and the label on that line with control, line-separator, and format characters removed (the format characters include the bidirectional overrides and the Unicode tag characters), cuts the label to the cap again, and quotes it as a JSON string, so a quote inside it cannot close it. It says the label is the record's name and not an instruction. A label with no `entityId` is ignored. The line is built by `pageContextMessage` (`packages/agent/src/runtime/page-context.ts`).
 
 ## Output
 

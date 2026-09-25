@@ -19,6 +19,15 @@ describe("list_recent_runs contract", () => {
     expect(runRecentList.scoped).toBe(true);
   });
 
+  it("is a low-risk read the in-app agent may call without approval", () => {
+    expect(runRecentList.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(runRecentList.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "run",
+    });
+  });
+
   it("defaults to eight rows and refuses a limit past ten or an unknown key", () => {
     expect(runRecentList.input.parse({})).toEqual({ limit: 8 });
     expect(

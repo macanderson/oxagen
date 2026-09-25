@@ -897,6 +897,7 @@ type Messages = {
         };
       };
       runtime: {
+        needsRole: string;
         empty: {
           title: string;
           body: string;
@@ -1734,6 +1735,7 @@ type Messages = {
       suspended: string;
       rateLimited: string;
       alreadyRegistered: string;
+      passwordTooWeak: string;
       codeWrong: string;
       linkExpired: string;
       oauthCancelled: string;
@@ -4040,6 +4042,8 @@ type Messages = {
       actions: string;
       resend: string;
       revoke: string;
+      resendFor: string;
+      revokeFor: string;
       working: string;
       resent: string;
       revoked: string;
@@ -5922,13 +5926,11 @@ type Messages = {
       firstPrompt: string;
       laterPrompt: string;
       turn: string;
-      showRest: string;
+      showFull: string;
       showLess: string;
       thinkingLines: string;
       showCall: string;
       hideCall: string;
-      moreLines: string;
-      collapse: string;
       lines: string;
       running: string;
       noResult: string;
@@ -5947,8 +5949,8 @@ type Messages = {
       recallItems: string;
       recallTokens: string;
       recallCut: string;
-      recallMore: string;
-      recallMoreTokens: string;
+      showRecall: string;
+      hideRecall: string;
       openContext: string;
       stopped: string;
       sealedAt: string;
@@ -6055,6 +6057,11 @@ type Messages = {
         previous: string;
         next: string;
         last: string;
+        play: string;
+        pause: string;
+        replay: string;
+        speed: string;
+        speedLabel: string;
         scrub: string;
         scrubValue: string;
         position: string;
@@ -7452,7 +7459,6 @@ type Messages = {
         billing: string;
         audit: string;
       };
-      assistant: string;
       assistantSub: string;
       search: string;
       searchSub: string;
@@ -7578,6 +7584,38 @@ type Messages = {
       intro: {
         title: string;
         body: string;
+      };
+      suggestions: {
+        title: string;
+        fleet: {
+          waiting: string;
+          stopped: string;
+          spend: string;
+        };
+        run: {
+          stopped: string;
+          cost: string;
+          denied: string;
+        };
+        spend: {
+          drivers: string;
+          operators: string;
+          budget: string;
+        };
+        mandate: {
+          allows: string;
+          left: string;
+          expires: string;
+        };
+        agents: {
+          cost: string;
+          waiting: string;
+        };
+        agent: {
+          runs: string;
+          cost: string;
+          mandate: string;
+        };
       };
       composer: {
         label: string;
@@ -7799,6 +7837,7 @@ type Messages = {
         missingVersion: string;
         catalogInvalid: string;
         catalogTooLarge: string;
+        catalogUnsafe: string;
       };
     };
   };
@@ -9079,6 +9118,7 @@ type Messages = {
         gitlabCredentialRejected: string;
         repositoryHostChanged: string;
         mergeTimeUnknown: string;
+        mergedOutsideOxagen: string;
         refused: string;
         invalid: string;
         pendingApproval: string;

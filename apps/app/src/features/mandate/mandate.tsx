@@ -29,6 +29,7 @@ import type { OrgRole } from "@/data/contracts/common";
 import type { MandateDetail, MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
+import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { eyebrow, linkText, mono, panel } from "@/ui/control-styles";
@@ -344,7 +345,18 @@ export async function Mandate({
       />
     );
   }
-  return <Loaded detail={read.value} at={at} view={view} readAt={readAt} />;
+  // The mandate the assistant is asked about. A mandate has no name, so its
+  // label is the purpose the header prints under the id.
+  return (
+    <>
+      <PageRecord
+        route="mandates"
+        id={mandate}
+        label={read.value.mandate.purpose}
+      />
+      <Loaded detail={read.value} at={at} view={view} readAt={readAt} />
+    </>
+  );
 }
 
 /**

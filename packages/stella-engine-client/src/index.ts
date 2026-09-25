@@ -9,8 +9,8 @@
  * and the SSE decoder between them (`./sse`).
  *
  * It depends on `fetch` and nothing else, so it stays trivial to keep in step
- * with the server: `STELLA_SERVE_PINNED_VERSION` names the release the wire
- * types were copied from and the smoke test drove.
+ * with the server. `STELLA_SERVE_PINNED_VERSION` names the release Oxagen
+ * deploys, records on every assistant run, and holds this client to.
  */
 
 export {

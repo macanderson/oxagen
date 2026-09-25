@@ -214,6 +214,8 @@ export function prBody(row: ProposalRow): string {
     "",
     "Oxagen runs six checks on this pull request as check runs: schema, lineage uniqueness, record_hash recomputation, secret and PII scan, conflict against active records, constraint_effect ∈ {require, forbid}. Merge is the publication; Oxagen merges from the operator console once every check passes and the reviewer the governance mode names approves.",
     "",
+    "Change the record in Oxagen, not on this pull request. An edit here, including an accepted review suggestion, leaves `record_hash` stamped over the old words, fails the checks, and a merge made outside Oxagen publishes nothing to the registry.",
+    "",
     `${proposalLine(row.publicId)} · raised by ${row.source}` +
       (row.stampedRecordId ? ` · record_id \`${row.stampedRecordId}\`` : "") +
       (row.recordHash ? ` · record_hash \`${row.recordHash}\`` : ""),
