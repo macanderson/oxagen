@@ -57,6 +57,7 @@ const CTX = {
 
 const RESULT = {
   conversationId: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+  conversationPublicId: "cnv_01k9x2tq",
   userMessageId: "0192d4a8-7c1e-7a00-8000-0000000000d1",
   assistantMessageId: "0192d4a8-7c1e-7a00-8000-0000000000d2",
   runId: "arun_0123456789abcdef012345",

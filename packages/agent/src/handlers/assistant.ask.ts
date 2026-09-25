@@ -73,6 +73,7 @@ export async function assistantAskHandler(
     );
     return {
       conversationId: result.conversationId,
+      conversationPublicId: result.conversationPublicId,
       userMessageId: result.userMessageId,
       assistantMessageId: result.assistantMessageId,
       runId: result.runId,

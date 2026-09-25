@@ -398,7 +398,7 @@ export async function withRepeatableReadTenantDb<T>(
 
 /**
  * Run DB work in a transaction with RLS DELIBERATELY BYPASSED
- * (app.rls_bypass='on') — the explicit, audited, greppable escape hatch for the
+ * (app.rls_bypass='on'). This is the explicit, greppable escape hatch for the
  * narrow set of operations that legitimately cross (or precede) a tenant scope:
  *
  *  - identity resolution that must read tenant-policied tables BEFORE a scope
@@ -408,16 +408,24 @@ export async function withRepeatableReadTenantDb<T>(
  *  - bootstrap that creates a tenant's own root rows (org/workspace creation);
  *  - the security-event audit write, which must succeed even on a no-scope deny.
  *
- * This is NOT a shortcut for normal handlers — those use withTenantDb so RLS
- * stays load-bearing. Every use should be obvious from the callsite and the
- * surrounding comment. Unlike withTenantDb it requires NO active ALS scope.
+ * This is NOT a shortcut for normal handlers. Those use withTenantDb so RLS
+ * stays load-bearing. Unlike withTenantDb it requires NO active ALS scope.
+ *
+ * Nothing audits a call at runtime. The fence is a source check: every call
+ * site carries a nearby `// tenancy:` comment that names the scope fence (the
+ * orgId, userId, or workspaceId filter, the verified membership, the signed
+ * webhook) or the global/system purpose. `pnpm check:system-db`
+ * (tools/scripts/check-system-db-justifications.ts, part of check:contracts)
+ * fails a new call without one, and its baseline of older exceptions may only
+ * shrink. The check reads the comment's syntax only. Review must confirm that
+ * the query actually applies the fence the comment names.
  */
 export async function withSystemDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   // Count every withSystemDb call that runs with no active tenant scope. During
   // the seeding window (TENANT_RLS_ENFORCEMENT_ENABLED off) this counter is the
   // operator signal: when db.query.unscoped reads zero it is safe to flip
-  // enforcement on. withSystemDb is the intentional, audited RLS bypass — these
-  // calls still must be counted or the gate is permanently unreachable.
+  // enforcement on. withSystemDb is the intentional RLS bypass, and these calls
+  // still must be counted or the gate is permanently unreachable.
   recordIfUnscoped("withSystemDb");
   // ADR-042: withSystemDb ALWAYS uses the SHARED plane, deliberately, and never
   // consults resolveDataPlane. Three reasons, each sufficient on its own:
@@ -469,7 +477,7 @@ export async function withOrgPlaneSystemDb<T>(
   orgId: string,
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T> {
-  // Counted like `withSystemDb`: this is an audited RLS bypass, and leaving it
+  // Counted like `withSystemDb`: this is a deliberate RLS bypass, and leaving it
   // out of the meter would make the enforcement gate unreachable.
   recordIfUnscoped("withOrgPlaneSystemDb");
   const { database, planeKey } = await tenantPlaneDb(orgId);

@@ -35,6 +35,10 @@ describe("NodeLabels (@oxagen/ontology)", () => {
     }
   });
 
+  it("omits the unused message-based Fanout label", () => {
+    expect(NodeLabels).not.toHaveProperty("Fanout");
+  });
+
   it("has no duplicate values", () => {
     const values = Object.values(NodeLabels);
     const unique = new Set(values);
@@ -61,7 +65,6 @@ describe("EdgeTypes (@oxagen/ontology)", () => {
       "CONTAINS",
       "INVOKED",
       "LOADED_SKILL",
-      "BRANCHED_TO_SUBAGENT",
       "APPROVED_BY",
       "DISPATCHED",
       "SPAWNED_FANOUT",
@@ -71,6 +74,11 @@ describe("EdgeTypes (@oxagen/ontology)", () => {
       expect(EdgeTypes).toHaveProperty(edge);
       expect(EdgeTypes[edge]).toBe(edge);
     }
+  });
+
+  it("omits the unused message-based fanout edge types", () => {
+    expect(EdgeTypes).not.toHaveProperty("BRANCHED_TO_SUBAGENT");
+    expect(EdgeTypes).not.toHaveProperty("ORIGINATED_FROM");
   });
 
   it("has no duplicate values", () => {

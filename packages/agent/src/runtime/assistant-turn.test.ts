@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   waitForApproval: vi.fn(),
   assertOrgRole: vi.fn(),
   promptConfig: vi.fn(),
+  generateObjectFor: vi.fn(),
   publishedSteering: vi.fn(),
   steeringManifest: vi.fn(),
   // The catalog, as `supportsReasoning` reads it: keyed by gateway ids, so a
@@ -67,6 +68,23 @@ vi.mock("@oxagen/ai", () => ({
     };
   },
   supportsReasoning: (id: string) => mocks.supportsReasoning(id),
+  // The summariser's seams (history-summary.ts): the model is built from the
+  // funding source the turn resolved, exactly as `selectModel` builds it.
+  CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
+  generateObjectFor: mocks.generateObjectFor,
+  selectModelFromFunding: (
+    _orgId: string,
+    funding: { fundedBy: string; modelKey?: Selector["credential"] },
+    s: Selector,
+  ) => ({
+    model: {
+      modelId: wireIdFor({
+        ...s,
+        ...(funding.modelKey ? { credential: funding.modelKey } : {}),
+      }),
+    },
+    fundedBy: funding.fundedBy,
+  }),
 }));
 
 interface Selector {
@@ -215,7 +233,8 @@ const ASSISTANT = {
 
 interface World {
   conversationExists: boolean;
-  history: Array<{ role: string; content: string }>;
+  history: Array<{ id?: string; role: string; content: string }>;
+  historySummary?: unknown;
   apiKeyCreator: string | null;
 }
 interface Captured {
@@ -227,16 +246,30 @@ function makeTx(world: World, captured: Captured) {
   return {
     select: () => ({
       from: (table: unknown) => {
+        let offset = 0;
         const chain = {
           where: () => chain,
           orderBy: () => chain,
-          limit: () => {
+          offset: (n: number) => {
+            offset = n;
+            return chain;
+          },
+          limit: (n: number) => {
             if (table === schema.conversations)
               return Promise.resolve(
-                world.conversationExists ? [{ id: CONVERSATION }] : [],
+                world.conversationExists
+                  ? [
+                      {
+                        id: CONVERSATION,
+                        historySummary: world.historySummary ?? null,
+                      },
+                    ]
+                  : [],
               );
             if (table === schema.messages)
-              return Promise.resolve([...world.history].reverse());
+              return Promise.resolve(
+                [...world.history].reverse().slice(offset, offset + n),
+              );
             if (table === schema.organizations)
               return Promise.resolve([{ name: "Acme" }]);
             if (table === schema.workspaces)
@@ -357,6 +390,8 @@ const GOVERNED_TOOLS = {
 
 /** Every outcome the run recorder was sealed with, per test. */
 let sealCalls: unknown[] = [];
+/** Every history-summary frame the run recorder was given, per test. */
+let summaryFrames: unknown[] = [];
 /** Every steering manifest frame the run recorder was given, per test. */
 const steeringFrames = (): AssistantSteeringFrame[] =>
   mocks.steeringManifest.mock.calls.map(
@@ -411,6 +446,7 @@ beforeEach(() => {
     };
   });
   sealCalls = [];
+  summaryFrames = [];
   mocks.openAssistantRun.mockImplementation(async () => {
     mocks.log.push("open-run");
     const receipts: unknown[] = [];
@@ -421,6 +457,10 @@ beforeEach(() => {
       agentVersionId: AGENT_VERSION_ID,
       receipts,
       steeringManifest: mocks.steeringManifest,
+      historySummary: async (frame: unknown) => {
+        mocks.log.push("history-summary");
+        summaryFrames.push(frame);
+      },
       modelCall: async (r: unknown) => {
         receipts.push({ kind: "model", ...(r as object) });
       },
@@ -837,6 +877,119 @@ describe("the prepared turn", () => {
     expect(captured.updates).toHaveLength(0);
   });
 
+  describe("a long thread (#4171)", () => {
+    const FACT = "My cost centre is CC-7741. Charge the migration to it.";
+    /** 120 prior messages, oldest first, with the fact at message 3. */
+    const longThread = () =>
+      Array.from({ length: 120 }, (_, i) => ({
+        id: `msg-${String(i + 1).padStart(3, "0")}`,
+        role: i % 2 === 0 ? "user" : "assistant",
+        content: i === 2 ? FACT : `message ${i + 1}`,
+      }));
+
+    beforeEach(() => {
+      // The fake summariser keeps the cost centre when it is given it, as the
+      // real one is told to keep every identifier.
+      mocks.generateObjectFor.mockImplementation(
+        async (args: { prompt: string }) => ({
+          object: {
+            summary: args.prompt.includes("CC-7741")
+              ? "- The person's cost centre is CC-7741."
+              : "- Nothing to keep.",
+          },
+          usage: { promptTokens: 900, completionTokens: 12, totalTokens: 912 },
+        }),
+      );
+    });
+
+    it("carries a fact from message 3 of a 120-message thread, and the run says a summary was used", async () => {
+      setup({ history: longThread() });
+      await runTurn(request);
+
+      const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+      const history = turnInput.history as Array<{ content: string }>;
+      // One summary, then the 40 newest messages word for word.
+      expect(history).toHaveLength(41);
+      expect(history[0]!.content).toContain("CC-7741");
+      expect(history[1]!.content).toBe("message 81");
+      expect(history.slice(1).some((m) => m.content === FACT)).toBe(false);
+
+      // Summarised on the fast tier, on the turn's funding, as assistant use.
+      expect(mocks.generateObjectFor).toHaveBeenCalledTimes(1);
+      expect(mocks.generateObjectFor.mock.calls[0]![0]).toMatchObject({
+        model: { modelId: "model-for-fast" },
+        fundedBy: "platform",
+        chargeReason: "consume_assistant_tokens",
+        telemetry: { surface: "app", messageId: "msg-user" },
+      });
+
+      expect(summaryFrames).toEqual([
+        expect.objectContaining({
+          outcome: "applied",
+          regenerated: true,
+          coveredMessages: 80,
+          windowMessages: 40,
+          text: "- The person's cost centre is CC-7741.",
+        }),
+      ]);
+      // On the record before the engine is asked anything.
+      expect(mocks.log.indexOf("history-summary")).toBeGreaterThan(
+        mocks.log.indexOf("open-run"),
+      );
+      expect(mocks.log.indexOf("history-summary")).toBeLessThan(
+        mocks.log.indexOf("engine"),
+      );
+      // Stored with the conversation for the turns after this one.
+      expect(captured.updates).toContainEqual({
+        table: schema.conversations,
+        set: {
+          historySummary: expect.objectContaining({
+            throughMessageId: "msg-080",
+            coveredMessages: 80,
+          }),
+        },
+      });
+    });
+
+    it("reuses the stored summary on the next turn without asking a model", async () => {
+      setup({ history: longThread() });
+      await runTurn(request);
+      const written = captured.updates.find(
+        (u) => u.table === schema.conversations && "historySummary" in u.set,
+      )!.set.historySummary;
+
+      // The turn above added its two messages.
+      setup({
+        history: [
+          ...longThread(),
+          { id: "msg-121", role: "user", content: "which cost centre?" },
+          { id: "msg-122", role: "assistant", content: "CC-7741." },
+        ],
+        historySummary: written,
+      });
+      mocks.generateObjectFor.mockClear();
+      mocks.runGovernedTurn.mockClear();
+      await runTurn(request);
+
+      expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+      const next = mocks.runGovernedTurn.mock.calls[0]![0];
+      const history = next.history as Array<{ content: string }>;
+      expect(history).toHaveLength(43);
+      expect(history[0]!.content).toContain("CC-7741");
+      expect(summaryFrames.at(-1)).toMatchObject({
+        outcome: "applied",
+        regenerated: false,
+      });
+    });
+
+    it("writes no summary frame for a thread that fits the window (negative)", async () => {
+      await runTurn(request);
+      expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+      expect(summaryFrames).toEqual([]);
+      expect(mocks.log).not.toContain("history-summary");
+    });
+  });
+
   // #4158: published steering and the workspace's instructions reach the
   // prompt through the one assembler, and the run records what it kept and
   // cut before the engine is asked anything (ADR-093 §7). Before, the
@@ -1126,6 +1279,54 @@ describe("the prepared turn", () => {
           requestPayload: { usd: 5 },
           responsePayload: { error: "not permitted" },
           status: "failed",
+          latencyMs: 1,
+        },
+      ]);
+    });
+
+    it("records a parked tool call as pending with the approval it waits on, not failed", async () => {
+      mocks.runGovernedTurn.mockImplementationOnce(
+        async (args: {
+          ledger: {
+            modelCall: (r: unknown) => Promise<void>;
+            toolCall: (r: unknown) => Promise<void>;
+          };
+        }) => {
+          await args.ledger.modelCall({
+            seq: 1,
+            requestId: "mc-1",
+            role: "worker",
+            provider: "anthropic",
+            model: "claude",
+            outcome: "completed",
+          });
+          await args.ledger.toolCall({
+            seq: 2,
+            requestId: "tc-1",
+            toolName: "set_budget",
+            outcome: "parked",
+            approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+            input: { usd: 5 },
+            error: "refused: set_budget is waiting for approval",
+            durationMs: 1,
+          });
+          return fakeTurn({});
+        },
+      );
+      await runTurn(request);
+      const input = executionCall()![1] as {
+        steps: Array<{ toolCalls?: Array<Record<string, unknown>> }>;
+      };
+      expect(input.steps[0]!.toolCalls).toEqual([
+        {
+          toolName: "set_budget",
+          toolType: "capability",
+          requestPayload: { usd: 5 },
+          responsePayload: {
+            error: "refused: set_budget is waiting for approval",
+            approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+          },
+          status: "pending",
           latencyMs: 1,
         },
       ]);

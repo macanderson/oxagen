@@ -1070,6 +1070,16 @@
       "writes": []
     },
     {
+      "domain": "conversation",
+      "name": "get_conversation",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "get_data_plane",
       "reads": [],
@@ -4100,7 +4110,7 @@
       "writes": []
     }
   ],
-  "contentHash": "5620d4495d73b0f5bab1927a669e9c9f120ecd2da6bbb85f001d3637b900222d",
+  "contentHash": "626519b1a9d1248ab18f58acc4411c91765ae35b3e8c6254727bbc2ed4cca015",
   "domains": [
     {
       "name": "agent",
@@ -6089,7 +6099,7 @@
       },
       "name": "EntityNode",
       "store": "neo4j",
-      "tenantScoped": false
+      "tenantScoped": true
     },
     {
       "columns": [
@@ -12413,6 +12423,12 @@
         },
         {
           "name": "code_binding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "history_summary",
           "nullable": true,
           "primaryKey": false,
           "type": "jsonb"
