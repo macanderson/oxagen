@@ -109,7 +109,6 @@ import {
   RunNotWritableError,
   RunSpecIdentityMismatchError,
   RunEventShapeError,
-  RunNotWritableError,
   RunStoreStateError,
   UnknownRunEventTypeError,
   isAttemptAdvancedError,
@@ -121,7 +120,6 @@ import {
   isRunEventIntegrityError,
   isRunEventPayloadTooLargeError,
   isRunEventSequenceGapError,
-  isRunNotWritableError,
   isRunStoreStateError,
   isUnknownRunEventTypeError,
 } from "./run-errors";

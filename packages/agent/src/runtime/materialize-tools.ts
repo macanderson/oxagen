@@ -838,7 +838,7 @@ export async function materializeTools(
                   cap.name,
                   approvalId,
                   expiresAt,
-                  approval.approvalPublicId,
+                  approval.publicId,
                 );
               }
               const resolution = await waitForApproval(approvalId);

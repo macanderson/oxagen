@@ -594,7 +594,7 @@ describe("materializeTools", () => {
     mocks.createApprovalRequest.mockClear();
     mocks.createApprovalRequest.mockResolvedValueOnce({
       approvalId: "appr_x",
-      approvalPublicId: "apr_x",
+      publicId: "apr_x",
     });
     mocks.waitForApproval.mockClear();
     vi.mocked(invoke).mockClear();
