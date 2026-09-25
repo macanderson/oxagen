@@ -47,6 +47,7 @@ const policyEntry = (seq: string, chainRef?: string) =>
       ...(chainRef === undefined ? {} : { chainRef }),
       decision: "deny",
       type: "policy_decision",
+      harness: false,
       at: AT,
     },
     ...(chainRef === undefined
@@ -208,6 +209,7 @@ describe("PolicyDecisions", () => {
                   seq: "4",
                   decision: word,
                   type: "policy_decision",
+                  harness: false,
                   at: AT,
                 },
               }),
@@ -258,6 +260,7 @@ describe("PolicyDecisions by who decided", () => {
     decision: string,
     source: string | null,
     label = "Bash",
+    harness = false,
   ) =>
     transcriptEntry({
       seq,
@@ -271,9 +274,13 @@ describe("PolicyDecisions by who decided", () => {
         decision,
         type: source === "human" ? "command" : "policy_decision",
         at: AT,
+        harness,
         ...(source === null ? {} : { source }),
       },
     });
+  /** A decision the server read as the harness checking itself. */
+  const checked = (seq: string, source: string) =>
+    decided(seq, "allow", source, "Bash", true);
 
   it("lists Oxagen policy and operator decisions with who decided, and folds the harness's own checks below", async () => {
     const { container } = renderPolicy(
@@ -281,8 +288,8 @@ describe("PolicyDecisions by who decided", () => {
         runTranscript({
           entries: [
             decided("3", "deny", "bundle"),
-            decided("5", "allow", "harness"),
-            decided("6", "allow", "managed_settings"),
+            checked("5", "harness"),
+            checked("6", "managed_settings"),
             decided("8", "pause", "human", "run"),
           ],
         }),
@@ -309,9 +316,7 @@ describe("PolicyDecisions by who decided", () => {
   });
 
   it("says only the harness decided when neither Oxagen nor an operator did (negative)", () => {
-    renderPolicy(
-      readOk(runTranscript({ entries: [decided("5", "allow", "harness")] })),
-    );
+    renderPolicy(readOk(runTranscript({ entries: [checked("5", "harness")] })));
     expect(
       screen.getByText(
         "Neither Oxagen policy nor an operator made a decision on this run. The agent harness's own checks are listed below.",
@@ -340,5 +345,32 @@ describe("PolicyDecisions by who decided", () => {
         .map((line) => line.textContent),
     ).toEqual(["who decided is not recorded", "decided by sandbox"]);
     expect(screen.queryByTestId("harness-checks")).toBeNull();
+  });
+
+  it("folds away only what the server said is the harness, whatever the source word reads (negative)", () => {
+    renderPolicy(
+      readOk(
+        runTranscript({
+          entries: [
+            // The server owns which sources are the harness (ADR-182). A
+            // source word the page happens to recognise does not fold a
+            // decision the server did not mark.
+            decided("3", "allow", "harness"),
+            decided("4", "allow", "sandbox", "Bash", true),
+          ],
+        }),
+      ),
+    );
+    const table = screen.getByRole("table", { name: "Policy decisions" });
+    expect(
+      within(table)
+        .getAllByTestId("policy-decided-by")
+        .map((line) => line.textContent),
+    ).toEqual(["decided by the agent harness"]);
+    const checks = screen.getByTestId("harness-checks");
+    expect(within(checks).getByText("1 harness check")).toBeTruthy();
+    expect(within(checks).getByTestId("policy-decided-by").textContent).toBe(
+      "decided by sandbox",
+    );
   });
 });

@@ -101,6 +101,8 @@ export type StepSpec = {
     decision: string;
     type: string;
     source?: string;
+    /** Whether the server read the source as the harness checking itself. */
+    harness?: boolean;
     sessionUuid?: string;
   }[];
   kinds?: TranscriptKind[];
@@ -236,6 +238,7 @@ export function stepsOf(
       decision: gate.decision,
       type: gate.type,
       source: gate.source ?? null,
+      harness: gate.harness ?? false,
       at,
     }));
     return {

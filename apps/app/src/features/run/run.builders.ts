@@ -472,6 +472,7 @@ export function mockupTranscript(
               seq: String(spec.seq),
               decision: spec.decision,
               type: spec.type,
+              harness: false,
               at: at(-3600 + spec.seq * 2),
             },
       cost:

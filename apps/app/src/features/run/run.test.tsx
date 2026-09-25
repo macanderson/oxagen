@@ -2977,6 +2977,7 @@ describe("policy and context", () => {
       seq: "41",
       decision: "deny",
       type: "policy.denied",
+      harness: false,
       at: "2026-09-20T00:00:00Z",
     },
   });
@@ -3038,6 +3039,7 @@ describe("policy and context", () => {
         type: "permission",
         at: "2026-09-20T00:00:00Z",
         source: "harness",
+        harness: true,
       },
     });
     // The server counts the two decisions under the policy chip, and only

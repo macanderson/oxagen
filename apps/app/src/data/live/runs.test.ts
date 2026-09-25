@@ -935,6 +935,7 @@ describe("runs.transcript", () => {
       decision: "allow",
       type: "policy_decision",
       source: "bundle",
+      harness: false,
       at: "2026-09-15T08:56:01.000Z",
     };
     kernelRead.mockResolvedValue(
@@ -1087,6 +1088,7 @@ describe("runs.transcript", () => {
           chainRef: "0192d4a8-7c1e-7a00-8000-00000000c1d0",
           decision: "allow",
           source: "bundle",
+          harness: false,
         },
       ],
     });

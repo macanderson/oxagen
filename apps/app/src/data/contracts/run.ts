@@ -450,6 +450,12 @@ const TranscriptDecision = z.object({
    * Null or absent when the frame names none.
    */
   source: z.string().nullable().optional(),
+  /**
+   * Whether the server read `source` as the agent's harness checking itself.
+   * The server owns which sources those are (ADR-182); the page sorts on
+   * this and keeps no list of its own.
+   */
+  harness: z.boolean().default(false),
   at: z.iso.datetime({ offset: true }),
 });
 

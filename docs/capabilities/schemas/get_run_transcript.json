@@ -1766,6 +1766,9 @@
                         }
                       ]
                     },
+                    "harness": {
+                      "type": "boolean"
+                    },
                     "at": {
                       "type": "string"
                     }
@@ -1774,6 +1777,7 @@
                     "seq",
                     "decision",
                     "type",
+                    "harness",
                     "at"
                   ],
                   "additionalProperties": false
@@ -1957,6 +1961,9 @@
                       }
                     ]
                   },
+                  "harness": {
+                    "type": "boolean"
+                  },
                   "at": {
                     "type": "string"
                   }
@@ -1965,6 +1972,7 @@
                   "seq",
                   "decision",
                   "type",
+                  "harness",
                   "at"
                 ],
                 "additionalProperties": false

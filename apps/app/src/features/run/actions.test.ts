@@ -942,6 +942,7 @@ describe("readTranscriptPage", () => {
             sessionUuid: CHAIN,
             decision: "allow",
             type: "policy_decision",
+            harness: false,
             at: "2026-09-15T08:10:01.000Z",
           },
           frames: 2,

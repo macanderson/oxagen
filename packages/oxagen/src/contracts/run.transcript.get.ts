@@ -382,6 +382,13 @@ export const transcriptDecisionSchema = z
      * the frame names none.
      */
     source: z.string().nullable().optional(),
+    /**
+     * Whether `source` is the agent's harness checking itself rather than
+     * Oxagen policy or an operator deciding. False when the source is
+     * unrecorded. A reader sorts decisions on this and never on its own list
+     * of source words (ADR-182).
+     */
+    harness: z.boolean(),
     /** RFC 3339. */
     at: z.string().datetime(),
   })

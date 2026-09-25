@@ -244,6 +244,35 @@ describe("the everything zoom", () => {
       );
     });
 
+    it("says whether the decision is the harness checking itself, the one place that rule lives", () => {
+      const decided = (seq: number, source: string | null) =>
+        w(seq, "policy_decision", {
+          policyDecision: "allow",
+          body: JSON.stringify(
+            source === null ? {} : { policy_source: source },
+          ),
+        });
+      const entries = foldTranscript(
+        [
+          decided(1, "harness"),
+          decided(2, "managed_settings"),
+          decided(3, "bundle"),
+          decided(4, "human"),
+          decided(5, null),
+        ],
+        "everything",
+      );
+      expect(
+        entries.map((e) => [e.decision?.source, e.decision?.harness]),
+      ).toEqual([
+        ["harness", true],
+        ["managed_settings", true],
+        ["bundle", false],
+        ["human", false],
+        [null, false],
+      ]);
+    });
+
     it("never becomes the decision of a call, and stays an entry of its own", () => {
       const folded = stepFolds([
         w(0, "tool_requested", { toolName: "Read", toolUseId: "toolu_r" }),

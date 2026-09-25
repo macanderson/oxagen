@@ -107,6 +107,13 @@ export interface TranscriptDecision {
   type: string;
   /** Who decided, in `FrameIdentity.policySource`'s words; null when unrecorded. */
   source: string | null;
+  /**
+   * Whether the source is the agent's harness checking itself rather than
+   * Oxagen policy or an operator. False when the source is unrecorded. This
+   * is the one place the rule lives: the counts and the Run page's Policy
+   * tab both read it here (ADR-182).
+   */
+  harness: boolean;
   at: Date;
 }
 
@@ -254,6 +261,7 @@ function addCost(sum: number | null, cost: number | null): number | null {
 
 function decisionOf(frame: RunFrame): TranscriptDecision | null {
   if (!POLICY_TYPES.has(frame.type)) return null;
+  const source = frame.identity.policySource ?? null;
   return {
     seq: frame.seq,
     ...(frame.chain === undefined
@@ -261,7 +269,8 @@ function decisionOf(frame: RunFrame): TranscriptDecision | null {
       : { sessionUuid: frame.chain.sessionUuid }),
     decision: frame.identity.policy ?? frame.type,
     type: frame.type,
-    source: frame.identity.policySource ?? null,
+    source,
+    harness: source !== null && HARNESS_SOURCES.has(source),
     at: frame.observedAt,
   };
 }
@@ -1019,11 +1028,7 @@ export function transcriptCounts(
       fold.kinds.has("errors")
     )
       errors += 1;
-    const source = fold.decision?.source ?? null;
-    if (
-      fold.kinds.has("policy") &&
-      (source === null || !HARNESS_SOURCES.has(source))
-    )
+    if (fold.kinds.has("policy") && fold.decision?.harness !== true)
       policy += 1;
   }
   return { kinds, entries, errors, policy };

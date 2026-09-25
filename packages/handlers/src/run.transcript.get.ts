@@ -624,6 +624,7 @@ function decisionView(decision: TranscriptDecision) {
     decision: decision.decision,
     type: decision.type,
     source: decision.source,
+    harness: decision.harness,
     at: decision.at.toISOString(),
   };
 }

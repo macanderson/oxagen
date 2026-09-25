@@ -66,16 +66,6 @@ function outcomeTone(decision: string): BadgeTone {
   return "quiet";
 }
 
-/**
- * The `policy_source` words that name the agent's own harness checking itself
- * rather than Oxagen policy or an operator deciding. The table folds these
- * away (#4023, #4034).
- */
-const HARNESS_SOURCES: ReadonlySet<string> = new Set([
-  "harness",
-  "managed_settings",
-]);
-
 /** The key under `run.policy.by` each recorded source reads as. */
 const SOURCE_COPY = {
   bundle: "oxagen",
@@ -92,13 +82,14 @@ function sourceCopy(
 }
 
 /**
- * Whether a decision is the harness checking itself.
+ * Whether a decision is the harness checking itself, which the table folds
+ * away (#4023, #4034). The server decides which sources those are and says so
+ * on the decision (ADR-182).
  *
  * @internal Exported for its unit test.
  */
 export function isHarnessCheck(entry: TranscriptEntry): boolean {
-  const source = entry.decision?.source ?? null;
-  return source !== null && HARNESS_SOURCES.has(source);
+  return entry.decision?.harness === true;
 }
 
 /** Who decided, under the outcome: a recorded source by name, else that it is not recorded. */

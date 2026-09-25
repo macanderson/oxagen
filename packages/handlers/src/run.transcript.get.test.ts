@@ -457,6 +457,33 @@ describe("get_run_transcript", () => {
     expect(out.entries[0]?.kinds).toContain("policy");
   });
 
+  it("says which decisions are the harness checking itself, so no reader keeps its own list of sources", async () => {
+    const decided = (seq: number, source: string | null) =>
+      tachoRow(seq, {
+        kind: "policy_decision",
+        toolName: "",
+        toolStatus: "",
+        policyDecision: "allow",
+        body: JSON.stringify(source === null ? {} : { policy_source: source }),
+      });
+    const { transcript } = harness([
+      decided(0, "bundle"),
+      decided(1, "managed_settings"),
+      decided(2, "harness"),
+      decided(3, null),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(
+      out.entries.map((e) => [e.decision?.source, e.decision?.harness]),
+    ).toEqual([
+      ["bundle", false],
+      ["managed_settings", true],
+      ["harness", true],
+      [null, false],
+    ]);
+  });
+
   // #3370: `kinds` is the union over every folded frame. A turn whose model
   // call filled its response slot still holds the failed tool call after it,
   // and that call is the entry's only sign of an error.
