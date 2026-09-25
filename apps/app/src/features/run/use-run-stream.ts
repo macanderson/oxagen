@@ -113,6 +113,17 @@ export function useRunStream({
       if (!stopped && (pending || force)) latest.current();
     }
 
+    // Wait out the next backoff, then reopen from `from`.
+    function retry(from: string | null) {
+      const delay = RETRY_BASE_MS * 2 ** retries;
+      retries += 1;
+      setState("connecting");
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        open(from);
+      }, delay);
+    }
+
     function open(after: string | null) {
       if (stopped) return;
       const target =
@@ -120,7 +131,9 @@ export function useRunStream({
       const es = new EventSource(target, { withCredentials: true });
       source = es;
       let terminalError = false;
+      let answered = false;
       es.onopen = () => {
+        answered = true;
         if (!stopped) setState("open");
       };
       es.onmessage = () => {
@@ -177,13 +190,7 @@ export function useRunStream({
         // retried from the last frame the route wrote, so nothing is read
         // twice or skipped, until the ceiling is reached.
         if (code === "stream_unavailable" && retries < RETRY_LIMIT) {
-          const delay = RETRY_BASE_MS * 2 ** retries;
-          retries += 1;
-          setState("connecting");
-          retryTimer = setTimeout(() => {
-            retryTimer = null;
-            open(cursor ?? after);
-          }, delay);
+          retry(cursor ?? after);
           return;
         }
         const denied = DENIED_CODES.has(code ?? "");
@@ -193,8 +200,18 @@ export function useRunStream({
       es.onerror = () => {
         // EventSource reconnects on its own unless the connection is closed
         // for good; only that second case is a loss the person should see.
-        if (es.readyState === EventSource.CLOSED && !stopped && !terminalError)
-          setState("lost");
+        if (es.readyState !== EventSource.CLOSED || stopped || terminalError)
+          return;
+        // A reopen during a backoff can fail before the route answers: the
+        // route awaits its first read before it responds, so a fault that
+        // has not cleared leaves as a 500 or 503 status, not as an event.
+        // That is the same fault, so it takes the next backoff rather than
+        // ending the sequence early.
+        if (!answered && retries > 0 && retries < RETRY_LIMIT) {
+          retry(after);
+          return;
+        }
+        setState("lost");
       };
     }
 

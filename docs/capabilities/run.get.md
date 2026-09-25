@@ -54,7 +54,7 @@ Every invoke runs the IAM check and the audit and security emissions once, befor
 | `event: run` | `{ run }` — the header, once, before any frame |
 | `id: <cursor>` + `data:` | one frame, exactly as `get_run` returns it. The `id` is the frame's own cursor |
 | `event: done` | `{ reason, cursor }` — `sealed` when the recording has ended and nothing lies past the last page, `idle` when the stream reached its 300 s ceiling with nothing new. The client reconnects from `cursor` |
-| `event: error` | `{ message, code, cursor }` — a failure after the stream is open. Before it is open, a refusal leaves as a status through the error middleware, not as a 200 whose first line is an error |
+| `event: error` | `{ message, code, reason, cursor }` — a failure after the stream is open. `reason` is present only for a handler refusal and carries its sub-code. Before it is open, a refusal leaves as a status through the error middleware, not as a 200 whose first line is an error |
 
 **Resuming.** `EventSource` sends the last `id` back as `Last-Event-ID`; a client that is not `EventSource` passes `?after=<cursor>`. A read that starts at either repeats nothing and skips nothing, so a dropped connection costs a round trip and no frames.
 
@@ -67,8 +67,8 @@ event carries the last emitted frame cursor, including on the final page.
 
 | Code | What it is | What the Run page does |
 |---|---|---|
-| `authz_denied`, `surface_denied`, `pending_approval`, `forbidden` | The viewer may no longer read the run | Stops and says access changed |
-| `invalid_input`, `unknown_capability`, `no_handler`, or a handler refusal's reason, such as `run_not_found` | A refusal the client caused, most often a cursor this capability did not write. The message says what was refused | Reads the tail once, then stops |
-| `stream_unavailable` | A server fault: a store timed out, or the kernel refused its own output (`invalid_output`). The message is always "Run stream unavailable", and the details go to the server log, never to the client | Reopens at the event's `cursor` after 1 s, doubling the wait each time, and reports the stream lost after five retries with no frame between them |
+| `authz_denied`, `surface_denied`, `pending_approval`, `forbidden` | The viewer may no longer read the run. `forbidden` is a handler refusal, whatever its reason, such as `session_required` or `run_token_invalid`; the reason travels in `reason` | Stops and says access changed |
+| `invalid_input`, `unknown_capability`, `no_handler`, or the reason of a handler refusal other than `forbidden`, such as `run_not_found` | A refusal the client caused, most often a cursor this capability did not write. The message says what was refused | Reads the tail once, then stops |
+| `stream_unavailable` | A server fault: a store timed out, or the kernel refused its own output (`invalid_output`). The message is always "Run stream unavailable", and the details go to the server log, never to the client | Reopens at the event's `cursor` after 1 s, doubling the wait each time, and reports the stream lost after five retries with no frame between them. A reopen that fails before the route answers, because its first read hit the same fault and left as a 500 or 503, counts as one of those retries |
 
 A kernel code is forwarded only when the API's error middleware would answer it with a 4xx; every code it answers with a 500 is sent as `stream_unavailable`. A transport disconnect with no event keeps EventSource's own retry.

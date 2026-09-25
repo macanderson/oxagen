@@ -348,6 +348,77 @@ describe("useRunStream", () => {
     expect(opened).toHaveLength(6);
   });
 
+  it("keeps backing off when a reopen fails before the route answers (#3652)", () => {
+    const { result } = follow();
+    act(() => {
+      latest().open();
+      latest().serverError({ code: "stream_unavailable", cursor: "ZjoxMQ" });
+    });
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(opened).toHaveLength(2);
+    // The fault has not cleared, so the route's first read fails and it
+    // answers with a status. EventSource closes without ever opening.
+    act(() => {
+      latest().fail(true);
+    });
+    expect(result.current).toBe("connecting");
+    act(() => {
+      vi.advanceTimersByTime(1999);
+    });
+    expect(opened).toHaveLength(2);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(opened).toHaveLength(3);
+    expect(latest().url).toBe(`${URL_UNDER_TEST}?after=ZjoxMQ`);
+    act(() => {
+      latest().open();
+    });
+    expect(result.current).toBe("open");
+  });
+
+  it("reports lost after five retries when every reopen fails before the route answers (negative)", () => {
+    const { result } = follow();
+    act(() => {
+      latest().open();
+      latest().serverError({ code: "stream_unavailable", cursor: null });
+    });
+    for (const wait of [1000, 2000, 4000, 8000]) {
+      act(() => {
+        vi.advanceTimersByTime(wait);
+        latest().fail(true);
+      });
+      expect(result.current).toBe("connecting");
+    }
+    act(() => {
+      vi.advanceTimersByTime(16_000);
+      latest().fail(true);
+    });
+    expect(result.current).toBe("lost");
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(opened).toHaveLength(6);
+  });
+
+  it("reports lost when a reopened source that answered is closed for good (negative)", () => {
+    const { result } = follow();
+    act(() => {
+      latest().open();
+      latest().serverError({ code: "stream_unavailable", cursor: null });
+      vi.advanceTimersByTime(1000);
+      latest().open();
+      latest().fail(true);
+    });
+    expect(result.current).toBe("lost");
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(opened).toHaveLength(2);
+  });
+
   it("starts the backoff over once a frame arrives between failures", () => {
     follow();
     act(() => {

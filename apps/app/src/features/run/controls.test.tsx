@@ -799,6 +799,25 @@ describe("following a queued pause", () => {
     expect(refresh).toHaveBeenCalledTimes(1 + HALT_FOLLOW_READS);
   });
 
+  it("starts a fresh count of reads for a pause queued again after the reads ran out", async () => {
+    await queuePauseAndClose();
+    advance(HALT_FOLLOW_EVERY_MS * (HALT_FOLLOW_READS + 5));
+    expect(refresh).toHaveBeenCalledTimes(1 + HALT_FOLLOW_READS);
+    // The host never applied the first pause, so the person queues it again.
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("run-pause"));
+    await user.click(screen.getByRole("button", { name: "Queue the pause" }));
+    await screen.findByTestId("queued-command");
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    fireEvent.click(screen.getByRole("button", { name: "Re-read the run" }));
+    expect(refresh).toHaveBeenCalledTimes(2 + HALT_FOLLOW_READS);
+    advance(HALT_FOLLOW_EVERY_MS);
+    expect(refresh).toHaveBeenCalledTimes(3 + HALT_FOLLOW_READS);
+    advance(HALT_FOLLOW_EVERY_MS * (HALT_FOLLOW_READS + 5));
+    expect(refresh).toHaveBeenCalledTimes(2 * (1 + HALT_FOLLOW_READS));
+  });
+
   it("does not follow a cancel, which changes no paused state (negative)", async () => {
     haltRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_c"] } });
     const user = userEvent.setup();

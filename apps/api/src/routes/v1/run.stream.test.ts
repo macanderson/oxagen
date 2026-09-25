@@ -225,6 +225,40 @@ describe("GET /runs/:run_id/stream", () => {
     expect(text).toContain('"cursor":"cur_1"');
   });
 
+  it("sends a handler's forbidden refusal as forbidden, with its reason beside it (negative)", async () => {
+    // Access changed mid-stream. The app keys "access changed" on the code,
+    // so the reason alone would read as an ordinary refusal.
+    mocks.invoke
+      .mockResolvedValueOnce(page(["1"], "cur_1"))
+      .mockRejectedValueOnce(
+        new HandlerError({
+          code: "forbidden",
+          reason: "session_required",
+          message: "Sign in again to read this run",
+        }),
+      );
+    const { status, text } = await open();
+    expect(status).toBe(200);
+    expect(events(text)).toEqual(["run", "error"]);
+    expect(text).toContain('"code":"forbidden"');
+    expect(text).toContain('"reason":"session_required"');
+    expect(text).toContain("Sign in again to read this run");
+    expect(text).toContain('"cursor":"cur_1"');
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it("sends any other handler refusal under its reason (negative)", async () => {
+    mocks.invoke
+      .mockResolvedValueOnce(page(["1"], "cur_1"))
+      .mockRejectedValueOnce(
+        new HandlerError({ code: "not_found", reason: "run_not_found" }),
+      );
+    const { text } = await open();
+    expect(events(text)).toEqual(["run", "error"]);
+    expect(text).toContain('"code":"run_not_found"');
+    expect(text).toContain('"reason":"run_not_found"');
+  });
+
   it("keeps an active stream open past its initial idle deadline", async () => {
     const clock = vi.spyOn(Date, "now");
     let now = 0;
