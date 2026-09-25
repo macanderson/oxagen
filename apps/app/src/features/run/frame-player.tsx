@@ -111,6 +111,18 @@ const STEP_KEYS: ReadonlySet<string> = new Set([
   "End",
 ]);
 
+/** The keys that move a focused range, so a scrub by key stops the playback too. */
+const RANGE_KEYS: ReadonlySet<string> = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+]);
+
 /**
  * Space on a control is that control's own: it presses a button, follows a
  * link, or scrolls the frame list. Space toggles playback only when focus
@@ -134,6 +146,8 @@ type Playback = {
   disabled: boolean;
   speed: PlaybackSpeed;
   toggle(): void;
+  /** A step taken by hand: the playback stops where it is. */
+  stop(): void;
   setSpeed(speed: PlaybackSpeed): void;
 };
 
@@ -142,7 +156,9 @@ const PlaybackContext = createContext<Playback | null>(null);
 function usePlayback(): Playback {
   const playback = use(PlaybackContext);
   if (playback === null)
-    throw new Error("The play button and speeds render inside FramePlayback.");
+    throw new Error(
+      "The play button, the speeds and the scrub render inside FramePlayback.",
+    );
   return playback;
 }
 
@@ -154,7 +170,9 @@ function usePlayback(): Playback {
  * It asks for one frame at a time: the next gap starts only once the frame it
  * asked for is the open one. It stops on the last frame, and play from there,
  * or from a frame the page does not hold, starts again from the first. A step
- * by key stops it; space plays and pauses. The timer goes with the bar.
+ * taken by hand stops it: a step key, a click on a link to one of the page's
+ * frames (the bar's steps, the timeline, the frame list), or a touch of the
+ * scrub. Space plays and pauses. The timer goes with the bar.
  */
 export function FramePlayback({
   hrefs,
@@ -203,11 +221,15 @@ export function FramePlayback({
     };
   }, [next, delay, navigate]);
 
+  const stop = useCallback(() => {
+    setPlaying(false);
+    setStepping(false);
+  }, []);
+
   const first = hrefs[0] ?? null;
   const toggle = useCallback(() => {
     if (running) {
-      setPlaying(false);
-      setStepping(false);
+      stop();
       return;
     }
     if (disabled || first === null) return;
@@ -216,18 +238,19 @@ export function FramePlayback({
       setStepping(true);
       navigate.advance(first);
     }
-  }, [running, disabled, first, index, done, navigate]);
+  }, [running, disabled, first, index, done, navigate, stop]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!isStepKey(event)) return;
       if (STEP_KEYS.has(event.key)) {
-        setPlaying(false);
-        setStepping(false);
+        stop();
         return;
       }
       if (event.key !== " " || event.repeat || isOnControl(event.target))
         return;
+      // With nothing to play, space keeps its own job of scrolling the page.
+      if (disabled) return;
       event.preventDefault();
       toggle();
     };
@@ -235,11 +258,49 @@ export function FramePlayback({
     return () => {
       document.removeEventListener("keydown", onKey);
     };
-  }, [toggle]);
+  }, [toggle, stop, disabled]);
+
+  // A click on a link to one of the page's frames is a step taken by hand,
+  // wherever the link sits. It is heard in the capture phase, before the link
+  // navigates, so the timer is cleared before the frame it opens can land. A
+  // click that opens a new tab leaves this one playing.
+  useEffect(() => {
+    const frameLinks = new Set(
+      hrefs.map((href) => new URL(href, document.baseURI).href),
+    );
+    const onClick = (event: MouseEvent) => {
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const link =
+        event.target instanceof Element
+          ? event.target.closest("a[href]")
+          : null;
+      if (link instanceof HTMLAnchorElement && frameLinks.has(link.href))
+        stop();
+    };
+    document.addEventListener("click", onClick, true);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+    };
+  }, [hrefs, stop]);
 
   const value = useMemo<Playback>(
-    () => ({ playing: running, done, disabled, speed, toggle, setSpeed }),
-    [running, done, disabled, speed, toggle],
+    () => ({
+      playing: running,
+      done,
+      disabled,
+      speed,
+      toggle,
+      stop,
+      setSpeed,
+    }),
+    [running, done, disabled, speed, toggle, stop],
   );
   return <PlaybackContext value={value}>{children}</PlaybackContext>;
 }
@@ -301,7 +362,9 @@ export function SpeedSegment() {
  * `.fp-scrub`: the range over the frames shown and the governed ticks under
  * it. The range moves freely while it is dragged and opens the frame it is
  * released on, so a drag across the run makes one read, not one per frame.
- * The caller keys it by the open frame, so a step resets it.
+ * The caller keys it by the open frame, so a step resets it. Taking hold of it,
+ * by pointer or by key, stops the playback, so no step the playback asks for
+ * lands under a drag and resets the range mid-move.
  */
 export function PlayerScrub({
   hrefs,
@@ -319,6 +382,7 @@ export function PlayerScrub({
 }) {
   const t = useTranslations("run.player.bar");
   const navigate = useNavigate();
+  const { stop } = usePlayback();
   const [pos, setPos] = useState(Math.max(0, index));
   useStepKeys(steps);
   const commit = () => {
@@ -341,6 +405,10 @@ export function PlayerScrub({
         disabled={hrefs.length < 2}
         onChange={(event) => {
           setPos(Number(event.currentTarget.value));
+        }}
+        onPointerDown={stop}
+        onKeyDown={(event) => {
+          if (RANGE_KEYS.has(event.key)) stop();
         }}
         onPointerUp={commit}
         onKeyUp={commit}
