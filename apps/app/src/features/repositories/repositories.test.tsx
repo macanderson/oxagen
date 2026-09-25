@@ -1863,6 +1863,42 @@ describe("one change on the Changes tab", () => {
 });
 
 describe("page reads", () => {
+  // A Context PR can merge or close on GitHub at any moment, and the
+  // repository sync moves it within seconds (ADR-184). The list re-reads
+  // while one is open, so the new state shows without a reload.
+  it("re-reads the changes every ten seconds while a Context PR is open", async () => {
+    const every = vi.spyOn(window, "setInterval");
+    page();
+    await waitFor(() => {
+      expect(every).toHaveBeenCalledWith(expect.any(Function), 10_000);
+    });
+    const poll = every.mock.calls.find(([, ms]) => ms === 10_000);
+    if (!poll) throw new Error("no ten-second poll was scheduled");
+    const tick = poll[0];
+    if (typeof tick !== "function")
+      throw new Error("the poll is not a function");
+    const before = actions.readRepositoryChanges.mock.calls.length;
+    tick();
+    await waitFor(() => {
+      expect(actions.readRepositoryChanges).toHaveBeenCalledTimes(before + 1);
+    });
+    every.mockRestore();
+  });
+
+  it("does not poll when no Context PR is open", async () => {
+    actions.readRepositoryChanges.mockResolvedValue({
+      ok: true,
+      value: { changes: [], open: 0 },
+    });
+    const every = vi.spyOn(window, "setInterval");
+    page();
+    await waitFor(() => {
+      expect(actions.readRepositoryChanges).toHaveBeenCalled();
+    });
+    expect(every).not.toHaveBeenCalledWith(expect.any(Function), 10_000);
+    every.mockRestore();
+  });
+
   it("draws nothing from answers that land after the page left the screen", async () => {
     let answerList!: (value: unknown) => void;
     let answerChanges!: (value: unknown) => void;
