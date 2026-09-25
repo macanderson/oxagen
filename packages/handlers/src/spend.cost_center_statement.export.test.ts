@@ -296,4 +296,73 @@ describe("export_cost_center_statement", () => {
       .find((c) => c[0] === "cost_center")!;
     expect(row[runIds]!.split(" ")).toEqual(many.map((r) => r.runId));
   });
+
+  // #3750. Each run overwrote its line's currency, so a line or the total
+  // holding USD and EUR runs added their micros and labelled the sum with the
+  // last run's currency. A second currency now refuses the statement.
+  it("refuses a line whose priced runs carry two currencies", async () => {
+    const { handler } = harness([
+      pricedRun(1_000_000n, {
+        costCenter: ENG,
+        currency: "USD",
+        startedAt: new Date("2026-09-02T09:00:00.000Z"),
+      }),
+      pricedRun(2_000_000n, {
+        costCenter: ENG,
+        currency: "EUR",
+        startedAt: new Date("2026-09-03T09:00:00.000Z"),
+      }),
+    ]);
+    const refusal = handler({ month: "2026-09", format: "csv" }, ctx());
+    await expect(refusal).rejects.toMatchObject({
+      code: "conflict",
+      reason: "statement_mixed_currency",
+    });
+    await expect(refusal).rejects.toThrow(/USD and in EUR/);
+  });
+
+  it("refuses a total whose lines carry different currencies", async () => {
+    const { handler } = harness([
+      pricedRun(1_000_000n, {
+        costCenter: ENG,
+        currency: "USD",
+        startedAt: new Date("2026-09-02T09:00:00.000Z"),
+      }),
+      pricedRun(2_000_000n, {
+        costCenter: MKT,
+        currency: "EUR",
+        startedAt: new Date("2026-09-03T09:00:00.000Z"),
+      }),
+    ]);
+    await expect(
+      handler({ month: "2026-09", format: "csv" }, ctx()),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "statement_mixed_currency",
+    });
+  });
+
+  it("labels a line with its priced runs' currency and ignores an unpriced run's", async () => {
+    const out = await exported([
+      pricedRun(1_000_000n, {
+        costCenter: ENG,
+        currency: "EUR",
+        startedAt: new Date("2026-09-02T09:00:00.000Z"),
+      }),
+      run({
+        costCenter: ENG,
+        currency: "USD",
+        startedAt: new Date("2026-09-03T09:00:00.000Z"),
+      }),
+    ]);
+    expect(out.lines[0]!.cost).toMatchObject({
+      micros: "1000000",
+      currency: "EUR",
+    });
+    expect(out.total.cost).toMatchObject({
+      micros: "1000000",
+      currency: "EUR",
+    });
+    expect(out.total.unpricedRuns).toBe(1);
+  });
 });

@@ -54,4 +54,6 @@ The handler reads the month's run rows in pages of 5,000, oldest first by start 
 
 Every run lands on exactly one line at its full cost, the `~none` line included. The lines' micros therefore sum to the total's micros. Cents are rounded half to even once per line (spec §12.3), and the total's cents are rounded once from the total's micros. The line cents can differ from the total cents by that rounding, so micros are the figure that reconciles. An unpriced run is counted and listed on its line and adds nothing to its cost.
 
+A statement figure sums micros in one currency. When a line or the total holds priced runs in two currencies, the handler refuses the statement with `conflict` and reason `statement_mixed_currency`, and the message names both currencies. An unpriced run's currency is not checked, because it adds no figure.
+
 The `cost_center` level of `get_spend` and `export_statement` answers one workspace's share of these lines. Summed over every workspace for the same month, it gives the same runs and micros per cost center.

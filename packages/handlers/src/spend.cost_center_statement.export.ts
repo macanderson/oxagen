@@ -7,7 +7,7 @@
 // line traces to the runs a finance reader can open, and every run lands on
 // exactly one line at its full cost: the lines' micros sum to the total's.
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import {
   COST_CENTER_STATEMENT_COLUMNS,
   COST_CENTER_STATEMENT_LINE_RUN_IDS_LIMIT,
@@ -139,18 +139,36 @@ interface LineAccumulator {
   unpriced: number;
   micros: bigint | null;
   basis: CostBasis | null;
-  currency: string;
+  /** The currency of the line's priced runs, null until one is priced. */
+  currency: string | null;
   runIds: string[];
 }
 
-function accumulate(into: LineAccumulator, run: StatementRun): void {
+/**
+ * Fold one run into a line or the total. Micros only add within one
+ * currency, so a priced run in a currency other than the one the figure
+ * already carries refuses the statement rather than sum across currencies
+ * and label the sum with whichever came last. An unpriced run adds no
+ * figure, so its currency is not checked.
+ */
+function accumulate(
+  into: LineAccumulator,
+  run: StatementRun,
+  label: string,
+): void {
   into.runs += 1;
   into.runIds.push(run.runId);
-  into.currency = run.currency;
   if (run.costMicros === null || run.costBasis === null) {
     into.unpriced += 1;
     return;
   }
+  if (into.currency !== null && into.currency !== run.currency)
+    throw new HandlerError({
+      code: "conflict",
+      reason: "statement_mixed_currency",
+      message: `The ${label} holds runs priced in ${into.currency} and in ${run.currency}. A statement figure sums one currency, so no statement was built.`,
+    });
+  into.currency = run.currency;
   into.micros = (into.micros ?? 0n) + run.costMicros;
   into.basis = foldBasis(into.basis, run.costBasis);
 }
@@ -160,7 +178,7 @@ const empty = (): LineAccumulator => ({
   unpriced: 0,
   micros: null,
   basis: null,
-  currency: "USD",
+  currency: null,
   runIds: [],
 });
 
@@ -216,9 +234,9 @@ export function createCostCenterStatementHandler(
     await forEachRun(deps, ctx.orgId, monthBounds(input.month), (run) => {
       const key = run.costCenter ?? UNASSIGNED_COST_CENTER_KEY;
       const acc = byCenter.get(key) ?? empty();
-      accumulate(acc, run);
+      accumulate(acc, run, `cost center ${key}`);
       byCenter.set(key, acc);
-      accumulate(all, run);
+      accumulate(all, run, "organization total");
     });
     // The CSV lists every run id. The data lists the oldest few per line and
     // counts the rest, so one response does not carry every id twice.
@@ -234,7 +252,7 @@ export function createCostCenterStatementHandler(
           costCenter,
           runs: acc.runs,
           unpricedRuns: acc.unpriced,
-          cost: cost(acc.micros, acc.currency, acc.basis),
+          cost: cost(acc.micros, acc.currency ?? "USD", acc.basis),
           runIds: listed,
           runIdsOmitted: acc.runIds.length - listed.length,
         };
@@ -243,7 +261,7 @@ export function createCostCenterStatementHandler(
     const total = {
       runs: all.runs,
       unpricedRuns: all.unpriced,
-      cost: cost(all.micros, all.currency, all.basis),
+      cost: cost(all.micros, all.currency ?? "USD", all.basis),
     };
     const csv = [
       COST_CENTER_STATEMENT_COLUMNS.join(","),
