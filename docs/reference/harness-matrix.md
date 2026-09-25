@@ -55,7 +55,7 @@ Cursor's adapter refuses an ask because its pre-tool protocol cannot provide the
 
 The MCP gateway in [the collector][MG] serves Oxagen's own read-only tools to Claude Desktop and to nothing else. It forwards each call to Oxagen's MCP server and cannot front a third-party server. Claude Code, Codex, Cursor, and Stella call the MCP servers you configure directly. Their `PreToolUse` hooks record and can refuse each `mcp__*` call, client-attested like any other tool call. No wrapped run reaches the `gateway` tier through MCP today.
 
-Routing those calls is #3299 item 6. [The MCP gateway plan](https://github.com/macanderson/roadmap/blob/main/docs/mcp-gateway-plan.md) gives each server its own loopback relay under its original name, and adds a third way for a run to earn `gateway` at ingest. When a phase ships, this column changes in the same pull request.
+Routing those calls is #3299 item 6. [The MCP gateway plan](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/mcp-gateway-plan.md) gives each server its own loopback relay under its original name, and adds a third way for a run to earn `gateway` at ingest. When a phase ships, this column changes in the same pull request.
 
 Some MCP calls can never pass through a local gateway, because the vendor runs the tool:
 
