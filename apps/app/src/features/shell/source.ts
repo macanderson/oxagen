@@ -129,13 +129,15 @@ export async function shellSource(
   // workspace the sidebar points at: the first `shell.context` lists. The
   // feed carries the organization's rows and that workspace's; the counts are
   // that workspace's Steering and Audit figures. A workspace page replaces
-  // both with its own (`<ShellWorkspace>`).
+  // both with its own (`<ShellWorkspace>`). A viewer who can open no
+  // workspace still has the organization's own rows, so the feed is read in
+  // the organization's scope and only the counts are left unread (#3806).
   const first = read[0];
   const firstCtx =
     first === undefined ? null : await requireViewer(ctx.orgSlug, first.slug);
   const [feed, counts] =
     firstCtx === null
-      ? [null, null]
+      ? [await source.shell.notifications(ctx), null]
       : await Promise.all([
           source.shell.notifications(firstCtx),
           source.shell.counts(firstCtx),

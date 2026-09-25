@@ -3,9 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { api, route, requestHeaders } = vi.hoisted(() => ({
   api: {
     getSession: vi.fn(),
-    requestPasswordReset: vi.fn(),
-    resetPassword: vi.fn(),
-    sendVerificationEmail: vi.fn(),
   },
   route: vi.fn(),
   requestHeaders: new Headers({ cookie: "better-auth.session_token=abc" }),
@@ -17,15 +14,8 @@ vi.mock("next/headers", () => ({
 vi.mock("@oxagen/auth/server", () => ({ auth: { api } }));
 vi.mock("@oxagen/auth/route", () => ({ handleAuthRequest: route }));
 
-import { routes } from "@/shared/safe-path";
-import {
-  getAuthUser,
-  getSession,
-  handleAuthRequest,
-  requestPasswordReset,
-  resetPassword,
-  sendVerificationEmail,
-} from "./session";
+import * as session from "./session";
+import { getAuthUser, getSession, handleAuthRequest } from "./session";
 
 beforeEach(() => {
   for (const fn of [...Object.values(api), route]) fn.mockReset();
@@ -141,24 +131,11 @@ describe("Better Auth server calls", () => {
     expect(route).toHaveBeenCalledWith(request);
   });
 
-  it("sends each call's body with its SafePath destination", async () => {
-    await requestPasswordReset({
-      email: "m@acme.example",
-      redirectTo: routes.resetPassword(),
-    });
-    expect(api.requestPasswordReset).toHaveBeenCalledWith({
-      body: { email: "m@acme.example", redirectTo: "/reset-password" },
-    });
-    await resetPassword({ token: "rst", newPassword: "pw" });
-    expect(api.resetPassword).toHaveBeenCalledWith({
-      body: { token: "rst", newPassword: "pw" },
-    });
-    await sendVerificationEmail({
-      email: "m@acme.example",
-      callbackURL: routes.newOrganization(),
-    });
-    expect(api.sendVerificationEmail).toHaveBeenCalledWith({
-      body: { email: "m@acme.example", callbackURL: "/new-organization" },
-    });
+  it("sends no reset or verification mail, which would skip Better Auth's rate limiter (#4042)", () => {
+    expect(Object.keys(session).sort()).toEqual([
+      "getAuthUser",
+      "getSession",
+      "handleAuthRequest",
+    ]);
   });
 });

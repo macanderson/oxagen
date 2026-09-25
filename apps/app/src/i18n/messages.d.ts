@@ -897,6 +897,7 @@ type Messages = {
         };
       };
       runtime: {
+        needsRole: string;
         empty: {
           title: string;
           body: string;
@@ -1734,6 +1735,7 @@ type Messages = {
       suspended: string;
       rateLimited: string;
       alreadyRegistered: string;
+      passwordTooWeak: string;
       codeWrong: string;
       linkExpired: string;
       oauthCancelled: string;
@@ -4040,6 +4042,8 @@ type Messages = {
       actions: string;
       resend: string;
       revoke: string;
+      resendFor: string;
+      revokeFor: string;
       working: string;
       resent: string;
       revoked: string;
@@ -7798,6 +7802,7 @@ type Messages = {
         missingVersion: string;
         catalogInvalid: string;
         catalogTooLarge: string;
+        catalogUnsafe: string;
       };
     };
   };

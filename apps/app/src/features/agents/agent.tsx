@@ -237,6 +237,9 @@ function tabBody({
           here={routes.agent(place.org, place.ws, place.agent, {
             tab: "runtime",
           })}
+          // create_enrollment_token and revoke_host_enrollment admit an org
+          // Owner or Admin only.
+          canManageHosts={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
         />
       );
     case "permissions":

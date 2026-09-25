@@ -33,9 +33,10 @@ export const SECURITY_EVENT_TYPES = [
   "auth.sign_in",
   "auth.sign_in_failed",
   "auth.sign_out",
-  // RESERVED — no emitter. Better Auth hooks in packages/auth/src/auth.ts emit
-  // only sign_in and sign_out; nothing writes these three.
+  // RESERVED — no emitter. Nothing writes auth.token_refreshed.
   "auth.token_refreshed",
+  // Better Auth's onPasswordReset and afterEmailVerification hooks in
+  // packages/auth/src/auth.ts write these two.
   "auth.password_changed",
   "auth.email_verified",
   // API key lifecycle
@@ -281,10 +282,8 @@ export const SECURITY_EVENT_TYPES = [
  * markers are hand-maintained and unchecked — they are checked now.
  */
 export const RESERVED_SECURITY_EVENT_TYPES = [
-  // Better Auth hooks emit only sign_in and sign_out.
+  // Nothing emits a token refresh.
   "auth.token_refreshed",
-  "auth.password_changed",
-  "auth.email_verified",
   // There is no org plugin denylist.
   "plugin.denylist_added",
   "plugin.denylist_removed",
@@ -544,7 +543,18 @@ export interface CredentialRevocationDetail {
   credential: string;
 }
 
+/**
+ * Evidence recorded on `auth.password_changed`. `method` says which flow set
+ * the password, and `sessionsRevoked` says whether every existing session was
+ * ended with it. Never the password, the reset token or the reset link.
+ */
+export interface PasswordChangeDetail {
+  method: "reset";
+  sessionsRevoked: boolean;
+}
+
 export type SecurityEventDetail =
+  | PasswordChangeDetail
   | ScimTokenDetail
   | ScimUserDetail
   | MemberRemovalDetail

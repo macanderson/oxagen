@@ -43,6 +43,8 @@ export function useSkillFailure(): (failure: Failure) => string {
             return t("missingVersion");
           case "skill_catalog_invalid":
             return t("catalogInvalid");
+          case "skill_catalog_unsafe":
+            return t("catalogUnsafe");
           case "skill_catalog_too_large":
             return t("catalogTooLarge");
           default:
