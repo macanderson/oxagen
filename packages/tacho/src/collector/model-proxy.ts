@@ -456,20 +456,33 @@ function exchangeContent(
   return jsonContent(jcs({ request, response }));
 }
 
-/** The request body decoded for reading only; the forwarded bytes are the caller's. */
+/**
+ * The request body decoded for reading only; the forwarded bytes are the caller's.
+ *
+ * Decoding stops at `maxOutputLength` bytes, the same ceiling the proxy holds
+ * for a raw body. Gzip and deflate inflate up to about a thousandfold, and
+ * brotli and zstd further, so a request under the raw ceiling could decode to
+ * more memory than the daemon has. A body that inflates past the ceiling
+ * reads as one nobody here can decode: a workspace with a `models` clause
+ * refuses it, and without one it is forwarded as it came, for the vendor to
+ * refuse.
+ */
 function readableBody(
   body: Buffer,
   encoding: string | undefined,
+  maxOutputLength: number,
 ): Buffer | undefined {
   const name = (encoding ?? "").trim().toLowerCase();
+  const limit = { maxOutputLength };
   try {
     if (name === "" || name === "identity") return body;
-    if (name === "zstd") return zstdDecompressSync(body);
-    if (name === "gzip" || name === "x-gzip") return gunzipSync(body);
-    if (name === "br") return brotliDecompressSync(body);
-    if (name === "deflate") return inflateSync(body);
+    if (name === "zstd") return zstdDecompressSync(body, limit);
+    if (name === "gzip" || name === "x-gzip") return gunzipSync(body, limit);
+    if (name === "br") return brotliDecompressSync(body, limit);
+    if (name === "deflate") return inflateSync(body, limit);
   } catch {
-    // A body nobody here can decode is still forwarded as it came.
+    // A body nobody here can decode, or one that inflates past the ceiling,
+    // is still forwarded as it came.
   }
   return undefined;
 }
@@ -1150,7 +1163,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const encoding = header(req, "content-encoding");
     let decoded: Buffer | undefined | null = null;
     const readable = (): Buffer | undefined => {
-      if (decoded === null) decoded = readableBody(body, encoding);
+      if (decoded === null)
+        decoded = readableBody(body, encoding, maxRequestBytes);
       return decoded;
     };
     let parsed: Record<string, unknown> | undefined | null = null;

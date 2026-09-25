@@ -33,7 +33,11 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { canonicalJson, sha256Hex } from "./registry-digest";
+import {
+  appendPromotion,
+  appendVersion,
+  lockWorkspacePublication,
+} from "./context.steering.publication";
 
 interface SteeringScope {
   orgId: string;
@@ -903,6 +907,10 @@ export const postgresSteeringStore: SteeringStore = {
   async publishMerge(input) {
     const { scope, proposal } = input;
     return withTenantDb(async (tx) => {
+      // The repository sync publishes the same merge when its push arrives
+      // (ADR-184). One lock per workspace orders the two, and whichever runs
+      // second finds the content already published.
+      await lockWorkspacePublication(tx, scope.workspaceId);
       // Take the lock the INSERT below will take anyway, BEFORE probing.
       //
       // `information_schema` is an ordinary catalog read and locks nothing, so
@@ -939,6 +947,7 @@ export const postgresSteeringStore: SteeringStore = {
           id: schema.contextRecords.id,
           publicId: schema.contextRecords.publicId,
           label: schema.contextRecords.label,
+          activeVersionId: schema.contextRecords.activeVersionId,
         })
         .from(schema.contextRecords)
         .where(
@@ -980,32 +989,9 @@ export const postgresSteeringStore: SteeringStore = {
 
       let recordId: string;
       let recordPublicId: string;
-      let version: number;
-      let parentVersionId: string | undefined;
       if (existing) {
         recordId = existing.id;
         recordPublicId = existing.publicId;
-        const [latest] = await tx
-          .select({
-            id: schema.contextRecordVersions.id,
-            versionNumber: schema.contextRecordVersions.versionNumber,
-          })
-          .from(schema.contextRecordVersions)
-          .where(
-            and(
-              eq(schema.contextRecordVersions.recordId, recordId),
-              eq(schema.contextRecordVersions.isLatest, true),
-            ),
-          )
-          .limit(1);
-        if (latest) {
-          await tx
-            .update(schema.contextRecordVersions)
-            .set({ isLatest: false, updatedAt: input.mergedAt })
-            .where(eq(schema.contextRecordVersions.id, latest.id));
-        }
-        version = (latest?.versionNumber ?? 0) + 1;
-        parentVersionId = latest?.id;
       } else {
         const [created] = await tx
           .insert(schema.contextRecords)
@@ -1024,37 +1010,44 @@ export const postgresSteeringStore: SteeringStore = {
           throw new Error("[context.steering] record insert returned no row");
         recordId = created.id;
         recordPublicId = created.publicId;
-        version = 1;
       }
 
-      const [versionRow] = await tx
-        .insert(schema.contextRecordVersions)
-        .values({
-          orgId: scope.orgId,
-          workspaceId: scope.workspaceId,
+      // The repository sync can publish this same merge first, when its push
+      // reaches the lock before this call does (ADR-184). The bytes are then
+      // already the version in force, and this publication adds the
+      // reviewer's promotion to it rather than a second copy of them.
+      let reused: { id: string; version: number } | null = null;
+      if (existing?.activeVersionId) {
+        const [active] = await tx
+          .select({
+            id: schema.contextRecordVersions.id,
+            versionNumber: schema.contextRecordVersions.versionNumber,
+            checksum: schema.contextRecordVersions.checksum,
+          })
+          .from(schema.contextRecordVersions)
+          .where(eq(schema.contextRecordVersions.id, existing.activeVersionId))
+          .limit(1);
+        if (active?.checksum === input.checksum)
+          reused = { id: active.id, version: active.versionNumber };
+      }
+
+      // The version carries what its body says. A later promote of this
+      // version copies these four back onto the record row (#3312).
+      const version =
+        reused ??
+        (await appendVersion(tx, {
+          scope,
           recordId,
-          versionNumber: version,
-          isLatest: true,
-          parentVersionId,
-          publishedAt: input.mergedAt,
           body: input.body,
           checksum: input.checksum,
-          // The version carries what its body says. A later promote of this
-          // version copies these four back onto the record row (#3312).
-          //
-          // Omitted entirely while migration `20260918160000` is pending:
-          // naming a column the database does not have raises 42703 and would
-          // fail the merge outright. The record row still gets them, so the
-          // merge is not lossy, and the version reads through
-          // `classificationOf`'s record-row fallback until the migration lands.
-          ...(versionClassificationReady
-            ? {
-                kind: proposal.kind,
-                force: proposal.force,
-                constraintEffect: proposal.constraintEffect,
-                statement: proposal.statement,
-              }
-            : {}),
+          publishedAt: input.mergedAt,
+          classification: {
+            kind: proposal.kind,
+            force: proposal.force,
+            constraintEffect: proposal.constraintEffect,
+            statement: proposal.statement,
+          },
+          classificationReady: versionClassificationReady,
           provenance: [
             {
               type: "commit",
@@ -1064,73 +1057,24 @@ export const postgresSteeringStore: SteeringStore = {
               by: proposal.publicId,
             },
           ],
-          createdById: input.mergedByUserId ?? undefined,
-          updatedById: input.mergedByUserId ?? undefined,
-        })
-        .returning({ id: schema.contextRecordVersions.id });
-      if (!versionRow)
-        throw new Error("[context.steering] version insert returned no row");
+          byUserId: input.mergedByUserId,
+        }));
 
       await tx
         .update(schema.contextRecords)
-        .set({ ...classification, activeVersionId: versionRow.id })
+        .set({ ...classification, activeVersionId: version.id })
         .where(eq(schema.contextRecords.id, recordId));
 
       // The promotion event: the next link in the record's chain, and one more
       // entry in the workspace ledger (its steering version).
-      const [ledger] = await tx
-        .select({ total: count() })
-        .from(schema.contextPromotions)
-        .where(
-          and(
-            eq(schema.contextPromotions.orgId, scope.orgId),
-            eq(schema.contextPromotions.workspaceId, scope.workspaceId),
-          ),
-        );
-      const ledgerBefore = ledger?.total ?? 0;
-      const [head] = await tx
-        .select({
-          seq: schema.contextPromotions.seq,
-          chainDigest: schema.contextPromotions.chainDigest,
-        })
-        .from(schema.contextPromotions)
-        .where(eq(schema.contextPromotions.recordId, recordId))
-        .orderBy(desc(schema.contextPromotions.seq))
-        .limit(1);
-      const seq = (head?.seq ?? 0) + 1;
-      const prevChainDigest = head?.chainDigest ?? null;
-      const chainDigest = sha256Hex(
-        (prevChainDigest ?? "") +
-          canonicalJson({
-            action: "promote",
-            approver_user_id: input.mergedByUserId,
-            policy_version: input.policyVersion,
-            record_id: recordId,
-            seq,
-            version_id: versionRow.id,
-          }),
-      );
-      const [promotion] = await tx
-        .insert(schema.contextPromotions)
-        .values({
-          orgId: scope.orgId,
-          workspaceId: scope.workspaceId,
-          recordId,
-          versionId: versionRow.id,
-          seq,
-          action: "promote",
-          approverUserId: input.mergedByUserId,
-          policyVersion: input.policyVersion,
-          prevChainDigest,
-          chainDigest,
-          createdById: input.mergedByUserId ?? undefined,
-        })
-        .returning({
-          id: schema.contextPromotions.id,
-          publicId: schema.contextPromotions.publicId,
-        });
-      if (!promotion)
-        throw new Error("[context.steering] promotion insert returned no row");
+      const promotion = await appendPromotion(tx, {
+        scope,
+        recordId,
+        versionId: version.id,
+        action: "promote",
+        approverUserId: input.mergedByUserId,
+        policyVersion: input.policyVersion,
+      });
 
       // The transition is the transaction's guard: two calls that both read
       // `checks_passed` and both reached here publish once, the second one
@@ -1159,15 +1103,15 @@ export const postgresSteeringStore: SteeringStore = {
       return {
         recordId,
         recordPublicId,
-        versionId: versionRow.id,
-        version,
+        versionId: version.id,
+        version: version.version,
         promotion: {
           id: promotion.id,
           publicId: promotion.publicId,
-          seq,
-          chainDigest,
+          seq: promotion.seq,
+          chainDigest: promotion.chainDigest,
         },
-        ledgerBefore,
+        ledgerBefore: promotion.ledgerBefore,
       };
     });
   },

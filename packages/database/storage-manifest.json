@@ -4136,7 +4136,7 @@
       "writes": []
     }
   ],
-  "contentHash": "84eba562ffbf0c501bf6db20754b09792ca1b3dcc81eb585e574cf973294de0c",
+  "contentHash": "2b59c09c49b92808d9a0766d7400a18d055963becd1c6283f3624ae1717f83c0",
   "domains": [
     {
       "name": "agent",
@@ -4179,6 +4179,7 @@
         "postgres:agent.context_proposals",
         "postgres:agent.context_record_versions",
         "postgres:agent.context_records",
+        "postgres:agent.context_sync_state",
         "postgres:agent.tool_versions",
         "postgres:agent.tools"
       ]
@@ -4598,7 +4599,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 150
+      "tableCount": 151
     },
     {
       "domains": [
@@ -9160,6 +9161,106 @@
       "domain": "agent",
       "id": "postgres:agent.context_records",
       "name": "context_records",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "provider",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repository",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "head_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "rules_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "findings",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "requested_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "synced_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.context_sync_state",
+      "name": "context_sync_state",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

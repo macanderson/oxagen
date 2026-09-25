@@ -380,6 +380,31 @@ describe("context.record.promote handler", () => {
     expect(mocks.updateSets[0]).toMatchObject({ status: "retired" });
   });
 
+  // The repository is the source for a record whose file lives under
+  // .oxagen/rules/ (ADR-184). A retire here would last until the next sync
+  // read the file back, then silently revert, so it is refused and pointed
+  // at the file, and nothing is written.
+  it("refuses to retire a record whose file lives in the repository", async () => {
+    queueSelects([
+      {
+        ...RECORD,
+        slug: "ctx.a.one",
+        path: ".oxagen/rules/ctx.a.one.toml",
+      },
+    ]);
+    await expect(
+      contextRecordPromoteHandler(
+        { record_id: "ctr_1", action: "retire", policy_version: "team-1" },
+        CTX,
+      ),
+    ).rejects.toMatchObject({
+      reason: "record_follows_repository",
+      message: expect.stringContaining(".oxagen/rules/ctx.a.one.toml"),
+    });
+    expect(mocks.insertedValues).toHaveLength(0);
+    expect(mocks.updateSets).toHaveLength(0);
+  });
+
   it("rejects a promote without a version_id", async () => {
     queueSelects([RECORD]);
 
