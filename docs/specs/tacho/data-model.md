@@ -85,6 +85,15 @@ The person is `initiating_principal_id` / `initiating_user_id` on
 `tacho.sessions` — an identity this deployment issues, which a producer cannot
 choose and which needs no secret to stay meaningful. ADR-084 has the reasoning.
 
+The stored addresses are gone too. Earlier rows held the readable address in
+`anthropic_user_email`, in `tacho_events` and in `tacho.sessions`. ClickHouse
+migration 0031 drops the `tacho_events` column, and Atlas migration
+20260925230100 drops the `tacho.sessions` column. Nothing read or wrote either
+one when they were dropped. 0027 still creates the ClickHouse column, so the
+committed file keeps matching what every cluster applied, and
+`tacho-events-ddl.ts` lists it in `DROPPED_COLUMNS` so no writer names it.
+ADR-183 records the decision.
+
 ### 2.3 Session, causality, ordering
 | Column | Type | From |
 |---|---|---|

@@ -6,8 +6,10 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   bodyColumnType,
+  DROPPED_COLUMNS,
   RETIRED_COLUMNS,
   tachoEventsColumns,
+  tachoEventsCreatedColumns,
   tachoEventsMigration,
 } from "./tacho-events-ddl";
 
@@ -41,15 +43,50 @@ describe("tacho_events DDL", () => {
     // The point of retiring rather than deleting: the table still has the
     // column, so a cluster bootstrapped today matches one bootstrapped before
     // the retirement and a rollback to a release that still sends the field
-    // does not meet an unknown column. Nothing writes it.
+    // does not meet an unknown column. Nothing writes it. The list may be
+    // empty: a retired column leaves it once its drop migration lands.
     const names = tachoEventsColumns().map((column) => column.name);
-    expect(RETIRED_COLUMNS.length).toBeGreaterThan(0);
     for (const { name, after } of RETIRED_COLUMNS) {
       expect(names).toContain(name);
       expect(names.indexOf(name)).toBe(names.indexOf(after) + 1);
       expect(ENVELOPE_COLUMNS).not.toContain(name);
       expect(BODY_MEMBER_NAMES).not.toContain(name);
     }
+  });
+
+  it("keeps each dropped column in 0027 and drops it in the migration named for it", () => {
+    // 0027 stays byte-identical, so every cluster creates the column. The
+    // named forward migration then removes it on every cluster, and the live
+    // column set, which writers project onto, no longer has it.
+    const created = tachoEventsCreatedColumns().map((column) => column.name);
+    const live = tachoEventsColumns().map((column) => column.name);
+    for (const { name, after, droppedBy } of DROPPED_COLUMNS) {
+      expect(created.indexOf(name)).toBe(created.indexOf(after) + 1);
+      expect(live).not.toContain(name);
+      expect(ENVELOPE_COLUMNS).not.toContain(name);
+      expect(BODY_MEMBER_NAMES).not.toContain(name);
+      const drop = readFileSync(join(here, "migrations", droppedBy), "utf8");
+      expect(drop).toMatch(
+        new RegExp(
+          `^ALTER TABLE tacho_events DROP COLUMN IF EXISTS ${name};$`,
+          "m",
+        ),
+      );
+    }
+  });
+
+  it("drops the readable email address from the live table (#3072)", () => {
+    // The address is the one plaintext personal identifier the table ever
+    // held. 0027 still creates it; 0031 removes it and the values it holds.
+    expect(tachoEventsCreatedColumns().map((c) => c.name)).toContain(
+      "anthropic_user_email",
+    );
+    expect(tachoEventsColumns().map((c) => c.name)).not.toContain(
+      "anthropic_user_email",
+    );
+    expect(DROPPED_COLUMNS.map((c) => c.droppedBy)).toContain(
+      "0031_drop_tacho_events_anthropic_user_email.sql",
+    );
   });
 
   it("derives body column types from the Zod definitions", () => {

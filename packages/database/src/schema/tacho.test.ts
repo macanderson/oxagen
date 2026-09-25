@@ -11,11 +11,13 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getTableColumns } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
   TACHO_ENFORCEMENT_TIERS,
   TACHO_RUNTIMES,
   TACHO_SESSION_OUTCOMES,
+  tachoSessions,
 } from "./tacho";
 
 const MIGRATIONS_DIR = fileURLToPath(
@@ -85,5 +87,42 @@ describe("tacho.sessions CHECK constraints match the schema lists", () => {
     expect(checkedValues(sql, "tacho_sessions_runtime_check")).toContain(
       "cursor",
     );
+  });
+});
+
+describe("tacho.sessions holds no readable email address (#3072)", () => {
+  /** Every migration, oldest first, with its text. */
+  function migrations(): Array<{ file: string; sql: string }> {
+    return readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .map((file) => ({
+        file,
+        sql: readFileSync(join(MIGRATIONS_DIR, file), "utf8"),
+      }));
+  }
+
+  it("a migration after the one that created anthropic_user_email drops it", () => {
+    const all = migrations();
+    const created = all.findIndex(({ sql }) =>
+      /"anthropic_user_email"\s+text/.test(sql),
+    );
+    const dropped = all.findIndex(({ sql }) =>
+      /^ALTER TABLE "tacho"\."sessions" DROP COLUMN IF EXISTS "anthropic_user_email";$/m.test(
+        sql,
+      ),
+    );
+    expect(created, "no migration creates the column").toBeGreaterThanOrEqual(
+      0,
+    );
+    expect(dropped, "no migration drops the column").toBeGreaterThan(created);
+  });
+
+  it("the schema declares no column for the address", () => {
+    const names = Object.values(getTableColumns(tachoSessions)).map(
+      (column) => column.name,
+    );
+    expect(names).not.toContain("anthropic_user_email");
+    expect(names.filter((name) => /email/.test(name))).toEqual([]);
   });
 });
