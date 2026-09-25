@@ -266,6 +266,16 @@ function checkLineageUniqueness(ctx: CheckContext): CheckOutcome {
   };
 }
 
+/**
+ * Why a stamped file stops agreeing with itself or with its proposal. Oxagen
+ * writes the file whole, so a mismatch almost always means someone changed
+ * it on the pull request, and the fix is in Oxagen, not in the file. A review
+ * bot's accepted suggestion is the common case: it edits `statement` and
+ * leaves `record_hash` stamped over the old words.
+ */
+const EDITED_ON_PR =
+  "The file changed after Oxagen wrote it, usually through an edit or an accepted review suggestion on this pull request. Change the record in Oxagen, not on the pull request.";
+
 function checkRecordHash(ctx: CheckContext): CheckOutcome {
   const parsed = parseChecked(ctx.fileText);
   if (!parsed.ok) return { ok: false, summary: parsed.reason };
@@ -274,13 +284,13 @@ function checkRecordHash(ctx: CheckContext): CheckOutcome {
   if (expected.record_hash !== record.record_hash) {
     return {
       ok: false,
-      summary: `recomputed over the canonical bytes · ${expected.record_hash} does not match the file's ${record.record_hash}`,
+      summary: `recomputed over the canonical bytes · ${expected.record_hash} does not match the file's ${record.record_hash}. ${EDITED_ON_PR}`,
     };
   }
   if (expected.record_id !== record.record_id) {
     return {
       ok: false,
-      summary: `record_id ${record.record_id} is not derived from the content (expected ${expected.record_id})`,
+      summary: `record_id ${record.record_id} is not derived from the content (expected ${expected.record_id}). ${EDITED_ON_PR}`,
     };
   }
   return {
@@ -515,12 +525,12 @@ function checkConstraintEffect(ctx: CheckContext): CheckOutcome {
   if (disagreements.length > 0) {
     return {
       ok: false,
-      summary: disagreements
+      summary: `${disagreements
         .map(
           ([field, inFile, inProposal]) =>
             `the file's ${field} is ${JSON.stringify(inFile)}; the proposal's is ${JSON.stringify(inProposal)}`,
         )
-        .join("; "),
+        .join("; ")}. ${EDITED_ON_PR}`,
     };
   }
   const effect = ctx.proposal.constraintEffect;
