@@ -65,6 +65,7 @@ export async function assistantAskHandler(
       conversationId: input.conversationId,
       content: input.content,
       pageContext: input.pageContext,
+      ...(input.goal ? { goal: input.goal } : {}),
       ...stream?.overrides,
     });
     stream?.onPrepared();
