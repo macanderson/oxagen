@@ -595,6 +595,9 @@ describe("the prepared turn", () => {
       userId: "user-1",
       surface: "chat",
       instruction: "explain this run",
+      // The turn meters its model calls on the person's message, so the run
+      // names it for the cost rollup (#4167).
+      originMessageId: "msg-user",
       maxSteps: 12,
       // The spec's tool policy is what the turn actually holds — the
       // materialised capabilities and the belt's two meta-tools. An empty

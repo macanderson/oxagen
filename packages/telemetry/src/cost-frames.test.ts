@@ -392,6 +392,59 @@ describe("readModelCallFrames", () => {
       },
     ]);
   });
+
+  it("reads an assistant run's rows on the message that asked for it too (#4167)", async () => {
+    // The in-app assistant meters every call of a turn on the person's
+    // message id, so a read on the run's own uuid alone found none of them.
+    const MESSAGE = "00000000-0000-4000-8000-0000000000bb";
+    answer([
+      {
+        at: "2026-09-25T10:00:00.000Z",
+        model: "anthropic/claude-sonnet-4.5",
+        provider: "anthropic",
+        input_uncached: "1200",
+        cache_read: "0",
+        cache_write_5m: "0",
+        output: "300",
+        cost_micros: "8100",
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "ledger", runUuid: RUN, originMessageId: MESSAGE },
+    });
+    const { query, query_params } = lastQuery();
+    expect(query).toContain(
+      "execution_step_id IN ({runId:UUID}, {originMessageId:UUID})",
+    );
+    expect(query_params).toEqual({
+      orgId: ORG,
+      runId: RUN,
+      originMessageId: MESSAGE,
+    });
+    expect(frames).toEqual([
+      expect.objectContaining({
+        model: "anthropic/claude-sonnet-4.5",
+        inputUncached: 1200,
+        output: 300,
+        basis: "gateway_observed",
+      }),
+    ]);
+  });
+
+  it("reads a ledger run with no origin message on its own uuid alone", async () => {
+    answer([]);
+    await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "ledger", runUuid: RUN, originMessageId: null },
+    });
+    const { query, query_params } = lastQuery();
+    expect(query).toContain("execution_step_id = {runId:UUID}");
+    expect(query).not.toContain("originMessageId");
+    expect(query_params).toEqual({ orgId: ORG, runId: RUN });
+  });
 });
 
 describe("readTachoToolCallFrames", () => {

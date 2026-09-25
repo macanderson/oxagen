@@ -130,6 +130,97 @@ describe("rebuildRunTotals", () => {
   });
 });
 
+describe("an in-app assistant run (#4167)", () => {
+  const RUN = "arun_0123456789abcdef012345";
+  const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000a0001";
+  const MESSAGE = "0192d4a8-7c1e-7a00-8000-0000000a0002";
+
+  it("prices the model calls the turn metered on the message that asked for it", async () => {
+    const { d, written } = deps({ runs: {} });
+    d.loadRunSource = async () => ({
+      meta: {
+        ...meta(RUN, "prn_asker"),
+        runSource: "ledger",
+        enforcementTier: null,
+        replayGrade: null,
+      },
+      frames: { kind: "ledger", runUuid: RUN_UUID, originMessageId: MESSAGE },
+    });
+    // `token_usage` holds the turn's calls under the message id, as the
+    // assistant writes them: a read on the run's uuid alone finds none.
+    const readModelCalls = vi.fn<RunRollupDeps["readModelCalls"]>(
+      async ({ run }) =>
+        run.kind === "ledger" && run.originMessageId === MESSAGE
+          ? [
+              {
+                at: new Date("2026-09-15T09:05:00.000Z"),
+                model: "claude-sonnet-5",
+                provider: "anthropic",
+                tokens: {
+                  input_uncached: 1000,
+                  cache_read: 0,
+                  cache_write_5m: 0,
+                  cache_write_1h: 0,
+                  output: 100,
+                  reasoning: 0,
+                },
+                reportedCostMicros: 4500n,
+                basis: "gateway_observed",
+              },
+            ]
+          : [],
+    );
+    d.readModelCalls = readModelCalls;
+    d.loadPriceBook = async () => [
+      {
+        id: "pe_in",
+        orgId: null,
+        provider: "anthropic",
+        model: "claude-sonnet-5",
+        modelAliases: [],
+        region: null,
+        tokenClass: "input_uncached",
+        unit: "token",
+        currency: "USD",
+        microsPerMillion: 3_000_000n,
+        effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+        effectiveTo: null,
+        source: "list",
+      },
+      {
+        id: "pe_out",
+        orgId: null,
+        provider: "anthropic",
+        model: "claude-sonnet-5",
+        modelAliases: [],
+        region: null,
+        tokenClass: "output",
+        unit: "token",
+        currency: "USD",
+        microsPerMillion: 15_000_000n,
+        effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+        effectiveTo: null,
+        source: "list",
+      },
+    ];
+
+    const record = await rebuildRunTotals(RUN, d);
+
+    expect(readModelCalls).toHaveBeenCalledWith({
+      ...SCOPE,
+      run: { kind: "ledger", runUuid: RUN_UUID, originMessageId: MESSAGE },
+    });
+    // 1000 input at $3 and 100 output at $15 a million: $0.0045.
+    expect(record?.costMicros).toBe(4500n);
+    expect(record?.costBasis).toBe("gateway_observed");
+    expect(record?.modelCalls).toBe(1);
+    expect(record?.breakdown.models.map((m) => m.model)).toEqual([
+      "claude-sonnet-5",
+    ]);
+    expect(written).toHaveLength(1);
+  });
+});
+
 describe("the breakdown jsonb (#4069)", () => {
   const byClass = {
     input_uncached: 3_000n,

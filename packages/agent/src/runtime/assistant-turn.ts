@@ -476,6 +476,9 @@ async function runPreparedTurn(
     userId,
     surface: request.surface,
     instruction: request.content,
+    // Every model call of the turn is metered on the person's message, so
+    // the run names it and the cost rollup finds the calls (#4167).
+    originMessageId: messageId,
     maxSteps: DEFAULT_GOVERNED_TURN_MAX_STEPS,
     // The spec's tool policy is the set this turn holds: the capabilities
     // materializeTools resolved, plus the belt's two meta-tools, which are

@@ -125,6 +125,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
       tx
         .select({
           runId: runs.id,
+          originMessageId: runs.originMessageId,
           orgId: runs.orgId,
           workspaceId: runs.workspaceId,
           initiatingPrincipalId: runs.initiatingPrincipalId,
@@ -199,7 +200,13 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
         enforcementTier: null,
         replayGrade: null,
       },
-      frames: { kind: "ledger", runUuid: row.runId },
+      // An in-app assistant turn meters its model calls on the message that
+      // asked for it, not on the run (#4167), so the frame read takes both.
+      frames: {
+        kind: "ledger",
+        runUuid: row.runId,
+        originMessageId: row.originMessageId,
+      },
     };
   }
 
