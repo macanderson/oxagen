@@ -73,12 +73,12 @@ export interface DedicatedPlaneDeps {
   ): Promise<string | null>;
 }
 
+// tenancy: webhook routing has to learn which organizations live on a
+// dedicated plane before it can scope anything. It reads only org_id and
+// workspace_id from the control plane, filtered to live dedicated Postgres
+// planes, and reads no tenant row; each head is then read in its own scope.
 const dedicatedPlaneDeps: DedicatedPlaneDeps = {
   dedicatedScopes: () =>
-    // tenancy: webhook routing has to learn which organizations live on a
-    // dedicated plane before it can scope anything. It reads only org_id and
-    // workspace_id from the control plane, filtered to live dedicated
-    // Postgres planes, and reads no tenant row.
     withSystemDb((tx) =>
       tx
         .select({

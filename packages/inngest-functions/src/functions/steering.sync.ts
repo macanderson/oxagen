@@ -82,10 +82,11 @@ export const [steeringSyncSweep] = createFunction(
   { cron: "*/5 * * * *" },
   async ({ step }) => {
     const heads = await step.run("list-steered-workspaces", async () => {
+      // tenancy: scheduled global sweep across all orgs; both shared-plane
+      // reads select only org_id and workspace_id (main binding heads, and
+      // legacy GitHub connections with no head), and every sync the sweep
+      // requests re-enters that workspace's scope before reading or writing.
       const [bound, legacy, dedicated] = await Promise.all([
-        // tenancy: scheduled global sweep across all orgs; it reads only the
-        // org_id and workspace_id of each main binding head on the shared
-        // plane, and every sync it requests re-enters that workspace's scope.
         withSystemDb((tx) =>
           tx
             .selectDistinct({
