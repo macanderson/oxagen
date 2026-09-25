@@ -618,9 +618,6 @@ describe("readTranscriptPage", () => {
           type: "tool_result",
           label: "create_release ok",
           callId: "tc_1",
-          // Fields the port gained after this copy was written: a later page
-          // must carry them too, or the step loses its target and effort once
-          // it scrolls past the first page.
           target: "gh release create v1.2.0",
           effort: "high",
           subagent: {
@@ -659,13 +656,110 @@ describe("readTranscriptPage", () => {
       [],
       "ZjoxMA",
     );
-    // The layer matrix keeps `features/*` out of `data/live`, so the action
-    // carries its own copy of the port's mapping. This is what stops the two
-    // drifting: a test may import both, and production may not.
-    expect(page).toEqual({
-      ok: true,
-      value: toRunTranscript(out),
-    });
+    expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
+  });
+
+  it("carries a later page's assembled reply as blocks and text, as the first page does (#3375)", async () => {
+    // A later page was mapped by a second copy of the port's mapper, which
+    // kept no blocks and no text from the assembly: the reply the first page
+    // drew was blank once it scrolled onto a later page. Both pages now read
+    // the port, and this pins that on a half that carries an assembly.
+    const { toRunTranscript } = await import("@/data/live/mappers/run");
+    const block = { chars: 0, tokens: 0, partial: false, cost: null };
+    const out: TranscriptOutput = {
+      zoom: "everything",
+      kinds: [],
+      entries: [
+        {
+          seq: "22",
+          endSeq: "22",
+          at: "2026-09-15T08:12:00.000Z",
+          elapsedMs: 1800,
+          kind: "model_call",
+          type: "model.response",
+          label: "anthropic/claude-sonnet-4-5",
+          callId: "msg_1",
+          kinds: ["responses"],
+          turn: 2,
+          request: null,
+          response: {
+            seq: "22",
+            type: "model.response",
+            digest: `sha256:${"b".repeat(64)}`,
+            bytesRef: "evb:v1:k:def",
+            redactions: [],
+            fidelity: "full",
+            text: null,
+            truncated: false,
+            assembly: {
+              blocks: [
+                {
+                  ...block,
+                  id: "b0",
+                  kind: "text",
+                  text: "Release notes are drafted.",
+                  truncated: false,
+                },
+                {
+                  ...block,
+                  id: "b1",
+                  kind: "tool_use",
+                  name: "create_release",
+                  input: { tag: "v1.2.0" },
+                  inputRaw: false,
+                  inputFolded: false,
+                  callKey: "tu_1",
+                  verdict: null,
+                },
+              ],
+              precis: "text, 1 tool call",
+              stopReason: "tool_use",
+              ttftMs: 400,
+              durationMs: 1800,
+              tokensPerSecond: null,
+              usage: {
+                inputTokens: 1200,
+                cacheReadTokens: 0,
+                cacheWriteTokens: 0,
+                outputTokens: 40,
+              },
+              partial: false,
+              wire: { events: 12, bytes: 2048 },
+            },
+          },
+          decision: null,
+          frames: 1,
+          cost: null,
+          cumulativeCost: null,
+        },
+      ],
+      cursor: "ZjoyMg",
+      complete: false,
+    };
+    invoke.mockResolvedValue(out);
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "everything",
+      [],
+      "ZjoxMQ",
+    );
+    expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
+    if (!page.ok) throw new Error("the page was read");
+    const response = page.value.entries[0]?.response;
+    expect(response?.blocks).toEqual([
+      { kind: "text", text: "Release notes are drafted." },
+      {
+        kind: "tool_use",
+        name: "create_release",
+        input: { tag: "v1.2.0" },
+        callKey: "tu_1",
+      },
+    ]);
+    expect(response?.text).toBe(
+      'Release notes are drafted.\n\ncreate_release\n{\n  "tag": "v1.2.0"\n}',
+    );
   });
 
   it("answers a cursor the capability did not write as a read error, not as a throw (negative)", async () => {
@@ -730,6 +824,24 @@ describe("readTranscriptPage", () => {
       reason: "pending_approval",
       accessRequestId: "areq_01k4qj9e",
     });
+  });
+
+  it("answers a run the workspace does not hold as not_found with the handler's reason, not as a bad cursor (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "not_found",
+      reason: "run_not_found",
+      message: "run not found",
+    });
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "ZjoxMQ",
+      ),
+    ).toEqual({ ok: false, reason: "not_found", code: "run_not_found" });
   });
 
   it("answers a store that failed as unavailable with the Run page's error code, not as invalid (negative)", async () => {
@@ -839,10 +951,8 @@ describe("readTranscriptPage", () => {
   // A page whose mapped shape the app's own `RunTranscript` schema refuses
   // cannot be produced through this file's fake boundary: `kernelRead`'s real
   // `contract.output.safeParse` already validates the mocked `invoke` result
-  // against the (`.strict()`, identically-shaped) contract schema before this
-  // module ever sees it, so a value that clears that gate always clears the
-  // app's looser view schema too. The `captureError` report on that branch is
-  // proved directly against `data/live/runs.ts`'s `view()` helper instead
-  // (`data/live/runs.test.ts`), which is the same defensive parse this file's
-  // own copy of the mapping mirrors (see the doc comment on `toTranscriptPage`).
+  // against the (`.strict()`, identically-shaped) contract schema before the
+  // port maps it, so a value that clears that gate always clears the app's
+  // looser view schema too. The `captureError` report on that branch belongs
+  // to the port's `view()` helper and is proved in `data/live/runs.test.ts`.
 });

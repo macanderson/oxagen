@@ -78,16 +78,21 @@ interface SummaryStep {
 }
 
 /**
- * The prompt's transcript: the first steps with their body text. Bodies
- * that were not retained, are not text, or do not hash to their digest read
- * as `null`, and the prompt says so.
+ * The prompt's transcript: the first steps with their body text, read from
+ * the same step fold the Run page draws (ADR-182). A step that only frames
+ * the run (the agent starting, a hook registering, a subagent's brief) says
+ * nothing about what the run did, so it is left out rather than spending one
+ * of the prompt's steps. Bodies that were not retained, are not text, or do
+ * not hash to their digest read as `null`, and the prompt says so.
  */
 export async function collectSummarySteps(
   scope: RunScope,
   frames: readonly RunFrame[],
   getBody: (scope: RunScope, ref: string) => Promise<{ bytes: Uint8Array }>,
 ): Promise<{ steps: SummaryStep[]; total: number }> {
-  const folds = foldTranscript(frames, "steps");
+  const folds = foldTranscript(frames, "steps").filter(
+    (fold) => fold.node !== "control",
+  );
   const kept = folds.slice(0, SUMMARY_STEP_MAX);
 
   /** A frame's retained body as text, or null. */
@@ -107,20 +112,24 @@ export async function collectSummarySteps(
   const steps: SummaryStep[] = [];
   for (const fold of kept) {
     const { opening } = fold;
-    // The response half is the result; a producer that appends a single
+    const call = fold.node === "model" || fold.node === "tool";
+    // A call's response half is the result; a producer that appends a single
     // terminal receipt records it there too, so `opening` is only read when
     // the fold has neither half. A request with no response is a call that
     // never completed (a failed or abandoned attempt): it has no result, and
     // reading its opening would hand the model the input as what came back
-    // (#3370).
-    const result = fold.response ?? (fold.request === null ? opening : null);
+    // (#3370). Any other step's words are its one half, or its opening: an
+    // operator's prompt is the request of its `turn_start`.
+    const result = call
+      ? (fold.response ?? (fold.request === null ? opening : null))
+      : (fold.response ?? fold.request ?? opening);
     steps.push({
       seq: opening.seq,
       kind: fold.kind,
       label: opening.summary,
-      input: await bodyText(fold.request),
+      input: call ? await bodyText(fold.request) : null,
       text: await bodyText(result),
-      unfinished: fold.request !== null && fold.response === null,
+      unfinished: call && fold.request !== null && fold.response === null,
     });
   }
   return { steps, total: folds.length };

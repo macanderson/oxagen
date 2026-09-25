@@ -1,23 +1,29 @@
 // run-turns.ts — a run's per-turn ledger (`get_run_turns`, #4067), built two
 // ways that must agree.
 //
+// A ledger run is read frame by frame here (`framesTurns`), because the
+// ledger store is Postgres and its runs are small. Its steps are the
+// transcript's own: the one step fold in `@oxagen/run-ledger` (ADR-182),
+// counted per turn, so a turn here holds the steps the Run page draws.
+//
 // A wrapped run is counted in ClickHouse (`selectTachoTurnGroups`): each chain
 // comes back tallied per turn, and `tachoTurns` below places every subagent
-// chain in the turn that spawned it and adds the tallies up. A ledger run is
-// read frame by frame and tallied here (`framesTurns`), because the ledger
-// store is Postgres and its runs are small. `framesTurns` over a wrapped run's
-// spliced frames is also the reference the ClickHouse path is tested against
-// (`run.turns.get.integration.test.ts`): the two must answer the same rows.
+// chain in the turn that spawned it and adds the tallies up. That SQL counts
+// steps by a rule of its own, a second definition of a step, until each frame
+// carries its step key from ingest. `framesTurns` over a wrapped run's spliced
+// frames is the reference the ClickHouse path is tested against
+// (`run.turns.get.integration.test.ts`), so the two cannot drift apart
+// unnoticed.
 //
-// Both count by the rules the `get_run_turns` contract states. A turn is what
-// `turnOrdinals` says it is, the numbering the transcript's entries carry, so
-// a turn here and a turn there are the same turn.
+// A turn is what `turnOrdinals` says it is, the numbering the transcript's
+// entries carry, so a turn here and a turn there are the same turn.
 import type { RunTurn } from "@oxagen/oxagen/contracts/run.turns.get";
 import {
   type RunFrame,
-  stepKind,
+  stepFolds,
   tachoTimestamp,
   turnOrdinals,
+  withoutDuplicateModelCalls,
 } from "@oxagen/run-ledger";
 import type {
   TachoChainTurnFacts,
@@ -26,7 +32,7 @@ import type {
 } from "@oxagen/telemetry";
 import { microsString } from "../run.list";
 
-/** One chain's frames within one turn, counted. Both paths produce these. */
+/** One chain's frames within one turn, as the ClickHouse path tallies them. */
 export interface TurnTally {
   frames: number;
   /** Single-frame model calls that are no later sighting of a call. */
@@ -41,27 +47,20 @@ export interface TurnTally {
   cacheRead: number | null;
 }
 
-const EMPTY: TurnTally = {
-  frames: 0,
-  modelCalls: 0,
-  modelRequests: 0,
-  modelResponses: 0,
-  keyedToolCalls: 0,
-  unkeyedToolRequests: 0,
-  unkeyedToolCalls: 0,
-  costMicros: null,
-  inputUncached: null,
-  cacheRead: null,
-};
-
 const addNullable = (a: number | null, b: number | null): number | null =>
   a === null ? b : b === null ? a : a + b;
 
-/** One chain's model calls: each single frame, and each request and response pair. */
+/**
+ * One chain's model calls in ClickHouse's tally: each single frame, and each
+ * request and response pair.
+ */
 const modelSteps = (t: TurnTally) =>
   t.modelCalls + Math.max(t.modelRequests, t.modelResponses);
 
-/** One chain's tool calls: each call id, and each unkeyed request and result pair. */
+/**
+ * One chain's tool calls in ClickHouse's tally: each call id, and each
+ * unkeyed request and result pair.
+ */
 const toolSteps = (t: TurnTally) =>
   t.keyedToolCalls + Math.max(t.unkeyedToolRequests, t.unkeyedToolCalls);
 
@@ -141,42 +140,30 @@ function rowsOf(
 
 // ── From frames ──────────────────────────────────────────────────────────────
 
-/** Add one frame to its chain's tally for the turn. */
-function tallyFrame(
-  tally: TurnTally,
-  frame: RunFrame,
-  keys: Set<string>,
-): TurnTally {
-  const next = { ...tally, frames: tally.frames + 1 };
-  const kind = stepKind(frame);
-  const laterSighting = (frame.llmCall?.duplicateOf ?? null) !== null;
-  if (kind === "model_call" && !laterSighting) {
-    if (frame.phase === "request") next.modelRequests += 1;
-    else if (frame.phase === "response") next.modelResponses += 1;
-    else next.modelCalls += 1;
+/**
+ * Model and tool steps per turn, as the transcript's `steps` zoom folds them.
+ *
+ * The fold reads what the transcript shows: one model call reported by
+ * several sources is one step (`withoutDuplicateModelCalls`). That read moves
+ * a hidden sighting's spend onto the copy it keeps, so it runs over copies of
+ * the frames, and the frames `framesTurns` tallies keep the spend they were
+ * read with.
+ */
+function stepsByTurn(
+  frames: readonly RunFrame[],
+): Map<number, { model: number; tool: number }> {
+  const shown = withoutDuplicateModelCalls(
+    frames.map((frame) => ({ ...frame })),
+  );
+  const out = new Map<number, { model: number; tool: number }>();
+  for (const step of stepFolds(shown)) {
+    if (step.turn === null) continue;
+    const counted = out.get(step.turn) ?? { model: 0, tool: 0 };
+    if (step.node === "model") counted.model += 1;
+    else if (step.node === "tool") counted.tool += 1;
+    out.set(step.turn, counted);
   }
-  if (kind === "tool_call") {
-    const key = frame.identity.callId;
-    if (key !== null) {
-      if (!keys.has(key)) {
-        keys.add(key);
-        next.keyedToolCalls += 1;
-      }
-    } else if (frame.phase === "request") next.unkeyedToolRequests += 1;
-    else next.unkeyedToolCalls += 1;
-  }
-  next.costMicros = addNullable(next.costMicros, frame.costMicros);
-  if (!laterSighting) {
-    next.inputUncached = addNullable(
-      next.inputUncached,
-      frame.usage?.inputUncached ?? null,
-    );
-    next.cacheRead = addNullable(
-      next.cacheRead,
-      frame.usage?.cacheRead ?? null,
-    );
-  }
-  return next;
+  return out;
 }
 
 /**
@@ -197,6 +184,7 @@ export function framesTurns(
   cap: number,
 ): { turns: RunTurn[]; complete: boolean } {
   const ordinals = turnOrdinals(frames);
+  const steps = stepsByTurn(frames);
   let before: number | null = null;
   const byTurn = new Map<
     number,
@@ -204,7 +192,7 @@ export function framesTurns(
       opening: TurnOpening;
       /** Whether `opening` is a frame on the run's own chain. */
       rooted: boolean;
-      chains: Map<string, { tally: TurnTally; keys: Set<string> }>;
+      sum: TurnSum;
     }
   >();
   frames.forEach((frame, i) => {
@@ -216,27 +204,41 @@ export function framesTurns(
     const rooted = frame.chain === undefined;
     let entry = byTurn.get(turn);
     if (entry === undefined) {
+      const counted = steps.get(turn);
       entry = {
         opening: { turn, seq: frame.seq, at: frame.observedAt },
         rooted,
-        chains: new Map(),
+        sum: {
+          frames: 0,
+          modelSteps: counted?.model ?? 0,
+          toolSteps: counted?.tool ?? 0,
+          costMicros: null,
+          inputUncached: null,
+          cacheRead: null,
+        },
       };
       byTurn.set(turn, entry);
     } else if (rooted && !entry.rooted) {
       entry.opening = { turn, seq: frame.seq, at: frame.observedAt };
       entry.rooted = true;
     }
-    const chain = frame.chain?.sessionUuid ?? "";
-    const held = entry.chains.get(chain) ?? {
-      tally: EMPTY,
-      keys: new Set<string>(),
-    };
-    held.tally = tallyFrame(held.tally, frame, held.keys);
-    entry.chains.set(chain, held);
+    const { sum } = entry;
+    sum.frames += 1;
+    sum.costMicros = addNullable(sum.costMicros, frame.costMicros);
+    if ((frame.llmCall?.duplicateOf ?? null) === null) {
+      sum.inputUncached = addNullable(
+        sum.inputUncached,
+        frame.usage?.inputUncached ?? null,
+      );
+      sum.cacheRead = addNullable(
+        sum.cacheRead,
+        frame.usage?.cacheRead ?? null,
+      );
+    }
   });
-  const turns = [...byTurn.values()].map((entry) => ({
-    opening: entry.opening,
-    sum: sumOf([...entry.chains.values()].map((held) => held.tally)),
+  const turns = [...byTurn.values()].map(({ opening, sum }) => ({
+    opening,
+    sum,
   }));
   return {
     turns: rowsOf(turns.slice(0, cap), before),

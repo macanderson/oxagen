@@ -84,12 +84,20 @@ const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
  * layout rendered, so no route render can hand them down. The approvals
  * port's `pending` and `resolved` already hold the kernel call, the mapping
  * and the view-model check the Run page uses for the same rows.
+ *
+ * `features/run/actions` reads a later page of a run's transcript when a
+ * person asks for more or the live stream signals new frames (ADR-182). A
+ * navigation would throw away the playhead and the scroll position, so no
+ * route render can make that read. The `runs.transcript` port maps the first
+ * page, and a second copy of that mapper in the action dropped the assembled
+ * reply from every later page. Reading the port gives every page one mapper.
  */
 const PORT_READING_ACTIONS: readonly string[] = [
   "features/shell/choice-actions",
   "features/shell/engine-actions",
   "features/shell/assistant-approval-actions",
   "features/shell/assistant-thread-actions",
+  "features/run/actions",
 ];
 
 const isVocabulary = (target: string): boolean =>

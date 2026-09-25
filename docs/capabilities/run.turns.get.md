@@ -2,7 +2,7 @@
 
 The Run page's run waterfall (Mission Control spec §12.9; #4067): one run's per-turn ledger over every frame it recorded. Each row is one turn with its model and tool steps, its frames, its cost and the run's cost so far, and the input tokens its model calls reported. The Cost tab draws its per-turn bars, its cost-so-far line, the ledger table under them, and the Shape of the run and Cost so far instruments from these rows.
 
-A wrapped run is counted in ClickHouse in two reads, whatever its length: one finds where each chain's turns open and where the proxy began observing it, and one groups every frame by chain and turn. A 250,000-frame run answers in about 0.3 seconds, where the Cost tab's former read of the whole transcript took 19 seconds and stopped at the transcript's 10,000-frame fold. A ledger run is read from the ledger and counted frame by frame.
+A wrapped run is counted in ClickHouse in two reads, whatever its length: one finds where each chain's turns open and where the proxy began observing it, and one groups every frame by chain and turn. A 250,000-frame run answers in about 0.3 seconds, where the Cost tab's former read of the whole transcript took 19 seconds and stopped at the transcript's 10,000-frame fold. A ledger run is read from the ledger, and its steps are the entries `get_run_transcript` folds at the `steps` zoom (ADR-182). The wrapped path's SQL counts steps by its own rule, and an integration test holds the two to the same rows.
 
 **Surfaces:** api, mcp, cli
 

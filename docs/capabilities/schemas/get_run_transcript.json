@@ -1,7 +1,7 @@
 {
   "name": "get_run_transcript",
   "domain": "run",
-  "description": "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost.",
+  "description": "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries, and carries the run's counts and figures.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -52,6 +52,18 @@
       "after": {
         "type": "string",
         "maxLength": 256
+      },
+      "text": {
+        "type": "string",
+        "enum": [
+          "excerpt",
+          "full"
+        ]
+      },
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
       },
       "limit": {
         "type": "integer",
@@ -137,6 +149,17 @@
                   "anyOf": [
                     {
                       "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "parentSessionUuid": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
                     },
                     {
                       "type": "null"
@@ -664,6 +687,39 @@
                                               "rule",
                                               "ms",
                                               "waitingOn"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "stepKey": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "result": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "ok": {
+                                                "type": "boolean"
+                                              },
+                                              "summary": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "ok",
+                                              "summary"
                                             ],
                                             "additionalProperties": false
                                           },
@@ -1329,6 +1385,39 @@
                                             "type": "null"
                                           }
                                         ]
+                                      },
+                                      "stepKey": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "result": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "ok": {
+                                                "type": "boolean"
+                                              },
+                                              "summary": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "ok",
+                                              "summary"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
                                       }
                                     },
                                     "required": [
@@ -1738,6 +1827,285 @@
                   "type": "null"
                 }
               ]
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parentKey": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "node": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "prompt",
+                    "reply",
+                    "model",
+                    "tool",
+                    "policy",
+                    "recall",
+                    "seal",
+                    "control",
+                    "event"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "quiet": {
+              "type": "boolean"
+            },
+            "outcome": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "ok",
+                    "failed",
+                    "denied",
+                    "parked",
+                    "pending"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "approvalId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "gates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "seq": {
+                    "type": "string"
+                  },
+                  "sessionUuid": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "decision": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "seq",
+                  "decision",
+                  "type",
+                  "at"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "subject": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "family": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "shell",
+                    "read",
+                    "edit",
+                    "create",
+                    "delete",
+                    "search",
+                    "web",
+                    "skill",
+                    "agent",
+                    "plan",
+                    "notebook",
+                    "mcp",
+                    "tool"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "echoOf": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recall": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "unit": {
+                      "type": "string",
+                      "enum": [
+                        "frames",
+                        "items"
+                      ]
+                    },
+                    "count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cut": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "label",
+                          "tokens"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 2000
+                    }
+                  },
+                  "required": [
+                    "unit",
+                    "count",
+                    "tokens",
+                    "cut",
+                    "items"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "matches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "subject",
+                  "target",
+                  "request",
+                  "response"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 5
             }
           },
           "required": [
@@ -1774,6 +2142,287 @@
       },
       "complete": {
         "type": "boolean"
+      },
+      "counts": {
+        "type": "object",
+        "properties": {
+          "kinds": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "entries": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "policy": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "kinds",
+          "entries",
+          "errors",
+          "policy"
+        ],
+        "additionalProperties": false
+      },
+      "figures": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tool": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "model",
+              "tool"
+            ],
+            "additionalProperties": false
+          },
+          "prompts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "calls": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "calls": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "calls"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "families": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "family": {
+                      "type": "string",
+                      "enum": [
+                        "shell",
+                        "read",
+                        "edit",
+                        "create",
+                        "delete",
+                        "search",
+                        "web",
+                        "skill",
+                        "agent",
+                        "plan",
+                        "notebook",
+                        "mcp",
+                        "tool"
+                      ]
+                    },
+                    "calls": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "share": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "failed": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "tools": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "family",
+                    "calls",
+                    "share",
+                    "ms",
+                    "failed",
+                    "tools"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "batches": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "parallel": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "widest": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "fanOut": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "serialMs": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "togetherMs": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "histogram": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "width": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0
+                            },
+                            "batches": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "width",
+                            "batches"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "count",
+                      "parallel",
+                      "widest",
+                      "fanOut",
+                      "serialMs",
+                      "togetherMs",
+                      "histogram"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "count",
+              "failed",
+              "tools",
+              "families",
+              "batches"
+            ],
+            "additionalProperties": false
+          },
+          "wall": {
+            "type": "object",
+            "properties": {
+              "modelMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "toolMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "waitingMs": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "modelMs",
+              "toolMs",
+              "waitingMs"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "steps",
+          "prompts",
+          "calls",
+          "wall"
+        ],
+        "additionalProperties": false
+      },
+      "search": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "matched": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unsearched": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "query",
+          "matched",
+          "unsearched"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

@@ -1,18 +1,34 @@
 // `get_run_transcript`: a run read as a transcript at one zoom level
 // (Mission Control spec §8.4, §14; ADR-058).
 //
-// The frames come from the run reader (lib/run-read.ts), are narrowed to the
-// chips the caller pressed (`filterFramesByKind`), and fold into entries with
-// the pure `foldTranscript` (@oxagen/run-ledger). Each entry's two halves —
-// what went out and what came back — then have their bodies read from the
-// evidence store, decoded as UTF-8 and cut at the contract's text cap.
+// The frames come from the run reader (lib/run-read.ts) and fold into entries
+// with the one transcript fold, `foldTranscript` (@oxagen/run-ledger,
+// ADR-182). The chips the caller pressed then narrow the entries
+// (`filterFoldsByKind`), so a filtered read shows the same steps as an
+// unfiltered one. Each entry's two halves (what went out and what came back)
+// have their bodies read from the evidence store, decoded as UTF-8 and cut at
+// the contract's text cap.
+//
+// Every fact a reader would otherwise derive from an entry's frames is the
+// fold's, and goes out as a field of the entry: its key, parent, node,
+// outcome, gates, subject, family, duration and echo. Two need bytes the fold
+// does not read, so they are added here: a recall entry's items, parsed from
+// the body it kept (`recallOf`), and each reply's `tool_use` blocks, which
+// name the tool step that recorded the call (`toolUseClaimer`) and what came
+// back. `counts` counts the run's entries at the zoom, and `figures` the
+// run's steps, calls and time (`transcriptFigures`), whatever the chips.
+//
+// A `query` narrows the entries the chips kept (`searchFolds`). Label, tool
+// and target are matched on the entry; each half's text is read from the
+// evidence store, at most TRANSCRIPT_SEARCH_HALF_MAX halves per read, and
+// `search.unsearched` counts the halves the read could not look inside.
 //
 // Three things are computed over the whole run and not over the page: the
 // cumulative cost, which is a prefix sum from the run's first frame (§8.4),
 // the elapsed time, which is measured from the run's recorded start, and the
-// turn each entry falls in, which is counted over the unfiltered frames so a
-// chip never renumbers the turns. A page that computed any of them from its
-// own first entry would restate the run's cost, clock and turns as the page's,
+// turn each entry falls in, which the fold counts over every frame so a chip
+// never renumbers the turns. A page that computed any of them from its own
+// first entry would restate the run's cost, clock and turns as the page's,
 // which is wrong on every page but the first.
 //
 // A wrapped run's subagents record on chains of their own, each numbered from
@@ -31,19 +47,28 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runTranscriptGet,
   type RunTranscriptGetOutput,
+  TRANSCRIPT_SEARCH_HALF_MAX,
+  TRANSCRIPT_TEXT_MAX,
   transcriptTextMax,
   type TranscriptEntry,
   type TranscriptEntryBody,
+  type TranscriptRecallView,
   type TranscriptZoom,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import {
-  filterFramesByKind,
-  foldTranscript,
+  filterFoldsByKind,
+  frameFolds,
   frameKey,
+  recallOf,
   type RunFrame,
+  stepFolds,
+  toolUseClaimer,
+  TRANSCRIPT_KINDS,
+  transcriptCounts,
+  transcriptFigures,
+  type TranscriptDecision,
   type TranscriptFold,
-  type TranscriptKind,
-  turnOrdinals,
+  turnFolds,
   withoutDuplicateModelCalls,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
@@ -55,6 +80,8 @@ import {
   resolvePriceEntry,
 } from "@oxagen/billing";
 import { assemblyView, readAssembly } from "./lib/transcript-assembly";
+import { mapConcurrent } from "./lib/map-concurrent";
+import { searchableText, searchFolds } from "./lib/transcript-search";
 import { digestBytes } from "@oxagen/tacho";
 import { logger } from "./logger";
 import {
@@ -74,6 +101,12 @@ import {
 
 /** The most frames a transcript folds; past it the transcript is incomplete. */
 const TRANSCRIPT_FRAME_CAP = 10_000;
+/**
+ * The largest recall body read to parse what it put in front of the model. A
+ * steering manifest lists at most 2,000 items; a body past this is not one,
+ * and the recall falls back to the count the frame recorded.
+ */
+const RECALL_BODY_MAX = 1_048_576;
 /** Bodies read at once. */
 const BODY_CONCURRENCY = 8;
 
@@ -344,25 +377,91 @@ async function half(
     : { ...base, text, truncated: false, assembly: null };
 }
 
-async function mapConcurrent<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const out: R[] = new Array<R>(items.length);
-  let next = 0;
-  async function worker(): Promise<void> {
-    for (;;) {
-      const index = next;
-      next += 1;
-      if (index >= items.length) return;
-      out[index] = await fn(items[index] as T);
+/**
+ * A recall frame's whole body as text, for `recallOf` to parse, or null when
+ * none was kept, it cannot be read, it does not hash to its digest, or it is
+ * larger than any manifest. A half's text is cut at the zoom's cap, and a
+ * manifest cut short does not parse, so this reads the body on its own.
+ */
+async function recallBody(
+  bodies: Pick<EvidenceStore, "getBody">,
+  scope: RunScope,
+  frame: RunFrame,
+): Promise<string | null> {
+  const { bodyRef, bodyDigest } = frame.body;
+  if (bodyRef === null || bodyDigest === null) return null;
+  try {
+    const stored = await bodies.getBody(scope, bodyRef);
+    if (stored.bytes.byteLength > RECALL_BODY_MAX) return null;
+    if (digestBytes(stored.bytes) !== bodyDigest) return null;
+    return decoder.decode(stored.bytes);
+  } catch (err) {
+    logger.warn(
+      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
+      "get_run_transcript: a recall body could not be read; its recall falls back to the recorded count",
+    );
+    return null;
+  }
+}
+
+/** A tool call's result from a `tool_result` block, by the call it answers. */
+type ToolResults = ReadonlyMap<string, { ok: boolean; summary: string }>;
+
+/** Every `tool_result` block the page's halves hold, by the call key it answers. */
+export function toolResultsOf(
+  halves: readonly (TranscriptEntryBody | null)[],
+): ToolResults {
+  const results = new Map<string, { ok: boolean; summary: string }>();
+  for (const half of halves) {
+    for (const block of half?.assembly?.blocks ?? []) {
+      if (block.kind === "tool_result")
+        results.set(block.forId, { ok: block.ok, summary: block.summary });
     }
   }
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
+  return results;
+}
+
+/**
+ * `half` with each `tool_use` block's `stepKey` (the tool step that recorded
+ * the call, from `claim`) and `result` (what the page's `tool_result` blocks
+ * say came back). A half with no assembly is returned as it is.
+ */
+export function withToolUseFacts(
+  half: TranscriptEntryBody | null,
+  claim: (
+    uses: { name: string; callKey: string | null }[],
+  ) => (string | null)[],
+  results: ToolResults,
+): TranscriptEntryBody | null {
+  const blocks = half?.assembly?.blocks;
+  if (half === null || half.assembly === null || blocks === undefined)
+    return half;
+  const uses = blocks.flatMap((block) =>
+    block.kind === "tool_use" ? [block] : [],
   );
-  return out;
+  if (uses.length === 0) return half;
+  const keys = claim(
+    uses.map((use) => ({ name: use.name, callKey: use.callKey })),
+  );
+  const stepKeys = new Map(uses.map((use, i) => [use, keys[i] ?? null]));
+  return {
+    ...half,
+    assembly: {
+      ...half.assembly,
+      blocks: blocks.map((block) =>
+        block.kind === "tool_use"
+          ? {
+              ...block,
+              stepKey: stepKeys.get(block) ?? null,
+              result:
+                block.callKey === null
+                  ? null
+                  : (results.get(block.callKey) ?? null),
+            }
+          : block,
+      ),
+    },
+  };
 }
 
 // ---- Entries --------------------------------------------------------------------------
@@ -382,44 +481,6 @@ export function elapsedMs(startedAt: number, at: Date): number {
 }
 
 /**
- * A turn boundary's own body, read as the half it is. The fold keeps a turn
- * boundary out of both slots because it is not a step (`foldTranscript`'s
- * `open()`), and that is right for pairing calls. It also meant the prompt a
- * turn opened with, which the recorder kept in full on `turn_start`, reached
- * no half and so no page: every run read as if nobody had typed anything.
- *
- * The prompt is what went out, so it is the `request`; a `turn_end` reply is
- * what came back, so it is the `response`. A step half the fold already
- * placed is never displaced, and a boundary with no retained body adds
- * nothing.
- */
-const BOUNDARY_HALF: Readonly<Record<string, "request" | "response">> = {
-  turn_start: "request",
-  turn_end: "response",
-};
-
-export function boundaryHalves(fold: TranscriptFold): {
-  request: RunFrame | null;
-  response: RunFrame | null;
-} {
-  const { opening } = fold;
-  // An agent message a harness reported on its own (`tachoFramePhase`) is
-  // what came back, and it is read as that half the way a `turn_end` is.
-  const slot =
-    BOUNDARY_HALF[opening.type] ??
-    (opening.type === "oxagen:message" && opening.phase === "response"
-      ? "response"
-      : undefined);
-  if (slot === undefined || opening.body.bodyRef === null) {
-    return { request: fold.request, response: fold.response };
-  }
-  return {
-    request: fold.request ?? (slot === "request" ? opening : null),
-    response: fold.response ?? (slot === "response" ? opening : null),
-  };
-}
-
-/**
  * The part of the price book a page's blocks are priced from: the models of
  * the frames `outputRate` is asked about, which are the request and response
  * halves of each fold, from the earliest of those frames to the latest.
@@ -432,8 +493,7 @@ export function pagePriceSlice(
   let to = Number.NEGATIVE_INFINITY;
   const models = new Set<string>();
   for (const fold of page) {
-    const { request, response } = boundaryHalves(fold);
-    for (const frame of [request, response]) {
+    for (const frame of [fold.request, fold.response]) {
       if (frame === null || frame.identity.model === null) continue;
       models.add(frame.identity.model);
       const at = frame.observedAt.getTime();
@@ -448,6 +508,20 @@ export function pagePriceSlice(
   return { orgId, models: [...models], from: new Date(from), to: new Date(to) };
 }
 
+/** A decision as the contract carries it. */
+function decisionView(decision: TranscriptDecision) {
+  return {
+    seq: decision.seq,
+    ...(decision.sessionUuid === undefined
+      ? {}
+      : { sessionUuid: decision.sessionUuid }),
+    decision: decision.decision,
+    type: decision.type,
+    source: decision.source,
+    at: decision.at.toISOString(),
+  };
+}
+
 /**
  * The reasoning effort the fold's model call ran at: the first of its frames
  * that recorded one. Null where none did, which is every ledger frame and
@@ -459,17 +533,6 @@ function entryEffort(fold: TranscriptFold): string | null {
     if (effort !== undefined && effort !== "") return effort;
   }
   return null;
-}
-
-/**
- * The chips an entry answers to: the union over every frame it folds, which
- * the fold collects as it absorbs them (#3370), not only its opening and its
- * two halves.
- */
-function entryKinds(fold: TranscriptFold): TranscriptKind[] {
-  const kinds = new Set<TranscriptKind>(fold.kinds);
-  if (fold.decision !== null) kinds.add("policy");
-  return [...kinds];
 }
 
 export function createRunTranscriptGetHandler(
@@ -493,14 +556,51 @@ export function createRunTranscriptGetHandler(
     // One model call reported by several sources is one step
     // (`withoutDuplicateModelCalls`): a proxied call drew twice.
     const shown = withoutDuplicateModelCalls(read.frames);
-    const frames = filterFramesByKind(shown, input.kinds);
-    const folds = foldTranscript(frames, input.zoom);
-    // Turns are counted over every frame of the run, so a chip filter never
-    // renumbers them: turn 2 is turn 2 whichever kinds the page shows.
-    const ordinals = turnOrdinals(shown);
-    const turnOf = new Map(
-      shown.map((frame, i) => [frame, ordinals[i] ?? null]),
-    );
+    // The fold runs over every frame, then the chips narrow its entries, so
+    // a filtered read shows the same steps, turns and turn numbers as an
+    // unfiltered one (ADR-182).
+    //
+    // The `steps` fold is taken at every zoom: `turns` groups it, and a model
+    // reply's `tool_use` blocks are claimed by its tool steps.
+    const steps = stepFolds(shown);
+    const all =
+      input.zoom === "steps"
+        ? steps
+        : input.zoom === "turns"
+          ? turnFolds(shown, steps)
+          : frameFolds(shown);
+    // Counted over every entry at the zoom, whatever the chips or query, so
+    // a chip's count and the rows it shows agree.
+    const counts = transcriptCounts(all, TRANSCRIPT_KINDS);
+    // The page's figures, over the steps of every frame read (ADR-182).
+    const figures = transcriptFigures(shown, steps);
+    const chipped = filterFoldsByKind(all, input.kinds);
+    // A query narrows what the chips kept, and the matches page on the same
+    // cursor as any other read. Each half is searched as far as a full read
+    // carries it, so a match is one a reader can see.
+    const found =
+      input.query === undefined
+        ? null
+        : await searchFolds(
+            chipped,
+            input.query,
+            async (frame) => {
+              const body = await half(
+                deps.bodies,
+                scope,
+                frame,
+                TRANSCRIPT_TEXT_MAX,
+                () => null,
+              );
+              return body === null ? null : searchableText(body);
+            },
+            {
+              halfMax: TRANSCRIPT_SEARCH_HALF_MAX,
+              concurrency: BODY_CONCURRENCY,
+            },
+          );
+    const folds = found?.folds ?? chipped;
+    const search = found === null ? {} : { search: found.search };
 
     // Cumulative cost is a prefix over every frame of the run (§8.4), before
     // any chip filter. Building it from the filtered folds understated spend
@@ -521,13 +621,9 @@ export function createRunTranscriptGetHandler(
 
     // Pages are cut on each frame's position in the run as read, not on its
     // `seq`: a subagent's chain is numbered from 0 like the root's, so a
-    // sequence alone no longer orders the frames of a run.
-    const position = new Map(shown.map((frame, i) => [frame, i]));
-    const at = (frame: RunFrame): number => position.get(frame) ?? -1;
-    const spans = folds.map((fold) => ({
-      open: at(fold.opening),
-      end: at(fold.last),
-    }));
+    // sequence alone no longer orders the frames of a run. The fold states
+    // each entry's span in those positions.
+    const spans = folds.map((fold) => fold.span);
     const plan = planTranscriptPage(
       spans,
       after === null
@@ -566,12 +662,16 @@ export function createRunTranscriptGetHandler(
         entries: [],
         cursor,
         complete: read.complete,
+        counts,
+        figures,
+        ...search,
       };
     }
     const runStartedAt = Date.parse(run.item.startedAt);
 
-    // A folded zoom carries an excerpt; `everything` carries the whole body.
-    const textMax = transcriptTextMax(input.zoom as TranscriptZoom);
+    // A folded zoom carries an excerpt and `everything` the whole body,
+    // unless the caller asked for one or the other.
+    const textMax = transcriptTextMax(input.zoom as TranscriptZoom, input.text);
     // Read once for the page, not once per block: a block's cost is the
     // model's output rate applied to its apportioned share.
     const book = await deps.priceBook(pagePriceSlice(ctx.orgId, page));
@@ -586,13 +686,45 @@ export function createRunTranscriptGetHandler(
       });
       return entry === null ? null : Number(entry.microsPerMillion);
     };
-    const halves = await mapConcurrent(page, BODY_CONCURRENCY, async (fold) => {
-      const { request, response } = boundaryHalves(fold);
-      return {
-        request: await half(deps.bodies, scope, request, textMax, outputRate),
-        response: await half(deps.bodies, scope, response, textMax, outputRate),
-      };
-    });
+    const halves = await mapConcurrent(
+      page,
+      BODY_CONCURRENCY,
+      async (fold) => ({
+        request: await half(
+          deps.bodies,
+          scope,
+          fold.request,
+          textMax,
+          outputRate,
+        ),
+        response: await half(
+          deps.bodies,
+          scope,
+          fold.response,
+          textMax,
+          outputRate,
+        ),
+      }),
+    );
+    // What each recall entry put in front of the model, parsed here from the
+    // body it kept (ADR-182), so no reader parses a manifest of its own.
+    const recalls = await mapConcurrent(
+      page,
+      BODY_CONCURRENCY,
+      async (fold): Promise<TranscriptRecallView | null> =>
+        fold.node === "recall"
+          ? recallOf(
+              fold.opening,
+              await recallBody(deps.bodies, scope, fold.opening),
+            )
+          : null,
+    );
+    // Each reply's `tool_use` blocks name the tool step that recorded the
+    // call, and what came back, so a reader draws each call once.
+    const claimer = toolUseClaimer(steps);
+    const results = toolResultsOf(
+      halves.flatMap((pair) => [pair.request, pair.response]),
+    );
 
     const entries: TranscriptEntry[] = page.map((fold, i) => {
       const { opening } = fold;
@@ -600,6 +732,8 @@ export function createRunTranscriptGetHandler(
         request: TranscriptEntryBody | null;
         response: TranscriptEntryBody | null;
       };
+      const claim = (uses: { name: string; callKey: string | null }[]) =>
+        claimer(fold, uses);
       return {
         seq: opening.seq,
         endSeq: fold.endSeq,
@@ -611,6 +745,7 @@ export function createRunTranscriptGetHandler(
                 id: opening.chain.subagentId,
                 type: opening.chain.subagentType,
                 spawnCallId: opening.chain.spawnToolUseId,
+                parentSessionUuid: opening.chain.parentSessionUuid,
               },
             }),
         at: opening.observedAt.toISOString(),
@@ -622,26 +757,28 @@ export function createRunTranscriptGetHandler(
         target: opening.identity.target ?? null,
         effort: entryEffort(fold),
         usage: fold.usage ?? null,
-        kinds: entryKinds(fold),
-        request: pair.request,
-        response: pair.response,
-        decision:
-          fold.decision === null
-            ? null
-            : {
-                seq: fold.decision.seq,
-                ...(fold.decision.sessionUuid === undefined
-                  ? {}
-                  : { sessionUuid: fold.decision.sessionUuid }),
-                decision: fold.decision.decision,
-                type: fold.decision.type,
-                source: fold.decision.source,
-                at: fold.decision.at.toISOString(),
-              },
+        kinds: [...fold.kinds],
+        request: withToolUseFacts(pair.request, claim, results),
+        response: withToolUseFacts(pair.response, claim, results),
+        decision: fold.decision === null ? null : decisionView(fold.decision),
         frames: fold.frames,
-        turn: turnOf.get(opening) ?? null,
+        turn: fold.turn,
         cost: cost(fold.costMicros),
         cumulativeCost: cost(costThrough.get(fold.last) ?? null),
+        key: fold.key,
+        parentKey: fold.parentKey,
+        node: fold.node,
+        quiet: fold.quiet,
+        outcome: fold.outcome,
+        approvalId: fold.approvalId,
+        gates: fold.gates.map(decisionView),
+        subject: fold.subject,
+        family: fold.family,
+        model: fold.model,
+        durationMs: fold.durationMs,
+        echoOf: fold.echoOf,
+        recall: recalls[i] ?? null,
+        ...(found === null ? {} : { matches: found.matches.get(fold) }),
       };
     });
 
@@ -651,6 +788,9 @@ export function createRunTranscriptGetHandler(
       entries,
       cursor,
       complete: read.complete,
+      counts,
+      figures,
+      ...search,
     };
   };
 }
