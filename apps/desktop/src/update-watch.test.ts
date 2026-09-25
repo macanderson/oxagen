@@ -8,19 +8,25 @@ vi.mock("@tauri-apps/plugin-process", () => ({ relaunch }));
 vi.mock("@tauri-apps/plugin-updater", () => ({ check }));
 
 const { checkForUpdate } = await import("./updater");
-const { FOCUS_GAP_MS, startUpdateWatch, WATCH_INTERVAL_MS } = await import(
-  "./update-watch"
-);
+const { FOCUS_GAP_MS, promptVisible, startUpdateWatch, WATCH_INTERVAL_MS } =
+  await import("./update-watch");
 
 const RUNNING = "2.1.1";
 
-/** A plugin handle whose install must never run on its own. */
+/**
+ * A plugin handle whose install must never run on its own. `close` frees the
+ * resource the plugin holds for it in the Rust process.
+ */
 function handle(version: string) {
   return {
     version,
     currentVersion: RUNNING,
     downloadAndInstall: vi.fn(async () => {}),
-  } as unknown as Update & { downloadAndInstall: ReturnType<typeof vi.fn> };
+    close: vi.fn(async () => {}),
+  } as unknown as Update & {
+    downloadAndInstall: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+  };
 }
 
 /**
@@ -85,6 +91,8 @@ describe("the prompt", () => {
     // relaunches.
     expect(offered.downloadAndInstall).not.toHaveBeenCalled();
     expect(relaunch).not.toHaveBeenCalled();
+    // The prompt holds the handle for Install, so the watch keeps it open.
+    expect(offered.close).not.toHaveBeenCalled();
   });
 
   it("does not fire when the feed has the running version", async () => {
@@ -100,13 +108,15 @@ describe("the prompt", () => {
   });
 
   it("does not fire for a handle that names the running version", async () => {
-    check.mockResolvedValue(handle(RUNNING));
+    const running = handle(RUNNING);
+    check.mockResolvedValue(running);
     const { env, offers } = fakeEnv();
 
     startUpdateWatch(env);
     await settle();
 
     expect(offers).toEqual([]);
+    expect(running.close).toHaveBeenCalledTimes(1);
   });
 
   it("fires once per version, and again for a newer one", async () => {
@@ -115,9 +125,13 @@ describe("the prompt", () => {
     const watch = startUpdateWatch(env);
     await settle();
 
+    const again = handle("2.2.0");
+    check.mockResolvedValue(again);
     page.tick?.();
     await settle();
     expect(offers.map((o) => o.version)).toEqual(["2.2.0"]);
+    // The second handle for 2.2.0 is dropped, so its resource is freed.
+    expect(again.close).toHaveBeenCalledTimes(1);
 
     check.mockResolvedValue(handle("2.3.0"));
     await watch.check();
@@ -209,9 +223,11 @@ describe("an install or a manual check in progress", () => {
     const watch = startUpdateWatch(env);
 
     page.paused = true;
-    answer(handle("2.2.0"));
+    const late = handle("2.2.0");
+    answer(late);
     await settle();
     expect(offers).toEqual([]);
+    expect(late.close).toHaveBeenCalledTimes(1);
 
     page.paused = false;
     check.mockResolvedValue(handle("2.2.0"));
@@ -230,5 +246,83 @@ describe("stop", () => {
     watch.stop();
     expect(page.cleared).toEqual([7]);
     expect(page.removed).toBe(page.focus);
+  });
+
+  it("drops a check that was out when it ran, and starts no new one", async () => {
+    let answer: (value: Update) => void = () => {};
+    check.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const { env, offers } = fakeEnv();
+    const watch = startUpdateWatch(env);
+
+    watch.stop();
+    const late = handle("2.2.0");
+    answer(late);
+    await settle();
+    expect(offers).toEqual([]);
+    expect(late.close).toHaveBeenCalledTimes(1);
+
+    await watch.check();
+    expect(check).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a version the app already handled", () => {
+  it("is not offered after the person's own check found it", async () => {
+    check.mockResolvedValue(null);
+    const { env, offers } = fakeEnv();
+    const watch = startUpdateWatch(env);
+    await settle();
+
+    watch.handled("2.2.0");
+    const same = handle("2.2.0");
+    check.mockResolvedValue(same);
+    await watch.check();
+
+    expect(offers).toEqual([]);
+    expect(same.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not offered again after an install whose relaunch failed", async () => {
+    check.mockResolvedValue(handle("2.2.0"));
+    const { env, offers } = fakeEnv();
+    const watch = startUpdateWatch(env);
+    await settle();
+    expect(offers.map((o) => o.version)).toEqual(["2.2.0"]);
+
+    // The install finished and the relaunch failed, so the app still runs
+    // 2.1.1 and the feed still answers 2.2.0.
+    watch.handled("2.2.0");
+    check.mockResolvedValue(handle("2.2.0"));
+    await watch.check();
+    expect(offers.map((o) => o.version)).toEqual(["2.2.0"]);
+
+    check.mockResolvedValue(handle("2.3.0"));
+    await watch.check();
+    expect(offers.map((o) => o.version)).toEqual(["2.2.0", "2.3.0"]);
+  });
+});
+
+describe("promptVisible", () => {
+  const prompt = { version: "2.2.0" };
+
+  it("shows the prompt while the masthead holds the offered version", () => {
+    expect(promptVisible(prompt, "2.2.0", false)).toBe(true);
+  });
+
+  it("hides it after Later", () => {
+    expect(promptVisible(null, "2.2.0", false)).toBe(false);
+  });
+
+  it("hides it while the install runs", () => {
+    expect(promptVisible(prompt, "2.2.0", true)).toBe(false);
+  });
+
+  it("hides it when a later check replaced or cleared the handle", () => {
+    expect(promptVisible(prompt, "2.3.0", false)).toBe(false);
+    expect(promptVisible(prompt, null, false)).toBe(false);
   });
 });

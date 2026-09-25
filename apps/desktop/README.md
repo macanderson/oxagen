@@ -232,7 +232,10 @@ and the masthead shows **Install**. The watch installs nothing and relaunches
 nothing. Only the click on Install does, and Install stays disabled while
 another action runs. **Later** hides the panel for that version until the next
 launch. A check that fails stays quiet, because an offline laptop would
-otherwise raise an error every hour. The masthead button still reports its own failures.
+otherwise raise an error every hour. The masthead button still reports its own
+failures. The watch skips a version the masthead's own check already found,
+and a version already installed whose relaunch failed. It closes every plugin
+handle it drops, so an app left open does not collect them.
 `src/update-watch.test.ts` covers the prompt: it fires for a newer version,
 stays away for the running one, and never downloads or relaunches on its own.
 
@@ -240,8 +243,11 @@ The feed carries releases only. Deploy builds reach downloads.oxagen.sh
 without an updater entry (ADR-158), so an open app offers the next release,
 not every deploy.
 
-Mac chose this on 2026-09-25 (#3697). Three other mechanisms were considered
-and rejected, because each assumes the window loads a remote page:
+The decision comment on #3697 (2026-09-25) records this mechanism, and the
+issue carries `needs:decision` until the maintainer confirms it. The hourly
+interval and the 15-minute focus gap are this implementation's choices. Three
+other mechanisms were considered and rejected, because each assumes the window
+loads a remote page:
 
 - Reload on focus. There is no remote page to reload, and reloading the
   bundled UI shows the same build.

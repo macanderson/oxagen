@@ -8,9 +8,9 @@
  *
  * The watch reads the feed at launch, every hour, and when the window takes
  * focus with the last check at least 15 minutes old. When the feed offers a
- * newer version, it calls `offer` once for that version. It never downloads, installs, or relaunches anything: the
- * person's click on Install does that, through `installUpdate` in
- * updater.ts.
+ * newer version, it calls `offer` once for that version. It never
+ * downloads, installs, or relaunches anything: the person's click on
+ * Install does that, through `installUpdate` in updater.ts.
  *
  * Everything the watch touches in the webview (timers, the focus event, the
  * clock) comes in through `UpdateWatchEnv`, so the tests drive it directly.
@@ -55,24 +55,60 @@ export interface UpdateWatch {
   check: () => Promise<void>;
   /** A window focus: read the feed when the last check is FOCUS_GAP_MS old. */
   focus: () => Promise<void>;
-  /** Clear the timer and the focus listener. */
+  /**
+   * Never offer this version. The app calls it when the person's own check
+   * found the version, and when an install of it finished. After an install
+   * whose relaunch failed, the running binary is still the old one, so the
+   * feed keeps answering with the version already on disk.
+   */
+  handled: (version: string) => void;
+  /**
+   * Clear the timer and the focus listener. A check still out when this runs
+   * offers nothing.
+   */
   stop: () => void;
+}
+
+/**
+ * Whether the prompt shows: the watch offered a version, the masthead still
+ * holds the handle for that same version (a manual check or an install has
+ * not replaced it), and no install is running.
+ */
+export function promptVisible(
+  prompt: { version: string } | null,
+  heldVersion: string | null,
+  installing: boolean,
+): boolean {
+  return prompt !== null && heldVersion === prompt.version && !installing;
 }
 
 /** Start watching: one check now, then the timer and the focus listener. */
 export function startUpdateWatch(env: UpdateWatchEnv): UpdateWatch {
   let lastStarted = Number.NEGATIVE_INFINITY;
   let inFlight: Promise<void> | null = null;
+  let stopped = false;
   const offered = new Set<string>();
 
   async function run(): Promise<void> {
     try {
       const { update } = await env.check(env.currentVersion);
-      if (update === null || update.version === env.currentVersion) return;
+      if (update === null) return;
       // Once per version: Later means later, not at the next focus. A
       // result that lands after Install was clicked is dropped, so it
-      // cannot replace the install's own progress.
-      if (offered.has(update.version) || env.paused()) return;
+      // cannot replace the install's own progress. A result that lands
+      // after stop() is dropped too.
+      if (
+        stopped ||
+        update.version === env.currentVersion ||
+        offered.has(update.version) ||
+        env.paused()
+      ) {
+        // Each handle the plugin returns holds a resource in the Rust
+        // process until close() frees it. A dropped handle is never used,
+        // so free it here, or every hourly check leaks one.
+        void update.close().catch(() => {});
+        return;
+      }
       offered.add(update.version);
       env.offer({
         version: update.version,
@@ -88,7 +124,7 @@ export function startUpdateWatch(env: UpdateWatchEnv): UpdateWatch {
 
   function check(): Promise<void> {
     if (inFlight !== null) return inFlight;
-    if (env.paused()) return Promise.resolve();
+    if (stopped || env.paused()) return Promise.resolve();
     lastStarted = env.now();
     inFlight = run().finally(() => {
       inFlight = null;
@@ -113,7 +149,11 @@ export function startUpdateWatch(env: UpdateWatchEnv): UpdateWatch {
   return {
     check,
     focus,
+    handled(version) {
+      offered.add(version);
+    },
     stop() {
+      stopped = true;
       env.clearInterval(timer);
       env.removeEventListener("focus", onFocus);
     },

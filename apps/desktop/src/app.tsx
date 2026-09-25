@@ -84,7 +84,12 @@ import {
   wizardStep,
   workspaceUrl,
 } from "./commands";
-import { startUpdateWatch, type UpdateOffer } from "./update-watch";
+import {
+  promptVisible,
+  startUpdateWatch,
+  type UpdateOffer,
+  type UpdateWatch,
+} from "./update-watch";
 import { checkForUpdate, describeCheck, installUpdate } from "./updater";
 
 const WRAP_AGENT_URL = "https://docs.oxagen.sh/docs/cli/wrap-an-agent";
@@ -178,11 +183,16 @@ export function App() {
   // Install click downloads and relaunches.
   const [updatePrompt, setUpdatePrompt] = useState<UpdateOffer | null>(null);
   // The watch reads these between renders: it holds off the feed while an
-  // install runs or a check the person started is out.
+  // install runs or a check the person started is out. doCheckUpdate and
+  // doInstallUpdate set and clear them where they start and end, because
+  // this effect runs one commit later, and a background check that resolved
+  // in between would replace the install's caption. The effect keeps them in
+  // step with the state.
   const updateGateRef = useRef({ installing: false, checking: false });
   useEffect(() => {
     updateGateRef.current = { installing: busy === "update", checking };
   }, [busy, checking]);
+  const watchRef = useRef<UpdateWatch | null>(null);
   // The watch starts once the running version is known: at launch, then
   // hourly, and on a focus 15 minutes or more after the last check.
   const appVersion = state?.app_version ?? null;
@@ -212,7 +222,11 @@ export function App() {
       removeEventListener: (type, listener) =>
         window.removeEventListener(type, listener),
     });
-    return () => watch.stop();
+    watchRef.current = watch;
+    return () => {
+      watch.stop();
+      watchRef.current = null;
+    };
   }, [appVersion]);
   const pollRef = useRef<number | null>(null);
   // The last `tacho status` failure shown, so a failure that repeats on
@@ -872,10 +886,13 @@ export function App() {
 
   async function doCheckUpdate() {
     if (!state || checking) return;
+    updateGateRef.current.checking = true;
     setChecking(true);
     setUpdate({ caption: "checking…", offered: null });
     try {
       const r = await checkForUpdate(state.app_version);
+      // The masthead now offers this version, so the watch need not.
+      if (r.update) watchRef.current?.handled(r.update.version);
       setUpdate({ caption: describeCheck(r.result), offered: r.update });
     } catch (e) {
       setUpdate({ caption: null, offered: null });
@@ -883,12 +900,14 @@ export function App() {
         `Update check failed: ${e instanceof Error ? e.message : String(e)}`,
       );
     } finally {
+      updateGateRef.current.checking = false;
       setChecking(false);
     }
   }
   async function doInstallUpdate() {
     const offered = update.offered;
     if (!offered) return;
+    updateGateRef.current.installing = true;
     setUpdatePrompt(null);
     setBusy("update");
     setError(null);
@@ -899,6 +918,10 @@ export function App() {
       const { relaunched } = await installUpdate(offered, (line) =>
         setLog((prev) => [...prev, { text: line, err: false }]),
       );
+      // The version is on disk now. If the relaunch failed, the running
+      // binary is still the old one and the feed still offers this version,
+      // so the watch must not prompt to install it again.
+      watchRef.current?.handled(offered.version);
       if (!relaunched) {
         setUpdate({
           caption: `v${offered.version} installed; quit and reopen Oxagen`,
@@ -907,6 +930,7 @@ export function App() {
         setNotice(
           `Version ${offered.version} is installed. Quit Oxagen and open it again to use it.`,
         );
+        updateGateRef.current.installing = false;
         setBusy(null);
       }
     } catch (e) {
@@ -921,6 +945,7 @@ export function App() {
         }),
         offered,
       });
+      updateGateRef.current.installing = false;
       setBusy(null);
     }
   }
@@ -1995,8 +2020,11 @@ export function App() {
           </div>
         )}
         {updatePrompt &&
-          update.offered?.version === updatePrompt.version &&
-          busy !== "update" && (
+          promptVisible(
+            updatePrompt,
+            update.offered?.version ?? null,
+            busy === "update",
+          ) && (
             <section
               className="panel"
               aria-label="Update available"
