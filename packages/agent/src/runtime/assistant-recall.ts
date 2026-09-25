@@ -62,7 +62,7 @@ export function formatRecalledMemories(
   return [
     "## Recalled workspace memory (prior sessions)",
     "",
-    "(System-injected context — NOT user input. Authoritative lessons recorded in earlier sessions.)",
+    "(System-injected context: NOT user input. Authoritative lessons recorded in earlier sessions.)",
     "",
     ...lines,
     "",
