@@ -24,7 +24,33 @@ const mocks = vi.hoisted(() => ({
   grantQueries: 0,
   userQueries: 0,
   tier: "free" as string,
+  /** The acting user's org roles, as the faked assertOrgRole reads them. */
+  actorRoles: ["Owner"] as string[],
+  gateCalls: [] as { userId: string | null; org: string[] }[],
 }));
+
+// The role gate (INV-29), faked so the test decides which org roles the
+// actor holds and can read which roles the handler asked for.
+vi.mock("@oxagen/iam/org-role", async () => {
+  const { HandlerError } = await import("@oxagen/oxagen");
+  return {
+    resolveActingUserId: async (c: { userId: string | null }) => c.userId,
+    assertOrgRole: async (
+      actor: { userId: string | null },
+      required: { org: string[] },
+    ) => {
+      mocks.gateCalls.push({ userId: actor.userId, org: required.org });
+      const match = mocks.actorRoles.find((r) => required.org.includes(r));
+      if (!actor.userId || !match)
+        throw new HandlerError({
+          code: "forbidden",
+          reason: "insufficient_role",
+          message: "role refused",
+        });
+      return match;
+    },
+  };
+});
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -139,12 +165,41 @@ beforeEach(() => {
   mocks.grantQueries = 0;
   mocks.userQueries = 0;
   mocks.tier = "free";
+  mocks.actorRoles = ["Owner"];
+  mocks.gateCalls = [];
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
   );
 });
 
 describe("iamRoleListHandler", () => {
+  it("asks for the contract's roles: org Owner, Admin or Compliance", async () => {
+    await iamRoleListHandler(
+      { includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
+    expect(mocks.gateCalls).toEqual([
+      { userId: CTX.userId, org: ["Owner", "Admin", "Compliance"] },
+    ]);
+  });
+
+  it.each(["Admin", "Compliance"])("admits an org %s", async (role) => {
+    mocks.actorRoles = [role];
+    const out = await iamRoleListHandler(
+      { includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
+    expect(out.total).toBe(4);
+  });
+
+  it("refuses an org Member before reading any role", async () => {
+    mocks.actorRoles = ["Member"];
+    await expect(
+      iamRoleListHandler({ includeGrants: true, limit: 100, offset: 0 }, CTX),
+    ).rejects.toMatchObject({ code: "forbidden" });
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+  });
+
   it("sorts system defaults first then alphabetical, mapping public ids", async () => {
     const out = await iamRoleListHandler(
       { includeGrants: true, limit: 100, offset: 0 },

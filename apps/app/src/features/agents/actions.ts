@@ -299,11 +299,12 @@ const ROLE_PAGE = 200;
  * cannot classify, so the dialog would name it `kernel_failure` and the person
  * would learn nothing.
  *
- * Only an org Owner or Admin may read it. `list_iam_roles` asserts no role of
- * its own, and the catalogue names every role's scope and the organization's
- * enforcement tier, so a Member would otherwise read what only the people who
- * assign roles need. The picker is offered to those two roles alone, and this
- * check holds the same line on the server (#3525).
+ * Only an org Owner or Admin may read it. The catalogue names every role's
+ * scope and the organization's enforcement tier, which only the people who
+ * assign roles need. The picker is offered to those two roles alone. This
+ * check holds the same line before the kernel call (#3525), and the
+ * `list_iam_roles` handler asserts its contract's roles (Owner, Admin,
+ * Compliance) on every surface as the gate that decides.
  */
 export async function readAssignableRoles(
   org: string,
