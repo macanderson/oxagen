@@ -77,11 +77,14 @@ const events = schema.agentRunEvents;
  * Runs list reads it from here, so a run's turns do not change when
  * compaction swaps its rows for the seal (#3372).
  * `cost-rollup-ledger-reads.pg.test.ts` has Postgres check the two agree.
+ *
+ * A function rather than a constant: a fragment built at import reads the
+ * schema then, and a test that mocks `@oxagen/database` with no event table
+ * could not import this package.
  */
 export function modelCallHidesTurn(payload: AnyColumn | SQL): SQL {
   return sql`(${payload} is null or ${payload}->>'turn_index' is null)`;
 }
-export const LEDGER_CALL_HIDES_TURN = modelCallHidesTurn(events.payloadInline);
 
 /**
  * A ledger tool call's name, under either payload's name for it:
@@ -95,7 +98,6 @@ export function toolCallName(payload: AnyColumn | SQL): SQL<string | null> {
     string | null
   >`coalesce(${payload}->>'capability_name', ${payload}->>'tool_name')`;
 }
-export const LEDGER_TOOL_NAME = toolCallName(events.payloadInline);
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
 const principals = schema.principals;
@@ -180,7 +182,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
               Number,
             ),
           opaqueModelCalls:
-            sql<number>`(select count(*) from ${events} where ${events.runId} = ${runs.id} and ${inArray(events.eventType, MODEL_CALL_TYPES)} and ${LEDGER_CALL_HIDES_TURN})::int`.mapWith(
+            sql<number>`(select count(*) from ${events} where ${events.runId} = ${runs.id} and ${inArray(events.eventType, MODEL_CALL_TYPES)} and ${modelCallHidesTurn(events.payloadInline)})::int`.mapWith(
               Number,
             ),
         })
@@ -335,7 +337,7 @@ async function readLedgerToolCalls(args: {
   const rows = await withSystemDb((tx) =>
     tx
       .select({
-        name: LEDGER_TOOL_NAME,
+        name: toolCallName(events.payloadInline),
       })
       .from(events)
       .where(

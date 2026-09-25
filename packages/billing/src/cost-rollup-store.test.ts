@@ -5,6 +5,7 @@
  * records what it was asked; the verdict and witness-link queries run against
  * Postgres in packages/handlers/src/lib/proof.pg.test.ts.
  */
+import { schema } from "@oxagen/database";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -14,11 +15,11 @@ import {
   type RunTotalsRecord,
 } from "./cost-rollup";
 import {
-  LEDGER_CALL_HIDES_TURN,
-  LEDGER_TOOL_NAME,
+  modelCallHidesTurn,
   rebuildRunTotals,
   reviveBreakdown,
   serializeBreakdown,
+  toolCallName,
   type RunRollupDeps,
 } from "./cost-rollup-store";
 
@@ -239,7 +240,7 @@ describe("what a ledger run's events are read for (#3372)", () => {
     // `tool.engine_call_completed` stores its name in `tool_name`. Reading
     // `capability_name` alone counted the call in `toolCalls` and left it
     // out of `breakdown.tools`.
-    expect(render(LEDGER_TOOL_NAME)).toBe(
+    expect(render(toolCallName(schema.agentRunEvents.payloadInline))).toBe(
       `coalesce(${PAYLOAD}->>'capability_name', ${PAYLOAD}->>'tool_name')`,
     );
   });
@@ -248,9 +249,9 @@ describe("what a ledger run's events are read for (#3372)", () => {
     // An engine call's payload is inline and names no `turn_index`, so a
     // null-payload test alone reported `turns: 0` where the seal's rollup
     // records `null`.
-    expect(render(LEDGER_CALL_HIDES_TURN)).toBe(
-      `(${PAYLOAD} is null or ${PAYLOAD}->>'turn_index' is null)`,
-    );
+    expect(
+      render(modelCallHidesTurn(schema.agentRunEvents.payloadInline)),
+    ).toBe(`(${PAYLOAD} is null or ${PAYLOAD}->>'turn_index' is null)`);
   });
 });
 
