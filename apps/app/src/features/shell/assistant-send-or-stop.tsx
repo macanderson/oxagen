@@ -1,6 +1,6 @@
 "use client";
 // The composer's one button (#4164). It is Send, and it becomes Stop while the
-// thread's turn is running or its answer is still typing itself out.
+// thread's turn is running.
 //
 // Send and Stop are the same <button> element: React keeps a node whose type
 // and place do not change, so a person who pressed Send keeps focus on the
@@ -8,10 +8,10 @@
 // Send again.
 //
 // The stop is a POST to the workspace's `assistant/stop` route
-// (`assistant-stop.ts`), not a server action. The question is itself a server
-// action that stays pending for the whole turn, and one page's actions run one
-// at a time, so a stop sent as an action would reach the turn only after it
-// had finished.
+// (`assistant-stop.ts`), not a server action. One page's actions run one at a
+// time, so a stop sent as an action would wait behind any action still
+// pending, and a stop has to arrive while the turn it names is streaming
+// (`assistant-stream-client.ts`).
 import { Send, Square } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";

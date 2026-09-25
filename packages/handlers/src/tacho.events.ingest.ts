@@ -119,6 +119,11 @@ import {
   unstorableBatch,
 } from "./lib/tacho-host";
 import {
+  continuesRecordedChain,
+  readSuccessionHosts,
+  succeedsHost,
+} from "./lib/tacho-session-succession";
+import {
   type BodyRejection,
   countContentFrames,
   sealTachoSession,
@@ -1177,12 +1182,35 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       tx as never,
       input.host_enrollment_id,
     );
-    if (
-      input.events.some(
-        (event) => event.agent.host_enrollment_id !== host.publicId,
-      )
-    ) {
+    // A frame the host's predecessor recorded and never shipped still names
+    // the predecessor: the enrollment id sits inside the hashed event, so the
+    // host cannot restate it. Those frames are accepted from a successor
+    // (ADR-179) and from no other host.
+    const eventHosts = input.events.map(
+      (event) => event.agent.host_enrollment_id,
+    );
+    // An event that names no host has no predecessor to check, so it is
+    // refused as the pre-succession check refused it.
+    if (eventHosts.some((id) => id === undefined)) {
       throw tachoDenied(capability, "Forbidden: event names another host");
+    }
+    const foreign = [
+      ...new Set(
+        eventHosts.filter(
+          (id): id is string => id !== undefined && id !== host.publicId,
+        ),
+      ),
+    ];
+    if (foreign.length > 0) {
+      const predecessors = await readSuccessionHosts(tx, "publicId", foreign);
+      if (
+        foreign.some((id) => {
+          const predecessor = predecessors.get(id);
+          return predecessor === undefined || !succeedsHost(predecessor, host);
+        })
+      ) {
+        throw tachoDenied(capability, "Forbidden: event names another host");
+      }
     }
     // A session another host opened is refused here, before any of this
     // batch's bodies reach the tenant's store. The same refusal inside the
@@ -1193,19 +1221,44 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       .select({
         sessionUuid: schema.tachoSessions.sessionUuid,
         hostId: schema.tachoSessions.hostId,
+        seqCount: schema.tachoSessions.seqCount,
+        lastHash: schema.tachoSessions.lastHash,
       })
       .from(schema.tachoSessions)
       .where(inArray(schema.tachoSessions.sessionUuid, named))) as Array<{
       sessionUuid?: string;
       hostId?: string | null;
+      seqCount?: number;
+      lastHash?: string | null;
     }>;
+    const held = owners.filter(
+      (row) =>
+        row.sessionUuid !== undefined &&
+        named.includes(row.sessionUuid) &&
+        row.hostId !== host.id,
+    );
+    const holders = await readSuccessionHosts(
+      tx,
+      "id",
+      held.flatMap((row) => (row.hostId ? [row.hostId] : [])),
+    );
+    // A session a revoked predecessor opened passes here only on a batch
+    // that continues its recorded chain, the same test the write below
+    // applies, so a successor's refused batch writes no bodies either.
     if (
-      owners.some(
-        (row) =>
-          row.sessionUuid !== undefined &&
-          named.includes(row.sessionUuid) &&
-          row.hostId !== host.id,
-      )
+      held.some((row) => {
+        const holder = row.hostId ? holders.get(row.hostId) : undefined;
+        return (
+          holder === undefined ||
+          !succeedsHost(holder, host) ||
+          !continuesRecordedChain(
+            { seqCount: row.seqCount ?? 0, lastHash: row.lastHash ?? null },
+            input.events.filter(
+              (event) => event.session_uuid === row.sessionUuid,
+            ),
+          )
+        );
+      })
     ) {
       // The collector's Shipper matches this message to set the session
       // aside (`SESSION_OWNED_ELSEWHERE`), as it does the one below.
@@ -1442,11 +1495,29 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       // The collector's Shipper matches this message to set the session
       // aside instead of retrying it (`SESSION_OWNED_ELSEWHERE` in
       // packages/tacho/src/collector/spool.ts). Change both together.
+      //
+      // The one exception is a successor (ADR-179): a later enrollment of the
+      // same machine in the same workspace, whose predecessor is revoked,
+      // carrying the session on from its recorded head. The write below
+      // moves the session to it, and only while the predecessor still holds it.
+      let succeeds = false;
       if (existing && existing.hostId !== host.id) {
-        throw tachoDenied(
-          capability,
-          "Forbidden: session belongs to another host",
-        );
+        const holder = existing.hostId
+          ? (await readSuccessionHosts(tx, "id", [existing.hostId])).get(
+              existing.hostId,
+            )
+          : undefined;
+        if (
+          holder === undefined ||
+          !succeedsHost(holder, host) ||
+          !continuesRecordedChain(existing, events)
+        ) {
+          throw tachoDenied(
+            capability,
+            "Forbidden: session belongs to another host",
+          );
+        }
+        succeeds = true;
       }
 
       let ok = true;
@@ -1466,6 +1537,12 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         ? events.filter((event) => event.seq >= existing.seqCount)
         : events;
       const head = fresh[0];
+      // A successor takes the session only with frames past the recorded
+      // head, which must link to it. A batch of re-sent frames alone proves
+      // nothing about the head: `compareResent` judges those after the
+      // commit, too late to undo a move. The re-send is still accepted, since
+      // a spool that never saw its answer sends the same batch again.
+      const moves = succeeds && fresh.length > 0;
       if (existing) {
         if (first.seq > existing.seqCount) {
           ok = false;
@@ -1827,11 +1904,16 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         // question as matching the head, asked of the other input.
         const written = await tx
           .update(schema.tachoSessions)
-          .set(common)
+          .set(moves ? { ...common, hostId: host.id } : common)
           .where(
             and(
               eq(schema.tachoSessions.id, existing.id),
               eq(schema.tachoSessions.seqCount, existing.seqCount),
+              // A session moves to a successor only from the host that held
+              // it when this batch read it.
+              ...(moves && existing.hostId
+                ? [eq(schema.tachoSessions.hostId, existing.hostId)]
+                : []),
               eq(
                 schema.tachoSessions.enforcementTier,
                 existing.enforcementTier,

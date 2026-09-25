@@ -291,6 +291,15 @@
       "close": "Close stella",
       "thinking": "Working…",
       "recordedAs": "recorded as",
+      "cost": {
+        "label": "cost",
+        "pending": "pending",
+        "notRecorded": "not recorded",
+        "unread": "could not be read",
+        "basisNotRecorded": "basis not recorded",
+        "estimate": "estimate",
+        "incomplete": "some calls unpriced"
+      },
       "stopped": "Stopped",
       "parked": "{count, plural, one {This turn parked # write for a person to decide} other {This turn parked # writes for a person to decide}}. Approve or deny each one here or on Fleet.",
       "parkedCard": {
@@ -399,6 +408,18 @@
         "model": "The model provider refused or failed stella’s request, so this question was not answered. An owner can check the key and model under Model funding. Ask again.",
         "unavailable": "stella could not be reached. Try again."
       },
+      "answering": {
+        "tool": "Calling {capability}…"
+      },
+      "dropped": {
+        "body": "The connection dropped before the reply finished. stella is still working on it and saves the finished reply with the run.",
+        "noRun": "The connection dropped before stella named the run, so this reply cannot be loaded. Ask again.",
+        "load": "Load the finished reply",
+        "loading": "Loading the reply…",
+        "running": "stella has not saved the reply yet. Try again in a moment.",
+        "ended": "This turn ended without a reply. The run records why.",
+        "unread": "The reply could not be loaded. Try again."
+      },
       "engine": {
         "unreachable": "stella’s engine could not be reached. Send is off until it answers.",
         "starting": "stella’s engine is starting. Send is off until it is ready.",
@@ -407,7 +428,20 @@
         "check": "Check again",
         "checking": "Checking…"
       },
-      "retry": "Ask again"
+      "retry": "Ask again",
+      "feedback": {
+        "label": "Rate this reply",
+        "useful": "Useful",
+        "wrong": "Wrong",
+        "noteLabel": "What was wrong? Optional.",
+        "notePlaceholder": "The run, number, or step it got wrong",
+        "noteHint": "Up to {max} characters.",
+        "send": "Record as wrong",
+        "cancel": "Cancel",
+        "recordedUseful": "Recorded as useful against this run.",
+        "recordedWrong": "Recorded as wrong against this run.",
+        "failed": "Your rating was not recorded. Try again."
+      }
     },
     "avatar": {
       "title": "Your avatar",

@@ -1,3 +1,4 @@
+import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
 import {
   registerHandler,
   registerHandlersOnce,
@@ -12,6 +13,15 @@ import {
 // Wrapped in `registerHandlersOnce` so a dev bundler re-evaluating this module
 // on hot reload is a no-op instead of tripping the kernel's duplicate guard.
 registerHandlersOnce("@oxagen/handlers", () => {
+  // An in-app assistant run seals inside @oxagen/agent, which cannot import
+  // the event client: @oxagen/inngest-functions depends on it. Every surface
+  // that runs a turn loads this module, so the sender is handed in here, and
+  // the assistant's seal sends `cost/run.sealed` as every other seal does
+  // (#4167). The client is imported on first send, not at boot.
+  setRunSealedSender(async (event) => {
+    const { eventClient } = await import("./event-client");
+    await eventClient.send(event);
+  });
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
       (m) => m.handler as CapabilityHandlerFn,
@@ -556,6 +566,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./conversation.attachment.add"))
         .conversationAttachmentAddHandler as CapabilityHandlerFn,
+  );
+  // A person's verdict on an assistant reply (#4169). The turn itself is
+  // `ask_assistant`, bound in @oxagen/agent; the verdict needs none of the
+  // agent runtime, so it binds here.
+  registerHandler(
+    "record_reply_feedback",
+    async () =>
+      (await import("./assistant.reply_feedback.record"))
+        .assistantReplyFeedbackRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "export_data",

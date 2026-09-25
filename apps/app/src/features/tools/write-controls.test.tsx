@@ -17,6 +17,7 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { McpServer } from "@/data/contracts/tools";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
@@ -1201,5 +1202,321 @@ describe("ToolDialog while a classification is pending", () => {
     fireEvent.submit(form);
     fireEvent.submit(form);
     expect(setToolClassification).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ToolDialog tabs", () => {
+  const stripe = McpServer.parse({
+    id: "mcs_01k5s1",
+    name: "Stripe",
+    transportType: "streamable-http",
+    endpointUrl: "https://mcp.stripe.example/v1",
+    healthStatus: "healthy",
+    lastHealthcheckAt: "2026-09-18T09:00:00.000Z",
+    toolCount: 12,
+    authKind: "bearer",
+    iconUrl: "https://mcp.stripe.example/icon.svg",
+    authorization: null,
+  });
+  /** The shape Notion's MCP tools publish: markdown, a placeholder, and inline examples. */
+  const NOTION = [
+    "Update a data source.",
+    "",
+    "## Statements",
+    "",
+    '- ADD COLUMN "Name" <type>',
+    "- **DROP** a column",
+    "",
+    '<example description="Add properties">{"data_source_id": "f336d0bc"}</example>',
+    "<example>not json</example>",
+  ].join("\n");
+
+  async function open(
+    version = financial(),
+    options: { canClassify?: boolean; provider?: McpServer | null } = {},
+  ) {
+    withIntl(
+      <ToolDialog
+        at={at}
+        version={version}
+        canClassify={options.canClassify ?? true}
+        provider={options.provider ?? null}
+      >
+        <span>Open the tool</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Open the tool"));
+    return within(await screen.findByTestId("tool-dialog"));
+  }
+
+  /** The selected tab's name: one dialog is open, so its tabs are the page's. */
+  const selected = () =>
+    screen
+      .getAllByRole("tab")
+      .filter((tab) => tab.getAttribute("aria-selected") === "true")
+      .map((tab) => tab.textContent);
+
+  it("heads the dialog with the provider's logo, the tool's name, and its API name", async () => {
+    const dialog = await open(financial(), { provider: stripe });
+    const logo = element(
+      document.querySelector("[data-sheet-icon] img"),
+      "provider logo",
+    );
+    expect(logo).toHaveAttribute("src", "https://mcp.stripe.example/icon.svg");
+    expect(
+      dialog.getByRole("heading", { name: "Create payment" }),
+    ).toBeInTheDocument();
+    expect(dialog.getByText("Stripe")).toBeInTheDocument();
+    // The API name heads the dialog and is copyable on Details.
+    expect(dialog.getAllByText(versionLabel(financial()))).toHaveLength(2);
+  });
+
+  it("opens on Overview and moves between tabs from the keyboard", async () => {
+    const dialog = await open();
+    expect(dialog.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Overview",
+      "Details",
+      "Classification",
+    ]);
+    expect(selected()).toEqual(["Overview"]);
+    const overview = dialog.getByRole("tab", { name: "Overview" });
+    fireEvent.keyDown(overview, { key: "ArrowRight" });
+    expect(selected()).toEqual(["Details"]);
+    expect(dialog.getByRole("tab", { name: "Details" })).toHaveFocus();
+    expect(dialog.getByRole("tabpanel")).toHaveTextContent("tlv_01k5a1");
+    fireEvent.keyDown(document.activeElement ?? overview, { key: "End" });
+    expect(selected()).toEqual(["Classification"]);
+    fireEvent.keyDown(document.activeElement ?? overview, {
+      key: "ArrowRight",
+    });
+    expect(selected()).toEqual(["Overview"]);
+    fireEvent.keyDown(document.activeElement ?? overview, { key: "ArrowLeft" });
+    expect(selected()).toEqual(["Classification"]);
+    fireEvent.keyDown(document.activeElement ?? overview, { key: "Home" });
+    expect(selected()).toEqual(["Overview"]);
+    // Only the selected tab is in the Tab order.
+    expect(
+      dialog.getAllByRole("tab").map((tab) => tab.getAttribute("tabindex")),
+    ).toEqual(["0", "-1", "-1"]);
+  });
+
+  it("renders the description as markdown and keeps a placeholder in angle brackets as text", async () => {
+    const dialog = await open({ ...plain(), description: NOTION });
+    const overview = within(dialog.getByRole("tabpanel"));
+    expect(
+      overview.getByRole("heading", { name: "Statements" }),
+    ).toBeInTheDocument();
+    expect(overview.getByText("DROP")).toHaveAttribute(
+      "data-streamdown",
+      "strong",
+    );
+    expect(overview.getByText('ADD COLUMN "Name" <type>')).toBeInTheDocument();
+    // The examples moved to their own tab and left nothing in the prose.
+    expect(overview.queryByText(/data_source_id/)).not.toBeInTheDocument();
+  });
+
+  it("lists the provider's examples as code on their own tab, with a count", async () => {
+    const dialog = await open({ ...plain(), description: NOTION });
+    fireEvent.click(dialog.getByRole("tab", { name: "Examples 2" }));
+    const examples = within(dialog.getByRole("tabpanel"));
+    expect(
+      examples.getByRole("heading", { name: "Add properties" }),
+    ).toBeInTheDocument();
+    expect(
+      examples.getByRole("heading", { name: "Example 2" }),
+    ).toBeInTheDocument();
+    const blocks = document.querySelectorAll("[data-code-block]");
+    expect([...blocks].map((block) => block.textContent)).toEqual([
+      '{\n  "data_source_id": "f336d0bc"\n}',
+      "not json",
+    ]);
+  });
+
+  it("sends a person who can classify from the unclassified notice to the form", async () => {
+    const dialog = await open(plain());
+    expect(dialog.getByTestId("tool-unclassified")).toHaveTextContent(
+      "No one has classified this version.",
+    );
+    fireEvent.click(
+      dialog.getByRole("button", { name: "Classify this version" }),
+    );
+    expect(selected()).toEqual(["Classification"]);
+    expect(dialog.getByRole("tab", { name: "Classification" })).toHaveFocus();
+    expect(
+      dialog.getByRole("button", { name: "Reclassify this version" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says a version has no description, and offers no form to a person who cannot classify", async () => {
+    const dialog = await open(plain(), { canClassify: false });
+    expect(
+      dialog.getByText("This version carries no description."),
+    ).toBeInTheDocument();
+    expect(
+      dialog.queryByRole("button", { name: "Classify this version" }),
+    ).not.toBeInTheDocument();
+    expect(
+      dialog.queryByRole("tab", { name: /Examples/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("copies the version id, and says so when the clipboard refuses", async () => {
+    const writeText = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("denied"));
+    const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    try {
+      const dialog = await open();
+      fireEvent.click(dialog.getByRole("tab", { name: "Details" }));
+      const copy = dialog.getByRole("button", { name: "Copy version id" });
+      fireEvent.click(copy);
+      expect(await dialog.findByText("Copied")).toBeInTheDocument();
+      expect(writeText).toHaveBeenCalledWith("tlv_01k5a1");
+      fireEvent.click(copy);
+      expect(
+        await dialog.findByText("Copy failed. Select the text instead."),
+      ).toBeInTheDocument();
+    } finally {
+      if (original) Object.defineProperty(navigator, "clipboard", original);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("copies an example's body as the tab shows it", async () => {
+    const writeText = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    try {
+      const dialog = await open({ ...plain(), description: NOTION });
+      fireEvent.click(dialog.getByRole("tab", { name: "Examples 2" }));
+      fireEvent.click(
+        dialog.getByRole("button", { name: "Copy example: Add properties" }),
+      );
+      expect(await dialog.findByText("Copied")).toBeInTheDocument();
+      expect(writeText).toHaveBeenCalledWith(
+        '{\n  "data_source_id": "f336d0bc"\n}',
+      );
+    } finally {
+      if (original) Object.defineProperty(navigator, "clipboard", original);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("walks four tabs in order from the keyboard, and ignores a key it does not handle", async () => {
+    const dialog = await open({ ...plain(), description: NOTION });
+    const overview = dialog.getByRole("tab", { name: "Overview" });
+    fireEvent.keyDown(overview, { key: "ArrowRight" });
+    expect(selected()).toEqual(["Examples 2"]);
+    fireEvent.keyDown(document.activeElement ?? overview, {
+      key: "ArrowRight",
+    });
+    expect(selected()).toEqual(["Details"]);
+    fireEvent.keyDown(document.activeElement ?? overview, { key: "End" });
+    expect(selected()).toEqual(["Classification"]);
+    // Tab leaves the strip, so the handler must not swallow it.
+    const handled = !fireEvent.keyDown(document.activeElement ?? overview, {
+      key: "Tab",
+    });
+    expect(handled).toBe(false);
+    expect(selected()).toEqual(["Classification"]);
+  });
+
+  it("keeps a half-filled form when the person looks at another tab", async () => {
+    const dialog = await open(plain());
+    fireEvent.click(dialog.getByRole("tab", { name: "Classification" }));
+    fireEvent.change(dialog.getByRole("textbox", { name: "Reason" }), {
+      target: { value: "Reads only public files" },
+    });
+    fireEvent.click(dialog.getByRole("tab", { name: "Overview" }));
+    expect(
+      dialog.queryByRole("textbox", { name: "Reason" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(dialog.getByRole("tab", { name: "Classification" }));
+    expect(dialog.getByRole("textbox", { name: "Reason" })).toHaveValue(
+      "Reads only public files",
+    );
+  });
+
+  it("opens on Overview again after it was closed on another tab", async () => {
+    const dialog = await open();
+    fireEvent.click(dialog.getByRole("tab", { name: "Details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("tool-dialog")).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Open the tool"));
+    await screen.findByTestId("tool-dialog");
+    expect(selected()).toEqual(["Overview"]);
+  });
+
+  it("falls back to Overview when a refreshed description loses the examples it was showing", async () => {
+    const version = { ...plain(), description: NOTION };
+    const view = (next: typeof version) => (
+      <IntlProvider>
+        <ToolDialog at={at} version={next} canClassify provider={null}>
+          <span>Open the tool</span>
+        </ToolDialog>
+      </IntlProvider>
+    );
+    const { rerender } = render(view(version));
+    fireEvent.click(screen.getByText("Open the tool"));
+    const dialog = within(await screen.findByTestId("tool-dialog"));
+    fireEvent.click(dialog.getByRole("tab", { name: "Examples 2" }));
+    rerender(view({ ...version, description: "Update a data source." }));
+    expect(selected()).toEqual(["Overview"]);
+    expect(dialog.getAllByRole("tabpanel")).toHaveLength(1);
+    expect(dialog.getByRole("tabpanel")).toHaveTextContent(
+      "Update a data source.",
+    );
+  });
+
+  it("gives a description made only of examples an Examples tab and no empty notice", async () => {
+    const dialog = await open({
+      ...plain(),
+      description: '<example description="Only">{"a": 1}</example>',
+    });
+    expect(
+      dialog.queryByText("This version carries no description."),
+    ).not.toBeInTheDocument();
+    expect(dialog.queryByTestId("tool-description")).not.toBeInTheDocument();
+    expect(dialog.getByRole("tab", { name: "Examples 1" })).toBeInTheDocument();
+  });
+
+  describe("at a glance", () => {
+    /** The value a Glance tile prints, found by its term on the Overview panel. */
+    function tile(term: string): Element | null {
+      const dialog = within(screen.getByTestId("tool-dialog"));
+      return within(dialog.getByRole("tabpanel")).getByText(term, {
+        selector: "dt",
+      }).nextElementSibling;
+    }
+
+    it("names where a version not imported from a provider was declared", async () => {
+      await open({ ...plain(), source: "custom" });
+      expect(tile("Provider")).toHaveTextContent("Declared here");
+    });
+
+    it("says an unclassified version's egress and missing call count plainly", async () => {
+      await open(plain());
+      expect(tile("Egress")).toHaveTextContent("Unclassified");
+      expect(tile("Calls 30d")).toHaveTextContent("not recorded");
+    });
+
+    it("prints a classified version's egress and its calls, with no unclassified notice", async () => {
+      const dialog = await open(financial());
+      expect(tile("Egress")).toHaveTextContent("third party");
+      expect(tile("Calls 30d")).toHaveTextContent("1,204");
+      expect(dialog.queryByTestId("tool-unclassified")).not.toBeInTheDocument();
+    });
   });
 });

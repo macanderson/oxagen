@@ -1116,6 +1116,22 @@ describe("SQL builders", () => {
     expect(params).toContain(COMMIT_SHA);
   });
 
+  it("buildCreateRunSql records the message that asked for the run, and null when none did (#4167)", () => {
+    const MESSAGE = "6f1f5a8e-0000-4000-8000-000000000001";
+    const asked = compile(
+      buildCreateRunSql("arun_x", SHA_1, {
+        ...makeCreateRunInput(),
+        originMessageId: MESSAGE,
+      }),
+    );
+    expect(asked.sql).toContain("origin_message_id");
+    expect(asked.params.at(-1)).toBe(MESSAGE);
+    const plain = compile(
+      buildCreateRunSql("arun_x", SHA_1, makeCreateRunInput()),
+    );
+    expect(plain.params.at(-1)).toBeNull();
+  });
+
   it("buildLockRunForAttemptSql takes the run row's FOR UPDATE lock", () => {
     const { sql: text, params } = compile(buildLockRunForAttemptSql(UUID_RUN));
     expect(text).toContain("FROM agent.agent_runs");

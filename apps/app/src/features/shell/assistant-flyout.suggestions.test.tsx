@@ -22,10 +22,32 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { recordLabel, suggestionsFor } from "./assistant-suggestions";
 import { PageRecord } from "./page-record";
+import type { readAssistantReply as ReadAssistantReply } from "./assistant-actions";
+import type {
+  AssistantQuestion,
+  AssistantStreamResult,
+} from "./assistant-stream-client";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
-const askAssistant = vi.fn();
-vi.mock("./assistant-actions", () => ({ askAssistant }));
+// The turn's transport (assistant-stream-client.ts) answers in the shape the
+// Server Action it replaced did, so these cases drive it through one fake
+// that takes the same three arguments and leaves the stream's handlers out.
+// What arrives while a turn streams is assistant-flyout.streaming.test.tsx.
+const askAssistant =
+  vi.fn<
+    (
+      org: string,
+      ws: string,
+      question: AssistantQuestion,
+    ) => Promise<AssistantStreamResult>
+  >();
+vi.mock("./assistant-stream-client", () => ({
+  askAssistantStream: (org: string, ws: string, question: AssistantQuestion) =>
+    askAssistant(org, ws, question),
+}));
+vi.mock("./assistant-actions", () => ({
+  readAssistantReply: vi.fn<typeof ReadAssistantReply>(),
+}));
 // The engine read has its own file (assistant-flyout.engine-health.test.tsx).
 // Here it never answers, so nothing but a turn in flight holds Send.
 vi.mock("./engine-actions", () => ({
@@ -96,11 +118,10 @@ beforeEach(() => {
     ok: true,
     value: {
       conversationId: "6f1f5a8e-0000-4000-8000-00000000c0de",
-      userMessageId: "6f1f5a8e-0000-4000-8000-00000000u001",
-      assistantMessageId: "6f1f5a8e-0000-4000-8000-00000000a001",
       runId: "arun_01k9",
       reply: "Three runs are live.",
       parkedCards: [],
+      stopped: false,
     },
   });
   pathname.mockReturnValue("/acme/core-platform");

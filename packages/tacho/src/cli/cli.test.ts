@@ -136,8 +136,8 @@ const OTHER_ENROLLMENT = "tch_zyxwvutsrqpnmkjhgfedcb";
 function enrollmentResponse(
   signer: ReturnType<typeof bundleSigner>,
   workspace = "core",
+  id = workspace === "core" ? TEST_ENROLLMENT : OTHER_ENROLLMENT,
 ): EnrollmentResponse {
-  const id = workspace === "core" ? TEST_ENROLLMENT : OTHER_ENROLLMENT;
   // Signed for the enrollment it comes with: enroll refuses a bundle bound
   // to another host.
   const bundle = signer.sign(
@@ -2248,6 +2248,161 @@ describe("harnesses and reassign", () => {
       onScratchDisk,
     );
     expect(calls.filter((c) => c.startsWith("sh "))).toHaveLength(1);
+  });
+});
+
+/**
+ * `deps()` whose control plane mints a new enrollment id on every create, as
+ * the real one does, so a re-enrollment can be told apart from the one it
+ * replaces. `revoke` answers as `revokes` says.
+ */
+function mintingDeps(revokes: "confirm" | "refuse" = "confirm") {
+  const d = deps();
+  const signer = bundleSigner();
+  const upstream = d.fetch;
+  let minted = 0;
+  d.fetch = async (url, init) => {
+    if (url.endsWith("/tacho/enrollments/revoke") && revokes === "refuse") {
+      d.requests.push({ url, body: JSON.parse(init.body ?? "{}") });
+      return { ok: false, status: 503, text: async () => "unavailable" };
+    }
+    if (url.endsWith("/tacho/enrollments")) {
+      d.requests.push({ url, body: JSON.parse(init.body ?? "{}") });
+      const workspace =
+        /\/v1\/[^/]+\/([^/]+)\/tacho\/enrollments$/.exec(url)?.[1] ?? "core";
+      minted += 1;
+      const id = `tch_minted${String(minted).padStart(16, "0")}`;
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify(enrollmentResponse(signer, workspace, id)),
+      };
+    }
+    return upstream(url, init);
+  };
+  return d;
+}
+
+const WHERE_CORE = {
+  token: "tok",
+  org: "acme",
+  workspace: "core",
+  apiUrl: "https://api.test",
+} as const;
+
+describe("session scope (ADR-179)", () => {
+  // tachod hashes a session's uuid from host.json's session scope. When it
+  // followed the enrollment id, re-enrolling split every live session into a
+  // second run that replayed its transcript (#4201).
+  const FIRST = "tch_minted0000000000000001";
+  const SECOND = "tch_minted0000000000000002";
+
+  it("starts a first enrollment on its own enrollment id", async () => {
+    const d = mintingDeps();
+    expect((await enroll(WHERE_CORE, d)).ok).toBe(true);
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: FIRST,
+      session_scope: FIRST,
+    });
+  });
+
+  it("keeps the scope when `enroll --force` re-enrolls into the same workspace", async () => {
+    const d = mintingDeps();
+    await enroll(WHERE_CORE, d);
+    expect((await enroll({ ...WHERE_CORE, force: true }, d)).ok).toBe(true);
+    expect(d.lines.join("\n")).toContain(`previous enrollment ${FIRST} revoked`);
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: SECOND,
+      session_scope: FIRST,
+    });
+  });
+
+  it("starts fresh when `enroll --force` could not revoke the old enrollment", async () => {
+    // The old host still owns its sessions on the server, so a carried uuid
+    // would be refused and quarantined rather than recorded.
+    const d = mintingDeps("refuse");
+    await enroll(WHERE_CORE, d);
+    const result = await enroll({ ...WHERE_CORE, force: true }, d);
+    expect(result.ok).toBe(true);
+    expect(result.warnings.join("\n")).toContain("could not be revoked");
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: SECOND,
+      session_scope: SECOND,
+    });
+  });
+
+  it("keeps the scope when adding a harness re-enrolls the host", async () => {
+    const d = mintingDeps();
+    await enroll(WHERE_CORE, d);
+    const grown = await enroll(
+      { ...WHERE_CORE, harnesses: ["claude-code", "codex"] },
+      d,
+    );
+    expect(grown.ok).toBe(true);
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: SECOND,
+      harnesses: ["claude-code", "codex"],
+      session_scope: FIRST,
+    });
+  });
+
+  it("keeps the scope on a harness-only reassign within the workspace", async () => {
+    const d = mintingDeps();
+    await enroll({ ...WHERE_CORE, harnesses: ["claude-code", "codex"] }, d);
+    const dropped = await reassign(
+      { token: "tok", harnesses: ["claude-code"] },
+      d,
+    );
+    expect(dropped.ok).toBe(true);
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: SECOND,
+      harnesses: ["claude-code"],
+      session_scope: FIRST,
+    });
+  });
+
+  it("changes the scope when reassign moves the host to another workspace", async () => {
+    const d = mintingDeps();
+    await enroll(WHERE_CORE, d);
+    const moved = await reassign({ token: "tok", workspace: "edge" }, d);
+    expect(moved.ok).toBe(true);
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: SECOND,
+      workspace_id: "wrk_2",
+      session_scope: SECOND,
+    });
+  });
+
+  it("carries a legacy host's enrollment id forward as its scope", async () => {
+    // A host.json written before session_scope existed: its live sessions'
+    // uuids are hashed from the enrollment id, so that is what carries.
+    const d = mintingDeps();
+    await enroll(WHERE_CORE, d);
+    const legacy = readHostFile(d.paths.hostFile);
+    if (legacy === undefined) throw new Error("not enrolled");
+    const withoutScope = { ...legacy };
+    delete withoutScope.session_scope;
+    writeHostFile(d.paths.hostFile, withoutScope);
+    expect(readHostFile(d.paths.hostFile)?.session_scope).toBeUndefined();
+    expect((await enroll({ ...WHERE_CORE, force: true }, d)).ok).toBe(true);
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: SECOND,
+      session_scope: FIRST,
+    });
+  });
+
+  it("keeps the scope when `--force` replaces an enrollment revoked from the fleet page", async () => {
+    const d = mintingDeps();
+    await enroll(WHERE_CORE, d);
+    const host = readHostFile(d.paths.hostFile);
+    if (host === undefined) throw new Error("not enrolled");
+    writeHostFile(d.paths.hostFile, { ...host, host_status: "revoked" });
+    expect((await enroll({ ...WHERE_CORE, force: true }, d)).ok).toBe(true);
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: SECOND,
+      session_scope: FIRST,
+    });
   });
 });
 

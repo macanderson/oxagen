@@ -83,9 +83,19 @@ interface ToolCallFrameRow {
   name: string | null;
 }
 
-/** The run a frame read is keyed on: the ledger run uuid or the tacho root session uuid. */
+/**
+ * The run a frame read is keyed on: the ledger run uuid or the tacho root
+ * session uuid.
+ *
+ * A ledger run may also name the message that asked for it
+ * (`agent_runs.origin_message_id`). The in-app assistant meters every call of
+ * a turn on the person's message id, because the message exists before the
+ * run is admitted and the turn's recall, approvals and credit debits all name
+ * it. Its `token_usage` rows carry that id rather than the run's, so the read
+ * matches either (#4167).
+ */
 export type FrameRunRef =
-  | { kind: "ledger"; runUuid: string }
+  | { kind: "ledger"; runUuid: string; originMessageId?: string | null }
   | { kind: "tacho"; rootSessionUuid: string };
 
 /**
@@ -181,6 +191,7 @@ export async function readModelCallFrames(args: {
   const ch = clickhouse();
   const run = args.run;
   if (run.kind === "ledger") {
+    const origin = run.originMessageId ?? null;
     const result = await ch.query({
       query: `
         SELECT
@@ -194,10 +205,17 @@ export async function readModelCallFrames(args: {
           cost_usd_micros      AS cost_micros
         FROM metered_token_usage
         WHERE org_id = {orgId:UUID}
-          AND execution_step_id = {runId:UUID}
+          AND ${
+            origin === null
+              ? "execution_step_id = {runId:UUID}"
+              : "execution_step_id IN ({runId:UUID}, {originMessageId:UUID})"
+          }
         ORDER BY created_at
       `,
-      query_params: { orgId: args.orgId, runId: run.runUuid },
+      query_params:
+        origin === null
+          ? { orgId: args.orgId, runId: run.runUuid }
+          : { orgId: args.orgId, runId: run.runUuid, originMessageId: origin },
       format: "JSONEachRow",
     });
     type Row = {

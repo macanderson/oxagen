@@ -123,6 +123,31 @@
         "mcp": "Imported from a provider",
         "foundry": "Foundry"
       },
+      "tabs": {
+        "label": "Tool version sections",
+        "overview": "Overview",
+        "examples": "Examples",
+        "details": "Details",
+        "classification": "Classification"
+      },
+      "overview": {
+        "noDescription": "This version carries no description.",
+        "unclassified": "No one has classified this version.",
+        "classify": "Classify this version"
+      },
+      "examples": {
+        "lead": "The provider wrote these into the description as sample inputs for the model.",
+        "untitled": "Example {number}"
+      },
+      "copy": {
+        "id": "Copy version id",
+        "apiName": "Copy API name",
+        "capability": "Copy capability",
+        "digest": "Copy schema digest",
+        "example": "Copy example: {title}",
+        "copied": "Copied",
+        "failed": "Copy failed. Select the text instead."
+      },
       "facts": {
         "id": "Version id",
         "capability": "Governed as",
@@ -134,7 +159,8 @@
         "enabled": "Enabled",
         "classifiedAt": "Classified",
         "measures": "Measures",
-        "updatedAt": "Updated"
+        "updatedAt": "Updated",
+        "apiName": "API name"
       },
       "classify": {
         "lead": "Classification describes the tool and decides nothing by itself: a class kill switch matches a version by its consequence tags at call time, and the approval rules are written against it. Reclassifying is a governed action and is recorded in Audit.",

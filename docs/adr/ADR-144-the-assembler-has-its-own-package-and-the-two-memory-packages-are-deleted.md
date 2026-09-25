@@ -84,8 +84,10 @@ hosts receive therefore changes once, and every etag moves once.
 - `tiktoken`, `@anthropic-ai/tokenizer` and DuckDB leave the dependency
   graph. Token budgets are the protocol's byte rule, which is what the bundle
   cap is measured against.
-- The volatile selection at `UserPromptSubmit` and the in-app agent's use of
-  the same assembler remain Phase 1 work under ADR-093. The `steer` kind is
+- The volatile selection at `UserPromptSubmit` remains Phase 1 work under
+  ADR-093. The in-app agent's turn now assembles through the same function
+  (`packages/agent/src/runtime/assistant-steering.ts`, #4158; ADR-093 §7,
+  amended 2026-09-25). The `steer` kind is
   typed and ranked by the assembler today and produced by the host's delivery
   report, not by a server-side adapter, because the server has no run context
   at bundle time.

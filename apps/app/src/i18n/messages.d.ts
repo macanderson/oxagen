@@ -7606,6 +7606,15 @@ type Messages = {
       close: string;
       thinking: string;
       recordedAs: string;
+      cost: {
+        label: string;
+        pending: string;
+        notRecorded: string;
+        unread: string;
+        basisNotRecorded: string;
+        estimate: string;
+        incomplete: string;
+      };
       stopped: string;
       parked: string;
       parkedCard: {
@@ -7714,6 +7723,18 @@ type Messages = {
         model: string;
         unavailable: string;
       };
+      answering: {
+        tool: string;
+      };
+      dropped: {
+        body: string;
+        noRun: string;
+        load: string;
+        loading: string;
+        running: string;
+        ended: string;
+        unread: string;
+      };
       engine: {
         unreachable: string;
         starting: string;
@@ -7723,6 +7744,19 @@ type Messages = {
         checking: string;
       };
       retry: string;
+      feedback: {
+        label: string;
+        useful: string;
+        wrong: string;
+        noteLabel: string;
+        notePlaceholder: string;
+        noteHint: string;
+        send: string;
+        cancel: string;
+        recordedUseful: string;
+        recordedWrong: string;
+        failed: string;
+      };
     };
     avatar: {
       title: string;
@@ -9388,6 +9422,31 @@ type Messages = {
         mcp: string;
         foundry: string;
       };
+      tabs: {
+        label: string;
+        overview: string;
+        examples: string;
+        details: string;
+        classification: string;
+      };
+      overview: {
+        noDescription: string;
+        unclassified: string;
+        classify: string;
+      };
+      examples: {
+        lead: string;
+        untitled: string;
+      };
+      copy: {
+        id: string;
+        apiName: string;
+        capability: string;
+        digest: string;
+        example: string;
+        copied: string;
+        failed: string;
+      };
       facts: {
         id: string;
         capability: string;
@@ -9400,6 +9459,7 @@ type Messages = {
         classifiedAt: string;
         measures: string;
         updatedAt: string;
+        apiName: string;
       };
       classify: {
         lead: string;
