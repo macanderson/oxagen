@@ -24,6 +24,10 @@ export const ENRICHMENT_TEXT_CEILING_CHARS = 40 * ENRICHMENT_CHUNK_CHARS;
  * reduced so far, in one more call over at most one chunk, and the account
  * says it covers only the start of the run. The account is persisted with
  * its input digest, so an unchanged run is not summarized again.
+ *
+ * The budget is per job. A live run is enriched again every
+ * `LIVE_ENRICHMENT_INTERVAL_MS` while it changes, and each job starts with the
+ * full budget, so nothing yet caps one run's total (#4312).
  */
 export const ENRICHMENT_RUN_BUDGET_USD = 1;
 
