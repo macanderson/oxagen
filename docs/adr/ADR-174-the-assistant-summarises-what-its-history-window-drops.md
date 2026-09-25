@@ -1,4 +1,4 @@
-# ADR-XXX: The assistant summarises the messages its history window drops
+# ADR-174: The assistant summarises the messages its history window drops
 
 - **Status:** Accepted
 - **Date:** 2026-09-25
