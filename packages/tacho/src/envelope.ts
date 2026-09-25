@@ -690,7 +690,9 @@ export const KIND_BODIES = {
   "oxagen:session_title": body({ ...pick("session_title") }),
   /**
    * A pull request the session opened, as the harness recorded it. The PR
-   * travels in `attrs` (`pr_number`, `pr_url`, `pr_repository`).
+   * travels in `attrs` (`pr.number`, `pr.url`, `pr.repository`), the names
+   * the `pr_open` effect frame uses. Frames written before those names carry
+   * `pr_number`, `pr_url` and `pr_repository`.
    */
   "oxagen:pr_link": body({}),
   "oxagen:queue": body({ ...pick(...lifecycleKeys), ...pick(...promptKeys) }),

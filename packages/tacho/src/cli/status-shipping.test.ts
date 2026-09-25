@@ -34,6 +34,29 @@ describe("the shipping verdict", () => {
     ).toBe(true);
   });
 
+  it("fails for a revoked host even with nothing waiting (#3944, S-04)", () => {
+    // The shipper stopped for good, so a WAL that happens to be empty now
+    // must not read as shipping.
+    const verdict = shippingHealth(
+      {
+        host_status: "revoked",
+        last_error: "an operator revoked this host's enrollment",
+        last_ingest_at: ago(1_000),
+      },
+      { unshipped: 0 },
+      NOW,
+    );
+    expect(verdict.healthy).toBe(false);
+    expect(verdict.detail).toContain("revoked");
+    expect(
+      shippingHealth(
+        { host_status: "active", last_error: null },
+        { unshipped: 0 },
+        NOW,
+      ).healthy,
+    ).toBe(true);
+  });
+
   it("fails with events waiting behind a failed ingest, and names the error", () => {
     const verdict = shippingHealth(
       {
