@@ -21,6 +21,7 @@ export const orgSettingsWrite = registerCapability({
     category: "organization",
   },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

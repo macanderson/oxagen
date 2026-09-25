@@ -90,6 +90,9 @@ export const commandMenuSuggest = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "low",
+  // Reads the org's opt-out setting and asks a model for suggestions. It
+  // stores nothing.
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Member: "allow" },

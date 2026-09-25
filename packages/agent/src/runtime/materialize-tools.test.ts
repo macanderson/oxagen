@@ -1902,6 +1902,21 @@ describe("materializeTools — first-use consent gate", () => {
     expect(fakeExecute).toHaveBeenCalledTimes(1);
   });
 
+  it("the consent card carries the risk level the engine is told", async () => {
+    const { tools, governance } = await materializeTools(CHAT_CTX);
+    const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(governance[alias]?.riskLevel).toBe("high");
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilityName: `mcp.${MCP_SERVER.id}.list_pull_requests`,
+        riskLevel: governance[alias]?.riskLevel,
+      }),
+    );
+  });
+
   it("records denial and blocks the transport when consent is denied at the prompt", async () => {
     mocks.waitForApproval.mockResolvedValueOnce({
       approvalId: "appr_consent",
@@ -2856,6 +2871,25 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
     // Approved → the transport ran.
     expect(fakeExecute).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ data: "result" });
+  });
+
+  it("ask: the consent card carries the risk level the engine is told", async () => {
+    const ctx = {
+      ...CTX,
+      messageId: "msg_ask_risk",
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "ask" }]),
+    };
+    const { tools, governance } = await materializeTools(ctx);
+    await (tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(governance[ALIAS]?.riskLevel).toBe("high");
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilityName: SYNTHETIC,
+        riskLevel: governance[ALIAS]?.riskLevel,
+      }),
+    );
   });
 
   it("ask: an active agent-subject grant runs inline — no card, no audit, no user gate", async () => {

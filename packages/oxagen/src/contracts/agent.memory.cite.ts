@@ -22,6 +22,8 @@ export const agentMemoryCite = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "low",
+  // Writes the turn's :Execution and a :Citation per cited memory.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

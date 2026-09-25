@@ -18,6 +18,7 @@ export const conversationRename = registerCapability({
     category: "conversation",
   },
   sensitivity: "low",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

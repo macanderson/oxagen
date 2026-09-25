@@ -11,6 +11,7 @@ export const repoPause = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "ingestion" },
   sensitivity: "low",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

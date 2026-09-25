@@ -37,6 +37,7 @@ export const pluginOrgInstallBulk = registerCapability({
   layers: ["api", "docs", "mcp", "unit"],
   scoped: false,
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({

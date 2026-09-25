@@ -494,6 +494,21 @@ async function recordExternalToolCall(
 // HITL window the consent card is answerable in (same as the approval card).
 const CONSENT_PROMPT_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * The one risk level an external MCP tool carries: in the governance map the
+ * engine reads, and on the consent card a person answers.
+ *
+ * High, because Oxagen holds no contract for the tool. Nothing states what it
+ * reads or writes, so it gets the grade the engine gives any tool it has no
+ * declaration for (`toToolContracts` in ./engine/tools.ts), and the grade a
+ * decision rule's approval for the same tool records (./external-tool-rules.ts,
+ * ./external-approval.ts). The consent card used to record medium while the
+ * engine was told high, so the person deciding saw a lower grade than the
+ * engine enforced. Lowering the engine to medium instead would relax its
+ * policy for a tool no one has vouched for.
+ */
+const EXTERNAL_TOOL_RISK_LEVEL: ToolGovernance["riskLevel"] = "high";
+
 // Model-facing input schema for a contributed external tool. When the
 // contributor supplied a pinned JSONSchema contract (descriptor pinning,
 // mcp-snapshots.ts), the model is constrained by it; providers reject
@@ -1428,7 +1443,7 @@ export async function materializeTools(
                           runId: callAgentRun?.runId ?? null,
                           capabilityName: capturedKey,
                           inputPreview: input,
-                          riskLevel: "medium",
+                          riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
                           ttlMs: CONSENT_PROMPT_TTL_MS,
                         }),
                     );
@@ -1551,7 +1566,7 @@ export async function materializeTools(
                         messageId: ctx.messageId!,
                         capabilityName: capturedKey,
                         inputPreview: input,
-                        riskLevel: "medium",
+                        riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
                         ttlMs: CONSENT_PROMPT_TTL_MS,
                       }),
                   );
@@ -1782,8 +1797,9 @@ export async function materializeTools(
       mutatingToolNames.push(externalAlias);
       // An external tool's semantics are unknown here, so it is declared the
       // way the engine would treat an undeclared one: high risk, mutating.
+      // Its consent card records the same level.
       governance[externalAlias] = {
-        riskLevel: "high",
+        riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
         requiresApproval: false,
         readOnly: false,
       };
