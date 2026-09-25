@@ -20,6 +20,9 @@ export const schema = {
   text: runTranscriptGet.input.shape.text.describe(
     "How much of each body to carry: excerpt cuts it at 1,024 characters, full at 16,384; omit to take the zoom's cap (full at everything, excerpt otherwise)",
   ),
+  query: runTranscriptGet.input.shape.query.describe(
+    "Words to search the entries for, ignoring case: an entry matches on its label, its tool, its target, or the text of either half. The chips narrow first, and the matches page on the same cursor. A read searches at most 2,000 halves and reports in search.unsearched how many it could not look inside",
+  ),
   limit: runTranscriptGet.input.shape.limit.describe(
     "Entries per page, 1 to 500",
   ),

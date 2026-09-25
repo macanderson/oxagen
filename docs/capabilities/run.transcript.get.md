@@ -32,6 +32,7 @@ A body the store cannot return reads as `text: null` on its half; the rest of th
 | `kinds` | string[] | no | the chips pressed; empty (the default) keeps every frame |
 | `after` | string | no | an entry cursor from an earlier read |
 | `text` | `excerpt` \| `full` | no | how much of each body to carry; omitted takes the zoom's cap (see below) |
+| `query` | string | no | words to search the entries for, ignoring case; trimmed, 1 to 200 characters (see Search) |
 | `limit` | integer | no | 1–500, default 200 |
 
 ## Zoom levels
@@ -109,7 +110,10 @@ The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `
 | `entries[].cumulativeCost` | `{ micros, currency, basis }` or null | every cost record of the run up to and including this entry (spec §8.4 prefix sum), so a page never restates the run's spend as the page's |
 | `cursor` | string or null | the point to continue from; null when nothing lies past this page |
 | `complete` | boolean | false when the run has more than 10 000 frames, so the transcript is a prefix |
-| `counts` | object | the run's entries at the zoom read, counted over every entry whatever the chips: `kinds` (entries per chip), `entries` (entries that are not `quiet`), `errors` (entries that failed or were refused, or answer the errors chip), and `policy` (entries that answer the policy chip, except the harness checking itself) |
+| `counts` | object | the run's entries at the zoom read, counted over every entry whatever the chips or query: `kinds` (entries per chip), `entries` (entries that are not `quiet`), `errors` (entries that failed or were refused, or answer the errors chip), and `policy` (entries that answer the policy chip, except the harness checking itself) |
+| `figures` | object | the run's steps, calls and recorded time, whatever the zoom, chips or query (see Figures) |
+| `search` | object or absent | on a read with a `query`: `{ query, matched, unsearched }` (see Search) |
+| `entries[].matches` | string[] or absent | on a read with a `query`: where the entry matched, from `label`, `subject`, `target`, `request` and `response` |
 
 ### What the fold states about each entry
 
@@ -130,6 +134,46 @@ The server is the only place a transcript is folded (ADR-182), so every fact a r
 | `entries[].durationMs` | integer or null | first frame to last; null for one frame, and for a call with no result yet |
 | `entries[].echoOf` | string or null | the `key` of an earlier entry in the same turn whose kept body this one repeats byte for byte: a message that echoes the operator's prompt, or a reply that says again what the last one said |
 | `entries[].recall` | object or null | on a recall entry, what it put in front of the model, read from the body it kept: `{ unit, count, tokens, cut, items[] }`. A steering manifest counts `items` and lists the ones that reached the model; a context frame counts `frames`. A body that cannot be read falls back to the frame count the ledger recorded |
+
+## Search
+
+A read with a `query` answers only the entries that hold it (#3942). The chips narrow the entries first, then the query, and the matches page on the same cursor as any other read. The search compares lowercased text, so `Retry` finds `RETRY_LIMIT`.
+
+An entry matches on any of five places, and `matches` lists each one that held the query:
+
+- `label` and `target`: the opening frame's label and the target its gate recorded.
+- `subject`: the tool the entry is about.
+- `request` and `response`: the text of each half, as far as `text: "full"` carries it (16 384 characters). For a half that carries an `assembly`, the text is its blocks: what the model said and thought, each tool it called with its input, and each result's summary.
+
+Label, subject and target are on the entry. The halves are in the evidence store, one read each, and a run can keep a body for every frame. So one read looks inside at most **2 000** halves (`TRANSCRIPT_SEARCH_HALF_MAX`), in entry order, and still matches the rest on label, subject and target.
+
+`search` says what the query found over the whole run, not only the page:
+
+| Field | Type | Description |
+|---|---|---|
+| `search.query` | string | the query as searched: trimmed and lowercased |
+| `search.matched` | integer | entries that matched, after the chips |
+| `search.unsearched` | integer | halves that carried content the search could not look inside: kept as a digest only, not readable or no longer hashing to their digest, or past the 2 000-half bound. A prompt or reply kept as a digest only is no half of its entry, so it is not counted |
+
+An entry whose only match sits in an unsearched half is not in the answer. A caller that sees `unsearched` above zero says the search was partial.
+
+## Figures
+
+`figures` counts the Run page's figures on the server, over the `steps` fold of every frame read (ADR-182). They were counted in the browser over its own fold until then. The zoom, the chips and the query do not change them, and they share the read's 10 000-frame cap: when `complete` is false they cover a prefix of the run.
+
+| Field | Type | Description |
+|---|---|---|
+| `figures.steps` | `{ model, tool }` | model steps and tool steps |
+| `figures.prompts` | integer | the times the operator prompted the run, the first prompt included. A subagent's `turn_start` and a model request are not the operator |
+| `figures.calls.count`, `.failed` | integer | tool calls, and those whose `outcome` is `failed` or `denied` |
+| `figures.calls.tools[]` | `{ name, calls }` | calls per tool, by the tool's name without a gateway's harness prefix (`claude_code__Bash` counts as `Bash`), most called first. `name` is null for calls whose record named no tool |
+| `figures.calls.families[]` | object | per family: `family`, `calls`, `share` of all calls, `ms` (the calls' own time), `failed`, and `tools` (distinct names). Most called first |
+| `figures.calls.batches` | object or null | the calls between two model steps, which one reply asked for at once. A turn boundary closes a batch too. `count`, `parallel` (batches of more than one call), `widest`, `fanOut` (calls per batch), `serialMs` (every call's own time summed), `togetherMs` (each batch's first start to its last end, summed), and `histogram[]` of `{ width, batches }`. Null for a run that called no tool |
+| `figures.wall` | `{ modelMs, toolMs, waitingMs }` | model steps from first frame to last, tool calls' own time, and the time from each `approval_request` to the frame after it |
+
+A call's own time is its entry's `durationMs` less any approval wait that fell inside it, because the wait is the person's and not the tool's. A call with no result adds no time.
+
+The run's wall clock is not in `figures`. It runs from the run's start to its end, or on a live run to the instant the page reads it, and only the reader knows that instant. The part of the clock that `wall` does not account for is the harness's, and the reader takes it against its own clock.
 
 ## A model stream is answered as a message, not as a stream
 
