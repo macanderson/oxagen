@@ -18,6 +18,7 @@ import type {
   TranscriptEntry,
   TranscriptUsage,
 } from "@/data/contracts/run";
+import { parkedReceipt } from "./player-model";
 import {
   parseBody,
   type ToolDetail,
@@ -885,8 +886,16 @@ export type FeedCall = {
   /** The call as it was made, for the row's fold. */
   raw: string | null;
   gates: FeedGate[];
-  /** The request for approval the call is waiting on, when it is. */
+  /**
+   * The frame that records the call waiting on approval, when it is: the
+   * request for approval, or the ledger receipt of a call that parked.
+   */
   parked: FrameRef | null;
+  /**
+   * The public id (`apr_…`) of the approval a parked call waits on, when its
+   * receipt named one; null otherwise.
+   */
+  approvalId: string | null;
   /** No frame recorded a result, and nothing refused or parked the call. */
   pending: boolean;
   /** A body of the call was cut at the contract's ceiling. */
@@ -1270,10 +1279,17 @@ function toolRow(step: TranscriptStep): FeedRow {
       (frame) =>
         TOOL_GATE.has(frame.type) && ASK.test(policyOutcome(frame) ?? ""),
     );
+  // The in-app assistant records a parked call on its receipt, not on a
+  // request frame before it: the call closed, and it waits on the approval
+  // the receipt names.
+  const parkedClose =
+    close === undefined ? null : parkedReceipt(close.type, close.label);
   const parked =
     asked !== undefined && close === undefined && !answered
       ? refOf(asked)
-      : null;
+      : close !== undefined && parkedClose !== null
+        ? refOf(close)
+        : null;
   const failed =
     digest.node === "deny" ||
     step.frames.some((frame) => frame.kinds.includes("errors"));
@@ -1294,6 +1310,7 @@ function toolRow(step: TranscriptStep): FeedRow {
     raw: detail?.raw ?? null,
     gates: gatesOf(step.frames),
     parked,
+    approvalId: parkedClose?.approvalId ?? null,
     pending: close === undefined && parked === null && !failed,
     truncated: step.frames.some(
       (frame) =>
@@ -1354,6 +1371,7 @@ function blockToolRow(
     raw: detail?.raw ?? null,
     gates: [],
     parked: null,
+    approvalId: null,
     pending: result === undefined,
     truncated: frame.response?.truncated === true,
     frame: refOf(frame),

@@ -45,6 +45,7 @@ const ctx = unsafeMint(WsCtx, {
 
 const REPLY = {
   conversationId: "6f1f5a8e-0000-4000-8000-00000000c0de",
+  conversationPublicId: "cnv_01k9c0de",
   userMessageId: "6f1f5a8e-0000-4000-8000-00000000a111",
   assistantMessageId: "6f1f5a8e-0000-4000-8000-00000000a222",
   runId: "arun_01k9",
