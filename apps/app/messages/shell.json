@@ -14,8 +14,7 @@
       "foot": {
         "connected": "connected",
         "offline": "offline",
-        "reachable": "The control plane answered when this page loaded, and the browser is online.",
-        "notBacked": "Agent count and data plane not read here"
+        "reachable": "The control plane answered when this page loaded, and the browser is online."
       },
       "countNotRecorded": "The count could not be read when this page loaded.",
       "countNotRecordedShort": ", count not recorded"
