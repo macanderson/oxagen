@@ -14,6 +14,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// The handler's role gate (#4194) runs for real against a role fixture. The
+// default caller is an org Owner; a case that needs another sets roleGate.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
@@ -46,6 +52,7 @@ vi.mock("./lib/github-installation-access", () => ({
 }));
 
 import { connectionMappingsSetHandler } from "./connection.mappings.set";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 
 // ── helper: build a mock transaction that returns fixed rows ──────────────────
 
@@ -494,5 +501,32 @@ describe("connectionMappingsSetHandler — auto-name to repo slug", () => {
     );
 
     expect(sets.some((s) => "displayName" in s)).toBe(false);
+  });
+});
+
+// The contract grants org Owner or Admin, or workspace Owner. The kernel's IAM
+// check allows every capability for a non-enterprise org, so the handler is
+// the only gate there (#4194). Remapping decides what the ingest writes.
+describe("connectionMappingsSetHandler role gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetRoleGate();
+  });
+
+  it("refuses a workspace Member as forbidden, before reading the connection", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("lets a workspace Owner through to the connection lookup", async () => {
+    roleGate.roles = { org: null, workspace: "Owner" };
+    setupDbSequence([], []);
+    await expect(
+      connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX),
+    ).rejects.toThrow("Connection not found");
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
 });

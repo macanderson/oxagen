@@ -6,6 +6,12 @@
  * accountability projection, and the clean null not-found path.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// The handler's role gate (#4194) runs for real against a role fixture. The
+// default caller is an org Owner; a case that needs another sets roleGate.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
 import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({

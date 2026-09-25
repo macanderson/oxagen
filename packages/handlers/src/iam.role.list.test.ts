@@ -15,7 +15,33 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// The handler's role gate (#4194). This suite spies on drizzle's `eq` and
+// `and` to prove the handler's own WHERE clauses, and the real gate builds
+// the same conditions on `roles.scopeKind`, so the gate is stubbed here: it
+// passes the org roles `mocks.callerOrgRoles` holds when the requirement names
+// one, and refuses with the real gate's error shape otherwise.
+vi.mock("@oxagen/iam/org-role", async () => {
+  const { HandlerError } = await import("@oxagen/oxagen");
+  return {
+    resolveActingUserId: async (ctx: { userId: string | null }) => ctx.userId,
+    assertOrgRole: vi.fn(
+      async (_ctx: unknown, required: { org: readonly string[] }) => {
+        const match = mocks.callerOrgRoles.find((r) =>
+          required.org.includes(r),
+        );
+        if (match) return match;
+        throw new HandlerError({
+          code: "forbidden",
+          reason: "org_role_required",
+          message: "Requires one of the org roles",
+        });
+      },
+    ),
+  };
+});
+
 const mocks = vi.hoisted(() => ({
+  callerOrgRoles: ["Owner"] as string[],
   withSystemDb: vi.fn(),
   roleRows: [] as Record<string, unknown>[],
   countRows: [] as Record<string, unknown>[],
@@ -46,6 +72,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
 });
 
 import { schema } from "@oxagen/database";
+import { assertOrgRole } from "@oxagen/iam/org-role";
 import { eq, and } from "drizzle-orm";
 import { iamRoleListHandler } from "./iam.role.list";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
@@ -139,6 +166,7 @@ beforeEach(() => {
   mocks.grantQueries = 0;
   mocks.userQueries = 0;
   mocks.tier = "free";
+  mocks.callerOrgRoles = ["Owner"];
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
   );
@@ -344,5 +372,39 @@ describe("iamRoleListHandler", () => {
     expect(
       andMock.mock.calls.some((call: unknown[]) => call.length === 2),
     ).toBe(true);
+  });
+});
+
+// The contract grants org Owner, Admin, or Compliance. The kernel's IAM check
+// allows every capability for a non-enterprise org, so the handler is the
+// only gate there (#4194). The grant map it returns is the org's whole
+// permission model.
+describe("iamRoleListHandler role gate", () => {
+  it("asks for the roles the contract grants", async () => {
+    await iamRoleListHandler(
+      { includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
+    expect(vi.mocked(assertOrgRole)).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: CTX.userId }),
+      { org: ["Owner", "Admin", "Compliance"] },
+    );
+  });
+
+  it("refuses a caller with no org role as forbidden, reading nothing", async () => {
+    mocks.callerOrgRoles = [];
+    await expect(
+      iamRoleListHandler({ includeGrants: true, limit: 100, offset: 0 }, CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("allows an org Compliance member", async () => {
+    mocks.callerOrgRoles = ["Compliance"];
+    const out = await iamRoleListHandler(
+      { includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
+    expect(out.total).toBe(4);
   });
 });
