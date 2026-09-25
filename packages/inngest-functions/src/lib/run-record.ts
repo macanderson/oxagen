@@ -127,19 +127,44 @@ export async function resolveRunRecord(
 
 const PAGE = 500;
 
-/** Every `tacho_events` row of a session, in sequence order. */
+/**
+ * Every `tacho_events` row of a session, in sequence order.
+ *
+ * Each page is bounded above, as `readFrames` in the handlers' run-read.ts is.
+ * `tacho_events` is read with `FINAL`, and a read with no upper bound scans
+ * the chain from `afterSeq` to its end whatever the limit says. Unbounded, a
+ * long session cost one scan of the rest of the chain per page (#4202).
+ *
+ * A chain numbers its frames without holes, so a full window of `PAGE` seqs
+ * holds `PAGE` rows. A short window means the chain ended or it has a
+ * recorded break. One read past the window, unbounded, tells the two apart.
+ * It returns nothing at the end of the chain, and the rows after the break
+ * otherwise.
+ */
 async function allTachoRows(sessionUuid: string): Promise<TachoFrameRow[]> {
   const rows: TachoFrameRow[] = [];
   let after = -1;
   for (;;) {
+    const through = after + PAGE;
     const page = await selectTachoEvents({
       sessionUuid,
       afterSeq: after,
+      throughSeq: through,
       limit: PAGE,
     });
     rows.push(...page);
-    const last = page.at(-1);
-    if (!last || page.length < PAGE) return rows;
+    if (page.length === PAGE) {
+      after = through;
+      continue;
+    }
+    const rest = await selectTachoEvents({
+      sessionUuid,
+      afterSeq: through,
+      limit: PAGE,
+    });
+    rows.push(...rest);
+    const last = rest.at(-1);
+    if (!last || rest.length < PAGE) return rows;
     after = last.seq;
   }
 }

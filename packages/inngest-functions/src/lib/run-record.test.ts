@@ -364,17 +364,78 @@ describe("readSealedSegments", () => {
   });
 });
 
+/**
+ * A `tacho_events` store holding these seqs. It answers a read the way the
+ * ClickHouse select does: after `afterSeq`, through `throughSeq` when given,
+ * ascending, at most `limit`.
+ */
+function tachoChain(seqs: number[]) {
+  mocks.selectTachoEvents.mockImplementation(
+    async (args: { afterSeq: number; throughSeq?: number; limit: number }) =>
+      seqs
+        .filter(
+          (seq) =>
+            seq > args.afterSeq &&
+            (args.throughSeq === undefined || seq <= args.throughSeq),
+        )
+        .slice(0, args.limit)
+        .map(tachoRow),
+  );
+}
+
+const range = (from: number, to: number) =>
+  Array.from({ length: to - from + 1 }, (_, i) => from + i);
+
+const WRAPPED = {
+  source: "tacho",
+  sessionUuid: SESSION,
+  enforcementTier: "harness",
+  completenessGaps: [],
+  replayGrade: null,
+} as const;
+
 describe("readRunFrames", () => {
   it("reads a wrapped session's frames in sequence inside the tenant scope", async () => {
-    mocks.selectTachoEvents.mockResolvedValue([tachoRow(0), tachoRow(1)]);
-    const frames = await readRunFrames(SCOPE, {
-      source: "tacho",
-      sessionUuid: SESSION,
-      enforcementTier: "harness",
-      completenessGaps: [],
-      replayGrade: null,
-    });
+    tachoChain([0, 1]);
+    const frames = await readRunFrames(SCOPE, WRAPPED);
     expect(frames.map((f) => f.seq)).toEqual(["0", "1"]);
     expect(scopes).toEqual([SCOPE]);
+  });
+
+  // #4202: under FINAL an unbounded page scans the rest of the chain.
+  it("bounds each windowed page of a wrapped session at afterSeq plus the page size", async () => {
+    tachoChain(range(0, 1200));
+    const frames = await readRunFrames(SCOPE, WRAPPED);
+    expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 1200));
+    const calls = mocks.selectTachoEvents.mock.calls.map(
+      ([args]) => args as { afterSeq: number; throughSeq?: number },
+    );
+    const windowed = calls.filter((c) => c.throughSeq !== undefined);
+    expect(windowed.map((c) => c.afterSeq)).toEqual([-1, 499, 999]);
+    for (const call of windowed) {
+      expect(call.throughSeq).toBe(call.afterSeq + 500);
+    }
+    // One unbounded read, past the last window, finds the end of the chain.
+    expect(calls.filter((c) => c.throughSeq === undefined)).toEqual([
+      expect.objectContaining({ afterSeq: 1499 }),
+    ]);
+  });
+
+  it("reads past a recorded break in a wrapped session's chain", async () => {
+    const seqs = [...range(0, 299), ...range(800, 1000)];
+    tachoChain(seqs);
+    const frames = await readRunFrames(SCOPE, WRAPPED);
+    expect(frames.map((f) => Number(f.seq))).toEqual(seqs);
+  });
+
+  it("reads a wrapped session one frame past a full page", async () => {
+    tachoChain(range(0, 500));
+    const frames = await readRunFrames(SCOPE, WRAPPED);
+    expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 500));
+  });
+
+  it("reads an empty wrapped session as no frames (negative)", async () => {
+    tachoChain([]);
+    expect(await readRunFrames(SCOPE, WRAPPED)).toEqual([]);
   });
 });
