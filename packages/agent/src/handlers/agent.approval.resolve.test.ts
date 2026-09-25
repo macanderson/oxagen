@@ -22,6 +22,11 @@
  *     `released`, in the one transaction the UPDATE runs in; `approved`
  *     releases nothing and reports `held`; a row with no mandate reports
  *     null and never touches the ledger
+ *   - delivery (ADR-118, #3127): an approved row that stores the parked
+ *     call runs it in the deciding request, outside the enclosing governed
+ *     action, and answers what the row then records; a delivery that throws
+ *     leaves the decision standing and answers the row as it stands; a
+ *     denied row and a row with no stored call never run anything
  *   - who answers a mandate row (§6.9, INV-29): a workspace Member who
  *     passes the wide gate but holds no role for moves_money → forbidden,
  *     no lock, no release, no UPDATE; an agent principal (resolved or on an
@@ -37,11 +42,24 @@
  *     run lookup the answer does not need
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
+import { z } from "zod";
 import { schema } from "@oxagen/database";
-import { isHandlerError } from "@oxagen/oxagen";
+import {
+  getCapability,
+  isHandlerError,
+  registerCapability,
+} from "@oxagen/oxagen";
 import {
   clearBillingAdmissionGate,
   clearHandlersForTests,
@@ -63,6 +81,9 @@ const mocks = vi.hoisted(() => ({
     publicId: "mnd_01k5rt9xq7v3m8n2p4s6t8w0",
   })),
   release: vi.fn(async () => 1),
+  resumeApprovedCall: vi.fn<(ref: unknown) => Promise<string>>(
+    async () => "succeeded",
+  ),
 }));
 
 vi.mock("@oxagen/rules", () => ({
@@ -99,6 +120,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 vi.mock("../runtime/approval", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../runtime/approval")>()),
   notifyResolution: mocks.notifyResolution,
+}));
+
+vi.mock("../runtime/approval-resume", () => ({
+  resumeApprovedCall: mocks.resumeApprovedCall,
 }));
 
 import { agentApprovalResolveHandler } from "./agent.approval.resolve";
@@ -188,7 +213,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
         }),
       },
     },
-    select: () => ({
+    select: (projection?: Record<string, unknown>) => ({
       from: (table: unknown) => {
         let lastWhere: SQL | null = null;
         const chain = {
@@ -220,6 +245,13 @@ function makeTx(tenant: Tenant, captured: Captured) {
               );
             }
             if (table === schema.approvalRequests) {
+              // The execution read-back asks for the resume columns; the
+              // pending read asks for the mandate hop.
+              if (projection && "resumeRunPublicId" in projection) {
+                return Promise.resolve(
+                  tenant.resume ? [tenant.resume.readBack] : [],
+                );
+              }
               return Promise.resolve(pendingRow());
             }
             if (table === schema.mandates) {
@@ -289,6 +321,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
                             id: tenant.matchedRowId,
                             messageId: tenant.messageId,
                             capabilityName: "set_budget",
+                            resumeStatus: tenant.resume?.afterUpdate ?? null,
                           },
                         ]
                       : [],
@@ -378,6 +411,7 @@ describe("resolve_approval — role gate", () => {
       approvalId: PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      execution: null,
     });
   });
 
@@ -394,6 +428,7 @@ describe("resolve_approval — role gate", () => {
         approvalId: PUBLIC_ID,
         resolution: "denied",
         mandate: null,
+        execution: null,
       });
     },
   );
@@ -449,6 +484,7 @@ describe("resolve_approval — role gate", () => {
         approvalId: PUBLIC_ID,
         resolution: "approved",
         mandate: null,
+        execution: null,
       });
       expect(captured.set?.resolvedByUserId).toBe("u_creator");
     });
@@ -533,6 +569,7 @@ describe("resolve_approval — the UPDATE", () => {
       approvalId: PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      execution: null,
     });
   });
 
@@ -661,6 +698,7 @@ describe("resolve_approval — governed-action accrual through the kernel", () =
       approvalId: PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      execution: null,
     });
     expect(recorder).toHaveBeenCalledTimes(1);
     expect(recorder.mock.calls[0]?.[0]).toMatchObject({
@@ -737,6 +775,185 @@ describe("resolve_approval — governed-action accrual through the kernel", () =
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
     expect(captured.set).toBeNull();
     expect(recorder).not.toHaveBeenCalled();
+  });
+});
+
+// ── delivering the approved call (ADR-118, #3127) ────────────────────────────
+
+describe("resolve_approval — delivering the approved call", () => {
+  const RAN = {
+    resumeStatus: "succeeded",
+    resumeRunPublicId: "arun_resumed",
+    resumeError: null,
+  };
+
+  it("runs an approved stored call in the deciding request and answers what the row records", async () => {
+    setup({ resume: { afterUpdate: "queued", readBack: RAN } });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    // Delivered by the row uuid, inside the caller's org and workspace.
+    expect(mocks.resumeApprovedCall).toHaveBeenCalledTimes(1);
+    expect(mocks.resumeApprovedCall).toHaveBeenCalledWith({
+      id: ROW_UUID,
+      orgId: CTX.orgId,
+      workspaceId: CTX.workspaceId,
+    });
+    // The answer is the row read back, not what the delivery returned.
+    expect(out.execution).toEqual({
+      status: "succeeded",
+      runId: "arun_resumed",
+      reason: null,
+    });
+  });
+
+  it("reports a refused delivery as the row records it", async () => {
+    mocks.resumeApprovedCall.mockResolvedValueOnce("failed");
+    setup({
+      resume: {
+        afterUpdate: "queued",
+        readBack: {
+          resumeStatus: "failed",
+          resumeRunPublicId: null,
+          resumeError: "requester_access_revoked",
+        },
+      },
+    });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    expect(out.execution).toEqual({
+      status: "failed",
+      runId: null,
+      reason: "requester_access_revoked",
+    });
+  });
+
+  it("keeps the decision when delivery throws, and answers the row as it stands (negative)", async () => {
+    mocks.resumeApprovedCall.mockRejectedValueOnce(new Error("ledger down"));
+    const captured = setup({
+      resume: {
+        afterUpdate: "queued",
+        readBack: {
+          resumeStatus: "queued",
+          resumeRunPublicId: null,
+          resumeError: null,
+        },
+      },
+    });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    expect(captured.set).toMatchObject({ resolution: "approved" });
+    expect(mocks.notifyResolution).toHaveBeenCalledTimes(1);
+    expect(out.resolution).toBe("approved");
+    // Still queued, so the periodic worker delivers it.
+    expect(out.execution).toEqual({
+      status: "queued",
+      runId: null,
+      reason: null,
+    });
+  });
+
+  it("never runs a denied stored call (negative)", async () => {
+    setup({
+      resume: {
+        afterUpdate: "denied",
+        readBack: {
+          resumeStatus: "denied",
+          resumeRunPublicId: null,
+          resumeError: null,
+        },
+      },
+    });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "denied", note: "not now" },
+      CTX,
+    );
+    expect(mocks.resumeApprovedCall).not.toHaveBeenCalled();
+    expect(out.execution).toEqual({
+      status: "denied",
+      runId: null,
+      reason: null,
+    });
+  });
+
+  it("runs nothing and answers no execution for a row that stores no call (negative)", async () => {
+    setup();
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    expect(mocks.resumeApprovedCall).not.toHaveBeenCalled();
+    expect(out.execution).toBeNull();
+  });
+
+  describe("through the kernel", () => {
+    const ORG = "00000000-0000-0000-0000-000000000001";
+    const WS = "00000000-0000-0000-0000-000000000002";
+    const USER = "00000000-0000-0000-0000-000000000003";
+    const kernelCtx = makeCTX({ orgId: ORG, workspaceId: WS, userId: USER });
+    const PARKED = "test.parked_write";
+    let recorder: Mock<(r: GovernedActionRecord) => Promise<void>>;
+
+    beforeEach(() => {
+      clearHandlersForTests();
+      clearKernelIAMRuntime();
+      clearBillingAdmissionGate();
+      clearSecurityEventEmitter();
+      if (!getCapability(PARKED)) {
+        registerCapability({
+          name: PARKED,
+          domain: "test",
+          description: "The write a parked call asked for.",
+          mode: "sync" as const,
+          surfaces: ["agent"] as const,
+          layers: ["unit"] as const,
+          sensitivity: "low" as const,
+          defaultEffect: "allow" as const,
+          defaultRoles: { org: {}, workspace: {} },
+          input: z.object({}),
+          output: z.object({ ok: z.boolean() }),
+        });
+      }
+      registerHandler(
+        "resolve_approval",
+        async () => (input, ctx) =>
+          agentApprovalResolveHandler(
+            input as Parameters<typeof agentApprovalResolveHandler>[0],
+            ctx,
+          ),
+      );
+      registerHandler(PARKED, async () => async () => ({ ok: true }));
+      recorder = vi.fn<(r: GovernedActionRecord) => Promise<void>>();
+      setUsageRecorder(recorder);
+      // The delivery invokes the stored call the way resumeApprovedCall does.
+      mocks.resumeApprovedCall.mockImplementationOnce(async () => {
+        await invoke(PARKED, {}, kernelCtx, { surface: "agent" });
+        return "succeeded";
+      });
+    });
+
+    afterEach(() => {
+      clearUsageRecorder();
+      clearHandlersForTests();
+    });
+
+    it("meters the delivered call as its own governed action, not as part of the decision", async () => {
+      setup({ resume: { afterUpdate: "queued", readBack: RAN } });
+      await invoke(
+        "resolve_approval",
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        kernelCtx,
+      );
+      // Nested inside the decision, the call would accrue nothing, and the
+      // write would go unmetered where the periodic worker meters it.
+      const billed = recorder.mock.calls.map(([record]) => record.capability);
+      expect(billed).toEqual([PARKED, "resolve_approval"]);
+    });
   });
 });
 

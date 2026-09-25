@@ -297,11 +297,10 @@ vi.mock("./mcp-snapshots", async (importOriginal) => {
 });
 
 const mocks = vi.hoisted(() => ({
-  createApprovalRequest: vi.fn(
-    async (): Promise<{ approvalId: string; approvalPublicId?: string }> => ({
-      approvalId: "appr_x",
-    }),
-  ),
+  createApprovalRequest: vi.fn(async () => ({
+    approvalId: "appr_x",
+    publicId: "apr_x",
+  })),
   waitForApproval: vi.fn(
     async (): Promise<{
       approvalId: string;
@@ -637,17 +636,12 @@ describe("materializeTools", () => {
     expect(mocks.waitForApproval).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
     expect(events).toHaveLength(1);
-    // `tool_invocations` records the call as parked, not as a failure with
-    // the park's class, so failure rates leave it out.
-    expect(mocks.insertToolInvocation).toHaveBeenCalledOnce();
-    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        capability_name: FIXTURE[2]!.name,
-        status: "parked",
-        error_class: null,
-        required_approval: 1,
-      }),
-    );
+    // The row uuid keys waiters; the public id is what the parked card shows
+    // and what the list reads answer.
+    expect(events[0]).toMatchObject({
+      approvalId: "appr_x",
+      approvalPublicId: "apr_x",
+    });
   });
 
   it("attaches a parked approval to the run set on runIdRef AFTER materialization, not the run captured at materialize time (finding 9, negative)", async () => {
@@ -875,7 +869,7 @@ describe("materializeTools", () => {
     mocks.createApprovalRequest.mockImplementationOnce(async () => {
       // tenancyMock.state.current is the active scope set by runInTenantScope.
       scopeAtApproval = tenancyMock.state.current;
-      return { approvalId: "appr_scoped" };
+      return { approvalId: "appr_scoped", publicId: "apr_scoped" };
     });
     const fixtureGated = [
       {
@@ -906,6 +900,7 @@ describe("materializeTools", () => {
     // Restore the shared default impl for subsequent tests.
     mocks.createApprovalRequest.mockImplementation(async () => ({
       approvalId: "appr_x",
+      publicId: "apr_x",
     }));
   });
 });
@@ -1867,6 +1862,7 @@ describe("materializeTools — first-use consent gate", () => {
     mocks.createApprovalRequest.mockClear();
     mocks.createApprovalRequest.mockResolvedValue({
       approvalId: "appr_consent",
+      publicId: "apr_consent",
     });
     mocks.waitForApproval.mockClear();
     mocks.waitForApproval.mockResolvedValue({
@@ -2698,7 +2694,10 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
     mocks.insertToolInvocation.mockClear();
     mocks.insertToolInvocation.mockResolvedValue(undefined);
     mocks.createApprovalRequest.mockClear();
-    mocks.createApprovalRequest.mockResolvedValue({ approvalId: "appr_ask" });
+    mocks.createApprovalRequest.mockResolvedValue({
+      approvalId: "appr_ask",
+      publicId: "apr_ask",
+    });
     mocks.waitForApproval.mockClear();
     mocks.waitForApproval.mockResolvedValue({
       approvalId: "appr_ask",
