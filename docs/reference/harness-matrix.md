@@ -34,6 +34,7 @@ Each source abbreviation below links to the implementation. “Metered” and �
 [G]: https://geminicli.com/docs/hooks/reference/
 [GC]: https://geminicli.com/docs/reference/configuration/
 [AI]: https://aider.chat/docs/config/options.html
+[E]: ../../packages/tacho/src/cli/enroll.ts
 [CW]: ../../packages/tacho/src/host/cursor-writer.ts
 [MG]: ../../packages/tacho/src/collector/mcp-gateway.ts
 [CCM]: https://code.claude.com/docs/en/mcp
@@ -45,7 +46,7 @@ Claude Desktop is a connected gateway harness, not one of the four wrapped harne
 
 ### Codex trust and approval
 
-The current enrollment writer installs hooks but does not persist their trust. Codex skips new or changed non-managed hooks until their definitions are reviewed and trusted. Operators can inspect them with `/hooks`. This is why a populated hooks file does not prove recording. The dirty Codex trust worktree contains a recovery draft, but it is not shipped in the audited revision. Codex also does not honor PreToolUse `ask`; the hook client needs a refusal translation before an ask rule can safely govern it. These findings come from [the official hooks documentation][O] and the linked client source, without a live Codex exercise.
+Codex skips new or changed non-managed hooks until their definitions are trusted. Enrollment records each hook as trusted in Codex's config after every write, because trust is bound to the hook's contents ([`trustCodexHooks` in enroll.ts][E]). When that step fails, enrollment warns and the hooks file records nothing until someone accepts the hooks in Codex. Operators can inspect them with `/hooks`. This is why a populated hooks file alone does not prove recording. Codex also does not honor PreToolUse `ask`; the hook client needs a refusal translation before an ask rule can safely govern it. These findings come from [the official hooks documentation][O] and the linked client source, without a live Codex exercise.
 
 ### Cursor and Stella
 
