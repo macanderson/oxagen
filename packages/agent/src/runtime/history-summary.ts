@@ -320,16 +320,17 @@ export async function loadConversationHistory(
   }
 
   // Longer than one page, with no summary or one whose boundary is further
-  // back. Read the older messages the summary does not cover yet.
+  // back. Read the older messages the summary does not cover yet, and one
+  // more to learn whether any are left past the bound.
   const seen = new Set(recent.map((row) => row.id));
-  const older = (await page(HISTORY_SUMMARY_MAX_SPAN, pageSize)).filter(
+  const older = (await page(HISTORY_SUMMARY_MAX_SPAN + 1, pageSize)).filter(
     // A message written between the two reads shifts the offset by one.
     (row) => !seen.has(row.id),
   );
   const reached = stored
     ? older.findIndex((row) => row.id === stored.throughMessageId)
     : -1;
-  const exhausted = older.length < HISTORY_SUMMARY_MAX_SPAN;
+  const exhausted = older.length <= HISTORY_SUMMARY_MAX_SPAN;
   if (stored && reached < 0 && exhausted) {
     logger.warn(
       { ...scope, conversationId, throughMessageId: stored.throughMessageId },
@@ -337,7 +338,10 @@ export async function loadConversationHistory(
     );
   }
   const previous = stored && (reached >= 0 || !exhausted) ? stored : null;
-  const olderUncovered = reached >= 0 ? older.slice(0, reached) : older;
+  const olderUncovered = older.slice(
+    0,
+    reached >= 0 ? reached : HISTORY_SUMMARY_MAX_SPAN,
+  );
   const truncated = reached < 0 && !exhausted;
   if (truncated) {
     logger.warn(

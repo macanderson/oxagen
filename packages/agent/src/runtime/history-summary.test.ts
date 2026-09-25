@@ -228,7 +228,7 @@ describe("a 120-message thread with no summary yet", () => {
       { offset: 0, limit: LIMIT + HISTORY_SUMMARY_SLACK + 1 },
       {
         offset: LIMIT + HISTORY_SUMMARY_SLACK + 1,
-        limit: HISTORY_SUMMARY_MAX_SPAN,
+        limit: HISTORY_SUMMARY_MAX_SPAN + 1,
       },
     ]);
     if (loaded.plan.kind !== "refresh") throw new Error("expected a refresh");
@@ -500,6 +500,29 @@ describe("a thread longer than one turn reads", () => {
       /^Older messages came before these and were not read\./,
     );
     expect(mocks.warn[0]!.msg).toContain("leaving the oldest messages out");
+  });
+
+  it("does not call a thread that ends exactly at the bound truncated", async () => {
+    const read = LIMIT + HISTORY_SUMMARY_SLACK + 1 + HISTORY_SUMMARY_MAX_SPAN;
+    const { loaded } = await load({ summary: null, rows: thread(read) });
+    if (loaded.plan.kind !== "refresh") throw new Error("expected a refresh");
+    expect(loaded.plan.truncated).toBe(false);
+    expect(loaded.plan.span[0]!.id).toBe(idOf(1));
+    expect(mocks.warn).toEqual([]);
+  });
+
+  it("finds a stored summary further back than one page on the second read", async () => {
+    const { loaded, pages } = await load({
+      summary: stored(100),
+      rows: thread(200),
+    });
+    expect(pages).toHaveLength(2);
+    if (loaded.plan.kind !== "refresh") throw new Error("expected a refresh");
+    expect(loaded.plan.previous).toEqual(stored(100));
+    expect(loaded.plan.truncated).toBe(false);
+    expect(loaded.plan.span[0]!.id).toBe(idOf(101));
+    expect(loaded.plan.throughMessageId).toBe(idOf(160));
+    expect(loaded.window[0]!.content).toBe("message 161");
   });
 });
 
