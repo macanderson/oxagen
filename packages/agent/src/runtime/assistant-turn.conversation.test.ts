@@ -33,21 +33,29 @@ interface Captured {
   updates: { table: string; set: Record<string, unknown> }[];
 }
 
-/** A transaction whose conversation lookup answers `found`. */
+/**
+ * A transaction whose conversation lookup answers `found`. The lookup is the
+ * read that projects `publicId`. The history read (#4195) also selects from
+ * conversations, for the stored summary, and answers no summary here.
+ */
 function fakeTx(found: (typeof CONVERSATION)[]) {
   const captured: Captured = { lookups: [], inserts: [], updates: [] };
   const tx = {
-    select: () => ({
+    select: (projection?: Record<string, unknown>) => ({
       from: (table: Parameters<typeof getTableName>[0]) => ({
         where: (cond: SQL) => {
-          const isConversation = getTableName(table) === CONVERSATIONS;
-          if (isConversation) {
+          const isLookup =
+            getTableName(table) === CONVERSATIONS &&
+            projection !== undefined &&
+            "publicId" in projection;
+          if (isLookup) {
             const q = dialect.sqlToQuery(cond);
             captured.lookups.push({ where: q.sql, params: q.params });
           }
           const chain = {
             orderBy: () => chain,
-            limit: () => Promise.resolve(isConversation ? found : []),
+            offset: () => chain,
+            limit: () => Promise.resolve(isLookup ? found : []),
           };
           return chain;
         },
