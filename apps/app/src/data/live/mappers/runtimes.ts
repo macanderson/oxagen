@@ -9,7 +9,7 @@
 // `hooksOk` is mapped as it stands. It is Claude Code's alone: the collector
 // reads the harness's settings file back each tick (`tachoHookPresence`,
 // packages/tacho/src/host/settings-writer.ts) and reports `true` only when
-// every hook Tacho writes, the six command hooks among them, is present with
+// every hook Tacho writes, the five command hooks among them, is present with
 // its environment. `false` names no count, so the page reads a count only
 // from `true` (#3818).
 import type { agentList } from "@oxagen/oxagen/contracts/agent.list";

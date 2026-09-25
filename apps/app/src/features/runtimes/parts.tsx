@@ -190,16 +190,19 @@ export function isEnrolled(host: RuntimeEnrollment, now: number): boolean {
 }
 
 /**
- * The six command hooks Tacho writes into Claude Code's settings, in the
- * order the design prints them (`COMMAND_HOOK_EVENTS`, then
- * `SPOOLED_HOOK_EVENTS`, packages/tacho/src/host/settings-writer.ts). They
- * are event names, printed as the harness spells them.
+ * The five command hooks Tacho writes into Claude Code's settings, in the
+ * order the design prints them (`COMMAND_HOOK_EVENTS`,
+ * packages/tacho/src/host/settings-writer.ts). They are event names, printed
+ * as the harness spells them. `SessionEnd` also runs as a command hook on a
+ * host enrolled since #3989, and the list leaves it out: `hooksOk` holds for
+ * an older host whose `SessionEnd` is still an http hook, so the page cannot
+ * say which one a host has.
  */
 export const COMMAND_HOOKS =
-  "SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop, SessionEnd";
+  "SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop";
 
 /**
- * Whether the record holds all six command hooks as written: a host whose
+ * Whether the record holds all five command hooks as written: a host whose
  * only harness is Claude Code, whose settings file the collector last read
  * back with every hook in place (`hooksOk`). `false` names no count, and no
  * other harness reports a read-back, so every other host's hooks are not

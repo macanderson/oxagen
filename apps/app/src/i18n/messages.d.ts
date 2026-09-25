@@ -7267,7 +7267,7 @@ type Messages = {
       collectorGaps: string;
       hookEnforce: string;
       hookObserve: string;
-      hooksCommand: string;
+      hooksFive: string;
       modelLoopback: string;
       modelMixed: string;
       modelDirect: string;

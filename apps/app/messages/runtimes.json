@@ -141,7 +141,7 @@
       "collectorGaps": "telemetry gaps in the last 24h not recorded",
       "hookEnforce": "tacho-hook {version} · fails closed against its cached bundle",
       "hookObserve": "tacho-hook {version} · allows when its bundle is stale, because this host is in observe mode",
-      "hooksCommand": "Six run as command hooks. The first four can refuse.",
+      "hooksFive": "Five run as command hooks. The first four can refuse.",
       "modelLoopback": "every harness config names the loopback proxy, as the daemon last reported them",
       "modelMixed": "some harness configs name the loopback proxy and some send model traffic to the provider direct, as the daemon last reported them",
       "modelDirect": "model traffic goes from the harness to its provider; routing it is the gateway tier",
