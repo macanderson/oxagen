@@ -532,7 +532,11 @@ export const transcriptEntrySchema = z
     node: transcriptNodeSchema.nullable().optional(),
     /** True when the entry has nothing to show a reader beyond its frames. */
     quiet: z.boolean().optional(),
-    /** How the entry's call ended; null for an entry that records no call. */
+    /**
+     * How the entry's call ended; null for an entry that records no call. At
+     * `everything`, a call's request frame cannot say how the call ended, so
+     * its entry's outcome is null too.
+     */
     outcome: transcriptOutcomeSchema.nullable().optional(),
     /** The approval a parked call waits on (`apr_…`); null otherwise. */
     approvalId: z.string().nullable().optional(),

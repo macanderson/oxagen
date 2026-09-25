@@ -973,6 +973,34 @@ describe("how a call ended", () => {
       quiet: false,
     });
   });
+
+  it("states no outcome at everything for a call's request frame, which cannot say how the call ended", () => {
+    const frames = [
+      w(1, "tool_requested", { toolName: "Bash", toolUseId: "k1" }),
+      w(2, "tool_call", {
+        toolName: "Bash",
+        toolStatus: "ok",
+        toolUseId: "k1",
+      }),
+      w(3, "model.request", { model: "m", toolUseId: "c1" }),
+      w(4, "model.response", { model: "m", toolUseId: "c1" }),
+    ];
+    expect(
+      frameFolds(frames).map((f) => [f.key, f.node, f.outcome, f.durationMs]),
+    ).toEqual([
+      ["1", "tool", null, null],
+      ["2", "tool", "ok", null],
+      ["3", "model", null, null],
+      ["4", "model", "ok", null],
+    ]);
+  });
+
+  it("keeps a lone request pending at steps, where the step is the whole call (negative)", () => {
+    const [tool] = stepFolds([
+      w(1, "tool_requested", { toolName: "Bash", toolUseId: "k1" }),
+    ]);
+    expect(tool?.outcome).toBe("pending");
+  });
 });
 
 describe("turn boundaries and replies", () => {

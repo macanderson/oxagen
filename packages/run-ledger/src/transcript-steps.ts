@@ -764,25 +764,35 @@ export function stepFolds(frames: readonly RunFrame[]): TranscriptFold[] {
   );
 }
 
-/** The `everything` zoom: one entry per frame, each read as a step of one frame. */
+/**
+ * The `everything` zoom: one entry per frame, each read as a step of one
+ * frame.
+ *
+ * A call's request frame on its own says what went out and nothing about how
+ * the call ended, so its outcome is null rather than `pending`: the call it
+ * opens may well have completed in a later frame.
+ */
 export function frameFolds(frames: readonly RunFrame[]): TranscriptFold[] {
   const turns = turnOrdinals(frames);
   return withRelations(
-    frames.map((frame, i) =>
-      stepFold(
+    frames.map((frame, i) => {
+      const kind = stepKind(frame);
+      const fold = stepFold(
         frames,
         {
           indexes: [i],
           tag:
-            stepKind(frame) === "model_call"
+            kind === "model_call"
               ? "model"
-              : stepKind(frame) === "tool_call"
+              : kind === "tool_call"
                 ? "tool"
                 : "event",
         },
         turns,
-      ),
-    ),
+      );
+      if (kind !== null && frame.phase === "request") fold.outcome = null;
+      return fold;
+    }),
   );
 }
 
