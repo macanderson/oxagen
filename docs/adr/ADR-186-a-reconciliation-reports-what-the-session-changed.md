@@ -34,7 +34,7 @@ work.
 ## Decision
 
 A path is in a reconciliation when the session changed it. The rule lives in
-`readSessionChanges` (`packages/tacho/src/collector/git-facts.ts`).
+`readSessionChanges` (`packages/tacho/src/collector/session-changes.ts`).
 
 1. **The session's own commits.** The lane stamps the session's first git
    read (`gitFirstReadAt`). A commit is the session's when it is a non-merge

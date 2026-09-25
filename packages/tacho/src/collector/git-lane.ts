@@ -20,9 +20,6 @@ import {
   type GitFacts,
   readGitFacts,
   readGitRoot,
-  readPreexistingPaths,
-  readSessionChanges,
-  type SessionChanges,
   worktreeReconciledBody,
 } from "./git-facts";
 import {
@@ -32,6 +29,11 @@ import {
   type SessionRegistry,
 } from "./registry";
 import type { HookEnvelope } from "./server";
+import {
+  readPreexistingPaths,
+  readSessionChanges,
+  type SessionChanges,
+} from "./session-changes";
 import {
   readWorktreeSnapshot,
   type WorktreeSnapshot,

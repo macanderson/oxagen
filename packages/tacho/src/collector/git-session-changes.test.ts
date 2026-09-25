@@ -32,12 +32,12 @@ import {
   unsignedBundle,
 } from "../host/test-support";
 import { type DaemonHandle, startDaemon } from "./daemon";
+import { readWorkingTreeChanges } from "./git-facts";
 import {
   readPreexistingPaths,
   readSessionChanges,
-  readWorkingTreeChanges,
   type WorktreeAttribution,
-} from "./git-facts";
+} from "./session-changes";
 
 const ME = "agent@example.com";
 const OTHER = "someone-else@example.com";

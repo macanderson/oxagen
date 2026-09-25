@@ -17,7 +17,7 @@ import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import { isSha256Digest } from "../digest";
 import type { TachoEvent, TachoRuntime } from "../envelope";
-import type { PreexistingPaths } from "./git-facts";
+import type { PreexistingPaths } from "./session-changes";
 import { COMMAND_HOOK_TIMEOUTS_S } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import {
