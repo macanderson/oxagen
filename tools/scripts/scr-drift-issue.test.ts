@@ -5,11 +5,15 @@
  * job overwrote its body.
  */
 import { describe, expect, it } from "vitest";
+import { dodStatus } from "./scr-dod-check.mjs";
 import {
+  DRIFT_DOD_ITEMS,
   MARKER,
   confirmMarkedIssues,
   decideCloseAction,
   decideDriftAction,
+  driftDodSection,
+  prepareDriftClose,
 } from "./scr-drift-issue.mjs";
 
 /** Bodies keyed by issue number, standing in for the issues API. */
@@ -196,5 +200,64 @@ describe("decideCloseAction", () => {
       action: "close",
       number: 2673,
     });
+  });
+});
+
+describe("prepareDriftClose", () => {
+  const filed = [
+    MARKER,
+    "### Context",
+    "",
+    "Drift.",
+    "",
+    driftDodSection(),
+  ].join("\n");
+
+  it("files a DoD the gate can read, every box unticked", () => {
+    const status = dodStatus(filed);
+    expect(status.present).toBe(true);
+    // dodStatus reads prose only, so the item text loses its code spans.
+    expect(status.unchecked).toHaveLength(DRIFT_DOD_ITEMS.length);
+  });
+
+  it("ticks every item a green run verifies and allows the close", () => {
+    const got = prepareDriftClose(filed);
+    expect(got.changed).toBe(true);
+    expect(got.close).toBe(true);
+    expect(got.unchecked).toEqual([]);
+    for (const item of DRIFT_DOD_ITEMS)
+      expect(got.body).toContain(`- [x] ${item}`);
+    expect(got.body).not.toContain("- [ ]");
+  });
+
+  it("keeps open an older issue whose DoD holds an item no run verifies", () => {
+    // The residue item the filing step used to write. Closing this as
+    // completed with the box empty is what SCR-003 forbids.
+    const older = `${filed}\n- [ ] Residue filed as new issues (triage label only)`;
+    const got = prepareDriftClose(older);
+    expect(got.close).toBe(false);
+    expect(got.unchecked).toEqual([
+      "Residue filed as new issues (triage label only)",
+    ]);
+    for (const item of DRIFT_DOD_ITEMS)
+      expect(got.body).toContain(`- [x] ${item}`);
+  });
+
+  it("closes once a person has ticked the item no run verifies", () => {
+    const done = `${filed}\n- [x] Residue filed as new issues (triage label only)`;
+    expect(prepareDriftClose(done).close).toBe(true);
+  });
+
+  it("ticks a CRLF body without dropping its line endings", () => {
+    const crlf = filed.replaceAll("\n", "\r\n");
+    const got = prepareDriftClose(crlf);
+    expect(got.body).toBe(crlf.replaceAll("- [ ]", "- [x]"));
+  });
+
+  it("never closes an issue with no definition of done", () => {
+    const got = prepareDriftClose(`${MARKER}\nDrift.`);
+    expect(got.changed).toBe(false);
+    expect(got.close).toBe(false);
+    expect(prepareDriftClose(null).close).toBe(false);
   });
 });

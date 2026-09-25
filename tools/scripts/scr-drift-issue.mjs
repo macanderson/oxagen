@@ -26,8 +26,67 @@
  * construction in order to ban it.
  */
 
+import { dodStatus } from "./scr-dod-check.mjs";
+
 /** The marker that identifies the drift issue. Must match the workflow's. */
 export const MARKER = "<!-- scr-corpus-drift -->";
+
+/**
+ * The drift issue's definition of done. A green run of `scr-corpus-check`
+ * proves both items, so the job can tick them and close the issue itself.
+ *
+ * The DoD used to add "Residue filed as new issues", which no run can verify.
+ * The close step closed the issue as completed with all three boxes empty,
+ * which SCR-003 forbids, and escaped `dod-close-guard` only because events
+ * raised with GITHUB_TOKEN start no other workflow. Keep every item here
+ * machine-verifiable; the close step still leaves open any issue whose DoD
+ * holds an item it did not tick.
+ */
+export const DRIFT_DOD_ITEMS = [
+  "Every `docs/scr/` file named above is removed",
+  "`scr-corpus-check` is green",
+];
+
+/** The DoD section the filing step writes, every box unticked. */
+export function driftDodSection() {
+  return [
+    "### Definition of done",
+    "",
+    ...DRIFT_DOD_ITEMS.map((item) => `- [ ] ${item}`),
+  ].join("\n");
+}
+
+/**
+ * Prepare the drift issue for a close after a green run.
+ *
+ * Ticks each {@link DRIFT_DOD_ITEMS} box, since the green run verified it, and
+ * leaves every other box as it was. `close` is true only when the DoD is
+ * present and nothing in it is left unticked, which is the bar SCR-003 and
+ * `dod-close-guard` hold a person to. An older issue that still lists the
+ * residue item stays open, and `unchecked` names what a person has to do.
+ *
+ * @param body the issue body
+ * @returns `{ body, changed, close, unchecked }`
+ */
+export function prepareDriftClose(body) {
+  const original = body ?? "";
+  const ticked = original
+    .split("\n")
+    .map((line) => {
+      // `(\r?)` keeps a CRLF line, which a body edited on github.com carries.
+      const item = line.match(/^(\s*[-*]\s*)\[ \](\s*)(.*?)(\r?)$/);
+      if (!item || !DRIFT_DOD_ITEMS.includes(item[3].trim())) return line;
+      return `${item[1]}[x]${item[2]}${item[3]}${item[4]}`;
+    })
+    .join("\n");
+  const status = dodStatus(ticked);
+  return {
+    body: ticked,
+    changed: ticked !== original,
+    close: status.present && status.unchecked.length === 0,
+    unchecked: status.unchecked,
+  };
+}
 
 /**
  * Remove fenced blocks and inline code spans, leaving the prose.

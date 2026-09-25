@@ -108,6 +108,11 @@ jobs:
             // and by the triage agent, and a daily job that re-files because
             // someone reworded a title turns a real signal into noise.
             const MARKER = '<!-- scr-corpus-drift -->'
+            // The DoD comes from the tested module, so the close step below
+            // can tick exactly the items a green run verifies.
+            const { driftDodSection } = await import(
+              `${process.env.GITHUB_WORKSPACE}/tools/scripts/scr-drift-issue.mjs`
+            )
             const body = [
               MARKER,
               '### Context',
@@ -120,11 +125,7 @@ jobs:
               '',
               `Detected by [scr-corpus-check run ${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
               '',
-              '### Definition of done',
-              '',
-              '- [ ] Every `docs/scr/` file named above is removed',
-              '- [ ] `scr-corpus-check` is green',
-              '- [ ] Residue filed as new issues (triage label only)',
+              driftDodSection(),
             ].join('\n')
 
             const existing = await github.rest.search.issuesAndPullRequests({
@@ -176,7 +177,8 @@ jobs:
             }
 
       # The drift issue's definition of done says this check is green, so a
-      # green run closes it (#2978). The step reads `drifted == 'false'`, which
+      # green run ticks the items it verifies and closes the issue when no box
+      # is left unticked (#2978, SCR-003). The step reads `drifted == 'false'`, which
       # the script writes only after it read all five repos. An empty output
       # means the check could not run, and that must never close the issue.
       - name: Close the drift issue once the corpus is clean
@@ -193,7 +195,7 @@ jobs:
             // The same confirmation as the filing step: search returns
             // candidates, and only a body that carries the marker in its prose
             // is the drift issue. An issue quoting it in backticks stays open.
-            const { confirmMarkedIssues, decideCloseAction } = await import(
+            const { confirmMarkedIssues, decideCloseAction, prepareDriftClose } = await import(
               `${process.env.GITHUB_WORKSPACE}/tools/scripts/scr-drift-issue.mjs`
             )
 
@@ -221,11 +223,35 @@ jobs:
               return
             }
 
+            // SCR-003: close as completed only when every DoD box is ticked.
+            // This run verifies the items it ticks here; any other open item
+            // is left to a person, and the issue stays open until it is done.
             const number = decision.number
+            const { data: issue } = await github.rest.issues.get({
+              ...context.repo,
+              issue_number: number,
+            })
+            const ready = prepareDriftClose(issue.body)
+            if (ready.changed) {
+              await github.rest.issues.update({ ...context.repo, issue_number: number, body: ready.body })
+            }
+            const run = `[scr-corpus-check run ${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
+            if (!ready.close) {
+              const left = ready.unchecked.length > 0
+                ? ready.unchecked.map((item) => `- [ ] ${item}`).join('\n')
+                : 'The issue has no definition of done this run can check.'
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: number,
+                body: `Corpus clean as of ${context.sha}, verified by ${run}. The items this run proves are ticked. The issue stays open until a person finishes the rest and closes it:\n\n${left}`,
+              })
+              core.notice(`Drift issue #${number} left open: ${ready.unchecked.length} DoD item(s) need a person.`)
+              return
+            }
             await github.rest.issues.createComment({
               ...context.repo,
               issue_number: number,
-              body: `Corpus clean as of ${context.sha}. Closed by [scr-corpus-check run ${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
+              body: `Corpus clean as of ${context.sha}. Every DoD item is ticked. Closed by ${run}.`,
             })
             await github.rest.issues.update({
               ...context.repo,
