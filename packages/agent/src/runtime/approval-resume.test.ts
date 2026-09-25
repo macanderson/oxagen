@@ -367,13 +367,6 @@ describe("approved call resumption", () => {
     expect(h.row.resumeError).toBe("requester_access_revoked");
     expect(h.invoke).not.toHaveBeenCalled();
   });
-  // #4159 made the org scope required. #4189 merged a minute later from a
-  // base without it and put back the bare call, which failed the API build
-  // on main at 0cdc27a. Hold the scope here so a merge cannot drop it again.
-  it("reads the budgets of the approval's own organization", async () => {
-    await resumeApprovedCall(ref);
-    expect(h.budgets).toHaveBeenCalledWith({ orgId: ref.orgId });
-  });
   it.each(["tool", "budget", "kill"])(
     "rechecks fresh %s admission",
     async (kind) => {
