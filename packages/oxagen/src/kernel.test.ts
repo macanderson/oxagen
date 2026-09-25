@@ -19,6 +19,7 @@ import {
   clearSecurityEventEmitter,
   createDeployedAgentInvocationContext,
   hasHandler,
+  isExternalExecutionFailureCode,
   isKernelIssuedDeployedAgentInvocation,
   invoke,
   registerHandler,
@@ -675,6 +676,31 @@ describe("emitExternalCapabilityOutcome", () => {
       "external_decision_refused",
       null,
     ]);
+  });
+
+  it("names an allowed call that failed in the remote tool or its transport", () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    // The shape McpToolExecutionError carries for an `isError` result.
+    const toolFailure = Object.assign(new Error("remote failure"), {
+      code: "mcp_tool_execution_failed",
+    });
+    emitExternalCapabilityOutcome(
+      "mcp.github.list",
+      extCtx,
+      "error",
+      1,
+      toolFailure,
+    );
+    emitExternalCapabilityOutcome("mcp.github.list", extCtx, "error", 1, {
+      code: "mcp_transport_failed",
+    });
+    expect(events.map((e) => e.errorCode)).toEqual([
+      "mcp_tool_execution_failed",
+      "mcp_transport_failed",
+    ]);
+    expect(isExternalExecutionFailureCode("mcp_transport_failed")).toBe(true);
+    expect(isExternalExecutionFailureCode("kill_switch_denied")).toBe(false);
   });
 });
 

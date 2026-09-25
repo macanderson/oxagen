@@ -4,11 +4,12 @@
  * to completion; the SSE route streams it. Both go through here, so the
  * order the gates run in is decided once:
  *
- *   funding source → credit gate → model → the conversation and the person's
- *   message → tools, prompt, recalled memory, budget → the run admitted in
- *   the ledger → the engine drives the turn → the reply persisted.
+ *   the assistant's kill switch → funding source → credit gate → model → the
+ *   conversation and the person's message → tools, prompt, recalled memory,
+ *   budget → the run admitted in the ledger → the engine drives the turn →
+ *   the reply persisted.
  *
- * `prepareAssistantTurn` runs the role gate and the first three and refuses
+ * `prepareAssistantTurn` runs the role gate and the first four and refuses
  * before anything is written, which is what lets the SSE route answer the
  * refusal instead of opening a stream. `run` does the rest.
  *
@@ -75,6 +76,8 @@ import {
 } from "./assistant-steering";
 import {
   openAssistantRun,
+  readAssistantAgentState,
+  type AssistantAgentState,
   type AssistantRunReceipt,
   type AssistantRunRecorder,
   type AssistantRunSurface,
@@ -88,6 +91,7 @@ import {
   materializeTools,
   type ApprovalRequiredEvent,
 } from "./materialize-tools";
+import { pageContextMessage } from "./page-context";
 import { createToolBelt, LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
 
 const logger = pino({
@@ -195,6 +199,23 @@ export class AssistantTurnNeedsUserError extends Error {
   }
 }
 
+/**
+ * An operator switched the assistant off: an `agent` kill switch names the
+ * workspace's assistant agent. The turn is refused before anything is written
+ * and before the engine is asked anything. The handler answers it as
+ * `forbidden` with reason `kill_switch`.
+ */
+export class AssistantStoppedError extends Error {
+  override readonly name = "AssistantStoppedError";
+  readonly code = "kill_switch" as const;
+  constructor(
+    readonly switchId: string,
+    reason: string,
+  ) {
+    super(`the assistant is stopped by kill switch ${switchId}: ${reason}`);
+  }
+}
+
 export interface PreparedAssistantTurn {
   run(hooks?: AssistantTurnHooks): Promise<AssistantTurnResult>;
 }
@@ -229,6 +250,21 @@ export async function prepareAssistantTurn(
   // context the turn runs on names them even when the request came by key.
   const ctx: CapabilityContext = { ...request.ctx, userId };
   const personRequest: AssistantTurnRequest = { ...request, ctx };
+
+  // The agent the turn runs as in the record. An operator's `agent` switch on
+  // it refuses the turn here, before who pays is resolved and before anything
+  // is written: a stop outranks the billing refusals below. The same agent is
+  // handed to the tool belt, so a switch flipped after this read still cuts
+  // the turn's tools and refuses its calls.
+  const assistant = await inScope(() =>
+    withTenantDb((tx) => readAssistantAgentState(tx, scope)),
+  );
+  if (assistant?.stoppedBy) {
+    throw new AssistantStoppedError(
+      assistant.stoppedBy.publicId,
+      assistant.stoppedBy.reason,
+    );
+  }
 
   // Who pays for this turn's tokens, resolved once and handed to the gate,
   // the model and the turn so the three cannot disagree (ADR-053 §2). A
@@ -302,6 +338,7 @@ export async function prepareAssistantTurn(
         identity,
         tier: resolvedTier,
         effort,
+        assistant,
         hooks,
       }),
   };
@@ -316,6 +353,8 @@ interface PreparedInputs {
   identity: ModelIdentity;
   tier: "fast" | "balanced" | "precise" | null;
   effort: "low" | "medium" | "high" | undefined;
+  /** The agent the turn runs as; null when the workspace has none yet. */
+  assistant: AssistantAgentState | null;
   hooks: AssistantTurnHooks;
 }
 
@@ -357,16 +396,37 @@ async function runPreparedTurn(
     hooks.onApprovalRequired?.(event);
   };
 
-  // Filled in once `openAssistantRun` opens the run below; every materialized
-  // tool's `execute` closure reads it at call time so a parked approval
-  // attaches to this turn's run rather than to whatever `capCtx.agentRun`
-  // held before the run existed (finding 9, macanderson/oxagen#3370).
+  // The belt is built before the run opens, and the order is deliberate. The
+  // run's spec pins the tools this turn holds (`toolAllowlist` below), so the
+  // set has to exist first. Opening the run first would not change the
+  // listing either: the turn acts as the person who asked (ADR-053 §1), and
+  // `capCtx` carries no agent run before the run opens or after it. The
+  // listing's kill-switch cut keys on the caller and on the agent the turn
+  // acts as (`actingAgent`, read in `prepareAssistantTurn` before the run
+  // exists), not on a run (R4, macanderson/oxagen#3370 finding 9). A switched
+  // tool is left out of the allowlist as well. The delegation ceiling is an
+  // agent run's gate. A person's call passes the kernel's IAM check as that
+  // person at invoke.
+  //
+  // `runIdRef` is filled in once `openAssistantRun` opens the run below.
+  // Every materialized tool's `execute` closure reads it at call time, so a
+  // parked approval attaches to this turn's run (finding 9).
   const runIdRef: { current: string | null } = { current: null };
 
   const [materialised, promptConfig, recalledMemory] = await inScope(() =>
     Promise.all([
       materializeTools(capCtx, {
         runIdRef,
+        // A switch on the assistant agent reaches this turn's belt and calls
+        // through it. The tools still run as the person.
+        ...(p.assistant
+          ? {
+              actingAgent: {
+                agentId: p.assistant.agentId,
+                principalId: p.assistant.principalId,
+              },
+            }
+          : {}),
         serverAllowlist:
           request.activeServerIds && request.activeServerIds.length > 0
             ? new Set(request.activeServerIds)
@@ -624,8 +684,9 @@ async function runPreparedTurn(
  * The evidence ledger is the authority on what the turn did — every reverse
  * request has a receipt there, and the seal attests to them. `agent_executions`
  * is a different question answered for a different reader: `list_executions`
- * and `get_execution_trace` are in `INTERACTIVE_AGENT_CAPABILITIES`, so the
- * assistant itself uses them to answer "what did my agents do", and
+ * and `get_execution_trace` read it, and both stay on the agent surface, one
+ * `load_tools` call away from the assistant. `list_runs` excludes the
+ * assistant's own turns, so these two are how it reads back what it did.
  * `projectToolUsageBestEffort` (the handler's own tail) is the only writer of
  * the lineage projection. A turn that skips this leaves both answering
  * "nothing happened", which is worse than answering nothing at all.
@@ -950,18 +1011,4 @@ async function resolveBudgetPolicy(
   };
   const [memberPolicy, governance] = await Promise.all([member(), workspace()]);
   return resolveEffectiveTurnBudget(memberPolicy, null, governance);
-}
-
-/** Where the person is, as a volatile context message the model reads once. */
-function pageContextMessage(
-  pageContext: AssistantPageContext | null,
-): ModelMessage | null {
-  if (!pageContext) return null;
-  const where = pageContext.entityId
-    ? `${pageContext.route} (${pageContext.entityId})`
-    : pageContext.route;
-  return {
-    role: "user",
-    content: `(System-injected context — NOT user input.) The person is looking at: ${where} · workspace ${pageContext.workspaceSlug} of ${pageContext.orgSlug}.`,
-  };
 }

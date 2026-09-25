@@ -19,19 +19,15 @@ import { TOAST_MS } from "@/ui/toast";
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
-const actions = {
-  requestPasswordReset: vi.fn(),
-  resetPassword: vi.fn(),
-  resendVerification: vi.fn(),
-};
-vi.mock("./actions", () => actions);
-
 const live = {
   liveSignIn: vi.fn(),
   liveSignUp: vi.fn(),
   liveVerifyTwoFactor: vi.fn(),
   liveSignInSocial: vi.fn(),
   liveSignInSso: vi.fn(),
+  liveRequestPasswordReset: vi.fn(),
+  liveResetPassword: vi.fn(),
+  liveResendVerification: vi.fn(),
   rememberPendingNext: vi.fn(),
   takePendingNext: vi.fn(),
   rememberPendingEmail: vi.fn(),
@@ -80,7 +76,6 @@ function renderStrict(ui: React.ReactNode) {
 beforeEach(() => {
   for (const fn of [
     ...Object.values(router),
-    ...Object.values(actions),
     ...Object.values(live),
     ...Object.values(inviteActions),
   ]) {
@@ -1050,10 +1045,7 @@ describe("ForgotPasswordForm", () => {
   };
 
   it("validates, then replaces the page with the success-toned sent card and keeps the footer", async () => {
-    actions.requestPasswordReset.mockResolvedValue({
-      ok: true,
-      to: "/forgot-password",
-    });
+    live.liveRequestPasswordReset.mockResolvedValue({ ok: true });
     renderWithIntl(<ForgotPasswordForm {...frame} />);
     expect(screen.getByLabelText("Work email")).toHaveAttribute(
       "autocomplete",
@@ -1092,7 +1084,7 @@ describe("ForgotPasswordForm", () => {
   });
 
   it("loading: Sending… is aria-disabled and the address stays", async () => {
-    actions.requestPasswordReset.mockReturnValue(hang());
+    live.liveRequestPasswordReset.mockReturnValue(hang());
     renderWithIntl(<ForgotPasswordForm {...frame} />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.click(
@@ -1104,8 +1096,8 @@ describe("ForgotPasswordForm", () => {
     expect(screen.getByLabelText("Work email")).toHaveValue("a@b.co");
   });
 
-  it("an action that fails says the email was not sent", async () => {
-    actions.requestPasswordReset.mockRejectedValue(new Error("down"));
+  it("a call that throws says the email was not sent", async () => {
+    live.liveRequestPasswordReset.mockRejectedValue(new Error("down"));
     renderWithIntl(<ForgotPasswordForm {...frame} />);
     await userEvent.type(
       screen.getByLabelText("Work email"),
@@ -1122,7 +1114,7 @@ describe("ForgotPasswordForm", () => {
   });
 
   it("a second press while sending sends nothing more (negative)", async () => {
-    actions.requestPasswordReset.mockReturnValue(hang());
+    live.liveRequestPasswordReset.mockReturnValue(hang());
     renderWithIntl(<ForgotPasswordForm {...frame} />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.click(
@@ -1131,30 +1123,41 @@ describe("ForgotPasswordForm", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: "Sending…" }),
     );
-    expect(actions.requestPasswordReset).toHaveBeenCalledTimes(1);
+    expect(live.liveRequestPasswordReset).toHaveBeenCalledTimes(1);
   });
 
-  it("a refusal shows the server's field error, and one naming no field reads as an invalid address", async () => {
-    actions.requestPasswordReset.mockResolvedValueOnce({
+  it("past Better Auth's rate limit, shows the rate-limited copy and keeps the form (#4042)", async () => {
+    live.liveRequestPasswordReset.mockResolvedValue({
       ok: false,
-      fields: { email: "emailRequired" },
+      outcome: "rateLimited",
     });
     renderWithIntl(<ForgotPasswordForm {...frame} />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.click(
       screen.getByRole("button", { name: "Send reset link" }),
     );
-    expect(
-      await screen.findByText("Enter your work email."),
-    ).toBeInTheDocument();
-    actions.requestPasswordReset.mockResolvedValueOnce({ ok: false });
-    await userEvent.click(
-      screen.getByRole("button", { name: "Send reset link" }),
-    );
-    expect(screen.getByLabelText("Work email")).toHaveAccessibleDescription(
-      "Enter an email address like name@company.com.",
+    expect(await screen.findByTestId("forgot-outcome")).toHaveTextContent(
+      "Too many attempts. Wait a minute, then try again.",
     );
     expect(screen.queryByTestId("forgot-sent")).toBeNull();
+    expect(screen.getByLabelText("Work email")).toHaveValue("a@b.co");
+  });
+
+  it("a registered and an unregistered address get the same sent card", async () => {
+    // The client wrapper answers ok for both. The card names only the typed address.
+    live.liveRequestPasswordReset.mockResolvedValue({ ok: true });
+    const cards: string[] = [];
+    for (const email of ["m@acme.example", "nobody@acme.example"]) {
+      const { unmount } = renderWithIntl(<ForgotPasswordForm {...frame} />);
+      await userEvent.type(screen.getByLabelText("Work email"), email);
+      await userEvent.click(
+        screen.getByRole("button", { name: "Send reset link" }),
+      );
+      const card = await screen.findByTestId("forgot-sent");
+      cards.push(card.textContent.replace(email, "<email>"));
+      unmount();
+    }
+    expect(cards[0]).toBe(cards[1]);
   });
 });
 
@@ -1209,11 +1212,11 @@ describe("ResetPasswordForm", () => {
       "true",
     );
     expect(screen.getAllByText(/do not match/)).toHaveLength(1);
-    expect(actions.resetPassword).not.toHaveBeenCalled();
+    expect(live.liveResetPassword).not.toHaveBeenCalled();
   });
 
   it("loading: Saving… is aria-disabled", async () => {
-    actions.resetPassword.mockReturnValue(hang());
+    live.liveResetPassword.mockReturnValue(hang());
     renderWithIntl(<ResetPasswordForm token="rst_1" />);
     await submit(STRONG, STRONG);
     expect(
@@ -1222,21 +1225,20 @@ describe("ResetPasswordForm", () => {
   });
 
   it("success returns to Log in with the notice; a spent link is the expired card", async () => {
-    actions.resetPassword.mockResolvedValueOnce({ ok: true, to: "/login" });
+    live.liveResetPassword.mockResolvedValueOnce({ ok: true });
     const { unmount } = renderWithIntl(<ResetPasswordForm token="rst_1" />);
     await submit(STRONG, STRONG);
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith("/login");
     });
     expect(live.rememberNotice).toHaveBeenCalledWith("passwordSet");
-    expect(actions.resetPassword).toHaveBeenCalledWith({
+    expect(live.liveResetPassword).toHaveBeenCalledWith({
       token: "rst_1",
       newPassword: STRONG,
-      confirmPassword: STRONG,
     });
     unmount();
 
-    actions.resetPassword.mockResolvedValueOnce({
+    live.liveResetPassword.mockResolvedValueOnce({
       ok: false,
       outcome: "linkExpired",
     });
@@ -1252,38 +1254,32 @@ describe("ResetPasswordForm", () => {
     ).toHaveFocus();
   });
 
-  it("shows server field errors and other outcomes", async () => {
-    actions.resetPassword.mockResolvedValueOnce({
-      ok: false,
-      fields: { newPassword: "passwordTooLong" },
-    });
-    renderWithIntl(<ResetPasswordForm token="rst_1" />);
-    await submit(STRONG, STRONG);
-    expect(
-      await screen.findByText("Use at most 128 characters."),
-    ).toBeInTheDocument();
-    actions.resetPassword.mockResolvedValueOnce({
+  it("past Better Auth's rate limit, shows the rate-limited copy and keeps the form (#4042)", async () => {
+    live.liveResetPassword.mockResolvedValueOnce({
       ok: false,
       outcome: "rateLimited",
     });
-    await userEvent.click(screen.getByRole("button", { name: "Set password" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Too many attempts",
+    renderWithIntl(<ResetPasswordForm token="rst_1" />);
+    await submit(STRONG, STRONG);
+    expect(await screen.findByTestId("reset-outcome")).toHaveTextContent(
+      "Too many attempts. Wait a minute, then try again.",
     );
+    expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("a second press while saving sends nothing more (negative)", async () => {
-    actions.resetPassword.mockReturnValue(hang());
+    live.liveResetPassword.mockReturnValue(hang());
     renderWithIntl(<ResetPasswordForm token="rst_1" />);
     await submit(STRONG, STRONG);
     await userEvent.click(
       await screen.findByRole("button", { name: "Saving…" }),
     );
-    expect(actions.resetPassword).toHaveBeenCalledTimes(1);
+    expect(live.liveResetPassword).toHaveBeenCalledTimes(1);
   });
 
-  it("a refusal that names neither a field nor an outcome reads as the generic failure", async () => {
-    actions.resetPassword.mockResolvedValue({ ok: false });
+  it("an unknown outcome reads as the generic failure", async () => {
+    live.liveResetPassword.mockResolvedValue({ ok: false, outcome: "unknown" });
     renderWithIntl(<ResetPasswordForm token="rst_1" />);
     await submit(STRONG, STRONG);
     expect(await screen.findByTestId("reset-outcome")).toHaveTextContent(
@@ -1291,8 +1287,8 @@ describe("ResetPasswordForm", () => {
     );
   });
 
-  it("a thrown action reads as unavailable and keeps the form", async () => {
-    actions.resetPassword.mockRejectedValue(new Error("down"));
+  it("a thrown call reads as unavailable and keeps the form", async () => {
+    live.liveResetPassword.mockRejectedValue(new Error("down"));
     renderWithIntl(<ResetPasswordForm token="rst_1" />);
     await submit(STRONG, STRONG);
     expect(await screen.findByTestId("reset-outcome")).toHaveTextContent(
@@ -1305,7 +1301,7 @@ describe("ResetPasswordForm", () => {
 
 describe("VerifyPanel", () => {
   it("with the address: Did not arrive? and a resend that sends it", async () => {
-    actions.resendVerification.mockResolvedValue({ ok: true, to: "/verify" });
+    live.liveResendVerification.mockResolvedValue({ ok: true });
     renderWithIntl(
       <VerifyPanel
         email="m@acme.example"
@@ -1322,14 +1318,14 @@ describe("VerifyPanel", () => {
     expect(await screen.findByTestId("verify-resent")).toHaveTextContent(
       "If an account for that address is waiting to be verified, a new link is on its way.",
     );
-    expect(actions.resendVerification).toHaveBeenCalledWith({
+    expect(live.liveResendVerification).toHaveBeenCalledWith({
       email: "m@acme.example",
       next: "/new-organization",
     });
   });
 
   it("without one: announces a spent link, validates the address and confirms a resend neutrally", async () => {
-    actions.resendVerification.mockResolvedValue({ ok: true, to: "/verify" });
+    live.liveResendVerification.mockResolvedValue({ ok: true });
     renderWithIntl(
       <VerifyPanel email={null} expired next="/new-organization" />,
     );
@@ -1349,16 +1345,16 @@ describe("VerifyPanel", () => {
       screen.getByRole("button", { name: "Send a new link" }),
     );
     expect(await screen.findByTestId("verify-resent")).toBeInTheDocument();
-    expect(actions.resendVerification).toHaveBeenCalledWith({
+    expect(live.liveResendVerification).toHaveBeenCalledWith({
       email: "marcus.bell@acme.example",
       next: "/new-organization",
     });
   });
 
-  it("a refused address shows under the resend", async () => {
-    actions.resendVerification.mockResolvedValue({
+  it("past Better Auth's rate limit, shows the rate-limited copy and no sent line (#4042)", async () => {
+    live.liveResendVerification.mockResolvedValue({
       ok: false,
-      fields: { email: "emailInvalid" },
+      outcome: "rateLimited",
     });
     renderWithIntl(
       <VerifyPanel email="m@acme.example" expired={false} next="/x" />,
@@ -1366,28 +1362,14 @@ describe("VerifyPanel", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Send a new link" }),
     );
-    expect(
-      await screen.findByText("Enter an email address like name@company.com."),
-    ).toBeInTheDocument();
-  });
-
-  it("a refusal naming no field reads as an invalid address", async () => {
-    actions.resendVerification.mockResolvedValue({ ok: false });
-    renderWithIntl(<VerifyPanel email={null} expired={false} next="/x" />);
-    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Send a new link" }),
+    expect(await screen.findByTestId("verify-outcome")).toHaveTextContent(
+      "Too many attempts. Wait a minute, then try again.",
     );
-    await waitFor(() => {
-      expect(screen.getByLabelText("Work email")).toHaveAccessibleDescription(
-        "Enter an email address like name@company.com.",
-      );
-    });
     expect(screen.queryByTestId("verify-resent")).toBeNull();
   });
 
   it("a resend that throws reads as unavailable and can be retried (negative)", async () => {
-    actions.resendVerification.mockRejectedValueOnce(new Error("offline"));
+    live.liveResendVerification.mockRejectedValueOnce(new Error("offline"));
     renderWithIntl(
       <VerifyPanel email="m@acme.example" expired={false} next="/x" />,
     );
@@ -1398,7 +1380,7 @@ describe("VerifyPanel", () => {
       "Sign-in is unavailable right now. Try again in a minute.",
     );
     expect(screen.queryByTestId("verify-resent")).toBeNull();
-    actions.resendVerification.mockResolvedValue({ ok: true, to: "/verify" });
+    live.liveResendVerification.mockResolvedValue({ ok: true });
     await userEvent.click(
       screen.getByRole("button", { name: "Send a new link" }),
     );
@@ -1407,7 +1389,7 @@ describe("VerifyPanel", () => {
   });
 
   it("a second press while sending sends nothing more (negative)", async () => {
-    actions.resendVerification.mockReturnValue(hang());
+    live.liveResendVerification.mockReturnValue(hang());
     renderWithIntl(
       <VerifyPanel email="m@acme.example" expired={false} next="/x" />,
     );
@@ -1417,7 +1399,7 @@ describe("VerifyPanel", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: "Sending…" }),
     );
-    expect(actions.resendVerification).toHaveBeenCalledTimes(1);
+    expect(live.liveResendVerification).toHaveBeenCalledTimes(1);
   });
 });
 

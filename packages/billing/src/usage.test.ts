@@ -5,8 +5,11 @@
  *  - Returns empty array when no active subscription exists
  *  - Calls sumTokenUsage with period bounds from the active subscription
  *  - Returns the rollup rows from sumTokenUsage
+ *  - Counts a trialing, past-due or paused subscription, not only `active`
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 
 interface SubState {
   row:
@@ -15,9 +18,11 @@ interface SubState {
         currentPeriodEnd: Date;
       }
     | undefined;
+  /** The `where` clause of the last findFirst call, kept for inspection. */
+  where: SQL | undefined;
 }
 
-const subState: SubState = { row: undefined };
+const subState: SubState = { row: undefined, where: undefined };
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -30,7 +35,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       const tx = {
         query: {
           subscriptions: {
-            findFirst: vi.fn(async () => subState.row),
+            findFirst: vi.fn(async (args: { where?: SQL }) => {
+              subState.where = args.where;
+              return subState.row;
+            }),
           },
         },
       };
@@ -59,6 +67,7 @@ describe("getCurrentPeriodUsage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     subState.row = undefined;
+    subState.where = undefined;
   });
 
   it("returns empty array when no active subscription exists", async () => {
@@ -106,5 +115,25 @@ describe("getCurrentPeriodUsage", () => {
     expect(sumTokenUsageMock).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: "org-xyz-999" }),
     );
+  });
+
+  // #2976: the filter read `status = 'active'`, so a trialing org got an
+  // empty rollup. The mock returns the row whatever the filter says, so the
+  // test renders the where clause and checks which statuses it admits.
+  it("admits every entitled subscription status in the filter", async () => {
+    subState.row = {
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+    };
+    await getCurrentPeriodUsage("org-1");
+
+    expect(subState.where).toBeDefined();
+    const { sql, params } = new PgDialect().sqlToQuery(subState.where as SQL);
+    expect(sql).toMatch(/"status" in \(/);
+    expect(params).toEqual(
+      expect.arrayContaining(["trialing", "active", "past_due", "paused"]),
+    );
+    expect(params).not.toContain("canceled");
+    expect(params).toContain("org-1");
   });
 });

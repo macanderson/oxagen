@@ -123,4 +123,43 @@ describe("assertCanStartTurn", () => {
       InsufficientCreditsError,
     );
   });
+
+  // #2976: the reload already read the balance when it granted nothing, so the
+  // gate reuses that read rather than scanning the ledger a second time.
+  it("reuses the balance the reload read when it granted nothing", async () => {
+    maybeAutoReloadMock.mockResolvedValue({
+      reloaded: false,
+      reason: "balance_above_threshold",
+      balanceCents: 40n,
+    });
+    effectiveBalanceMock.mockResolvedValue(0n);
+    await expect(assertCanStartTurn("org-7")).resolves.toBeUndefined();
+    expect(effectiveBalanceMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses on the reused balance when it is spent", async () => {
+    maybeAutoReloadMock.mockResolvedValue({
+      reloaded: false,
+      reason: "reloaded_recently",
+      balanceCents: 30n,
+    });
+    owedCreditsMock.mockResolvedValueOnce(30n);
+    await expect(assertCanStartTurn("org-8")).rejects.toBeInstanceOf(
+      InsufficientCreditsError,
+    );
+    expect(effectiveBalanceMock).not.toHaveBeenCalled();
+  });
+
+  it("reads the balance again after a reload granted credits", async () => {
+    maybeAutoReloadMock.mockResolvedValue({
+      reloaded: true,
+      amountCents: 2000,
+      // A stale pre-grant read must never stand in for the new balance.
+      balanceCents: 0n,
+    });
+    effectiveBalanceMock.mockResolvedValue(2000n);
+    await expect(assertCanStartTurn("org-9")).resolves.toBeUndefined();
+    expect(effectiveBalanceMock).toHaveBeenCalledTimes(1);
+    expect(effectiveBalanceMock).toHaveBeenCalledWith("org-9");
+  });
 });
