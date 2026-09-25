@@ -505,6 +505,30 @@ describe("install rig: Linux, systemd", () => {
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });
 
+  it("restores the model base URLs before the unit is disabled", async () => {
+    const seed = seedHome({ platform: "linux" });
+    let urlPresentAtDisable: boolean | undefined;
+    const rig = buildRig(seed, {
+      onExec: (command, args) => {
+        if (command === "systemctl" && args.includes("disable"))
+          urlPresentAtDisable = text(
+            seed.home,
+            ".claude",
+            "settings.json",
+          ).includes("ANTHROPIC_BASE_URL");
+      },
+    });
+    expect(
+      (await enroll({ harnesses: harnessesOn("linux") }, rig.deps)).ok,
+    ).toBe(true);
+    expect(text(seed.home, ".claude", "settings.json")).toContain(
+      "ANTHROPIC_BASE_URL",
+    );
+    urlPresentAtDisable = undefined;
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(urlPresentAtDisable).toBe(false);
+  });
+
   it("refuses Claude Desktop, which has no Linux build, and writes none of its config", async () => {
     const seed = seedHome({ platform: "linux" });
     const before = snapshotTree(seed.home);
