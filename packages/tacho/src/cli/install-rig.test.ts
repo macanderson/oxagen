@@ -37,13 +37,17 @@ import {
   diffTrees,
   EMPTY_DIFF,
   type KillPoint,
+  RIG_DAEMON_PID,
   RIG_GATEWAY_PORT,
   RigKill,
+  type RigPlatform,
+  rigClaudeDesktopConfig,
   seedHome,
   snapshotTree,
   USER_CLAUDE_SETTINGS,
 } from "./install-rig";
 import { status } from "./status";
+import { parseDaemonPid } from "../host/process-scan";
 import { serviceManagerFor } from "../host/service";
 import { unenroll } from "./unenroll";
 import { reassign } from "./reassign";
@@ -55,6 +59,13 @@ const ALL: TachoHarness[] = [
   "stella",
   "claude-desktop",
 ];
+
+/** Every harness with a build on `platform`: Claude Desktop has none on Linux. */
+function harnessesOn(platform: RigPlatform): TachoHarness[] {
+  return platform === "linux"
+    ? ALL.filter((harness) => harness !== "claude-desktop")
+    : ALL;
+}
 
 /**
  * What `unenroll --purge` may leave behind, and why. Empty on purpose: a
@@ -207,6 +218,36 @@ describe("install rig: macOS, every harness", () => {
     const before = snapshotTree(seed.home);
     expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
     expect(existsSync(rig.deps.paths.claudeSettings)).toBe(true);
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("gives back the empty containers the user already had, byte for byte", async () => {
+    // Each strip drops a `hooks`, `env` or `mcpServers` it emptied, so one
+    // the merge created does not outlive it. The user's own empty one looks
+    // the same by then, since the merge filled it, and its absence read as
+    // an edit made while enrolled: the file came back re-serialized with the
+    // container gone instead of byte-identical (#3301).
+    const seed = seedHome();
+    writeFileSync(
+      join(seed.home, ".claude", "settings.json"),
+      '{\n    "model": "opus",\n    "env": {},\n    "hooks": {}\n}\n',
+    );
+    writeFileSync(join(seed.home, ".codex", "hooks.json"), '{"hooks": {}}');
+    writeFileSync(
+      join(seed.home, ".cursor", "hooks.json"),
+      '{\n  "version": 1,\n  "hooks": {}\n}\n',
+    );
+    writeFileSync(
+      join(seed.home, ...(rigClaudeDesktopConfig("darwin") as string[])),
+      '{ "mcpServers": {}, "globalShortcut": "Alt+Space" }\n',
+    );
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    expect(
+      tachoHookPresence(rig.deps.readSettings(), TEST_ENROLLMENT).missing,
+    ).toEqual([]);
     expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });
@@ -431,8 +472,24 @@ describe("install rig: Linux, systemd", () => {
     const seed = seedHome({ platform: "linux" });
     const before = snapshotTree(seed.home);
     const rig = buildRig(seed);
-    const harnesses: TachoHarness[] = ["claude-code", "codex", "stella"];
+    const harnesses = harnessesOn("linux");
+    expect(harnesses).toEqual(["claude-code", "codex", "cursor", "stella"]);
     expect((await enroll({ harnesses }, rig.deps)).ok).toBe(true);
+    expect(
+      tachoHookPresence(rig.deps.readSettings(), TEST_ENROLLMENT).missing,
+    ).toEqual([]);
+    expect(
+      codexHookPresence(rig.deps.readCodexHooks(), TEST_ENROLLMENT).missing,
+    ).toEqual([]);
+    expect(
+      stellaHookPresence(readStellaHooksFile(rig.deps.paths), TEST_ENROLLMENT)
+        .missing,
+    ).toEqual([]);
+    expect(text(seed.home, ".cursor", "hooks.json")).toContain(TEST_ENROLLMENT);
+    // Re-enrolling moves nothing.
+    const enrolled = snapshotTree(seed.home);
+    expect((await enroll({ harnesses }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(enrolled, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
     const unit = text(
       seed.home,
       ".config",
@@ -445,6 +502,181 @@ describe("install rig: Linux, systemd", () => {
     expect(rig.serviceLoaded()).toBe(true);
     expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
     expect(rig.serviceLoaded()).toBe(false);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("refuses Claude Desktop, which has no Linux build, and writes none of its config", async () => {
+    const seed = seedHome({ platform: "linux" });
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    await enroll({ harnesses: ALL }, rig.deps);
+    expect(rig.deps.paths.claudeDesktopConfig).toBeUndefined();
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(rig.serviceLoaded()).toBe(false);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+});
+
+describe("install rig: Windows, Task Scheduler", () => {
+  const ROOT = [".config", "oxagen", "tacho"];
+
+  it("installs every harness, re-installs without a duplicate, and uninstalls to a byte-identical tree", async () => {
+    const seed = seedHome({ platform: "win32" });
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    // The task runs the launcher, and the launcher runs the daemon.
+    expect(rig.scheduler()).toEqual({
+      tasks: ["OxagenTachod"],
+      daemonPid: RIG_DAEMON_PID,
+    });
+    const launcher = text(seed.home, ...ROOT, "tachod.cmd");
+    expect(launcher.startsWith("@echo off\r\n")).toBe(true);
+    expect(launcher).toContain(
+      `"${rig.deps.runtime.daemonCommand[0]}" "daemon"`,
+    );
+    expect(parseDaemonPid(text(seed.home, ...ROOT, "tachod.pid"))?.pid).toBe(
+      RIG_DAEMON_PID,
+    );
+    const create = rig.execs.find(
+      (e) => e.command === "schtasks" && e.args[0] === "/Create",
+    );
+    expect(create?.args).toEqual(
+      expect.arrayContaining(["/SC", "ONLOGON", "/RL", "LIMITED"]),
+    );
+    // Every harness is hooked, Claude Desktop through %APPDATA%.
+    expect(rig.deps.paths.claudeDesktopConfig).toBe(
+      join(seed.home, ...(rigClaudeDesktopConfig("win32") as string[])),
+    );
+    expect(
+      claudeDesktopPresence(rig.deps.readClaudeDesktopConfig(), TEST_ENROLLMENT)
+        .present,
+    ).toBe(true);
+    expect(
+      tachoHookPresence(rig.deps.readSettings(), TEST_ENROLLMENT).missing,
+    ).toEqual([]);
+    expect(
+      codexHookPresence(rig.deps.readCodexHooks(), TEST_ENROLLMENT).missing,
+    ).toEqual([]);
+    expect(
+      stellaHookPresence(readStellaHooksFile(rig.deps.paths), TEST_ENROLLMENT)
+        .missing,
+    ).toEqual([]);
+    expect(text(seed.home, ".cursor", "hooks.json")).toContain(TEST_ENROLLMENT);
+    // The gateway is routed on Windows too, and taken back out below.
+    const settings = rig.deps.readSettings() as { env: Record<string, string> };
+    expect(settings.env["ANTHROPIC_BASE_URL"]).toBe(
+      `http://127.0.0.1:${RIG_GATEWAY_PORT}/anthropic`,
+    );
+
+    // Install again: one task and one daemon. The old daemon is killed by
+    // pid before the task runs again, so a re-enroll never leaves two
+    // collectors on one port. The launcher is the one file that changes: each
+    // install writes a new generation, so a launcher loop left from the old
+    // install stops at its next restart.
+    const enrolled = snapshotTree(seed.home);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(enrolled, snapshotTree(seed.home))).toEqual({
+      ...EMPTY_DIFF,
+      changed: [".config/oxagen/tacho/tachod.cmd"],
+    });
+    expect(rig.scheduler().tasks).toEqual(["OxagenTachod"]);
+    expect(
+      rig.execs.filter((e) => e.command === "taskkill").map((e) => e.args),
+    ).toEqual([["/PID", String(RIG_DAEMON_PID), "/T", "/F"]]);
+
+    // Uninstall: no task, no daemon, byte-identical to the snapshot.
+    const removed = await unenroll({ purge: true }, rig.deps);
+    expect(removed.ok).toBe(true);
+    expect(removed.revoked).toBe(true);
+    expect(rig.scheduler()).toEqual({ tasks: [], daemonPid: undefined });
+    expect(rig.serviceLoaded()).toBe(false);
+    expect(diffTrees(before, snapshotTree(seed.home), PURGE_ALLOWLIST)).toEqual(
+      EMPTY_DIFF,
+    );
+
+    // Uninstall again: a clean no-op.
+    const again = await unenroll({ purge: true }, rig.deps);
+    expect(again.ok).toBe(true);
+    expect(again.warnings).toEqual([]);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("restores the model base URLs before the daemon is killed", async () => {
+    const seed = seedHome({ platform: "win32" });
+    let urlPresentAtKill: boolean | undefined;
+    const rig = buildRig(seed, {
+      onExec: (command) => {
+        if (command === "taskkill")
+          urlPresentAtKill = text(
+            seed.home,
+            ".claude",
+            "settings.json",
+          ).includes("ANTHROPIC_BASE_URL");
+      },
+    });
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    urlPresentAtKill = undefined;
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(urlPresentAtKill).toBe(false);
+  });
+
+  it("without --purge keeps only the local event record", async () => {
+    const seed = seedHome({ platform: "win32" });
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    expect((await unenroll({}, rig.deps)).ok).toBe(true);
+    expect(rig.serviceLoaded()).toBe(false);
+    const diff = diffTrees(before, snapshotTree(seed.home), KEEP_ALLOWLIST);
+    expect(diff.added.filter((p) => p !== ".config/oxagen/tacho")).toEqual([]);
+    expect(diff.changed).toEqual([]);
+    expect(diff.removed).toEqual([]);
+  });
+
+  it("creates nothing it does not remove on a machine with no harness files at all", async () => {
+    const seed = seedHome({ platform: "win32" });
+    for (const dir of [".claude", ".codex", ".cursor", ".stella"])
+      rmSync(join(seed.home, dir), { recursive: true });
+    rmSync(join(seed.home, "AppData", "Roaming"), { recursive: true });
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    expect(existsSync(rig.deps.paths.claudeDesktopConfig as string)).toBe(true);
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("never kills a process that took over a stale pid", async () => {
+    // The daemon died without cleaning up (a crash, a power cut) and Windows
+    // gave its pid to another program. The pid file still names it, and
+    // `taskkill /T /F` on that pid would end the other program's whole
+    // process tree. Only a process running the daemon's image is ours.
+    const seed = seedHome({ platform: "win32" });
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    const foreign = serviceManagerFor({
+      platform: "win32",
+      home: rig.deps.home,
+      launcherPath: rig.deps.paths.daemonLauncher,
+      pidPath: rig.deps.paths.pid,
+      exec: (command, args) => {
+        if (command === "tasklist")
+          return {
+            status: 0,
+            stdout: `"chrome.exe","${RIG_DAEMON_PID}","Console","1","99,999 K"\r\n`,
+            stderr: "",
+          };
+        return rig.deps.exec(command, args);
+      },
+    });
+    expect(foreign.status().running).toBe(false);
+    const deps = { ...rig.deps, serviceManager: foreign };
+    expect((await unenroll({ purge: true }, deps)).ok).toBe(true);
+    expect(rig.execs.filter((e) => e.command === "taskkill")).toEqual([]);
+    expect(rig.scheduler().tasks).toEqual([]);
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });
 });
@@ -721,16 +953,37 @@ describe("install rig: failure injection", () => {
   /** Enroll on a rig that dies at `killAt`; it must not report success. */
   async function dieAt(seed: ReturnType<typeof seedHome>, killAt: KillPoint) {
     const dying = buildRig(seed, { killAt });
-    const outcome = await enroll({ harnesses: ALL }, dying.deps).then(
+    const outcome = await enroll(
+      { harnesses: harnessesOn(seed.platform) },
+      dying.deps,
+    ).then(
       (result) => result,
       (error: unknown) => error,
     );
     if (!(outcome instanceof RigKill))
       expect((outcome as { ok: boolean }).ok).toBe(false);
   }
-  for (const killAt of KILL_POINTS) {
-    it(`killed at ${killAt}: removable, then resumable`, async () => {
-      const seed = seedHome();
+  // Each platform's service manager dies at its own step, and on Windows
+  // between registering the task and running it.
+  const PLATFORM_KILLS: Array<[RigPlatform, KillPoint]> = [
+    ...KILL_POINTS.map((point): [RigPlatform, KillPoint] => ["darwin", point]),
+    ["linux", "fetch"],
+    ["linux", "systemctl --user"],
+    ["linux", "readCodexHooks"],
+    ["linux", "readCursorHooks"],
+    ["linux", "readStellaHooks"],
+    ["linux", "daemonGet"],
+    ["win32", "fetch"],
+    ["win32", "schtasks /Create"],
+    ["win32", "schtasks /Run"],
+    ["win32", "readCursorHooks"],
+    ["win32", "readStellaHooks"],
+    ["win32", "writeClaudeDesktopConfig"],
+    ["win32", "daemonGet"],
+  ];
+  for (const [platform, killAt] of PLATFORM_KILLS) {
+    it(`${platform}: killed at ${killAt}: removable, then resumable`, async () => {
+      const seed = seedHome({ platform });
       const before = snapshotTree(seed.home);
 
       // Removable.
@@ -744,7 +997,10 @@ describe("install rig: failure injection", () => {
       // Resumable: die again, then finish with a plain enroll.
       await dieAt(seed, killAt);
       const resumed = buildRig(seed);
-      const finished = await enroll({ harnesses: ALL }, resumed.deps);
+      const finished = await enroll(
+        { harnesses: harnessesOn(platform) },
+        resumed.deps,
+      );
       expect(finished.ok).toBe(true);
       expect(
         tachoHookPresence(resumed.deps.readSettings(), TEST_ENROLLMENT).missing,
