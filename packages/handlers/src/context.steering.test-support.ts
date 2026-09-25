@@ -25,6 +25,17 @@ import {
 } from "./context.steering.store";
 import { canonicalJson, sha256Hex } from "./registry-digest";
 import { readRecordFile } from "./context.steering.file";
+import type { RegistryRecord, SyncPlan } from "./context.steering.sync.plan";
+import {
+  SYNC_POLICY_VERSION,
+  type AppliedSync,
+  type ApplyInput,
+  type SyncState,
+  type SyncStateWrite,
+  type SyncStore,
+} from "./context.steering.sync.store";
+
+type SyncScope = { orgId: string; workspaceId: string };
 
 export const SCOPE = {
   orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
@@ -88,6 +99,8 @@ export class MemoryStore implements SteeringStore {
     prev: string | null;
     policyVersion: string;
     approverUserId: string | null;
+    /** `promote` when absent; the repository sync also writes `retire`. */
+    action?: "promote" | "retire";
   }[] = [];
   appends: AppendRow[] = [];
 
@@ -980,4 +993,235 @@ export function harness(files: Record<string, string> = {}): Harness {
     events,
     roleOf,
   };
+}
+
+/**
+ * The repository sync's store (ADR-182) over a `MemoryStore`'s own arrays, so
+ * a test can run `merge_context_pr` and the sync against one registry and see
+ * whether they agree. `apply` writes versions and ledger links the way the
+ * Postgres store does: one version per publication, the chain digest over the
+ * same canonical fields, and a `retire` link with no version.
+ */
+export class MemorySyncStore implements SyncStore {
+  state: SyncState | null = null;
+  applied = 0;
+  constructor(private readonly store: MemoryStore) {}
+
+  async readState() {
+    return this.state;
+  }
+  async markRequested(_scope: SyncScope, at: Date) {
+    this.state = {
+      ...(this.state ?? {
+        provider: null,
+        repository: null,
+        branch: null,
+        headSha: null,
+        status: "pending" as const,
+        findings: [],
+        error: null,
+        syncedAt: null,
+      }),
+      requestedAt: at,
+    };
+  }
+  async writeState(_scope: SyncScope, state: SyncStateWrite) {
+    this.state = { ...state, requestedAt: this.state?.requestedAt ?? null };
+  }
+
+  private chain(
+    recordId: string,
+    versionId: string | null,
+    action: "promote" | "retire",
+  ) {
+    const head = this.store.ledger
+      .filter((l) => l.recordId === recordId)
+      .sort((a, b) => b.seq - a.seq)[0];
+    const seq = (head?.seq ?? 0) + 1;
+    const prev = head?.chainDigest ?? null;
+    const chainDigest = sha256Hex(
+      (prev ?? "") +
+        canonicalJson({
+          action,
+          approver_user_id: null,
+          policy_version: SYNC_POLICY_VERSION,
+          record_id: recordId,
+          seq,
+          version_id: versionId,
+        }),
+    );
+    this.store.ledger.push({
+      id: uuid(),
+      publicId: nextId("ctp"),
+      recordId,
+      seq,
+      chainDigest,
+      prev,
+      policyVersion: SYNC_POLICY_VERSION,
+      approverUserId: null,
+      action,
+    });
+  }
+
+  async apply(
+    scope: SyncScope,
+    input: ApplyInput,
+    planFor: (records: RegistryRecord[]) => SyncPlan,
+  ): Promise<AppliedSync> {
+    this.applied += 1;
+    const mine = this.store.records.filter(
+      (r) => r.workspaceId === scope.workspaceId,
+    );
+    const plan = planFor(
+      mine.map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        path: r.path,
+        status: r.status,
+        deleted: r.deletedAt !== null,
+        label: r.label ?? null,
+        kind: r.kind,
+        constraintEffect: r.constraintEffect,
+        statement: r.statement,
+        body:
+          this.store.versions.find((v) => v.id === r.activeVersionId)?.body ??
+          null,
+      })),
+    );
+    let created = 0;
+    let revised = 0;
+    for (const p of plan.publish) {
+      let record = p.recordId
+        ? this.store.records.find((r) => r.id === p.recordId)
+        : undefined;
+      if (!record) {
+        record = {
+          id: uuid(),
+          publicId: nextId("ctr"),
+          createdAt: input.now,
+          createdById: null,
+          updatedById: null,
+          deletedAt: null,
+          deletedById: null,
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          slug: p.lineageId,
+          title: p.content.statement,
+          label: p.content.label ?? contextRecordLabel(p.lineageId),
+          status: "active",
+          kind: p.content.kind,
+          force: p.content.force,
+          constraintEffect: p.content.constraintEffect,
+          sharingScope: p.content.sharingScope,
+          statement: p.content.statement,
+          commitSha: input.commitSha,
+          path: p.path,
+          publishedAt: input.publishedAt,
+          activatedByUserId: null,
+          activatedAt: input.publishedAt,
+          updatedAt: input.now,
+          activeVersionId: null,
+          validUntil: null,
+          version: null,
+          checksum: null,
+        };
+        this.store.records.push(record);
+        created += 1;
+      } else revised += 1;
+      const target = record;
+      const latest = this.store.versions
+        .filter((v) => v.recordId === target.id)
+        .sort((a, b) => b.version - a.version)[0];
+      if (latest) latest.isLatest = false;
+      const version = {
+        id: uuid(),
+        publicId: nextId("crv"),
+        recordId: target.id,
+        version: (latest?.version ?? 0) + 1,
+        checksum: p.checksum,
+        isLatest: true,
+        publishedAt: input.publishedAt,
+        body: p.body,
+        kind: p.content.kind,
+        force: p.content.force,
+        constraintEffect: p.content.constraintEffect,
+        statement: p.content.statement,
+      };
+      this.store.versions.push(version);
+      Object.assign(target, {
+        slug: p.lineageId,
+        label: p.content.label ?? target.label,
+        status: "active",
+        kind: p.content.kind,
+        force: p.content.force,
+        constraintEffect: p.content.constraintEffect,
+        sharingScope: p.content.sharingScope,
+        statement: p.content.statement,
+        commitSha: input.commitSha,
+        path: p.path,
+        publishedAt: input.publishedAt,
+        deletedAt: null,
+        activeVersionId: version.id,
+        version: version.version,
+        checksum: version.checksum,
+      });
+      this.chain(target.id, version.id, "promote");
+    }
+    for (const u of plan.update) {
+      const record = this.store.records.find((r) => r.id === u.recordId);
+      if (!record) continue;
+      if (u.slug !== undefined) record.slug = u.slug;
+      if (u.path !== undefined) record.path = u.path;
+      if (u.label !== undefined) record.label = u.label;
+    }
+    for (const r of plan.retire) {
+      const record = this.store.records.find((x) => x.id === r.recordId);
+      if (!record) continue;
+      record.status = "retired";
+      this.chain(record.id, null, "retire");
+    }
+    return {
+      plan,
+      created,
+      revised,
+      updated: plan.update.length,
+      retired: plan.retire.length,
+    };
+  }
+
+  async openProposals(scope: SyncScope) {
+    return this.store.proposals.filter(
+      (p) => p.workspaceId === scope.workspaceId && OPEN.has(p.status),
+    );
+  }
+
+  async linkMergedProposal(
+    scope: SyncScope,
+    proposalId: string,
+    args: { lineageId: string; mergedCommit: string; mergedAt: Date },
+  ) {
+    const record = this.store.records.find(
+      (r) =>
+        r.workspaceId === scope.workspaceId &&
+        r.slug === args.lineageId &&
+        r.status === "active" &&
+        r.deletedAt === null,
+    );
+    if (!record) return false;
+    const promotion = this.store.ledger
+      .filter((l) => l.recordId === record.id && l.action !== "retire")
+      .sort((a, b) => b.seq - a.seq)[0];
+    if (!promotion) return false;
+    const proposal = this.store.proposals.find((p) => p.id === proposalId);
+    if (!proposal || !OPEN.has(proposal.status)) return false;
+    Object.assign(proposal, {
+      status: "merged",
+      mergedCommit: args.mergedCommit,
+      mergedAt: args.mergedAt,
+      mergedByUserId: null,
+      publishedRecordId: record.id,
+      promotionEventId: promotion.id,
+    });
+    return true;
+  }
 }

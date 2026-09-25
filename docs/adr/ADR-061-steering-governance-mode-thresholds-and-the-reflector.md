@@ -3,6 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-09-15
 - **Owners:** platform
+- **Amended by:** ADR-182 (the registry follows the production branch, so a
+  Context PR merged on the host publishes too).
 - **Related:** the Mission Control spec `2026-09-11-oxagen-mission-control-spec.md`
   (§9 context records, §10 the repository, steering and Context PRs, App. E
   "Context and steering"), issue #2961 and its scope note of 2026-09-14
