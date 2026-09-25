@@ -201,6 +201,7 @@ export function orgSource(reads: OrgReads): {
     };
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
+    conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,

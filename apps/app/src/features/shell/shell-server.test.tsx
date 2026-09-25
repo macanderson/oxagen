@@ -57,6 +57,7 @@ afterEach(async () => {
 function stubSource() {
   return {
     runtimes: { list: vi.fn(), agents: vi.fn() },
+    conversations: { latest: vi.fn() },
     pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
     shell: {
       context: vi.fn(),
