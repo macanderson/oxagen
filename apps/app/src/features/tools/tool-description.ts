@@ -22,10 +22,8 @@ export interface ToolDescription {
   examples: ToolExample[];
 }
 
-/** An attribute list may quote a `>`, so quoted values are consumed whole. */
-const EXAMPLE =
-  /<example\b((?:"[^"]*"|'[^']*'|[^>"'])*)>([\s\S]*?)<\/example\s*>/gi;
-const TITLE = /\bdescription\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+/** A whole attribute, so `data-description` is not read as the title. */
+const TITLE = /(?:^|\s)description\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
 /** The `<examples>` wrapper some providers put round the list, now empty. */
 const WRAPPER = /<\/?examples\b[^>]*>/gi;
 /** Three or more line breaks, blank lines with spaces included. */
@@ -48,13 +46,58 @@ function example(attributes: string, raw: string): ToolExample {
   return { title, body, language: /^[[{]/.test(body) ? "json" : "text" };
 }
 
+/**
+ * The index just past the `>` that ends a tag's attributes, or -1 when none
+ * does. An attribute may quote a `>`, so a quoted value is skipped whole.
+ */
+function tagEnd(text: string, from: number): number {
+  let quote: string | null = null;
+  for (let index = from; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote !== null) {
+      if (char === quote) quote = null;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === ">") {
+      return index + 1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * One pass, left to right. A regex with a lazy body rescans to the end of the
+ * text from every opening tag that never closes, so a provider's description
+ * of repeated unclosed tags took time that grew with the square of its length.
+ * Here each character is read a fixed number of times. The first tag that
+ * never closes ends the scan, and it and everything after it stay in the prose.
+ */
 export function splitToolDescription(text: string): ToolDescription {
   const examples: ToolExample[] = [];
-  const prose = text
-    .replace(EXAMPLE, (_match, attributes: string, body: string) => {
-      examples.push(example(attributes, body));
-      return "\n";
-    })
+  const kept: string[] = [];
+  const open = /<example\b/gi;
+  const close = /<\/example\s*>/gi;
+  let cursor = 0;
+  for (let tag = open.exec(text); tag !== null; tag = open.exec(text)) {
+    const attributesStart = tag.index + tag[0].length;
+    const bodyStart = tagEnd(text, attributesStart);
+    if (bodyStart === -1) break;
+    close.lastIndex = bodyStart;
+    const end = close.exec(text);
+    if (end === null) break;
+    kept.push(text.slice(cursor, tag.index), "\n");
+    examples.push(
+      example(
+        text.slice(attributesStart, bodyStart - 1),
+        text.slice(bodyStart, end.index),
+      ),
+    );
+    cursor = close.lastIndex;
+    open.lastIndex = cursor;
+  }
+  kept.push(text.slice(cursor));
+  const prose = kept
+    .join("")
     .replace(WRAPPER, "")
     .replace(BLANK_RUN, "\n\n")
     .trim();

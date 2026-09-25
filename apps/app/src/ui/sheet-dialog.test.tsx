@@ -226,4 +226,32 @@ describe("SheetDialog icon and extra-wide size", () => {
     expect(popup.className).toContain("h-[min(76dvh,720px)]");
     expect(popup.className).not.toContain("max-w-[600px]");
   });
+
+  // About twenty dialogs pass `wide` as a boolean, so the older two widths
+  // must not move when the third was added.
+  it.each([
+    { wide: true, width: "max-w-[600px]" },
+    { wide: false, width: "max-w-md" },
+  ])(
+    "keeps the $width width for wide={$wide}, with no fixed height",
+    ({ wide, width }) => {
+      render(
+        <IntlProvider>
+          <SheetDialog
+            open
+            onOpenChange={vi.fn()}
+            title="Sized"
+            wide={wide}
+            testId="sized"
+          >
+            <p>Body</p>
+          </SheetDialog>
+        </IntlProvider>,
+      );
+      const popup = screen.getByTestId("sized");
+      expect(popup.className).toContain(width);
+      expect(popup.className).not.toContain("max-w-[760px]");
+      expect(popup.className).not.toContain("h-[min(76dvh,720px)]");
+    },
+  );
 });

@@ -571,6 +571,10 @@ export function ToolDialog({
     examples > 0
       ? ["overview", "examples", "details", "classification"]
       : ["overview", "details", "classification"];
+  // A description refreshed while the dialog is open can lose its examples,
+  // and then the tab it was on is gone. Overview stands in, so one tab is
+  // always selected and one panel always shows.
+  const current: ToolTab = tabs.includes(tab) ? tab : "overview";
 
   const select = (next: ToolTab) => {
     setTab(next);
@@ -605,7 +609,7 @@ export function ToolDialog({
       id={panelId(name)}
       aria-labelledby={tabId(name)}
       data-tool-panel={name}
-      hidden={tab !== name}
+      hidden={current !== name}
     >
       {body}
     </div>
@@ -652,9 +656,9 @@ export function ToolDialog({
                 type="button"
                 role="tab"
                 id={tabId(name)}
-                aria-selected={tab === name}
+                aria-selected={current === name}
                 aria-controls={panelId(name)}
-                tabIndex={tab === name ? 0 : -1}
+                tabIndex={current === name ? 0 : -1}
                 className={TAB_CLASS}
                 onClick={() => {
                   setTab(name);

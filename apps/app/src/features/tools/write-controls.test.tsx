@@ -1386,4 +1386,137 @@ describe("ToolDialog tabs", () => {
       else Reflect.deleteProperty(navigator, "clipboard");
     }
   });
+
+  it("copies an example's body as the tab shows it", async () => {
+    const writeText = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    try {
+      const dialog = await open({ ...plain(), description: NOTION });
+      fireEvent.click(dialog.getByRole("tab", { name: "Examples 2" }));
+      fireEvent.click(
+        dialog.getByRole("button", { name: "Copy example: Add properties" }),
+      );
+      expect(await dialog.findByText("Copied")).toBeInTheDocument();
+      expect(writeText).toHaveBeenCalledWith(
+        '{\n  "data_source_id": "f336d0bc"\n}',
+      );
+    } finally {
+      if (original) Object.defineProperty(navigator, "clipboard", original);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("walks four tabs in order from the keyboard, and ignores a key it does not handle", async () => {
+    const dialog = await open({ ...plain(), description: NOTION });
+    const overview = dialog.getByRole("tab", { name: "Overview" });
+    fireEvent.keyDown(overview, { key: "ArrowRight" });
+    expect(selected()).toEqual(["Examples 2"]);
+    fireEvent.keyDown(document.activeElement ?? overview, {
+      key: "ArrowRight",
+    });
+    expect(selected()).toEqual(["Details"]);
+    fireEvent.keyDown(document.activeElement ?? overview, { key: "End" });
+    expect(selected()).toEqual(["Classification"]);
+    // Tab leaves the strip, so the handler must not swallow it.
+    const handled = !fireEvent.keyDown(document.activeElement ?? overview, {
+      key: "Tab",
+    });
+    expect(handled).toBe(false);
+    expect(selected()).toEqual(["Classification"]);
+  });
+
+  it("keeps a half-filled form when the person looks at another tab", async () => {
+    const dialog = await open(plain());
+    fireEvent.click(dialog.getByRole("tab", { name: "Classification" }));
+    fireEvent.change(dialog.getByRole("textbox", { name: "Reason" }), {
+      target: { value: "Reads only public files" },
+    });
+    fireEvent.click(dialog.getByRole("tab", { name: "Overview" }));
+    expect(
+      dialog.queryByRole("textbox", { name: "Reason" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(dialog.getByRole("tab", { name: "Classification" }));
+    expect(dialog.getByRole("textbox", { name: "Reason" })).toHaveValue(
+      "Reads only public files",
+    );
+  });
+
+  it("opens on Overview again after it was closed on another tab", async () => {
+    const dialog = await open();
+    fireEvent.click(dialog.getByRole("tab", { name: "Details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("tool-dialog")).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Open the tool"));
+    await screen.findByTestId("tool-dialog");
+    expect(selected()).toEqual(["Overview"]);
+  });
+
+  it("falls back to Overview when a refreshed description loses the examples it was showing", async () => {
+    const version = { ...plain(), description: NOTION };
+    const view = (next: typeof version) => (
+      <IntlProvider>
+        <ToolDialog at={at} version={next} canClassify provider={null}>
+          <span>Open the tool</span>
+        </ToolDialog>
+      </IntlProvider>
+    );
+    const { rerender } = render(view(version));
+    fireEvent.click(screen.getByText("Open the tool"));
+    const dialog = within(await screen.findByTestId("tool-dialog"));
+    fireEvent.click(dialog.getByRole("tab", { name: "Examples 2" }));
+    rerender(view({ ...version, description: "Update a data source." }));
+    expect(selected()).toEqual(["Overview"]);
+    expect(dialog.getAllByRole("tabpanel")).toHaveLength(1);
+    expect(dialog.getByRole("tabpanel")).toHaveTextContent(
+      "Update a data source.",
+    );
+  });
+
+  it("gives a description made only of examples an Examples tab and no empty notice", async () => {
+    const dialog = await open({
+      ...plain(),
+      description: '<example description="Only">{"a": 1}</example>',
+    });
+    expect(
+      dialog.queryByText("This version carries no description."),
+    ).not.toBeInTheDocument();
+    expect(dialog.queryByTestId("tool-description")).not.toBeInTheDocument();
+    expect(dialog.getByRole("tab", { name: "Examples 1" })).toBeInTheDocument();
+  });
+
+  describe("at a glance", () => {
+    /** The value a Glance tile prints, found by its term on the Overview panel. */
+    function tile(term: string): Element | null {
+      const dialog = within(screen.getByTestId("tool-dialog"));
+      return within(dialog.getByRole("tabpanel")).getByText(term, {
+        selector: "dt",
+      }).nextElementSibling;
+    }
+
+    it("names where a version not imported from a provider was declared", async () => {
+      await open({ ...plain(), source: "custom" });
+      expect(tile("Provider")).toHaveTextContent("Declared here");
+    });
+
+    it("says an unclassified version's egress and missing call count plainly", async () => {
+      await open(plain());
+      expect(tile("Egress")).toHaveTextContent("Unclassified");
+      expect(tile("Calls 30d")).toHaveTextContent("not recorded");
+    });
+
+    it("prints a classified version's egress and its calls, with no unclassified notice", async () => {
+      const dialog = await open(financial());
+      expect(tile("Egress")).toHaveTextContent("third party");
+      expect(tile("Calls 30d")).toHaveTextContent("1,204");
+      expect(dialog.queryByTestId("tool-unclassified")).not.toBeInTheDocument();
+    });
+  });
 });

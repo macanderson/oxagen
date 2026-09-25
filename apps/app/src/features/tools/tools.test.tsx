@@ -571,6 +571,18 @@ describe("Tools › tools tab", () => {
       within(tools).queryByText("Get file contents"),
     ).not.toBeInTheDocument();
   });
+
+  it("names the provider a version came from in the version's dialog", async () => {
+    await renderTools();
+    fireEvent.click(screen.getByText("Create payment"));
+    const dialog = within(await screen.findByTestId("tool-dialog"));
+    // The registry hands the row's provider to the dialog. Without it the
+    // Provider tile would say "not recorded".
+    const overview = within(dialog.getByRole("tabpanel"));
+    expect(
+      overview.getByText("Provider", { selector: "dt" }).nextElementSibling,
+    ).toHaveTextContent("Stripe");
+  });
 });
 
 describe("Tools › toolbelts tab", () => {

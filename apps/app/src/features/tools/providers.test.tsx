@@ -337,6 +337,20 @@ describe("Providers › drill-down", () => {
       expect(screen.queryByTestId("provider-dialog")).not.toBeInTheDocument();
     });
   });
+
+  it("opens a version from the drill-down under the provider's name and mark", async () => {
+    renderProviders();
+    const drill = await openDrill();
+    fireEvent.click(drill.getByText("Create payment"));
+    const dialog = within(await screen.findByTestId("tool-dialog"));
+    const overview = within(dialog.getByRole("tabpanel"));
+    expect(
+      overview.getByText("Provider", { selector: "dt" }).nextElementSibling,
+    ).toHaveTextContent("Stripe");
+    expect(
+      document.querySelector('[data-testid="tool-dialog"] [data-sheet-icon]'),
+    ).not.toBeNull();
+  });
 });
 
 describe("Providers › Remove", () => {

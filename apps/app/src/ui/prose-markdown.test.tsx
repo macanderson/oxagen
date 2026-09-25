@@ -51,4 +51,29 @@ describe("ProseMarkdown", () => {
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByText("Tracking pixel")).toBeInTheDocument();
   });
+
+  it("blocks a script link and keeps a web link behind a confirmation", () => {
+    const { container } = render(
+      <ProseMarkdown>
+        {"[bad](javascript:alert(1)) and [docs](https://example.com/docs)"}
+      </ProseMarkdown>,
+    );
+    expect(container.querySelector('[href^="javascript:"]')).toBeNull();
+    expect(screen.getByText(/bad/)).not.toHaveAttribute("data-streamdown");
+    // Streamdown opens a web link from a button that asks before leaving.
+    expect(screen.getByRole("button", { name: "docs" })).toHaveAttribute(
+      "data-streamdown",
+      "link",
+    );
+  });
+
+  it("renders fenced code as a code block in its language", () => {
+    const { container } = render(
+      <ProseMarkdown>{'```json\n{"a": 1}\n```'}</ProseMarkdown>,
+    );
+    const block = container.querySelector(
+      '[data-streamdown="code-block"][data-language="json"]',
+    );
+    expect(block).toHaveTextContent('{"a": 1}');
+  });
 });

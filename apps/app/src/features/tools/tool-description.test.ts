@@ -76,4 +76,33 @@ describe("splitToolDescription", () => {
     expect(prose).toBe('Text <example description="cut">{"a":');
     expect(examples).toEqual([]);
   });
+
+  it("keeps the examples before a tag that never closes, and the rest as prose", () => {
+    const { prose, examples } = splitToolDescription(
+      'Lead. <example>1</example> Mid. <example description="open">2 Tail.',
+    );
+    expect(examples.map((e) => e.body)).toEqual(["1"]);
+    expect(prose).toBe('Lead. \n Mid. <example description="open">2 Tail.');
+  });
+
+  it("stops at an attribute whose quote never closes", () => {
+    const text = `<example description='it's'>1</example>`;
+    expect(splitToolDescription(text)).toEqual({ prose: text, examples: [] });
+  });
+
+  it("reads only a whole description attribute as the title", () => {
+    const [first] = splitToolDescription(
+      '<example data-description="wrong">x</example>',
+    ).examples;
+    expect(first?.title).toBeNull();
+  });
+
+  it("reads a long run of unclosed tags as prose, whole", () => {
+    // Twenty thousand unclosed tags: the scan reads the text once, where a
+    // backtracking regex rescanned it from every tag.
+    const text = '<example description="'.repeat(20_000);
+    const { prose, examples } = splitToolDescription(text);
+    expect(examples).toEqual([]);
+    expect(prose).toBe(text);
+  });
 });
