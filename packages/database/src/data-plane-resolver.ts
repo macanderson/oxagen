@@ -12,7 +12,7 @@
  * WHY withSystemDb: the binding row is read BEFORE a tenant scope's store is
  * chosen — `withTenantDb` would have to resolve the plane to read the table
  * that says which plane to use. Platform-level tables always live on the shared
- * plane (ADR-042 §2), so this read is a genuine, audited RLS bypass on the
+ * plane (ADR-042 §2), so this read is a genuine RLS bypass on the
  * shared singleton, exactly like identity resolution.
  *
  * SECRET HANDLING: the decrypted config never leaves this module except inside

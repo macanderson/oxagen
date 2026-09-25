@@ -52,9 +52,10 @@ const CONTRACT_IMPORT_RE =
 
 /**
  * Pure indexer: given the raw contents of every apps/api/src/routes/v1/*.ts
- * file, return the set of contract stems any of them import plus the
- * concatenated source (for a literal-name fallback scan). No filesystem
- * access, so it's directly unit-testable.
+ * file, return the set of contract stems any of them import, the
+ * concatenated source, and that source with its comments removed (`code`, for
+ * the dispatch-by-name fallback scan). No filesystem access, so it's directly
+ * unit-testable.
  *
  * @param {{name: string, content: string}[]} files
  */
@@ -67,7 +68,38 @@ export function buildApiRouteIndex(files) {
     while ((m = CONTRACT_IMPORT_RE.exec(src))) importedStems.add(m[1]);
     content += src + "\n";
   }
-  return { importedStems, content };
+  return { importedStems, content, code: stripComments(content) };
+}
+
+/**
+ * Remove block and line comments from TypeScript source so a scan sees only
+ * code. A route file often explains itself in a comment such as
+ * `invoke("get_run")`, and that sentence dispatches nothing. The line-comment
+ * rule skips `//` preceded by a colon, a quote, or a backslash, so a URL
+ * inside a string literal survives.
+ *
+ * @param {string} src
+ */
+export function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+}
+
+/**
+ * Whether route code dispatches `capName` by its registered name, that is,
+ * passes it as a string literal in the first argument of `invoke(...)`, the
+ * kernel's one dispatch path. A name that appears anywhere else (a log
+ * message, an error string, a comment) is not wiring.
+ *
+ * @param {string} code - route source with comments removed
+ * @param {string} capName
+ */
+export function dispatchesByName(code, capName) {
+  const name = capName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\binvoke\\s*\\(\\s*(["'\`])${name}\\1\\s*[,)]`).test(
+    code,
+  );
 }
 
 /**
@@ -77,11 +109,12 @@ export function buildApiRouteIndex(files) {
  * from a combined multi-capability route file) is either of:
  *   - the capability's contract module is imported by some route file
  *     (`from ".../contracts/<stem>"`, matched against either candidate stem)
- *   - the route source contains the capability's exact registered name as a
- *     quoted string literal (covers dispatch sites where the imported
- *     identifier doesn't textually match either stem)
+ *   - route code dispatches the capability by its exact registered name,
+ *     `invoke("<name>", ...)` (covers dispatch sites where the imported
+ *     identifier doesn't textually match either stem). The name quoted
+ *     anywhere else, such as a comment or a log string, does not count.
  *
- * @param {{stems: string[], capName: string, hasDirectFile: boolean, routeIndex: {importedStems: Set<string>, content: string}}} args
+ * @param {{stems: string[], capName: string, hasDirectFile: boolean, routeIndex: {importedStems: Set<string>, content: string, code?: string}}} args
  */
 export function apiLayerSatisfied({
   stems,
@@ -91,10 +124,9 @@ export function apiLayerSatisfied({
 }) {
   if (hasDirectFile) return true;
   if (stems.some((s) => routeIndex.importedStems.has(s))) return true;
-  return (
-    routeIndex.content.includes(`"${capName}"`) ||
-    routeIndex.content.includes(`'${capName}'`) ||
-    routeIndex.content.includes(`\`${capName}\``)
+  return dispatchesByName(
+    routeIndex.code ?? stripComments(routeIndex.content),
+    capName,
   );
 }
 

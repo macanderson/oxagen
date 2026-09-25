@@ -58,6 +58,15 @@ module may.
 - A second module joins the list only with its own reason, written in
   `layers.ts` and added to this record.
 
+**Amendment, 2026-09-25 (#4163): `features/shell/assistant-thread-actions.ts`
+joins the list.** The assistant flyout reads the viewer's latest thread when it
+opens, through the `conversations` port. Reading it in the workspace layout
+would read it on every full load, first visit, and post-write refresh, whether
+or not the flyout opens. The port already maps `get_conversation` and checks
+every id is a public id (INV-11). The module carries `"use server"`, resolves
+its viewer with `requireViewer`, and answers an `ActionResult`, like
+`choice-actions.ts`.
+
 ## Alternatives rejected
 
 **Call `kernelRead` in `choice-actions.ts`, as ADR-089 does.** The module

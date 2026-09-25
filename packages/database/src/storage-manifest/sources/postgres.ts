@@ -75,8 +75,9 @@ export function collectPostgresTables(): ManifestTable[] {
       name: cfg.name,
       // A table is tenant-scoped iff it appears in the tenant-policy manifest —
       // that manifest is the authoritative record of which tables carry RLS
-      // tenant isolation. Tables absent from it are shared catalogs or isolate
-      // transitively via an FK to a policied parent (see the manifest header).
+      // tenant isolation keyed on org_id/workspace_id. Tables absent from it are
+      // shared catalogs, children with their own EXISTS-against-parent policy,
+      // or children with no RLS at all. The manifest header lists which.
       tenantScoped: rls !== undefined,
       columns,
     };

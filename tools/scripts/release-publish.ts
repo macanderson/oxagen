@@ -77,6 +77,7 @@ import {
   releaseUrl,
 } from "./lib/release-artifacts";
 import { readRootVersion, versionDrift } from "./lib/versions";
+import { parseWrittenList } from "./release";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const DOWNLOADS_BUCKET = "oxagen-downloads-916294258235";
@@ -454,13 +455,18 @@ async function main(): Promise<void> {
   const notesFile = join(ROOT, "releases", `v${version}.md`);
   if (!opts.publishOnly) {
     step("Bump every manifest and write the notes");
+    // release.ts lists every file it writes here, outside the tree, and the
+    // commit below stages exactly those. With --written-list it also refuses
+    // a dirty tree before its first write, as the preflight above does.
+    const writtenList = join(tmpdir(), `oxagen-release-${version}-files.txt`);
     const releaseArgs = [
       "tools/scripts/release.ts",
       "--set",
       version,
       "--no-git",
-      "--no-vercel",
       "--no-npm",
+      "--written-list",
+      writtenList,
       "--install-links",
       ...(last ? ["--from", last.tag] : []),
       ...(opts.dryRun ? ["--dry-run"] : []),
@@ -489,7 +495,12 @@ async function main(): Promise<void> {
       branch = `release/v${version}`;
       git(["switch", "-c", branch]);
     }
-    git(["add", "-A"]);
+    // Only what release.ts wrote. `git add -A` would also commit any stray or
+    // secret file that reached the tree after the preflight (#2978).
+    const files = parseWrittenList(readFileSync(writtenList, "utf8"));
+    if (files.length === 0)
+      throw new Error(`release.ts listed no written files in ${writtenList}`);
+    git(["add", "--", ...files]);
     git(["commit", "-m", `chore(release): v${version}`]);
     const notes = readFileSync(notesFile, "utf8");
     for (const t of [platformTag, tag]) git(["tag", "-a", t, "-F", notesFile]);

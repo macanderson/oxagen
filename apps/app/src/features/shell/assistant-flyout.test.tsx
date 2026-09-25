@@ -45,6 +45,15 @@ declare global {
 
 const askAssistant = vi.fn();
 vi.mock("./assistant-actions", () => ({ askAssistant }));
+// Each workspace reads back as having no thread yet, filed under its own id.
+// assistant-flyout.threads.test.tsx covers the read itself (#4163).
+vi.mock("./assistant-thread-actions", () => ({
+  loadAssistantThread: (_org: string, ws: string) =>
+    Promise.resolve({
+      ok: true,
+      value: { workspaceKey: `id-${ws}`, thread: null },
+    }),
+}));
 
 // The parked cards read approval rows and decide through Fleet's action; they
 // have their own tests (assistant-parked-approvals.test.tsx). This stand-in

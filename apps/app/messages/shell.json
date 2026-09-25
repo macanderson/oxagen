@@ -335,6 +335,11 @@
         "title": "Ask stella",
         "body": "stella reads this workspace’s runs, agents, spend and knowledge graph. Every turn is recorded as a run of its own."
       },
+      "thread": {
+        "new": "New thread",
+        "loading": "Loading your last thread…",
+        "loadFailed": "Your last thread could not be loaded. A new question starts a new thread."
+      },
       "suggestions": {
         "title": "Ask about this page",
         "fleet": {
