@@ -162,6 +162,52 @@ describe("propose_configuration_clone", () => {
     );
     expect(github.pulls).toEqual([]);
   });
+  it("refuses a second record clone on the same slug even if the name check raced (ADR-174)", async () => {
+    const { handler, source, store } = setup();
+    const originalRecord = { ...original, kind: "record" as const };
+    source.mockResolvedValue(originalRecord);
+    const clone = {
+      ...input(),
+      kind: "record" as const,
+      name: "Review-cloned",
+      sourceDigest: configurationSourceDigest(originalRecord),
+      source:
+        'lineageId="review"\nlabel="Review"\nkind="rule"\nforce="must"\nsharingScope="workspace"\nstatement="Review changes."',
+    };
+    await handler(clone, ctx());
+    // `taken` still answers false, so only the store's create-only refusal
+    // stands between the second submit and a second row on the lineage.
+    await expect(handler(clone, ctx())).rejects.toMatchObject({
+      code: "conflict",
+      reason: "clone_name_taken",
+    });
+    expect(store.proposals).toHaveLength(1);
+  });
+  it("refuses a record clone whose name is longer than a label as invalid input, before reading the source (ADR-174)", async () => {
+    const { handler, source, store } = setup();
+    const originalRecord = { ...original, kind: "record" as const };
+    source.mockResolvedValue(originalRecord);
+    // The draft allows a 200-character name. A record's name is its label,
+    // which stops at 36.
+    await expect(
+      handler(
+        {
+          ...input(),
+          kind: "record",
+          name: "x".repeat(37),
+          sourceDigest: configurationSourceDigest(originalRecord),
+          source:
+            'lineageId="review"\nkind="rule"\nforce="must"\nsharingScope="workspace"\nstatement="Review changes."',
+        },
+        ctx(),
+      ),
+    ).rejects.toMatchObject({
+      code: "invalid_input",
+      message: expect.stringContaining("36"),
+    });
+    expect(source).not.toHaveBeenCalled();
+    expect(store.proposals).toEqual([]);
+  });
   it("refuses changed source content and occupied identities before opening a branch", async () => {
     const { handler, source, taken, github } = setup();
     source.mockResolvedValueOnce({ ...original, source: body("changed") });

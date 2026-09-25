@@ -921,6 +921,51 @@ describe("Records", () => {
     );
   });
 
+  it("sorts the cards by label, with the title standing in for a record that declares none (ADR-174)", async () => {
+    // The statements run the other way from the labels, so a sort by
+    // statement would put the cards in the opposite order.
+    await renderSteering("/records", {
+      records: readOk({
+        records: [
+          publishedRecord({
+            id: "ctr_alpha",
+            lineage: "ctx.a.alpha",
+            label: "Alpha",
+            statement: "Zed comes last.",
+            publishedAt: "2026-09-11T09:00:00.000Z",
+          }),
+          publishedRecord({
+            id: "ctr_beta",
+            lineage: "ctx.a.beta",
+            label: "Beta",
+            statement: "Middle.",
+            publishedAt: "2026-09-12T09:00:00.000Z",
+          }),
+          publishedRecord({
+            id: "ctr_gamma",
+            lineage: "ctx.a.gamma",
+            title: "Gamma",
+            statement: "Aardvark comes first.",
+            publishedAt: "2026-09-10T09:00:00.000Z",
+          }),
+        ],
+        total: 3,
+      }),
+    });
+    const panel = section("Published records");
+    const labels = () =>
+      within(panel)
+        .getAllByRole("article")
+        .map((card) => card.querySelector('[data-term="label"]')?.textContent);
+    // Shown order is newest first.
+    expect(labels()).toEqual(["Beta", "Alpha", "Gamma"]);
+    const sort = within(panel).getByRole("combobox", { name: "Sort" });
+    fireEvent.change(sort, { target: { value: "asc" } });
+    expect(labels()).toEqual(["Alpha", "Beta", "Gamma"]);
+    fireEvent.change(sort, { target: { value: "desc" } });
+    expect(labels()).toEqual(["Gamma", "Beta", "Alpha"]);
+  });
+
   it("prints unclassified and the title for a record no Context PR wrote, with no fact it lacks", async () => {
     await renderSteering("/records", {
       records: readOk({

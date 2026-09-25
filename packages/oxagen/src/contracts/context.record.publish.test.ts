@@ -99,6 +99,26 @@ describe("context.record.publish capability", () => {
     ).toThrow();
   });
 
+  it("caps a label at 36 characters, trimmed, and refuses a blank one (ADR-174)", () => {
+    expect(
+      contextRecordPublish.input.parse({
+        ...VALID_INPUT,
+        label: ` ${"x".repeat(36)} `,
+      }).label,
+    ).toBe("x".repeat(36));
+    expect(
+      contextRecordPublish.input.safeParse({
+        ...VALID_INPUT,
+        label: "x".repeat(37),
+      }).success,
+    ).toBe(false);
+    expect(
+      contextRecordPublish.input.safeParse({ ...VALID_INPUT, label: "  " })
+        .success,
+    ).toBe(false);
+    expect(contextRecordPublish.input.parse(VALID_INPUT).label).toBeUndefined();
+  });
+
   // ── output ────────────────────────────────────────────────────────────────
 
   it("parses a valid output", () => {
