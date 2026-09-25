@@ -1055,9 +1055,9 @@ export function App() {
                   {sessionExpired
                     ? `The saved session for ${state?.config.org_slug ?? "your organization"} has expired. `
                     : ""}
-                  Sign in opens your browser; come back here when it says you
-                  are done. New to Oxagen? Create an account — you will name
-                  your organization and first workspace, then land back here.
+                  Sign in opens your browser. Come back here when it says you
+                  are done. New to Oxagen? Create an account. You name your
+                  organization and first workspace, then land back here.
                 </p>
                 <div className="row">
                   <button
@@ -1214,8 +1214,8 @@ export function App() {
                   !detecting &&
                   detected.harnesses.every((d) => !d.installed) && (
                     <div className="notice">
-                      None of Claude Code, Codex, Cursor, or stella was found on
-                      your PATH. Install one, then rescan:{" "}
+                      None of the agents above was found on this machine.
+                      Install one, then rescan:{" "}
                       {HARNESSES.map((h, i) => (
                         <span key={h}>
                           {i > 0 && " · "}
@@ -1347,7 +1347,7 @@ export function App() {
                 <p className="sub">
                   {runList.length > 0
                     ? `Oxagen sends each wrapped agent one small prompt ("reply OK") and confirms the run was recorded and sealed. That is your first data in the workspace.`
-                    : `Nothing here to drive: every app you registered is a connected app, which Oxagen governs through its own MCP gateway rather than through a hook. There is no headless prompt to send one. It reports the first time you use it — open the workspace and watch it arrive.`}
+                    : `Nothing here to drive: every app you registered is a connected app, which Oxagen governs through its own MCP gateway rather than through a hook. There is no headless prompt to send one. It reports the first time you use it. Open the workspace and watch it arrive.`}
                 </p>
                 <div className="agents">
                   {hostHarnesses.map((h) => (
@@ -1543,7 +1543,7 @@ export function App() {
             {loggedIn
               ? `${state?.config.org_slug ?? "—"} · CLI default workspace ${state?.config.workspace_slug ?? "—"}`
               : sessionExpired
-                ? "session expired — sign in to change the workspace"
+                ? "session expired (sign in to change the workspace)"
                 : "not signed in"}
           </dd>
         </dl>
@@ -1580,8 +1580,8 @@ export function App() {
         <p className="sub">
           Every app Oxagen covers here, and what each one records. A{" "}
           <strong>wrapped</strong> agent runs an Oxagen hook, so every action it
-          takes is recorded and can be refused — but Oxagen does not run it, so
-          the record is what the agent reported. A <strong>connected</strong>{" "}
+          takes is recorded and can be refused. Oxagen does not run the agent,
+          so the record is what the agent reported. A <strong>connected</strong>{" "}
           app has no hook: Oxagen serves it a toolbelt and refuses the calls its
           mandate does not allow, and sees nothing else the app does. Neither
           covers what the other covers.
