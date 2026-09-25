@@ -33,6 +33,7 @@ import { HarnessFiles, type SettleOutcome } from "../host/harness-file";
 import { readHostFile } from "../host/host-file";
 import {
   applyModelBaseUrls,
+  claudeManagedSettingsPath,
   type ModelBaseUrlOptions,
   type ModelBaseUrlState,
   readModelBaseUrlState,
@@ -821,11 +822,38 @@ function settleOrThrow(harnessFiles: HarnessFiles): SettleOutcome[] {
   return outcomes;
 }
 
-export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
+/**
+ * Where the default deps read managed settings, which win over the user's
+ * own. Claude Code's defaults to the system path for the deps' platform, and
+ * Stella's to the system path for this machine. The install rig points both
+ * under its scratch home, so a rig run never reads the managed settings of
+ * the machine it runs on.
+ */
+export interface ManagedSettingsFiles {
+  /** Claude Code's managed settings file. */
+  claude?: string;
+  /** Stella's managed settings file. */
+  stella?: string;
+}
+
+export function defaultCliDeps(
+  overrides: Partial<CliDeps> = {},
+  managed: ManagedSettingsFiles = {},
+): CliDeps {
   const env = overrides.env ?? process.env;
   const home = overrides.home ?? homedir();
   const exec = overrides.exec ?? realExec;
   const platform = overrides.platform ?? process.platform;
+  const claudeManaged = managed.claude ?? claudeManagedSettingsPath(platform);
+  // Stella's default is left to each call: which of its two files counts
+  // depends on which exists at that moment.
+  const baseUrlInternals = {
+    managedSettingsFile: claudeManaged,
+    ...(managed.stella !== undefined
+      ? { stellaManagedSettingsFile: managed.stella }
+      : {}),
+  };
+  const credentialInternals = { managedSettingsFile: claudeManaged };
   // `platform` is resolved BEFORE the paths and handed to `tachoPaths`, which
   // derives one field from it — `claudeDesktopConfig`, undefined where Claude
   // Desktop has no build. Omitting it let that one field read `process.platform`
@@ -952,18 +980,31 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     // so they take the directories `paths` resolved for them. A caller that
     // names its own still wins.
     modelBaseUrls: {
-      apply: (options) => applyModelBaseUrls({ ...harnessDirs, ...options }),
+      apply: (options) =>
+        applyModelBaseUrls({ ...harnessDirs, ...options }, baseUrlInternals),
       restore: (options) =>
-        restoreModelBaseUrls({ ...harnessDirs, ...options }),
-      read: (options) => readModelBaseUrlState({ ...harnessDirs, ...options }),
+        restoreModelBaseUrls({ ...harnessDirs, ...options }, baseUrlInternals),
+      read: (options) =>
+        readModelBaseUrlState({ ...harnessDirs, ...options }, baseUrlInternals),
     },
     modelCredentials: {
       peek: (options) => peekModelCredentials({ ...harnessDirs, ...options }),
-      apply: (options) => applyModelCredentials({ ...harnessDirs, ...options }),
+      apply: (options) =>
+        applyModelCredentials(
+          { ...harnessDirs, ...options },
+          credentialInternals,
+        ),
       restore: (options, secrets) =>
-        restoreModelCredentials({ ...harnessDirs, ...options }, secrets),
+        restoreModelCredentials(
+          { ...harnessDirs, ...options },
+          secrets,
+          credentialInternals,
+        ),
       read: (options) =>
-        readModelCredentialState({ ...harnessDirs, ...options }),
+        readModelCredentialState(
+          { ...harnessDirs, ...options },
+          credentialInternals,
+        ),
     },
     credentialStore: openCredentialStore({
       file: paths.credentials,

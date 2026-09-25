@@ -69,6 +69,51 @@ describe("HarnessFiles", () => {
     expect(existsSync(join(dir, "tacho", "backups"))).toBe(false);
   });
 
+  it("restores an original whose only difference is an empty container the strip dropped", () => {
+    // The strips drop an `env`, `hooks`, `mcpServers` or event list they
+    // emptied. The user's own empty one looks the same by then, because the
+    // merge filled it, and its absence read as an edit made while enrolled.
+    const dir = scratch();
+    const files = new HarnessFiles(join(dir, "tacho"));
+    const path = join(dir, "settings.json");
+    const original =
+      '{\n    "model": "opus",\n    "env": {},\n    "hooks": { "Stop": [] },\n    "mcpServers": {}\n}\n';
+    writeFileSync(path, original);
+    files.write(
+      path,
+      '{"model":"opus","env":{"TACHO_PORT":"1"},"hooks":{"Stop":[{"ours":true}]},"mcpServers":{"oxagen":{}}}',
+    );
+    files.write(path, '{\n  "model": "opus"\n}\n');
+    expect(files.settle()).toEqual([{ path, result: "restored" }]);
+    expect(readFileSync(path, "utf8")).toBe(original);
+  });
+
+  it("keeps an edit that emptied a container of the user's that held something", () => {
+    const dir = scratch();
+    const files = new HarnessFiles(join(dir, "tacho"));
+    const path = join(dir, "settings.json");
+    writeFileSync(path, '{"env":{"MINE":"1"}}');
+    files.write(path, '{"env":{"MINE":"1","TACHO_PORT":"1"}}');
+    files.write(path, '{"env":{}}');
+    expect(files.settle()[0]?.result).toBe("kept-user-edit");
+    expect(readFileSync(path, "utf8")).toBe('{"env":{}}');
+  });
+
+  it("counts an empty list the strips never drop as an edit", () => {
+    // `"deny": []` added while enrolled is a change the strip did not make,
+    // so the original is not put back over it.
+    const dir = scratch();
+    const files = new HarnessFiles(join(dir, "tacho"));
+    const path = join(dir, "settings.json");
+    writeFileSync(path, '{"model":"opus"}');
+    files.write(path, '{"model":"opus","ours":true}');
+    files.write(path, '{"model":"opus","permissions":{"deny":[]}}');
+    expect(files.settle()[0]?.result).toBe("kept-user-edit");
+    expect(readFileSync(path, "utf8")).toBe(
+      '{"model":"opus","permissions":{"deny":[]}}',
+    );
+  });
+
   it("keeps a user edit made while enrolled, and still restores the mode", () => {
     const dir = scratch();
     const files = new HarnessFiles(join(dir, "tacho"));

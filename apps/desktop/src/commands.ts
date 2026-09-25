@@ -194,16 +194,20 @@ export function pendingChange(
  * `tacho enroll` for a machine that is not enrolled yet. `--org` never
  * travels without `--workspace`: tacho would fill the workspace from the
  * CLI's config.json, which names the previously signed-in org's workspace.
+ * No agent is picked for the operator: no harness is the default (ADR-101),
+ * and an empty pick would reach tacho as `--harness ""`.
  */
 export function enrollArgs(picks: Picks): string[] {
   if (picks.org !== null && picks.workspace === null)
     throw new Error(`pick a workspace in ${picks.org} first`);
+  if (picks.harnesses === null || picks.harnesses.length === 0)
+    throw new Error("pick at least one agent to register");
   return [
     "enroll",
     ...(picks.org ? ["--org", picks.org] : []),
     ...(picks.workspace ? ["--workspace", picks.workspace] : []),
     "--harness",
-    (picks.harnesses ?? ["claude-code"]).join(","),
+    picks.harnesses.join(","),
   ];
 }
 
@@ -298,6 +302,27 @@ export function deregisterNeedsSession(
   harness: Harness,
 ): boolean {
   return deregisterArgs(enrolled, harness).args[0] === "reassign";
+}
+
+/**
+ * The wizard's confirmation line on enforcement, for what was registered. It
+ * read "client-attested (the hooks the agents honour)" for every machine,
+ * including one whose only registered app is connected and has no hook. A
+ * connected app is checked on the server, and only for the Oxagen tools it
+ * calls (ADR-078, ADR-095).
+ */
+export function enforcementText(harnesses: readonly string[]): string {
+  const tiers = new Set(
+    harnesses
+      .map((h) => HARNESS_TIER[h as Harness])
+      .filter((tier) => tier !== undefined),
+  );
+  const hooks = "client-attested (the hooks the agents honour)";
+  const server = "checked on the server for the Oxagen tools they call";
+  if (tiers.has("harness") && tiers.has("gateway"))
+    return `wrapped agents are ${hooks}, and connected apps are ${server}`;
+  if (tiers.has("gateway")) return `connected apps are ${server}`;
+  return `enforcement is ${hooks}`;
 }
 
 /**
