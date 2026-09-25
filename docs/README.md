@@ -11,7 +11,7 @@ Start with [engineering onboarding](ONBOARDING.md) to find the code and rules fo
 | Design intent | [Specs](specs/README.md) |
 | Roadmap, implementation plans, and the rev1 product spec | [oxagen-roadmap](https://github.com/macanderson/oxagen-roadmap) |
 | Why a decision was made | [ADR index](adr/README.md) |
-| Standing decisions | [Context records](../.oxagen/rules/) |
+| Standing decisions | [AGENTS.md](../AGENTS.md#standing-decisions--apply-without-asking) |
 | Capability inputs, outputs, and surfaces | [Capability index](capabilities/_index.md) |
 | Operational procedures | [Runbooks](ops/) |
 | Connector and storage extensions | [Guides](guides/) |
@@ -31,6 +31,6 @@ Plans, gap inventories, epics, and designs for work not yet started go to [oxage
 
 Generated reports (release audits, eval and audit command output) go to the gitignored `verifications/` directory, not here.
 
-Keep accepted ADRs as historical decisions. Record a changed decision in a new ADR. Keep the standing decisions in `.oxagen/rules/` and the vendored house specifications under their cross-repository maintenance workflows.
+Keep accepted ADRs as historical decisions. Record a changed decision in a new ADR. Keep the standing decisions in `AGENTS.md` and the vendored house specifications under their cross-repository maintenance workflows.
 
 Remove duplicate documents and completed task instructions when they add no explanation. Git history retains the removed text. Check DEREGISTERED.md before deleting a file that belongs to a preserved feature.
