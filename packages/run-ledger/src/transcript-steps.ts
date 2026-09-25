@@ -1046,17 +1046,19 @@ export function recallOf(
       ? parsed["frames"]
       : undefined;
   if (isRecord(parsed) && Array.isArray(list)) {
-    const kept = list
-      .filter(isRecord)
-      .filter(
-        (item) =>
-          item["outcome"] === undefined || item["outcome"] === "included",
-      );
+    const listed = list.filter(isRecord);
+    const kept = listed.filter(
+      (item) => item["outcome"] === undefined || item["outcome"] === "included",
+    );
+    // A manifest that records the outcome of each item and no total of what
+    // it cut has cut what it listed and did not include.
+    const judged = listed.some((item) => item["outcome"] !== undefined);
     return {
       unit: Array.isArray(items) ? "items" : "frames",
       count: count(parsed["included"]) ?? kept.length,
       tokens: count(parsed["spent_tokens"]) ?? count(parsed["tokens"]),
-      cut: count(parsed["cut"]),
+      cut:
+        count(parsed["cut"]) ?? (judged ? listed.length - kept.length : null),
       items: kept.slice(0, RECALL_ITEM_MAX).map((item) => ({
         kind: text(item, "kind") ?? text(item, "type") ?? "",
         label:

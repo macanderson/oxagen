@@ -1324,6 +1324,44 @@ describe("recallOf", () => {
     });
   });
 
+  it("counts what a manifest cut from the outcome of each item when it recorded no total", () => {
+    // The shape the host seals (`steeringManifestFrameSchema`): each item's
+    // outcome, and no `included` or `cut` of its own.
+    const body = JSON.stringify({
+      budget_tokens: 4000,
+      spent_tokens: 340,
+      items: [
+        {
+          id: "rec_1",
+          kind: "rule",
+          force: "must",
+          tokens: 200,
+          outcome: "included",
+        },
+        {
+          id: "rec_2",
+          kind: "fact",
+          force: "may",
+          tokens: 140,
+          outcome: "included",
+        },
+        {
+          id: "rec_3",
+          kind: "fact",
+          force: "may",
+          tokens: 900,
+          outcome: "cut",
+        },
+      ],
+    });
+    expect(recallOf(manifest, body)).toMatchObject({
+      unit: "items",
+      count: 2,
+      tokens: 340,
+      cut: 1,
+    });
+  });
+
   it("reads a context frame's listed frames, counting them when no total was recorded", () => {
     const body = JSON.stringify({
       tokens: 90,
@@ -1381,11 +1419,13 @@ describe("recallOf", () => {
       cut: "3",
       items: [{ id: "r", kind: "fact", tokens: -4, outcome: "included" }],
     });
+    // The recorded `cut` is not a count, so the cut is read from the items,
+    // which say none was cut.
     expect(recallOf(manifest, body)).toEqual({
       unit: "items",
       count: 1,
       tokens: null,
-      cut: null,
+      cut: 0,
       items: [{ kind: "fact", label: "r", tokens: null }],
     });
   });
