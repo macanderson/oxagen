@@ -38,11 +38,14 @@ The app and both sidecars link only system libraries, which library
 validation always admits. The Node single-executable sidecars load no native
 addon.
 
-`scripts/smoke-macos-bundle.sh` proves it on every macOS build in
+`scripts/smoke-macos-bundle.sh` checks this on every macOS build in
 `.github/workflows/desktop.yml`. The script prints each binary's signature
 and entitlements, runs `tacho --version` and `oxagen --version` from inside
 the signed bundle under the hardened runtime, and starts the app for 20
-seconds. A dependency that needs a third-party dynamic library fails that
-step before anything publishes.
+seconds. A third-party dynamic library that a binary links, or loads during
+those first 20 seconds, fails that step before anything publishes. The step
+does not run every command path. A library loaded later with `dlopen`, for
+example a native addon a sidecar loads for one command, would pass it and
+fail on a customer's machine.
 
 Add the key back only with the library that needs it named here.
