@@ -4100,7 +4100,7 @@
       "writes": []
     }
   ],
-  "contentHash": "540157713918917a7360451d0cc4b5b39efe38729cb236898afc233e56b2490e",
+  "contentHash": "5620d4495d73b0f5bab1927a669e9c9f120ecd2da6bbb85f001d3637b900222d",
   "domains": [
     {
       "name": "agent",
@@ -7626,6 +7626,12 @@
         },
         {
           "name": "parent_run_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "origin_message_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
