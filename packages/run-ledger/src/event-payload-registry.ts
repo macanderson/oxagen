@@ -485,6 +485,38 @@ const verificationCompletedSchema = z
   })
   .strict();
 
+/**
+ * One round's verdict from the engine's goal verifier (`goal_verdict` on the
+ * `stella-serve` event stream, `stella-serve/src/goal.rs`). A goal-shaped
+ * turn of the in-app agent works in rounds, and after each one a verifier on
+ * a different model tier from the worker judges the transcript against the
+ * goal. This is that judgment as a receipt: which round, whether the goal was
+ * met, and the digests of the goal and of the verifier's reasoning. The goal
+ * and the reasoning ride the frame's body.
+ *
+ * It is not `verification.completed`. That type is one verification of the
+ * attempt; a goal turn can have several rounds, each with its own verdict,
+ * and only the last can say `met`. A round whose verdict is `met: false` is
+ * the verifier sending the worker back, not a failed verification.
+ */
+const verificationGoalVerdictSchema = z
+  .object({
+    /** The engine frame's `seq`, what a replay asks the engine for. */
+    engine_seq: countSchema,
+    /** 1-based; the engine clamps a goal run at 32 rounds. */
+    round: z.number().int().min(1).max(32),
+    met: z.boolean(),
+    goal_digest: sha256DigestSchema,
+    reasoning_digest: sha256DigestSchema,
+    /**
+     * What the verifier's calls cost this round, in integer micro-dollars
+     * (`canonicalJson` refuses a float). Capped at $1,000, far past any
+     * verifier call, so a corrupt figure is refused rather than recorded.
+     */
+    verifier_cost_usd_micros: z.number().int().min(0).max(1_000_000_000),
+  })
+  .strict();
+
 const providerCommitCreatedSchema = z
   .object({
     provider_observation_public_id: providerObservationSchema.optional(),
@@ -628,6 +660,11 @@ export const EVENT_TYPE_REGISTRY = {
     stage: "verification",
     contentClass: "verification_receipt",
     schema: verificationCompletedSchema,
+  },
+  "verification.goal_verdict": {
+    stage: "verification",
+    contentClass: "verification_receipt",
+    schema: verificationGoalVerdictSchema,
   },
   "provider_publish.commit_created": {
     stage: "provider_publish",
