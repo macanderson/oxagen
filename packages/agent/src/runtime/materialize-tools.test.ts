@@ -856,7 +856,7 @@ describe("materializeTools", () => {
     mocks.createApprovalRequest.mockImplementationOnce(async () => {
       // tenancyMock.state.current is the active scope set by runInTenantScope.
       scopeAtApproval = tenancyMock.state.current;
-      return { approvalId: "appr_scoped" };
+      return { approvalId: "appr_scoped", publicId: "apr_scoped" };
     });
     const fixtureGated = [
       {
@@ -887,6 +887,7 @@ describe("materializeTools", () => {
     // Restore the shared default impl for subsequent tests.
     mocks.createApprovalRequest.mockImplementation(async () => ({
       approvalId: "appr_x",
+      publicId: "apr_x",
     }));
   });
 });
@@ -1840,6 +1841,7 @@ describe("materializeTools — first-use consent gate", () => {
     mocks.createApprovalRequest.mockClear();
     mocks.createApprovalRequest.mockResolvedValue({
       approvalId: "appr_consent",
+      publicId: "apr_consent",
     });
     mocks.waitForApproval.mockClear();
     mocks.waitForApproval.mockResolvedValue({
@@ -2666,7 +2668,10 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
     mocks.insertToolInvocation.mockClear();
     mocks.insertToolInvocation.mockResolvedValue(undefined);
     mocks.createApprovalRequest.mockClear();
-    mocks.createApprovalRequest.mockResolvedValue({ approvalId: "appr_ask" });
+    mocks.createApprovalRequest.mockResolvedValue({
+      approvalId: "appr_ask",
+      publicId: "apr_ask",
+    });
     mocks.waitForApproval.mockClear();
     mocks.waitForApproval.mockResolvedValue({
       approvalId: "appr_ask",

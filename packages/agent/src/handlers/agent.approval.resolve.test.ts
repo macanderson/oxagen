@@ -36,7 +36,15 @@
  *     gone at the read → `approval_expired`
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -836,7 +844,7 @@ describe("resolve_approval — delivering the approved call", () => {
     const USER = "00000000-0000-0000-0000-000000000003";
     const kernelCtx = makeCTX({ orgId: ORG, workspaceId: WS, userId: USER });
     const PARKED = "test.parked_write";
-    let recorder: ReturnType<typeof vi.fn>;
+    let recorder: Mock<(r: GovernedActionRecord) => Promise<void>>;
 
     beforeEach(() => {
       clearHandlersForTests();
@@ -867,10 +875,8 @@ describe("resolve_approval — delivering the approved call", () => {
           ),
       );
       registerHandler(PARKED, async () => async () => ({ ok: true }));
-      recorder = vi.fn();
-      setUsageRecorder(
-        recorder as unknown as (r: GovernedActionRecord) => Promise<void>,
-      );
+      recorder = vi.fn<(r: GovernedActionRecord) => Promise<void>>();
+      setUsageRecorder(recorder);
       // The delivery invokes the stored call the way resumeApprovedCall does.
       mocks.resumeApprovedCall.mockImplementationOnce(async () => {
         await invoke(PARKED, {}, kernelCtx, { surface: "agent" });
@@ -892,9 +898,7 @@ describe("resolve_approval — delivering the approved call", () => {
       );
       // Nested inside the decision, the call would accrue nothing, and the
       // write would go unmetered where the periodic worker meters it.
-      const billed = recorder.mock.calls.map(
-        ([record]: [GovernedActionRecord]) => record.capability,
-      );
+      const billed = recorder.mock.calls.map(([record]) => record.capability);
       expect(billed).toEqual([PARKED, "resolve_approval"]);
     });
   });
