@@ -284,6 +284,8 @@ export type TranscriptKind = z.infer<typeof TranscriptKind>;
  * (ADR-182): the operator's prompt, a reply, a model call, a tool call, a
  * decision on no recorded call, a recall, the run's stop, a frame that frames
  * the run, or any other event.
+ *
+ * @internal Exported for the contract's test.
  */
 export const TRANSCRIPT_NODES = [
   "prompt",
@@ -296,10 +298,15 @@ export const TRANSCRIPT_NODES = [
   "control",
   "event",
 ] as const;
+/** @internal Exported for the transcript builders. */
 export const TranscriptNode = z.enum(TRANSCRIPT_NODES);
 export type TranscriptNode = z.infer<typeof TranscriptNode>;
 
-/** How an entry's call ended, as the fold states it. */
+/**
+ * How an entry's call ended, as the fold states it.
+ *
+ * @internal Exported for the contract's test.
+ */
 export const TRANSCRIPT_OUTCOMES = [
   "ok",
   "failed",
@@ -307,6 +314,7 @@ export const TRANSCRIPT_OUTCOMES = [
   "parked",
   "pending",
 ] as const;
+/** @internal Exported for the transcript builders. */
 export const TranscriptOutcome = z.enum(TRANSCRIPT_OUTCOMES);
 export type TranscriptOutcome = z.infer<typeof TranscriptOutcome>;
 
@@ -314,6 +322,8 @@ export type TranscriptOutcome = z.infer<typeof TranscriptOutcome>;
  * The family a tool belongs to, as the fold reads it from the tool's name.
  * It decides the colour of a call's row and the icon beside it, and which
  * reading of its body the row uses.
+ *
+ * @internal Exported for the contract's test.
  */
 export const TOOL_FAMILIES = [
   "shell",
@@ -333,7 +343,11 @@ export const TOOL_FAMILIES = [
 export const ToolFamily = z.enum(TOOL_FAMILIES);
 export type ToolFamily = z.infer<typeof ToolFamily>;
 
-/** Where a search found its query in an entry. */
+/**
+ * Where a search found its query in an entry.
+ *
+ * @internal Exported for the contract's test.
+ */
 export const TRANSCRIPT_MATCHES = [
   "label",
   "subject",
@@ -341,6 +355,7 @@ export const TRANSCRIPT_MATCHES = [
   "request",
   "response",
 ] as const;
+/** @internal Exported for the transcript builders. */
 export const TranscriptMatch = z.enum(TRANSCRIPT_MATCHES);
 export type TranscriptMatch = z.infer<typeof TranscriptMatch>;
 

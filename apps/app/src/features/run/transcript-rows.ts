@@ -287,7 +287,7 @@ function wordsOf(half: TranscriptBody | null): string | null {
 }
 
 /** The headline and its qualifier on one line, or null when neither was recorded. */
-export function argOf(detail: ToolDetail | null): string | null {
+function argOf(detail: ToolDetail | null): string | null {
   const parts = [detail?.headline ?? null, detail?.detail ?? null].filter(
     (part): part is string => part !== null,
   );
@@ -314,7 +314,7 @@ export function closedLine(text: string): string {
 }
 
 /** The call as it was made, as compact JSON; null when it holds nothing. */
-export function compactRaw(raw: string | null): string | null {
+function compactRaw(raw: string | null): string | null {
   if (raw === null) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -331,7 +331,7 @@ export function compactRaw(raw: string | null): string | null {
  * it. A call whose arguments are all objects has no headline, and its row
  * would otherwise print the name alone.
  */
-export function callArg(arg: string | null, raw: string | null): string | null {
+function callArg(arg: string | null, raw: string | null): string | null {
   const line = closedLine(arg ?? compactRaw(raw) ?? "");
   return line === "" ? null : line;
 }
@@ -535,6 +535,8 @@ function eventRow(entry: TranscriptEntry): FeedRow {
  * (`echoOf`): the server compares the words, and its counts leave out every
  * quiet entry, so a count and the rows drawn agree (ADR-182). A turn (`node`
  * null) is a group, not a row.
+ *
+ * @internal Exported for its unit test; the view draws rows through `feedOf`.
  */
 export function rowsOf(entry: TranscriptEntry): FeedRow[] {
   if (entry.quiet) return [];

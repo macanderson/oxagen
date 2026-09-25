@@ -295,29 +295,14 @@ function toTranscriptDecision(
 }
 
 /**
- * The run's counts, with every chip. The server counts each chip, and one it
- * left out is one nothing answered.
+ * The run's counts. The contract states a count for every chip, so they are
+ * copied as the server counted them, and none is filled in here.
  */
 function countsOf(
   counts: RunTranscriptOutput["counts"],
 ): z.input<typeof RunTranscript>["counts"] {
   if (counts === undefined) return null;
-  const { kinds } = counts;
-  return {
-    ...counts,
-    frames: counts.frames ?? null,
-    kinds: {
-      prompt: kinds.prompt ?? 0,
-      responses: kinds.responses ?? 0,
-      thinking: kinds.thinking ?? 0,
-      tools: kinds.tools ?? 0,
-      policy: kinds.policy ?? 0,
-      usage: kinds.usage ?? 0,
-      recall: kinds.recall ?? 0,
-      seal: kinds.seal ?? 0,
-      errors: kinds.errors ?? 0,
-    },
-  };
+  return { ...counts, frames: counts.frames ?? null };
 }
 
 /**

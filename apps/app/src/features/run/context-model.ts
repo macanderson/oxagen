@@ -85,7 +85,11 @@ export type ManifestRead =
       entry: TranscriptEntry;
     };
 
-/** The manifest frame on the run's own chain, if the run recorded one. */
+/**
+ * The manifest frame on the run's own chain, if the run recorded one.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function manifestEntry(
   entries: readonly TranscriptEntry[],
 ): TranscriptEntry | null {

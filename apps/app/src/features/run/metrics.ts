@@ -153,7 +153,7 @@ type WallClock = {
 };
 
 /** The run's tool calls, as the server counted them over its steps. */
-export type ToolCalls = {
+type ToolCalls = {
   count: number;
   /** Calls that failed, or that a rule, a person or the harness refused. */
   failed: number;

@@ -629,6 +629,20 @@ export const transcriptEntrySchema = z
   })
   .strict();
 
+const entryCount = z.number().int().nonnegative();
+
+/**
+ * One count for every chip. The server counts each chip on every read, so
+ * none is optional: a reader never has to guess a missing count as zero.
+ */
+const transcriptKindCountsSchema = z
+  .object(
+    Object.fromEntries(
+      TRANSCRIPT_KINDS.map((kind) => [kind, entryCount]),
+    ) as Record<(typeof TRANSCRIPT_KINDS)[number], typeof entryCount>,
+  )
+  .strict();
+
 /**
  * What the whole run holds at the zoom read, counted over every entry that is
  * not `quiet`, whatever the chips pressed, so a chip's count and the entries
@@ -638,7 +652,7 @@ export const transcriptEntrySchema = z
 export const transcriptCountsSchema = z
   .object({
     /** Entries per chip; an entry that answers two chips counts under both. */
-    kinds: z.record(transcriptKindSchema, z.number().int().nonnegative()),
+    kinds: transcriptKindCountsSchema,
     /** Entries that have something to show (`quiet` false). */
     entries: z.number().int().nonnegative(),
     /** Entries that failed or were refused, or that answer the errors chip. */
