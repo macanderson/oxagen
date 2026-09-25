@@ -39,6 +39,55 @@ const FOREIGN = {
 };
 
 describe("settings writer", () => {
+  it("runs SessionEnd through tacho-hook, so the event spools while the daemon is down (#3989)", () => {
+    const entries = tachoHookEntries(CONFIG);
+    expect(entries.SessionEnd).toEqual([
+      {
+        hooks: [
+          {
+            type: "command",
+            command: `${CONFIG.hookCommand} --enrollment ${TEST_ENROLLMENT}`,
+            timeout: 10,
+          },
+        ],
+      },
+    ]);
+    expect(HTTP_HOOK_EVENTS as readonly string[]).not.toContain("SessionEnd");
+  });
+
+  it("replaces the http SessionEnd an earlier enrollment wrote with the command hook", () => {
+    const earlier = {
+      hooks: {
+        SessionEnd: [
+          {
+            hooks: [
+              {
+                type: "http",
+                url: `http://127.0.0.1:47001/hook/${TEST_ENROLLMENT}`,
+                headers: { Authorization: "Bearer $TACHO_LOCAL_TOKEN" },
+                allowedEnvVars: ["TACHO_LOCAL_TOKEN"],
+                timeout: 5,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const merged = mergeTachoSettings(earlier, CONFIG);
+    expect(merged.changed).toBe(true);
+    expect(merged.settings.hooks?.SessionEnd).toEqual([
+      {
+        hooks: [
+          {
+            type: "command",
+            command: `${CONFIG.hookCommand} --enrollment ${TEST_ENROLLMENT}`,
+            timeout: 10,
+          },
+        ],
+      },
+    ]);
+  });
+
   it("installs command hooks for enforcement events and http hooks for the rest", () => {
     const entries = tachoHookEntries(CONFIG);
     expect(Object.keys(entries).sort()).toEqual([...ALL_HOOK_EVENTS].sort());

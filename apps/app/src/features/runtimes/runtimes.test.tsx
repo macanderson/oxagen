@@ -781,13 +781,13 @@ describe("One runtime", () => {
     );
   });
 
-  it("lists the five command hooks when the collector read them back", async () => {
+  it("lists the six command hooks when the collector read them back", async () => {
     await renderDetail({
       list: runtimeList([enrollment({ hooksOk: true })]),
     });
     const written = screen.getByTestId("fact-hooks-written");
     expect(written).toHaveTextContent(
-      "SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, StopFive run as command hooks. The first four can refuse.",
+      "SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop, SessionEndSix run as command hooks. The first four can refuse.",
     );
     expect(written.querySelector("[data-not-backed]")).toBeNull();
   });

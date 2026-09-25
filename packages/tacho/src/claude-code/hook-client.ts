@@ -34,7 +34,10 @@ import {
   type TachoHarness,
   tachoHarnessSchema,
 } from "../wire";
-import { COMMAND_HOOK_TIMEOUTS_S } from "../host/settings-writer";
+import {
+  COMMAND_HOOK_TIMEOUTS_S,
+  SESSION_END_TIMEOUT_S,
+} from "../host/settings-writer";
 import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
 import {
   cursorAnswer,
@@ -42,6 +45,7 @@ import {
   type CursorHookEventName,
   translateCursorPayload,
 } from "./cursor-adapter";
+import { codexHarnessPid } from "./harness-process";
 import { hookInputSchema } from "./hooks";
 import {
   psStartInstance,
@@ -248,10 +252,13 @@ export interface HookRunDeps {
    */
   agent?: string;
   /**
-   * The Stella process's pid, for `--harness stella` (whose payload names no
-   * session). Defaults to walking up from this process's parent with `ps`.
+   * The harness process's pid, for a harness that exports none: Stella
+   * (whose payload names no session either) and Codex. Defaults to walking
+   * up from this process's parent with `ps` (`stellaHarnessPid`,
+   * `codexHarnessPid`). Undefined means no pid names this one session, and
+   * the daemon falls back to its idle bound. Cursor never asks.
    */
-  harnessPid?: () => number;
+  harnessPid?: () => number | undefined;
   /**
    * The Stella process instance token (its start time), which keeps a reused
    * pid off the previous run's chain. Defaults to one `ps` call; `undefined`
@@ -304,6 +311,9 @@ const RESPONSE_BUDGET_MS: Record<string, number> = {
   SessionStart: 5_000,
   UserPromptSubmit: 5_000,
   Stop: 5_000,
+  // Under `SESSION_END_TIMEOUT_S` by the harness margin, so a daemon that
+  // accepts the connection and never answers still leaves time to spool.
+  SessionEnd: SESSION_END_TIMEOUT_S * 1_000 - HARNESS_TIMEOUT_MARGIN_MS,
 };
 
 type HostStatus = HostFile["host_status"];
@@ -752,19 +762,34 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   }
   let harnessPid: number | undefined;
   if (stella) {
-    harnessPid = (
-      deps.harnessPid ?? (() => stellaHarnessPid(process.ppid, platform))
-    )();
+    const pid = deps.harnessPid?.() ?? stellaHarnessPid(process.ppid, platform);
+    harnessPid = pid;
     // Windows has no `ps`, so there the id stays the bare pid form.
     const instance = (
       deps.harnessInstance ??
       ((pid: number) =>
         platform === "win32" ? undefined : psStartInstance(pid))
-    )(harnessPid);
-    raw = translateStellaPayload(raw, harnessPid, instance);
+    )(pid);
+    raw = translateStellaPayload(raw, pid, instance);
   }
+  // Codex exports no pid, and without one a session that exits without its
+  // SessionEnd waits out the daemon's six-hour idle bound (#3989).
+  if (codex)
+    harnessPid = (
+      deps.harnessPid ?? (() => codexHarnessPid(process.ppid, platform))
+    )();
   // Cursor issues both the session id and the tool-use id, so its adapter
-  // only renames; there is no pid to walk to and no digest to derive.
+  // only renames. It gets no harness pid, on purpose (#3989). In Cursor
+  // 3.22.7 the one code path that runs a command hook is the agent-host
+  // daemon (`extensions/cursor-agent-host/dist/agent-host-daemon/dist/bin/
+  // daemon.cjs`: `CliHooksExecutor.executeCommandScript` runs the command
+  // through `NaiveTerminalExecutor`, which spawns `$SHELL -c`). The
+  // extension starts that daemon detached and reuses one already listening
+  // on its socket, and one executor tracks many conversations
+  // (`activeSessionIdsByConversationId`). So the walk would reach a process
+  // that many Cursor conversations share: it outlives each of them, and a
+  // cancel of one conversation would signal the rest. A Cursor session ends
+  // on Cursor's own `sessionEnd`, or on the daemon's idle bound.
   if (cursor) raw = translateCursorPayload(raw);
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {

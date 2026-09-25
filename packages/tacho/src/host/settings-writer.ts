@@ -17,6 +17,22 @@ export const COMMAND_HOOK_EVENTS = [
   "Stop",
 ] as const;
 
+/**
+ * Telemetry events that also run `tacho-hook` as a command hook, so the event
+ * is spooled when the daemon is down and replayed when it starts. It answers
+ * `{}` either way (fail open). `SessionEnd` is the one: as an http hook it was
+ * lost while the daemon was down, and the session then stayed open until the
+ * sweep closed it as idle hours later (#3989).
+ */
+export const SPOOLED_HOOK_EVENTS = ["SessionEnd"] as const;
+
+/**
+ * The command timeout for `SessionEnd`. Claude Code waits for SessionEnd hooks
+ * for the largest timeout configured on them, at least 1.5 s and at most 60 s
+ * (checked in Claude Code 2.1.282), so this is the wait it honours.
+ */
+export const SESSION_END_TIMEOUT_S = 10;
+
 /** Telemetry-only events post straight to the daemon (fail open, gap chained). */
 export const HTTP_HOOK_EVENTS = [
   "PostToolUse",
@@ -29,7 +45,6 @@ export const HTTP_HOOK_EVENTS = [
   "PermissionDenied",
   "Notification",
   "ConfigChange",
-  "SessionEnd",
   "InstructionsLoaded",
   "UserPromptExpansion",
   "MessageDisplay",
@@ -63,6 +78,7 @@ export const RETIRED_HOOK_EVENTS = [
 
 export const ALL_HOOK_EVENTS = [
   ...COMMAND_HOOK_EVENTS,
+  ...SPOOLED_HOOK_EVENTS,
   ...HTTP_HOOK_EVENTS,
 ] as const;
 
@@ -183,6 +199,9 @@ export function tachoHookEntries(
     out[event] = [
       { hooks: [commandHookEntry(config, COMMAND_HOOK_TIMEOUTS_S[event])] },
     ];
+  }
+  for (const event of SPOOLED_HOOK_EVENTS) {
+    out[event] = [{ hooks: [commandHookEntry(config, SESSION_END_TIMEOUT_S)] }];
   }
   for (const event of HTTP_HOOK_EVENTS) {
     out[event] = [

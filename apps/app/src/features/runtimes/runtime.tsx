@@ -110,12 +110,12 @@ function HostPanel({
     },
     {
       term: t("detail.facts.hooksWritten"),
-      // The list the collector read back, when the record holds all five;
+      // The list the collector read back, when the record holds all six;
       // otherwise not recorded (#3818).
       value: hooksReadBack(host) ? (
         <>
           <span className={`${mono} text-[11.5px]`}>{COMMAND_HOOKS}</span>
-          <Sub>{t("detail.hooksFive")}</Sub>
+          <Sub>{t("detail.hooksCommand")}</Sub>
         </>
       ) : (
         <NotBacked gap="hooks" />
