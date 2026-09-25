@@ -2441,6 +2441,7 @@ type Messages = {
       lead: string;
       loading: string;
       name: string;
+      label: string;
       slug: string;
       source: string;
       companions: string;
@@ -2631,6 +2632,7 @@ type Messages = {
       noGrant: string;
       next: string;
       name: string;
+      labelHint: string;
       slug: string;
       slugHint: string;
       slugInvalid: string;
@@ -2828,6 +2830,7 @@ type Messages = {
       baseMoved: string;
       proposalMoved: string;
       unanswered: string;
+      slugTaken: string;
       refused: string;
       invalid: string;
       pendingApproval: string;
@@ -4898,6 +4901,18 @@ type Messages = {
       record: string;
       published: string;
       archived: string;
+      slugTitle: string;
+      notRecorded: string;
+      versionValue: string;
+      props: {
+        kind: string;
+        force: string;
+        effect: string;
+        scope: string;
+        status: string;
+        version: string;
+        pending: string;
+      };
       forceTitle: string;
       effectTitle: string;
       kindLine: {
@@ -7591,6 +7606,16 @@ type Messages = {
       close: string;
       thinking: string;
       recordedAs: string;
+      cost: {
+        label: string;
+        pending: string;
+        notRecorded: string;
+        unread: string;
+        basisNotRecorded: string;
+        estimate: string;
+        incomplete: string;
+      };
+      stopped: string;
       parked: string;
       parkedCard: {
         list: string;
@@ -7689,6 +7714,8 @@ type Messages = {
         label: string;
         placeholder: string;
         send: string;
+        stop: string;
+        stopFailed: string;
         sendHintEnter: string;
         sendHintModEnter: string;
         draftTooLong: string;
@@ -7708,6 +7735,18 @@ type Messages = {
         aborted: string;
         model: string;
         unavailable: string;
+      };
+      answering: {
+        tool: string;
+      };
+      dropped: {
+        body: string;
+        noRun: string;
+        load: string;
+        loading: string;
+        running: string;
+        ended: string;
+        unread: string;
       };
       engine: {
         unreachable: string;
@@ -9050,6 +9089,7 @@ type Messages = {
       new: string;
       published: string;
       openLabel: string;
+      cloneLabel: string;
       effectLineTitle: string;
       effectNotRecorded: string;
       truncated: string;
@@ -9293,6 +9333,8 @@ type Messages = {
       title: string;
       categories: string;
       allCategories: string;
+      providers: string;
+      allProviders: string;
       categoriesNote: string;
       allOnPage: string;
       categoriesDeclaredNote: string;
@@ -9300,6 +9342,8 @@ type Messages = {
       unclassified: string;
       noTags: string;
       emptyCategory: string;
+      emptyProvider: string;
+      emptyProviderCategory: string;
       gateNote: string;
       columns: {
         version: string;
@@ -9378,6 +9422,31 @@ type Messages = {
         mcp: string;
         foundry: string;
       };
+      tabs: {
+        label: string;
+        overview: string;
+        examples: string;
+        details: string;
+        classification: string;
+      };
+      overview: {
+        noDescription: string;
+        unclassified: string;
+        classify: string;
+      };
+      examples: {
+        lead: string;
+        untitled: string;
+      };
+      copy: {
+        id: string;
+        apiName: string;
+        capability: string;
+        digest: string;
+        example: string;
+        copied: string;
+        failed: string;
+      };
       facts: {
         id: string;
         capability: string;
@@ -9390,6 +9459,7 @@ type Messages = {
         classifiedAt: string;
         measures: string;
         updatedAt: string;
+        apiName: string;
       };
       classify: {
         lead: string;

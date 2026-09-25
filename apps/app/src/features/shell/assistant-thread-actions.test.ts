@@ -45,6 +45,7 @@ const THREAD = {
       runId: null,
       parked: [],
       toolCalls: [],
+      stopped: false,
     },
   ],
   truncated: false,

@@ -1,9 +1,14 @@
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { pluginOrgInstallBulk } from "@oxagen/oxagen/contracts/plugin.org.install_bulk";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { installOne, type InstallOneInput } from "./plugin.org.install";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(pluginOrgInstallBulk, ctx);
   const { items } = input as { items: InstallOneInput[] };
 
   const installed = await Promise.all(

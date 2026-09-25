@@ -60,11 +60,15 @@ import {
   RETENTION_USD_PER_GB_MONTH,
   actionPeriodStart,
 } from "@oxagen/billing";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 export const billingEvidenceRetentionHandler: CapabilityHandler<
   typeof billingEvidenceRetention
 > = async (_input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(billingEvidenceRetention, ctx);
   // ADR-042: the policy aggregate below is tenant evidence state, and
   // withSystemDb is shared-plane by construction. Refuse before reading rather
   // than report a dedicated-plane organisation's evidence as absent.

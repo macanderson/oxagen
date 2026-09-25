@@ -139,7 +139,11 @@ describe("ask_assistant contract", () => {
       parkedCards: [],
       toolCalls: [],
     };
-    expect(assistantAsk.output.parse(output)).toEqual(output);
+    // A turn nobody stopped reads back as not stopped (#4164).
+    expect(assistantAsk.output.parse(output)).toEqual({
+      ...output,
+      stopped: false,
+    });
     expect(
       assistantAsk.output.safeParse({ ...output, runId: "tse_abc" }).success,
     ).toBe(false);
@@ -186,6 +190,8 @@ describe("ask_assistant contract", () => {
           approvalId: "apr_01k5rt9xq7v3m8n2p4s6t8w0",
         },
       ],
+      // The turn ran to its end; the contract defaults the flag (#4164).
+      stopped: false,
     };
     expect(assistantAsk.output.parse(output)).toEqual(output);
   });

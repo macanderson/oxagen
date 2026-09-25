@@ -1384,3 +1384,101 @@ describe("helpers", () => {
     expect(serializeMutatingTools(tools, [])).toBe(tools);
   });
 });
+
+// A person's stop (#4164): `cancel_assistant_turn` aborts the caller's signal
+// with a string reason. The seal carries that reason, and a completion the
+// engine asks for after the stop is recorded and never sent.
+describe("a person's stop (#4164)", () => {
+  const PERSON = "stopped by the person who asked";
+
+  beforeEach(() => {
+    streamAgentReply.mockReset();
+  });
+
+  function recordingLedger() {
+    const started: TurnLedgerModelIntent[] = [];
+    const modelCalls: TurnLedgerModelCall[] = [];
+    const outcomes: TurnLedgerOutcome[] = [];
+    const ledger: TurnLedger = {
+      modelCallStarted: async (record) => {
+        started.push(record);
+      },
+      modelCall: async (record) => {
+        modelCalls.push(record);
+      },
+      toolCallStarted: async () => undefined,
+      toolCall: async () => undefined,
+      seal: async (outcome) => {
+        outcomes.push(outcome);
+      },
+    };
+    return { ledger, started, modelCalls, outcomes };
+  }
+
+  /** A turn whose caller aborts as the engine asks for the first completion. */
+  async function abortedAtFirstCompletion(
+    abort: (controller: AbortController) => void,
+  ) {
+    const { client } = setup();
+    const controller = new AbortController();
+    const log = recordingLedger();
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      // The guard runs as the request arrives, before anything is sent, which
+      // is where a stop in flight lands.
+      budgetGuard: () => {
+        abort(controller);
+        return "continue";
+      },
+      abortSignal: controller.signal,
+      engine: client,
+      ledger: log.ledger,
+    });
+    const parts = await drain(result);
+    return { log, parts };
+  }
+
+  it("records a completion asked for after the stop as cancelled, and never sends it", async () => {
+    const { log, parts } = await abortedAtFirstCompletion((c) =>
+      c.abort(PERSON),
+    );
+    expect(streamAgentReply).not.toHaveBeenCalled();
+    expect(log.started).toEqual([]);
+    expect(log.modelCalls.map((c) => c.outcome)).toEqual(["cancelled"]);
+    expect(parts.find((p) => p.type === "error")).toMatchObject({
+      error: expect.objectContaining({ code: "engine_aborted" }),
+    });
+  });
+
+  it("seals the run with the person's reason", async () => {
+    const { log } = await abortedAtFirstCompletion((c) => c.abort(PERSON));
+    expect(log.outcomes).toEqual([{ status: "aborted", reason: PERSON }]);
+  });
+
+  it("keeps the engine's reason for a disconnect, which aborts with no reason (negative)", async () => {
+    const { log } = await abortedAtFirstCompletion((c) => c.abort());
+    expect(log.outcomes).toEqual([{ status: "aborted", reason: "cancelled" }]);
+  });
+
+  it("keeps the engine's reason for a budget stop, which never aborts the caller's signal (negative)", async () => {
+    const { client } = setup();
+    const log = recordingLedger();
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      budgetGuard: () => "stop",
+      abortSignal: new AbortController().signal,
+      engine: client,
+      ledger: log.ledger,
+    });
+    await drain(result);
+    expect(log.outcomes).toEqual([{ status: "aborted", reason: "cancelled" }]);
+  });
+});

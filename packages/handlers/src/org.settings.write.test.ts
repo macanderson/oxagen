@@ -23,8 +23,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
+// The role gate runs for real against a role fixture, not the tx above.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
+
+import { isHandlerError } from "@oxagen/oxagen";
 import { orgSettingsWriteHandler } from "./org.settings.write";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 
 const ROW = {
   name: "Acme",
@@ -38,11 +45,42 @@ const ROW = {
 
 describe("org.settings.write handler", () => {
   beforeEach(() => {
+    resetRoleGate();
     mocks.findFirst.mockReset();
     mocks.set.mockClear();
     mocks.update.mockClear();
     mocks.where.mockReset();
     mocks.where.mockResolvedValue(undefined);
+  });
+
+  // The contract grants org Owner or Admin and workspace Owner or Admin. The
+  // kernel's IAM check allows every capability for a non-enterprise org, so
+  // the handler is the only gate there (#4194).
+  describe("role gate", () => {
+    it("refuses a workspace Member as forbidden, before any read or write", async () => {
+      roleGate.roles = { org: null, workspace: "Member" };
+      const err = await orgSettingsWriteHandler({ name: "Mine now" }, CTX).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(isHandlerError(err)).toBe(true);
+      expect(err).toMatchObject({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(mocks.findFirst).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["an org Admin", { org: "Admin" }],
+      ["a workspace Owner", { org: null, workspace: "Owner" }],
+    ])("allows %s", async (_who, roles) => {
+      roleGate.roles = roles;
+      mocks.findFirst.mockResolvedValue(ROW);
+      const out = await orgSettingsWriteHandler({}, CTX);
+      expect(out.slug).toBe("acme");
+    });
   });
 
   it("applies only the provided fields and returns the mapped row", async () => {

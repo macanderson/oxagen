@@ -8,6 +8,7 @@ import {
   capabilityRegistryList,
   type CapabilityRegistrySummary,
 } from "@oxagen/oxagen/contracts/capability.registry.list";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 /**
@@ -74,6 +75,9 @@ export function projectCapabilitySummary(
 export const capabilityRegistryListHandler: CapabilityHandler<
   typeof capabilityRegistryList
 > = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(capabilityRegistryList, ctx);
   const all = listCapabilities();
 
   const domains = [...new Set(all.map((c) => c.domain))].sort();

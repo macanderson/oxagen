@@ -34,6 +34,8 @@ export const conversationMessage = z.object({
    * every reply when the run ledger could not be read.
    */
   toolCalls: z.array(assistantToolCallSchema),
+  /** True when the person stopped the turn and this is its partial reply (#4164). */
+  stopped: z.boolean(),
 });
 
 /**

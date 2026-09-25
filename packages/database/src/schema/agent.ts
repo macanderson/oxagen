@@ -577,6 +577,10 @@ export const agentRuns = agentSchema.table(
     authorizationSnapshotId: uuid("authorization_snapshot_id"),
     // Child runs narrow their parent's ceiling; a root run is null.
     parentRunId: uuid("parent_run_id"),
+    // The chat message that asked for the run: an in-app assistant turn's
+    // user message (#4167). The turn meters its model calls on that id, and
+    // the cost rollup reads them by it. Null for every other run.
+    originMessageId: uuid("origin_message_id"),
     // Immutable repository binding plus the copies admission resolved from it.
     // The copies are not redundancy for its own sake: the binding row is
     // versioned, and the run must prove which version it saw.
@@ -1455,7 +1459,7 @@ export const contextRecords = agentSchema.table(
     ),
     labelCheck: check(
       "context_records_label_check",
-      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 200)`,
+      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 36)`,
     ),
     statusCheck: check(
       "context_records_status_check",
@@ -1682,7 +1686,7 @@ export const contextProposals = agentSchema.table(
       ),
     labelCheck: check(
       "context_proposals_label_check",
-      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 200)`,
+      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 36)`,
     ),
     kindCheck: check(
       "context_proposals_kind_check",

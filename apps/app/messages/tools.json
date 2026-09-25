@@ -34,6 +34,8 @@
       "title": "Tools",
       "categories": "Filter by category",
       "allCategories": "All",
+      "providers": "Filter by provider",
+      "allProviders": "All providers",
       "categoriesNote": "These tags and counts are this page of the registry. A tag carried only by a version on a later page appears once you reach that page.",
       "allOnPage": "All on this page",
       "categoriesDeclaredNote": "The chips and the Category column show the consequence tags a version’s classification records. The ten categories that group tools by what they act on are not recorded on a version yet. A version can also carry tags declared where it was published, which the filter and a class kill switch match too, so a tag can select a version whose row shows none.",
@@ -41,6 +43,8 @@
       "unclassified": "Unclassified",
       "noTags": "No tag",
       "emptyCategory": "No tool version on this page carries that tag.",
+      "emptyProvider": "No tool version in the registry came from this provider.",
+      "emptyProviderCategory": "No tool version from this provider carries that tag.",
       "gateNote": "The gate shown is today’s: the version’s own kill switch, then its provider’s, then its class’s. A toolbelt decides which agents are shown the tool; the gate decides whether the call survives. Open a provider on any row to see what it imported and the connection it is reached with.",
       "columns": {
         "version": "Tool version",
@@ -119,6 +123,31 @@
         "mcp": "Imported from a provider",
         "foundry": "Foundry"
       },
+      "tabs": {
+        "label": "Tool version sections",
+        "overview": "Overview",
+        "examples": "Examples",
+        "details": "Details",
+        "classification": "Classification"
+      },
+      "overview": {
+        "noDescription": "This version carries no description.",
+        "unclassified": "No one has classified this version.",
+        "classify": "Classify this version"
+      },
+      "examples": {
+        "lead": "The provider wrote these into the description as sample inputs for the model.",
+        "untitled": "Example {number}"
+      },
+      "copy": {
+        "id": "Copy version id",
+        "apiName": "Copy API name",
+        "capability": "Copy capability",
+        "digest": "Copy schema digest",
+        "example": "Copy example: {title}",
+        "copied": "Copied",
+        "failed": "Copy failed. Select the text instead."
+      },
       "facts": {
         "id": "Version id",
         "capability": "Governed as",
@@ -130,7 +159,8 @@
         "enabled": "Enabled",
         "classifiedAt": "Classified",
         "measures": "Measures",
-        "updatedAt": "Updated"
+        "updatedAt": "Updated",
+        "apiName": "API name"
       },
       "classify": {
         "lead": "Classification describes the tool and decides nothing by itself: a class kill switch matches a version by its consequence tags at call time, and the approval rules are written against it. Reclassifying is a governed action and is recorded in Audit.",

@@ -21,7 +21,8 @@
 // earlier one instead of over it, and every older reference still resolves to
 // an envelope its own key id can open. The same plaintext under the same
 // tenant and KEK lands on the same key, so a retried append rewrites an
-// equivalent object rather than minting a second one.
+// equivalent object rather than minting a second one. Within one process the
+// store skips that rewrite for a key it remembers writing (`writeOnce`).
 //
 // The module lives in @oxagen/run-ledger so the ingest handlers, the read
 // handlers and the durable jobs (@oxagen/inngest-functions) share one store.
@@ -167,12 +168,64 @@ export function parseFrameBodyPlaintext(plaintext: Uint8Array): {
   };
 }
 
+/**
+ * How many body and assembly keys one store remembers writing. A key is about
+ * 180 characters, so a full set stays under 2 MB however long the process
+ * runs.
+ */
+const REMEMBERED_WRITE_KEYS = 4096;
+
 interface EvidenceStoreDeps {
   storage: StorageAdapter;
   /** The KEK new objects are wrapped under. */
   writeCrypto: () => IngestionCryptoAdapter;
   /** The KEK a stored reference names. */
   readCrypto: (keyId: string) => IngestionCryptoAdapter;
+  /** Overrides {@link REMEMBERED_WRITE_KEYS}. Tests set it low to see eviction. */
+  rememberedWriteKeys?: number;
+}
+
+/**
+ * Runs each content-addressed write once per key while the key is remembered.
+ *
+ * Body and assembly keys name the tenant, the KEK and the digest of the bytes,
+ * so a key this process already wrote holds the same object a second write
+ * would produce. Tacho ingest used to encrypt and upload a body again
+ * whenever it saw the same bytes again: 37 keys were written 2 to 4 times in the two
+ * minutes before one heap failure (#4202).
+ *
+ * The map is a least-recently-used set of at most `limit` keys, so memory
+ * stays flat. It holds the write's promise, so a second write of a key that is
+ * still in flight waits for the first instead of starting its own. A write
+ * that fails is forgotten, and the next caller writes the key again. Nothing
+ * deletes these objects today. A future delete path must forget the key here,
+ * or a later write of the same bytes would be skipped.
+ */
+function writeOnce(limit: number) {
+  const written = new Map<string, Promise<void>>();
+  return async function once(
+    key: string,
+    write: () => Promise<void>,
+  ): Promise<void> {
+    const known = written.get(key);
+    if (known !== undefined) {
+      written.delete(key);
+      written.set(key, known);
+      return known;
+    }
+    const pending = write();
+    written.set(key, pending);
+    if (written.size > limit) {
+      const oldest = written.keys().next().value;
+      if (oldest !== undefined) written.delete(oldest);
+    }
+    try {
+      await pending;
+    } catch (err) {
+      if (written.get(key) === pending) written.delete(key);
+      throw err;
+    }
+  };
 }
 
 interface StoredFrameBody {
@@ -210,27 +263,32 @@ export interface EvidenceStore extends RunBodyStore, RunArchiveStore {
 }
 
 export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
+  // The key is checked before the body is encrypted, so a skipped write also
+  // skips the fresh data key and its KMS wrap.
+  const once = writeOnce(deps.rememberedWriteKeys ?? REMEMBERED_WRITE_KEYS);
   return {
     async put(input) {
       const { adapter, keyId } = deps.writeCrypto();
       const digestHex = digestHexOf(input.digest);
-      const ciphertext = await encrypt(
-        frameBodyPlaintext(input.contentType, input.bytes),
-        keyId,
-        { adapter },
-      );
       const key = evidenceBodyKey(input, keyId, digestHex);
-      const written = await deps.storage.put({
-        key,
-        body: ciphertext,
-        contentType: BODY_OBJECT_CONTENT_TYPE,
-        access: "private",
-      });
-      if (written.key !== key) {
-        throw new Error(
-          `evidence body landed on an unexpected key: ${written.key}`,
+      await once(key, async () => {
+        const ciphertext = await encrypt(
+          frameBodyPlaintext(input.contentType, input.bytes),
+          keyId,
+          { adapter },
         );
-      }
+        const written = await deps.storage.put({
+          key,
+          body: ciphertext,
+          contentType: BODY_OBJECT_CONTENT_TYPE,
+          access: "private",
+        });
+        if (written.key !== key) {
+          throw new Error(
+            `evidence body landed on an unexpected key: ${written.key}`,
+          );
+        }
+      });
       return { ref: evidenceBodyRef(keyId, digestHex) };
     },
 
@@ -257,17 +315,22 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
           `not an evidence body reference: ${input.bodyRef}`,
         );
       }
-      const { adapter } = deps.readCrypto(parsed.keyId);
-      const ciphertext = await encrypt(
-        frameBodyPlaintext(MESSAGE_ASSEMBLY_CONTENT_TYPE, input.bytes),
-        parsed.keyId,
-        { adapter },
-      );
-      await deps.storage.put({
-        key: evidenceAssemblyKey(input, parsed.keyId, parsed.digestHex),
-        body: ciphertext,
-        contentType: BODY_OBJECT_CONTENT_TYPE,
-        access: "private",
+      const key = evidenceAssemblyKey(input, parsed.keyId, parsed.digestHex);
+      // The fold is a function of the body's bytes, so the key names its
+      // content as surely as a body key does.
+      await once(key, async () => {
+        const { adapter } = deps.readCrypto(parsed.keyId);
+        const ciphertext = await encrypt(
+          frameBodyPlaintext(MESSAGE_ASSEMBLY_CONTENT_TYPE, input.bytes),
+          parsed.keyId,
+          { adapter },
+        );
+        await deps.storage.put({
+          key,
+          body: ciphertext,
+          contentType: BODY_OBJECT_CONTENT_TYPE,
+          access: "private",
+        });
       });
     },
 

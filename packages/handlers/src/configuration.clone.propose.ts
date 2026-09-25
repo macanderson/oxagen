@@ -2,6 +2,8 @@
 import { applyCloneIdentity } from "./configuration-clone-draft";
 import { parse } from "smol-toml";
 import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
+import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { configurationClonePropose } from "@oxagen/oxagen/contracts/configuration.clone.propose";
 import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
@@ -75,6 +77,16 @@ export function createConfigurationCloneProposeHandler(deps: {
   store: SteeringStore;
 }): CapabilityHandler<typeof configurationClonePropose> {
   return async (input, ctx) => {
+    // The draft allows 200 characters for every kind, and a record's name is
+    // its label (ADR-178). Refuse a long one here, before the record parse
+    // throws an untyped ZodError. The MCP tool spreads the contract's
+    // `.shape`, so the contract cannot carry a per-kind refinement.
+    if (input.kind === "record" && input.name.length > CONTEXT_RECORD_LABEL_MAX)
+      throw new CapabilityError(
+        configurationClonePropose.name,
+        "invalid_input",
+        `A record's label is at most ${CONTEXT_RECORD_LABEL_MAX} characters. Choose a shorter name.`,
+      );
     const userId = await resolveActingUserId(ctx);
     await assertOrgRole({ ...ctx, userId }, { org: ["Owner", "Admin"] });
     const original = await deps.source(ctx, input.kind, input.sourceId);
@@ -90,7 +102,7 @@ export function createConfigurationCloneProposeHandler(deps: {
         code: "conflict",
         reason: "clone_name_taken",
         message:
-          "This name already belongs to a record or proposal. Choose a new name.",
+          "Another configuration already holds this slug or name. Choose another.",
       });
     const github = createOnlyCloneGitHub(deps.github);
     const source = applyCloneIdentity(input);
@@ -175,7 +187,7 @@ export function createConfigurationCloneProposeHandler(deps: {
     });
     if (
       record.record.lineageId !== input.slug ||
-      record.record.title !== input.name ||
+      record.record.label !== input.name ||
       input.files.length
     )
       throw new HandlerError({

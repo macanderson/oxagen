@@ -38,11 +38,11 @@
     "ask_assistant": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Ask the assistant at the foot of the sidebar, and of the phone's nav drawer \u2014 the shell's assistant flyout, whose composer invokes ask_assistant inside a workspace (features/shell/assistant-flyout.tsx, features/shell/assistant-actions.ts)",
+      "entry": "Ask the assistant at the foot of the sidebar, and of the phone's nav drawer. The shell's assistant flyout asks inside a workspace, and its reply streams in over the API's chat stream, the streaming adapter that invokes ask_assistant (features/shell/assistant-flyout.tsx, features/shell/assistant-stream-client.ts)",
       "testid": "assistant-send",
-      "proof": "apps/app/src/features/shell/assistant-flyout.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session-7172f7a7-in-app-assistant"
+      "proof": "apps/app/src/features/shell/assistant-flyout.streaming.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
     },
     "assign_agent_role": {
       "route": "/[org]/[ws]/agents/[agent]",
@@ -92,6 +92,15 @@
       "proof": "apps/app/src/features/run/replay.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
+    },
+    "cancel_assistant_turn": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Stop in the assistant flyout's composer, which takes the place of Send while a turn is running and posts the turn's id to the [org]/[ws]/assistant/stop route (features/shell/assistant-send-or-stop.tsx, features/shell/assistant-stop.ts)",
+      "testid": "assistant-stop",
+      "proof": "apps/app/src/features/shell/assistant-flyout.stop.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session-622589c6-stella-r15-stop"
     },
     "change_member_role": {
       "route": "/[org]",
@@ -348,6 +357,15 @@
       "entry": "every workspace page: opening the assistant flyout reads get_assistant_engine for the workspace in the URL, and while the engine reports any state but ready the line above the composer names it, Send is held with that sentence as its description, and Check again and a window focus read it again (features/shell/use-engine-health.ts, features/shell/assistant-engine-notice.tsx, features/shell/engine-actions.ts, data/live/shell.ts, data/live/mappers/shell.ts)",
       "testid": "assistant-engine-down",
       "proof": "apps/app/src/features/shell/assistant-flyout.engine-health.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
+    },
+    "get_assistant_reply": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Load the finished reply, which the shell's assistant flyout offers when a turn's stream drops before the reply finishes. It reads get_assistant_reply by the run the stream named, in the workspace the question was asked in (features/shell/assistant-stream-reply.tsx, features/shell/assistant-actions.ts)",
+      "testid": "assistant-load-reply",
+      "proof": "apps/app/src/features/shell/assistant-flyout.streaming.test.tsx",
       "verifiedAt": "2026-09-25",
       "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
     },

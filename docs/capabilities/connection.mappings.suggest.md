@@ -40,6 +40,10 @@ Each suggestion object:
 - confidence: number (0.0-1.0)
 - reasoning: string (explanation shown in UI)
 
+## Roles
+
+An org Owner or Admin, or the workspace Owner. The handler checks the contract's roles and refuses anyone else with `forbidden` (`org_role_required`).
+
 ## Side effects
 
 LLM call for suggestion generation (ClickHouse telemetry). Creates

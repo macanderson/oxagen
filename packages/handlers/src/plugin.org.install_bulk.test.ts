@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// The handler's role gate (#4194) runs for real against a role fixture. The
+// default caller is an org Owner; a case that needs another sets roleGate.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
+
 // ── Mocks (hoisted) ──────────────────────────────────────────────────────────
 
 const mocks = vi.hoisted(() => ({
@@ -18,6 +24,7 @@ vi.mock("@oxagen/database/security", () => ({
 }));
 
 import { handler } from "./plugin.org.install_bulk";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -189,5 +196,33 @@ describe("plugin.org.install_bulk handler", () => {
     };
 
     expect(result.installed[0]?.error).toBe("raw string rejection");
+  });
+});
+
+// The contract grants org Owner or Admin. The kernel's IAM check allows every
+// capability for a non-enterprise org, so the handler is the only gate there
+// (#4194).
+describe("plugin.org.install_bulk handler — role gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetRoleGate();
+  });
+
+  it("refuses a workspace Member as forbidden and installs nothing", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(handler({ items: [ITEM_A] }, ctx)).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(mocks.installOne).not.toHaveBeenCalled();
+  });
+
+  it("allows an org Admin", async () => {
+    roleGate.roles = { org: "Admin" };
+    mocks.installOne.mockResolvedValueOnce(RESULT_A);
+    const out = (await handler({ items: [ITEM_A] }, ctx)) as {
+      installed: InstalledRow[];
+    };
+    expect(out.installed[0]?.orgListingId).toBe("listing-a");
   });
 });

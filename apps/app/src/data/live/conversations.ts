@@ -44,6 +44,7 @@ function toThreadMessage(message: StoredMessage): ThreadMessage | null {
       durationMs: call.durationMs,
       approvalId: call.approvalId,
     })),
+    stopped: message.stopped,
   };
 }
 

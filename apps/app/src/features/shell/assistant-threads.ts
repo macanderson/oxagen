@@ -32,7 +32,7 @@
 // time the flyout opens, it reads again.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssistantThread } from "@/data/contracts/conversations";
-import type { ParkedCard, ToolCallSummary } from "./assistant-actions";
+import type { ParkedCard, ToolCallSummary } from "./assistant-stream-client";
 import { loadAssistantThread } from "./assistant-thread-actions";
 
 /** One workspace's thread, whatever the flyout draws its entries as. */
@@ -55,22 +55,12 @@ export type RestoredEntry =
       runId: string;
       parked: readonly ParkedCard[];
       toolCalls: readonly ToolCallSummary[];
+      /** The person stopped it, so a reload shows the mark again (#4164). */
+      stopped: boolean;
     };
 
 /** Whether the read for the workspace on screen is out, or failed. */
 export type ThreadStatus = "idle" | "loading" | "failed";
-
-/** The prefix of a message's public id: every restored entry carries one. */
-const RESTORED_ID = /^msg_/;
-
-/**
- * Whether an entry was read back from the record rather than answered in this
- * page. A restored answer is shown whole: it was read before, and typing it
- * out again on every reload would replay a conversation as if it were new.
- */
-export function isRestoredEntry(id: string): boolean {
-  return RESTORED_ID.test(id);
-}
 
 /**
  * The recorded thread as entries. A question is `asked`; a reply is
@@ -101,6 +91,7 @@ function restoredEntries(thread: AssistantThread): readonly RestoredEntry[] {
           durationMs: call.durationMs,
           approvalId: call.approvalId,
         })),
+        stopped: message.stopped,
       });
     }
   }

@@ -189,6 +189,9 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "stopped": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -198,7 +201,8 @@
                     "createdAt",
                     "runId",
                     "parkedCards",
-                    "toolCalls"
+                    "toolCalls",
+                    "stopped"
                   ],
                   "additionalProperties": false
                 }

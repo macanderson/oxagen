@@ -204,6 +204,15 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "cancel_assistant_turn",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "change_member_role",
       "reads": [],
@@ -926,6 +935,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "assistant",
+      "name": "get_assistant_reply",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -4108,7 +4126,7 @@
       "writes": []
     }
   ],
-  "contentHash": "cef601806444e51e654e41db0a82950b6efa9976a973a06e1ea87538e0a0de31",
+  "contentHash": "8ee3d0b5d44aa3cbee321a4b535eb98dfd6a87da76a506a9b8b1001d69db3671",
   "domains": [
     {
       "name": "agent",
@@ -7634,6 +7652,12 @@
         },
         {
           "name": "parent_run_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "origin_message_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"

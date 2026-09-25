@@ -183,12 +183,14 @@ async function TabBody({
         source.tools.versions(ctx, {
           category: view.category,
           cursor: view.cursor,
+          serverId: view.provider,
         }),
         source.tools.mcpServers(ctx),
       ]);
       const total = await source.tools.versions(ctx, {
         category: null,
         cursor: null,
+        serverId: null,
       });
       return (
         <Registry
@@ -196,6 +198,7 @@ async function TabBody({
           orgRole={ctx.orgRole}
           names={view.names}
           category={view.category}
+          provider={view.provider}
           cursor={view.cursor}
           canImport={admin}
           canClassify={admin}
@@ -212,7 +215,11 @@ async function TabBody({
       // leaves the roster readable, and the other way round.
       const [servers, versions, connections, grants] = await Promise.all([
         source.tools.mcpServers(ctx),
-        source.tools.versions(ctx, { category: null, cursor: null }),
+        source.tools.versions(ctx, {
+          category: null,
+          cursor: null,
+          serverId: null,
+        }),
         source.tools.connections(ctx, { status: null, connectorId: null }),
         source.tools.grants(ctx, { cursor: view.cursor }),
       ]);
@@ -300,13 +307,17 @@ export async function Tools({
   source: DataSource;
   /** The tab the route resolved from its path segment or a legacy `?tab=`. */
   tab: ToolsTab;
-  /** The query the URL carried: `category`, `names`, `cursor`. */
+  /** The query the URL carried: `category`, `provider`, `names`, `cursor`. */
   searchParams: Readonly<Record<string, string | string[] | undefined>>;
 }) {
   const view = parseToolsView(tab, searchParams);
   const at: ToolsAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   const [registry, servers, board, members] = await Promise.all([
-    source.tools.versions(ctx, { category: null, cursor: null }),
+    source.tools.versions(ctx, {
+      category: null,
+      cursor: null,
+      serverId: null,
+    }),
     source.tools.mcpServers(ctx),
     source.tools.killSwitches(ctx),
     canAdministerOrg(ctx) ? source.org.members(ctx) : Promise.resolve(null),

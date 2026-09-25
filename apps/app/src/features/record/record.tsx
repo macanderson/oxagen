@@ -1,10 +1,11 @@
 // One published context record (#3395; ADR-061; MC spec §10.2;
 // mockups/pages/record.md), presented by its kind.
 //
-// The statement is the record, so the statement is the headline, and the
-// lineage, the commit and the counters read as the metadata they are. The
-// statement is editable in a real source editor, and saving opens a pull
-// request: a published record is changed the way it was published.
+// The label is the headline and the breadcrumb's last step, the slug under it
+// is the address that never changes (ADR-178), and the commit and the
+// counters read as the metadata they are. The statement is editable in a real
+// source editor, and saving opens a pull request: a published record is
+// changed the way it was published.
 //
 // The record is read through the repository binding, out of
 // `.oxagen/rules/<lineage>.toml` on the production branch, with the registry
@@ -184,7 +185,11 @@ export async function Record({
   const repository = fresh?.repository ?? null;
   return (
     <>
-      <PageRecord route="steering" id={lineage} />
+      <PageRecord
+        route="steering"
+        id={lineage}
+        label={detail.record.label ?? detail.record.title}
+      />
       <RecordWorkbench
         at={at}
         detail={detail}

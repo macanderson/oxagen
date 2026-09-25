@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The record page over a fake DataSource (#3395; mockups/pages/record.md): the
-// address it accepts, the header that leads with the statement, the editor,
+// address it accepts, the header that leads with the label, the editor,
 // the six kinds each drawing their own panel, the proposal and archive
 // dialogs, the related records, and the not-loaded states in the design's
 // words. Each render carries an axe check (INV-26).
@@ -25,6 +25,7 @@ import {
   type RecordKind,
 } from "@/data/contracts/steering";
 import { readError, readOk } from "@/data/read";
+import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -164,11 +165,72 @@ describe("Record › the address", () => {
 });
 
 describe("Record › the header", () => {
-  it("makes the statement the h1", async () => {
+  it("makes the label the h1 and prints the slug under it (ADR-178)", async () => {
+    await renderRecord({
+      record: readOk(
+        recordDetail({
+          record: {
+            ...publishedRecord({ label: "Read the changelog once" }),
+            status: "active",
+          },
+        }),
+      ),
+    });
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Read the changelog once",
+    );
+    expect(screen.getByTestId("record-slug").textContent).toBe(LINEAGE);
+    // The statement is not the headline, and it is still on the page, whole,
+    // in the editor under the header.
+    expect(
+      screen.getByTestId<HTMLTextAreaElement>("record-statement").value,
+    ).toBe("Do not re-read CHANGELOG.md after the first read in a run.");
+  });
+
+  it("falls back to the title while the record declares no label", async () => {
     await renderRecord();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
-      "Do not re-read CHANGELOG.md after the first read in a run.",
+      "Read CHANGELOG.md once per run",
     );
+    expect(screen.getByTestId("record-slug").textContent).toBe(LINEAGE);
+  });
+
+  it("names each property it shows", async () => {
+    await renderRecord();
+    const names = Array.from(
+      screen.getByTestId("record-chips").querySelectorAll("dt"),
+    ).map((dt) => dt.textContent);
+    expect(names).toEqual([
+      "Kind",
+      "Force",
+      "Effect",
+      "Scope",
+      "Status",
+      "Version",
+    ]);
+    expect(
+      screen.getByTestId("record-chips").querySelector('[data-term="version"]')
+        ?.textContent,
+    ).toBe("v3");
+  });
+
+  it("offers Clone, which opens the clone editor on this record's slug", async () => {
+    const receive = vi.fn((event: Event) => createRequestOf(event));
+    window.addEventListener(CREATE_EVENT, receive);
+    try {
+      await renderRecord();
+      fireEvent.click(
+        within(screen.getByTestId("record-header")).getByRole("button", {
+          name: "Clone",
+        }),
+      );
+      expect(receive).toHaveReturnedWith({
+        kind: "record",
+        cloneSourceRef: LINEAGE,
+      });
+    } finally {
+      window.removeEventListener(CREATE_EVENT, receive);
+    }
   });
 
   it("links Steering in the eyebrow back to the records", async () => {
@@ -179,7 +241,7 @@ describe("Record › the header", () => {
     expect(header.textContent).toContain("record");
   });
 
-  it("draws the chips in order: kind, force, effect, scope, published", async () => {
+  it("draws the chips in order: kind, force, effect, scope, published, version", async () => {
     await renderRecord();
     const chips = screen.getByTestId("record-chips");
     const terms = Array.from(chips.querySelectorAll("[data-term]")).map(
@@ -191,6 +253,7 @@ describe("Record › the header", () => {
       "constraint-effect",
       "scope",
       "status",
+      "version",
     ]);
     expect(chips.textContent).toContain("constraint");
     expect(chips.textContent).toContain("must");
@@ -682,9 +745,10 @@ describe("Record › Propose a change", () => {
       `acme/platform#528 opened. ${LINEAGE} changes when it merges; until then every run still gets the words that are in force now.`,
     );
     // The dialog is modal, so the page behind it is hidden from the
-    // accessibility tree; the h1 is read from the document.
+    // accessibility tree; the h1 is read from the document. The headline is
+    // the name, which a proposed statement does not change.
     expect(document.querySelector("h1")?.textContent).toBe(
-      "Do not re-read CHANGELOG.md after the first read in a run.",
+      "Read CHANGELOG.md once per run",
     );
     expect(
       screen.getByTestId("record-chips").querySelector('[data-term="pending"]')
@@ -798,17 +862,33 @@ describe("Record › Archive", () => {
 
 describe("Record › related records", () => {
   const at = { org: "acme", ws: "core-platform", lineage: LINEAGE };
+  // Each card leads with the record's label and sorts by it (ADR-178), so the
+  // fixture names each one. The statements keep the same words, because the
+  // list shows both and a card that read one way and sorted another would
+  // make a reordering test pass for the wrong reason.
   const others = [
-    publishedRecord({ id: "ctr_a1", lineage: "ctx.a.one", statement: "Beta" }),
-    publishedRecord({ id: "ctr_a2", lineage: "ctx.a.two", statement: "Alpha" }),
+    publishedRecord({
+      id: "ctr_a1",
+      lineage: "ctx.a.one",
+      label: "Beta",
+      statement: "Beta",
+    }),
+    publishedRecord({
+      id: "ctr_a2",
+      lineage: "ctx.a.two",
+      label: "Alpha",
+      statement: "Alpha",
+    }),
     publishedRecord({
       id: "ctr_a3",
       lineage: "ctx.a.three",
+      label: "Gamma",
       statement: "Gamma",
     }),
     publishedRecord({
       id: "ctr_a4",
       lineage: "ctx.a.four",
+      label: "Delta",
       statement: "Delta",
     }),
   ];
@@ -861,7 +941,7 @@ describe("Record › related records", () => {
           .getByTestId("record-related-list")
           .querySelectorAll("li p:first-of-type"),
       ).map((p) => p.textContent);
-    await user.selectOptions(screen.getByLabelText("Sort"), "Statement A–Z");
+    await user.selectOptions(screen.getByLabelText("Sort"), "Label A–Z");
     expect(list()).toEqual(["Alpha", "Beta", "Gamma"]);
     await user.type(screen.getByLabelText("Search records"), "gam");
     expect(list()).toEqual(["Gamma"]);
@@ -1048,6 +1128,11 @@ describe("Record › reads that did not answer and facts a record lacks", () => 
     expect(
       screen.getByTestId("record-chips").querySelector('[data-term="force"]'),
     ).toBeNull();
+    expect(
+      screen
+        .getByTestId("record-chips")
+        .querySelector('[data-state="not-recorded"]')?.textContent,
+    ).toBe("not recorded");
     expect(
       screen.getByTestId<HTMLTextAreaElement>("record-statement").value,
     ).toBe("");

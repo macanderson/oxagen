@@ -38,7 +38,7 @@ List the workspaces inside an organization the authenticated user belongs to. Ba
 
 ## Roles
 
-Org Owner, Org Admin, Org Member, Org Billing, Org Compliance, Org Viewer.
+Org: Owner, Admin, Billing, Compliance. Workspace: Owner, Member, Viewer. These are every role a person can hold. The handler lists workspaces only in an org the caller belongs to.
 
 ## Side effects
 

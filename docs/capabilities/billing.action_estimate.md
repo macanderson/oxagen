@@ -2,7 +2,7 @@
 
 **Domain:** billing
 **Mode:** sync
-**Scope:** org + workspace (Owner, Admin, Billing, Member)
+**Scope:** org + workspace (org Owner, Admin, or Billing, or workspace Owner, Member, or Viewer)
 **Surfaces:** api, mcp, agent
 **Risk level:** low
 **Capability name:** `preview_action_cost`
@@ -44,7 +44,7 @@ a charge.
 
 ## Roles
 
-Org: Owner, Admin, Billing, Member. Workspace: none.
+Org: Owner, Admin, Billing. Workspace: Owner, Member, Viewer.
 
 ## Side effects
 

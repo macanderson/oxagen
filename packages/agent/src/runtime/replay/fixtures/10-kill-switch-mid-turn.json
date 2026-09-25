@@ -1,0 +1,145 @@
+{
+  "turn": "10 a kill switch flipped mid-turn refuses the call",
+  "question": "What did run arun_replay3 cost?",
+  "source": "hand-authored",
+  "gates": {
+    "killSwitchMidTurn": ["get_run_cost"]
+  },
+  "handlers": {
+    "get_run_cost": {
+      "runId": "arun_replay3",
+      "rollup": {
+        "cost": {
+          "micros": "412000",
+          "currency": "USD",
+          "basis": "gateway_observed"
+        },
+        "tokens": {
+          "input_uncached": 48000,
+          "cache_read": 120000,
+          "cache_write_5m": 0,
+          "cache_write_1h": 0,
+          "output": 6100,
+          "reasoning": 0
+        },
+        "cacheHitRate": 0.71,
+        "turns": 3,
+        "steps": 12,
+        "modelCalls": 9,
+        "toolCalls": 14,
+        "retries": 0,
+        "productiveRatio": null,
+        "byModel": [],
+        "byTool": [
+          {
+            "name": "create_pull_request",
+            "calls": 1
+          }
+        ],
+        "priceEntryIds": [],
+        "rolledUpAt": "2026-09-24T09:05:00.000Z",
+        "isEstimate": false
+      },
+      "provisional": null
+    }
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What did run arun_replay3 cost?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "get_run_cost",
+      "input": {
+        "runId": "arun_replay3"
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "get_run_cost",
+          "input": {
+            "runId": "arun_replay3"
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What did run arun_replay3 cost?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "A kill switch turned off run cost reads while I was answering."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "A kill switch turned off run cost reads while I was answering.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["get_run_cost"],
+    "gates": ["emergency_denies none", "kill_switch get_run_cost hit"],
+    "ledger": [
+      "model completed",
+      "tool get_run_cost denied",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["refused_by_policy"],
+    "refusals": ["kill_switch"],
+    "invocations": ["get_run_cost failed KillSwitchDeniedError"],
+    "approvals": [],
+    "answer": "A kill switch turned off run cost reads while I was answering."
+  }
+}

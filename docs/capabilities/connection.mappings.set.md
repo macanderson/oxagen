@@ -32,6 +32,10 @@ Each mapping object:
 | mappingsUpdated | number | Count of updated mappings |
 | connectionStatus | string | Updated connection status |
 
+## Roles
+
+An org Owner or Admin, or the workspace Owner. The handler checks the contract's roles and refuses anyone else with `forbidden` (`org_role_required`).
+
 ## Side effects
 
 Creates or updates rows in Postgres connection_mappings table. If

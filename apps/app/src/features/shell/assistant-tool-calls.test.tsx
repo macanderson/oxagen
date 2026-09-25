@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import type { ToolCallSummary } from "./assistant-actions";
+import type { ToolCallSummary } from "./assistant-stream-client";
 import { AssistantToolCalls, toolLabel } from "./assistant-tool-calls";
 
 const APPROVAL = "0a1b2c3d-0000-4000-8000-00000000a001";

@@ -160,6 +160,12 @@ export interface CreateRunInput {
   retentionPolicyRowId: string;
   /** Internal uuid of the pinned repository binding; null for a general run. */
   repositoryBindingRowId: string | null;
+  /**
+   * The chat message that asked for the run: an in-app assistant turn's user
+   * message, whose id the turn meters its model calls on (#4167). Omitted or
+   * null for every other run.
+   */
+  originMessageId?: string | null;
 }
 
 /** The engine binary that actually executed — pinned on the attempt row. */
@@ -1279,7 +1285,8 @@ export function buildCreateRunSql(
         repository_binding_id, repository_provider, provider_repository_id,
         repository_connection_id, configured_default_ref,
         base_commit_sha, base_tree_sha,
-        retention_policy_id, retention_policy_digest, max_attempts
+        retention_policy_id, retention_policy_digest, max_attempts,
+        origin_message_id
       )
       VALUES (
         ${publicId},
@@ -1307,7 +1314,8 @@ export function buildCreateRunSql(
         ${repository?.base_tree_sha ?? null},
         ${input.retentionPolicyRowId}::uuid,
         ${spec.context_policy.retention_policy_digest},
-        ${spec.engine_policy.max_attempts}
+        ${spec.engine_policy.max_attempts},
+        ${input.originMessageId ?? null}::uuid
       )
       RETURNING *
     )

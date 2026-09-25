@@ -40,11 +40,22 @@
 // of winning it: there is no timing at which a reply can reach the wrong
 // thread.
 //
-// Stopping a turn on purpose is a different thing from walking away from it,
-// and it is not here. It belongs to run controls (#2953), whose job is to
-// cancel any run through one mechanism rather than one per surface. An
-// assistant turn is recorded as a run, so that mechanism will cover it. It
-// does not exist yet: today nothing stops a turn once it is asked.
+// A reply streams in as the engine writes it (ADR-176), over the API's chat
+// stream (`assistant-stream-client.ts`), with each tool call named while it
+// runs. The stream is not the turn: a connection that drops mid-reply keeps
+// what arrived, the turn runs on and saves its reply with the run (ADR-092),
+// and the person can load the finished reply (`get_assistant_reply`) instead
+// of asking again.
+//
+// Stopping a turn on purpose is a different thing from walking away from it
+// (#4164). While a turn runs, the composer's Send is Stop
+// (`assistant-send-or-stop.tsx`). The flyout names each turn with a uuid it
+// mints and sends with the question, and Stop posts that id to the workspace
+// the turn was asked in. The server cancels the engine's turn and records the
+// run as cancelled, and the stream ends with what the turn had written, which
+// the flyout shows marked Stopped. Closing the flyout, leaving the workspace
+// or losing the connection never stops anything. Run controls for every run
+// (#2953) are a separate thing.
 //
 // Each answer names the run it was recorded as, and links it. `list_runs`
 // excludes the `chat` and `api-chat` surfaces — the assistant is Oxagen's, and
@@ -105,7 +116,7 @@
 // container renders on every pass and only its contents are conditional: a
 // polite region inserted in the same commit as its own text is announced
 // unreliably.
-import { CircleAlert, Send } from "lucide-react";
+import { CircleAlert } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -122,23 +133,35 @@ import {
   assistantDraftOf,
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
-import {
-  askAssistant,
-  type ParkedCard,
-  type ToolCallSummary,
-} from "./assistant-actions";
+import { readAssistantReply } from "./assistant-actions";
 import {
   ASSISTANT_ENGINE_REASON_ID,
   AssistantEngineNotice,
 } from "./assistant-engine-notice";
+import { AssistantMarkdown } from "./assistant-markdown";
 import { AssistantParkedApprovals } from "./assistant-parked-approvals";
-import { AssistantStreamingText } from "./assistant-streaming-text";
+import { AssistantReplyCost } from "./assistant-reply-cost";
+import {
+  askAssistantStream,
+  type AssistantRefusal,
+  type ParkedCard,
+  type ToolCallSummary,
+} from "./assistant-stream-client";
+import {
+  AssistantAnswering,
+  AssistantDropped,
+  type DroppedLoad,
+  type StreamedTool,
+} from "./assistant-stream-reply";
+import {
+  AssistantSendOrStop,
+  requestAssistantStop,
+} from "./assistant-send-or-stop";
 import { AssistantSuggestions } from "./assistant-suggestions";
 import { AssistantToolCalls } from "./assistant-tool-calls";
 import { AssistantThinking } from "./assistant-thinking";
 import { AssistantThreadBar } from "./assistant-thread-bar";
 import {
-  isRestoredEntry,
   type RestoredEntry,
   type ThreadState,
   useAssistantThreads,
@@ -163,7 +186,26 @@ import { SafeLink, useNavigate } from "@/ui/navigation";
 import { StellaIcon, StellaWordmark } from "@/ui/stella-mark";
 
 type Entry =
-  | { kind: "asked"; id: string; text: string }
+  | {
+      kind: "asked";
+      id: string;
+      text: string;
+      /**
+       * The turn this question started, for Stop: the id the flyout minted
+       * and the workspace it was asked in. A question read back from the
+       * record has none, because its turn is over.
+       */
+      turn?: RunningTurn;
+    }
+  /** A reply the engine is still writing, painted as it arrives. */
+  | {
+      kind: "answering";
+      id: string;
+      text: string;
+      runId: string | null;
+      tools: readonly StreamedTool[];
+      parked: readonly ParkedCard[];
+    }
   | {
       kind: "answered";
       id: string;
@@ -171,6 +213,21 @@ type Entry =
       runId: string;
       parked: readonly ParkedCard[];
       toolCalls: readonly ToolCallSummary[];
+      /** The person stopped it, so `text` is what it reached before the stop. */
+      stopped?: boolean;
+    }
+  /** A reply whose stream dropped. The turn ran on and saves its reply. */
+  | {
+      kind: "dropped";
+      id: string;
+      text: string;
+      runId: string | null;
+      parked: readonly ParkedCard[];
+      /** The workspace the question was asked in, which the load reads. */
+      org: string;
+      ws: string;
+      question: string;
+      load: DroppedLoad;
     }
   | {
       kind: "refused";
@@ -181,6 +238,23 @@ type Entry =
       /** The question that was refused, so "Ask again" can send it unchanged. */
       question: string;
     };
+
+type AnsweringEntry = Extract<Entry, { kind: "answering" }>;
+type DroppedEntry = Extract<Entry, { kind: "dropped" }>;
+
+/** A turn Stop can reach: its id, and the workspace it runs in. */
+type RunningTurn = { id: string; org: string; ws: string };
+
+/**
+ * The turn a waiting thread is waiting on: the one its newest question
+ * started. Read from the entry, not from the page, because the person may be
+ * on another workspace, and the thread can be filed under the workspace's id
+ * while the turn runs.
+ */
+function runningTurnOf(entries: readonly Entry[]): RunningTurn | null {
+  const newest = entries.findLast((entry) => entry.kind === "asked");
+  return newest?.kind === "asked" ? (newest.turn ?? null) : null;
+}
 
 /**
  * One workspace's conversation with the assistant: what was said, the
@@ -347,7 +421,7 @@ function recordOnPage(
   return found;
 }
 
-type Refused = Extract<Awaited<ReturnType<typeof askAssistant>>, { ok: false }>;
+type Refused = AssistantRefusal;
 
 function refusalKey(result: Refused): Refusal {
   switch (result.reason) {
@@ -487,17 +561,14 @@ export function AssistantFlyout({
       open: assistantOpen,
       restore: restoreEntry,
     });
-  // Answers whose reveal has already run. Only the thread on screen is
-  // mounted, so a workspace round trip remounts every answer in it; without
-  // this each would start over from nothing and the transcript would retype.
-  const [revealed, setRevealed] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  // Whether the reader is at the bottom of the transcript. A reveal grows the
-  // newest answer frame by frame, which the `entries` effect below never sees,
-  // so the growth follows the tail only while the reader has not scrolled up
-  // to read something else.
+  // Whether the reader is at the bottom of the transcript. A streamed reply
+  // grows fragment by fragment, and the growth follows the tail only while the
+  // reader has not scrolled up to read something else.
   const pinnedRef = useRef(true);
+  // The turn whose stop is on its way or has been taken, so Stop does not
+  // send twice, and the turn whose stop failed, so the flyout can say so.
+  const [stopping, setStopping] = useState<string | null>(null);
+  const [stopFailed, setStopFailed] = useState<string | null>(null);
 
   // The workspace whose thread is on screen. An organization page is not a
   // switch (it has no conversation of its own), so it keeps showing the last
@@ -524,6 +595,8 @@ export function AssistantFlyout({
   const thread: Thread =
     shownScope === null ? EMPTY_THREAD : (threadOf(shownScope) ?? EMPTY_THREAD);
   const { entries, draft, pending } = thread;
+  // What Stop would end: the turn this thread is waiting on.
+  const running = pending ? runningTurnOf(entries) : null;
   const threadOrg = shownSlugs?.org;
   const threadWs = shownSlugs?.ws;
 
@@ -613,26 +686,21 @@ export function AssistantFlyout({
     return release;
   }, [modal]);
 
-  // Keep the newest turn in view. Guarded because scrollTo is a browser
-  // affordance jsdom does not implement, and the shell's own tests mount this
-  // host on every render — a cosmetic scroll must not fail them.
+  // Keep the newest turn in view. A new entry, such as the question just
+  // asked, always scrolls to it. A streamed reply growing in place follows
+  // the tail only while the reader is pinned there. Guarded because scrollTo
+  // is a browser affordance jsdom does not implement, and the shell's own
+  // tests mount this host on every render — a cosmetic scroll must not fail
+  // them.
+  const entryCountRef = useRef(entries.length);
   useEffect(() => {
     const log = logRef.current;
+    const added = entries.length !== entryCountRef.current;
+    entryCountRef.current = entries.length;
     if (log === null || typeof log.scrollTo !== "function") return;
+    if (!added && !pinnedRef.current) return;
     log.scrollTo({ top: log.scrollHeight });
   }, [entries]);
-
-  /** Follow a growing answer down, unless the reader has scrolled away from the bottom. */
-  function followReveal() {
-    const log = logRef.current;
-    if (
-      log === null ||
-      !pinnedRef.current ||
-      typeof log.scrollTo !== "function"
-    )
-      return;
-    log.scrollTo({ top: log.scrollHeight });
-  }
 
   // The width the person left the panel at. The cookie is read as a store:
   // the server renders the designed width, and the first client read corrects
@@ -707,6 +775,9 @@ export function AssistantFlyout({
       return;
     nextIdRef.current += 1;
     const id = `t${nextIdRef.current.toString()}`;
+    // The turn's name, minted here so Stop can name it while the question is
+    // still in flight (#4164).
+    const turnId = crypto.randomUUID();
     /**
      * The thread this turn belongs to, fixed now. Everything it produces goes
      * back to this thread: the reply, the run, the conversation id, a refusal,
@@ -717,8 +788,9 @@ export function AssistantFlyout({
      *
      * One thread holds at most one turn in flight, so nothing races this one
      * for `conversationId`. Two layers hold it, and each is enough on its own:
-     * the composer is `disabled` while its thread is `pending`, and the check
-     * at the top of this function refuses a submit that reaches it anyway.
+     * the composer is `disabled` while its thread is `pending`, and its button
+     * is Stop rather than Send, and the check at the top of this function
+     * refuses a submit that reaches it anyway.
      * Both survive the person leaving and coming back, because leaving no
      * longer clears `pending`. The two tests named "refuses a second question
      * …" fail only when both layers are gone, which is what "each is enough"
@@ -727,36 +799,100 @@ export function AssistantFlyout({
      */
     const asked = scope;
     const { conversationId } = thread;
+    const answeringId = `${id}-s`;
     updateThread(asked, (t) => ({
       ...t,
-      entries: [...t.entries, { kind: "asked", id, text: content }],
+      entries: [
+        ...t.entries,
+        { kind: "asked", id, text: content, turn: { id: turnId, org, ws } },
+        {
+          kind: "answering",
+          id: answeringId,
+          text: "",
+          runId: null,
+          tools: [],
+          parked: [],
+        },
+      ],
       ...(fromDraft ? { draft: "", draftTooLong: false } : {}),
       pending: true,
     }));
+    /** Change this turn's reply in progress, in the thread it was asked in. */
+    const answering = (change: (entry: AnsweringEntry) => Entry) => {
+      updateThread(asked, (t) => ({
+        ...t,
+        entries: t.entries.map((entry) =>
+          entry.id === answeringId && entry.kind === "answering"
+            ? change(entry)
+            : entry,
+        ),
+      }));
+    };
+    // Parked writes counted as they stream in, for the refresh a dropped
+    // stream still owes: the approval is on the record either way.
+    let parkedSeen = 0;
     try {
       const entityId = recordOnPage(declaredRecord, rest[1]);
       const entityLabel = labelOnPage(declaredRecord, entityId);
-      const result = await askAssistant(org, ws, {
-        conversationId,
-        content,
-        route,
-        entityId,
-        // Only a page that named its record sends a label.
-        ...(entityLabel === null ? {} : { entityLabel }),
-      });
+      const result = await askAssistantStream(
+        org,
+        ws,
+        {
+          conversationId,
+          content,
+          route,
+          turnId,
+          entityId,
+          // Only a page that named its record sends a label.
+          ...(entityLabel === null ? {} : { entityLabel }),
+        },
+        {
+          onRun: (runId) => {
+            answering((entry) => ({ ...entry, runId }));
+          },
+          onText: (delta) => {
+            answering((entry) => ({ ...entry, text: entry.text + delta }));
+          },
+          onToolStart: (call) => {
+            const started: StreamedTool = { ...call, status: "running" };
+            answering((entry) => ({
+              ...entry,
+              tools: [...entry.tools, started],
+            }));
+          },
+          onToolEnd: (call) => {
+            answering((entry) => ({
+              ...entry,
+              tools: entry.tools.map((tool) =>
+                tool.id === call.id ? { ...tool, status: call.status } : tool,
+              ),
+            }));
+          },
+          onParked: (card) => {
+            parkedSeen += 1;
+            answering((entry) => ({
+              ...entry,
+              parked: [...entry.parked, card],
+            }));
+          },
+        },
+      );
       if (result.ok) {
-        const answered: Entry = {
+        const { value } = result;
+        // A new entry rather than the one in progress changed in place, so
+        // the log announces the finished reply whole, once.
+        answering(() => ({
           kind: "answered",
           id: `${id}-a`,
-          text: result.value.reply,
-          runId: result.value.runId,
-          parked: result.value.parkedCards,
-          toolCalls: result.value.toolCalls,
-        };
+          text: value.reply,
+          runId: value.runId,
+          parked: value.parkedCards,
+          toolCalls: value.toolCalls,
+          stopped: value.stopped,
+        }));
         updateThread(asked, (t) => ({
           ...t,
-          conversationId: result.value.conversationId,
-          entries: [...t.entries, answered],
+          conversationId: value.conversationId,
         }));
         // A parked write is a new approval on the record, created after Fleet
         // and the shell's waiting count were server-rendered
@@ -772,34 +908,43 @@ export function AssistantFlyout({
         // The shell's waiting count spans the organization, so it is stale
         // wherever they are standing, and the parked notice itself waits in
         // this turn's thread for when they come back.
-        if (result.value.parkedCards.length > 0) navigate.refresh();
+        if (value.parkedCards.length > 0) navigate.refresh();
+      } else if (result.reason === "dropped") {
+        // The stream ended early and the turn did not (ADR-092). What arrived
+        // stays, and the finished reply can be loaded from the run.
+        answering((entry) => ({
+          kind: "dropped",
+          id: `${id}-d`,
+          text: entry.text,
+          runId: result.runId ?? entry.runId,
+          parked: entry.parked,
+          org,
+          ws,
+          question: content,
+          load: "idle",
+        }));
+        if (parkedSeen > 0) navigate.refresh();
       } else {
-        const refused: Entry = {
+        // A refusal mid-stream saves nothing as a reply, so what arrived
+        // before it is not kept as one.
+        answering(() => ({
           kind: "refused",
           id: `${id}-a`,
           code: refusalKey(result),
           detail: refusalDetail(result),
           question: content,
-        };
-        updateThread(asked, (t) => ({
-          ...t,
-          entries: [...t.entries, refused],
         }));
         // The turn found the engine down, so read it again past the cache:
         // the line above the composer then says so before the next question.
         if (refusalKey(result) === "engine") void engine.check();
       }
     } catch {
-      const unavailable: Entry = {
+      answering(() => ({
         kind: "refused",
         id: `${id}-a`,
         code: "unavailable",
         detail: null,
         question: content,
-      };
-      updateThread(asked, (t) => ({
-        ...t,
-        entries: [...t.entries, unavailable],
       }));
     } finally {
       updateThread(asked, (t) => ({ ...t, pending: false }));
@@ -807,6 +952,74 @@ export function AssistantFlyout({
       // person has not read yet if the panel was closed while it ran.
       noteAssistantReply();
     }
+  }
+
+  /**
+   * Load the finished reply of a turn whose stream dropped, from the run it
+   * was recorded as, into the thread it was asked in. A reply still being
+   * saved, or a turn that ended without one, says so and keeps the entry.
+   */
+  async function loadReply(key: string, dropped: DroppedEntry) {
+    const { runId } = dropped;
+    if (runId === null) return;
+    const settle = (change: (entry: DroppedEntry) => Entry) => {
+      updateThread(key, (t) => ({
+        ...t,
+        entries: t.entries.map((entry) =>
+          entry.id === dropped.id && entry.kind === "dropped"
+            ? change(entry)
+            : entry,
+        ),
+      }));
+    };
+    settle((entry) => ({ ...entry, load: "loading" }));
+    try {
+      const result = await readAssistantReply(dropped.org, dropped.ws, runId);
+      if (!result.ok) {
+        settle((entry) => ({ ...entry, load: "unread" }));
+        return;
+      }
+      const found = result.value;
+      if (found.state !== "answered") {
+        settle((entry) => ({ ...entry, load: found.state }));
+        return;
+      }
+      settle((entry) => ({
+        kind: "answered",
+        id: `${entry.id}-a`,
+        text: found.reply,
+        runId,
+        parked: entry.parked,
+        // `get_assistant_reply` answers the reply, not the run's tool calls,
+        // so a reply recovered after a dropped stream lists none. Reading the
+        // thread back lists them from the run (`get_conversation`).
+        toolCalls: [],
+        stopped: found.stopped,
+      }));
+      // The next question continues the conversation the reply was saved in,
+      // unless the thread has started another since the stream dropped.
+      updateThread(key, (t) =>
+        t.conversationId === null
+          ? { ...t, conversationId: found.conversationId }
+          : t,
+      );
+    } catch {
+      settle((entry) => ({ ...entry, load: "unread" }));
+    }
+  }
+
+  /**
+   * Stop the running turn. The turn is stopped on the server, and its stream
+   * ends with what it had written, which carries the mark.
+   */
+  async function stop() {
+    if (running === null) return;
+    const turn = running;
+    setStopping(turn.id);
+    setStopFailed(null);
+    if (await requestAssistantStop(turn.org, turn.ws, turn.id)) return;
+    setStopping(null);
+    setStopFailed(turn.id);
   }
 
   return (
@@ -915,18 +1128,35 @@ export function AssistantFlyout({
                   <p className="ml-auto w-fit max-w-[85%] rounded-lg bg-secondary px-3 py-2 text-sm text-secondary-foreground">
                     {entry.text}
                   </p>
+                ) : entry.kind === "answering" ? (
+                  <AssistantAnswering text={entry.text} tools={entry.tools} />
+                ) : entry.kind === "dropped" ? (
+                  <AssistantDropped
+                    text={entry.text}
+                    runId={entry.runId}
+                    load={entry.load}
+                    org={entry.org}
+                    ws={entry.ws}
+                    retryDisabled={pending}
+                    onLoad={() => {
+                      if (shownScope !== null)
+                        void loadReply(shownScope, entry);
+                    }}
+                    onRetry={() => {
+                      void send(entry.question, { fromDraft: false });
+                    }}
+                  />
                 ) : entry.kind === "answered" ? (
                   <div data-testid="assistant-answer">
-                    <AssistantStreamingText
-                      text={entry.text}
-                      reveal={
-                        !revealed.has(entry.id) && !isRestoredEntry(entry.id)
-                      }
-                      onRevealed={() => {
-                        setRevealed((prior) => new Set(prior).add(entry.id));
-                      }}
-                      onGrow={followReveal}
-                    />
+                    <AssistantMarkdown>{entry.text}</AssistantMarkdown>
+                    {entry.stopped === true ? (
+                      <p
+                        data-testid="assistant-stopped"
+                        className="mt-1 text-[12px] text-muted-foreground"
+                      >
+                        {t("stopped")}
+                      </p>
+                    ) : null}
                     <p
                       data-testid="assistant-recorded-as"
                       className="mt-1 font-mono text-[11px] text-muted-foreground"
@@ -944,6 +1174,13 @@ export function AssistantFlyout({
                       )}
                     </p>
                     <AssistantToolCalls calls={entry.toolCalls} />
+                    {/* What the run cost, from its record (#4167). */}
+                    {shownScope === null ? null : (
+                      <AssistantReplyCost
+                        scope={shownScope}
+                        runId={entry.runId}
+                      />
+                    )}
                     {entry.parked.length === 0 ? null : (
                       <p
                         data-testid="assistant-parked"
@@ -1048,22 +1285,22 @@ export function AssistantFlyout({
                 }}
                 className="min-h-10 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
               />
-              <button
-                type="submit"
-                aria-label={t("composer.send")}
-                aria-disabled={
-                  pending || engineDown || draft.trim() === "" || undefined
+              <AssistantSendOrStop
+                stop={
+                  running === null
+                    ? null
+                    : {
+                        onStop: () => {
+                          void stop();
+                        },
+                        stopping: stopping === running.id,
+                      }
                 }
-                aria-describedby={
-                  engineDown ? ASSISTANT_ENGINE_REASON_ID : undefined
+                sendDisabled={pending || engineDown || draft.trim() === ""}
+                unavailableReasonId={
+                  engineDown ? ASSISTANT_ENGINE_REASON_ID : null
                 }
-                data-testid="assistant-send"
-                className={`mb-0.5 grid size-8 flex-none place-items-center rounded-md bg-gold text-on-gold focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 ${
-                  engineDown ? "cursor-not-allowed opacity-60" : ""
-                }`}
-              >
-                <Send aria-hidden="true" className="size-4" />
-              </button>
+              />
             </div>
             {/*
               The send key for the person's setting. The app does not detect
@@ -1078,6 +1315,15 @@ export function AssistantFlyout({
                 ? t("composer.sendHintEnter")
                 : t("composer.sendHintModEnter")}
             </p>
+            {running !== null && stopFailed === running.id ? (
+              <p
+                role="alert"
+                data-testid="assistant-stop-failed"
+                className="mt-2 text-sm text-muted-foreground"
+              >
+                {t("composer.stopFailed")}
+              </p>
+            ) : null}
             {thread.draftTooLong ? (
               <p role="alert" className="mt-2 text-sm text-muted-foreground">
                 {t("composer.draftTooLong")}

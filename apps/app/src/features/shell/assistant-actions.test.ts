@@ -1,10 +1,12 @@
-// The assistant turn through the real kernel seam: the viewer resolution and
-// the kernel's invoke() are the only fakes, so each case shows what the person
-// gets back and what ask_assistant was asked.
+// Loading the finished reply of a turn whose stream dropped, and stopping a
+// running turn (#4164), through the real kernel seam: the viewer resolution
+// and the kernel's invoke() are the only fakes, so each case shows what the
+// flyout gets back and what get_assistant_reply or cancel_assistant_turn was
+// asked.
 //
-// `ask_assistant` is workspace-scoped, so the viewer this action resolves is a
-// WsCtx. A turn run at organization scope would be refused by the kernel for
-// want of a scope, which is why the flyout offers no composer outside one.
+// Both are workspace-scoped, because a turn and its reply belong to the
+// workspace the question was asked in, so the viewer each action resolves is
+// a WsCtx.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
@@ -29,7 +31,9 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { askAssistant } = await import("./assistant-actions");
+const { readAssistantReply, stopAssistantTurn } = await import(
+  "./assistant-actions"
+);
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -43,23 +47,9 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
-const REPLY = {
-  conversationId: "6f1f5a8e-0000-4000-8000-00000000c0de",
-  conversationPublicId: "cnv_01k9c0de",
-  userMessageId: "6f1f5a8e-0000-4000-8000-00000000a111",
-  assistantMessageId: "6f1f5a8e-0000-4000-8000-00000000a222",
-  runId: "arun_01k9",
-  reply: "Three runs are live.",
-  parkedCards: [],
-  toolCalls: [],
-};
-
-const onFleet = {
-  conversationId: null,
-  content: "what is live?",
-  route: "fleet",
-  entityId: null,
-};
+const RUN = "arun_01k9";
+const CONVERSATION = "6f1f5a8e-0000-4000-8000-00000000c0de";
+const TURN_ID = "0192d4a8-7c1e-7a00-8000-0000000000f1";
 
 beforeEach(() => {
   invoke.mockReset();
@@ -67,118 +57,141 @@ beforeEach(() => {
   requireViewer.mockResolvedValue(ctx);
 });
 
-describe("askAssistant", () => {
-  it("resolves a workspace viewer, never an organization one", async () => {
-    invoke.mockResolvedValue(REPLY);
-    await askAssistant("acme", "core-platform", onFleet);
+describe("readAssistantReply", () => {
+  it("resolves the viewer of the workspace the question was asked in, and asks for the run", async () => {
+    invoke.mockResolvedValue({ runId: RUN, runStatus: "running", reply: null });
+    await readAssistantReply("acme", "core-platform", RUN);
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
-  });
-
-  it("takes the turn and answers with the reply the handler returned", async () => {
-    invoke.mockResolvedValue(REPLY);
-    const result = await askAssistant("acme", "core-platform", onFleet);
-    expect(result).toEqual({ ok: true, value: REPLY });
     expect(invoke).toHaveBeenCalledWith(
-      "ask_assistant",
-      {
-        conversationId: null,
-        content: "what is live?",
-        pageContext: {
-          route: "fleet",
-          orgSlug: "acme",
-          workspaceSlug: "core-platform",
-          entityId: null,
-          entityLabel: null,
-        },
-      },
-      expect.anything(),
+      "get_assistant_reply",
+      { runId: RUN },
+      expect.objectContaining({ workspaceId: ctx.workspaceId }),
     );
   });
 
-  it("carries the page the question was asked from, so the agent is asked about what is on screen", async () => {
-    invoke.mockResolvedValue(REPLY);
-    await askAssistant("acme", "core-platform", {
-      conversationId: null,
-      content: "why did this fail?",
-      route: "runs",
-      entityId: "arun_01k9",
+  it("answers the saved reply and the conversation it continues", async () => {
+    invoke.mockResolvedValue({
+      runId: RUN,
+      runStatus: "completed",
+      reply: { conversationId: CONVERSATION, text: "Three runs are live." },
     });
-    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      pageContext: { route: "runs", entityId: "arun_01k9", entityLabel: null },
-    });
-  });
-
-  // The Run page names its run, so a question asked there reaches the turn
-  // with the title the person sees beside the id the agent can look up.
-  it("forwards the label the page gave its record, beside the record's id", async () => {
-    invoke.mockResolvedValue(REPLY);
-    const result = await askAssistant("acme", "core-platform", {
-      conversationId: null,
-      content: "why did this fail?",
-      route: "runs",
-      entityId: "arun_01k9",
-      entityLabel: "Fix the flaky checkout test",
-    });
-    expect(result).toEqual({ ok: true, value: REPLY });
-    expect(invoke.mock.calls[0]?.[1]).toEqual({
-      conversationId: null,
-      content: "why did this fail?",
-      pageContext: {
-        route: "runs",
-        orgSlug: "acme",
-        workspaceSlug: "core-platform",
-        entityId: "arun_01k9",
-        entityLabel: "Fix the flaky checkout test",
+    await expect(
+      readAssistantReply("acme", "core-platform", RUN),
+    ).resolves.toEqual({
+      ok: true,
+      value: {
+        state: "answered",
+        conversationId: CONVERSATION,
+        reply: "Three runs are live.",
+        stopped: false,
       },
     });
   });
 
-  // The flyout cuts a long label before it sends one. A label that arrives
-  // past the cap anyway is refused as invalid by the contract, before the
-  // turn starts, rather than reaching the model.
-  it("refuses a label past the contract's cap before the turn starts (negative)", async () => {
-    const result = await askAssistant("acme", "core-platform", {
-      conversationId: null,
-      content: "why did this fail?",
-      route: "runs",
-      entityId: "arun_01k9",
-      entityLabel: "x".repeat(257),
+  // A turn the person stopped keeps the words it wrote, and its run is sealed
+  // cancelled (#4164), so a stream that dropped after the stop loads them
+  // marked.
+  it("answers a cancelled run's saved reply as stopped", async () => {
+    invoke.mockResolvedValue({
+      runId: RUN,
+      runStatus: "cancelled",
+      reply: { conversationId: CONVERSATION, text: "Three runs" },
     });
-    expect(result).toMatchObject({
+    await expect(
+      readAssistantReply("acme", "core-platform", RUN),
+    ).resolves.toEqual({
+      ok: true,
+      value: {
+        state: "answered",
+        conversationId: CONVERSATION,
+        reply: "Three runs",
+        stopped: true,
+      },
+    });
+  });
+
+  it.each(["pending", "running", "completed"])(
+    "reads a run that is %s with no reply saved as still running",
+    async (runStatus) => {
+      invoke.mockResolvedValue({ runId: RUN, runStatus, reply: null });
+      await expect(
+        readAssistantReply("acme", "core-platform", RUN),
+      ).resolves.toEqual({ ok: true, value: { state: "running" } });
+    },
+  );
+
+  it.each(["failed", "cancelled"])(
+    "reads a run that %s with no reply as ended (negative)",
+    async (runStatus) => {
+      invoke.mockResolvedValue({ runId: RUN, runStatus, reply: null });
+      await expect(
+        readAssistantReply("acme", "core-platform", RUN),
+      ).resolves.toEqual({ ok: true, value: { state: "ended" } });
+    },
+  );
+
+  it("answers not_found with its reason for a run the handler does not hold (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({ code: "not_found", reason: "run_not_found" }),
+    );
+    await expect(
+      readAssistantReply("acme", "core-platform", RUN),
+    ).resolves.toMatchObject({
       ok: false,
-      reason: "invalid",
-      field: "pageContext.entityLabel",
+      reason: "not_found",
+      code: "run_not_found",
     });
+  });
+
+  it("answers denied when the handler refuses the person's role (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      }),
+    );
+    await expect(
+      readAssistantReply("acme", "core-platform", RUN),
+    ).resolves.toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+describe("stopAssistantTurn", () => {
+  it("stops the viewer's own turn in the workspace, by the id it was asked under", async () => {
+    invoke.mockResolvedValue({ turnId: TURN_ID, found: true });
+    const result = await stopAssistantTurn("acme", "core-platform", TURN_ID);
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "cancel_assistant_turn",
+      { turnId: TURN_ID },
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: { turnId: TURN_ID, found: true },
+    });
+  });
+
+  it("answers found false for a turn that is not running, not an error", async () => {
+    invoke.mockResolvedValue({ turnId: TURN_ID, found: false });
+    const result = await stopAssistantTurn("acme", "core-platform", TURN_ID);
+    expect(result).toEqual({
+      ok: true,
+      value: { turnId: TURN_ID, found: false },
+    });
+  });
+
+  it("refuses an id that is not a uuid before the kernel is asked (negative)", async () => {
+    const result = await stopAssistantTurn("acme", "core-platform", "t1");
+    expect(result).toMatchObject({ ok: false, reason: "invalid" });
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("sends a null page context when the caller has no page", async () => {
-    invoke.mockResolvedValue(REPLY);
-    await askAssistant("acme", "core-platform", {
-      conversationId: null,
-      content: "hello",
-      route: null,
-      entityId: null,
-    });
-    expect(invoke.mock.calls[0]?.[1]).toMatchObject({ pageContext: null });
-  });
-
-  it("continues an existing conversation when it is given one", async () => {
-    invoke.mockResolvedValue(REPLY);
-    await askAssistant("acme", "core-platform", {
-      ...onFleet,
-      conversationId: REPLY.conversationId,
-    });
-    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      conversationId: REPLY.conversationId,
-    });
-  });
-
-  it("answers denied with nothing said, when the handler refuses (negative)", async () => {
+  it("answers denied when the handler refuses the caller (negative)", async () => {
     invoke.mockRejectedValue(
-      new kernel.HandlerError({ code: "forbidden", reason: "not_a_member" }),
+      new kernel.HandlerError({ code: "forbidden", reason: "no_principal" }),
     );
-    const result = await askAssistant("acme", "core-platform", onFleet);
+    const result = await stopAssistantTurn("acme", "core-platform", TURN_ID);
     expect(result).toMatchObject({ ok: false, reason: "denied" });
   });
 });

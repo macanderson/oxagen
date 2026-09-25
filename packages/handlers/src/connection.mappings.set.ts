@@ -4,6 +4,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { eventClient } from "./event-client";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 import { assertGithubInstallationAccessible } from "./lib/github-installation-access";
 import { getConnector } from "@oxagen/ingestion/connectors";
@@ -83,6 +84,9 @@ function repoSlugName(
 export const connectionMappingsSetHandler: CapabilityHandler<
   typeof connectionMappingsSet
 > = async (input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(connectionMappingsSet, ctx);
   // Verify connection exists and belongs to this org/workspace
   const [conn] = await withTenantDb((tx) =>
     tx

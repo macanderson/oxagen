@@ -21,6 +21,7 @@ interface Stream {
     onApprovalRequired?: (e: unknown) => void;
     onBudgetNotice?: (n: unknown) => void;
     onUsage?: (u: unknown) => void;
+    abortSignal?: AbortSignal;
   };
   onPrepared: () => void;
 }
@@ -52,7 +53,9 @@ const { Hono } = await import("hono");
 const { HandlerError } = await import("@oxagen/oxagen");
 const { CapabilityError } = await import("@oxagen/oxagen/kernel");
 const { errorMiddleware } = await import("../../middleware/error");
-const { chatStreamRoute } = await import("./chat.stream");
+const { CHAT_STREAM_HEARTBEAT_MS, chatStreamRoute } = await import(
+  "./chat.stream"
+);
 const { assistantAskRoute } = await import("./assistant.ask");
 
 const app = new Hono();
@@ -171,6 +174,20 @@ describe("POST chat/stream — ingress", () => {
     ).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
+
+  it("continues a conversation by its cnv_ public id, as the contract does", async () => {
+    // The flyout reads its thread back on reload by get_conversation, which
+    // answers the public id, and asks the next question with it (#4163).
+    const res = await post({ content: "and now?", conversationId: "cnv_01k9x2" });
+    await res.text();
+    expect(res.status).toBe(200);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "ask_assistant",
+      expect.objectContaining({ conversationId: "cnv_01k9x2" }),
+      CTX,
+      { surface: "api" },
+    );
+  });
 });
 
 describe("ask_assistant — the same gates on both adapters", () => {
@@ -271,6 +288,43 @@ describe("POST chat/stream — the turn on the wire", () => {
     });
   });
 
+  // The flyout sends the name its page gave the record beside the record's
+  // id. The body's page context is the contract's own schema, so the label
+  // reaches ask_assistant as the person saw it.
+  it("carries the record's label beside its id to ask_assistant", async () => {
+    await post({
+      content: "why did this fail?",
+      pageContext: {
+        route: "runs",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+        entityId: "arun_01k9",
+        entityLabel: "Fix the flaky checkout test",
+      },
+    }).then((r) => r.text());
+    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({
+      pageContext: {
+        entityId: "arun_01k9",
+        entityLabel: "Fix the flaky checkout test",
+      },
+    });
+  });
+
+  it("refuses a label past the contract's cap with 400 before the turn starts (negative)", async () => {
+    const res = await post({
+      content: "why did this fail?",
+      pageContext: {
+        route: "runs",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+        entityId: "arun_01k9",
+        entityLabel: "x".repeat(257),
+      },
+    });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
   // The route builds ask_assistant's input field by field, so a field the
   // contract gains is dropped here unless the route names it.
   it("carries a goal to ask_assistant, and sends none for an ordinary turn", async () => {
@@ -289,6 +343,45 @@ describe("POST chat/stream — the turn on the wire", () => {
 
     await post({ content: "hi" }).then((r) => r.text());
     expect(mocks.invoke.mock.lastCall?.[1]).not.toHaveProperty("goal");
+  });
+
+  // The flyout mints a turn id so the person can stop the turn it streams
+  // (#4164). Dropped here, cancel_assistant_turn would never find the turn.
+  it("carries the caller's turn id to ask_assistant, and sends none when it names none", async () => {
+    const turnId = "0192d4a8-7c1e-7a00-8000-0000000000f1";
+    await post({ content: "hi", turnId }).then((r) => r.text());
+    expect(mocks.invoke).toHaveBeenLastCalledWith(
+      "ask_assistant",
+      expect.objectContaining({ turnId }),
+      CTX,
+      { surface: "api" },
+    );
+
+    await post({ content: "hi" }).then((r) => r.text());
+    expect(mocks.invoke.mock.lastCall?.[1]).not.toHaveProperty("turnId");
+  });
+
+  it("refuses a turn id that is not a uuid with 400 before the turn starts (negative)", async () => {
+    const res = await post({ content: "hi", turnId: "not-a-uuid" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("streams a stopped turn's partial reply and its stopped flag as the terminal", async () => {
+    mocks.invoke.mockImplementationOnce(async () => {
+      mocks.stream?.onPrepared();
+      mocks.stream?.hooks.onRun?.({ runId: OUTPUT.runId });
+      mocks.stream?.hooks.onPart?.({ type: "text-delta", text: "hello" });
+      return { ...OUTPUT, reply: "hello", stopped: true };
+    });
+    const { events, done } = await readSse(
+      await post({
+        content: "hi",
+        turnId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+      }),
+    );
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    expect(done).toMatchObject({ reply: "hello", stopped: true });
   });
 
   it("streams the run, the translated parts, one usage event, then the output as the terminal", async () => {
@@ -400,4 +493,84 @@ describe("POST chat/stream — the turn on the wire", () => {
       expect(done).toBe("[DONE]");
     },
   );
+});
+
+describe("POST chat/stream — a client that goes away (ADR-092)", () => {
+  /** A turn that is prepared, names its run, and ends when the test says. */
+  function heldTurn(): { finish: (output: unknown) => void; ended: boolean } {
+    const held: { finish: (output: unknown) => void; ended: boolean } = {
+      finish: () => undefined,
+      ended: false,
+    };
+    mocks.invoke.mockImplementationOnce(async () => {
+      mocks.stream!.onPrepared();
+      mocks.stream!.hooks.onRun?.({ runId: OUTPUT.runId });
+      const output = await new Promise((resolve) => {
+        held.finish = resolve;
+      });
+      held.ended = true;
+      return output;
+    });
+    return held;
+  }
+
+  it("hands the turn no abort signal, so a dropped connection does not stop it", async () => {
+    const turn = heldTurn();
+    const client = new AbortController();
+    const res = await app.fetch(
+      new Request("http://localhost/v1/acme/main/chat/stream", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: "hi" }),
+        signal: client.signal,
+      }),
+    );
+    const reader = res.body!.getReader();
+    const first = new TextDecoder().decode((await reader.read()).value);
+    expect(first).toContain(OUTPUT.runId);
+    // The person's connection drops mid-turn.
+    client.abort();
+    await reader.cancel();
+    expect(mocks.stream!.hooks.abortSignal).toBeUndefined();
+    // The turn runs on and ends on its own clock. The writes after the drop
+    // are dropped quietly rather than failing it.
+    turn.finish(OUTPUT);
+    await vi.waitFor(() => {
+      expect(turn.ended).toBe(true);
+    });
+  });
+
+  it("writes a keep-alive comment while the turn is quiet, and none after the terminal", async () => {
+    vi.useFakeTimers();
+    try {
+      const turn = heldTurn();
+      const res = await post({ content: "hi" });
+      await vi.advanceTimersByTimeAsync(CHAT_STREAM_HEARTBEAT_MS * 2);
+      turn.finish(OUTPUT);
+      await vi.advanceTimersByTimeAsync(CHAT_STREAM_HEARTBEAT_MS * 2);
+      const text = await res.text();
+      expect(text.match(/^: keep-alive$/gm)).toHaveLength(2);
+      expect(
+        text.endsWith(`event: done\ndata: ${JSON.stringify(OUTPUT)}\n\n`),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the comment out of the events a reader parses (negative)", async () => {
+    vi.useFakeTimers();
+    try {
+      const turn = heldTurn();
+      const res = await post({ content: "hi" });
+      await vi.advanceTimersByTimeAsync(CHAT_STREAM_HEARTBEAT_MS);
+      turn.finish(OUTPUT);
+      await vi.advanceTimersByTimeAsync(0);
+      const { events, done } = await readSse(res);
+      expect(events).toEqual([{ type: "run", runId: OUTPUT.runId }]);
+      expect(done).toEqual(OUTPUT);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

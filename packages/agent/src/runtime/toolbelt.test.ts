@@ -348,6 +348,103 @@ describe("decideCapabilityForBelt", () => {
   });
 });
 
+// The role rule (#4194). The kernel's IAM check allows every capability for a
+// non-enterprise org, and each handler asks for its contract's roles, so a
+// person's belt holds only what their roles are granted.
+describe("decideCapabilityForBelt role rule", () => {
+  const OWNER_ONLY = cap({
+    name: "install_plugin",
+    mutates: true,
+    agent: { riskLevel: "medium" },
+    defaultRoles: {
+      org: { Owner: "allow", Admin: "allow" },
+      workspace: { Owner: "allow" },
+    },
+  });
+  const MEMBERS = cap({
+    name: "get_rate_card",
+    defaultRoles: {
+      org: { Owner: "allow", Admin: "allow", Billing: "allow" },
+      workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
+    },
+  });
+  const MEMBER = { org: [], workspace: ["Member"] };
+  const ORG_OWNER = { org: ["Owner"], workspace: [] };
+
+  beforeEach(() => {
+    pluginMocks.pluginForContract.mockReturnValue(undefined);
+  });
+
+  it("drops an Owner-only capability from a workspace Member's belt", () => {
+    expect(
+      decideCapabilityForBelt(OWNER_ONLY, env({ callerRoles: MEMBER })),
+    ).toMatchObject({ outcome: "deny", rule: "role" });
+  });
+
+  it("keeps it on an org Owner's belt", () => {
+    expect(
+      decideCapabilityForBelt(OWNER_ONLY, env({ callerRoles: ORG_OWNER })),
+    ).toMatchObject({ outcome: "allow", rule: "contract_default" });
+  });
+
+  it("keeps it for a workspace Owner, whom the contract's workspace side grants", () => {
+    expect(
+      decideCapabilityForBelt(
+        OWNER_ONLY,
+        env({ callerRoles: { org: [], workspace: ["Owner"] } }),
+      ).outcome,
+    ).toBe("allow");
+  });
+
+  it("keeps a capability the contract grants a workspace Member", () => {
+    expect(
+      decideCapabilityForBelt(MEMBERS, env({ callerRoles: MEMBER })).outcome,
+    ).toBe("allow");
+  });
+
+  it("does not count an org role on the workspace side", () => {
+    // "Owner" is granted on the workspace side only as a workspace role.
+    const wsOnly = cap({
+      name: "add_plugin_registry",
+      defaultRoles: { org: {}, workspace: { Owner: "allow" } },
+    });
+    expect(
+      decideCapabilityForBelt(wsOnly, env({ callerRoles: ORG_OWNER })).rule,
+    ).toBe("role");
+  });
+
+  it("does not treat require_approval as a grant", () => {
+    const asks = cap({
+      name: "rotate_key",
+      defaultRoles: { org: { Owner: "require_approval" }, workspace: {} },
+    });
+    expect(
+      decideCapabilityForBelt(asks, env({ callerRoles: ORG_OWNER })).rule,
+    ).toBe("role");
+  });
+
+  it("fails closed when the role read failed", () => {
+    expect(
+      decideCapabilityForBelt(MEMBERS, env({ callerRoles: "unavailable" })),
+    ).toMatchObject({ outcome: "deny", rule: "role" });
+  });
+
+  it("does not apply when no roles were read", () => {
+    expect(decideCapabilityForBelt(OWNER_ONLY, env()).outcome).toBe("allow");
+  });
+
+  it("leaves an agent run to its delegation ceiling", () => {
+    // The run has no resolution, so the ceiling's own fail-closed rule
+    // decides, not the role rule.
+    expect(
+      decideCapabilityForBelt(
+        OWNER_ONLY,
+        env({ agentRun: agentRun(), callerRoles: MEMBER }),
+      ).rule,
+    ).toBe("agent_run_unresolved");
+  });
+});
+
 describe("decideMcpToolForBelt", () => {
   const decide = (effect: "allow" | "deny" | "ask") => () => effect;
 

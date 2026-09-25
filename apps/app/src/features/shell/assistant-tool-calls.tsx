@@ -8,7 +8,7 @@
 // (#4204). A reply restored after a reload lists the calls `get_conversation`
 // read from its run.
 import { useLocale, useTranslations } from "next-intl";
-import type { ToolCallSummary } from "./assistant-actions";
+import type { ToolCallSummary } from "./assistant-stream-client";
 import { mono } from "@/ui/control-styles";
 import { formatDuration } from "@/ui/money-format";
 

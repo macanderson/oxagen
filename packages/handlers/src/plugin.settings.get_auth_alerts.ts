@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { pluginSettingsGetAuthAlerts } from "@oxagen/oxagen/contracts/plugin.settings.get_auth_alerts";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 /**
@@ -24,6 +25,9 @@ const DEFAULT_ALERTS = {
 export const pluginSettingsGetAuthAlertsHandler: CapabilityHandler<
   typeof pluginSettingsGetAuthAlerts
 > = async (_input, ctx) => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #4194).
+  await assertContractRole(pluginSettingsGetAuthAlerts, ctx);
   const { orgId } = ctx;
 
   const rows = await withSystemDb((tx) =>

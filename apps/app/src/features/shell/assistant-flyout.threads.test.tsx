@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The assistant's thread across a reload, a workspace rename, and "New
-// thread" (#4163, #3313). The turn action and the thread read are fakes: the
+// thread" (#4163, #3313). The turn's stream and the thread read are fakes: the
 // read answers the thread the record holds and the workspace id the flyout
 // files it under, so each case shows what the person sees.
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -20,10 +20,32 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
-const askAssistant = vi.fn();
-vi.mock("./assistant-actions", () => ({ askAssistant }));
+// The turn streams from the API (assistant-stream-client.ts, ADR-176) and
+// answers in the shape the Server Action it replaced did, so one fake that
+// takes the same three arguments drives it.
+const askAssistant =
+  vi.fn<(org: string, ws: string, question: unknown) => Promise<unknown>>();
+vi.mock("./assistant-stream-client", () => ({
+  askAssistantStream: (org: string, ws: string, question: unknown) =>
+    askAssistant(org, ws, question),
+}));
+vi.mock("./assistant-actions", () => ({ readAssistantReply: vi.fn() }));
 const loadAssistantThread = vi.fn();
 vi.mock("./assistant-thread-actions", () => ({ loadAssistantThread }));
+// The parked cards have their own tests (assistant-parked-approvals.test.tsx).
+// This stand-in records the workspace and run the flyout hands them.
+const parkedApprovals =
+  vi.fn<(props: { org: string; ws: string; runId: string }) => void>();
+vi.mock("./assistant-parked-approvals", () => ({
+  AssistantParkedApprovals: (props: {
+    org: string;
+    ws: string;
+    runId: string;
+  }) => {
+    parkedApprovals(props);
+    return <div data-testid="parked-cards" />;
+  },
+}));
 
 const pathname = vi.fn(() => "/acme/core-platform");
 vi.mock("next/navigation", () => ({
@@ -33,6 +55,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { AssistantFlyout } = await import("./assistant-flyout");
+
+/** Any turn id: the flyout mints a new one for each question (#4164). */
+const A_TURN_ID: unknown = expect.any(String);
 
 /** The workspace's id: what a rename leaves alone. */
 const WORKSPACE = "7b000000-0000-4000-8000-000000000001";
@@ -47,6 +72,7 @@ const RECORDED: AssistantThread = {
       runId: null,
       parked: [],
       toolCalls: [],
+      stopped: false,
     },
     {
       id: "msg_a2",
@@ -77,6 +103,7 @@ const RECORDED: AssistantThread = {
           approvalId: "apr_01k5rt9xq7v3m8n2p4s6t8w0",
         },
       ],
+      stopped: false,
     },
   ],
   truncated: false,
@@ -153,6 +180,7 @@ beforeAll(() => {
 beforeEach(() => {
   askAssistant.mockReset();
   loadAssistantThread.mockReset();
+  parkedApprovals.mockReset();
   askAssistant.mockResolvedValue(turn());
   loadAssistantThread.mockResolvedValue(loaded(RECORDED));
   pathname.mockReturnValue("/acme/core-platform");
@@ -165,7 +193,6 @@ describe("the assistant's thread across a reload", () => {
 
     expect(loadAssistantThread).toHaveBeenCalledWith("acme", "core-platform");
     expect(await screen.findByText("what is live?")).toBeTruthy();
-    // A restored answer was read before: it is shown whole, not typed out.
     expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
       "Three runs are live.",
     );
@@ -173,6 +200,8 @@ describe("the assistant's thread across a reload", () => {
       "recorded as arun_01k9",
     );
     expect(screen.getByTestId("assistant-parked")).toBeTruthy();
+    // A reply that ran to the end carries no Stopped mark (#4164).
+    expect(screen.queryByTestId("assistant-stopped")).toBeNull();
     expect(screen.queryByTestId("assistant-intro")).toBeNull();
   });
 
@@ -206,6 +235,19 @@ describe("the assistant's thread across a reload", () => {
     expect(screen.queryByTestId("assistant-tool-calls")).toBeNull();
   });
 
+  // The thread read files the thread under the workspace's id, which holds
+  // no slugs, so the cards take the slugs of the workspace on screen.
+  it("draws a read-back thread's parked writes as cards for its workspace and run", async () => {
+    await openFlyout();
+    expect(await screen.findByTestId("parked-cards")).toBeTruthy();
+    expect(parkedApprovals).toHaveBeenLastCalledWith({
+      org: "acme",
+      ws: "core-platform",
+      runId: "arun_01k9",
+      cards: RECORDED.messages[1]?.parked,
+    });
+  });
+
   it("reads the thread once and continues its conversation by its public id", async () => {
     const { user } = await openFlyout();
     await screen.findByText("what is live?");
@@ -215,6 +257,7 @@ describe("the assistant's thread across a reload", () => {
       conversationId: "cnv_01k9x2",
       content: "and now?",
       route: "fleet",
+      turnId: A_TURN_ID,
       entityId: null,
     });
     await waitFor(() => {

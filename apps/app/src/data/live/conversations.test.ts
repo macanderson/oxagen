@@ -44,6 +44,7 @@ const message = (over: Record<string, unknown>) => ({
   runId: null,
   parkedCards: [],
   toolCalls: [],
+  stopped: false,
   ...over,
 });
 
@@ -127,6 +128,7 @@ describe("conversations.latest", () => {
             runId: null,
             parked: [],
             toolCalls: [],
+            stopped: false,
           },
           {
             id: "msg_a2",
@@ -135,12 +137,35 @@ describe("conversations.latest", () => {
             runId: "arun_0002",
             parked: [CARD],
             toolCalls: VIEW_CALLS,
+            stopped: false,
           },
         ],
         truncated: false,
       }),
     );
     expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("carries a reply the person stopped as stopped (#4164)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        conversation: conversation([
+          message({}),
+          message({
+            publicId: "msg_a2",
+            role: "assistant",
+            content: "Two agents are",
+            runId: "arun_0002",
+            stopped: true,
+          }),
+        ]),
+      }),
+    );
+
+    const read = await conversations.latest(ctx);
+
+    if (!read.ok) throw new Error(`the read failed: ${read.reason}`);
+    expect(read.value?.messages.map((m) => m.stopped)).toEqual([false, true]);
   });
 
   it("answers null when the viewer has no conversation yet", async () => {

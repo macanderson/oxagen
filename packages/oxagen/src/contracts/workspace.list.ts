@@ -61,16 +61,20 @@ export const workspaceList = registerCapability({
   // "deny" caused no_grant 403s for Enterprise callers whose org was created
   // before workspace.list was seeded in role_grants. (OXA fix — CLI picker 403.)
   defaultEffect: "allow",
+  // Every role a person can hold, for the reason org.list gives: "Member"
+  // and "Viewer" are workspace roles, not org roles (#4194).
   defaultRoles: {
     org: {
       Owner: "allow",
       Admin: "allow",
-      Member: "allow",
       Billing: "allow",
       Compliance: "allow",
+    },
+    workspace: {
+      Owner: "allow",
+      Member: "allow",
       Viewer: "allow",
     },
-    workspace: {},
   },
   input: z.object({
     orgSlug: z

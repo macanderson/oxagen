@@ -10,6 +10,12 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
+
+// The handler's role gate (#4194) runs for real against a role fixture. The
+// default caller is an org Owner; a case that needs another sets roleGate.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
 import type { PriceEntry } from "@oxagen/billing";
 
 const mocks = vi.hoisted(() => ({
@@ -37,6 +43,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 
 import { billingUsageBreakdownHandler } from "./billing.usage.breakdown";
 import { TEST_CTX } from "./test-utils/fixtures";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 
 const BREAKDOWN = {
   totals: {
@@ -337,5 +344,38 @@ describe("billingUsageBreakdownHandler (@oxagen/handlers)", () => {
     await expect(billingUsageBreakdownHandler(INPUT, TEST_CTX)).rejects.toThrow(
       "clickhouse down",
     );
+  });
+});
+
+// The contract grants org Owner, Admin, or Billing. The kernel's IAM check
+// allows every capability for a non-enterprise org, so the handler is the
+// only gate there (#4194). The spend it discloses is the org's whole bill.
+describe("billingUsageBreakdownHandler role gate", () => {
+  beforeEach(() => resetRoleGate());
+
+  it("refuses a workspace Member as forbidden, before any usage read", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    await expect(
+      billingUsageBreakdownHandler(INPUT, TEST_CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.readUsageBreakdown).not.toHaveBeenCalled();
+    expect(mocks.loadPriceBookInTenantScope).not.toHaveBeenCalled();
+  });
+
+  it("allows an org Billing member", async () => {
+    roleGate.roles = { org: "Billing" };
+    const out = await billingUsageBreakdownHandler(INPUT, TEST_CTX);
+    expect(out.totals.executions).toBe(3);
+  });
+
+  it("acts as an API key's creator, and refuses a key with none", async () => {
+    roleGate.roles = { org: "Owner", keyCreator: null };
+    await expect(
+      billingUsageBreakdownHandler(INPUT, {
+        ...TEST_CTX,
+        userId: null,
+        apiKeyId: "key_1",
+      }),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
   });
 });

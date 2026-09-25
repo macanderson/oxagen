@@ -8,9 +8,9 @@
  * `mode: "async"`: the API streams the turn over its SSE route,
  * `POST /v1/:org/:ws/chat/stream`, whose body is this contract's input and
  * whose terminal `done` carries this contract's output. The apps/app flyout
- * does not stream: its server action makes one `kernelWrite` call and
- * receives the output whole, as the API's `ask_assistant` route and the MCP
- * tool do.
+ * reads the turn from that route (ADR-176). The API's `ask_assistant` route
+ * and the MCP tool run the same turn to completion and return the output
+ * whole.
  *
  * The SSE route invokes this contract through the kernel too, so the gates
  * below are the same on every adapter.
@@ -25,6 +25,12 @@
  * the parked card, and the turn still completes. Every tool call the turn
  * made comes back in `toolCalls` with its outcome and duration, so a surface
  * can show what the reply rests on without opening the run.
+ *
+ * A turn the person stops is not a refusal. When the caller passed `turnId`
+ * and `cancel_assistant_turn` names it, the turn returns with `stopped: true`
+ * and whatever reply the engine had written, and the run is sealed
+ * `cancelled`. A budget stop still refuses with `engine_aborted`. A dropped
+ * connection is not a stop: the turn runs on (ADR-092, ADR-176).
  *
  * The turn is not a governed action (`noBillingGate`, #2968 decision 3): the
  * run is free to the customer and never appears in `list_runs`; `runId` opens
@@ -202,6 +208,12 @@ export const assistantAsk = registerCapability({
        * contract is not on the agent surface.
        */
       goal: assistantGoalSchema.optional(),
+      /**
+       * A key the caller mints before it asks, so it can stop the turn with
+       * `cancel_assistant_turn` while this call is still waiting. Omitted, the
+       * turn can still end on a budget stop, but nobody can stop it by name.
+       */
+      turnId: z.string().uuid().optional(),
     })
     .strict(),
   output: z
@@ -232,6 +244,12 @@ export const assistantAsk = registerCapability({
        * are tool calls too and appear here.
        */
       toolCalls: z.array(assistantToolCallSchema),
+      /**
+       * True when the person who asked stopped the turn with
+       * `cancel_assistant_turn`. `reply` then holds what the engine wrote
+       * before the stop, possibly nothing, and the run is sealed `cancelled`.
+       */
+      stopped: z.boolean().default(false),
     })
     .strict(),
 });

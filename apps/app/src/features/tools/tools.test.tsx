@@ -501,7 +501,7 @@ describe("Tools › tools tab", () => {
     });
     expect(calls.versions).toContainEqual([
       owner,
-      { category: "moves_money", cursor: null },
+      { category: "moves_money", cursor: null, serverId: null },
     ]);
     const chips = within(
       screen.getByRole("group", { name: "Filter by category" }),
@@ -510,6 +510,27 @@ describe("Tools › tools tab", () => {
     expect(picked).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(picked);
     expect(router.push).toHaveBeenCalledWith("/acme/core-platform/tools");
+  });
+
+  it("asks the kernel for the provider a chip picks, and counts against the unfiltered registry", async () => {
+    const { calls } = await renderTools({}, "tools", {
+      provider: "mcs_01k5s1",
+    });
+    expect(calls.versions).toContainEqual([
+      owner,
+      { category: null, cursor: null, serverId: "mcs_01k5s1" },
+    ]);
+    expect(calls.versions).toContainEqual([
+      owner,
+      { category: null, cursor: null, serverId: null },
+    ]);
+    const providers = within(
+      screen.getByRole("group", { name: "Filter by provider" }),
+    );
+    expect(providers.getByRole("button", { name: /Stripe/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("says the chip matched nothing rather than that the registry is empty", async () => {
@@ -570,6 +591,18 @@ describe("Tools › tools tab", () => {
     expect(
       within(tools).queryByText("Get file contents"),
     ).not.toBeInTheDocument();
+  });
+
+  it("names the provider a version came from in the version's dialog", async () => {
+    await renderTools();
+    fireEvent.click(screen.getByText("Create payment"));
+    const dialog = within(await screen.findByTestId("tool-dialog"));
+    // The registry hands the row's provider to the dialog. Without it the
+    // Provider tile would say "not recorded".
+    const overview = within(dialog.getByRole("tabpanel"));
+    expect(
+      overview.getByText("Provider", { selector: "dt" }).nextElementSibling,
+    ).toHaveTextContent("Stripe");
   });
 });
 
@@ -1067,6 +1100,8 @@ async function offered(ctx: WsCtxType): Promise<Record<ToolsWrite, boolean>> {
   const flipOffered = screen.queryByTestId("tools-flip-open") !== null;
   fireEvent.click(screen.getByText("Create payment"));
   const dialog = within(await screen.findByTestId("tool-dialog"));
+  // The form lives on its own tab, and a hidden panel has no roles to find.
+  fireEvent.click(dialog.getByRole("tab", { name: "Classification" }));
   const classifyOffered =
     dialog.queryByRole("button", { name: "Reclassify this version" }) !== null;
   expect(

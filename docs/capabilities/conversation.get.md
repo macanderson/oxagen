@@ -63,6 +63,10 @@ the runs of the replies inside `limit` are read.
 `toolCalls` is empty on a `user` or `system` message and on a reply with no
 run. If the ledger cannot be read, the conversation is still returned: every
 reply lists no calls, and the handler logs the failure as a warning.
+| Field       | Type                                                                  | Notes                                                        |
+| ----------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `messages`  | `Array<{ publicId, role, content, createdAt, runId, parkedCards, stopped }>`   | Oldest first. `runId` is the `arun_` run an assistant turn was recorded as, or null. `parkedCards` are the governed writes that turn parked for a person, each `{ approvalId, capability, expiresAt }`. `stopped` is true when the person stopped the turn, so `content` is the part of the reply written before the stop. |
+| `truncated` | `boolean`                                                             | True when `limit` left earlier messages out.                 |
 
 ## Surfaces
 

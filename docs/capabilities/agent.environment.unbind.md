@@ -50,5 +50,5 @@ Tool name: `unbind_agent_environment`
 ## Errors
 
 - `validation_error`: missing/empty `agentId`/`environmentId`.
-- `unauthorized`: caller is not org Owner/Admin.
+- `forbidden` (`org_role_required`): the caller is not an org Owner or Admin.
 - `not_found`: no agent or environment with that id exists in the active workspace.

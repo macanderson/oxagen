@@ -81,6 +81,7 @@ describe("the six tools carry their contract's name and hints", () => {
       "category",
       "cursor",
       "limit",
+      "serverId",
     ]);
   });
 });
@@ -144,11 +145,17 @@ describe("list_tool_versions, set_tool_classification, import_tools, list_creden
     await listToolVersions({
       limit: 5,
       category: "moves_money",
+      serverId: "mcs_linear",
       cursor: undefined,
     });
     expect(mocks.invoke).toHaveBeenLastCalledWith(
       "list_tool_versions",
-      { limit: 5, category: "moves_money", cursor: undefined },
+      {
+        limit: 5,
+        category: "moves_money",
+        serverId: "mcs_linear",
+        cursor: undefined,
+      },
       fakeCtx,
       { surface: "mcp" },
     );
@@ -213,7 +220,12 @@ describe("list_tool_versions, set_tool_classification, import_tools, list_creden
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("forbidden"));
     await expect(
-      listToolVersions({ limit: 5, category: undefined, cursor: undefined }),
+      listToolVersions({
+        limit: 5,
+        category: undefined,
+        serverId: undefined,
+        cursor: undefined,
+      }),
     ).rejects.toThrow("forbidden");
   });
 });

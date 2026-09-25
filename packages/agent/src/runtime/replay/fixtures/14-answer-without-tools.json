@@ -1,0 +1,48 @@
+{
+  "turn": "14 an answer that needs no tool",
+  "question": "What does a kill switch do?",
+  "source": "hand-authored",
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What does a kill switch do?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "A kill switch refuses every call to its target until someone turns it off."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "A kill switch refuses every call to its target until someone turns it off.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": [],
+    "gates": ["emergency_denies none"],
+    "ledger": ["model completed", "seal completed"],
+    "answers": [],
+    "refusals": [],
+    "invocations": [],
+    "approvals": [],
+    "answer": "A kill switch refuses every call to its target until someone turns it off."
+  }
+}

@@ -49,6 +49,7 @@ const CONVERSATION = {
       runId: null,
       parkedCards: [],
       toolCalls: [],
+      stopped: false,
     },
   ],
   truncated: false,

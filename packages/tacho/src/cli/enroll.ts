@@ -560,6 +560,33 @@ async function enrollSteps(
     existing.revoked_at === null &&
     !fleetRevoked &&
     options.force !== true;
+  // Harnesses named on a live enrollment that it does not hook yet. Adding
+  // one is a change to the control plane's host record (`tacho.hosts.
+  // harnesses`), which only an enrollment writes, so it goes through a
+  // revoke and a fresh enrollment — the same path `reassign --harness`
+  // takes — rather than a local re-apply that the fleet page never sees.
+  const added: TachoHarness[] = live
+    ? (options.harnesses ?? []).filter(
+        (harness) => !existing.harnesses.includes(harness),
+      )
+    : [];
+  // A one-time token names the agent this machine should enroll as. The
+  // re-apply below never presents it, so a live host printed "Already
+  // enrolled", exited 0, and left the register wizard waiting for a first
+  // frame from an agent no host had enrolled as. Refuse before anything
+  // changes, and name the flag that replaces the enrollment.
+  //
+  // A token that also names a harness this host does not hook yet is left
+  // to the harness branch below. That command fails for a narrower reason —
+  // adding a harness revokes the live enrollment first, and a token cannot
+  // revoke — and saying so points at `oxagen login` rather than at --force,
+  // which would replace the enrollment instead of extending it.
+  if (live && options.enrollmentToken !== undefined && added.length === 0) {
+    deps.err(
+      `This machine is already enrolled as ${existing.agent_key} (${existing.host_enrollment_id}), so the token was not used. Run the same command with --force to replace that enrollment with the agent the token names.`,
+    );
+    return { ok: false, warnings };
+  }
   // An enrolled host only needs its document rendered: nothing is minted,
   // written or installed for it.
   if (options.printManaged === true && live) {
@@ -572,16 +599,6 @@ async function enrollSteps(
     deps.out(JSON.stringify(managedSettings, null, 2));
     return { ok: true, host: existing, managedSettings, warnings };
   }
-  // Harnesses named on a live enrollment that it does not hook yet. Adding
-  // one is a change to the control plane's host record (`tacho.hosts.
-  // harnesses`), which only an enrollment writes, so it goes through a
-  // revoke and a fresh enrollment — the same path `reassign --harness`
-  // takes — rather than a local re-apply that the fleet page never sees.
-  const added: TachoHarness[] = live
-    ? (options.harnesses ?? []).filter(
-        (harness) => !existing.harnesses.includes(harness),
-      )
-    : [];
   if (options.printManaged !== true) {
     const wanted = live
       ? [...(existing.harnesses as TachoHarness[]), ...added]

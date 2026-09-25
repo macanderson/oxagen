@@ -56,14 +56,21 @@ export const billingActionRateCard = registerCapability({
   sensitivity: "low",
   mutates: false,
   defaultEffect: "deny",
+  // The published rate card and the caller's own tier, so anyone in the org
+  // may read it. "Member" is a workspace role, not an org role
+  // (`SystemOrgRole`), so the grant sits on the workspace side, where stella's
+  // belt finds it (#4194).
   defaultRoles: {
     org: {
       Owner: "allow",
       Admin: "allow",
       Billing: "allow",
-      Member: "allow",
     },
-    workspace: {},
+    workspace: {
+      Owner: "allow",
+      Member: "allow",
+      Viewer: "allow",
+    },
   },
   input: z.object({}),
   output: z.object({

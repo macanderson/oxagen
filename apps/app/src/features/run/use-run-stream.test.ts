@@ -302,6 +302,31 @@ describe("useRunStream", () => {
     expect(result.current).toBe("open");
   });
 
+  it("reopens at the route's cursor after frames_unavailable, on the same backoff (#4243)", () => {
+    const { result } = follow();
+    act(() => {
+      latest().open();
+      latest().frame();
+      latest().serverError({ code: "frames_unavailable", cursor: "ZjoxMQ" });
+    });
+    // ClickHouse refused the read at its memory cap: a wait, not a loss.
+    expect(opened[0]?.closed).toBe(true);
+    expect(result.current).toBe("connecting");
+    act(() => {
+      vi.advanceTimersByTime(999);
+    });
+    expect(opened).toHaveLength(1);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(opened).toHaveLength(2);
+    expect(latest().url).toBe(`${URL_UNDER_TEST}?after=ZjoxMQ`);
+    act(() => {
+      latest().open();
+    });
+    expect(result.current).toBe("open");
+  });
+
   it("retries from where the failed source started when the route had no cursor to give", () => {
     follow();
     act(() => {

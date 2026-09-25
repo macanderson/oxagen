@@ -65,14 +65,20 @@ export const billingActionEstimate = registerCapability({
   sensitivity: "low",
   mutates: false,
   defaultEffect: "deny",
+  // Pure arithmetic over published figures, so anyone in the org may ask.
+  // "Member" is a workspace role, not an org role (`SystemOrgRole`), so the
+  // grant sits on the workspace side, where stella's belt finds it (#4194).
   defaultRoles: {
     org: {
       Owner: "allow",
       Admin: "allow",
       Billing: "allow",
-      Member: "allow",
     },
-    workspace: {},
+    workspace: {
+      Owner: "allow",
+      Member: "allow",
+      Viewer: "allow",
+    },
   },
   input: z.object(billingActionEstimateFields),
   output: z.object({
