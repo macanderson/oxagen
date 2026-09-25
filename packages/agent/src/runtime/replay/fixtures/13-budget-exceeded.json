@@ -1,0 +1,127 @@
+{
+  "turn": "13 a spent budget refuses a graph search",
+  "question": "What do we know about the billing service?",
+  "source": "hand-authored",
+  "gates": {
+    "budgetExceeded": true
+  },
+  "handlers": {
+    "search_graph": {
+      "results": [
+        {
+          "nodeId": "node_replay1",
+          "label": "Service",
+          "displayName": "billing-service",
+          "kind": "entity",
+          "snippet": "Meters usage and writes invoices.",
+          "score": 0.92
+        }
+      ]
+    }
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What do we know about the billing service?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "search_graph",
+      "input": {
+        "query": "billing service"
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "search_graph",
+          "input": {
+            "query": "billing service"
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What do we know about the billing service?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "The workspace's monthly budget is spent."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "The workspace's monthly budget is spent.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["search_graph"],
+    "gates": [
+      "emergency_denies none",
+      "kill_switch search_graph open",
+      "iam search_graph allow",
+      "billing admit",
+      "budget search_graph exceeded"
+    ],
+    "ledger": [
+      "model completed",
+      "tool search_graph failed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["error"],
+    "refusals": ["budget_exceeded"],
+    "invocations": ["search_graph failed BudgetExceededError"],
+    "approvals": [],
+    "answer": "The workspace's monthly budget is spent."
+  }
+}

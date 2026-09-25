@@ -1,0 +1,169 @@
+{
+  "turn": "11 IAM refuses a run read",
+  "question": "Why was run arun_replay7 refused?",
+  "source": "hand-authored",
+  "gates": {
+    "iamDeny": ["get_run"]
+  },
+  "handlers": {
+    "get_run": {
+      "run": {
+        "id": "arun_replay7",
+        "source": "ledger",
+        "agentKey": "agt_replay",
+        "operatorId": null,
+        "operatorKind": "agent",
+        "operatorName": "release-bot",
+        "operatorAttribution": null,
+        "status": "halted",
+        "outcome": "failed",
+        "turns": 3,
+        "steps": 12,
+        "frames": 40,
+        "cost": {
+          "micros": "31000",
+          "currency": "USD",
+          "basis": "gateway_observed"
+        },
+        "taskRef": null,
+        "startedAt": "2026-09-24T09:00:00.000Z",
+        "sealedAt": "2026-09-24T09:04:00.000Z",
+        "endedAt": "2026-09-24T09:04:00.000Z",
+        "replayGrade": null,
+        "verdict": null,
+        "enforcementTier": "gateway",
+        "completenessGaps": [],
+        "canSummarize": false,
+        "model": null,
+        "machine": null,
+        "name": "Release notes",
+        "summary": null
+      },
+      "frames": {
+        "frames": [
+          {
+            "cursor": "7",
+            "seq": "7",
+            "type": "tool_call",
+            "stage": "refused",
+            "observedAt": "2026-09-24T09:03:58.000Z",
+            "digest": "sha256:replay7",
+            "summary": "create_pull_request refused: budget_exceeded, the workspace's monthly budget is spent",
+            "body": {
+              "digest": null,
+              "bytesRef": null,
+              "redactions": [],
+              "fidelity": "digest_only"
+            },
+            "cost": null
+          }
+        ],
+        "cursor": null
+      },
+      "witnessFor": null
+    }
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Why was run arun_replay7 refused?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "get_run",
+      "input": {
+        "runId": "arun_replay7"
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "get_run",
+          "input": {
+            "runId": "arun_replay7"
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Why was run arun_replay7 refused?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "Your role cannot read that run."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "Your role cannot read that run.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["get_run"],
+    "gates": [
+      "emergency_denies none",
+      "kill_switch get_run open",
+      "iam get_run deny"
+    ],
+    "ledger": [
+      "model completed",
+      "tool get_run failed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["error"],
+    "refusals": ["authz_denied"],
+    "invocations": ["get_run failed CapabilityError"],
+    "approvals": [],
+    "answer": "Your role cannot read that run."
+  }
+}

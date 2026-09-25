@@ -30,6 +30,16 @@ const COALESCE_MS = 750;
 const RETRY_BASE_MS = 1_000;
 const RETRY_LIMIT = 5;
 
+/**
+ * The server faults expected to pass, each retried on the backoff above:
+ * `stream_unavailable` for a store timeout (#3652), and `frames_unavailable`
+ * when ClickHouse refused the frame read at its memory cap (#4243).
+ */
+const RETRY_CODES: ReadonlySet<string> = new Set([
+  "stream_unavailable",
+  "frames_unavailable",
+]);
+
 /** The codes that mean the viewer may no longer read this run. */
 const DENIED_CODES: ReadonlySet<string> = new Set([
   "authz_denied",
@@ -186,10 +196,11 @@ export function useRunStream({
         terminalError = true;
         es.close();
         flushSignal(code === "invalid_input");
-        // A fault the server expects to pass (a database timeout, #3652) is
-        // retried from the last frame the route wrote, so nothing is read
-        // twice or skipped, until the ceiling is reached.
-        if (code === "stream_unavailable" && retries < RETRY_LIMIT) {
+        // A fault the server expects to pass (a database timeout, #3652, or
+        // ClickHouse at its memory cap, #4243) is retried from the last frame
+        // the route wrote, so nothing is read twice or skipped, until the
+        // ceiling is reached.
+        if (code !== null && RETRY_CODES.has(code) && retries < RETRY_LIMIT) {
           retry(cursor ?? after);
           return;
         }

@@ -1,0 +1,126 @@
+{
+  "turn": "12 exhausted credits refuse a graph search",
+  "question": "What do we know about the billing service?",
+  "source": "hand-authored",
+  "gates": {
+    "gauExhausted": true
+  },
+  "handlers": {
+    "search_graph": {
+      "results": [
+        {
+          "nodeId": "node_replay1",
+          "label": "Service",
+          "displayName": "billing-service",
+          "kind": "entity",
+          "snippet": "Meters usage and writes invoices.",
+          "score": 0.92
+        }
+      ]
+    }
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What do we know about the billing service?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "search_graph",
+      "input": {
+        "query": "billing service"
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "search_graph",
+          "input": {
+            "query": "billing service"
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What do we know about the billing service?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "This organization has no credits left this period."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "This organization has no credits left this period.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["search_graph"],
+    "gates": [
+      "emergency_denies none",
+      "kill_switch search_graph open",
+      "iam search_graph allow",
+      "billing exhausted"
+    ],
+    "ledger": [
+      "model completed",
+      "tool search_graph failed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["error"],
+    "refusals": ["gau_exhausted"],
+    "invocations": ["search_graph failed GauExhaustedError"],
+    "approvals": [],
+    "answer": "This organization has no credits left this period."
+  }
+}

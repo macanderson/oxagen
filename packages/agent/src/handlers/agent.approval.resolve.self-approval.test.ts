@@ -408,6 +408,9 @@ describe("resolve_approval: a turn answering its own parked write", () => {
       approvalId: APPROVAL_PUBLIC_ID,
       resolution: "approved",
       mandate: null,
+      // The released call stays queued for the worker: the double models no
+      // resume claim, so the deciding request does not run it.
+      execution: { status: "queued", runId: null, reason: null },
     });
     expect(store.row).toMatchObject({
       resolution: "approved",
