@@ -28,6 +28,10 @@ replacement) is enterprise-only.
 | overrides | object | Updated overrides |
 | autoImprovePrompts | boolean | Updated toggle state |
 
+## Roles
+
+An org Owner or Admin, or a workspace Owner or Admin. The handler checks the contract's roles and refuses anyone else with `forbidden` (`org_role_required`).
+
 ## Side effects
 
 Postgres workspace_prompt_settings updated. Changes take effect immediately on
