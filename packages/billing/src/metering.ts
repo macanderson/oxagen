@@ -624,17 +624,3 @@ export async function chargeUsageCredits(
     transaction,
   );
 }
-
-/**
- * True when the org has credits left to spend: non-expired lots worth more
- * than what it owes ({@link owedCredits}). Reads the effective balance from
- * lots (lazy expiry) rather than the cached credit_balances mirror so it is
- * always authoritative.
- */
-export async function hasCreditBalance(orgId: string): Promise<boolean> {
-  const [lots, owed] = await Promise.all([
-    effectiveBalance(orgId),
-    owedCredits(orgId),
-  ]);
-  return lots - owed > 0n;
-}

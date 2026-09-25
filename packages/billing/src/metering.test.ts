@@ -2,9 +2,9 @@
  * Unit tests for the cost meter / gate (packages/billing/src/metering.ts).
  *
  * Mocks two seams:
- *  - `../credits.js` `effectiveBalance` — hasCreditBalance now reads from lots
- *    (lazy expiry) rather than the cached credit_balances mirror.
- *  - `../credits.js` `consumeCredits` — the atomic clamped debit (its own
+ *  - `../credits.js` `effectiveBalance`: assertCanStartTurn reads the balance
+ *    from lots (lazy expiry) rather than the cached credit_balances mirror.
+ *  - `../credits.js` `consumeCredits`: the atomic clamped debit (its own
  *    lot-based logic is tested in consume-credits.test.ts).
  *
  * We verify the meter's arithmetic and that it delegates correctly.
@@ -126,7 +126,6 @@ const {
   assistantSpendThisMonth,
   assistantSpendWindowStart,
   chargeUsageCredits,
-  hasCreditBalance,
   meterCreditsForUsage,
 } = await import("./metering");
 const { PgDialect } = await import("drizzle-orm/pg-core");
@@ -790,32 +789,11 @@ describe("assertCanStartTurn — who pays decides whether the cap applies", () =
   });
 });
 
-describe("hasCreditBalance", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    effectiveBalanceState.value = 0n;
-    owedState.value = 0n;
-  });
-
-  it("is false when what the org owes uses up the balance", async () => {
-    effectiveBalanceState.value = 10n;
-    owedState.value = 10n;
-    expect(await hasCreditBalance("org-1")).toBe(false);
-  });
-
-  it("is true when the effective balance is positive", async () => {
-    effectiveBalanceState.value = 10n;
-    expect(await hasCreditBalance("org-1")).toBe(true);
-    expect(effectiveBalance).toHaveBeenCalledWith("org-1");
-  });
-
-  it("is false at zero effective balance", async () => {
-    effectiveBalanceState.value = 0n;
-    expect(await hasCreditBalance("org-1")).toBe(false);
-  });
-
-  it("is false when effectiveBalance returns 0 (no lots or all expired)", async () => {
-    effectiveBalanceState.value = 0n;
-    expect(await hasCreditBalance("org-1")).toBe(false);
+describe("module exports", () => {
+  // hasCreditBalance had no production caller; assertCanStartTurn is the one
+  // balance gate, and it nets owed credits the same way (#2976).
+  it("does not export the retired hasCreditBalance helper", async () => {
+    const metering = await import("./metering");
+    expect(metering).not.toHaveProperty("hasCreditBalance");
   });
 });
