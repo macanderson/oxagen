@@ -133,6 +133,7 @@ beforeEach(() => {
       runId: "arun_01k9",
       reply: "The checkout test timed out.",
       parkedCards: [],
+      stopped: false,
     },
   });
 });

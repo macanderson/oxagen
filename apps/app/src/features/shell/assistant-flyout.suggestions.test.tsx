@@ -121,6 +121,7 @@ beforeEach(() => {
       runId: "arun_01k9",
       reply: "Three runs are live.",
       parkedCards: [],
+      stopped: false,
     },
   });
   pathname.mockReturnValue("/acme/core-platform");
