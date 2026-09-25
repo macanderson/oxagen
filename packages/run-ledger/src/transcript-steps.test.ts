@@ -21,6 +21,7 @@ import {
   frameCounts,
   frameFolds,
   markWords,
+  wordsDigest,
   RECALL_ITEM_MAX,
   type RecallBody,
   recallOf,
@@ -1318,7 +1319,10 @@ describe("a subagent's entries", () => {
   });
 });
 
-/** A `markWords` reader that answers from a table of words by entry key. */
+/**
+ * A `markWords` reader that answers from a table of words by entry key, as
+ * the digest of each entry's words (`wordsDigest`), the way the handler does.
+ */
 function reader(table: Record<string, string | null>) {
   const asked: string[][] = [];
   const read = (needed: readonly TranscriptFold[]) => {
@@ -1326,13 +1330,29 @@ function reader(table: Record<string, string | null>) {
     return Promise.resolve(
       new Map(
         needed.flatMap((fold) =>
-          fold.key in table ? [[fold, table[fold.key] ?? null] as const] : [],
+          fold.key in table
+            ? [[fold, wordsDigest(table[fold.key] ?? null)] as const]
+            : [],
         ),
       ),
     );
   };
   return { read, asked };
 }
+
+describe("wordsDigest", () => {
+  it("names words by the digest of their trimmed text, so surrounding whitespace does not count", () => {
+    expect(wordsDigest("  Fixed it.\n")).toBe(wordsDigest("Fixed it."));
+    expect(wordsDigest("Fixed it.")).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(wordsDigest("Fixed it.")).not.toBe(wordsDigest("Fixed it"));
+  });
+
+  it("gives no digest for blank text or none (negative)", () => {
+    expect(wordsDigest(" \n\t")).toBeNull();
+    expect(wordsDigest("")).toBeNull();
+    expect(wordsDigest(null)).toBeNull();
+  });
+});
 
 describe("markWords", () => {
   const facts = (folds: readonly TranscriptFold[]) =>

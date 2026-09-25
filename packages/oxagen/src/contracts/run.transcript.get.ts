@@ -614,9 +614,10 @@ export const transcriptEntrySchema = z
      * says again, ignoring surrounding whitespace: on the run's own chain, the
      * operator's prompt; on any chain, the model step or reply said last
      * before it, such as a turn's closing message that repeats the model's
-     * last text block. The words are compared, not the digests. Null
-     * otherwise, and always null at `everything`, where the words are not
-     * read. An entry that repeats another is `quiet`.
+     * last text block. The digests of the trimmed words are compared, not
+     * the bodies' digests. Null otherwise, and always null at `everything`,
+     * where the words are not read. An entry that repeats another is
+     * `quiet`.
      */
     echoOf: z.string().nullable().optional(),
     /** What a recall entry put in front of the model; null on other entries. */

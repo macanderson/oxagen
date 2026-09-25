@@ -144,6 +144,7 @@ export {
   frameCounts,
   toolUseClaimer,
   markWords,
+  wordsDigest,
   wordsHalf,
   type RecallBody,
   recallOf,

@@ -68,6 +68,7 @@ import {
   turnOrdinals,
 } from "./run-frames";
 import {
+  digestBytes,
   TRANSCRIPT_NODES,
   TRANSCRIPT_OUTCOMES,
   type TranscriptNode,
@@ -765,15 +766,28 @@ function nestSubagents(folds: readonly TranscriptFold[]): void {
 }
 
 /**
- * What an entry says, as `markWords` reads it: the words a reader is shown
- * for it. For a prompt, the text of its request; for a reply, the text of its
- * response; for a model step, the last text block of its reply, or the
+ * What an entry says, as `markWords` compares it: the digest of the words a
+ * reader is shown for it (`wordsDigest`), never the words themselves. For a
+ * prompt, the text of its request; for a reply, the text of its response;
+ * for a model step, the last text block of its reply that has words, or the
  * reply's text where the recorder assembled none. Null when the entry shows
  * no words: the half kept no body, the body could not be read or is not
- * text, or a prompt or reply was kept as a model stream, which a reader is
- * shown no text for.
+ * text, a prompt or reply was kept as a model stream, which a reader is shown
+ * no text for, or the words are only whitespace.
  */
 export type TranscriptWords = string | null;
+
+/**
+ * The one rule for what counts as the same words (ADR-182): the sha256 of the
+ * text with its surrounding whitespace trimmed, or null when nothing is left
+ * (the text is blank). Two halves say the same thing exactly when their
+ * digests are equal, so a caller can keep the digest and let the words go.
+ */
+export function wordsDigest(text: string | null): TranscriptWords {
+  if (text === null) return null;
+  const words = text.trim();
+  return words === "" ? null : digestBytes(words);
+}
 
 /**
  * The half whose words an entry says: a prompt's request, and the response
@@ -796,10 +810,11 @@ export function wordsHalf(fold: TranscriptFold): RunFrame | null {
  *   model step or an earlier reply: a turn's closing message repeats the
  *   model's last text block on every harness that records both.
  *
- * Words compare with their surrounding whitespace trimmed. They are compared
- * as text and never by digest: a model's reply is kept as the stream it
- * arrived in, and a turn's closing message as plain words, so the two never
- * share a digest even when they say the same thing.
+ * Words compare by `wordsDigest`, the digest of the words with their
+ * surrounding whitespace trimmed. That is not the body's digest: a model's
+ * reply is kept as the stream it arrived in, and a turn's closing message as
+ * plain words, so the two bodies never share a digest even when they say the
+ * same thing, while the digests of their words are equal.
  *
  * `read` is asked once, for every prompt and reply and for the model step or
  * reply said right before each reply. An entry it leaves out of its answer
@@ -843,22 +858,20 @@ export async function markWords(
   }
   if (needed.size === 0) return;
   const words = await read([...needed]);
-  const trimmed = (fold: TranscriptFold | undefined) => {
-    const found = fold === undefined ? null : (words.get(fold) ?? null);
-    return found === null ? null : found.trim();
-  };
+  const digestOf = (fold: TranscriptFold | undefined) =>
+    fold === undefined ? null : (words.get(fold) ?? null);
   for (const fold of needed) {
     if (fold.node !== "prompt" && fold.node !== "reply") continue;
     if (!words.has(fold)) continue;
-    const text = trimmed(fold);
-    if (text === null || text === "") {
+    const digest = digestOf(fold);
+    if (digest === null) {
       fold.quiet = true;
       continue;
     }
     if (fold.node !== "reply") continue;
     const echoed =
-      prompts.get(fold)?.find((prompt) => trimmed(prompt) === text) ??
-      (trimmed(before.get(fold)) === text ? before.get(fold) : undefined);
+      prompts.get(fold)?.find((prompt) => digestOf(prompt) === digest) ??
+      (digestOf(before.get(fold)) === digest ? before.get(fold) : undefined);
     if (echoed === undefined) continue;
     fold.echoOf = echoed.key;
     fold.quiet = true;

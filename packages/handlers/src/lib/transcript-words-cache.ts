@@ -1,4 +1,4 @@
-// The words a kept body shows a reader, remembered per process (ADR-182).
+// What a kept body says, remembered per process as a digest (ADR-182).
 //
 // `get_run_transcript` settles which prompts and replies have nothing to show,
 // and which reply repeats words the reader was just shown, over the whole run
@@ -7,47 +7,56 @@
 // page at a time and again on every signal a live run sends. Without this
 // cache, every one of those reads read every body again.
 //
-// A body never changes: its reference names the sha256 of its bytes, and the
-// read checks the bytes against the digest the frame recorded. So what a body
-// says can be kept for as long as the process wants to keep it. The key holds
-// the tenant as well as the reference and the digest, because the store keys a
-// body under its organization and workspace, and one tenant's read must never
-// be answered from another tenant's body.
+// The cache keeps only what `markWords` compares: whether a body shows words,
+// and the digest of those words (`wordsDigest`). It keeps no text. So no read
+// is ever answered with a body's text from here: a page's halves and a
+// search's are read from the evidence store each time, and once erasure
+// crypto-shreds a body, no read shows what it said. An entry is a few hundred
+// bytes whatever the body's size, and only the words read writes to it, so a
+// page of large tool bodies cannot push out the words.
 //
-// The cache is bounded twice: by entries, and by the characters it holds. A
-// body whose words alone pass `maxValueChars` is not kept, so one very long
-// prompt cannot push out the rest; it is read again on each read. Eviction is
-// least recently used: a `Map` keeps insertion order, and a hit is moved to the
-// end.
-import type { RunFrame } from "@oxagen/run-ledger";
+// A body never changes: its reference names the sha256 of its bytes, and the
+// read checks the bytes against the digest the frame recorded. So the digest
+// of its words can be kept for as long as the process wants to keep it. The
+// key holds the tenant as well as the reference and the digest, because the
+// store keys a body under its organization and workspace, and one tenant's
+// read must never be answered from another tenant's body.
+//
+// A body the store says is gone, or whose bytes no longer hash to the digest,
+// is remembered as showing no words, but only for `failureTtlMs`. An erased
+// run's bodies are then not read again on every read, and a body that lands
+// late is read once the entry expires.
+//
+// Eviction is least recently used, bounded by entries: a `Map` keeps
+// insertion order, and a hit is moved to the end.
+import type { RunFrame, TranscriptWords } from "@oxagen/run-ledger";
 
 /**
- * What a kept body shows a reader, as far as its words go. A body that is not
- * a recorded model stream shows its text, whole; a stream shows the last text
- * block that has words (`last`), or none.
+ * What a kept body shows a reader, as far as `markWords` compares it. A body
+ * that is not a recorded model stream shows its text, whole (`words`); a
+ * stream shows the last text block that has words (`last`). Each is the
+ * `wordsDigest` of those words, or null when there are none.
  */
 export type BodyWords =
-  | { stream: false; text: string }
-  | { stream: true; last: string | null };
+  | { stream: false; words: TranscriptWords }
+  | { stream: true; last: TranscriptWords };
 
 export interface WordsCacheLimits {
   /** The most bodies kept. */
   maxEntries: number;
-  /** The most characters kept, over every body's words and key. */
-  maxChars: number;
-  /** A body whose words pass this many characters is not kept. */
-  maxValueChars: number;
+  /** How long a body that could not be read is remembered as showing nothing. */
+  failureTtlMs: number;
 }
 
 /**
- * 8,192 bodies and 8 Mi characters (about 16 MiB of UTF-16), with no one body
- * over 1 Mi characters. A long run's whole-run read asks for at most 2,000
- * halves (`TRANSCRIPT_WORDS_HALF_MAX`), so four such runs fit at once.
+ * 16,384 bodies. An entry holds its key and one digest, a few hundred bytes,
+ * so the cache stays under 10 MB. A long run's whole-run read asks for at
+ * most 2,000 halves (`TRANSCRIPT_WORDS_HALF_MAX`), so eight such runs fit at
+ * once. A failed read is remembered for a minute.
  */
 export const WORDS_CACHE_LIMITS: WordsCacheLimits = {
-  maxEntries: 8_192,
-  maxChars: 8 * 1_048_576,
-  maxValueChars: 1_048_576,
+  maxEntries: 16_384,
+  failureTtlMs: 60_000,
 };
 
 interface Scope {
@@ -56,12 +65,17 @@ interface Scope {
 }
 
 export interface WordsCache {
-  /** The words kept for the frame's body, or undefined when none are. */
+  /** What is kept for the frame's body, or undefined when nothing is. */
   get(scope: Scope, frame: RunFrame): BodyWords | undefined;
   /** Keep what the frame's body says. A frame with no kept body is ignored. */
   set(scope: Scope, frame: RunFrame, words: BodyWords): void;
-  /** Bodies kept, and the characters they hold. */
-  size(): { entries: number; chars: number };
+  /**
+   * Remember, for `failureTtlMs`, that the frame's body could not be read for
+   * good: the store has no such object, or its bytes no longer hash.
+   */
+  fail(scope: Scope, frame: RunFrame): void;
+  /** Bodies kept, a failure included until it expires. */
+  size(): number;
 }
 
 function keyOf(scope: Scope, frame: RunFrame): string | null {
@@ -70,21 +84,24 @@ function keyOf(scope: Scope, frame: RunFrame): string | null {
   return `${scope.orgId}\n${scope.workspaceId}\n${bodyRef}\n${bodyDigest}`;
 }
 
-function charsOf(words: BodyWords): number {
-  return words.stream ? (words.last?.length ?? 0) : words.text.length;
-}
+/** A failed read shows no words, the same as a body that holds none. */
+const NOTHING: BodyWords = { stream: false, words: null };
 
 export function createWordsCache(
   limits: WordsCacheLimits = WORDS_CACHE_LIMITS,
+  now: () => number = Date.now,
 ): WordsCache {
-  const kept = new Map<string, { words: BodyWords; chars: number }>();
-  let chars = 0;
+  const kept = new Map<string, { words: BodyWords; until: number | null }>();
 
-  const drop = (key: string) => {
-    const held = kept.get(key);
-    if (held === undefined) return;
+  const keep = (key: string, words: BodyWords, until: number | null) => {
     kept.delete(key);
-    chars -= held.chars;
+    if (limits.maxEntries < 1) return;
+    while (kept.size >= limits.maxEntries) {
+      const oldest = kept.keys().next();
+      if (oldest.done === true) break;
+      kept.delete(oldest.value);
+    }
+    kept.set(key, { words, until });
   };
 
   return {
@@ -94,27 +111,20 @@ export function createWordsCache(
       const held = kept.get(key);
       if (held === undefined) return undefined;
       kept.delete(key);
+      if (held.until !== null && now() >= held.until) return undefined;
       kept.set(key, held);
       return held.words;
     },
     set(scope, frame, words) {
       const key = keyOf(scope, frame);
-      if (key === null) return;
-      const value = charsOf(words);
-      drop(key);
-      if (value > limits.maxValueChars) return;
-      const size = value + key.length;
-      if (size > limits.maxChars || limits.maxEntries < 1) return;
-      while (kept.size >= limits.maxEntries || chars + size > limits.maxChars) {
-        const oldest = kept.keys().next();
-        if (oldest.done === true) break;
-        drop(oldest.value);
-      }
-      kept.set(key, { words, chars: size });
-      chars += size;
+      if (key !== null) keep(key, words, null);
+    },
+    fail(scope, frame) {
+      const key = keyOf(scope, frame);
+      if (key !== null) keep(key, NOTHING, now() + limits.failureTtlMs);
     },
     size() {
-      return { entries: kept.size, chars };
+      return kept.size;
     },
   };
 }

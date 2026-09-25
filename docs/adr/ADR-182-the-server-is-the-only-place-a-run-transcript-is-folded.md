@@ -91,13 +91,15 @@ fold, and the client fold introduced with #3345.
   and says what it left unsearched.
 - At `steps`, which prompts and replies draw nothing, and which reply repeats
   words just shown, are settled from their words over the whole run, so the
-  counts match the rows. A body never changes, so the server keeps each
-  body's words per process, keyed by tenant, reference and digest, and a
-  later page or live read reads only the bodies it has not read. `everything`
-  and `turns` read only the prompts' words, for the figures, which the cache
-  holds once the run has been read at `steps`. Recording each body's trimmed-words digest and a
-  blank flag at ingest would let the read compare digests and read no body
-  for this; that needs a ClickHouse column and waits on its own issue.
+  counts match the rows. A body never changes, so the server keeps, per
+  process, the digest of each body's trimmed words and whether it has any,
+  never the words, keyed by tenant, reference and digest. A later page or
+  live read reads only the word bodies it has not read, and every half a
+  page shows is read from the evidence store. `everything` and `turns` read
+  only the prompts' words, for the figures, which the cache holds once the
+  run has been read at `steps`. Recording that digest and blank flag at
+  ingest would let the read settle both facts with no body read at all; that
+  needs a ClickHouse column and is issue #4331.
 - A chip selects what the Run page draws under it, so a chip's count in
   `counts.kinds` is the count of what the chip shows. `prompt` is the
   operator's prompt and no longer a model call's request, `responses` takes
