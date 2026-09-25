@@ -17,8 +17,6 @@ import { Money } from "@/ui/money";
 import { formatCount, ratioWidth } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import {
-  barButton,
-  disabledStep,
   FramePlayback,
   PlayButton,
   PlayerScrub,
@@ -27,6 +25,7 @@ import {
 } from "./frame-player";
 import { MARK_HUE } from "./player-hues";
 import type { Mark, OpenFrame } from "./player-model";
+import { barButton, disabledStep } from "./player-styles";
 
 /**
  * A step to another frame: a link when there is one that way, and a disabled

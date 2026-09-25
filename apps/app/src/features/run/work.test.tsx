@@ -8,6 +8,7 @@ import { type ReactNode, Suspense } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunWork } from "@/data/contracts/run-work";
 import { type Read, readError, readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { runOutputs, runRow, runWork } from "./run.builders";
 import { ChangesPanel, basesOf } from "./work";
@@ -124,12 +125,11 @@ describe("the Changes panel's Base row", () => {
     expect(base.getByRole("link", { name: "main" }).getAttribute("href")).toBe(
       "https://github.com/acme/platform/tree/main",
     );
+    await expectNoAxe(panel);
   });
 
   it("says the base is not recorded when the run opened no pull request (negative)", async () => {
-    const panel = await renderChanges(
-      readOk(runWork({ pullRequests: [] })),
-    );
+    const panel = await renderChanges(readOk(runWork({ pullRequests: [] })));
     expect(baseRow(panel).textContent).toBe("not recorded");
   });
 
