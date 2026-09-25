@@ -491,6 +491,26 @@ describe("the daemon's audit wiring", () => {
     expect(chain.some((event) => event.source === "otel_log")).toBe(false);
   });
 
+  it("writes a queued steer to disk before it acknowledges it", async () => {
+    // A steer seals no frame when it arrives, so nothing marked the state
+    // dirty. The operator read `received` while the steer lived only in
+    // memory, and a crash before the next frame lost it.
+    const { handle, plane, paths } = await boot();
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: handle.registry.get(SESSION)!.recorder.sessionUuid,
+        payload: { text: "Keep the old column until the backfill runs." },
+      }),
+    );
+    await handle.tick();
+    expect(readFileSync(paths.daemonState, "utf8")).toContain(
+      "Keep the old column until the backfill runs.",
+    );
+  });
+
   it("does not verify a bundle signed for another host", async () => {
     const log: string[] = [];
     const { handle, plane, signer } = await boot({ log });

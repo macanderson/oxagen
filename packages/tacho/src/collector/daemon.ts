@@ -1338,6 +1338,11 @@ async function initializeDaemon(
           }),
         (result) => ({ events: result.events }),
       );
+      // Written before the acknowledgements leave. A queued message or steer
+      // seals no frame, so nothing else marked the state dirty, and a crash
+      // before the next frame lost a prompt the operator had been told was
+      // `received`.
+      persistState();
       pendingAcks.push(...result.acknowledgements);
       // Only the commands that took effect: an expired or refused kill must
       // not cut a session's model calls.
