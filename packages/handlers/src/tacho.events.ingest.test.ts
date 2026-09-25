@@ -783,10 +783,13 @@ function wire(db: FakeDb): void {
                   }))
                 : tableName(table) === "sessions"
                 ? // The ownership read before any body is written: which
-                  // host opened each session the batch names.
+                  // host opened each session the batch names, and its
+                  // recorded head for a successor's chain test.
                   [...db.sessions.values()].map((row) => ({
                     sessionUuid: row["sessionUuid"],
                     hostId: row["hostId"],
+                    seqCount: row["seqCount"],
+                    lastHash: row["lastHash"],
                   }))
                 : tableName(table) === "contained_launches"
                   ? db.containedLaunches
@@ -2090,6 +2093,47 @@ describe("ingest_tacho_events", () => {
           CONTEXT,
         ),
       ).rejects.toThrow(/session belongs to another host/);
+      expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
+    });
+
+    it("accepts a successor's re-sent frames and leaves the session where it is", async () => {
+      const db = withPredecessor();
+      wire(db);
+      heldByPredecessor(db, resealed(() => PREDECESSOR_PUBLIC));
+      // A seq-0 frame with a valid genesis link and its own correct hash,
+      // but not the frame the predecessor recorded. It carries nothing past
+      // the recorded head, so it cannot prove the successor continues it.
+      const resent = resealed(() => HOST_PUBLIC).slice(0, 1);
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: resent,
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
+    });
+
+    it("writes no body for a successor's batch it refuses", async () => {
+      const db = withPredecessor();
+      wire(db);
+      const events = sessionWithContent();
+      db.sessions.set(SESSION, {
+        id: "s1",
+        sessionUuid: SESSION,
+        seqCount: 1,
+        lastHash: `sha256:${"f".repeat(64)}`,
+        chainVerified: true,
+        hostId: PREDECESSOR_ID,
+      });
+      await expect(
+        tachoEventsIngestHandler(
+          batch(events, [bodyFor(events[1] as TachoEvent)]),
+          CONTEXT,
+        ),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(mocks.bodyPut).not.toHaveBeenCalled();
       expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
     });
   });

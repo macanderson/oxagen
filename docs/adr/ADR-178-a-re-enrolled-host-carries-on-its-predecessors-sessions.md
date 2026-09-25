@@ -42,13 +42,19 @@ stop instead of splitting.
 4. **A session moves on a continuing batch.** The session row passes to the
    successor only when the batch's own chain verifies, leaves no gap after the
    recorded head, and its first new frame links to the recorded `last_hash`.
-   The update is conditional on the host it read, so two successors racing for
+   The batch must carry at least one frame past the head. A batch of re-sent
+   frames alone is accepted, because a spool that never saw its answer sends
+   the same batch again, but it moves nothing. The same test runs before any
+   of the batch's bodies are stored, so a refused batch stores none. The
+   update is conditional on the host it read, so two successors racing for
    one session cannot both take it.
 5. **A live predecessor keeps its sessions.** Two enrollments of one machine
-   never write the same session at once. Enrollment refuses a second live
-   host for one agent key (`agent_has_host`), and the client carries the
-   scope only once the control plane confirms the old enrollment revoked, so
-   a successor under the same agent key never meets a live predecessor.
+   never write the same session at once. Two live enrollments of one machine
+   can exist: the token path refuses a second live host for one agent key
+   (`agent_has_host`), but operator enrollment gives the second host a
+   suffixed agent key. So ingest takes a session only from a revoked
+   predecessor, and the client carries the scope only once the control plane
+   confirms the old enrollment revoked.
 
 ## Consequences
 
@@ -66,6 +72,22 @@ stop instead of splitting.
   enrollment is not a successor and live sessions split as before. That was
   the 00:23 UTC case. Carrying a session across a wipe would need the old key,
   which the wipe destroyed.
+- Succession does not compare the registered agent. `host.json` and the
+  signed enrollment claims carry no agent id, so the client cannot tell
+  whether the new enrollment is for the same agent. A check on the server
+  alone would refuse a session the client had carried, and the recording
+  would stop. After an `enroll --force` that changes the registered agent,
+  the frames after the move carry the new enrollment's identity, which is the
+  one recording them.
+- A successor's first batch for a session must prove the chain. A batch with
+  an internal break, a gap, or a session with no recorded `last_hash` is
+  refused and the collector sets the session aside
+  (`SESSION_OWNED_ELSEWHERE`). The owner's same batch would be kept and marked
+  broken. An unproven successor has no claim to the session.
+- Frames that name the predecessor are accepted on any session in the batch,
+  including one with no row yet: a session the predecessor recorded and never
+  shipped. ClickHouse counts those frames under the predecessor enrollment,
+  which is the one that recorded them.
 - Records keyed on the host rather than the session, such as gateway
   invocations and contained launches, stay with the predecessor. A session
   that moves keeps its frames, cost, and seal on one run, but a report that

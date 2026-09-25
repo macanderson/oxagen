@@ -34,9 +34,10 @@ export interface SuccessionHost {
 
 /**
  * Whether `host` succeeds `predecessor`: another enrollment of the same
- * device key, in the same organization and workspace, made after the
- * predecessor was revoked. A live predecessor keeps what it holds, so two
- * enrollments of one machine never write the same session at once.
+ * device key, in the same organization and workspace, whose predecessor is
+ * revoked. The order of the two enrollments is not checked. A live
+ * predecessor keeps what it holds, so two enrollments of one machine never
+ * write the same session at once.
  */
 export function succeedsHost(
   predecessor: SuccessionHost,
@@ -61,7 +62,8 @@ export interface RecordedHead {
  * Whether a batch carries a session on from its recorded head: the batch's
  * own chain verifies, it leaves no gap, and its first new frame links to the
  * recorded head. A batch that only re-sends recorded frames also passes, and
- * `compareResent` judges each of those against the stored frame.
+ * `compareResent` judges each of those against the stored frame. Such a
+ * batch proves nothing about the head, so ingest moves no session on it.
  */
 export function continuesRecordedChain(
   recorded: RecordedHead,

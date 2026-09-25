@@ -1213,11 +1213,15 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       .select({
         sessionUuid: schema.tachoSessions.sessionUuid,
         hostId: schema.tachoSessions.hostId,
+        seqCount: schema.tachoSessions.seqCount,
+        lastHash: schema.tachoSessions.lastHash,
       })
       .from(schema.tachoSessions)
       .where(inArray(schema.tachoSessions.sessionUuid, named))) as Array<{
       sessionUuid?: string;
       hostId?: string | null;
+      seqCount?: number;
+      lastHash?: string | null;
     }>;
     const held = owners.filter(
       (row) =>
@@ -1230,12 +1234,22 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       "id",
       held.flatMap((row) => (row.hostId ? [row.hostId] : [])),
     );
-    // A session a revoked predecessor opened passes here. The write below
-    // moves it only on a batch that continues its recorded chain.
+    // A session a revoked predecessor opened passes here only on a batch
+    // that continues its recorded chain, the same test the write below
+    // applies, so a successor's refused batch writes no bodies either.
     if (
       held.some((row) => {
         const holder = row.hostId ? holders.get(row.hostId) : undefined;
-        return holder === undefined || !succeedsHost(holder, host);
+        return (
+          holder === undefined ||
+          !succeedsHost(holder, host) ||
+          !continuesRecordedChain(
+            { seqCount: row.seqCount ?? 0, lastHash: row.lastHash ?? null },
+            input.events.filter(
+              (event) => event.session_uuid === row.sessionUuid,
+            ),
+          )
+        );
       })
     ) {
       // The collector's Shipper matches this message to set the session
@@ -1515,6 +1529,12 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         ? events.filter((event) => event.seq >= existing.seqCount)
         : events;
       const head = fresh[0];
+      // A successor takes the session only with frames past the recorded
+      // head, which must link to it. A batch of re-sent frames alone proves
+      // nothing about the head: `compareResent` judges those after the
+      // commit, too late to undo a move. The re-send is still accepted, since
+      // a spool that never saw its answer sends the same batch again.
+      const moves = succeeds && fresh.length > 0;
       if (existing) {
         if (first.seq > existing.seqCount) {
           ok = false;
@@ -1876,14 +1896,14 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         // question as matching the head, asked of the other input.
         const written = await tx
           .update(schema.tachoSessions)
-          .set(succeeds ? { ...common, hostId: host.id } : common)
+          .set(moves ? { ...common, hostId: host.id } : common)
           .where(
             and(
               eq(schema.tachoSessions.id, existing.id),
               eq(schema.tachoSessions.seqCount, existing.seqCount),
               // A session moves to a successor only from the host that held
               // it when this batch read it.
-              ...(succeeds && existing.hostId
+              ...(moves && existing.hostId
                 ? [eq(schema.tachoSessions.hostId, existing.hostId)]
                 : []),
               eq(
