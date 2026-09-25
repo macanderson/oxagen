@@ -506,13 +506,6 @@ export function isRunEventShapeError(err: unknown): err is RunEventShapeError {
 }
 
 /** Structural type guard — see isRunSpecValidationError for the rationale. */
-export function isRunNotWritableError(
-  err: unknown,
-): err is RunNotWritableError {
-  return err instanceof RunNotWritableError || hasCode(err, "run_not_writable");
-}
-
-/** Structural type guard — see isRunSpecValidationError for the rationale. */
 export function isAttemptAdvancedError(
   err: unknown,
 ): err is AttemptAdvancedError {
