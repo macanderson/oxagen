@@ -18,7 +18,7 @@ Oxagen is where a team sets up its agents: the tools they may call, the rules an
 - Skills (`.oxagen/skills/`), agent-definition instructions, and memories reach no wrapped harness. Context records reach them at session start only.
 - The model gateway runs on each laptop (ADR-094), and the vendor key sits in `credentials.json` on that laptop (ADR-143). The machine's owner can unset the base URL or decrypt the file and call the vendor directly, so a paused or killed run can keep going.
 
-ADR-094 put the gateway on the laptop and rejected a cloud proxy, so prompt bodies and keys would never reach Oxagen. That protects custody. They also leave Oxagen unable to stop an agent the owner does not want stopped, and unable to deliver the toolbelt at all.
+ADR-094 put the gateway on the laptop and rejected a cloud proxy, so prompt bodies and keys would never reach Oxagen. The code has since moved half of that: the proxy now records each request and response as the body of its `llm_call` frame and ships it to Oxagen (`packages/tacho/src/collector/model-proxy.ts:10-15`), and a workspace with no retention policy defaults to `content_exact` (`packages/handlers/src/lib/tacho-host.ts:262-264`). Prompt bodies already reach Oxagen by default, as a copy after the call. The key still stays on the laptop. They also leave Oxagen unable to stop an agent the owner does not want stopped, and unable to deliver the toolbelt at all.
 
 Kong solves the same shape for APIs and MCP. Its control plane is a service. Its data plane, the gateway that carries traffic, runs either on Kong's infrastructure (Dedicated Cloud Gateways) or in the customer's network (hybrid mode), where it pulls configuration from the control plane and keeps proxying from a cached copy while the control plane is down. Its AI MCP Proxy applies OAuth, per-tool access lists, and rate limits, and logs each call.
 
@@ -46,7 +46,7 @@ Kong solves the same shape for APIs and MCP. Its control plane is a service. Its
 ## Consequences
 
 - The gateway tier gains a second source of evidence: a call the gateway carried is on the control plane's own record. The run also records who held its key (Oxagen, the customer's KMS, or the harness). A surface may say "enforced" for the kill switch only when Oxagen or the customer's KMS held the key, scoped to "for calls made with the organization's keys".
-- An Oxagen-hosted gateway carries prompt and tool bodies. The workspace's retention policy decides what is kept, and its default must be set before the model gateway ships (below).
+- An Oxagen-hosted gateway carries prompt and tool bodies during the call, even for a workspace on `digest_only`. The workspace's retention policy still decides what is kept. Today's default, `content_exact`, needs a decision before the model gateway ships (below).
 - Custody moves off the laptop. `credentials.json`, the local HMAC signing key, and the local model proxy go away for brokered harnesses. The local relay stays only for stdio servers that need the machine.
 - One platform variable, `AUTH_TOKEN_ENCRYPTION_KEY`, encrypts every workspace's MCP credentials today (`packages/plugins/src/credentials/kms.ts:4-5`). That becomes one KMS key per organization.
 - The in-app agent is not a customer agent and is outside this record. #4310 removes the workspace toolbelt and rules from it.
@@ -58,7 +58,7 @@ ADR-094 rejected "a cloud-hosted proxy" for four reasons. This record answers ea
 
 - **"It adds a hop."** It does. The gateway runs in regions near the vendors' endpoints, and a customer-hosted gateway runs in the customer's own network. The hop is the price of a kill switch the owner cannot remove.
 - **"An availability dependency."** The gateway serves from its cached configuration and keeps minting run tokens while the control plane is down, as Kong's data plane does. A gateway outage stops routed calls. That is the same failure a daemon outage causes today, where a harness pointed at a dead loopback gets a refused connection.
-- **"Every prompt body and every customer's source code through Oxagen's network."** On an Oxagen-hosted gateway, yes, under the workspace's retention policy. A customer that cannot accept that runs the gateway itself, and the bodies stay in its network.
+- **"Every prompt body and every customer's source code through Oxagen's network."** That already happens by default: the laptop proxy ships each request and response to Oxagen as a frame body unless the workspace chooses `digest_only`. The gateway changes when the body crosses, during the call instead of after it, and the retention policy still decides what Oxagen keeps. A customer that cannot accept that runs the gateway itself, and the bodies stay in its network.
 - **"It moves the vendor credential off the machine."** That is the point. A credential on the machine is a credential the owner can use to route around Oxagen.
 
 ## Supersedes and amends
