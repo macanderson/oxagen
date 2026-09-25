@@ -31,7 +31,7 @@ import { buttonDanger, buttonGhost } from "./buttons";
 import { gapRef } from "./gaps";
 import { NotBackedValue } from "./not-backed";
 import { NotCarried, StateDot } from "./parts";
-import { ProviderIcon } from "./provider-icon";
+import { ProviderIcon } from "@/ui/provider-icon";
 import { GateDot, HazardCell } from "./registry-cells";
 import {
   ProviderAuthorization,

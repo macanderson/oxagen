@@ -36,7 +36,7 @@ import { ImportProvider } from "./import-provider";
 import { NotBacked, NotBackedValue } from "./not-backed";
 import { CursorPager, NotCarried } from "./parts";
 import { ProviderButton, type ProviderView } from "./provider-dialog";
-import { ProviderIcon } from "./provider-icon";
+import { ProviderIcon } from "@/ui/provider-icon";
 import { ToolsReadFailure } from "./read-failure";
 import {
   CategoryCell,
