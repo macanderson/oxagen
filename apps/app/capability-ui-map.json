@@ -1327,7 +1327,7 @@
       "page": "apps/app/src/app/[org]/layout.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-514c860f-account-dialog-w11",
-      "entry": "Account dialog \u203a Preferences \u203a Save writes locale, time zone and theme through set_preferences (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "entry": "Account dialog \u203a Preferences \u203a Save writes locale, time zone, theme, and enter_to_submit (\"Enter sends a message\") through set_preferences (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
       "testid": "account-preferences-save",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },

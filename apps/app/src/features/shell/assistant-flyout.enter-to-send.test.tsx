@@ -4,7 +4,7 @@
 // adds a line and Cmd+Enter or Ctrl+Enter sends. Under both, an Enter that
 // commits an input method editor's word is left to the editor, and a key send
 // is refused wherever the Send button's is: an empty draft, a turn in flight,
-// and a draft over the limit.
+// and a draft over the limit. A line under the composer names the send key.
 import {
   act,
   cleanup,
@@ -222,6 +222,32 @@ describe("AssistantFlyout with enter_to_submit off", () => {
     await user.keyboard("{Control>}{Enter}{/Control}");
     expectAsked("first\nsecond");
   });
+});
+
+// One line under the composer names the send key for the setting, and the
+// composer takes it as its description, so a screen reader hears it too.
+describe("AssistantFlyout send hint", () => {
+  const ENTER = "Enter to send, Shift+Enter for a new line";
+  const MOD_ENTER = "Cmd+Enter or Ctrl+Enter to send, Enter for a new line";
+
+  it("names Enter when enter_to_submit is on", async () => {
+    const { composer } = await openFlyout(true);
+
+    expect(screen.getByTestId("assistant-send-hint").textContent).toBe(ENTER);
+    expect(composer).toHaveAccessibleDescription(ENTER);
+  });
+
+  it.each([false, undefined])(
+    "names Cmd+Enter and Ctrl+Enter when enter_to_submit is %s",
+    async (enterToSubmit) => {
+      const { composer } = await openFlyout(enterToSubmit);
+
+      expect(screen.getByTestId("assistant-send-hint").textContent).toBe(
+        MOD_ENTER,
+      );
+      expect(composer).toHaveAccessibleDescription(MOD_ENTER);
+    },
+  );
 });
 
 // Japanese and Chinese input commit a word with Enter. That Enter belongs to
