@@ -1,7 +1,8 @@
 "use server";
 // The two writes behind the Account dialog: a person's own display name and
 // avatar (spec App. F, "the account pages collapse into one Account dialog
-// reachable from the user menu"), and the time zone their dates render in.
+// reachable from the user menu"), and their preferences: the time zone their
+// dates render in, and whether Enter sends in the assistant composer.
 //
 // It goes through the kernel seam like every other write in this app, and for
 // a reason worth stating. The deprecated app wrote `auth.users` straight from
@@ -70,7 +71,7 @@ export async function updateProfile(
 }
 
 /**
- * The Preferences tab's three fields. `get_user_preferences` answers with the
+ * The Preferences tab's four fields. `get_user_preferences` answers with the
  * whole set; the tab shows the ones it can set, and a partial `set_preferences`
  * leaves the rest as they are.
  */
@@ -80,6 +81,8 @@ export type PreferencesDraft = {
   /** An IANA zone name. */
   timezone: string;
   theme: "system" | "light" | "dark";
+  /** `enter_to_submit` (ADR-075): whether Enter sends in the assistant composer. */
+  enterToSubmit: boolean;
 };
 
 /** INV-19: a `"use server"` module answers with an ActionResult, so a read's refusal takes a write's shape. */
@@ -93,8 +96,11 @@ export async function readPreferences(
     page: "shell",
   });
   if (!read.ok) return readToActionResult(read);
-  const { language, timezone, theme } = read.value;
-  return { ok: true, value: { locale: language, timezone, theme } };
+  const { language, timezone, theme, enterToSubmit } = read.value;
+  return {
+    ok: true,
+    value: { locale: language, timezone, theme, enterToSubmit },
+  };
 }
 
 export async function savePreferences(
@@ -106,10 +112,11 @@ export async function savePreferences(
     locale: draft.locale,
     timezone: draft.timezone,
     theme: draft.theme,
+    enterToSubmit: draft.enterToSubmit,
   });
   if (!result.ok) return result;
-  const { locale, timezone, theme } = result.value;
-  return { ok: true, value: { locale, timezone, theme } };
+  const { locale, timezone, theme, enterToSubmit } = result.value;
+  return { ok: true, value: { locale, timezone, theme, enterToSubmit } };
 }
 
 export type ExportQueued = { exportId: string; status: string };

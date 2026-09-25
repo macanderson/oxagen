@@ -15,6 +15,7 @@ export const schemaDelete = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "schema" },
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

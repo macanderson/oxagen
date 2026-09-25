@@ -380,6 +380,34 @@ describe("approved call resumption", () => {
       expect(h.invoke).not.toHaveBeenCalled();
     },
   );
+  // The budget read is scoped to the org the call resumes in. It takes the
+  // scope as an argument (#4159), so a read with none would type-fail and,
+  // loosely typed, read no org at all.
+  it("reads the budgets of the org the call resumes in", async () => {
+    await resumeApprovedCall(ref);
+    expect(h.budgets).toHaveBeenCalledWith({ orgId: ref.orgId });
+  });
+  // R4: the listing now leaves out a tool a kill switch names, so the tool
+  // can be missing because of a switch. The refusal names the switch then,
+  // and a changed grant otherwise.
+  it.each([
+    ["a kill switch", { reason: "tool_version" }, "kill_switch_active"],
+    ["a changed grant", null, "tool_authorization_changed"],
+  ])(
+    "names %s when the fresh listing leaves the tool out",
+    async (_name, switched, reason) => {
+      h.tools.mockResolvedValue({ nameMap: {} });
+      h.kill.mockResolvedValue(switched);
+      expect(await resumeApprovedCall(ref)).toBe("failed");
+      expect(h.row.resumeError).toBe(reason);
+      expect(h.kill).toHaveBeenCalledWith({
+        capabilityId: "write_test",
+        readOnly: false,
+      });
+      expect(h.open).not.toHaveBeenCalled();
+      expect(h.invoke).not.toHaveBeenCalled();
+    },
+  );
   it("refuses changed validated defaults", async () => {
     h.schema = z.object({ secret: z.string(), count: z.number().default(2) });
     expect(await resumeApprovedCall(ref)).toBe("failed");

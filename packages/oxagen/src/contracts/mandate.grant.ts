@@ -25,6 +25,7 @@ export const mandateGrant = registerCapability({
   noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "governance" },
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: {

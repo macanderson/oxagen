@@ -26,7 +26,7 @@
     "properties": {
       "runsPerYear": {
         "type": "integer",
-        "minimum": 0,
+        "exclusiveMinimum": 0,
         "maximum": 1000000000,
         "description": "Projected agent runs per year"
       },
@@ -42,7 +42,7 @@
       },
       "actionsPerRun": {
         "type": "number",
-        "minimum": 0,
+        "exclusiveMinimum": 0,
         "maximum": 10000
       },
       "tier": {
@@ -69,11 +69,11 @@
         "properties": {
           "runsPerYear": {
             "type": "integer",
-            "minimum": 0
+            "exclusiveMinimum": 0
           },
           "actionsPerRun": {
             "type": "number",
-            "minimum": 0
+            "exclusiveMinimum": 0
           },
           "actionsPerRunSource": {
             "type": "string",

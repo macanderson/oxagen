@@ -44,6 +44,10 @@ type Part =
         inputTokens?: number;
         outputTokens?: number;
         totalTokens?: number;
+        inputTokenDetails?: {
+          cacheReadTokens?: number;
+          cacheWriteTokens?: number;
+        };
       };
     }
   | { type: "error"; error: string }
@@ -109,7 +113,50 @@ describe("translateAgentStream — usage event + credits", () => {
       model: BASE_ARGS.modelId,
       inputTokens: 100,
       outputTokens: 50,
+      cachedTokens: 0,
+      cacheWriteTokens: 0,
     });
+  });
+
+  it("prices the streamed creditsCharged on the finish part's cache reads and writes", async () => {
+    vi.mocked(meterCreditsForUsage).mockReturnValue(5n);
+
+    const events: StreamEvent[] = [];
+    await translateAgentStream({
+      ...BASE_ARGS,
+      fullStream: makeStream([
+        {
+          type: "finish",
+          totalUsage: {
+            inputTokens: 10_000,
+            outputTokens: 300,
+            totalTokens: 10_300,
+            inputTokenDetails: {
+              cacheReadTokens: 8_000,
+              cacheWriteTokens: 1_500,
+            },
+          },
+        },
+      ]),
+      emit: (e) => events.push(e),
+    });
+
+    // The meter sees the same four-field shape chargeUsageCredits bills on,
+    // so the live figure matches the debit instead of pricing the cached
+    // share as fresh input.
+    expect(vi.mocked(meterCreditsForUsage)).toHaveBeenCalledWith({
+      model: BASE_ARGS.modelId,
+      inputTokens: 10_000,
+      outputTokens: 300,
+      cachedTokens: 8_000,
+      cacheWriteTokens: 1_500,
+    });
+    const usageEvent = collectEvents(events, "usage")[0] as Extract<
+      StreamEvent,
+      { type: "usage" }
+    >;
+    expect(usageEvent.usage.cachedTokens).toBe(8_000);
+    expect(usageEvent.usage.creditsCharged).toBe(5);
   });
 
   it("(b) emits usage event WITHOUT creditsCharged when billing meter throws", async () => {
@@ -484,6 +531,29 @@ describe("emitUsageEvent", () => {
       model: "anthropic/claude-sonnet-5",
       inputTokens: 200,
       outputTokens: 80,
+      cachedTokens: 0,
+      cacheWriteTokens: 0,
+    });
+  });
+
+  it("clamps cache writes to the prompt share the reads left", () => {
+    vi.mocked(meterCreditsForUsage).mockReturnValue(3n);
+    emitUsageEvent(
+      () => {},
+      {
+        inputTokens: 1000,
+        outputTokens: 10,
+        totalTokens: 1010,
+        inputTokenDetails: { cacheReadTokens: 700, cacheWriteTokens: 900 },
+      },
+      "x/y",
+    );
+    expect(vi.mocked(meterCreditsForUsage)).toHaveBeenCalledWith({
+      model: "x/y",
+      inputTokens: 1000,
+      outputTokens: 10,
+      cachedTokens: 700,
+      cacheWriteTokens: 300,
     });
   });
 
@@ -502,6 +572,9 @@ describe("emitUsageEvent", () => {
     );
     const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
     expect(usage.usage.cachedTokens).toBe(800);
+    expect(vi.mocked(meterCreditsForUsage)).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedTokens: 800, cacheWriteTokens: 0 }),
+    );
   });
 
   it("clamps cachedTokens to the prompt size when the provider over-reports", () => {

@@ -540,6 +540,46 @@ describe("A3: deny-generation functions are security definer, pinned, and not pu
     expect(after[0]?.v).toBe("off");
   });
 
+  it("a caller that never set the bypass gets '' back, not 'on'", async () => {
+    // The body captures the prior value with `current_setting(..., true)`,
+    // which reads NULL when the session never set app.rls_bypass. set_config
+    // cannot unset a custom GUC, so the body restores COALESCE(prev, '') and
+    // the caller reads '' afterwards. That is the accepted behaviour (#2972).
+    // Every reader in packages/ compares the value to 'on', so NULL and '' both
+    // mean no bypass. This case pins it, so a restore that leaves 'on' behind
+    // fails here. The earlier cases all set 'off' first and cannot catch that.
+    let before: string | null | undefined;
+    let after: string | null | undefined;
+    const observed = await withBumpProbe("observe", async () => {
+      await sql.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_org_id', ${ORG_A}, true)`;
+        await tx`SELECT set_config('app.current_workspace_id', ${WS_A}, true)`;
+        const prior = await tx<
+          { v: string | null }[]
+        >`SELECT current_setting('app.rls_bypass', true) AS v`;
+        before = prior[0]?.v;
+        await tx`UPDATE iam.principals SET display_name = 'AZF Human' WHERE id = ${HUMAN_PRINCIPAL}`;
+        const rows = await tx<
+          { v: string | null }[]
+        >`SELECT current_setting('app.rls_bypass', true) AS v`;
+        after = rows[0]?.v;
+      });
+      return sql<
+        { observed: string | null }[]
+      >`SELECT observed FROM iam.azf_bypass_probe`;
+    });
+    // This file shares one pooled connection, and earlier cases set the GUC
+    // transaction-locally, so the session reads '' here rather than NULL.
+    // Both are the unset state this case needs.
+    expect([null, ""]).toContain(before);
+    // The probe shows the bump ran and held the bypass inside its body.
+    expect(observed.length).toBeGreaterThan(0);
+    for (const row of observed) {
+      expect(row.observed).toBe("on");
+    }
+    expect(after).toBe("");
+  });
+
   it("PUBLIC cannot execute the bump function", async () => {
     // Otherwise any role could invalidate an arbitrary tenant's cached allows —
     // a denial-of-service on authorization.

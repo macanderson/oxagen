@@ -18,6 +18,9 @@
 //   5. Every frame up to the branch point that carried content kept its body
 //      (`conflict`, `gap_before_from_seq`): the cassette would otherwise have
 //      a hole before the fork.
+//   6. The run still takes a new attempt once its row is locked (`conflict`,
+//      `run_not_writable` for a cancel or a pause that won the lock,
+//      `run_attempts_exhausted` at the pinned `max_attempts`).
 // The attempt is minted with the sealed attempt's engine identity and
 // provenance, and `forked_from_run_seq` records the branch point. No recorder
 // in this revision seals a ledger attempt at `fork` (`gradeSealedAttempt`
@@ -28,6 +31,7 @@ import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { runFork, type RunForkOutput } from "@oxagen/oxagen/contracts/run.fork";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { AttemptRecord, RunStore } from "@oxagen/run-ledger";
+import { isRunNotWritableError } from "@oxagen/run-ledger/run-errors";
 import {
   gradeAllows,
   isContentBearingFrame,
@@ -111,16 +115,27 @@ export function createRunForkHandler(
       after = last.seq;
     }
 
-    const created = await deps.attempts.createAttempt({
-      runId: run.runId,
-      producerId: sealed.producerId,
-      engine: sealed.engine,
-      resumedFrom: {
-        attemptId: sealed.attemptId,
-        attemptPublicId: sealed.attemptPublicId,
-      },
-      forkedFromRunSeq: input.fromSeq,
-    });
+    const created = await deps.attempts
+      .createAttempt({
+        runId: run.runId,
+        producerId: sealed.producerId,
+        engine: sealed.engine,
+        resumedFrom: {
+          attemptId: sealed.attemptId,
+          attemptPublicId: sealed.attemptPublicId,
+        },
+        forkedFromRunSeq: input.fromSeq,
+      })
+      .catch((err: unknown) => {
+        // A cancel or a pause can win the run lock after the reads above, and
+        // a run can reach its attempt ceiling. Each is the caller's conflict.
+        if (!isRunNotWritableError(err)) throw err;
+        throw conflict(
+          err.reason === "attempts_exhausted"
+            ? "run_attempts_exhausted"
+            : "run_not_writable",
+        );
+      });
     return {
       attemptId: created.attemptPublicId,
       attemptNumber: created.attemptNumber,

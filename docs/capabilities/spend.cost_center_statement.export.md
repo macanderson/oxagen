@@ -43,12 +43,17 @@ A line:
 | `runs` | integer | runs charged to the line |
 | `unpricedRuns` | integer | runs on the line that no frame priced |
 | `cost` | object or null | `{ micros, currency, basis }`, null when no run on the line was priced |
-| `runIds` | string[] | every run on the line, oldest first |
+| `runIds` | string[] | the oldest 100 runs on the line, oldest first |
+| `runIdsOmitted` | integer | runs on the line that `runIds` leaves out |
 
-Columns: `line, cost_center, runs, unpriced_runs, cost_micros, cost_cents, currency, basis, run_ids`. The `run_ids` field holds the ids separated by spaces. The `total` line leaves `cost_center` and `run_ids` empty, because every run is on a line above it.
+Columns: `line, cost_center, runs, unpriced_runs, cost_micros, cost_cents, currency, basis, run_ids`. The `run_ids` field holds every run id on the line, separated by spaces. The `lines` data lists at most 100 per line so a busy month does not carry every id twice. The CSV is the complete record. The `total` line leaves `cost_center` and `run_ids` empty, because every run is on a line above it.
+
+The handler reads the month's run rows in one query, oldest first by start time and run id, and selects only the columns the statement uses. It does not page: no index on `run_totals` leads with the organization, so each keyset page would scan the whole month again.
 
 ## Reconciliation
 
 Every run lands on exactly one line at its full cost, the `~none` line included. The lines' micros therefore sum to the total's micros. Cents are rounded half to even once per line (spec §12.3), and the total's cents are rounded once from the total's micros. The line cents can differ from the total cents by that rounding, so micros are the figure that reconciles. An unpriced run is counted and listed on its line and adds nothing to its cost.
+
+A statement figure sums micros in one currency. When a line or the total holds priced runs in two currencies, the handler refuses the statement with `conflict` and reason `statement_mixed_currency`, and the message names both currencies. An unpriced run's currency is not checked, because it adds no figure.
 
 The `cost_center` level of `get_spend` and `export_statement` answers one workspace's share of these lines. Summed over every workspace for the same month, it gives the same runs and micros per cost center.

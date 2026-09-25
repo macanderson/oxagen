@@ -13,8 +13,18 @@ The strict input contains 1 to 200 `events`. Each carries `attemptSeq`,
 existing ledger validates event kinds, dense sequences, replay digests,
 redaction, and the run's pinned retention policy.
 
+A malformed frame is refused with a 400 and writes nothing. That covers an
+event with both or neither of `payload` and `encryptedPayloadRef`, an event
+type outside the registry, a payload that fails its event schema, a raw
+content field, and an inline payload over the byte cap. A batch that skips a
+sequence answers 409 `run_event_sequence_gap`. A replay whose digest differs
+from the recorded event answers 409 `run_event_integrity_conflict`.
+
 The response returns accepted event receipts, the last attempt and run
-sequences, and the refreshed `expiresAt`. It refreshes the existing bearer
+sequences, and the refreshed `expiresAt`. Each receipt carries `attemptSeq`,
+`runSeq`, `eventDigest`, and `idempotent`. It does not carry the ledger's
+internal event row id. Earlier responses included that id as `eventId`, and
+it was removed on 2026-09-25 (#3665). It refreshes the existing bearer
 credential rather than replacing its secret. The credential is rechecked
 under the run lock before any evidence write. Revocation, expiry, a changed
 attempt binding, a sealed attempt, or cancellation refuses the append.

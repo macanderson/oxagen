@@ -3,8 +3,9 @@
 // only when a live call runs. It is the one browser module that imports
 // @oxagen/auth/client; the server half is src/server/session.ts. A destination
 // Better Auth navigates to (the social sign-in `callbackURL`) is a SafePath.
-import { routes, type SafePath } from "@/shared/safe-path";
+import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 import { type AuthOutcomeKey, authOutcomeKey } from "./auth-errors";
+import { AFTER_SIGNUP } from "./routes";
 
 export type ClientAuthResult =
   | { ok: true; twoFactor?: boolean; needsVerification?: boolean }
@@ -131,6 +132,64 @@ export async function liveSignInSso(input: {
     errorCallbackURL: routes.login(),
   });
   return fail(reply) ?? { ok: true };
+}
+
+/**
+ * The reply to a request that must not say whether an account exists. Only a
+ * refusal from Better Auth's rate limiter is shown. Every other failure reads
+ * as sent, the same as the reply for a registered address.
+ */
+function limitedOnly(reply: BetterAuthReply): ClientAuthResult {
+  return reply.error && authOutcomeKey(reply.error) === "rateLimited"
+    ? { ok: false, outcome: "rateLimited" }
+    : { ok: true };
+}
+
+// The reset and verification calls below go over HTTP to /api/auth rather
+// than through a server action, because Better Auth applies its rate limiter
+// only in its HTTP router. A direct `auth.api.*` call on the server skipped
+// it, which let anyone send reset and verification mail without limit (#4042).
+
+/** Emails a reset link. Better Auth appends `?token=` to `redirectTo` and checks it against its trusted origins. */
+export async function liveRequestPasswordReset(input: {
+  email: string;
+}): Promise<ClientAuthResult> {
+  const reply: BetterAuthReply = await (await client()).requestPasswordReset({
+    email: input.email,
+    redirectTo: routes.resetPassword(),
+  });
+  return limitedOnly(reply);
+}
+
+/** Emails a new verification link that lands on `next` once verified, or on the new-organization step. */
+export async function liveResendVerification(input: {
+  email: string;
+  next?: string;
+}): Promise<ClientAuthResult> {
+  const reply: BetterAuthReply = await (await client()).sendVerificationEmail({
+    email: input.email,
+    callbackURL: sanitizeNext(input.next ?? null, AFTER_SIGNUP),
+  });
+  return limitedOnly(reply);
+}
+
+/** Sets a new password from a reset link's token. */
+export async function liveResetPassword(input: {
+  token: string;
+  newPassword: string;
+}): Promise<ClientAuthResult> {
+  const reply: BetterAuthReply = await (await client()).resetPassword({
+    token: input.token,
+    newPassword: input.newPassword,
+  });
+  if (!reply.error) return { ok: true };
+  const outcome = authOutcomeKey(reply.error);
+  // An unrecognised failure is an outage until shown otherwise. Calling it an
+  // expired link would send the person for a new one that fails the same way.
+  return {
+    ok: false,
+    outcome: outcome === "unknown" ? "unavailable" : outcome,
+  };
 }
 
 export function rememberPendingNext(next: SafePath): void {

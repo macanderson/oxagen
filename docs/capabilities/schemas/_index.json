@@ -1,5 +1,5 @@
 {
-  "generatedCount": 390,
+  "generatedCount": 391,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -967,6 +967,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -1167,6 +1168,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_conversation",
+      "domain": "conversation",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1386,7 +1398,8 @@
       "domain": "shell",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1604,7 +1617,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1626,7 +1640,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1756,7 +1771,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1780,7 +1796,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2080,7 +2097,8 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2113,7 +2131,8 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2561,7 +2580,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2620,7 +2640,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3274,8 +3295,7 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp",
-        "agent"
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3286,8 +3306,7 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp",
-        "agent"
+        "mcp"
       ],
       "component": null,
       "produces": [],

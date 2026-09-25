@@ -212,6 +212,7 @@ import { conversationPurge } from "./conversation.purge";
 import { conversationRename } from "./conversation.rename";
 import { conversationFilesList } from "./conversation.files.list";
 import { conversationExport } from "./conversation.export";
+import { conversationGet } from "./conversation.get";
 import { conversationAttachmentAdd } from "./conversation.attachment.add";
 import { organizationCreate } from "./org.create";
 import { orgMemberAdd } from "./org.member.add";
@@ -830,6 +831,7 @@ export {
   conversationRename,
   conversationFilesList,
   conversationExport,
+  conversationGet,
   conversationAttachmentAdd,
   organizationCreate,
   orgList,
@@ -1234,6 +1236,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   conversationRename,
   conversationFilesList,
   conversationExport,
+  conversationGet,
   conversationAttachmentAdd,
   organizationCreate,
   orgList,

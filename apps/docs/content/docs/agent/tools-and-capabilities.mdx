@@ -26,6 +26,22 @@ The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent pick
 | `list_executions` / `get_execution_trace` | List past agent runs and read one run as a tree. |
 | `debug_execution` | Diagnose why a run failed: the failing step, the error class, and suspect files. |
 
+### Runs, spend and approvals
+
+These reads return the same record the Fleet, Run, Spend and Agents pages show. Each one is low risk and runs without an approval.
+
+| Tool | Description |
+|---|---|
+| `list_runs` / `get_run` | List the workspace's runs, newest first, and read one run's frames. The assistant's own turns are not listed. |
+| `list_recent_runs` | Read the newest runs with the four fields the command menu shows. |
+| `get_run_cost` | Read one run's cost by model and token class. |
+| `get_spend` / `get_spend_drill` | Read the workspace's spend by operator, agent, model, tool, task or cost center, and drill into one operator, agent or tool. |
+| `list_approvals` | List the tool calls that wait on a person. |
+| `list_agents` / `get_agent` | List the workspace's agents, and read one agent's credentials, roles, hosts and definition. |
+| `get_nav_counts` | Read the sidebar's counts: pending approvals, open proposals and open critical incidents. |
+
+The assistant offers seven tools on every turn: `list_runs`, `get_run`, `get_run_cost`, `get_spend`, `list_approvals`, `list_agents` and `search_graph`. It finds any other tool with `search_tools` and loads it with `load_tools`.
+
 ### Memory
 
 | Tool | Description |
@@ -50,10 +66,7 @@ These are the *ontology read set*. See `docs/capabilities/_ontology-read-set.md`
 
 ### Approvals
 
-| Tool | Description |
-|---|---|
-| `resolve_approval` | Allow or deny a pending tool-call approval request. This is for programmatic use. In the app, approval cards render inline in chat. |
-| `resolve_mcp_consent` | Allow or deny first-use consent for an external MCP tool. |
+An agent cannot approve or deny a parked tool call, or grant consent to an external MCP tool. `resolve_approval` and `resolve_mcp_consent` are not agent tools, because both are a person's decision. You answer them on Fleet, on the Run page, or from the approvals drawer. A program answers them through the API or MCP.
 
 ### Repository status (read-only)
 

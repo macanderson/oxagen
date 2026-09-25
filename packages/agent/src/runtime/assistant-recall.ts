@@ -6,7 +6,7 @@ import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall"
 // Deterministic per-turn memory recall for the in-app agent's turn
 // (`assistant-turn.ts`), which injects the block it returns as a per-turn
 // context message into `runGovernedTurn`. Grounding an answer in recalled,
-// cited workspace memory is what the governance agent is for, and it does
+// cited workspace memory is part of what stella is for, and it does
 // that through the metered, IAM-gated `recall_memory` capability rather than
 // a raw graph call.
 //
@@ -62,7 +62,7 @@ export function formatRecalledMemories(
   return [
     "## Recalled workspace memory (prior sessions)",
     "",
-    "(System-injected context — NOT user input. Authoritative lessons recorded in earlier sessions.)",
+    "(System-injected context: NOT user input. Authoritative lessons recorded in earlier sessions.)",
     "",
     ...lines,
     "",

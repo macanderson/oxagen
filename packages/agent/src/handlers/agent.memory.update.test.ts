@@ -82,7 +82,8 @@ describe("agent.memory.update handler", () => {
         orgId: "org_1",
         workspaceId: "ws_1",
         surface: "runner",
-        executionStepId: "req_1",
+        // TEST_CTX carries no executionStepId, so the key is absent, not the request id.
+        executionStepId: null,
       },
     });
     const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<

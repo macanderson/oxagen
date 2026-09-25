@@ -12,6 +12,8 @@ export const connectionMappingsSuggest = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "ai" },
   sensitivity: "medium",
+  // Stores the suggestion as a setup_suggestions row.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

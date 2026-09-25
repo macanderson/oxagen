@@ -45,13 +45,22 @@ interface LabelAccumulator {
   indexes: string[];
   vectorIndexes: string[];
   /**
-   * True when any index/constraint references orgId — the tenant scope key.
-   * Under-reports: a label scoped by workspaceId alone (:EntityNode, indexed on
-   * (workspaceId, entityType)) leaves this false even though its rows are
-   * tenant-owned. Widening the check to workspaceId would change the manifest's
-   * bytes and hash, so it is a deliberate follow-up, not a drive-by edit.
+   * True when any index/constraint references a tenant scope key: orgId or
+   * workspaceId. A label scoped by workspaceId alone (:EntityNode, indexed on
+   * (workspaceId, entityType)) is still tenant-owned, because a workspace
+   * belongs to exactly one organization.
    */
-  orgScoped: boolean;
+  tenantScoped: boolean;
+}
+
+/**
+ * Lowercased property names that mark a label's rows as tenant-owned. A
+ * workspace belongs to one organization, so either key scopes the row.
+ */
+const TENANT_SCOPE_KEYS = new Set(["orgid", "workspaceid"]);
+
+function namesTenantScopeKey(props: string[]): boolean {
+  return props.some((p) => TENANT_SCOPE_KEYS.has(p.toLowerCase()));
 }
 
 function ensure(
@@ -66,7 +75,7 @@ function ensure(
       constraints: [],
       indexes: [],
       vectorIndexes: [],
-      orgScoped: false,
+      tenantScoped: false,
     };
     map.set(label, acc);
   }
@@ -98,7 +107,7 @@ export function parseCypherSchema(cypher: string): ManifestTable[] {
     const props = propNames(m[3]);
     for (const p of props) acc.properties.add(p);
     acc.constraints.push(cname);
-    if (props.some((p) => p.toLowerCase() === "orgid")) acc.orgScoped = true;
+    if (namesTenantScopeKey(props)) acc.tenantScoped = true;
   }
 
   // Indexes (plain + vector): CREATE [VECTOR] INDEX <n> ... FOR (x:Label) ON (x.a, x.b)
@@ -114,7 +123,7 @@ export function parseCypherSchema(cypher: string): ManifestTable[] {
     for (const p of props) acc.properties.add(p);
     if (isVector) acc.vectorIndexes.push(iname);
     else acc.indexes.push(iname);
-    if (props.some((p) => p.toLowerCase() === "orgid")) acc.orgScoped = true;
+    if (namesTenantScopeKey(props)) acc.tenantScoped = true;
   }
 
   const tables: ManifestTable[] = [];
@@ -145,7 +154,7 @@ export function parseCypherSchema(cypher: string): ManifestTable[] {
       store: "neo4j",
       domain: assignDomain("neo4j", acc.label),
       name: acc.label,
-      tenantScoped: acc.orgScoped,
+      tenantScoped: acc.tenantScoped,
       columns,
       meta,
     });

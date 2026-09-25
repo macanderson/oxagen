@@ -1,9 +1,9 @@
 /**
  * `delete_cost_center`: soft-delete a label from the organization's list
- * (ADR-142). The row stays, so past statements still name it; agents and
- * workspaces that name it keep the value, but the rollup no longer charges a
- * new run to a deleted label. Org Owner, Admin or Billing, checked in the
- * handler.
+ * (ADR-142). The row stays, so past statements still name it. Every agent and
+ * workspace that names it is cleared, so the rollup charges none of their new
+ * runs to it, and restoring the label restores no assignment. Org Owner, Admin
+ * or Billing, checked in the handler.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";

@@ -1,7 +1,11 @@
 // audit-exempt: configuration inspection; no skill is loaded and the kernel audits access.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { skillSearchPreview } from "@oxagen/oxagen/contracts/skill.search.preview";
-import { estimateSkillTokens } from "@oxagen/oxagen/contracts/skill.propose";
+import {
+  estimateSkillTokens,
+  GRANTING_FRONTMATTER_KEYS,
+  scanForSecrets,
+} from "@oxagen/oxagen/contracts/skill.propose";
 import {
   skillCandidateSchema,
   type SkillCandidate,
@@ -93,6 +97,22 @@ async function loadSkillCatalog(
               code: "conflict",
               reason: "skill_catalog_invalid",
               message: "A published skill has invalid frontmatter",
+            });
+          // A pinned file on the production branch can change without passing
+          // propose_skill's checks, so the catalog repeats the two that guard
+          // what a candidate carries: no frontmatter key may grant authority,
+          // and no credential may reach a description or a load.
+          if (
+            GRANTING_FRONTMATTER_KEYS.some((key) =>
+              Object.hasOwn(fm.fields, key),
+            ) ||
+            scanForSecrets(file) !== null
+          )
+            throw new HandlerError({
+              code: "conflict",
+              reason: "skill_catalog_unsafe",
+              message:
+                "A published skill grants authority or carries a credential",
             });
           return skillCandidateSchema.parse({
             id,

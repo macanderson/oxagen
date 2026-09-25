@@ -106,6 +106,7 @@ const workspaces = vi.fn<DataSource["org"]["workspaces"]>();
 const refuse = () => Promise.reject(new Error("not an Audit read"));
 const source: DataSource = {
   runtimes: { list: refuse, agents: refuse },
+  conversations: { latest: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: {
     context: refuse,
@@ -269,7 +270,9 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockReturnValue(NOW);
   events.mockReset();
   preferences.mockReset();
-  preferences.mockResolvedValue(readOk({ timeZone: "America/Los_Angeles" }));
+  preferences.mockResolvedValue(
+    readOk({ timeZone: "America/Los_Angeles", enterToSubmit: false }),
+  );
   exportEvents.mockReset();
   retention.mockReset();
   retention.mockResolvedValue(readOk(POLICY));

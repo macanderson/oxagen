@@ -26,12 +26,17 @@
  */
 
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
-import { createAgentRunAuthorizationSnapshot } from "@oxagen/iam";
+import {
+  createAgentRunAuthorizationSnapshot,
+  readActiveKillSwitches,
+  resourceScopeDigestOf,
+} from "@oxagen/iam";
 import { INTERACTIVE_AGENT_SLUG } from "@oxagen/oxagen/interactive-agent";
 import { digestJcs } from "@oxagen/run-evidence";
 import {
   canonicalJson,
   createPostgresRunStore,
+  digestOfCanonicalJson,
   parseRunSpecV2,
   RETENTION_CONTENT_CLASSES,
   TERMINAL_EVENT_TYPE,
@@ -40,6 +45,7 @@ import {
   type PlatformSurface,
   type ResolvedEngineIdentity,
   type RunStore,
+  type ToolEngineCallOutcome,
 } from "@oxagen/run-ledger";
 import {
   deferredEvidenceArchive,
@@ -49,7 +55,13 @@ import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
-import type { WorkspaceInstructionsFrame } from "./workspace-instructions";
+import type { AssistantSteeringFrame } from "./assistant-steering";
+import {
+  GOAL_VERDICT_EVENT_TYPE,
+  goalVerdictPayload,
+  type TurnLedgerGoalVerdict,
+} from "./engine/goal";
+import type { HistorySummaryFrame } from "./history-summary";
 import type {
   TurnLedger,
   TurnLedgerModelCall,
@@ -117,22 +129,37 @@ const logger = pino({
 const GOAL_MAX_CHARS = 8192;
 
 /**
+ * The summary of a thread's older messages, as the spec's context policy and
+ * the `context.history_summarized` frame name it (`history-summary.ts`).
+ */
+export const HISTORY_SUMMARY_PROVIDER = "conversation_history";
+
+/**
  * The context the turn frames, as the spec names it. `engram` is the
  * workspace memory `recallWorkspaceMemoryMessage` reads; `page` is the
- * page-context message the app's turn carries. Both are assembled in this
- * process, which is why they are named here rather than resolved from a
- * provider registry the turn does not consult.
+ * page-context message the app's turn carries; `conversation_history` is the
+ * summary of the messages older than the turn's history window (#4171). All
+ * three are assembled in this process, which is why they are named here
+ * rather than resolved from a provider registry the turn does not consult.
  */
-export const ASSISTANT_CONTEXT_PROVIDERS = ["engram", "page"] as const;
+export const ASSISTANT_CONTEXT_PROVIDERS = [
+  "engram",
+  "page",
+  HISTORY_SUMMARY_PROVIDER,
+] as const;
 
-/** One recalled-memory message and one page-context message, at most. */
+/**
+ * One recalled-memory message, one page-context message and one history
+ * summary, at most.
+ */
 export const ASSISTANT_MAX_CONTEXT_FRAMES = ASSISTANT_CONTEXT_PROVIDERS.length;
 
 /**
- * The ceiling those frames are built under. Both are bounded at assembly —
- * the recall by its own row and query limits, the page context by the
- * contract's page-context schema — so this is the spec's statement of the
- * budget, not a second gate.
+ * The ceiling those frames are built under. Each is bounded at assembly: the
+ * recall by its own row and query limits, the page context by the contract's
+ * page-context schema, and the history summary by its output ceiling
+ * (`HISTORY_SUMMARY_MAX_OUTPUT_TOKENS`). So this is the spec's statement of
+ * the budget, not a second gate.
  */
 export const ASSISTANT_MAX_CONTEXT_TOKENS = 8192;
 
@@ -167,6 +194,12 @@ export interface OpenAssistantRunArgs extends AssistantRunScope {
   surface: AssistantRunSurface;
   /** This turn's user text; recorded as the run's goal. */
   instruction: string;
+  /**
+   * The goal a verifier judges the turn against, when the caller set one. It
+   * is the run's goal in place of the instruction: it is what the run is
+   * proven against, and the instruction stays on the first model frame.
+   */
+  goal?: string;
   /** The step cap the turn runs under; pinned on the spec. */
   maxSteps: number;
   /**
@@ -191,9 +224,6 @@ export type AssistantRunReceipt =
   | ({ kind: "model" } & TurnLedgerModelCall)
   | ({ kind: "tool" } & TurnLedgerToolCall);
 
-/** Where the checked instructions came from, as the frame's payload names it. */
-export const WORKSPACE_INSTRUCTIONS_PROVIDER = "workspace_prompt_config";
-
 /** A recorded assistant run: the ledger hook the turn writes through, plus its ids. */
 export interface AssistantRunRecorder extends TurnLedger {
   readonly runId: string;
@@ -212,11 +242,17 @@ export interface AssistantRunRecorder extends TurnLedger {
    */
   readonly receipts: readonly AssistantRunReceipt[];
   /**
-   * The workspace instructions this turn's prompt carried, or the ones it
-   * refused (#3303). Written before the engine is asked anything, so the
+   * What the steering assembler put in this turn's prompt and what it cut
+   * (ADR-093, #4158). Written before the engine is asked anything, so the
    * record states what the model was told even when the turn then fails.
    */
-  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void>;
+  steeringManifest(frame: AssistantSteeringFrame): Promise<void>;
+  /**
+   * The summary this turn carried in place of the messages older than its
+   * history window, or why it carried an old one or none (#4171). Written
+   * before the engine is asked anything, beside the steering manifest.
+   */
+  historySummary(frame: HistorySummaryFrame): Promise<void>;
 }
 
 /** What admission resolved about who acts and under which retention policy. */
@@ -227,6 +263,58 @@ export interface AssistantRunIdentity {
   agentVersionChecksum: string;
   initiatingPrincipalId: string;
   retention: { rowId: string; publicId: string; digest: string };
+}
+
+/**
+ * The workspace's assistant agent as a kill switch names it, and the `agent`
+ * switch that stops it, if one is on.
+ */
+export interface AssistantAgentState {
+  /** Public id (`agt_…`): the id an `agent` switch is flipped on. */
+  agentId: string;
+  /** The `oxagen.assistant` principal, once a first turn provisioned it. */
+  principalId: string | null;
+  /** The active `agent` switch on the assistant, or null when none is on. */
+  stoppedBy: { publicId: string; reason: string } | null;
+}
+
+/**
+ * Read the assistant agent and whether an operator switched it off. Read only:
+ * a workspace with no assistant agent answers null here and is refused later,
+ * by `openAssistantRun`, as `assistant_agent_missing`. The turn refuses a
+ * stopped assistant before it writes anything (assistant-turn.ts) and passes
+ * the rest to `materializeTools` as the agent the turn acts as.
+ */
+export async function readAssistantAgentState(
+  tx: Tx,
+  scope: AssistantRunScope,
+): Promise<AssistantAgentState | null> {
+  const [agent] = await tx
+    .select({
+      publicId: schema.agents.publicId,
+      principalId: schema.agents.principalId,
+    })
+    .from(schema.agents)
+    .where(
+      and(
+        eq(schema.agents.orgId, scope.orgId),
+        eq(schema.agents.workspaceId, scope.workspaceId),
+        eq(schema.agents.slug, INTERACTIVE_AGENT_SLUG),
+        isNull(schema.agents.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!agent) return null;
+  // `set_kill_switch` writes an `agent` switch as a resource-scope deny over
+  // this digest (kill_switch.set.ts), so the digest is what identifies it.
+  const digest = resourceScopeDigestOf({ kind: "agent", id: agent.publicId });
+  const switches = await readActiveKillSwitches(tx, scope);
+  const hit = switches.find((s) => s.resourceScopeDigest === digest);
+  return {
+    agentId: agent.publicId,
+    principalId: agent.principalId,
+    stoppedBy: hit ? { publicId: hit.publicId, reason: hit.reason } : null,
+  };
 }
 
 /**
@@ -466,7 +554,7 @@ export async function openAssistantRun(
     const spec = parseRunSpecV2({
       version: 2,
       run_kind: "general",
-      goal: goalOf(args.instruction),
+      goal: goalOf(args.goal ?? args.instruction),
       engine_policy: {
         requested_engine: ASSISTANT_ENGINE.name,
         allowed_engine_versions: [ASSISTANT_ENGINE.version],
@@ -759,25 +847,60 @@ class Recorder implements AssistantRunRecorder {
   }
 
   /**
-   * The workspace's standing instructions as a context frame: the digest of
-   * the exact text, its length against the budget it was checked under, and
-   * whether the prompt carried it. The text itself is the frame's body, so a
-   * reader of the run can see what the workspace told the agent without the
-   * payload carrying content.
+   * The assembler's manifest as a `steering.manifest` frame, the kind a
+   * wrapped agent's host seals for the same account. The payload is the
+   * manifest's summary and digests: the text the model read, the manifest
+   * itself, and the workspace instructions when they were a candidate. The
+   * manifest, one item per candidate with its outcome and the reason for a
+   * cut, is the frame's body, which the Run page's Context tab reads.
    */
-  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void> {
-    const eventType = "context.instructions_applied";
+  steeringManifest(frame: AssistantSteeringFrame): Promise<void> {
+    const eventType = "steering.manifest";
+    const { manifest } = frame;
     return this.append({
       eventType,
       payload: {
-        provider: WORKSPACE_INSTRUCTIONS_PROVIDER,
+        schema: manifest.schema,
+        delivers: manifest.delivers,
+        budget_tokens: manifest.budget_tokens,
+        spent_tokens: manifest.spent_tokens,
+        included: manifest.included,
+        cut: manifest.cut,
+        text_digest: manifest.text_digest,
+        manifest_digest: digestOfCanonicalJson(manifest),
+        ...(frame.instructionsDigest
+          ? { instructions_digest: frame.instructionsDigest }
+          : {}),
+        ...(frame.unavailableKinds.length > 0
+          ? { unavailable_kinds: [...frame.unavailableKinds] }
+          : {}),
+      },
+      body: jsonBody(eventType, manifest),
+    });
+  }
+
+  /**
+   * The history summary as a context frame: the digest of the exact summary,
+   * how many messages it stands in for, how many the turn carried word for
+   * word, and whether this turn wrote it. The summary itself is the frame's
+   * body. A turn that carried none writes no body.
+   */
+  historySummary(frame: HistorySummaryFrame): Promise<void> {
+    const eventType = "context.history_summarized";
+    return this.append({
+      eventType,
+      payload: {
+        provider: HISTORY_SUMMARY_PROVIDER,
         outcome: frame.outcome,
-        instructions_digest: frame.digest,
-        instructions_chars: frame.chars,
-        budget_chars: frame.budgetChars,
+        ...(frame.digest !== null && frame.chars !== null
+          ? { summary_digest: frame.digest, summary_chars: frame.chars }
+          : {}),
+        covered_message_count: frame.coveredMessages,
+        window_message_count: frame.windowMessages,
+        regenerated: frame.regenerated,
         ...(frame.reasonCode ? { reason_code: frame.reasonCode } : {}),
       },
-      body: jsonBody(eventType, frame.text),
+      body: frame.text === null ? undefined : jsonBody(eventType, frame.text),
     });
   }
 
@@ -868,7 +991,16 @@ class Recorder implements AssistantRunRecorder {
         engine_seq: record.seq,
         tool_call_id: record.requestId,
         tool_name: record.toolName,
-        outcome: record.outcome,
+        // The registry lists the outcomes the ledger accepts. An outcome the
+        // turn adds without it fails to compile here, rather than refusing the
+        // receipt and cancelling the turn at run time.
+        outcome: record.outcome satisfies ToolEngineCallOutcome,
+        // The approval a parked call waits on, so the Run page can say which
+        // one. Only a parked receipt carries it; the registry refuses it on
+        // any other outcome.
+        ...(record.outcome === "parked" && record.approvalPublicId
+          ? { approval_public_id: record.approvalPublicId }
+          : {}),
         input_digest: digestJcs(record.input ?? null),
         ...(record.outcome === "completed"
           ? { output_digest: digestJcs(record.output ?? null) }
@@ -884,6 +1016,24 @@ class Recorder implements AssistantRunRecorder {
           ? (record.output ?? null)
           : (record.error ?? null),
       ),
+    });
+  }
+
+  /**
+   * One verifier round of a goal-shaped turn. The payload carries the round,
+   * the verdict and the digests; the goal and the verifier's reasoning are
+   * the body, so a reader of the run can see why the verifier said what it
+   * said. Not a receipt: a verdict is no model or tool step of the turn.
+   */
+  goalVerdict(record: TurnLedgerGoalVerdict): Promise<void> {
+    const eventType = GOAL_VERDICT_EVENT_TYPE;
+    return this.append({
+      eventType,
+      payload: goalVerdictPayload(record),
+      body: jsonBody(eventType, {
+        goal: record.goal,
+        reasoning: record.reasoning,
+      }),
     });
   }
 
