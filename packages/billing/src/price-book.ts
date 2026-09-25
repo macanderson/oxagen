@@ -611,6 +611,8 @@ export async function loadPriceBookSlice(
   slice: PriceBookSlice,
 ): Promise<PriceBook> {
   if (slice.models.length === 0) return [];
+  // tenancy: system read because the cost rollup runs outside a tenant scope.
+  // sliceCondition keeps it filtered to the list rows and the orgId's own rows.
   const rows = await withSystemDb((tx) =>
     tx.select().from(schema.priceEntries).where(sliceCondition(slice)),
   );
