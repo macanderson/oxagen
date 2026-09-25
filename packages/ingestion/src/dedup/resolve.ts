@@ -253,7 +253,19 @@ export async function resolveEntity(
         executionStepId: null,
       },
     });
-  } catch {
+  } catch (err) {
+    // Log the cause before degrading. A 401 means a bad gateway credential and
+    // a 429 means rate limiting, and an operator can only fix the right one if
+    // the embedder's message reaches the logs.
+    console.warn(
+      "[ingestion] dedup: embedding failed, deferring similarity match",
+      {
+        err: err instanceof Error ? err.message : String(err),
+        orgId,
+        entityType: mutation.entityType,
+        naturalKey: mutation.naturalKey,
+      },
+    );
     vector = null;
   }
 

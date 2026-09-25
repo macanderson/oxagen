@@ -348,6 +348,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
   const refuse = () => Promise.reject(new Error("not a Steering read"));
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
+    conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,

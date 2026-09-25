@@ -1174,6 +1174,17 @@
       "consumes": []
     },
     {
+      "name": "get_conversation",
+      "domain": "conversation",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_data_plane",
       "domain": "org",
       "surfaces": [

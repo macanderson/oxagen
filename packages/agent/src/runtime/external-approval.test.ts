@@ -75,13 +75,15 @@ vi.mock("@oxagen/database", () => {
       values: (values: Row) => ({
         returning: async () => {
           const id = `approval-${h.approvals.length + 1}`;
+          const publicId = `apr_${h.approvals.length + 1}`;
           h.approvals.push({
             id,
+            publicId,
             resolution: null,
             tokenUsedAt: null,
             ...values,
           });
-          return [{ approvalId: id }];
+          return [{ approvalId: id, approvalPublicId: publicId }];
         },
       }),
     }),
@@ -156,6 +158,9 @@ describe("parked external approval proof", () => {
   it("records one pending request and recovers it on a later conversation turn", async () => {
     const pending = await externalApproval(args);
     expect(pending.status).toBe("pending");
+    // The public id travels with the row id, so the parked call's receipt
+    // can name the approval the Run page shows.
+    expect(pending.approvalPublicId).toBe("apr_1");
     expect(await externalApproval({ ...args, messageId: "message-2" })).toEqual(
       pending,
     );

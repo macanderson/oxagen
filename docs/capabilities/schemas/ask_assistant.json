@@ -26,8 +26,15 @@
       "conversationId": {
         "anyOf": [
           {
-            "type": "string",
-            "format": "uuid"
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "string"
+              }
+            ]
           },
           {
             "type": "null"
@@ -114,6 +121,9 @@
         "type": "string",
         "format": "uuid"
       },
+      "conversationPublicId": {
+        "type": "string"
+      },
       "userMessageId": {
         "type": "string",
         "format": "uuid"
@@ -156,6 +166,7 @@
     },
     "required": [
       "conversationId",
+      "conversationPublicId",
       "userMessageId",
       "assistantMessageId",
       "runId",

@@ -118,7 +118,7 @@
       },
       "budget": {
         "type": "integer",
-        "minimum": 0
+        "exclusiveMinimum": 0
       },
       "checks": {
         "type": "array",
@@ -167,7 +167,7 @@
         "properties": {
           "number": {
             "type": "integer",
-            "minimum": 0
+            "exclusiveMinimum": 0
           },
           "url": {
             "type": "string"
