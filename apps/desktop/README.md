@@ -75,7 +75,7 @@ collector's `/status` on loopback) and every action runs a sidecar:
 | Wrappers | `host.harnesses`, hook presence per harness | `tacho reassign --harness …` |
 | Command line | PATH, `cli_install` state | linked automatically on every launch; "Link into PATH" / "Remove links" for manual control |
 | Uninstall | — | `remove_local_data` after unenroll; then the platform uninstaller |
-| Masthead | the release feed, on demand | `tauri-plugin-updater`: check, download + verify, install, relaunch |
+| Masthead | the release feed, at launch, hourly, on focus, and on demand | `tauri-plugin-updater`: check, download + verify, install, relaunch |
 
 ### What installing does
 
@@ -210,9 +210,47 @@ the masthead fetches
 `https://github.com/macanderson/oxagen/releases/download/desktop-latest/latest.json`,
 and **Install** downloads the bundle for this platform, verifies it against
 the minisign public key in `tauri.conf.json` (`plugins.updater.pubkey`),
-installs it and relaunches; download milestones stream into the Activity
+installs it and relaunches. Download milestones stream into the Activity
 panel. The pure half (caption, byte formatting, the milestone gate) is
 covered by `src/updater.test.ts`.
+
+### Bundled UI
+
+The window renders the UI bundled into the app at build time
+(`build.frontendDist` is `../dist`). It never loads app.oxagen.sh: the CSP
+allows `connect-src ipc:` only, and the app opens app.oxagen.sh in the system
+browser. A web deploy therefore changes nothing in an open window. A new
+build of the app does, and a new build reaches an installed app only through
+the updater feed.
+
+### Automatic check
+
+`src/update-watch.ts` reads the feed at launch, every hour, and when the window
+takes focus with the last check at least 15 minutes old. When the feed offers
+a newer version, a panel names it with **Install and relaunch** and **Later**,
+and the masthead shows **Install**. The watch installs nothing and relaunches
+nothing. Only the click on Install does, and Install stays disabled while
+another action runs. **Later** hides the panel for that version until the next
+launch. A check that fails stays quiet, because an offline laptop would
+otherwise raise an error every hour. The masthead button still reports its own failures.
+`src/update-watch.test.ts` covers the prompt: it fires for a newer version,
+stays away for the running one, and never downloads or relaunches on its own.
+
+The feed carries releases only. Deploy builds reach downloads.oxagen.sh
+without an updater entry (ADR-158), so an open app offers the next release,
+not every deploy.
+
+Mac chose this on 2026-09-25 (#3697). Three other mechanisms were considered
+and rejected, because each assumes the window loads a remote page:
+
+- Reload on focus. There is no remote page to reload, and reloading the
+  bundled UI shows the same build.
+- Poll a build id and reload on a mismatch. The feed's version is the build
+  id, and applying a new build needs an install, not a reload.
+- Push a reload event from the deploy pipeline. Deploys do not move the feed
+  (ADR-158), and an app left open would still need an install.
+
+### Signing key
 
 The key pair came from `tauri signer generate` with no password. The private
 half is **not** in the repository: it lives at `~/.tauri/oxagen-desktop.key`
@@ -258,6 +296,7 @@ src/            React UI (app.tsx), the sidecar bridge (bridge.ts, tested with
                 the Tauri modules faked), the tacho status parser
                 (tacho-status.ts, pure), the argv mapping the panels hand to
                 the CLIs (commands.ts, tested), the updater flow (updater.ts,
+                tested), the automatic update check (update-watch.ts,
                 tested)
 src-tauri/      Rust shell: state reads, the two user-scoped API calls, tray;
                 cli_install.rs (PATH install: automatic on launch, and the
