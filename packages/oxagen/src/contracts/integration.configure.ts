@@ -12,6 +12,7 @@ export const integrationConfigure = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "plugin" },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

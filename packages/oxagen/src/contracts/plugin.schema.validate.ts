@@ -34,6 +34,9 @@ export const pluginSchemaValidate = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: false,
   sensitivity: "low",
+  // Resolves the schema through get_plugin_schema's handler, which writes
+  // the connector_schemas cache.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

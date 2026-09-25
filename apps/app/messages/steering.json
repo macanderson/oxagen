@@ -586,6 +586,7 @@
         "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",
         "repositoryHostChanged": "This pull request was opened on another host than the one the workspace's main repository is on now. Dismiss the proposal and propose it again.",
         "mergeTimeUnknown": "The pull request merged and GitHub has not said when, so nothing was published. Merge again to publish it.",
+        "mergedOutsideOxagen": "Someone merged this pull request on the repository host after it changed, so Oxagen published nothing. Running the checks again cannot fix it. Dismiss this proposal, then propose the wording you want here and merge it from Oxagen.",
         "refused": "The change was refused: {code}. Nothing was changed.",
         "invalid": "Write a reason before you dismiss the proposal.",
         "pendingApproval": "The change is waiting for approval: {accessRequestId}.",

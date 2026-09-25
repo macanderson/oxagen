@@ -62,13 +62,14 @@ export interface ManifestTable {
   /**
    * True when the table's rows are isolated per tenant (org/workspace). For
    * Postgres this is derived from the tenant-policy manifest membership; for
-   * other stores from the known scoping property (e.g. Neo4j orgId index).
+   * other stores from the known scoping property (e.g. a Neo4j index on orgId
+   * or workspaceId).
    *
    * Reliable only in the true direction. A false is not proof a table is
    * un-scoped: the Neo4j source flags a label only when an index or constraint
-   * names `orgId`, so a workspace-only-indexed label such as :EntityNode
-   * reports false despite being tenant-owned. Do not use a false value as
-   * evidence in a tenancy audit without checking the store's own DDL.
+   * names `orgId` or `workspaceId`, so a label whose scope key carries no index
+   * reports false. Do not use a false value as evidence in a tenancy audit
+   * without checking the store's own DDL.
    */
   tenantScoped: boolean;
   /** RLS policy class for tenant-scoped Postgres tables; absent otherwise. */

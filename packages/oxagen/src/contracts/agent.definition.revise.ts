@@ -34,6 +34,7 @@ export const agentDefinitionRevise = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "mutation" },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   // Mirrors agent.definition.update — the persist path this composes onto.
   defaultRoles: {

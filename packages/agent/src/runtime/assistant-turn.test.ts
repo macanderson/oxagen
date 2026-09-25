@@ -7,6 +7,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@oxagen/database";
 import { digestJcs } from "@oxagen/run-evidence";
+import { resourceScopeDigestOf } from "@oxagen/iam";
+import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({
   apiKeyCreator: vi.fn((): string | null => null),
@@ -19,14 +21,25 @@ const mocks = vi.hoisted(() => ({
   materializeTools: vi.fn(),
   runGovernedTurn: vi.fn(),
   openAssistantRun: vi.fn(),
+  readAssistantAgentState: vi.fn(),
   recall: vi.fn(),
   createApprovalRequest: vi.fn(),
   waitForApproval: vi.fn(),
   assertOrgRole: vi.fn(),
   promptConfig: vi.fn(),
+  generateObjectFor: vi.fn(),
+  publishedSteering: vi.fn(),
+  steeringManifest: vi.fn(),
   // The catalog, as `supportsReasoning` reads it: keyed by gateway ids, so a
   // bare vendor spelling is an id it cannot describe and answers false for.
   supportsReasoning: vi.fn((id: string) => id.includes("/")),
+  // The belt suite runs the real materializeTools over these two seams.
+  readActiveEmergencyDenies: vi.fn(
+    async (): Promise<
+      readonly import("@oxagen/iam").ActiveEmergencyDeny[]
+    > => [],
+  ),
+  registry: [] as unknown[],
   log: [] as string[],
 }));
 
@@ -35,19 +48,6 @@ vi.mock("@oxagen/ai", () => ({
   resolveModelFundingSource: mocks.resolveModelFundingSource,
   loadEffectiveModelDefaults: mocks.loadEffectiveModelDefaults,
   loadWorkspacePromptConfigSafe: async () => mocks.promptConfig(),
-  // The registry's own rule (packages/ai/src/prompts/registry.ts): the
-  // governance baseline is append-only, and the workspace's instructions are
-  // appended under their header. The fake keeps that shape so a test can see
-  // what the prompt actually carried.
-  resolvePrompt: (a: {
-    baseline: string;
-    config?: { additionalInstructions?: string | null } | null;
-  }) => {
-    const extra = a.config?.additionalInstructions?.trim();
-    return extra
-      ? `${a.baseline}\n\n---\n\n## Workspace instructions\n\n${extra}`
-      : a.baseline;
-  },
   selectModel: (s: Selector) => ({ modelId: wireIdFor(s) }),
   modelIdOf: (m: { modelId: string }) => m.modelId,
   // The real `modelIdentityFor`, in miniature: on a direct-vendor key the
@@ -68,6 +68,23 @@ vi.mock("@oxagen/ai", () => ({
     };
   },
   supportsReasoning: (id: string) => mocks.supportsReasoning(id),
+  // The summariser's seams (history-summary.ts): the model is built from the
+  // funding source the turn resolved, exactly as `selectModel` builds it.
+  CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
+  generateObjectFor: mocks.generateObjectFor,
+  selectModelFromFunding: (
+    _orgId: string,
+    funding: { fundedBy: string; modelKey?: Selector["credential"] },
+    s: Selector,
+  ) => ({
+    model: {
+      modelId: wireIdFor({
+        ...s,
+        ...(funding.modelKey ? { credential: funding.modelKey } : {}),
+      }),
+    },
+    fundedBy: funding.fundedBy,
+  }),
 }));
 
 interface Selector {
@@ -129,9 +146,19 @@ vi.mock("./approval", () => ({
 vi.mock("./assistant-recall", () => ({
   recallWorkspaceMemoryMessage: mocks.recall,
 }));
+// The registry read only. The assembly is the real one, so a test sees the
+// text and the manifest the turn would produce.
+vi.mock("./published-steering", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./published-steering")>();
+  return { ...real, readPublishedSteeringCandidates: mocks.publishedSteering };
+});
 vi.mock("./assistant-run", async (importOriginal) => {
   const real = await importOriginal<typeof import("./assistant-run")>();
-  return { ...real, openAssistantRun: mocks.openAssistantRun };
+  return {
+    ...real,
+    openAssistantRun: mocks.openAssistantRun,
+    readAssistantAgentState: mocks.readAssistantAgentState,
+  };
 });
 vi.mock("./materialize-tools", async (importOriginal) => {
   const real = await importOriginal<typeof import("./materialize-tools")>();
@@ -141,20 +168,48 @@ vi.mock("./governed-turn", async (importOriginal) => {
   const real = await importOriginal<typeof import("./governed-turn")>();
   return { ...real, runGovernedTurn: mocks.runGovernedTurn };
 });
+// The seams the real materializeTools reads when the belt suite calls it: the
+// active emergency denies, the capability registry, and the plugin-type
+// contributors (none here, so no MCP server is dialled).
+vi.mock("@oxagen/iam", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/iam")>();
+  return {
+    ...real,
+    readActiveEmergencyDenies: mocks.readActiveEmergencyDenies,
+  };
+});
+vi.mock("../registry-loader", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../registry-loader")>();
+  return {
+    ...real,
+    getOxagenRegistry: async () => ({
+      listCapabilities: () => mocks.registry,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }),
+  };
+});
+vi.mock("./plugin-type", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./plugin-type")>();
+  return { ...real, getPluginTypeContributors: () => [] };
+});
 
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import {
+  AssistantStoppedError,
   AssistantTurnNeedsUserError,
   AssistantTurnRefusedError,
   ConversationNotFoundError,
   prepareAssistantTurn,
   type AssistantTurnHooks,
 } from "./assistant-turn";
-import { LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
 import {
-  WORKSPACE_INSTRUCTIONS_MAX_CHARS,
-  WORKSPACE_INSTRUCTIONS_PRECEDENCE,
-} from "./workspace-instructions";
+  ASSISTANT_STEERING_BUDGET_TOKENS,
+  type AssistantSteeringFrame,
+  WORKSPACE_INSTRUCTIONS_ID,
+} from "./assistant-steering";
+import { LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
 
 const CTX = {
   orgId: "org-1",
@@ -169,10 +224,17 @@ const CONVERSATION = "0192d4a8-7c1e-7a00-8000-0000000000c1";
 const AGENT_ID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const AGENT_VERSION_ID = "0192d4a8-7c1e-7a00-8000-0000000000a2";
 const EXECUTION_ID = "0192d4a8-7c1e-7a00-8000-0000000000e1";
+/** The workspace's assistant agent, as `readAssistantAgentState` answers. */
+const ASSISTANT = {
+  agentId: "agt_assistant",
+  principalId: "prn_assistant",
+  stoppedBy: null,
+};
 
 interface World {
   conversationExists: boolean;
-  history: Array<{ role: string; content: string }>;
+  history: Array<{ id?: string; role: string; content: string }>;
+  historySummary?: unknown;
   apiKeyCreator: string | null;
 }
 interface Captured {
@@ -184,16 +246,30 @@ function makeTx(world: World, captured: Captured) {
   return {
     select: () => ({
       from: (table: unknown) => {
+        let offset = 0;
         const chain = {
           where: () => chain,
           orderBy: () => chain,
-          limit: () => {
+          offset: (n: number) => {
+            offset = n;
+            return chain;
+          },
+          limit: (n: number) => {
             if (table === schema.conversations)
               return Promise.resolve(
-                world.conversationExists ? [{ id: CONVERSATION }] : [],
+                world.conversationExists
+                  ? [
+                      {
+                        id: CONVERSATION,
+                        historySummary: world.historySummary ?? null,
+                      },
+                    ]
+                  : [],
               );
             if (table === schema.messages)
-              return Promise.resolve([...world.history].reverse());
+              return Promise.resolve(
+                [...world.history].reverse().slice(offset, offset + n),
+              );
             if (table === schema.organizations)
               return Promise.resolve([{ name: "Acme" }]);
             if (table === schema.workspaces)
@@ -302,9 +378,10 @@ function setup(over: Partial<World> = {}) {
   );
 }
 
+// `list_runs` is one of the interactive agent's pins. `set_budget` is not.
 const GOVERNED_TOOLS = {
-  recall_memory: {
-    description: "Recall",
+  list_runs: {
+    description: "List runs",
     inputSchema: {},
     execute: async () => 1,
   },
@@ -313,13 +390,20 @@ const GOVERNED_TOOLS = {
 
 /** Every outcome the run recorder was sealed with, per test. */
 let sealCalls: unknown[] = [];
-/** Every workspace-instructions frame the run recorder was given, per test. */
-let instructionFrames: unknown[] = [];
+/** Every history-summary frame the run recorder was given, per test. */
+let summaryFrames: unknown[] = [];
+/** Every steering manifest frame the run recorder was given, per test. */
+const steeringFrames = (): AssistantSteeringFrame[] =>
+  mocks.steeringManifest.mock.calls.map(
+    (call) => call[0] as AssistantSteeringFrame,
+  );
 
 beforeEach(() => {
   vi.clearAllMocks();
   setup();
   mocks.promptConfig.mockReturnValue({});
+  mocks.publishedSteering.mockResolvedValue([]);
+  mocks.steeringManifest.mockResolvedValue(undefined);
   mocks.assertOrgRole.mockImplementation(async () => {
     mocks.log.push("roles");
     return "Owner";
@@ -351,17 +435,18 @@ beforeEach(() => {
         },
   );
   mocks.recall.mockResolvedValue({ role: "user", content: "[memory]" });
+  mocks.readAssistantAgentState.mockResolvedValue(ASSISTANT);
   mocks.materializeTools.mockImplementation(async () => {
     mocks.log.push("materialize");
     return {
       tools: GOVERNED_TOOLS,
-      nameMap: { recall_memory: "recall_memory", set_budget: "set_budget" },
+      nameMap: { list_runs: "list_runs", set_budget: "set_budget" },
       mutatingToolNames: ["set_budget"],
       governance: {},
     };
   });
   sealCalls = [];
-  instructionFrames = [];
+  summaryFrames = [];
   mocks.openAssistantRun.mockImplementation(async () => {
     mocks.log.push("open-run");
     const receipts: unknown[] = [];
@@ -371,9 +456,10 @@ beforeEach(() => {
       agentId: AGENT_ID,
       agentVersionId: AGENT_VERSION_ID,
       receipts,
-      workspaceInstructions: async (frame: unknown) => {
-        mocks.log.push("instructions");
-        instructionFrames.push(frame);
+      steeringManifest: mocks.steeringManifest,
+      historySummary: async (frame: unknown) => {
+        mocks.log.push("history-summary");
+        summaryFrames.push(frame);
       },
       modelCall: async (r: unknown) => {
         receipts.push({ kind: "model", ...(r as object) });
@@ -404,6 +490,7 @@ const request = {
     orgSlug: "acme",
     workspaceSlug: "core",
     entityId: "arun_x",
+    entityLabel: null,
   },
 };
 
@@ -424,6 +511,28 @@ describe("prepareAssistantTurn", () => {
     });
     expect(captured.inserts).toHaveLength(0);
     expect(mocks.openAssistantRun).not.toHaveBeenCalled();
+  });
+
+  // R4 (#3370): an operator's `agent` kill switch on the assistant stops the
+  // whole turn, before who pays is resolved and before anything is written.
+  it("refuses a turn whose assistant agent is switched off, before funding and before any write", async () => {
+    mocks.readAssistantAgentState.mockResolvedValueOnce({
+      ...ASSISTANT,
+      stoppedBy: { publicId: "edn_stop", reason: "incident 42" },
+    });
+    await expect(prepareAssistantTurn(request)).rejects.toSatisfy(
+      (e) =>
+        e instanceof AssistantStoppedError &&
+        e.code === "kill_switch" &&
+        e.switchId === "edn_stop" &&
+        e.message.includes("incident 42"),
+    );
+    expect(mocks.log).toEqual(["roles"]);
+    expect(mocks.resolveModelFundingSource).not.toHaveBeenCalled();
+    expect(mocks.evaluateTurnCreditGate).not.toHaveBeenCalled();
+    expect(captured.inserts).toHaveLength(0);
+    expect(mocks.openAssistantRun).not.toHaveBeenCalled();
+    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
   });
 
   describe("the model's identity on the organisation's own key (#3314)", () => {
@@ -570,6 +679,12 @@ describe("the prepared turn", () => {
       executionStepId: "msg-user",
     });
     expect(materializeOpts).toMatchObject({ approvalMode: "park" });
+    // The agent the turn runs as, so a switch on it reaches the belt and the
+    // call gate. The tools still run as the person.
+    expect(materializeOpts.actingAgent).toEqual({
+      agentId: "agt_assistant",
+      principalId: "prn_assistant",
+    });
     // finding 9 (macanderson/oxagen#3370): materializeTools runs before
     // openAssistantRun opens the run, so a tool call parked mid-turn reads
     // the run from a mutable ref rather than from `ctx.agentRun`, which is
@@ -599,7 +714,7 @@ describe("the prepared turn", () => {
       // The spec's tool policy is what the turn actually holds — the
       // materialised capabilities and the belt's two meta-tools. An empty
       // allowlist would read "no tools" on a run whose job is calling them.
-      toolAllowlist: ["recall_memory", "set_budget", SEARCH_TOOLS, LOAD_TOOLS],
+      toolAllowlist: ["list_runs", "set_budget", SEARCH_TOOLS, LOAD_TOOLS],
     });
 
     // The engine is declared the whole belt plus the meta-tools; the model is
@@ -607,10 +722,10 @@ describe("the prepared turn", () => {
     // run is the ledger; the page context and the memory ride as context.
     const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
     expect(Object.keys(turnInput.tools).sort()).toEqual(
-      [LOAD_TOOLS, SEARCH_TOOLS, "recall_memory", "set_budget"].sort(),
+      [LOAD_TOOLS, SEARCH_TOOLS, "list_runs", "set_budget"].sort(),
     );
     expect(Object.keys(turnInput.modelTools()).sort()).toEqual(
-      [LOAD_TOOLS, SEARCH_TOOLS, "recall_memory"].sort(),
+      [LOAD_TOOLS, SEARCH_TOOLS, "list_runs"].sort(),
     );
     expect(turnInput.ledger.runPublicId).toBe("arun_0123456789abcdef012345");
     expect(turnInput.principal).toBe("user-1");
@@ -759,100 +874,235 @@ describe("the prepared turn", () => {
     expect(captured.updates).toHaveLength(0);
   });
 
-  // #3303: the workspace's extra instructions are steering. Before this they
-  // reached the model with no budget and left no line in the run's record, so
-  // nobody could audit what the workspace had told the agent.
-  describe("workspace instructions", () => {
-    const INSTRUCTIONS = "Answer in British English and cite the run id.";
+  describe("a long thread (#4171)", () => {
+    const FACT = "My cost centre is CC-7741. Charge the migration to it.";
+    /** 120 prior messages, oldest first, with the fact at message 3. */
+    const longThread = () =>
+      Array.from({ length: 120 }, (_, i) => ({
+        id: `msg-${String(i + 1).padStart(3, "0")}`,
+        role: i % 2 === 0 ? "user" : "assistant",
+        content: i === 2 ? FACT : `message ${i + 1}`,
+      }));
 
-    it("carries checked instructions under their header, with the precedence note after them, and records them by digest", async () => {
+    beforeEach(() => {
+      // The fake summariser keeps the cost centre when it is given it, as the
+      // real one is told to keep every identifier.
+      mocks.generateObjectFor.mockImplementation(
+        async (args: { prompt: string }) => ({
+          object: {
+            summary: args.prompt.includes("CC-7741")
+              ? "- The person's cost centre is CC-7741."
+              : "- Nothing to keep.",
+          },
+          usage: { promptTokens: 900, completionTokens: 12, totalTokens: 912 },
+        }),
+      );
+    });
+
+    it("carries a fact from message 3 of a 120-message thread, and the run says a summary was used", async () => {
+      setup({ history: longThread() });
+      await runTurn(request);
+
+      const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+      const history = turnInput.history as Array<{ content: string }>;
+      // One summary, then the 40 newest messages word for word.
+      expect(history).toHaveLength(41);
+      expect(history[0]!.content).toContain("CC-7741");
+      expect(history[1]!.content).toBe("message 81");
+      expect(history.slice(1).some((m) => m.content === FACT)).toBe(false);
+
+      // Summarised on the fast tier, on the turn's funding, as assistant use.
+      expect(mocks.generateObjectFor).toHaveBeenCalledTimes(1);
+      expect(mocks.generateObjectFor.mock.calls[0]![0]).toMatchObject({
+        model: { modelId: "model-for-fast" },
+        fundedBy: "platform",
+        chargeReason: "consume_assistant_tokens",
+        telemetry: { surface: "app", messageId: "msg-user" },
+      });
+
+      expect(summaryFrames).toEqual([
+        expect.objectContaining({
+          outcome: "applied",
+          regenerated: true,
+          coveredMessages: 80,
+          windowMessages: 40,
+          text: "- The person's cost centre is CC-7741.",
+        }),
+      ]);
+      // On the record before the engine is asked anything.
+      expect(mocks.log.indexOf("history-summary")).toBeGreaterThan(
+        mocks.log.indexOf("open-run"),
+      );
+      expect(mocks.log.indexOf("history-summary")).toBeLessThan(
+        mocks.log.indexOf("engine"),
+      );
+      // Stored with the conversation for the turns after this one.
+      expect(captured.updates).toContainEqual({
+        table: schema.conversations,
+        set: {
+          historySummary: expect.objectContaining({
+            throughMessageId: "msg-080",
+            coveredMessages: 80,
+          }),
+        },
+      });
+    });
+
+    it("reuses the stored summary on the next turn without asking a model", async () => {
+      setup({ history: longThread() });
+      await runTurn(request);
+      const written = captured.updates.find(
+        (u) => u.table === schema.conversations && "historySummary" in u.set,
+      )!.set.historySummary;
+
+      // The turn above added its two messages.
+      setup({
+        history: [
+          ...longThread(),
+          { id: "msg-121", role: "user", content: "which cost centre?" },
+          { id: "msg-122", role: "assistant", content: "CC-7741." },
+        ],
+        historySummary: written,
+      });
+      mocks.generateObjectFor.mockClear();
+      mocks.runGovernedTurn.mockClear();
+      await runTurn(request);
+
+      expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+      const next = mocks.runGovernedTurn.mock.calls[0]![0];
+      const history = next.history as Array<{ content: string }>;
+      expect(history).toHaveLength(43);
+      expect(history[0]!.content).toContain("CC-7741");
+      expect(summaryFrames.at(-1)).toMatchObject({
+        outcome: "applied",
+        regenerated: false,
+      });
+    });
+
+    it("writes no summary frame for a thread that fits the window (negative)", async () => {
+      await runTurn(request);
+      expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+      expect(summaryFrames).toEqual([]);
+      expect(mocks.log).not.toContain("history-summary");
+    });
+  });
+
+  // #4158: published steering and the workspace's instructions reach the
+  // prompt through the one assembler, and the run records what it kept and
+  // cut before the engine is asked anything (ADR-093 §7). Before, the
+  // instructions were refused whole past 8,000 characters and published
+  // records never reached the assistant.
+  describe("steering", () => {
+    const INSTRUCTIONS = "Answer in British English and cite the run id.";
+    const RECORD = {
+      id: "ask-before-deleting",
+      kind: "record",
+      force: "must",
+      body: "Ask before deleting data. (rule; ask-before-deleting)",
+      recordedAt: "2026-09-10T00:00:00.000Z",
+    };
+    const systemOf = (): string =>
+      mocks.runGovernedTurn.mock.calls[0]![0].system as string;
+
+    it("carries published steering and the instructions in the prompt, and records the manifest before the engine", async () => {
+      mocks.publishedSteering.mockResolvedValue([RECORD]);
       mocks.promptConfig.mockReturnValue({
         additionalInstructions: INSTRUCTIONS,
       });
       await runTurn(request);
 
-      const system = mocks.runGovernedTurn.mock.calls[0]![0].system as string;
+      const system = systemOf();
       expect(system.startsWith("GOVERNANCE Acme/Core")).toBe(true);
-      expect(system).toContain(INSTRUCTIONS);
-      // A published `must` record outranks them, and the prompt says so after
-      // them rather than leaving the model to decide.
-      expect(system.indexOf(WORKSPACE_INSTRUCTIONS_PRECEDENCE)).toBeGreaterThan(
+      expect(system).toContain(
+        "- Ask before deleting data. (rule; ask-before-deleting)",
+      );
+      expect(system).toContain(`- Workspace instructions: ${INSTRUCTIONS}`);
+      // The published MUST record is listed before the instructions.
+      expect(system.indexOf("Ask before deleting")).toBeLessThan(
         system.indexOf(INSTRUCTIONS),
       );
 
-      expect(instructionFrames).toEqual([
-        {
-          outcome: "applied",
-          digest: digestJcs(INSTRUCTIONS),
-          chars: INSTRUCTIONS.length,
-          budgetChars: WORKSPACE_INSTRUCTIONS_MAX_CHARS,
-          text: INSTRUCTIONS,
-        },
+      const [frame, ...rest] = steeringFrames();
+      expect(rest).toEqual([]);
+      expect(frame!.manifest.items.map((i) => [i.id, i.outcome])).toEqual([
+        ["ask-before-deleting", "included"],
+        [WORKSPACE_INSTRUCTIONS_ID, "included"],
       ]);
-      // Recorded before the engine is asked anything, so a turn that then
-      // fails still says what the model was told.
-      expect(mocks.log.indexOf("instructions")).toBeGreaterThan(
-        mocks.log.indexOf("open-run"),
+      expect(frame!.manifest.text_digest).toMatch(/^sha256:/);
+      expect(frame!.instructionsDigest).toBe(digestJcs(INSTRUCTIONS));
+      expect(frame!.unavailableKinds).toEqual([]);
+      // After the run is admitted and before the engine is asked anything,
+      // so a turn that then fails still says what steered it.
+      const order = (fn: { mock: { invocationCallOrder: number[] } }) =>
+        fn.mock.invocationCallOrder[0]!;
+      expect(order(mocks.steeringManifest)).toBeGreaterThan(
+        order(mocks.openAssistantRun),
       );
-      expect(mocks.log.indexOf("instructions")).toBeLessThan(
-        mocks.log.indexOf("engine"),
+      expect(order(mocks.steeringManifest)).toBeLessThan(
+        order(mocks.runGovernedTurn),
       );
     });
 
-    it("refuses instructions past the budget: the prompt carries none and the record says why (negative)", async () => {
-      const oversized = "x".repeat(WORKSPACE_INSTRUCTIONS_MAX_CHARS + 1);
+    it("cuts instructions past the budget: the prompt carries the records and the manifest names the cut (negative)", async () => {
+      const oversized = "x".repeat(ASSISTANT_STEERING_BUDGET_TOKENS * 4 + 1);
+      mocks.publishedSteering.mockResolvedValue([RECORD]);
       mocks.promptConfig.mockReturnValue({
         additionalInstructions: oversized,
       });
       await runTurn(request);
 
-      const system = mocks.runGovernedTurn.mock.calls[0]![0].system as string;
-      expect(system).toBe("GOVERNANCE Acme/Core");
+      const system = systemOf();
+      expect(system).toContain("Ask before deleting data.");
       expect(system).not.toContain("xxxx");
-      expect(instructionFrames).toEqual([
-        {
-          outcome: "refused",
-          reasonCode: "over_budget",
-          digest: digestJcs(oversized),
-          chars: oversized.length,
-          budgetChars: WORKSPACE_INSTRUCTIONS_MAX_CHARS,
-          text: oversized,
-        },
-      ]);
+      const [frame] = steeringFrames();
+      expect(
+        frame!.manifest.items.find((i) => i.id === WORKSPACE_INSTRUCTIONS_ID),
+      ).toMatchObject({ outcome: "cut", reason: "budget" });
+      expect(frame!.instructionsDigest).toBe(digestJcs(oversized));
+      expect(mocks.runGovernedTurn).toHaveBeenCalledTimes(1);
     });
 
-    it("writes no frame for a workspace that configured none (negative)", async () => {
+    it("records an empty manifest when nothing steers, and sends the baseline alone (negative)", async () => {
       await runTurn(request);
-      expect(instructionFrames).toEqual([]);
-      expect(mocks.log).not.toContain("instructions");
+      expect(systemOf()).toBe("GOVERNANCE Acme/Core");
+      const [frame] = steeringFrames();
+      expect(frame!.manifest).toMatchObject({
+        included: 0,
+        cut: 0,
+        text_digest: null,
+        items: [],
+      });
+      expect(frame!.instructionsDigest).toBeNull();
     });
 
-    it("does not run the turn when the record will not take the instructions", async () => {
+    it("runs on the instructions alone when the registry does not answer, and the manifest says so", async () => {
+      mocks.publishedSteering.mockRejectedValue(new Error("registry is down"));
       mocks.promptConfig.mockReturnValue({
         additionalInstructions: INSTRUCTIONS,
       });
-      mocks.openAssistantRun.mockImplementationOnce(async () => ({
-        runId: "run-uuid",
-        runPublicId: "arun_0123456789abcdef012345",
-        agentId: AGENT_ID,
-        agentVersionId: AGENT_VERSION_ID,
-        receipts: [],
-        workspaceInstructions: async () => {
-          throw new Error("ledger refused the instructions frame");
-        },
-        seal: async (outcome: unknown) => {
-          sealCalls.push(outcome);
-        },
-      }));
+      await runTurn(request);
+
+      expect(systemOf()).toContain(INSTRUCTIONS);
+      const [frame] = steeringFrames();
+      expect(frame!.unavailableKinds).toEqual(["record"]);
+      expect(frame!.manifest.items.map((i) => i.id)).toEqual([
+        WORKSPACE_INSTRUCTIONS_ID,
+      ]);
+    });
+
+    it("does not run the turn when the record will not take the manifest", async () => {
+      mocks.steeringManifest.mockRejectedValueOnce(
+        new Error("ledger refused the steering frame"),
+      );
 
       await expect(runTurn(request)).rejects.toThrow(
-        "ledger refused the instructions frame",
+        "ledger refused the steering frame",
       );
       expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
       // The run is sealed rather than left open, the same as any other
       // preflight refusal after admission.
       expect(sealCalls).toEqual([
-        { status: "failed", error: "ledger refused the instructions frame" },
+        { status: "failed", error: "ledger refused the steering frame" },
       ]);
     });
   });
@@ -1031,6 +1281,54 @@ describe("the prepared turn", () => {
       ]);
     });
 
+    it("records a parked tool call as pending with the approval it waits on, not failed", async () => {
+      mocks.runGovernedTurn.mockImplementationOnce(
+        async (args: {
+          ledger: {
+            modelCall: (r: unknown) => Promise<void>;
+            toolCall: (r: unknown) => Promise<void>;
+          };
+        }) => {
+          await args.ledger.modelCall({
+            seq: 1,
+            requestId: "mc-1",
+            role: "worker",
+            provider: "anthropic",
+            model: "claude",
+            outcome: "completed",
+          });
+          await args.ledger.toolCall({
+            seq: 2,
+            requestId: "tc-1",
+            toolName: "set_budget",
+            outcome: "parked",
+            approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+            input: { usd: 5 },
+            error: "refused: set_budget is waiting for approval",
+            durationMs: 1,
+          });
+          return fakeTurn({});
+        },
+      );
+      await runTurn(request);
+      const input = executionCall()![1] as {
+        steps: Array<{ toolCalls?: Array<Record<string, unknown>> }>;
+      };
+      expect(input.steps[0]!.toolCalls).toEqual([
+        {
+          toolName: "set_budget",
+          toolType: "capability",
+          requestPayload: { usd: 5 },
+          responsePayload: {
+            error: "refused: set_budget is waiting for approval",
+            approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+          },
+          status: "pending",
+          latencyMs: 1,
+        },
+      ]);
+    });
+
     // The reply is already persisted and, on the SSE route, already sent. A
     // missing audit record is a defect, so it is logged — but it must not take
     // the answer away from the person who already has it.
@@ -1060,5 +1358,153 @@ describe("the prepared turn", () => {
       await expect(runTurn(request)).rejects.toBe(failure);
       expect(executionCall()).toBeUndefined();
     });
+  });
+});
+
+// R4 (#3370, finding 9): the turn materialises its tools before it opens its
+// run, as the person who asked. This suite runs the real materializeTools, so
+// the belt the engine receives is the one production builds. Before the fix a
+// tool an emergency deny named reached the engine and the run's allowlist,
+// because the listing read the denies only for an agent run, and this turn
+// never carries one: not before the run opens, and not after.
+describe("the belt the engine is handed", () => {
+  const REGISTRY = [
+    {
+      name: "recall_memory",
+      description: "Recall",
+      surfaces: ["agent"],
+      agent: { riskLevel: "low" },
+      mutates: false,
+      input: z.object({}),
+    },
+    {
+      name: "set_budget",
+      description: "Set",
+      surfaces: ["agent"],
+      agent: { riskLevel: "high" },
+      input: z.object({}),
+    },
+  ];
+
+  /** A kill switch on one tool: the shape `set_kill_switch` writes. */
+  const killSwitch = (principalId: string | null = null) => ({
+    publicId: "edn_set_budget",
+    denyKind: "capability" as const,
+    capabilityId: "set_budget",
+    resourceScopeDigest: null,
+    principalId,
+    reason: "incident",
+  });
+
+  beforeEach(async () => {
+    mocks.registry = REGISTRY;
+    mocks.readActiveEmergencyDenies.mockResolvedValue([]);
+    const real =
+      await vi.importActual<typeof import("./materialize-tools")>(
+        "./materialize-tools",
+      );
+    mocks.materializeTools.mockImplementation(
+      async (...args: Parameters<typeof real.materializeTools>) => {
+        mocks.log.push("materialize");
+        return real.materializeTools(...args);
+      },
+    );
+  });
+
+  it("leaves a switched tool out of the engine's tools, the model's aliases, and the run's allowlist", async () => {
+    mocks.readActiveEmergencyDenies.mockResolvedValue([killSwitch()]);
+    const aliases: Array<Record<string, string>> = [];
+    await runTurn(request, { onTools: (map) => aliases.push(map) });
+
+    expect(mocks.readActiveEmergencyDenies).toHaveBeenCalledTimes(1);
+    expect(mocks.readActiveEmergencyDenies).toHaveBeenCalledWith(
+      expect.anything(),
+      { orgId: "org-1", workspaceId: "ws-1" },
+    );
+    const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+    expect(Object.keys(turnInput.tools).sort()).toEqual(
+      [LOAD_TOOLS, SEARCH_TOOLS, "recall_memory"].sort(),
+    );
+    expect(aliases).toEqual([{ recall_memory: "recall_memory" }]);
+    expect(mocks.openAssistantRun.mock.calls[0]![0].toolAllowlist).toEqual([
+      "recall_memory",
+      SEARCH_TOOLS,
+      LOAD_TOOLS,
+    ]);
+    // The refusals keep their order: the credit gate before anything is
+    // written, the belt before the run, the run before the engine.
+    expect(mocks.log).toEqual([
+      "roles",
+      "funding",
+      "gate",
+      "insert:message:user",
+      "materialize",
+      "open-run",
+      "engine",
+      "insert:message:assistant",
+    ]);
+  });
+
+  it("carries no agent run before or after the run opens, so the order was never the cause", async () => {
+    await runTurn(request);
+    const [materializeCtx] = mocks.materializeTools.mock.calls[0]!;
+    expect(materializeCtx).not.toHaveProperty("agentRun");
+    // The execution record is written with the turn's context after the run
+    // opened and sealed. It still names the person, not an agent run, so
+    // opening the run first would have handed the listing nothing new.
+    const execution = mocks.invoke.mock.calls.find(
+      (c: unknown[]) => c[0] === "get_message_execution",
+    );
+    expect(execution![2]).toMatchObject({ userId: "user-1" });
+    expect(execution![2]).not.toHaveProperty("agentRun");
+  });
+
+  it("leaves out a tool a deny names by the assistant agent's principal", async () => {
+    mocks.readActiveEmergencyDenies.mockResolvedValue([
+      killSwitch("prn_assistant"),
+    ]);
+    await runTurn(request);
+    const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+    expect(Object.keys(turnInput.tools)).not.toContain("set_budget");
+    expect(Object.keys(turnInput.tools)).toContain("recall_memory");
+  });
+
+  it("leaves out every capability when the assistant agent is switched off after the turn began", async () => {
+    // The turn's own check read no switch; the listing reads one. That is a
+    // flip between the two reads, and the belt still honours it.
+    mocks.readActiveEmergencyDenies.mockResolvedValue([
+      {
+        publicId: "edn_agent",
+        denyKind: "resource_scope",
+        capabilityId: null,
+        resourceScopeDigest: resourceScopeDigestOf({
+          kind: "agent",
+          id: "agt_assistant",
+        }),
+        principalId: null,
+        reason: "incident",
+      },
+    ]);
+    await runTurn(request);
+    const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+    expect(Object.keys(turnInput.tools).sort()).toEqual(
+      [LOAD_TOOLS, SEARCH_TOOLS].sort(),
+    );
+    expect(mocks.openAssistantRun.mock.calls[0]![0].toolAllowlist).toEqual([
+      SEARCH_TOOLS,
+      LOAD_TOOLS,
+    ]);
+  });
+
+  it("keeps a tool whose deny names another principal (negative)", async () => {
+    mocks.readActiveEmergencyDenies.mockResolvedValue([
+      killSwitch("prn_someone_else"),
+    ]);
+    await runTurn(request);
+    const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+    expect(Object.keys(turnInput.tools)).toContain("set_budget");
+    expect(mocks.openAssistantRun.mock.calls[0]![0].toolAllowlist).toContain(
+      "set_budget",
+    );
   });
 });

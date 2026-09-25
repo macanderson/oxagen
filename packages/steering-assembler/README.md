@@ -8,26 +8,31 @@ Oxagen's slice of its context (ADR-093, ADR-144).
 - **Owns:** ranking steering candidates by force and recency, fitting them to
   a token budget, and the manifest that names every candidate as `included`
   or `cut` with its reason.
-- **Does not own:** reading context records or steer commands from a store,
-  or building the policy bundle
-  ([`@oxagen/handlers`](../handlers/README.md),
-  `packages/handlers/src/lib/tacho-steering.ts`); sealing the manifest into a
-  run's chain ([`@oxagen/tacho`](../tacho/README.md) on the host,
-  [`@oxagen/run-ledger`](../run-ledger/README.md) for the frame kind); counting
-  delivered manifests ([`@oxagen/telemetry`](../telemetry/README.md),
+- **Does not own:** reading context records from a store
+  ([`@oxagen/agent`](../agent/README.md),
+  `packages/agent/src/runtime/published-steering.ts`); building the policy
+  bundle ([`@oxagen/handlers`](../handlers/README.md),
+  `packages/handlers/src/lib/tacho-steering.ts`); the in-app assistant's
+  steering (`packages/agent/src/runtime/assistant-steering.ts`); sealing the
+  manifest into a run's chain ([`@oxagen/tacho`](../tacho/README.md) on the
+  host, [`@oxagen/run-ledger`](../run-ledger/README.md) for the frame kind and
+  the in-app run's frame); counting delivered manifests
+  ([`@oxagen/telemetry`](../telemetry/README.md),
   `src/steering-deliveries.ts`).
 - **Depends on:** No `@oxagen/*` runtime dependencies. It imports
   `budgetTokens` from `@contextgraphprotocol/typescript-sdk` for the token
   unit and `node:crypto` for digests.
 - **Used by:** `@oxagen/handlers` (`src/lib/tacho-steering.ts`,
-  `assembleWorkspaceSteering`).
+  `assembleWorkspaceSteering`, for a wrapped agent's bundle) and
+  `@oxagen/agent` (`src/runtime/assistant-steering.ts`,
+  `assembleAssistantSteering`, for the in-app assistant's turn).
 
 ## Seams
 
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
-| `assembleSteering(run, budgetTokens)` | export | `packages/steering-assembler/src/assemble.ts` | `packages/handlers/src/lib/tacho-steering.ts` |
-| `SteeringCandidate`, `SteeringManifest` types | port | `packages/steering-assembler/src/assemble.ts` | `packages/handlers/src/lib/tacho-steering.ts` maps context records to candidates |
+| `assembleSteering(run, budgetTokens)` | export | `packages/steering-assembler/src/assemble.ts` | `packages/handlers/src/lib/tacho-steering.ts` and `packages/agent/src/runtime/assistant-steering.ts` |
+| `SteeringCandidate`, `SteeringManifest` types | port | `packages/steering-assembler/src/assemble.ts` | `packages/agent/src/runtime/published-steering.ts` maps context records to candidates; `assistant-steering.ts` adds the workspace instructions as an `instruction` candidate |
 | `STEERING_MANIFEST_SCHEMA` (`oxagen.steering.manifest/1`) | boundary | `packages/steering-assembler/src/assemble.ts` | Copied, not imported, as the same constant in `packages/tacho/src/wire.ts` |
 
 ## Entry points
@@ -77,11 +82,15 @@ about 2,500 tokens in Codex. Past that limit the agent reads a file path and
 a preview, not the records. `HARNESS_CONTEXT_MAX_CHARS` lists each limit and
 its source.
 
-`candidates` are context records, operator steer commands and, later, skill
-descriptions, each with an id, a kind, a force (`must`, `should`, `may`,
-`info`), a body and the instant it took effect. The assembler ranks them by
-tier and then by recency, fits them to the budget by skipping what does not
-fit, and returns the text the agent reads.
+`candidates` are context records, operator steer commands, the in-app
+assistant's workspace instructions and, later, skill descriptions, each with
+an id, a kind, a force (`must`, `should`, `may`, `info`), a body and the
+instant it took effect. The assembler ranks them by tier and then by recency,
+fits them to the budget by skipping what does not fit, and returns the text
+the agent reads. The text opens with `STEERING_HEADER` unless the run names
+its own `header`. The in-app assistant names one, because its text carries
+the workspace instructions beside published records, and it assembles under
+`ASSISTANT_STEERING_BUDGET_TOKENS` (4,096) rather than the prefix budget.
 
 The manifest lists every candidate in rank order with `included` or `cut` and
 the reason for a cut: `tier` (this injection point does not deliver that

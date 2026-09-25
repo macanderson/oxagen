@@ -22,6 +22,9 @@ export const conversationExport = registerCapability({
     category: "conversation",
   },
   sensitivity: "low",
+  // Markdown returns inline, but the PDF format stores the export as a
+  // private generated asset.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

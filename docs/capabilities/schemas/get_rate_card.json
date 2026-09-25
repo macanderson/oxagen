@@ -52,7 +52,7 @@
               "anyOf": [
                 {
                   "type": "integer",
-                  "minimum": 0
+                  "exclusiveMinimum": 0
                 },
                 {
                   "type": "null"
@@ -100,7 +100,7 @@
             },
             "retentionMonths": {
               "type": "integer",
-              "minimum": 0
+              "exclusiveMinimum": 0
             }
           },
           "required": [
@@ -116,7 +116,7 @@
         "properties": {
           "includedMonths": {
             "type": "integer",
-            "minimum": 0
+            "exclusiveMinimum": 0
           },
           "usdPerGbMonth": {
             "type": "number",

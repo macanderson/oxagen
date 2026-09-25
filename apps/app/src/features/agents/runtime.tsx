@@ -12,7 +12,9 @@
 // and All runtimes say so. Unenroll is `revoke_host_enrollment`, and Show the
 // CLI path mints the single-use token and prints the enroll command
 // (`create_enrollment_token`); a retired identity is archived, so it is
-// offered neither.
+// offered neither. Both writes admit only an organization Owner or Admin, so
+// any other viewer sees neither control and reads a line that names the role
+// instead of a dialog that ends in a refusal.
 import { useLocale, useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { EnforcementTier, RunRow } from "@/data/contracts/runs";
@@ -281,18 +283,33 @@ function TierDelivers({ tier }: { tier: EnforcementTier | null }) {
   );
 }
 
+/** Why a viewer without an Owner or Admin role sees no enroll or unenroll. */
+function NeedsRole() {
+  const t = useTranslations("agents.detail.runtime");
+  return (
+    <p
+      data-testid="runtime-needs-role"
+      className="max-w-prose text-xs text-muted-foreground"
+    >
+      {t("needsRole")}
+    </p>
+  );
+}
+
 function Rollback({
   hosts,
   org,
   ws,
   here,
   retired,
+  canManageHosts,
 }: {
   hosts: readonly Host[];
   org: string;
   ws: string;
   here: SafePath;
   retired: boolean;
+  canManageHosts: boolean;
 }) {
   const t = useTranslations("agents.detail.runtime.rollback");
   return (
@@ -312,7 +329,7 @@ function Rollback({
           gap="smoke_session"
           testId="smoke-session"
         />
-        {retired
+        {retired || !canManageHosts
           ? null
           : hosts.map((host) => (
               <RevokeHost
@@ -325,6 +342,7 @@ function Rollback({
               />
             ))}
       </div>
+      {!retired && !canManageHosts ? <NeedsRole /> : null}
     </Panel>
   );
 }
@@ -335,6 +353,7 @@ export function RuntimeSection({
   org,
   ws,
   here,
+  canManageHosts,
 }: {
   detail: AgentDetail;
   lastRun: RunRow | null;
@@ -342,6 +361,11 @@ export function RuntimeSection({
   ws: string;
   /** This tab, re-read after an unenroll. */
   here: SafePath;
+  /**
+   * The viewer holds an organization Owner or Admin role, the only roles
+   * `create_enrollment_token` and `revoke_host_enrollment` admit.
+   */
+  canManageHosts: boolean;
 }) {
   const t = useTranslations("agents.detail.runtime");
   const { identity } = detail;
@@ -363,12 +387,16 @@ export function RuntimeSection({
                 >
                   {t("empty.wrap")}
                 </SafeLink>
-                <EnrollHost
-                  org={org}
-                  ws={ws}
-                  agentId={identity.id}
-                  agentName={identity.name}
-                />
+                {canManageHosts ? (
+                  <EnrollHost
+                    org={org}
+                    ws={ws}
+                    agentId={identity.id}
+                    agentName={identity.name}
+                  />
+                ) : (
+                  <NeedsRole />
+                )}
               </>
             )
           }
@@ -410,6 +438,7 @@ export function RuntimeSection({
           ws={ws}
           here={here}
           retired={retired}
+          canManageHosts={canManageHosts}
         />
       </div>
     </div>

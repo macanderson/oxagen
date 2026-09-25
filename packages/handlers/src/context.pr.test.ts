@@ -140,6 +140,9 @@ describe("open_context_pr", () => {
     expect(h.github.pulls[0]!.body).toContain("`fnd_01K5RT6C`");
     expect(h.github.pulls[0]!.body).toContain(out.record!.recordHash);
     expect(h.github.pulls[0]!.body).toContain(
+      "Change the record in Oxagen, not on this pull request.",
+    );
+    expect(h.github.pulls[0]!.body).toContain(
       "> Do not re-read CHANGELOG.md more than once in a run; cache the first read.",
     );
 
@@ -991,6 +994,96 @@ describe("merge_context_pr", () => {
     expect(h.store.records).toHaveLength(0);
     expect(h.store.ledger).toHaveLength(0);
     expect(h.store.proposals[0]!.status).toBe("checks_passed");
+  });
+
+  // #4118: a review bot's suggestion was accepted into the record file on
+  // GitHub, the PR was merged there, and the app answered "run the checks
+  // again", which re-ran them on a head that could never change and turned
+  // two of them red.
+  it("refuses merged_outside_oxagen when the PR was edited and merged on the host, on the merge and on a re-run, and the lineage can be proposed again", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const accepted = (await h.github.readFile(REPO, PATH, BRANCH))!.replace(
+      "cache the first read",
+      "cache the first read and reuse it",
+    );
+    h.github.commit(BRANCH, PATH, accepted);
+    await h.github.mergePullRequest(REPO, {
+      number: 519,
+      commitTitle: "Context PR (#519)",
+      sha: "head2",
+    });
+    const refusal = {
+      code: "conflict",
+      reason: "merged_outside_oxagen",
+      message: expect.stringContaining("head2"),
+    };
+
+    await expect(
+      createMergeContextPrHandler(h)(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject(refusal);
+    await expect(
+      createOpenContextPrHandler(h)({ proposalId: id }, ctx()),
+    ).rejects.toMatchObject(refusal);
+    // Nothing was published, and no check reported on the merged head.
+    expect(h.store.records).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+    expect(h.github.checkRuns.map((c) => c.headSha)).toEqual(
+      Array(6).fill("head1"),
+    );
+    expect(h.store.proposals[0]!.status).toBe("checks_passed");
+
+    // The way out the refusal names: dismiss, propose the wording again, and
+    // merge that Context PR from Oxagen.
+    await createDismissProposalHandler(h)(
+      { proposalId: id, reason: "merged on GitHub after an edit" },
+      ctx(),
+    );
+    const again = await proposed(h, {
+      record: {
+        lineageId: LINEAGE,
+        kind: "rule",
+        force: "should",
+        sharingScope: "workspace",
+        statement:
+          "Do not re-read CHANGELOG.md more than once in a run; cache the first read and reuse it.",
+      },
+    });
+    const reopened = await createOpenContextPrHandler(h)(
+      { proposalId: again },
+      ctx(),
+    );
+    expect(reopened.status).toBe("checks_passed");
+    const merged = await createMergeContextPrHandler(h)(
+      { proposalId: again },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(merged.status).toBe("merged");
+    expect(h.store.records).toHaveLength(1);
+  });
+
+  it("re-runs the checks on a PR merged on the host at the commit they passed on, and merge still publishes it", async () => {
+    const h = harness();
+    const id = await opened(h);
+    await h.github.mergePullRequest(REPO, {
+      number: 519,
+      commitTitle: "Context PR (#519)",
+      sha: "head1",
+    });
+    const rerun = await createOpenContextPrHandler(h)(
+      { proposalId: id },
+      ctx(),
+    );
+    expect(rerun.status).toBe("checks_passed");
+    const out = await createMergeContextPrHandler(h)(
+      { proposalId: id },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(out.status).toBe("merged");
+    expect(out.mergedCommit).toBe("merge519");
   });
 
   it("refuses base_moved on the merge and on a re-run once the PR is retargeted off the production branch, and publishes nothing", async () => {

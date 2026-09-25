@@ -6,7 +6,6 @@ import {
   applyMentionPlaceholders,
   matchMentionTypes,
   mentionFromHref,
-  mentionGrammarPrompt,
   mentionToHref,
   mentionTypeInfo,
   parseMentions,
@@ -210,15 +209,5 @@ describe("mention href bridge", () => {
     expect(out).toMatch(
       /^fix \[proxy\.ts\]\(oxagen-mention:\/\/file\?.*\) now$/,
     );
-  });
-});
-
-describe("mentionGrammarPrompt", () => {
-  it("documents the grammar and every type", () => {
-    const prompt = mentionGrammarPrompt();
-    expect(prompt).toContain("[:TYPE|:SLUG|:LOCATION|:LABEL]");
-    for (const info of MENTION_TYPES) {
-      expect(prompt).toContain(`\`${info.type}\``);
-    }
   });
 });

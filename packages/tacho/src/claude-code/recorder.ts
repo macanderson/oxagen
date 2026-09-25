@@ -210,8 +210,13 @@ export interface ChainMark {
   cursor: ChainCursor;
   /** Events sealed on this chain when the mark was taken. */
   events: number;
-  /** Bodies waiting for the caller that takes the events with them. */
-  pendingBodies: number;
+  /**
+   * The bodies waiting for the caller that takes the events with them, as
+   * the mark found them. A list and not a count: a caller that fails after
+   * `takeBodies` has already drained these, and a count can trim the list
+   * but cannot put a drained body back.
+   */
+  pendingBodies: readonly FrameBody[];
   pendingChildGenesis: number;
   turnSeq: number;
   turnOpen: boolean;
@@ -429,6 +434,13 @@ export class SessionRecorder {
    * WAL already held. See `continueFromDisk`.
    */
   readonly bornOnDisk: boolean = false;
+  /**
+   * Whether this recorder was opened from restored state: a `daemon.json`
+   * entry, or a tombstone a forgotten session resumes from. Like
+   * `bornOnDisk`, its chain was born past genesis, so a caller that rolls it
+   * back to birth must first check the WAL still ends there.
+   */
+  readonly bornRestored: boolean = false;
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -461,8 +473,10 @@ export class SessionRecorder {
     this.rootSessionUuid = options.parent?.rootSessionUuid ?? this.sessionUuid;
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
-    if (options.restore) this.restore(options.restore);
-    else this.bornOnDisk = this.continueFromDisk();
+    if (options.restore) {
+      this.restore(options.restore);
+      this.bornRestored = true;
+    } else this.bornOnDisk = this.continueFromDisk();
     this.birth = this.markChain();
   }
 
@@ -644,7 +658,7 @@ export class SessionRecorder {
     return {
       cursor: { ...this.cursor },
       events: this.events.length,
-      pendingBodies: this.pendingBodies.length,
+      pendingBodies: [...this.pendingBodies],
       pendingChildGenesis: this.pendingChildGenesis.length,
       turnSeq: this.turnSeq,
       turnOpen: this.turnOpen,
@@ -700,7 +714,10 @@ export class SessionRecorder {
     }
     this.cursor = { ...mark.cursor };
     this.events.splice(mark.events);
-    this.pendingBodies.splice(mark.pendingBodies);
+    // Restore the list rather than trim it. The daemon drains bodies into
+    // the write that fails, so the ones sealed before the mark may no longer
+    // be here, and they still belong to events nothing has written.
+    this.pendingBodies = [...mark.pendingBodies];
     this.pendingChildGenesis.splice(mark.pendingChildGenesis);
     this.turnSeq = mark.turnSeq;
     this.turnOpen = mark.turnOpen;

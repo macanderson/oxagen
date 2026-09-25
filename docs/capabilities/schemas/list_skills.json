@@ -61,7 +61,7 @@
         "anyOf": [
           {
             "type": "integer",
-            "minimum": 0
+            "exclusiveMinimum": 0
           },
           {
             "type": "null"
@@ -84,7 +84,7 @@
             },
             "sessions": {
               "type": "integer",
-              "minimum": 0
+              "exclusiveMinimum": 0
             },
             "harnesses": {
               "type": "array",
@@ -97,7 +97,7 @@
             },
             "harnessCount": {
               "type": "integer",
-              "minimum": 0
+              "exclusiveMinimum": 0
             },
             "firstSeenAt": {
               "type": "string"

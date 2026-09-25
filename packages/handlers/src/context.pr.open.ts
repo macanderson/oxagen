@@ -45,6 +45,7 @@ import {
 import {
   assertProductionBase,
   assertSameHost,
+  mergedOutsideOxagen,
   type SteeringRepository,
 } from "./context.steering.github";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
@@ -214,6 +215,18 @@ export function createOpenContextPrHandler(
       assertSameHost(repo, row.provider, row.prUrl);
       const pr = await deps.github.getPullRequest(repo, row.prNumber!);
       assertProductionBase(repo, pr.baseRef, row.prUrl);
+      // A PR merged on the host at the commit the checks passed on is still
+      // Oxagen's to publish, and merge_context_pr resumes it. Merged anywhere
+      // else, the checks would only report on a head that can never change.
+      const passedHere =
+        row.status === "checks_passed" && pr.headSha === row.headSha;
+      if (pr.merged && !passedHere) {
+        throw mergedOutsideOxagen(
+          row.prUrl,
+          pr.headSha,
+          row.status === "checks_passed" ? row.headSha : null,
+        );
+      }
       row = await deps.store.updateProposal(
         row.id,
         {

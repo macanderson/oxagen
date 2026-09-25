@@ -14,6 +14,8 @@
  * returned result — no live Postgres needed.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { type SQL, isSQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // Shared state
@@ -30,6 +32,10 @@ const state: {
   ledgerInserts: Array<Record<string, unknown>>;
   // IDs of credit_lots rows that were updated (excluding credit_balances updates)
   lotUpdateIds: string[];
+  /** UPDATE credit_lots statements issued, however many rows each one names. */
+  lotUpdateStatements: number;
+  /** The debit each lot took, read from the UPDATE's CASE, in statement order. */
+  lotDebits: Array<[string, bigint]>;
   balanceUpdateCount: number;
   /**
    * org_billing_settings.meter_carry_micro_credits_by_reason — the sub-credit
@@ -42,10 +48,29 @@ const state: {
   lots: [],
   ledgerInserts: [],
   lotUpdateIds: [],
+  lotUpdateStatements: 0,
+  lotDebits: [],
   balanceUpdateCount: 0,
   carryByReason: {},
   hasSettingsRow: true,
 };
+
+const dialect = new PgDialect();
+
+/**
+ * Read the per-lot debits out of the batched UPDATE's SET expression. With the
+ * mock schema the two columns render as parameters too, so the params are the
+ * remaining_cents column, the id column, then an (id, debit) pair per WHEN.
+ */
+function debitsFromSet(expr: unknown): Array<[string, bigint]> {
+  if (!isSQLWrapper(expr)) return [];
+  const { params } = dialect.sqlToQuery(expr as SQL);
+  const pairs: Array<[string, bigint]> = [];
+  for (let i = 2; i + 1 < params.length; i += 2) {
+    pairs.push([params[i] as string, params[i + 1] as bigint]);
+  }
+  return pairs;
+}
 
 /** The micro-credits banked against one reason, as the column stores them. */
 function carryFor(reason: string): bigint {
@@ -107,11 +132,14 @@ function makeTx() {
       const isSettings = table === SCHEMA.orgBillingSettings;
       return {
         set: vi.fn((fields: Record<string, unknown>) => ({
-          where: vi.fn((cond: { _eq?: unknown[] }) => {
+          where: vi.fn((cond: { _in?: unknown[] }) => {
             if (isCreditLots) {
-              // cond._eq[1] is the lot id value from eq(schema.creditLots.id, lot.id)
-              const lotId = (cond?._eq?.[1] as string) ?? "unknown";
-              state.lotUpdateIds.push(lotId);
+              // cond._in[1] is the id list from inArray(schema.creditLots.id, ids):
+              // one statement debits every lot the draw touched.
+              const lotIds = (cond?._in?.[1] as string[]) ?? ["unknown"];
+              state.lotUpdateIds.push(...lotIds);
+              state.lotUpdateStatements++;
+              state.lotDebits.push(...debitsFromSet(fields["remainingCents"]));
             } else if (isSettings) {
               // The carry write-back: only this reason's remainder stays banked,
               // and the other reasons' buckets ride along untouched.
@@ -157,6 +185,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return {
     ...real,
     eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
+    inArray: (a: unknown, b: unknown) => ({ _in: [a, b] }),
   };
 });
 
@@ -208,6 +237,8 @@ describe("consumeCredits — lots model", () => {
     state.lots = [];
     state.ledgerInserts = [];
     state.lotUpdateIds = [];
+    state.lotUpdateStatements = 0;
+    state.lotDebits = [];
     state.balanceUpdateCount = 0;
     state.carryByReason = {};
   });
@@ -375,6 +406,43 @@ describe("consumeCredits — lots model", () => {
     expect(state.lotUpdateIds[2]).toBe("lot-free");
   });
 
+  // ── one statement per draw (#2976) ───────────────────────────────────────
+
+  it("debits every drained lot in one UPDATE, each by its own amount", async () => {
+    // Three lots drawn in one call used to cost three UPDATE round trips
+    // inside the debit transaction, while holding every lot's row lock.
+    state.lots = [
+      makeLot("lot-soon", 10n, future),
+      makeLot("lot-later", 10n, future),
+      makeLot("lot-free", 500n, null),
+    ];
+
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 25n,
+      reason: "consume_execution",
+    });
+
+    expect(r.chargedCents).toBe(25n);
+    expect(r.balanceCents).toBe(495n);
+    expect(state.lotUpdateStatements).toBe(1);
+    expect(state.lotDebits).toEqual([
+      ["lot-soon", 10n],
+      ["lot-later", 10n],
+      ["lot-free", 5n],
+    ]);
+  });
+
+  it("issues no lot UPDATE when every lot is already empty", async () => {
+    state.lots = [makeLot("lot-1", 0n), makeLot("lot-2", 0n)];
+    await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 5n,
+      reason: "consume_execution",
+    });
+    expect(state.lotUpdateStatements).toBe(0);
+  });
+
   // ── invalid reason guard ─────────────────────────────────────────────────
 
   it("rejects an invalid reason before touching the DB", async () => {
@@ -411,6 +479,8 @@ describe("consumeCredits — sub-credit carry", () => {
     state.lots = [];
     state.ledgerInserts = [];
     state.lotUpdateIds = [];
+    state.lotUpdateStatements = 0;
+    state.lotDebits = [];
     state.balanceUpdateCount = 0;
     state.carryByReason = {};
   });
@@ -500,6 +570,8 @@ describe("consumeCredits — carry is partitioned by reason", () => {
     state.lots = [];
     state.ledgerInserts = [];
     state.lotUpdateIds = [];
+    state.lotUpdateStatements = 0;
+    state.lotDebits = [];
     state.balanceUpdateCount = 0;
     state.carryByReason = {};
   });
@@ -606,6 +678,8 @@ describe("consumeCredits — an assistant shortfall is owed, not forgiven", () =
     state.lots = [];
     state.ledgerInserts = [];
     state.lotUpdateIds = [];
+    state.lotUpdateStatements = 0;
+    state.lotDebits = [];
     state.balanceUpdateCount = 0;
     state.carryByReason = {};
     state.hasSettingsRow = true;
@@ -712,6 +786,8 @@ describe("settleOwedCredits — a grant pays what the org owes", () => {
     state.lots = [];
     state.ledgerInserts = [];
     state.lotUpdateIds = [];
+    state.lotUpdateStatements = 0;
+    state.lotDebits = [];
     state.balanceUpdateCount = 0;
     state.carryByReason = {};
     state.hasSettingsRow = true;

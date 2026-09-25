@@ -35,7 +35,7 @@ export function ShellClient({
       <CommandMenu data={data} />
       <AccountDialog data={data} />
       <AvatarDialog data={data} />
-      <AssistantFlyout />
+      <AssistantFlyout enterToSubmit={data.viewer.enterToSubmit} />
       <NotificationsDialog data={data} />
       <ApprovalsDrawer data={data} cards={cards} />
     </ShellStateProvider>

@@ -234,7 +234,7 @@ describe("auditWindow", () => {
 
   const zoned = (timeZone: string) =>
     vi.fn<DataSource["shell"]["preferences"]>(() =>
-      Promise.resolve(readOk({ timeZone })),
+      Promise.resolve(readOk({ timeZone, enterToSubmit: false })),
     );
 
   it("resolves the days in the viewer's zone, the last day inclusive", async () => {

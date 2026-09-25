@@ -175,7 +175,13 @@ describe("the six §10.3 checks", () => {
     const out = CHECKS.record_hash(ctx({ fileText: edited }));
     expect(out.ok).toBe(false);
     expect(out.summary).toContain("does not match the file's");
+    // The summary names the likely cause and where to fix it, because the
+    // person reading it on GitHub just edited the file there (#4118).
+    expect(out.summary).toContain(
+      "Change the record in Oxagen, not on the pull request.",
+    );
     expect(CHECKS.record_hash(ctx()).summary).toContain("matches the file");
+    expect(CHECKS.record_hash(ctx()).summary).not.toContain("Oxagen, not on");
   });
 
   it("secret_pii_scan: refuses a token in the rationale and an email in the statement", () => {
@@ -295,7 +301,7 @@ describe("the six §10.3 checks", () => {
     );
     expect(disagree.ok).toBe(false);
     expect(disagree.summary).toBe(
-      'the file\'s kind is "procedure"; the proposal\'s is "rule"',
+      'the file\'s kind is "procedure"; the proposal\'s is "rule". The file changed after Oxagen wrote it, usually through an edit or an accepted review suggestion on this pull request. Change the record in Oxagen, not on the pull request.',
     );
     // The registry is written from the proposal row: a branch commit that
     // re-stamps the file with another statement, force or scope passes the

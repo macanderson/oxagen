@@ -371,7 +371,6 @@
     "d7e4566da24d1f9f949416657cfe9ff926a4f31ebbb9af31462e419c7bb79fb5"
   ],
   "packages/handlers/src/org.member_invite.accept.ts": [
-    "50e7979272eccae189c894e1aaefce19e7b0ea323586cd31a82398b7b03c4981",
     "8baee4a04bdea3bbed82fe611f524692eddc90faaff9290b78c492cface6a3ba",
     "a40adc7d53fa45180ff60c28568aae4560e8a0b24436873cc3fa74cbd79379ec"
   ],
@@ -545,9 +544,6 @@
   ],
   "packages/run-ledger/src/run-store.ts": [
     "dc94c15324c5de41f209183ce90169d9603c526a7bedf1c9b2ff4c09b12db83f"
-  ],
-  "tools/scripts/assistant-model-keys.ts": [
-    "92823280fa8765a0ff39b77bd22d5877b63c90cce2b6ab22a1dcd922022905c9"
   ],
   "tools/scripts/billing-terms.ts": [
     "a177ffe4cd322370f1d11a076cfd5a5499a8078669090cf60ee6f8a1b618bb55"

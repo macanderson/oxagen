@@ -31,6 +31,13 @@ export const conversations = chatSchema.table(
     // drift mid-conversation. NULL = non-code conversation. Shape:
     // StoredCodeBinding (apps/app chat stream code-binding.ts).
     codeBinding: jsonb("code_binding"),
+    // The in-app assistant's summary of the messages older than its verbatim
+    // history window, with the id of the newest message it covers. NULL until
+    // a thread outgrows the window. The assistant rewrites it only when enough
+    // messages have left the window since it was written, so a turn reads it
+    // rather than paying for it. Shape: StoredHistorySummary
+    // (packages/agent/src/runtime/history-summary.ts).
+    historySummary: jsonb("history_summary"),
     // softDeleteMixin (deleted_at / deleted_by_id): the engineering law
     // forbids hard-deletes on org-scoped tables, so the user-facing "delete"
     // sets deleted_at — the row is retained for SOC2/audit but vanishes from

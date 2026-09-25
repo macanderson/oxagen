@@ -3,8 +3,9 @@
 // `Promise<ActionResult<…>>` or `Promise<never>`, reaches `requireViewer`,
 // `requireUser` or `requireInvitee` from @/server/viewer (itself or through a
 // function of its own module), and never reads an org or workspace id from
-// its input or a form field. The pre-auth class, which runs before any
-// session exists, is an explicit allowlist of module and name.
+// its input or a form field. No action is exempt. The flows that run before
+// any session exists (password reset, verification resend) call Better Auth
+// from the browser over HTTP, where its rate limiter applies (#4042).
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
@@ -63,12 +64,6 @@ const VIEWER_RESOLVERS: ReadonlySet<string> = new Set([
   "requireViewer",
   "requireUser",
   "requireInvitee",
-]);
-/** The pre-auth class: password reset and verification resend. */
-const PRE_AUTH: ReadonlySet<string> = new Set([
-  "src/features/auth/actions.ts#requestPasswordReset",
-  "src/features/auth/actions.ts#resetPassword",
-  "src/features/auth/actions.ts#resendVerification",
 ]);
 /** An org or workspace id, however it is spelled. */
 const TENANT_ID = /^(org|workspace)_?id$/i;
@@ -279,16 +274,14 @@ function actionViolations(source: SourceText): string[] {
   const actionResult = importsFrom(sf, "@/server/kernel").get("ActionResult");
   const locals = localFunctions(sf);
   for (const action of actionsOf(sf, fail)) {
-    if (!PRE_AUTH.has(`${source.file}#${action.name}`)) {
-      if (!isActionReturn(action.fn.type, actionResult)) {
-        fail(action.at, `return-type:${action.name}`);
-      }
-      if (
-        action.fn.body === undefined ||
-        !reachesViewer(action.fn.body, resolvers, locals, new Set())
-      ) {
-        fail(action.at, `no-viewer:${action.name}`);
-      }
+    if (!isActionReturn(action.fn.type, actionResult)) {
+      fail(action.at, `return-type:${action.name}`);
+    }
+    if (
+      action.fn.body === undefined ||
+      !reachesViewer(action.fn.body, resolvers, locals, new Set())
+    ) {
+      fail(action.at, `no-viewer:${action.name}`);
     }
     parameterTenantReads(sf, action, fail);
   }
@@ -354,16 +347,16 @@ describe("server actions", () => {
     expect(probe("no-directive.ts")).toEqual([]);
   });
 
-  it("allowlists the pre-auth class by module and name, nowhere else", () => {
+  it("exempts no pre-auth action, not even in the auth lane (#4042)", () => {
     const { text } = readSource(`${PROBES}/pre-auth.ts`);
-    expect(
-      actionViolations({ file: "src/features/auth/actions.ts", text }),
-    ).toEqual([]);
-    expect(
-      actionViolations({ file: "src/features/billing/actions.ts", text }),
-    ).toEqual([
-      `${RULE} src/features/billing/actions.ts:3 return-type:requestPasswordReset`,
-      `${RULE} src/features/billing/actions.ts:3 no-viewer:requestPasswordReset`,
-    ]);
+    for (const file of [
+      "src/features/auth/actions.ts",
+      "src/features/billing/actions.ts",
+    ]) {
+      expect(actionViolations({ file, text })).toEqual([
+        `${RULE} ${file}:3 return-type:requestPasswordReset`,
+        `${RULE} ${file}:3 no-viewer:requestPasswordReset`,
+      ]);
+    }
   });
 });

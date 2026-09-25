@@ -601,6 +601,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
   const localeId = useId();
   const zoneId = useId();
   const themeId = useId();
+  const enterHintId = useId();
   const { state, outcome, update } = useAccountPreferences(data.viewer.id);
   const operation = useAccountOperation(data.viewer.id, "preferences");
   const { pending } = operation;
@@ -687,7 +688,15 @@ function PreferencesTab({ data }: { data: ShellData }) {
               }
             : current,
         );
-        if (result.value.timezone !== data.viewer.timeZone) navigate.refresh();
+        // The chrome reads the zone and enter_to_submit on the server
+        // (source.ts). A saved value the page did not render with is read
+        // again by re-rendering the server tree, which keeps client state, so
+        // the assistant composer follows the new setting without a reload.
+        if (
+          result.value.timezone !== data.viewer.timeZone ||
+          result.value.enterToSubmit !== data.viewer.enterToSubmit
+        )
+          navigate.refresh();
       } else {
         if (mountedRef.current && unchanged()) previewTheme(null);
         update((current) => ({
@@ -805,6 +814,24 @@ function PreferencesTab({ data }: { data: ShellData }) {
               </option>
             ))}
           </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="flex items-start gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              data-testid="account-enter-to-submit"
+              className="mt-0.5 size-4 accent-primary"
+              checked={draft.enterToSubmit}
+              aria-describedby={enterHintId}
+              onChange={(e) => {
+                edit({ enterToSubmit: e.target.checked });
+              }}
+            />
+            <span>{t("enterToSubmit")}</span>
+          </label>
+          <p id={enterHintId} className={hint}>
+            {t("enterToSubmitHint")}
+          </p>
         </div>
       </div>
 

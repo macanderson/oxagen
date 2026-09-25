@@ -546,8 +546,8 @@ export async function reactivateOrgSubscription(orgId: string): Promise<void> {
  * customer; both calls succeed, both reconcile to the same end state, and only
  * Stripe shows the second one.
  *
- * `setSubscriptionSeats` next door already had the right shape
- * (`seats:${subId}:${seats}`, no clock), and `autoreload.ts` reaches the same
+ * `setSubscriptionSeats` next door carries no clock either (see
+ * {@link seatChangeIdempotencyKey}), and `autoreload.ts` reaches the same
  * conclusion the other way — it persists the key it charged under, because no
  * wall-clock derivation could survive a retry (#1420).
  *
@@ -631,6 +631,41 @@ export async function upgradeSubscription(
 }
 
 /**
+ * Build the Stripe idempotency key for a seat change.
+ *
+ * The key names the transition, `prior->seats`, and the version of the
+ * subscription row the transition was read from. It used to be
+ * `seats:${subId}:${seats}`. A change from 5 to 8 and back to 5 inside
+ * Stripe's 24-hour key window then reused the first `:5` key, Stripe replayed
+ * the stored response, and the second change never applied (#2976). The row
+ * still read 8 seats while the caller saw success.
+ *
+ * The counts alone do not fix that. 5->8->5->8 reuses the `5->8` key, and the
+ * last change is replayed in the same way. So the key also carries
+ * `rowVersion`, the row's `updatedAt` in epoch milliseconds.
+ * `syncSubscriptionFromStripe` rewrites `updatedAt` after every applied
+ * change, so each applied change moves the version, and the next change reads
+ * a new one. A double submit of one change reads the same row before either
+ * submit syncs, so it produces the same key and Stripe dedupes it.
+ *
+ * The version is state read off the row, not a clock read at submit time, so
+ * the key never splits a double submit the way a time bucket did (#1421).
+ *
+ * `requestId` separates two deliberate submits of the same transition from one
+ * row version, the way it does in {@link planChangeIdempotencyKey}.
+ */
+export function seatChangeIdempotencyKey(
+  stripeSubId: string,
+  priorSeats: number,
+  seats: number,
+  rowVersion: number,
+  requestId?: string,
+): string {
+  const base = `seats:${stripeSubId}:${priorSeats}->${seats}@${rowVersion}`;
+  return requestId ? `${base}:${requestId}` : base;
+}
+
+/**
  * Update the seat count on an active subscription.
  *
  * Guard: if `seats` is less than the number of currently used seats
@@ -643,6 +678,13 @@ export async function upgradeSubscription(
 export async function setSubscriptionSeats(
   orgId: string,
   seats: number,
+  opts: {
+    /**
+     * Identifies this submit. See {@link seatChangeIdempotencyKey} for what it
+     * adds to the key.
+     */
+    requestId?: string;
+  } = {},
 ): Promise<void> {
   if (seats < 1) throw new Error("seats must be >= 1");
 
@@ -652,7 +694,11 @@ export async function setSubscriptionSeats(
         eq(schema.subscriptions.orgId, orgId),
         sql`${schema.subscriptions.status} IN ('active','trialing')`,
       ),
-      columns: { stripeSubscriptionId: true, seatCount: true },
+      columns: {
+        stripeSubscriptionId: true,
+        seatCount: true,
+        updatedAt: true,
+      },
     }),
   );
   if (!row) throw new Error(`No active subscription found for org ${orgId}`);
@@ -669,7 +715,13 @@ export async function setSubscriptionSeats(
   // on the next cycle (avoids surprising the customer with an immediate refund).
   const isIncrease = seats > row.seatCount;
   const prorationBehavior = isIncrease ? "always_invoice" : "create_prorations";
-  const idempotencyKey = `seats:${row.stripeSubscriptionId}:${seats}`;
+  const idempotencyKey = seatChangeIdempotencyKey(
+    row.stripeSubscriptionId,
+    row.seatCount,
+    seats,
+    row.updatedAt.getTime(),
+    opts.requestId,
+  );
 
   logger.info(
     { orgId, seats, previous: row.seatCount, prorationBehavior },
