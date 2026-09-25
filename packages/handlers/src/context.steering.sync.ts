@@ -322,6 +322,7 @@ export async function syncWorkspaceSteering(
         if (
           await reject(
             deps,
+            repo,
             row,
             `Merged on ${hostName(repo)} into ${pr.baseRef}, which is not the production branch ${repo.defaultBranch}`,
             now,
@@ -332,6 +333,7 @@ export async function syncWorkspaceSteering(
         if (
           await reject(
             deps,
+            repo,
             row,
             `Closed on ${hostName(repo)} without merging`,
             now,
@@ -381,6 +383,7 @@ export async function syncWorkspaceSteering(
         }));
       if (linked) {
         outcome.proposals.merged += 1;
+        await dropBranch(deps, repo, row);
         continue;
       }
       const why =
@@ -389,6 +392,7 @@ export async function syncWorkspaceSteering(
       if (
         await reject(
           deps,
+          repo,
           row,
           `Merged on ${hostName(repo)}, but Oxagen could not publish it: ${why}`,
           now,
@@ -472,6 +476,7 @@ export async function syncWorkspaceSteering(
 
 async function reject(
   deps: SyncDeps,
+  repo: SteeringRepository,
   row: ProposalRow,
   reason: string,
   at: Date,
@@ -482,11 +487,35 @@ async function reject(
       { status: "rejected", dismissedAt: at, dismissedReason: reason },
       OPEN_PR,
     );
-    return true;
   } catch (err) {
     // Another call moved it first: a merge from Oxagen, or a dismissal.
     if (err instanceof HandlerError && err.code === "conflict") return false;
     throw err;
+  }
+  await dropBranch(deps, repo, row);
+  return true;
+}
+
+/**
+ * Delete a settled Context PR's branch, as `dismiss_proposal` and
+ * `merge_context_pr` do. The next proposal on the lineage branches from the
+ * production branch; a stale `context/<lineage>` left behind would carry the
+ * old PR's commits into it. Best effort: a branch already gone is fine, and a
+ * refusal is logged rather than failing the sync.
+ */
+async function dropBranch(
+  deps: SyncDeps,
+  repo: SteeringRepository,
+  row: ProposalRow,
+): Promise<void> {
+  if (!row.branch) return;
+  try {
+    await deps.github.deleteBranch(repo, row.branch);
+  } catch (err) {
+    logger.warn(
+      { err, proposal: row.publicId, branch: row.branch },
+      "context.sync: could not delete a settled Context PR's branch",
+    );
   }
 }
 

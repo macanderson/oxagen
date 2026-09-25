@@ -495,6 +495,9 @@ describe("Context PRs on the host", () => {
       dismissedReason: "Closed on GitHub without merging",
     });
     expect(active(r)).toEqual([]);
+    // The next proposal on the lineage branches from main, not from the
+    // closed PR's commits.
+    expect(r.h.github.deletedBranches).toContain(`context/${LINEAGE}`);
   });
 
   it("resets the checks when the PR's branch moves on GitHub", async () => {
@@ -558,5 +561,6 @@ describe("Context PRs on the host", () => {
       mergedByUserId: null,
     });
     expect(r.h.store.versions).toHaveLength(1);
+    expect(r.h.github.deletedBranches).toContain(`context/${LINEAGE}`);
   });
 });

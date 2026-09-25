@@ -1,7 +1,34 @@
 import { schema, withSystemDb } from "@oxagen/database";
+import { NonRetriableError } from "@oxagen/functions";
 import { eq } from "drizzle-orm";
 import { createFunction } from "../create-function";
 import { steeringSyncRunner } from "../lib/steering-sync-runner";
+
+/**
+ * One sync, with a refusal the runner marked non-retriable (the production
+ * branch is gone, the rules directory is too large) rethrown as the error
+ * Inngest recognises inside a step. The flag alone is read only outside the
+ * step, after Inngest has already retried the step to exhaustion.
+ */
+async function runOnce(
+  scope: { orgId: string; workspaceId: string },
+  force: boolean,
+) {
+  try {
+    return await steeringSyncRunner()(scope, { force });
+  } catch (err) {
+    if (
+      err !== null &&
+      typeof err === "object" &&
+      (err as { isNonRetriable?: unknown }).isNonRetriable === true
+    )
+      throw new NonRetriableError(
+        err instanceof Error ? err.message : String(err),
+        { cause: err },
+      );
+    throw err;
+  }
+}
 
 /**
  * The repository sync for one workspace (ADR-182): make the context registry
@@ -32,16 +59,14 @@ export const [steeringSync] = createFunction(
     };
     const scope = { orgId: data.orgId, workspaceId: data.workspaceId };
     const first = await step.run("sync", () =>
-      steeringSyncRunner()(scope, { force: data.force === true }),
+      runOnce(scope, data.force === true),
     );
     if (first.retryAfterSeconds === null) return first;
     // A Context PR Oxagen merged is still inside its grace window; the merge
     // publishes it with its reviewer on the ledger. Sync again after the
     // window, when anything the merge left unpublished is the sync's.
     await step.sleep("merge-grace", `${first.retryAfterSeconds}s`);
-    return step.run("sync-after-grace", () =>
-      steeringSyncRunner()(scope, { force: true }),
-    );
+    return step.run("sync-after-grace", () => runOnce(scope, true));
   },
 );
 

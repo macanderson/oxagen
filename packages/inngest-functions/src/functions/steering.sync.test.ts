@@ -149,6 +149,21 @@ describe("steering/sync", () => {
     ).rejects.toThrow("GitHub answered 502");
   });
 
+  // A refusal reads the same on every retry. Inngest recognises only an
+  // error named NonRetriableError inside a step, so the runner's flag has to
+  // become one there, or the step is retried to exhaustion first.
+  it("turns a refusal the runner flagged into a non-retriable error inside the step", async () => {
+    runner.mockRejectedValue(
+      Object.assign(new Error("main is gone"), { isNonRetriable: true }),
+    );
+    await expect(
+      runSync({ ...SCOPE, reason: "push" }, fakeStep()),
+    ).rejects.toMatchObject({
+      name: "NonRetriableError",
+      message: "main is gone",
+    });
+  });
+
   it("runs one sync at a time per workspace and folds a burst of deliveries into one", () => {
     // A squash merge sends a push and a pull_request event for one change.
     // Keyed on the workspace, they debounce into one sync, and two syncs of
