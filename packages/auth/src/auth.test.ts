@@ -819,6 +819,106 @@ describe("databaseHooks.session.delete.after (sign_out audit)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Account audit — auth.password_changed and auth.email_verified (#3938)
+// ---------------------------------------------------------------------------
+
+describe("account audit callbacks", () => {
+  function onPasswordReset(): AnyFn {
+    const epw = getConfig()["emailAndPassword"] as Record<string, AnyFn>;
+    return epw["onPasswordReset"]!;
+  }
+  function afterEmailVerification(): AnyFn {
+    const ev = getConfig()["emailVerification"] as Record<string, AnyFn>;
+    return ev["afterEmailVerification"]!;
+  }
+  function withOrg(rows: unknown[]): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(makeQueryTx(rows)),
+    );
+  }
+  function lastEvent(): Record<string, unknown> {
+    const [event] = vi
+      .mocked(emitSecurityEvent)
+      .mock.calls.at(-1)! as unknown as [Record<string, unknown>];
+    return event;
+  }
+
+  beforeEach(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (withSystemDb as any).mockReset();
+    // mockReset, not mockClear: an earlier test left a throwing implementation.
+    vi.mocked(emitSecurityEvent).mockReset();
+  });
+
+  it("records auth.password_changed when a reset completes", async () => {
+    withOrg([{ orgId: "org_pw" }]);
+    const request = new Request(
+      "https://app.oxagen.test/api/auth/reset-password",
+      {
+        headers: { "user-agent": "ResetBrowser/1" },
+      },
+    );
+
+    await onPasswordReset()(
+      { user: { id: "user_pw", email: "pw@example.com" } },
+      request,
+    );
+
+    expect(emitSecurityEvent).toHaveBeenCalledOnce();
+    const event = lastEvent();
+    expect(event).toMatchObject({
+      eventType: "auth.password_changed",
+      actorUserId: "user_pw",
+      orgId: "org_pw",
+      outcome: "success",
+      userAgent: "ResetBrowser/1",
+      detail: { method: "reset", sessionsRevoked: true },
+    });
+    // The row holds no token, password or link.
+    expect(JSON.stringify(event)).not.toMatch(/token|password=|https?:/);
+  });
+
+  it("records auth.email_verified when an address is verified", async () => {
+    withOrg([]);
+
+    await afterEmailVerification()({ id: "user_ev", email: "ev@example.com" });
+
+    expect(emitSecurityEvent).toHaveBeenCalledOnce();
+    const event = lastEvent();
+    expect(event).toMatchObject({
+      eventType: "auth.email_verified",
+      actorUserId: "user_ev",
+      orgId: "00000000-0000-0000-0000-000000000000",
+      outcome: "success",
+      userAgent: null,
+    });
+    expect(event["detail"]).toBeUndefined();
+  });
+
+  it("SECURITY: a failed org lookup does not fail the reset", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (withSystemDb as any).mockRejectedValue(new Error("connection refused"));
+
+    await expect(
+      onPasswordReset()({ user: { id: "user_pw2" } }),
+    ).resolves.toBeUndefined();
+    expect(emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("SECURITY: a failed emit does not fail the verification", async () => {
+    withOrg([{ orgId: "org_ev2" }]);
+    vi.mocked(emitSecurityEvent).mockImplementation(() => {
+      throw new Error("audit sink unavailable");
+    });
+
+    await expect(
+      afterEmailVerification()({ id: "user_ev2" }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Startup guard — re-import branches (requires vi.resetModules)
 // ---------------------------------------------------------------------------
 
