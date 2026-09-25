@@ -1,5 +1,5 @@
 /**
- * credentials.ts — Credential resolution for file-based MCP servers.
+ * credentials.ts: credential resolution for file-based MCP servers.
  *
  * Resolution order (first match wins):
  *   1. Environment variable (envToken field or headers with ${VAR} already expanded)
@@ -12,11 +12,13 @@
  *   - Plaintext on disk, protected only by file mode 0600
  *
  * For OAuth servers, the credential file holds access + refresh tokens. The
- * refresh logic is handled by the caller — this module only reads and writes
- * the stored state.
+ * caller handles the refresh logic. This module only reads and writes the
+ * stored state.
  */
 import {
+  chmodSync,
   readFileSync,
+  renameSync,
   writeFileSync,
   existsSync,
   mkdirSync,
@@ -28,10 +30,19 @@ import type { McpServerConfig } from "./schema.ts";
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
-const CREDENTIALS_DIR = join(homedir(), ".config", "oxagen", "credentials");
+/**
+ * `~/.config/oxagen/credentials`, resolved on every call. `homedir()` reads
+ * `HOME` (`USERPROFILE` on Windows) each time, so a test that points `HOME`
+ * at a scratch directory gets a scratch credentials directory. A constant
+ * bound at import time kept the real one, and every suite that imported this
+ * module read and wrote the developer's own credentials (#3330).
+ */
+export function credentialsDir(): string {
+  return join(homedir(), ".config", "oxagen", "credentials");
+}
 
 export function getCredentialFilePath(serverName: string): string {
-  return join(CREDENTIALS_DIR, `${serverName}.json`);
+  return join(credentialsDir(), `${serverName}.json`);
 }
 
 // ── Credential File Schema ────────────────────────────────────────────────────
@@ -79,28 +90,43 @@ export function readCredential(serverName: string): StoredCredential | null {
  * Write (or overwrite) the credential file for a named server.
  * Creates the credentials directory if it doesn't exist.
  *
- * Two limits of the 0600 promise in this module's header: `mode` on
- * writeFileSync only applies when the file is CREATED, so a pre-existing
- * world-readable file keeps its mode and the token lands in it; and the write
- * truncates in place rather than writing a temp file and renaming, so a crash
- * mid-write leaves a truncated, unparseable credential.
+ * The token goes into a new sibling file created at 0600, which is then
+ * renamed over the old one. A file that already existed with a looser mode
+ * is replaced rather than written into, so the token never lands in a
+ * world-readable file, and a crash mid-write leaves the old credential
+ * instead of a truncated one.
  */
 export function writeCredential(
   serverName: string,
   credential: StoredCredential,
 ): void {
-  if (!existsSync(CREDENTIALS_DIR)) {
-    mkdirSync(CREDENTIALS_DIR, { recursive: true, mode: 0o700 });
+  const dir = credentialsDir();
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
   const filePath = getCredentialFilePath(serverName);
   const data: StoredCredential = {
     ...credential,
     updatedAt: new Date().toISOString(),
   };
-  writeFileSync(filePath, JSON.stringify(data, null, 2), {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    writeFileSync(tmp, JSON.stringify(data, null, 2), {
+      encoding: "utf8",
+      mode: 0o600,
+      flag: "wx",
+    });
+    // The umask can only narrow the create mode. This makes it exact.
+    chmodSync(tmp, 0o600);
+    renameSync(tmp, filePath);
+  } catch (error) {
+    try {
+      unlinkSync(tmp);
+    } catch {
+      // Never created, or already renamed.
+    }
+    throw error;
+  }
 }
 
 /**
@@ -179,7 +205,7 @@ export async function resolveCredential(
     // literal token (lets a config skip the indirection and inline a value).
     //
     // CAVEAT: the two cases are indistinguishable here. `envToken: "GH_TOKEN"`
-    // with GH_TOKEN unset yields the token "GH_TOKEN" — a non-empty value, so
+    // with GH_TOKEN unset yields the token "GH_TOKEN", a non-empty value, so
     // this returns early and the credential file in step 2 is never consulted,
     // even when a completed OAuth flow left a valid token there. The
     // `startsWith("$")` guard does not catch it either: resolve.ts has already
@@ -244,7 +270,7 @@ export async function resolveCredential(
     try {
       const remote = await opts.remoteFetch(serverName);
       if (remote) {
-        // Cache locally for next time — UNLESS the caller opted out. Workspace
+        // Cache locally for next time, unless the caller opted out. Workspace
         // credentials resolved through the platform bridge are deliberately not
         // written to disk (persistRemote === false).
         if (opts.persistRemote !== false) {
@@ -262,7 +288,7 @@ export async function resolveCredential(
         };
       }
     } catch {
-      // Remote unavailable — fall through to none
+      // Remote unavailable: fall through to none.
     }
   }
 
@@ -305,7 +331,7 @@ export function needsRefresh(
   bufferMs: number = 5 * 60 * 1000,
 ): boolean {
   const stored = readCredential(serverName);
-  if (!stored?.expiresAt) return false; // No expiry known — assume valid
+  if (!stored?.expiresAt) return false; // No expiry known: assume valid.
   const expiresAt = new Date(stored.expiresAt).getTime();
   return Date.now() + bufferMs >= expiresAt;
 }
