@@ -206,8 +206,11 @@ function sharedPlaneScan(args: ScanArgs) {
  */
 export async function listDedicatedPlaneScopes(): Promise<PlaneScope[]> {
   const planes = schema.dataPlanes;
-  // tenancy: the plane bindings and workspace ids live on the control plane
-  // for every organization, dedicated ones included. No tenant row is read.
+  // tenancy: the scheduled sweep has to learn which planes exist before it can
+  // scope anything, so this is a deliberate cross-tenant read of the control
+  // plane. It selects orgId and workspaceId alone, filtered to live dedicated
+  // postgres planes, and reads no tenant row; abandonSilentRun then opens each
+  // workspace in its own scope.
   return withSystemDb((tx) =>
     tx
       .select({
