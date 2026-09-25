@@ -1,7 +1,7 @@
 /**
  * `author_graph_rule`: ask the in-app agent to author a relationship rule
  * across two sources, and judge the turn by whether the graph then answers
- * through the rule (ADR-182, ADR-177; the in-app agent spec, §5 slice 4).
+ * through the rule (ADR-183, ADR-177; the in-app agent spec, §5 slice 4).
  *
  * The caller names the rule as data: the relationship type, and the node
  * label and source at each end. The handler builds the turn from it on the

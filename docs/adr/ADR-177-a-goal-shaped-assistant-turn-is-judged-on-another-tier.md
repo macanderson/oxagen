@@ -6,7 +6,7 @@
 - **Related:** ADR-053 (the in-app agent on `stella-serve`), ADR-058 (what a
   run's evidence retains), the in-app agent spec
   (`docs/specs/in-app-agent-on-stella-serve/spec.md` §5 slice 4 and §6),
-  issue #4175, #2968 item 3c, ADR-182 (the rule-authoring caller,
+  issue #4175, #2968 item 3c, ADR-183 (the rule-authoring caller,
   `author_graph_rule`).
 
 ## Context

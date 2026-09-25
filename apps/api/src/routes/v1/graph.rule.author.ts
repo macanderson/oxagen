@@ -7,7 +7,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * A relationship rule across two sources, authored as one goal-shaped
- * assistant turn and run to completion (ADR-182).
+ * assistant turn and run to completion (ADR-183).
  */
 export const graphRuleAuthorRoute = new Hono<AppEnv>();
 

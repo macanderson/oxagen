@@ -1,6 +1,6 @@
 // author_graph_rule: one `ask_assistant` turn that authors a relationship rule
 // across two sources, judged by whether the graph then answers through it
-// (ADR-182, ADR-177).
+// (ADR-183, ADR-177).
 //
 // The handler writes nothing itself. It checks the person may ask, builds the
 // instruction and the goal from the rule on the server, and invokes

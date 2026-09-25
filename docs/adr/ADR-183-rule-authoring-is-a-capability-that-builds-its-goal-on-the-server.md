@@ -1,4 +1,4 @@
-# ADR-182: Rule authoring is a capability that builds its goal on the server
+# ADR-183: Rule authoring is a capability that builds its goal on the server
 
 - **Status:** Accepted
 - **Date:** 2026-09-25
