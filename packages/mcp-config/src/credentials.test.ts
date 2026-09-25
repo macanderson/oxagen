@@ -20,6 +20,50 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
+/**
+ * A failed step inside `writeCredential`, injected through `node:fs`. A full
+ * disk at `write` or an I/O error at `fsync` cannot be produced on demand.
+ * `openSync` records which path each file descriptor names, so a step fails
+ * only for the temp file and never for the test's own setup.
+ */
+const fault = vi.hoisted(() => ({
+  step: undefined as "writeSync" | "fsyncSync" | "renameSync" | undefined,
+  fds: new Map<number, string>(),
+}));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const real = await importOriginal<typeof import("node:fs")>();
+  const isTemp = (path: string | undefined) =>
+    path !== undefined && path.endsWith(".tmp");
+  const injected = (step: string) =>
+    Object.assign(new Error(`${step}: injected`), {
+      code: step === "writeSync" ? "ENOSPC" : "EIO",
+    });
+  return {
+    ...real,
+    openSync: ((path: string, ...rest: unknown[]) => {
+      const fd = (real.openSync as (...a: unknown[]) => number)(path, ...rest);
+      fault.fds.set(fd, String(path));
+      return fd;
+    }) as typeof real.openSync,
+    writeSync: ((fd: number, ...rest: unknown[]) => {
+      if (fault.step === "writeSync" && isTemp(fault.fds.get(fd)))
+        throw injected("writeSync");
+      return (real.writeSync as (...a: unknown[]) => number)(fd, ...rest);
+    }) as typeof real.writeSync,
+    fsyncSync: (fd: number) => {
+      if (fault.step === "fsyncSync" && isTemp(fault.fds.get(fd)))
+        throw injected("fsyncSync");
+      real.fsyncSync(fd);
+    },
+    renameSync: (from: string, to: string) => {
+      if (fault.step === "renameSync" && isTemp(String(from)))
+        throw injected("renameSync");
+      real.renameSync(from, to);
+    },
+  };
+});
+
 // `HOME` points at a scratch directory before the module under test is
 // imported. A regression back to an import-time binding then fails the first
 // test below and still writes nowhere near the real home directory.
@@ -61,6 +105,7 @@ const dirUnder = (home: string) =>
   join(home, ".config", "oxagen", "credentials");
 
 afterEach(() => {
+  fault.step = undefined;
   vi.unstubAllEnvs();
   for (const dir of scratches.splice(0)) {
     chmodSync(dir, 0o700);
@@ -113,25 +158,24 @@ describe.skipIf(process.platform === "win32")("writeCredential", () => {
     expect(readCredential("github")?.accessToken).toBe("new");
     expect(readdirSync(dir)).toEqual(["github.json"]);
   });
+});
 
-  it.skipIf(process.getuid?.() === 0)(
-    "keeps the old credential and leaves no temp file when the write fails",
-    () => {
+describe("writeCredential when a step fails", () => {
+  // The old credential is what the caller still has. A failed write must
+  // leave it byte for byte, and leave nothing else in the directory.
+  for (const step of ["writeSync", "fsyncSync", "renameSync"] as const) {
+    it(`keeps the old credential and leaves no temp file when ${step} fails`, () => {
       const home = scratchHome();
       const dir = dirUnder(home);
       mkdirSync(dir, { recursive: true });
       const file = join(dir, "github.json");
       writeFileSync(file, '{ "accessToken": "old" }', { mode: 0o600 });
-      chmodSync(dir, 0o500);
-      try {
-        expect(() =>
-          writeCredential("github", { accessToken: "new" }),
-        ).toThrow();
-      } finally {
-        chmodSync(dir, 0o700);
-      }
+      fault.step = step;
+      expect(() => writeCredential("github", { accessToken: "new" })).toThrow(
+        `${step}: injected`,
+      );
       expect(readFileSync(file, "utf8")).toBe('{ "accessToken": "old" }');
       expect(readdirSync(dir)).toEqual(["github.json"]);
-    },
-  );
+    });
+  }
 });

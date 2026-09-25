@@ -17,12 +17,15 @@
  */
 import {
   chmodSync,
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
-  writeFileSync,
-  existsSync,
-  mkdirSync,
   unlinkSync,
+  writeSync,
 } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -90,11 +93,12 @@ export function readCredential(serverName: string): StoredCredential | null {
  * Write (or overwrite) the credential file for a named server.
  * Creates the credentials directory if it doesn't exist.
  *
- * The token goes into a new sibling file created at 0600, which is then
- * renamed over the old one. A file that already existed with a looser mode
- * is replaced rather than written into, so the token never lands in a
- * world-readable file, and a crash mid-write leaves the old credential
- * instead of a truncated one.
+ * The token goes into a new sibling file created at 0600, flushed to disk,
+ * and then renamed over the old one. A file that already existed with a
+ * looser mode is replaced rather than written into, so the token never lands
+ * in a world-readable file. A crash or a power loss mid-write leaves the old
+ * credential instead of a truncated or empty one: without the flush, the
+ * rename can reach the disk before the data does.
  */
 export function writeCredential(
   serverName: string,
@@ -111,11 +115,16 @@ export function writeCredential(
   };
   const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   try {
-    writeFileSync(tmp, JSON.stringify(data, null, 2), {
-      encoding: "utf8",
-      mode: 0o600,
-      flag: "wx",
-    });
+    const fd = openSync(tmp, "wx", 0o600);
+    try {
+      const bytes = Buffer.from(JSON.stringify(data, null, 2), "utf8");
+      let written = 0;
+      while (written < bytes.length)
+        written += writeSync(fd, bytes, written, bytes.length - written);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
     // The umask can only narrow the create mode. This makes it exact.
     chmodSync(tmp, 0o600);
     renameSync(tmp, filePath);
