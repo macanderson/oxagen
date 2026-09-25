@@ -53,12 +53,13 @@ describe("ProseMarkdown", () => {
   });
 
   it("blocks a script link and keeps a web link behind a confirmation", () => {
-    const { container } = render(
+    render(
       <ProseMarkdown>
         {"[bad](javascript:alert(1)) and [docs](https://example.com/docs)"}
       </ProseMarkdown>,
     );
-    expect(container.querySelector('[href^="javascript:"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: /bad/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /bad/ })).toBeNull();
     expect(screen.getByText(/bad/)).not.toHaveAttribute("data-streamdown");
     // Streamdown opens a web link from a button that asks before leaving.
     expect(screen.getByRole("button", { name: "docs" })).toHaveAttribute(
