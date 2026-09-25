@@ -110,14 +110,18 @@ import {
   RunEventSequenceGapError,
   RunNotWritableError,
   RunSpecIdentityMismatchError,
+  RunEventShapeError,
   RunStoreStateError,
   UnknownRunEventTypeError,
+  isAttemptAdvancedError,
   isAttemptNotWritableError,
+  isRunEventInputError,
+  isRunEventShapeError,
+  isRunNotWritableError,
   isForbiddenEventPayloadFieldError,
   isRunEventIntegrityError,
   isRunEventPayloadTooLargeError,
   isRunEventSequenceGapError,
-  isRunNotWritableError,
   isRunStoreStateError,
   isUnknownRunEventTypeError,
 } from "./run-errors";
@@ -758,8 +762,11 @@ describe("prepareAttemptEvent", () => {
         return e;
       }
     })();
-    expect(isRunStoreStateError(err)).toBe(true);
-    expect(err).toBeInstanceOf(RunStoreStateError);
+    // The producer's fault, not a store fault: a surface answers it 400.
+    expect(isRunEventShapeError(err)).toBe(true);
+    expect(err).toBeInstanceOf(RunEventShapeError);
+    expect(isRunStoreStateError(err)).toBe(false);
+    expect(isRunEventInputError(err)).toBe(true);
   });
 
   it("digests observedAt in the form the archive segment writes back, so an export can recompute event_digest", () => {
@@ -788,7 +795,7 @@ describe("prepareAttemptEvent", () => {
   it("refuses an observedAt that is not an instant (negative)", () => {
     expect(() =>
       prepareAttemptEvent({ ...toolEvent(1), observedAt: "not a time" }),
-    ).toThrow(RunStoreStateError);
+    ).toThrow(RunEventShapeError);
   });
 
   it("refuses neither", () => {
@@ -798,7 +805,7 @@ describe("prepareAttemptEvent", () => {
         eventType: "tool.call_completed",
         observedAt: OBSERVED_AT,
       }),
-    ).toThrow(RunStoreStateError);
+    ).toThrow(RunEventShapeError);
   });
 
   it("refuses an event type outside the closed registry", () => {
@@ -1492,6 +1499,28 @@ describe("createAttempt", () => {
     expect(ranSql(executed, INSERT_ATTEMPT)).toBe(false);
   });
 
+  it.each([
+    ["cancelled", { cancel_requested: true }],
+    ["paused", { ingress_paused: true }],
+    ["attempts_exhausted", { attempt_count: 3 }],
+  ] as const)(
+    "refuses a %s run as RunNotWritableError, which a surface answers as a conflict (#3665)",
+    async (reason, overrides) => {
+      const { tx, executed } = makeRoutingTx([
+        { match: LOCK_RUN, rows: lockedRunRows(overrides) },
+      ]);
+      useTx(tx);
+      const err = await createPostgresRunStore()
+        .createAttempt(input)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(RunNotWritableError);
+      expect(isRunNotWritableError(err)).toBe(true);
+      expect(err).toMatchObject({ code: "run_not_writable", reason });
+      expect(isRunStoreStateError(err)).toBe(false);
+      expect(ranSql(executed, INSERT_ATTEMPT)).toBe(false);
+    },
+  );
+
   it("refuses to exceed the run's pinned max_attempts", async () => {
     const { tx } = makeRoutingTx([
       { match: LOCK_RUN, rows: lockedRunRows({ attempt_count: 3 }) },
@@ -2018,6 +2047,129 @@ describe("sealAttempt", () => {
     expect(executed.find((e) => FINISH_RUN.test(e.sql))?.params).toContain(
       "failed",
     );
+  });
+
+  describe("a conditional seal (#3988)", () => {
+    it("seals abandoned at the head its caller read, with an unobserved tail", async () => {
+      const prepared = prepareAttemptEvent(toolEvent(1));
+      const { tx, executed } = makeRoutingTx([
+        { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+        { match: ATTEMPT_STATE, rows: [durableRow(prepared, "event-1", "5")] },
+        ...SEAL_ROUTES,
+      ]);
+      useTx(tx);
+      const handle = await createPostgresRunStore({
+        archive: fakeArchiveStore().store,
+      }).sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "abandoned",
+        reasonCode: "idle_timeout",
+        sealerId: "run.ledger-idle-close",
+        expectedAttemptSeq: 1,
+      });
+      expect(handle).toMatchObject({
+        terminalStatus: "abandoned",
+        eventCount: 1,
+        alreadySealed: false,
+      });
+      const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
+      expect(seal?.params).toContain("idle_timeout");
+      expect(
+        seal?.params.some(
+          (p) => typeof p === "string" && p.includes("unobserved_tail"),
+        ),
+      ).toBe(true);
+      expect(executed.find((e) => FINISH_RUN.test(e.sql))?.params).toContain(
+        "failed",
+      );
+    });
+
+    it("writes nothing when the producer appended after the caller read", async () => {
+      const prepared = prepareAttemptEvent(toolEvent(1));
+      const { tx, executed } = makeRoutingTx([
+        { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+        { match: ATTEMPT_STATE, rows: [durableRow(prepared, "event-1", "5")] },
+        ...SEAL_ROUTES,
+      ]);
+      useTx(tx);
+      // The caller read an attempt with no event; one landed since.
+      const err = await createPostgresRunStore({
+        archive: fakeArchiveStore().store,
+      })
+        .sealAttempt({
+          attemptId: UUID_ATTEMPT,
+          terminalStatus: "abandoned",
+          reasonCode: "idle_timeout",
+          sealerId: "run.ledger-idle-close",
+          expectedAttemptSeq: 0,
+        })
+        .catch((e: unknown) => e);
+      expect(isAttemptAdvancedError(err)).toBe(true);
+      expect(err).toMatchObject({
+        code: "run_attempt_advanced",
+        expectedAttemptSeq: 0,
+        actualAttemptSeq: 1,
+      });
+      expect(ranSql(executed, INSERT_SEAL)).toBe(false);
+      expect(ranSql(executed, INSERT_GRANT)).toBe(false);
+      expect(ranSql(executed, FINISH_RUN)).toBe(false);
+    });
+
+    it("answers the producer's own seal as already sealed and mints nothing", async () => {
+      const { tx, executed } = makeRoutingTx([
+        { match: LOCK_ATTEMPT, rows: [makeAttemptRow({ seal_id: "seal-1" })] },
+        {
+          match: SELECT_HANDLE,
+          rows: [
+            {
+              seal_id: "seal-1",
+              terminal_status: "completed",
+              event_count: "2",
+              final_event_digest: SHA_2,
+              event_stream_digest: SHA_3,
+              grant_id: "grant-1",
+              grant_public_id: "afg_abc",
+              obligation_id: "obligation-1",
+              submission_id: "afg_abc",
+            },
+          ],
+        },
+      ]);
+      useTx(tx);
+      const handle = await createPostgresRunStore({
+        archive: fakeArchiveStore().store,
+      }).sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "abandoned",
+        sealerId: "run.ledger-idle-close",
+        expectedAttemptSeq: 2,
+      });
+      expect(handle).toMatchObject({
+        terminalStatus: "completed",
+        alreadySealed: true,
+      });
+      expect(ranSql(executed, INSERT_SEAL)).toBe(false);
+      expect(ranSql(executed, FINISH_RUN)).toBe(false);
+    });
+
+    it("refuses a late append to an attempt the close sealed", async () => {
+      // ADR-180: the idle close is final, as any seal is. The producer that
+      // comes back finds its attempt sealed and must be issued a new run.
+      const { tx, executed } = makeRoutingTx([
+        { match: LOCK_ATTEMPT, rows: [makeAttemptRow({ seal_id: "seal-1" })] },
+      ]);
+      useTx(tx);
+      await expect(
+        createPostgresRunStore().appendAttemptBatch({
+          attemptId: UUID_ATTEMPT,
+          events: [toolEvent(2)],
+        }),
+      ).rejects.toMatchObject({
+        code: "run_attempt_not_writable",
+        reason: "sealed",
+      });
+      expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
+    });
   });
 
   it("seals an attempt whose terminal event is already durable", async () => {

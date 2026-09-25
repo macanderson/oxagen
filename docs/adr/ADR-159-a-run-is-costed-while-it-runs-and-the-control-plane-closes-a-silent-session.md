@@ -185,9 +185,14 @@ close, not the end.
   until its next frame lands.
 - Ledger runs (`arun_…`) get no running rollup. The in-app assistant seals
   its run when the turn settles. A run whose process died mid-turn stayed
-  open until ADR-173: `evidence.assistant-run-abandon` now seals it
-  `abandoned` once it records nothing for twelve minutes, and that seal is
-  final (#3988).
+  open until two closes landed (#3988). `evidence.assistant-run-abandon`
+  seals an assistant run `abandoned` once it records nothing for twelve
+  minutes (ADR-173), and `run.ledger-idle-close` seals any ledger attempt
+  with no event for twelve hours as `abandoned` and rolls up its cost
+  (ADR-180). Whichever runs first seals the attempt, and the other finds it
+  sealed and writes nothing. Unlike the idle close of a session, either
+  seal is final, because a ledger seal mints the attempt's finalization
+  grant.
 - The daemon's gaps stay. A root `SessionEnd` still does not finalize open
   subagent chains, Codex and Cursor still carry no pid, and Claude Code's
   `SessionEnd` still has no spool. The idle close bounds each at twelve hours

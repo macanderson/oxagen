@@ -133,18 +133,20 @@ export function PlayerPlayback({
       setRun({ from: index, to: index });
     } else if (first !== undefined) {
       setRun({ from: index, to: 0 });
-      navigate.push(first);
+      navigate.advance(first);
     }
   };
   // The next frame and the hold before it. The timer is set again only when
-  // the frame play opened lands, so one read is in flight at a time.
+  // the frame play opened lands, so one read is in flight at a time. Play
+  // replaces the history entry and keeps the scroll, so a long run adds
+  // one entry for the whole playback; a step by hand is a navigation.
   const next = run?.to === index ? hrefs[index + 1] : undefined;
   const wait = stepMs(times[index], times[index + 1], speed);
   useEffect(() => {
     if (next === undefined) return;
     const timer = setTimeout(() => {
       setRun({ from: index, to: index + 1 });
-      navigate.push(next);
+      navigate.advance(next);
     }, wait);
     return () => {
       clearTimeout(timer);

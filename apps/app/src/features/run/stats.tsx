@@ -32,7 +32,7 @@ import { SafeLink } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
 import { EnrichmentSwitch } from "./enrichment-switch";
 import { useHarness } from "./header";
-import type { RunMetrics } from "./metrics";
+import { provisionalCost, type RunMetrics } from "./metrics";
 import { NoValue } from "./parts";
 import { SummarizeAction } from "./record-actions";
 import type { Place } from "./tab-props";
@@ -268,7 +268,10 @@ export function StatRow({
   const { tokens, prompts, wall, priced } = metrics;
   // A count read from a transcript that stopped short of the run is a floor.
   const floor = metrics.whole ? "" : "+";
-  const displayedCost = metrics.cost ?? run.reportedCost ?? null;
+  // Nothing metered the run yet: the agent's own figures stand in, labelled
+  // provisional, the same number the Cost so far instrument prints (#4032).
+  const reported = provisionalCost(run, metrics);
+  const displayedCost = metrics.cost ?? reported?.value ?? null;
   return (
     <section
       aria-label={t("label")}
@@ -328,7 +331,15 @@ export function StatRow({
           )
         }
       >
-        {displayedCost === null ? <NoValue /> : <Money value={displayedCost} />}
+        {displayedCost === null ? (
+          <NoValue />
+        ) : (
+          <>
+            <Money value={displayedCost} />
+            {/* Some model reported no cost, so the sum is a floor. */}
+            {reported?.floor === true ? "+" : null}
+          </>
+        )}
       </Stat>
       {/* The rollup records what share of steps advanced the task, not what
           share of the cost they carried, so no wasted figure is derived from
