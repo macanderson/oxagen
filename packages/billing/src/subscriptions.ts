@@ -633,26 +633,35 @@ export async function upgradeSubscription(
 /**
  * Build the Stripe idempotency key for a seat change.
  *
- * The key names the transition, `prior->seats`, not only the target count. It
- * used to be `seats:${subId}:${seats}`. A change from 5 to 8 and back to 5
- * inside Stripe's 24-hour key window then reused the first `:5` key, Stripe
- * replayed the stored response, and the second change never applied (#2976).
- * The row still read 8 seats while the caller saw success.
+ * The key names the transition, `prior->seats`, and the version of the
+ * subscription row the transition was read from. It used to be
+ * `seats:${subId}:${seats}`. A change from 5 to 8 and back to 5 inside
+ * Stripe's 24-hour key window then reused the first `:5` key, Stripe replayed
+ * the stored response, and the second change never applied (#2976). The row
+ * still read 8 seats while the caller saw success.
  *
- * With the prior count in the key, 5->8 and 8->5 are different keys. A double
- * submit of one change still reads the same prior count, so it produces the
- * same key and Stripe dedupes it.
+ * The counts alone do not fix that. 5->8->5->8 reuses the `5->8` key, and the
+ * last change is replayed in the same way. So the key also carries
+ * `rowVersion`, the row's `updatedAt` in epoch milliseconds.
+ * `syncSubscriptionFromStripe` rewrites `updatedAt` after every applied
+ * change, so each applied change moves the version, and the next change reads
+ * a new one. A double submit of one change reads the same row before either
+ * submit syncs, so it produces the same key and Stripe dedupes it.
  *
- * `requestId` separates two deliberate submits of the same transition, the way
- * it does in {@link planChangeIdempotencyKey}. The key never carries a clock.
+ * The version is state read off the row, not a clock read at submit time, so
+ * the key never splits a double submit the way a time bucket did (#1421).
+ *
+ * `requestId` separates two deliberate submits of the same transition from one
+ * row version, the way it does in {@link planChangeIdempotencyKey}.
  */
 export function seatChangeIdempotencyKey(
   stripeSubId: string,
   priorSeats: number,
   seats: number,
+  rowVersion: number,
   requestId?: string,
 ): string {
-  const base = `seats:${stripeSubId}:${priorSeats}->${seats}`;
+  const base = `seats:${stripeSubId}:${priorSeats}->${seats}@${rowVersion}`;
   return requestId ? `${base}:${requestId}` : base;
 }
 
@@ -685,7 +694,11 @@ export async function setSubscriptionSeats(
         eq(schema.subscriptions.orgId, orgId),
         sql`${schema.subscriptions.status} IN ('active','trialing')`,
       ),
-      columns: { stripeSubscriptionId: true, seatCount: true },
+      columns: {
+        stripeSubscriptionId: true,
+        seatCount: true,
+        updatedAt: true,
+      },
     }),
   );
   if (!row) throw new Error(`No active subscription found for org ${orgId}`);
@@ -706,6 +719,7 @@ export async function setSubscriptionSeats(
     row.stripeSubscriptionId,
     row.seatCount,
     seats,
+    row.updatedAt.getTime(),
     opts.requestId,
   );
 
