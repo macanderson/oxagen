@@ -135,6 +135,120 @@ describe("createVercelBlobAdapter", () => {
     );
   });
 
+  // #4202: the production store is public-only. Every private write used to
+  // upload its bytes twice, and every private read asked twice.
+  it("remembers a public-only store: a later private put goes straight to public", async () => {
+    putMock
+      .mockRejectedValueOnce(
+        new Error("Cannot use private access on this store"),
+      )
+      .mockResolvedValue({
+        url: "https://store.public.blob.vercel-storage.com/k",
+        pathname: "k",
+      });
+    const adapter = createVercelBlobAdapter("tok-public-only");
+
+    await adapter.put({ key: "k", body: new Uint8Array([1]), access: "private" });
+    expect(putMock).toHaveBeenCalledTimes(2);
+
+    putMock.mockClear();
+    const second = await adapter.put({
+      key: "k",
+      body: new Uint8Array([2]),
+      access: "private",
+    });
+
+    expect(putMock).toHaveBeenCalledTimes(1);
+    expect(putMock.mock.calls[0]?.[2]).toMatchObject({ access: "public" });
+    expect(second.access).toBe("public");
+  });
+
+  it("remembers a public-only store learned on a read: later reads and writes skip private", async () => {
+    const STREAM = new ReadableStream<Uint8Array>();
+    const found = {
+      stream: STREAM,
+      headers: new Headers(),
+      blob: { contentType: "application/octet-stream", size: 1 },
+    };
+    getMock
+      .mockRejectedValueOnce(
+        new Error("Cannot use private access on this store"),
+      )
+      .mockResolvedValue(found);
+    putMock.mockResolvedValue({ url: "https://blob.example/k", pathname: "k" });
+    const adapter = createVercelBlobAdapter("tok-public-only");
+
+    await adapter.get("a");
+    expect(getMock).toHaveBeenCalledTimes(2);
+
+    getMock.mockClear();
+    await adapter.get("b");
+    expect(getMock).toHaveBeenCalledTimes(1);
+    expect(getMock).toHaveBeenCalledWith("b", {
+      token: "tok-public-only",
+      access: "public",
+    });
+
+    await adapter.put({ key: "k", body: new Uint8Array([1]), access: "private" });
+    expect(putMock).toHaveBeenCalledTimes(1);
+    expect(putMock.mock.calls[0]?.[2]).toMatchObject({ access: "public" });
+  });
+
+  it("does not learn public-only from an unrelated failure", async () => {
+    putMock
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValue({ url: "https://blob.example/k", pathname: "k" });
+    const adapter = createVercelBlobAdapter("tok");
+
+    await expect(
+      adapter.put({ key: "k", body: new Uint8Array([1]), access: "private" }),
+    ).rejects.toThrow("network down");
+    const next = await adapter.put({
+      key: "k",
+      body: new Uint8Array([1]),
+      access: "private",
+    });
+
+    expect(putMock.mock.calls[1]?.[2]).toMatchObject({ access: "private" });
+    expect(next.access).toBe("private");
+  });
+
+  it("hands the SDK the caller's bytes without copying them, on both attempts", async () => {
+    putMock
+      .mockRejectedValueOnce(
+        new Error("Cannot use private access on this store"),
+      )
+      .mockResolvedValue({ url: "https://blob.example/k", pathname: "k" });
+    const adapter = createVercelBlobAdapter("tok");
+    const buffer = Buffer.from([1, 2, 3]);
+
+    await adapter.put({ key: "k", body: buffer, access: "private" });
+
+    expect(putMock).toHaveBeenCalledTimes(2);
+    expect(putMock.mock.calls[0]?.[1]).toBe(buffer);
+    expect(putMock.mock.calls[1]?.[1]).toBe(buffer);
+  });
+
+  it("wraps a Uint8Array or ArrayBuffer body as a view over the same memory", async () => {
+    putMock.mockResolvedValue({ url: "https://blob.example/k", pathname: "k" });
+    const adapter = createVercelBlobAdapter("tok");
+    const backing = new ArrayBuffer(16);
+    const slice = new Uint8Array(backing, 4, 8);
+
+    await adapter.put({ key: "k", body: slice });
+    await adapter.put({ key: "k", body: backing });
+
+    const [fromSlice, fromBuffer] = putMock.mock.calls.map(
+      (call) => call[1] as Buffer,
+    );
+    expect(Buffer.isBuffer(fromSlice)).toBe(true);
+    expect(fromSlice?.buffer).toBe(backing);
+    expect(fromSlice?.byteOffset).toBe(4);
+    expect(fromSlice?.byteLength).toBe(8);
+    expect(fromBuffer?.buffer).toBe(backing);
+    expect(fromBuffer?.byteLength).toBe(16);
+  });
+
   it("computes bytes from a Blob body", async () => {
     putMock.mockResolvedValue({ url: "https://blob.example/k", pathname: "k" });
     const adapter = createVercelBlobAdapter("tok");
