@@ -9,6 +9,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
   NOW,
@@ -110,8 +111,12 @@ async function declared(run: Parameters<typeof runRow>[0]) {
   return screen.getByTestId("page-record");
 }
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 describe("Run page › the record it declares", () => {

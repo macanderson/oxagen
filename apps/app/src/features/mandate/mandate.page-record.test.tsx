@@ -8,6 +8,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { mandateDetailRead, mandateRow } from "@/test/mandate-views";
 import { mandateSource } from "./mandate.builders";
@@ -74,8 +75,12 @@ async function renderMandate(read: Parameters<typeof mandateSource>[0]) {
   render(<IntlProvider>{element}</IntlProvider>);
 }
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 describe("Mandate page › the record it declares", () => {

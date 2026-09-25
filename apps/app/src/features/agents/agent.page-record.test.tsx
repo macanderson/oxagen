@@ -9,6 +9,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { mandateList } from "@/test/mandate-views";
 import {
@@ -115,8 +116,12 @@ async function renderAgent(agent: string, reads: Reads = {}) {
   render(<IntlProvider>{element}</IntlProvider>);
 }
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 describe("Agent page › the record it declares", () => {

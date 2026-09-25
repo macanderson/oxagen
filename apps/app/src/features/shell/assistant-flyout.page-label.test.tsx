@@ -23,6 +23,7 @@ import {
   ASSISTANT_ENTITY_LABEL_MAX,
   assistantPageContextSchema,
 } from "@oxagen/oxagen/contracts/assistant.ask";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import type { askAssistant as AskAssistantAction } from "./assistant-actions";
 import { ENTITY_LABEL_MAX } from "./page-label";
@@ -110,7 +111,13 @@ beforeEach(() => {
     },
   });
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("AssistantFlyout › the record's label", () => {
   it("sends the run's label from a run page, beside the run's id", async () => {
