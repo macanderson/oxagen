@@ -357,7 +357,6 @@ export {
   isRunEventIntegrityError,
   isRunEventSequenceGapError,
   isAttemptNotWritableError,
-  isRunNotWritableError,
   isRunStoreStateError,
   type RunSpecIssue,
   type AttemptRejectionReason,
