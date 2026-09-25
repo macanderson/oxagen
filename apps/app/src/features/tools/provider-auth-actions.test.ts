@@ -3,7 +3,7 @@
 // that host is not the app's own; a sign-in URL that is not https is refused;
 // a started flow is recorded in a cookie scoped to the callback path, newest
 // first and at most four; and nothing a credential touches comes back.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   viewer: vi.fn(),
@@ -43,10 +43,18 @@ const STATE = "q".repeat(32);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The configured origin is the app's own host. Pin it, so the answer does
+  // not depend on the NEXT_PUBLIC_APP_URL of the machine running the test
+  // (CI sets it to http://localhost:3000).
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.oxagen.sh");
   mocks.headers.clear();
   mocks.headers.set("host", "app.oxagen.sh");
   mocks.viewer.mockResolvedValue(CTX);
   mocks.cookieGet.mockReturnValue(undefined);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("searchRegistry", () => {
