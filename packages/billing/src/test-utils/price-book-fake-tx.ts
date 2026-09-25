@@ -140,6 +140,10 @@ function matches(row: PriceRow, cond: PriceCond): boolean {
       return sameValue(valueOf(row, cond.col), cond.val);
     case "inArray":
       return cond.vals.some((v) => sameValue(valueOf(row, cond.col), v));
+    case "arrayOverlaps": {
+      const held = valueOf(row, cond.col) as unknown[];
+      return cond.vals.some((v) => held.some((h) => sameValue(h, v)));
+    }
   }
 }
 

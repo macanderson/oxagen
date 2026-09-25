@@ -91,6 +91,29 @@ describe("cancelLedgerRun", () => {
     expect(inserted).toEqual([]);
   });
 
+  it("answers a cancel retried after the run failed with no attempt with the existing receipt (#3665)", async () => {
+    // The cancel landed between `openAssistantRun` creating the run and
+    // creating its attempt. `createAttempt` saw the cancel and
+    // `terminalizeUnattemptedRun` finished the run `failed`, keeping
+    // `cancelRequested`. A retry after a lost response must return the
+    // receipt it already applied, not a `run_sealed` refusal.
+    mocks.lockRunForControl.mockResolvedValue({
+      id: "run-uuid",
+      publicId: RUN,
+      status: "failed",
+      cancelled: true,
+      paused: false,
+    });
+    const { tx, inserted } = fakeTx([{ publicId: "tcm_first_cancel" }]);
+
+    await expect(
+      postgresCommandStore(tx).cancelLedgerRun(control),
+    ).resolves.toBe("tcm_first_cancel");
+    expect(mocks.cancelRunInTransaction).not.toHaveBeenCalled();
+    expect(mocks.revokeRunTokens).not.toHaveBeenCalled();
+    expect(inserted).toEqual([]);
+  });
+
   it("refuses a run that ended without a cancel", async () => {
     mocks.lockRunForControl.mockResolvedValue({
       id: "run-uuid",
