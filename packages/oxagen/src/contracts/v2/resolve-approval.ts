@@ -40,7 +40,8 @@ export const resolveApproval = defineTool({
   mode: "sync",
   // Not on the `agent` surface: an approval is a person's decision, and a
   // model that holds this tool can answer the call its own run parked
-  // (ADR-XXX). Cutover (#2884) carries that decision with the tool.
+  // (ADR-XXX). The first-use consent it absorbs is a person's decision too.
+  // Cutover (#2884) carries that decision with the tool.
   surfaces: ["api", "mcp", "cli"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,

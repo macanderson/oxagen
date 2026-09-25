@@ -27,7 +27,10 @@ import {
 } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "../types";
 
-const db = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
+const db = vi.hoisted(() => ({
+  withTenantDb: vi.fn(),
+  recordConsent: vi.fn(async () => ({ consentId: "mcons_1" })),
+}));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -53,8 +56,15 @@ vi.mock("../runtime/plugin-type", () => ({
   registerPluginType: () => undefined,
   getPluginTypeContributors: () => [],
 }));
+// The durable consent row lives in agent.mcp_consents, which the double does
+// not model. What the resolver records there is asserted on the spy.
+vi.mock("../runtime/consent", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../runtime/consent")>()),
+  recordConsent: db.recordConsent,
+}));
 
 import { agentApprovalResolveHandler } from "./agent.approval.resolve";
+import { agentMcpConsentResolveHandler } from "./agent.mcp_consent.resolve";
 import {
   ApprovalPendingError,
   materializeTools,
@@ -74,6 +84,9 @@ const KEY_PUBLIC_ID = "aky_01k5rt9xq7v3m8n2p4s6t8w2";
 /** A high-risk write the contract parks for a person (`requiresApproval`). */
 const WRITE = "revoke_api_key";
 const RESOLVE = "resolve_approval";
+const CONSENT = "resolve_mcp_consent";
+const SERVER_ID = "0192d4a8-0000-7000-8000-000000000009";
+const CONSENT_ROW_ID = "0192d4a8-0000-7000-8000-00000000000a";
 
 /** The person's context for the turn, as `runPreparedTurn` builds it. */
 const TURN_CTX: CapabilityContext = {
@@ -167,6 +180,9 @@ function makeTx() {
           if (table !== schema.approvalRequests)
             throw new Error("unexpected table");
           store.row = {
+            // The column default: a writer that names no kind asks for an
+            // approval.
+            kind: "approval",
             ...values,
             id: ROW_ID,
             publicId: APPROVAL_PUBLIC_ID,
@@ -281,6 +297,14 @@ beforeEach(() => {
         ctx,
       ),
   );
+  registerHandler(
+    CONSENT,
+    async () => (input, ctx) =>
+      agentMcpConsentResolveHandler(
+        input as Parameters<typeof agentMcpConsentResolveHandler>[0],
+        ctx,
+      ),
+  );
   registerHandler(WRITE, async () => async () => {
     throw new Error("a parked write must not run");
   });
@@ -384,5 +408,118 @@ describe("resolve_approval: a turn answering its own parked write", () => {
       resolvedByUserId: USER_ID,
       resumeStatus: "queued",
     });
+  });
+});
+
+describe("resolve_mcp_consent: a turn answering a question its run put to a person", () => {
+  // Before ADR-XXX the belt carried resolve_mcp_consent too, and its handler
+  // answered any pending row by uuid. A call from the turn resolved the
+  // approval the turn's write had parked, as the person.
+
+  /** A consent request the gate wrote for this run, as the store holds it. */
+  function seedConsentRequest() {
+    store.row = {
+      id: CONSENT_ROW_ID,
+      publicId: "apr_01k5rt9xq7v3m8n2p4s6t8w3",
+      kind: "consent",
+      capabilityName: `mcp.${SERVER_ID}.search`,
+      messageId: MESSAGE_ID,
+      runPublicId: RUN_PUBLIC_ID,
+      riskLevel: "medium",
+      inputDigest: null,
+      resumePayload: null,
+      resumeStatus: null,
+      expiresAt: new Date(Date.now() + 5 * 60_000),
+      resolution: null,
+      resolvedAt: null,
+      resolvedByUserId: null,
+      note: null,
+    };
+  }
+
+  const person: CapabilityContext = {
+    orgId: ORG_ID,
+    workspaceId: WORKSPACE_ID,
+    userId: USER_ID,
+    apiKeyId: null,
+    requestId: "req_person",
+    surface: "app",
+    messageId: null,
+  };
+
+  const refusedWith = (code: string, reason: string) => (e: unknown) =>
+    isHandlerError(e) && e.code === code && e.reason === reason;
+
+  it("gives the turn's model no resolve_mcp_consent tool, and the kernel refuses it the agent surface", async () => {
+    const turn = await openTurn();
+    expect(turn.capabilities).not.toContain(CONSENT);
+    seedConsentRequest();
+    await expect(
+      invoke(
+        CONSENT,
+        { approvalId: CONSENT_ROW_ID, decision: "granted" },
+        { ...TURN_CTX, toolCallId: "call_consent" },
+        { surface: "agent", runId: RUN_ID },
+      ),
+    ).rejects.toMatchObject({ code: "surface_denied" });
+    expect(store.row?.resolution).toBeNull();
+  });
+
+  it("refuses a call that carries the run that raised the consent request", async () => {
+    seedConsentRequest();
+    await expect(
+      invoke(
+        CONSENT,
+        { approvalId: CONSENT_ROW_ID, decision: "granted" },
+        { ...TURN_CTX, toolCallId: "call_consent" },
+        { runId: RUN_ID },
+      ),
+    ).rejects.toSatisfy(
+      refusedWith("forbidden", "run_cannot_resolve_own_approval"),
+    );
+    expect(store.row?.resolution).toBeNull();
+    expect(db.recordConsent).not.toHaveBeenCalled();
+  });
+
+  it("refuses the approval the turn's write parked: it is not a consent request", async () => {
+    const turn = await openTurn();
+    const approvalId = await parkWrite(turn);
+    await expect(
+      invoke(
+        CONSENT,
+        { approvalId, decision: "granted" },
+        { ...TURN_CTX, toolCallId: "call_consent" },
+        { runId: RUN_ID },
+      ),
+    ).rejects.toSatisfy(refusedWith("conflict", "not_a_consent_request"));
+    // The probe that found this left the row approved by the person.
+    expect(store.row).toMatchObject({
+      resolution: null,
+      resolvedByUserId: null,
+      resumeStatus: "waiting",
+    });
+  });
+
+  it("lets the person grant a real consent request", async () => {
+    seedConsentRequest();
+    await expect(
+      invoke(
+        CONSENT,
+        { approvalId: CONSENT_ROW_ID, decision: "granted" },
+        person,
+      ),
+    ).resolves.toEqual({ approvalId: CONSENT_ROW_ID, resolution: "granted" });
+    expect(store.row).toMatchObject({
+      resolution: "approved",
+      resolvedByUserId: USER_ID,
+    });
+    expect(db.recordConsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        serverId: SERVER_ID,
+        toolName: "search",
+        status: "granted",
+      }),
+    );
   });
 });

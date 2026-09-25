@@ -50,11 +50,7 @@ These are the *ontology read set*. See `docs/capabilities/_ontology-read-set.md`
 
 ### Approvals
 
-| Tool | Description |
-|---|---|
-| `resolve_mcp_consent` | Allow or deny first-use consent for an external MCP tool. |
-
-An agent cannot approve or deny a parked tool call. `resolve_approval` is not an agent tool, because an approval is a person's decision. You answer it on Fleet, on the Run page, or from the approvals drawer. A program answers it through the API or MCP with `resolve_approval`.
+An agent cannot approve or deny a parked tool call, or grant consent to an external MCP tool. `resolve_approval` and `resolve_mcp_consent` are not agent tools, because both are a person's decision. You answer them on Fleet, on the Run page, or from the approvals drawer. A program answers them through the API or MCP.
 
 ### Repository status (read-only)
 

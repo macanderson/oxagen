@@ -45,6 +45,15 @@ describe("agent.mcp.consent.resolve capability", () => {
     ).toThrow();
   });
 
+  it("is not on the agent surface: a person grants consent, never a model (ADR-XXX)", () => {
+    expect(agentMcpConsentResolve.surfaces).toEqual(["api", "mcp"]);
+    expect(agentMcpConsentResolve.surfaces).not.toContain("agent");
+  });
+
+  it("declares that it writes", () => {
+    expect(agentMcpConsentResolve.mutates).toBe(true);
+  });
+
   it("is registered in the capability registry", () => {
     expect(getCapability("resolve_mcp_consent")).toBe(agentMcpConsentResolve);
   });
