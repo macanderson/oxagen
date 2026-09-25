@@ -142,7 +142,7 @@ replaces `Queued` with the assigned priority and aligns the area with its label.
 
 ## Issues and labels
 
-Track work in GitHub issues on `macanderson/oxagen`. Follow SCR-003, SCR-004, and SCR-005 in `.oxagen/rules/`.
+Track work in GitHub issues on `macanderson/oxagen`. Follow SCR-003, SCR-004, and SCR-005 in the standing decisions at the end of `AGENTS.md`.
 
 **Assigned work carries an issue.** When you are asked to change functional code, tests, or documentation and no issue covers it, open one before the PR, apply only `triage`, and cite it in the PR body with `Closes #N` or `Refs #N`. A chore needs none: an edit to rules or agent instructions, a dependency or lockfile bump, formatting, or release bookkeeping. Mac set this on 2026-09-23. SCR-004 below covers a different case, a defect you notice along the way: fix it in the PR, and file it only when it cannot ride.
 
