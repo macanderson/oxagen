@@ -386,13 +386,15 @@ function tachoChain(seqs: number[]) {
 const range = (from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
+// Only `source` is narrowed: RunRecord's completenessGaps is a mutable
+// string[], which a readonly `as const` tuple cannot be passed as.
 const WRAPPED = {
-  source: "tacho",
+  source: "tacho" as const,
   sessionUuid: SESSION,
   enforcementTier: "harness",
-  completenessGaps: [],
+  completenessGaps: [] as string[],
   replayGrade: null,
-} as const;
+};
 
 describe("readRunFrames", () => {
   it("reads a wrapped session's frames in sequence inside the tenant scope", async () => {
