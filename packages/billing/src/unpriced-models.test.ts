@@ -26,6 +26,7 @@ vi.mock("@oxagen/telemetry", () => ({
 import {
   findUnpricedModels,
   readUnpricedModels,
+  UNPRICED_MODEL_READ_PAGE_SIZE,
   UNPRICED_MODEL_REPORT_LIMIT,
   type ObservedModel,
   type ObservedModelClassUsage,
@@ -772,5 +773,139 @@ describe("readUnpricedModels", () => {
     expect(out[0]!.missingClasses).toEqual(["output"]);
     expect(out[0]!.firstSeen).toEqual(new Date("2026-09-02T00:00:00.000Z"));
     loadSpy.mockRestore();
+  });
+
+  // #3281. The frame read used to stop at a volume bound ranked by tokens, so
+  // an unpriced model with little usage past it never reached the comparison.
+  // The report now walks every page in model-id order.
+  it("reports an unpriced model that only the second page of the frame read holds", async () => {
+    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([]);
+    const row = (model: string, tokens: number) => ({
+      model,
+      provider: "vendor",
+      calls: 1,
+      tokens,
+      firstSeen: "2026-09-02T00:00:00.000Z",
+      lastSeen: "2026-09-02T00:00:00.000Z",
+      classes: [
+        {
+          tokenClass: "output",
+          calls: 1,
+          tokens,
+          firstSeen: "2026-09-02T00:00:00.000Z",
+          lastSeen: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+    });
+    // Page one is full of heavy models, so the loop must ask for page two,
+    // where the one light model sits.
+    const firstPage = Array.from(
+      { length: UNPRICED_MODEL_READ_PAGE_SIZE },
+      (_, index) => row(`a-${String(index).padStart(5, "0")}`, 1_000_000),
+    );
+    const pages: Array<{ afterModel?: string; size: number }> = [];
+    readObservedModelsMock.mockImplementation(async (args) => {
+      const typed = args as {
+        page: { afterModel?: string; size: number };
+        boundariesFor: (models: readonly string[]) => readonly Date[];
+      };
+      pages.push(typed.page);
+      const rows =
+        typed.page.afterModel === undefined ? firstPage : [row("z-light", 1)];
+      typed.boundariesFor(rows.map((r) => r.model));
+      return rows;
+    });
+    try {
+      const out = await readUnpricedModels({
+        orgId: ORG,
+        since: SINCE,
+        at: AT,
+      });
+      expect(pages).toEqual([
+        { afterModel: undefined, size: UNPRICED_MODEL_READ_PAGE_SIZE },
+        {
+          afterModel: firstPage.at(-1)!.model,
+          size: UNPRICED_MODEL_READ_PAGE_SIZE,
+        },
+      ]);
+      // Every model is unpriced in an empty book. The report cap keeps the
+      // heaviest, but the light model on page two was compared: an
+      // organization whose only unpriced model is light still hears about it.
+      expect(out).toHaveLength(
+        Math.min(
+          UNPRICED_MODEL_REPORT_LIMIT,
+          UNPRICED_MODEL_READ_PAGE_SIZE + 1,
+        ),
+      );
+      expect(out.every((m) => m.fullyUnpriced)).toBe(true);
+    } finally {
+      loadSpy.mockRestore();
+    }
+  });
+
+  it("reports a light unpriced model past a full page of priced ones", async () => {
+    const heavy = Array.from(
+      { length: UNPRICED_MODEL_READ_PAGE_SIZE },
+      (_, index) => `a-${String(index).padStart(5, "0")}`,
+    );
+    const loadSpy = vi
+      .spyOn(priceBook, "loadPriceBook")
+      .mockResolvedValue(heavy.flatMap((m) => fullyPriced(m)));
+    const row = (model: string, tokens: number) => ({
+      model,
+      provider: "vendor",
+      calls: 1,
+      tokens,
+      firstSeen: "2026-09-02T00:00:00.000Z",
+      lastSeen: "2026-09-02T00:00:00.000Z",
+      classes: [
+        {
+          tokenClass: "output",
+          calls: 1,
+          tokens,
+          firstSeen: "2026-09-02T00:00:00.000Z",
+          lastSeen: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+    });
+    readObservedModelsMock.mockImplementation(async (args) => {
+      const typed = args as { page: { afterModel?: string; size: number } };
+      expect(typed.page.size).toBe(UNPRICED_MODEL_READ_PAGE_SIZE);
+      return typed.page.afterModel === undefined
+        ? heavy.map((m) => row(m, 1_000_000))
+        : [row("z-light", 1)];
+    });
+    try {
+      const out = await readUnpricedModels({
+        orgId: ORG,
+        since: SINCE,
+        at: AT,
+      });
+      expect(out.map((m) => m.model)).toEqual(["z-light"]);
+      expect(readObservedModelsMock).toHaveBeenCalledTimes(2);
+    } finally {
+      loadSpy.mockRestore();
+    }
+  });
+
+  it("stops when a page does not move the cursor forward", async () => {
+    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([]);
+    const stuck = Array.from({ length: UNPRICED_MODEL_READ_PAGE_SIZE }, () => ({
+      model: "same",
+      provider: null,
+      calls: 1,
+      tokens: 1,
+      firstSeen: "2026-09-02T00:00:00.000Z",
+      lastSeen: "2026-09-02T00:00:00.000Z",
+      classes: [],
+    }));
+    readObservedModelsMock.mockImplementation(async () => stuck);
+    try {
+      await expect(
+        readUnpricedModels({ orgId: ORG, since: SINCE, at: AT }),
+      ).rejects.toThrow(/did not advance/);
+    } finally {
+      loadSpy.mockRestore();
+    }
   });
 });

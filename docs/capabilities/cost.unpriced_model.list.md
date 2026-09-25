@@ -44,7 +44,7 @@ A model:
 | `missingClassWindows` | object[] | one entry per class in `missingClasses`, each with `tokenClass`, `unpricedFrom` and `unpricedTo`: the span of that class's unpriced calls, so the Pricing tab can say when a class went unpriced rather than only that it did |
 | `fullyUnpriced` | boolean | true when every usage bucket the model actually sent tokens in came back unpriced, so the run has no cost at all. A class with both a priced and an unpriced bucket, such as a rate that lapsed and later came back, still names that class in `missingClasses`, but the model is not `fullyUnpriced`: it has real cost from the priced bucket, and the rollup records it `estimated` |
 
-At most 500 models are returned, the heaviest first: an organization running more distinct model ids than that has a naming problem, not a pricing one.
+At most 500 models are returned, fully unpriced models first and then the heaviest: an organization running more distinct model ids than that has a naming problem, not a pricing one. The cap applies to the report, not to the comparison. Every model the window holds is read, a page at a time, and judged against the book before the cap is applied, so a lightly used unpriced model is reported even when thousands of heavier priced models ran beside it.
 
 ## Tenancy
 
