@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   runInTenantScope: vi.fn(),
   ledgerStore: vi.fn(),
-  readRunFrames: vi.fn(),
+  readTranscriptFrames: vi.fn(),
   resolveRunRecord: vi.fn(),
   evidenceStore: vi.fn(),
 }));
@@ -67,7 +67,11 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
 }));
 vi.mock("../lib/run-record", () => ({
   ledgerStore: mocks.ledgerStore,
-  readRunFrames: mocks.readRunFrames,
+  // Answers the frames the test sets, as a read the cap did not cut.
+  readTranscriptFramesOf: async (...args: unknown[]) => ({
+    frames: await mocks.readTranscriptFrames(...args),
+    complete: true,
+  }),
   resolveRunRecord: mocks.resolveRunRecord,
 }));
 
@@ -255,7 +259,7 @@ describe("run.summarize job", () => {
     );
     mocks.resolveRunRecord.mockResolvedValue(tachoRecord);
     store("What is in README?");
-    mocks.readRunFrames.mockResolvedValue([
+    mocks.readTranscriptFrames.mockResolvedValue([
       row(1, "llm_call", "What is in README?"),
     ]);
     mocks.evidenceStore.mockReturnValue({ getBody });
@@ -283,7 +287,7 @@ describe("run.summarize job", () => {
       { orgId: "org_1", workspaceId: "ws_1" },
       data.runPublicId,
     );
-    expect(mocks.readRunFrames).toHaveBeenCalledWith(
+    expect(mocks.readTranscriptFrames).toHaveBeenCalledWith(
       { orgId: "org_1", workspaceId: "ws_1" },
       tachoRecord,
     );
@@ -316,7 +320,7 @@ describe("run.summarize job", () => {
   });
 
   it("fails without retry, before any model call, when no step kept a body (negative)", async () => {
-    mocks.readRunFrames.mockResolvedValue([
+    mocks.readTranscriptFrames.mockResolvedValue([
       row(1, "llm_call"),
       row(2, "tool_call"),
     ]);

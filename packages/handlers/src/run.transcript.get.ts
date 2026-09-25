@@ -86,7 +86,8 @@ import {
   type TranscriptFold,
   type TranscriptWords,
   turnFolds,
-  withoutDuplicateModelCalls,
+  readTranscriptFrames,
+  TRANSCRIPT_FRAME_CAP,
   wordsHalf,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
@@ -110,15 +111,11 @@ import {
 } from "./run.list";
 import {
   defaultRunReadDeps,
-  readRunFrames,
   resolveRun,
+  runChainReads,
   startCursorSeq,
   type RunReadDeps,
-  withoutLateReports,
 } from "./lib/run-read";
-
-/** The most frames a transcript folds; past it the transcript is incomplete. */
-const TRANSCRIPT_FRAME_CAP = 10_000;
 /**
  * The largest recall body read to parse what it put in front of the model. A
  * steering manifest lists at most 2,000 items; a body past this is not one,
@@ -657,14 +654,13 @@ export function createRunTranscriptGetHandler(
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
     // The run's own chain and every subagent chain under it, each spliced in
-    // where it was spawned (`readRunFrames`).
-    const read = await readRunFrames(deps, run, TRANSCRIPT_FRAME_CAP);
-    // Once a chain's model calls are observed by the proxy, the harness's own
-    // report of the same calls counts neither its tokens nor its cost.
-    withoutLateReports(read.frames);
-    // One model call reported by several sources is one step
-    // (`withoutDuplicateModelCalls`): a proxied call drew twice.
-    const shown = withoutDuplicateModelCalls(read.frames);
+    // where it was spawned; late harness reports uncounted; each model call
+    // once. `run.summarize` reads the same frames (`readTranscriptFrames`).
+    const read = await readTranscriptFrames(
+      runChainReads(deps, run),
+      TRANSCRIPT_FRAME_CAP,
+    );
+    const shown = read.frames;
     // The fold runs over every frame, then the chips narrow its entries, so
     // a filtered read shows the same steps, turns and turn numbers as an
     // unfiltered one (ADR-182).

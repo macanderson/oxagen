@@ -58,6 +58,11 @@ counting of frames of its own.
 6. The browser keeps presentation only: drawing an entry's rows, cutting a
    line to width, reading a tool's body into display fields, and reconciling
    pages.
+7. The frames the fold reads are composed once, by `readTranscriptFrames`
+   in `@oxagen/run-ledger`: each subagent chain spliced in where it was
+   spawned, a harness's late report of a metered call uncounted, and each
+   model call once, to one frame cap. `get_run_transcript` and
+   `run.summarize` pass it their store reads and fold what it returns.
 
 A rule written in two places drifts, and the copy nobody remembers is the one
 that ships the defect. A rule about how a run reads is a change to

@@ -26,7 +26,7 @@ import { createFunction } from "../create-function";
 import { logger } from "../logger";
 import {
   ledgerStore,
-  readRunFrames,
+  readTranscriptFramesOf,
   resolveRunRecord,
   type RunScope,
 } from "../lib/run-record";
@@ -184,7 +184,9 @@ export const [runSummarize] = createFunction(
           `run ${data.runPublicId} is not in the job's workspace`,
         );
       }
-      const frames = await readRunFrames(scope, record);
+      // The frames the Run page folds, read the same way, so the account
+      // covers the steps the page draws (ADR-182).
+      const { frames } = await readTranscriptFramesOf(scope, record);
       const steps = await runInTenantScope(scope, () =>
         collectSummarySteps(scope, frames, (s, ref) =>
           evidenceStore().getBody(s, ref),
