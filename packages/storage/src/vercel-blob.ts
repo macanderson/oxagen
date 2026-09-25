@@ -56,14 +56,26 @@ function byteLength(body: StorageBody): number {
 
 /**
  * Coerce the adapter's web-standard body shapes into a type the Vercel Blob SDK
- * accepts (`PutBody`). A `Blob`/`File` passes straight through; raw bytes become
- * a Node `Buffer` (the package is server-only). Keeping this here means call
- * sites stay on the portable {@link StorageBody} union.
+ * accepts (`PutBody`). A `Blob`/`File` and a `Buffer` pass straight through.
+ * Other raw bytes become a `Buffer` view over the same memory, never a copy:
+ * a copy doubles each upload's footprint on a 256 MB API heap (#4202). The
+ * package is server-only. Keeping this here means call sites stay on the
+ * portable {@link StorageBody} union.
  */
 function toPutBody(body: StorageBody): Blob | Buffer {
   if (body instanceof Blob) return body;
-  if (body instanceof Uint8Array) return Buffer.from(body);
-  return Buffer.from(new Uint8Array(body)); // ArrayBuffer
+  if (Buffer.isBuffer(body)) return body;
+  if (body instanceof Uint8Array) {
+    return Buffer.from(body.buffer, body.byteOffset, body.byteLength);
+  }
+  return Buffer.from(body); // ArrayBuffer: a view, not a copy
+}
+
+/** The refusal a public-only store answers to `access: "private"`. */
+function isPrivateAccessRefusal(err: unknown): boolean {
+  return (
+    err instanceof Error && err.message.includes("Cannot use private access")
+  );
 }
 
 /**
@@ -88,8 +100,34 @@ function toPutBody(body: StorageBody): Blob | Buffer {
  *   - Generated images/video, workspace files: access "private" (served only
  *     through the access-controlled /api/v1/assets/[id] and /api/v1/files/[id]
  *     routes, never via a guessable CDN URL).
+ *
+ * Public-only stores
+ * ------------------
+ * A store provisioned public-only refuses `access: "private"` on every call.
+ * The adapter learns that from the first refusal, on a read or a write, and
+ * sends every later call straight to public access. Before, each private write
+ * uploaded its bytes twice, and each private read asked twice (#4202). The
+ * flag lives in this closure. `storage()` memoizes one adapter per process,
+ * so the store's answer is remembered for the process's life.
  */
 export function createVercelBlobAdapter(token: string): StorageAdapter {
+  let publicOnly = false;
+
+  function learnPublicOnly(key: string): void {
+    if (publicOnly) return;
+    publicOnly = true;
+    // Once per process: every later downgrade shows as `requestedAccess:
+    // "private"` beside `access: "public"` on the write log instead.
+    logger.warn(
+      {
+        driver: "vercel-blob",
+        key,
+        reason: "store is public-only; private blobs are stored as public",
+      },
+      "storage: store refused private access; later calls use public access",
+    );
+  }
+
   return {
     driver: "vercel-blob",
 
@@ -100,23 +138,16 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       // read a private blob, and it also reads public blobs on a store that
       // has private access enabled. A store provisioned public-only rejects
       // `access: "private"` outright, so that one error is caught below and
-      // retried as public.
-      const result = await blobGet(key, { token, access: "private" }).catch(
-        async (err: unknown) => {
-          // If private access fails on a public-only store, try with public access.
-          if (
-            err instanceof Error &&
-            err.message.includes("Cannot use private access")
-          ) {
-            logger.info(
-              { driver: "vercel-blob", key, reason: "store is public-only" },
-              "storage: retrying get with public access",
-            );
-            return blobGet(key, { token, access: "public" });
-          }
-          throw err;
-        },
-      );
+      // retried as public, and every later read goes to public directly.
+      const result = publicOnly
+        ? await blobGet(key, { token, access: "public" })
+        : await blobGet(key, { token, access: "private" }).catch(
+            async (err: unknown) => {
+              if (!isPrivateAccessRefusal(err)) throw err;
+              learnPublicOnly(key);
+              return blobGet(key, { token, access: "public" });
+            },
+          );
 
       if (!result || !result.stream) {
         // SDK returns null for 404 (not found) or 304 (not modified).
@@ -157,46 +188,36 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       // store a requested "private" put falls back to "public"; we must report
       // the real visibility so callers persist accurate metadata and never
       // treat a world-readable blob as access-controlled.
-      let effectiveAccess = access;
+      let effectiveAccess: "public" | "private" = publicOnly ? "public" : access;
+      // Converted once: a refused private attempt retries with the same bytes.
+      const body = toPutBody(input.body);
+      const send = (level: "public" | "private") =>
+        blobPut(input.key, body, {
+          access: level,
+          token,
+          contentType: input.contentType,
+          addRandomSuffix: false,
+          allowOverwrite: true,
+        });
 
-      const result = await blobPut(input.key, toPutBody(input.body), {
-        access,
-        token,
-        contentType: input.contentType,
-        addRandomSuffix: false,
-        allowOverwrite: true,
-      }).catch(async (err: unknown) => {
-        // If private access fails on a public-only store, retry with public access.
-        if (
-          access === "private" &&
-          err instanceof Error &&
-          err.message.includes("Cannot use private access")
-        ) {
-          effectiveAccess = "public"; // store is public-only — blob is stored world-readable
-          logger.warn(
-            {
-              driver: "vercel-blob",
-              key: input.key,
-              reason: "store is public-only; private blob stored as public",
-            },
-            "storage: put fallback — private blob stored publicly",
-          );
-          return blobPut(input.key, toPutBody(input.body), {
-            access: "public",
-            token,
-            contentType: input.contentType,
-            addRandomSuffix: false,
-            allowOverwrite: true,
-          });
-        }
-        throw err;
-      });
+      const result = await send(effectiveAccess).catch(
+        async (err: unknown) => {
+          if (effectiveAccess !== "private" || !isPrivateAccessRefusal(err)) {
+            throw err;
+          }
+          // The store is public-only, so the blob is stored world-readable.
+          effectiveAccess = "public";
+          learnPublicOnly(input.key);
+          return send("public");
+        },
+      );
 
       logger.info(
         {
           driver: "vercel-blob",
           key: input.key,
           access: effectiveAccess,
+          requestedAccess: access,
           contentType: input.contentType,
           bytes,
           durationMs: Date.now() - start,
