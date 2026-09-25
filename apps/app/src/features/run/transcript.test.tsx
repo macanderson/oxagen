@@ -929,15 +929,23 @@ describe("paging past the cursor", () => {
       [],
       "ZjoxMQ",
     );
-    // The release call is now one row with its answer and its result.
-    expect(toolRow("github__create_release")).toHaveTextContent(
-      "draft created",
-    );
+    // The release call is now one row carrying the answer that landed with the
+    // appended page.
+    const release = toolRow("github__create_release");
+    expect(release).toHaveTextContent("approve \u00b7 fr 18");
     expect(
       rows()
         .slice(0, -1)
         .map((row) => row.textContent),
     ).toEqual(before.slice(0, -1));
+    // A row leads on one line, so the result the page carried is behind the
+    // call's fold rather than in the row's own text.
+    fireEvent.click(
+      within(release).getByRole("button", { name: "Show the call" }),
+    );
+    expect(within(release).getByTestId("tx-out")).toHaveTextContent(
+      "draft created",
+    );
   });
 
   it("stops offering more once the page it read carried no cursor", async () => {

@@ -157,7 +157,12 @@ describe("play", () => {
       "false",
     );
     fireEvent.click(play());
-    advance(62);
+    // The first hold is the 1 s gap over 16, so 62.5 ms. The fake clock
+    // truncates a fractional delay when the timer is set, which puts the
+    // boundary it can express at 62 rather than at 63; `stepMs` above pins the
+    // arithmetic itself, including its fractional case. What this asserts is
+    // that play uses the divided hold and not the 1 s one.
+    advance(61);
     expect(push).not.toHaveBeenCalled();
     advance(1);
     expect(push).toHaveBeenLastCalledWith(HREFS[1]);
