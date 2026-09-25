@@ -380,6 +380,13 @@ describe("approved call resumption", () => {
       expect(h.invoke).not.toHaveBeenCalled();
     },
   );
+  // The budget read is scoped to the org the call resumes in. It takes the
+  // scope as an argument (#4159), so a read with none would type-fail and,
+  // loosely typed, read no org at all.
+  it("reads the budgets of the org the call resumes in", async () => {
+    await resumeApprovedCall(ref);
+    expect(h.budgets).toHaveBeenCalledWith({ orgId: ref.orgId });
+  });
   // R4: the listing now leaves out a tool a kill switch names, so the tool
   // can be missing because of a switch. The refusal names the switch then,
   // and a changed grant otherwise.
