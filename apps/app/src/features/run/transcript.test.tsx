@@ -289,6 +289,13 @@ describe("the kind chips", () => {
     expect(kinds().at(-1)).toBe("seal");
     // The run is sealed, so its last stop reads as the seal and its instant.
     expect(rows().at(-1)).toHaveTextContent("sealed 08:55:00");
+    // A long stop label is cut to the row's one line, as every closed row is
+    // (#4116), and the seal's instant never shrinks.
+    const seal = rows().at(-1);
+    if (seal === undefined) throw new Error("no seal row");
+    const label = within(seal).getByText("agent_stop completed");
+    expect(label).toHaveClass("min-w-0", "truncate");
+    expect(label.previousElementSibling).toHaveClass("flex-none");
   });
 
   it("opens every chip off from a link that says none", () => {

@@ -1127,7 +1127,7 @@ function SealRow({
   const format = useFormatter();
   return (
     <div className="flex min-w-0 items-baseline gap-2">
-      <span className="font-semibold text-success">
+      <span className="flex-none font-semibold text-success">
         {sealedAt === null
           ? t("stopped")
           : t("sealedAt", {
@@ -1140,7 +1140,7 @@ function SealRow({
             })}
       </span>
       {row.label === null ? null : (
-        <span className="text-dim">
+        <span className="min-w-0 truncate text-dim">
           <Hi text={row.label} q={q} />
         </span>
       )}
