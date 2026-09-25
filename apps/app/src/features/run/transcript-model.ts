@@ -1218,6 +1218,8 @@ function argOf(detail: ToolDetail | null): string | null {
  * mono that is about 2,400px, wider than the argument's slot on a 2,560px
  * screen, so the cap never cuts text a reader could see. It keeps a heredoc
  * or an inline file out of every closed row. The open row shows it whole.
+ *
+ * @internal Exported for its test.
  */
 export const LINE_CAP = 320;
 
