@@ -612,6 +612,19 @@ export async function runGovernedTurn(
   input.abortSignal?.addEventListener("abort", () => turnAbort.abort(), {
     once: true,
   });
+  // The seal names who ended the turn. A caller that aborts with a string
+  // reason (a person's stop, `cancel_assistant_turn`) has that reason sealed
+  // in place of the engine's generic one. A disconnect aborts with no string
+  // and a budget stop does not abort the caller's signal, so both keep the
+  // engine's reason.
+  const abortReasonOf = (engineReason: string): string => {
+    const reason: unknown = input.abortSignal?.aborted
+      ? input.abortSignal.reason
+      : undefined;
+    return typeof reason === "string" && reason.length > 0
+      ? reason
+      : engineReason;
+  };
 
   let resolveText!: (text: string) => void;
   let rejectText!: (err: unknown) => void;
@@ -674,7 +687,7 @@ export async function runGovernedTurn(
     await sealLedger(
       outcome.status === "completed"
         ? { status: "completed", text: outcome.text }
-        : { status: "aborted", reason: outcome.reason },
+        : { status: "aborted", reason: abortReasonOf(outcome.reason) },
     );
     emit(withModelFailure(mapper.finish(outcome, hostUsage)));
     parts.end();
@@ -741,6 +754,24 @@ export async function runGovernedTurn(
           }
           turnAbort.abort();
           throw Object.assign(new Error("turn budget exhausted"), {
+            name: "AbortError",
+          });
+        }
+        // The turn was already cancelled (a person's stop that landed before
+        // the engine processed the cancel). The request is recorded as
+        // cancelled and never sent, so a stopped turn does not pay for one
+        // more completion while the cancel is in flight.
+        if (turnAbort.signal.aborted) {
+          if (ledger) {
+            await recorded(() =>
+              ledger.modelCall({
+                ...receipt,
+                model: modelId,
+                outcome: "cancelled",
+              }),
+            );
+          }
+          throw Object.assign(new Error("turn cancelled"), {
             name: "AbortError",
           });
         }

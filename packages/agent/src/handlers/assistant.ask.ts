@@ -20,6 +20,12 @@
 // engine's clock, outside this request's scope. The turn runs outside this
 // invoke's governed-action frame: the turn is not a governed action
 // (`noBillingGate`), and each tool call it answers is one (ADR-053 §1).
+//
+// A caller that passes `turnId` can stop the turn by name with
+// `cancel_assistant_turn` (#4164). The turn registers under the person who
+// asked once the gates have named them, and drops out when it ends, however
+// it ends. Nothing registers without a `turnId`, and nothing but that stop
+// aborts it: closing the flyout or leaving the page is not a stop (ADR-092).
 import type {
   AssistantAskInput,
   AssistantAskOutput,
@@ -31,10 +37,12 @@ import { eq } from "drizzle-orm";
 import type { AssistantRunSurface } from "../runtime/assistant-run";
 import { takeAssistantStream } from "../runtime/assistant-stream";
 import {
+  type AssistantTurnHooks,
   AssistantTurnNeedsUserError,
   ConversationNotFoundError,
   prepareAssistantTurn,
 } from "../runtime/assistant-turn";
+import { registerAssistantTurn } from "../runtime/assistant-turn-registry";
 import type { CapabilityContext } from "../types";
 
 /**
@@ -67,9 +75,22 @@ export async function assistantAskHandler(
       ...stream?.overrides,
     });
     stream?.onPrepared();
-    const result = await runOutsideGovernedAction(() =>
-      prepared.run(stream?.hooks),
-    );
+    const stop = input.turnId
+      ? registerAssistantTurn({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          userId: prepared.userId,
+          turnId: input.turnId,
+        })
+      : null;
+    let result: Awaited<ReturnType<typeof prepared.run>>;
+    try {
+      result = await runOutsideGovernedAction(() =>
+        prepared.run(withStop(stream?.hooks, stop?.signal)),
+      );
+    } finally {
+      stop?.release();
+    }
     return {
       conversationId: result.conversationId,
       userMessageId: result.userMessageId,
@@ -77,6 +98,7 @@ export async function assistantAskHandler(
       runId: result.runId,
       reply: result.reply,
       parkedCards: result.parkedCards,
+      stopped: result.stopped,
     };
   } catch (err) {
     if (err instanceof ConversationNotFoundError) {
@@ -93,6 +115,25 @@ export async function assistantAskHandler(
     // `assistant_run_not_recorded` to 503, `engine_aborted` to 409.
     throw err;
   }
+}
+
+/**
+ * The stream's hooks with the person's stop added: folded into `abortSignal`,
+ * which cancels the engine, and kept on its own as `stopSignal`, which tells
+ * the turn the abort was a stop.
+ */
+function withStop(
+  hooks: AssistantTurnHooks | undefined,
+  stopSignal: AbortSignal | undefined,
+): AssistantTurnHooks | undefined {
+  if (!stopSignal) return hooks;
+  return {
+    ...hooks,
+    abortSignal: hooks?.abortSignal
+      ? AbortSignal.any([hooks.abortSignal, stopSignal])
+      : stopSignal,
+    stopSignal,
+  };
 }
 
 /** The slugs the system prompt names the scope by. */

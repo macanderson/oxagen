@@ -160,6 +160,14 @@ export interface AssistantTurnHooks {
   onUsage?: (usage: GovernedTurnUsage) => void;
   /** Client disconnect; cancels the turn on the engine. */
   abortSignal?: AbortSignal;
+  /**
+   * The person asked to stop this turn (`cancel_assistant_turn`, #4164). The
+   * caller also folds it into `abortSignal`, which is what cancels the
+   * engine. This one tells a stop apart from a disconnect or a budget stop:
+   * a stopped turn keeps the reply written so far and returns
+   * `stopped: true`, where the other two refuse with `engine_aborted`.
+   */
+  stopSignal?: AbortSignal;
 }
 
 export interface AssistantTurnResult {
@@ -171,6 +179,8 @@ export interface AssistantTurnResult {
   reply: string;
   /** Every write this turn parked, in park order; empty when none did. */
   parkedCards: AssistantParkedCard[];
+  /** The person stopped the turn; `reply` is what was written before. */
+  stopped: boolean;
 }
 
 /** The credit gate said no. Surfaces answer 402 with the code and the message. */
@@ -198,6 +208,11 @@ export class AssistantTurnNeedsUserError extends Error {
 }
 
 export interface PreparedAssistantTurn {
+  /**
+   * The person asking, as the gates resolved them: the signed-in user, or the
+   * creator of the API key. A stop is keyed on this person.
+   */
+  readonly userId: string;
   run(hooks?: AssistantTurnHooks): Promise<AssistantTurnResult>;
 }
 
@@ -294,6 +309,7 @@ export async function prepareAssistantTurn(
   );
 
   return {
+    userId,
     run: (hooks = {}) =>
       runPreparedTurn({
         request: personRequest,
@@ -588,7 +604,17 @@ async function runPreparedTurn(
     }
     hooks.onPart?.(part);
   }
-  if (streamError) {
+  // A stop the person asked for ends the turn with the engine's aborted
+  // outcome, like a disconnect or a budget stop. Only the stop is kept as an
+  // answer: the run is already sealed `cancelled`, and the reply is the text
+  // the engine wrote before the stop, possibly none. A failure that ended the
+  // turn before the stop landed carries its own error, not `engine_aborted`,
+  // and still refuses.
+  const stopped =
+    streamError !== null &&
+    hooks.stopSignal?.aborted === true &&
+    errorCodeOf(streamError.error) === "engine_aborted";
+  if (streamError && !stopped) {
     // A stream that carried an error never completed, and nothing of it is
     // saved as a reply. `finalText` rejects with the failure that ended the
     // turn (an engine failure, a receipt that could not be written); a turn
@@ -597,6 +623,8 @@ async function runPreparedTurn(
     await turn.finalText;
     throw streamError.error;
   }
+  // `finalText` still rejects for a stopped turn whose receipt could not be
+  // written: a turn that was not recorded does not answer, stopped or not.
   const [reply, usage] = await Promise.all([turn.finalText, turn.usage]);
   hooks.onUsage?.(usage);
 
@@ -605,6 +633,7 @@ async function runPreparedTurn(
       appendAssistantMessage(tx, scope, userId, conversationId, reply, {
         surface: request.surface,
         runId: run.runPublicId,
+        ...(stopped ? { status: "stopped" } : {}),
       }),
     ),
   );
@@ -621,6 +650,7 @@ async function runPreparedTurn(
     reply,
     usage,
     startedAt: turnStartedAt,
+    status: stopped ? "cancelled" : "completed",
   });
 
   return {
@@ -630,7 +660,15 @@ async function runPreparedTurn(
     runId: run.runPublicId,
     reply,
     parkedCards: parked,
+    stopped,
   };
+}
+
+/** The `code` an error part carries, when it carries one. */
+function errorCodeOf(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
 }
 
 /**
@@ -661,6 +699,8 @@ async function recordTurnExecution(args: {
   reply: string;
   usage: { inputTokens: number; outputTokens: number };
   startedAt: Date;
+  /** `cancelled` when the person stopped the turn. */
+  status: "completed" | "cancelled";
 }): Promise<void> {
   const { run, capCtx, assistantMessageId } = args;
   const completedAt = new Date();
@@ -673,7 +713,7 @@ async function recordTurnExecution(args: {
         agentVersionId: run.agentVersionId,
         originType: "chat" as const,
         originId: assistantMessageId,
-        status: "completed" as const,
+        status: args.status,
         inputPayload: {
           content: args.instruction,
           conversationId: args.conversationId,
@@ -861,7 +901,12 @@ async function appendAssistantMessage(
   userId: string,
   conversationId: string,
   reply: string,
-  metadata: { surface: AssistantRunSurface; runId: string },
+  metadata: {
+    surface: AssistantRunSurface;
+    runId: string;
+    /** Overrides `complete` for a turn the person stopped (#4164). */
+    status?: "stopped";
+  },
 ): Promise<string> {
   const [assistantMessage] = await tx
     .insert(schema.messages)
