@@ -1057,8 +1057,11 @@ function RecallRow({
     .filter((part): part is string => part !== null)
     .join(" · ");
   // `color:var(--st-proven); font-weight:600; font-size:12.5px` on the heading.
-  // Closed, the heading is the whole row; the manifest opens under it.
-  const foldable = recall.items.length > 0;
+  // Closed, the heading is the whole row; what reached the model opens under
+  // it. The server states each item's outcome; the cuts are counted in the
+  // heading and listed on the Context tab.
+  const reached = recall.items.filter((item) => item.outcome === "included");
+  const foldable = reached.length > 0;
   const toggle = () => {
     onToggle(row.key);
   };
@@ -1097,7 +1100,7 @@ function RecallRow({
       </div>
       {open && foldable ? (
         <div data-testid="tx-recall-items" className={txRecall}>
-          {recall.items.map((item, index) => (
+          {reached.map((item, index) => (
             <RecallItem
               // A manifest names each item once; the index keeps two
               // unnamed items apart.

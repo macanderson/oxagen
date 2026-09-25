@@ -4,12 +4,11 @@
 // `steering.manifest` frame the host sealed at the session's start.
 //
 // Pure, so each reading is tested without a render. Nothing here pairs,
-// counts or estimates: the server folds a model call's request and response
-// into one step and counts what a manifest put in front of the model
-// (ADR-182), the window is not recorded block by block (G10), and a figure
-// the record did not carry is null.
-import { z } from "zod";
-import type { TranscriptEntry } from "@/data/contracts/run";
+// counts, parses or estimates: the server folds a model call's request and
+// response into one step and reads what a manifest put in front of the model
+// and cut (ADR-182), the window is not recorded block by block (G10), and a
+// figure the record did not carry is null.
+import type { TranscriptEntry, TranscriptRecall } from "@/data/contracts/run";
 import { soleBody } from "./transcript-rows";
 
 /** The frame type the host seals the assembler's manifest into (ADR-093, ADR-144). */
@@ -75,45 +74,12 @@ export function firstRequest(
 }
 
 /**
- * The body of a `steering.manifest` frame, as the host seals it
- * (`steeringManifestFrameSchema`, packages/tacho/src/wire.ts). Read loosely:
- * a word the vocabulary gains later still renders as the recorded word.
+ * The Context tab's reading of the manifest: the server's reading of the
+ * frame's body (`recall`, ADR-182), or why it has no items to show. The
+ * page never parses the body itself.
  */
-const ManifestItem = z.object({
-  id: z.string().min(1),
-  kind: z.string().min(1),
-  force: z.string().min(1),
-  tokens: z.number().int().nonnegative(),
-  outcome: z.enum(["included", "cut"]),
-  reason: z.string().optional(),
-  superseded_by: z.string().optional(),
-});
-export type ManifestItem = z.infer<typeof ManifestItem>;
-
-const ManifestBody = z.object({
-  budget_tokens: z.number().int().nonnegative(),
-  spent_tokens: z.number().int().nonnegative(),
-  text_digest: z.string().nullable().optional(),
-  items: z.array(ManifestItem),
-  bundle_version: z.number().int().nonnegative().optional(),
-});
-type ManifestBody = z.infer<typeof ManifestBody>;
-
-/** A manifest body's text, parsed; null when it is not a manifest. */
-export function parseManifest(text: string): ManifestBody | null {
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  const parsed = ManifestBody.safeParse(json);
-  return parsed.success ? parsed.data : null;
-}
-
-/** Where a manifest's items came from, or why they could not be read. */
 export type ManifestRead =
-  | { state: "read"; entry: TranscriptEntry; body: ManifestBody }
+  | { state: "read"; entry: TranscriptEntry; recall: TranscriptRecall }
   | {
       state: "unretained" | "unparsed" | "failed";
       entry: TranscriptEntry;
@@ -126,4 +92,27 @@ export function manifestEntry(
   return (
     entries.find((entry) => own(entry) && entry.type === MANIFEST_TYPE) ?? null
   );
+}
+
+/**
+ * The run's manifest as the server read it: its items when the body listed
+ * them, or which of the server's reasons it listed none. Null when the run
+ * recorded no manifest frame.
+ */
+export function manifestOf(
+  entries: readonly TranscriptEntry[],
+): ManifestRead | null {
+  const entry = manifestEntry(entries);
+  if (entry === null) return null;
+  const recall = entry.recall;
+  if (recall?.body === "listed" && recall.unit === "items")
+    return { state: "read", entry, recall };
+  switch (recall?.body) {
+    case "unretained":
+      return { state: "unretained", entry };
+    case "unreadable":
+      return { state: "failed", entry };
+    default:
+      return { state: "unparsed", entry };
+  }
 }

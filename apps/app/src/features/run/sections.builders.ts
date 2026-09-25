@@ -3,6 +3,7 @@
 // steering manifest, a context assembly, model calls with reported usage, and
 // two policy decisions), a work read with a checkout and a pull request, and
 // the props bundle a tab receives.
+import { type RecallBody, recallOf, tachoFrame } from "@oxagen/run-ledger";
 import type {
   RunTranscript,
   TranscriptEntry,
@@ -143,18 +144,41 @@ type Spec = {
   usage?: TranscriptUsage;
 };
 
-/** What the server reads from the manifest this fixture seals (`recallOf`). */
-const MANIFEST_RECALL: NonNullable<TranscriptEntry["recall"]> = {
-  unit: "items",
-  count: 3,
-  tokens: 1340,
-  cut: 5,
-  items: [
-    { kind: "record", label: "ctx.release.never-merge", tokens: 188 },
-    { kind: "policy", label: "gate.rg_0093", tokens: 33 },
-    { kind: "record", label: "ctx.release.notes-format", tokens: 214 },
-  ],
-};
+/**
+ * What the server reads from a manifest frame's body, by the server's own
+ * rule (`recallOf` in `@oxagen/run-ledger`), so a fixture's recall and the
+ * text it seals never disagree. Text is the body the frame kept, null a
+ * frame that kept none, and a `RecallBody` any other state the server found.
+ */
+export function manifestRecall(
+  body: string | RecallBody | null,
+): NonNullable<TranscriptEntry["recall"]> {
+  const frame = tachoFrame({
+    seq: 1,
+    ts: at(-3598),
+    kind: "steering.manifest",
+    hash: "",
+    contentDigest: "",
+    bytesRef: "",
+    redactions: "",
+    toolName: "",
+    toolStatus: "",
+    toolUseId: "",
+    model: "",
+    provider: "",
+    policyDecision: "",
+    costUsdMicros: null,
+    turnSeq: null,
+  });
+  return recallOf(
+    frame,
+    body === null
+      ? { state: "unretained" }
+      : typeof body === "string"
+        ? { state: "kept", text: body }
+        : body,
+  );
+}
 
 /**
  * A wrapped release run read at `everything`: the manifest and the context
@@ -183,7 +207,7 @@ export function evidenceTranscript(
       kinds: ["recall"],
       turn: null,
       node: "recall",
-      recall: manifest === null ? null : MANIFEST_RECALL,
+      recall: manifestRecall(manifest),
       text: manifest,
     },
     {

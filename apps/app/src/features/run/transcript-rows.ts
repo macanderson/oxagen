@@ -564,12 +564,16 @@ export function rowsOf(entry: TranscriptEntry): FeedRow[] {
         {
           ...base(entry.key, entry, "recall"),
           kind: "recall",
+          // The server reads a recall on every recall entry; one it did not
+          // state is drawn as a recall that listed nothing.
           recall: entry.recall ?? {
             unit: "frames",
             count: null,
             tokens: null,
             cut: null,
             items: [],
+            bundleVersion: null,
+            body: "unlisted",
           },
           frame: openingOf(entry),
         },

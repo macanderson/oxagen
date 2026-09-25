@@ -22,10 +22,12 @@ import {
   frameFolds,
   markWords,
   RECALL_ITEM_MAX,
+  type RecallBody,
   recallOf,
   stepFolds,
   toolUseClaimer,
   type TranscriptFold,
+  type TranscriptRecallBody,
   transcriptCounts,
   turnFolds,
   wordsHalf,
@@ -1539,8 +1541,24 @@ describe("toolUseClaimer", () => {
 
 describe("recallOf", () => {
   const manifest = w(1, "steering.manifest", kept("m"));
+  const said = (text: string): RecallBody => ({ state: "kept", text });
+  /** An item the reading lists, with no reason, replacement or force recorded. */
+  const listed = (
+    kind: string,
+    label: string,
+    tokens: number | null,
+    outcome: "included" | "cut" = "included",
+  ) => ({
+    kind,
+    label,
+    tokens,
+    outcome,
+    reason: null,
+    supersededBy: null,
+    force: null,
+  });
 
-  it("reads a steering manifest's included items, its cut and its tokens", () => {
+  it("reads a steering manifest's items with the outcome of each, its cut and its tokens", () => {
     const body = JSON.stringify({
       schema: "oxagen.steering.manifest/1",
       included: 2,
@@ -1552,24 +1570,28 @@ describe("recallOf", () => {
         { id: "rec_3", kind: "fact", tokens: 900, outcome: "cut" },
       ],
     });
-    expect(recallOf(manifest, body)).toEqual({
+    expect(recallOf(manifest, said(body))).toEqual({
       unit: "items",
       count: 2,
       tokens: 340,
       cut: 1,
       items: [
-        { kind: "rule", label: "rec_1", tokens: 200 },
-        { kind: "fact", label: "rec_2", tokens: 140 },
+        listed("rule", "rec_1", 200),
+        listed("fact", "rec_2", 140),
+        listed("fact", "rec_3", 900, "cut"),
       ],
+      bundleVersion: null,
+      body: "listed",
     });
   });
 
-  it("counts what a manifest cut from the outcome of each item when it recorded no total", () => {
+  it("carries each item's force, the reason for a cut and what superseded it, and the bundle the manifest names", () => {
     // The shape the host seals (`steeringManifestFrameSchema`): each item's
-    // outcome, and no `included` or `cut` of its own.
+    // outcome and force, and no `included` or `cut` of its own.
     const body = JSON.stringify({
       budget_tokens: 4000,
       spent_tokens: 340,
+      bundle_version: 41,
       items: [
         {
           id: "rec_1",
@@ -1582,24 +1604,53 @@ describe("recallOf", () => {
           id: "rec_2",
           kind: "fact",
           force: "may",
-          tokens: 140,
-          outcome: "included",
+          tokens: 900,
+          outcome: "cut",
+          reason: "budget",
         },
         {
           id: "rec_3",
           kind: "fact",
-          force: "may",
-          tokens: 900,
+          force: "should",
+          tokens: 140,
           outcome: "cut",
+          reason: "superseded",
+          superseded_by: "rec_1",
         },
       ],
     });
-    expect(recallOf(manifest, body)).toMatchObject({
+    expect(recallOf(manifest, said(body))).toEqual({
       unit: "items",
-      count: 2,
+      count: 1,
       tokens: 340,
-      cut: 1,
+      cut: 2,
+      items: [
+        { ...listed("rule", "rec_1", 200), force: "must" },
+        {
+          ...listed("fact", "rec_2", 900, "cut"),
+          force: "may",
+          reason: "budget",
+        },
+        {
+          ...listed("fact", "rec_3", 140, "cut"),
+          force: "should",
+          reason: "superseded",
+          supersededBy: "rec_1",
+        },
+      ],
+      bundleVersion: 41,
+      body: "listed",
     });
+  });
+
+  it("reads an outcome it has no word for as a cut, never as delivered (negative)", () => {
+    const body = JSON.stringify({
+      items: [{ id: "rec_1", kind: "rule", tokens: 5, outcome: "withheld" }],
+    });
+    const recall = recallOf(manifest, said(body));
+    expect(recall.items[0]?.outcome).toBe("cut");
+    expect(recall.count).toBe(0);
+    expect(recall.cut).toBe(1);
   });
 
   it("reads a context frame's listed frames, counting them when no total was recorded", () => {
@@ -1611,15 +1662,14 @@ describe("recallOf", () => {
         "not an item",
       ],
     });
-    expect(recallOf(manifest, body)).toEqual({
+    expect(recallOf(manifest, said(body))).toEqual({
       unit: "frames",
       count: 2,
       tokens: 90,
       cut: null,
-      items: [
-        { kind: "file", label: "a.ts", tokens: 40 },
-        { kind: "file", label: "b.ts", tokens: null },
-      ],
+      items: [listed("file", "a.ts", 40), listed("file", "b.ts", null)],
+      bundleVersion: null,
+      body: "listed",
     });
   });
 
@@ -1632,24 +1682,28 @@ describe("recallOf", () => {
     }));
     const recall = recallOf(
       manifest,
-      JSON.stringify({ included: items.length, items }),
+      said(JSON.stringify({ included: items.length, items })),
     );
     expect(recall.items).toHaveLength(RECALL_ITEM_MAX);
     expect(recall.count).toBe(RECALL_ITEM_MAX + 5);
   });
 
-  it("falls back to the ledger's recorded frame count for a body it cannot read (negative)", () => {
+  it("falls back to the ledger's recorded frame count for a body it cannot read, and says why (negative)", () => {
     const selected = ledger(1, "context.frames_selected", { frame_count: 6 });
-    for (const body of [null, "not json", "[1,2]", JSON.stringify({ a: 1 })]) {
-      expect(recallOf(selected, body)).toEqual({
-        unit: "frames",
-        count: 6,
-        tokens: null,
-        cut: null,
-        items: [],
-      });
-    }
-    expect(recallOf(manifest, null).count).toBeNull();
+    const fallback = (body: TranscriptRecallBody) => ({
+      unit: "frames",
+      count: 6,
+      tokens: null,
+      cut: null,
+      items: [],
+      bundleVersion: null,
+      body,
+    });
+    for (const text of ["not json", "[1,2]", JSON.stringify({ a: 1 })])
+      expect(recallOf(selected, said(text))).toEqual(fallback("unlisted"));
+    for (const state of ["unretained", "unreadable", "unlisted"] as const)
+      expect(recallOf(selected, { state })).toEqual(fallback(state));
+    expect(recallOf(manifest, { state: "unretained" }).count).toBeNull();
   });
 
   it("reads a count that is not a whole number, or is below zero, as none (negative)", () => {
@@ -1657,16 +1711,19 @@ describe("recallOf", () => {
       included: -1,
       spent_tokens: 1.5,
       cut: "3",
+      bundle_version: -2,
       items: [{ id: "r", kind: "fact", tokens: -4, outcome: "included" }],
     });
     // The recorded `cut` is not a count, so the cut is read from the items,
     // which say none was cut.
-    expect(recallOf(manifest, body)).toEqual({
+    expect(recallOf(manifest, said(body))).toEqual({
       unit: "items",
       count: 1,
       tokens: null,
       cut: 0,
-      items: [{ kind: "fact", label: "r", tokens: null }],
+      items: [listed("fact", "r", null)],
+      bundleVersion: null,
+      body: "listed",
     });
   });
 });

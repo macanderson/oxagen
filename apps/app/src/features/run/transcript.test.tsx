@@ -516,6 +516,38 @@ describe("the rows", () => {
     );
   });
 
+  it("lists only the items that reached the model when the server says a manifest cut some (negative)", () => {
+    const base = releaseTranscript();
+    const entries = base.entries.map((entry) => {
+      const recall = entry.recall;
+      if (recall === null) return entry;
+      const [first, second] = recall.items;
+      if (first === undefined || second === undefined) return entry;
+      return {
+        ...entry,
+        recall: {
+          ...recall,
+          unit: "items" as const,
+          count: 1,
+          cut: 1,
+          items: [
+            first,
+            { ...second, outcome: "cut" as const, reason: "budget" },
+          ],
+        },
+      };
+    });
+    renderSection({ read: readOk({ ...base, entries }) });
+    const recall = screen.getByTestId("tx-recall");
+    expect(recall).toHaveTextContent("1 cut");
+    fireEvent.click(
+      within(recall).getByRole("button", { name: "Show what was recalled" }),
+    );
+    const items = within(recall).getByTestId("tx-recall-items");
+    expect(items).toHaveTextContent("Repository a-intel/platform @ a4c91e2");
+    expect(items).not.toHaveTextContent("CHANGELOG.md");
+  });
+
   it("reads the agent's last words as the answer once the run has stopped, and not while it runs", () => {
     renderSection();
     const agents = screen.getAllByTestId("transcript-agent");

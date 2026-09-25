@@ -23,6 +23,26 @@ import {
 import { toRunTranscript } from "@/data/live/mappers/run";
 import { NOW } from "./run.builders";
 
+/**
+ * A frame a context frame listed, as the server reads it (`recallOf`): a
+ * context listing records no outcome, so every frame reached the model.
+ */
+function listedFrame(
+  kind: string,
+  label: string,
+  tokens: number,
+): TranscriptRecall["items"][number] {
+  return {
+    kind,
+    label,
+    tokens,
+    outcome: "included",
+    reason: null,
+    supersededBy: null,
+    force: null,
+  };
+}
+
 /** The run's first frame, an hour before the instant every Run test renders at. */
 const START = NOW - 3_600_000;
 
@@ -412,21 +432,15 @@ export function releaseSteps(): StepSpec[] {
         tokens: 11204,
         cut: null,
         items: [
-          {
-            kind: "fact",
-            label: "Repository a-intel/platform @ a4c91e2",
-            tokens: 1204,
-          },
-          { kind: "doc", label: "CHANGELOG.md · chunk 3 of 9", tokens: 3880 },
-          {
-            kind: "symbol",
-            label: "releaseNotes() · scripts/release.ts:44",
-            tokens: 902,
-          },
-          { kind: "rule", label: "ctx.release.notes-format", tokens: 2410 },
-          { kind: "doc", label: "RELEASING.md", tokens: 1908 },
-          { kind: "fact", label: "Tag v4.10.3 @ 9d02e11", tokens: 900 },
+          listedFrame("fact", "Repository a-intel/platform @ a4c91e2", 1204),
+          listedFrame("doc", "CHANGELOG.md · chunk 3 of 9", 3880),
+          listedFrame("symbol", "releaseNotes() · scripts/release.ts:44", 902),
+          listedFrame("rule", "ctx.release.notes-format", 2410),
+          listedFrame("doc", "RELEASING.md", 1908),
+          listedFrame("fact", "Tag v4.10.3 @ 9d02e11", 900),
         ],
+        bundleVersion: null,
+        body: "listed",
       },
     },
     {

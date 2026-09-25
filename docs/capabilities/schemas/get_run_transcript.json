@@ -2102,16 +2102,77 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "included",
+                              "cut"
+                            ]
+                          },
+                          "reason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "supersededBy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "force": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
                           "kind",
                           "label",
-                          "tokens"
+                          "tokens",
+                          "outcome",
+                          "reason",
+                          "supersededBy",
+                          "force"
                         ],
                         "additionalProperties": false
                       },
                       "maxItems": 2000
+                    },
+                    "bundleVersion": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "body": {
+                      "type": "string",
+                      "enum": [
+                        "listed",
+                        "unretained",
+                        "unreadable",
+                        "unlisted"
+                      ]
                     }
                   },
                   "required": [
@@ -2119,7 +2180,9 @@
                     "count",
                     "tokens",
                     "cut",
-                    "items"
+                    "items",
+                    "bundleVersion",
+                    "body"
                   ],
                   "additionalProperties": false
                 },

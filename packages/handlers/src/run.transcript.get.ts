@@ -73,6 +73,7 @@ import {
   frameKey,
   markWords,
   type MessageAssembly,
+  type RecallBody,
   recallOf,
   type RunFrame,
   stepFolds,
@@ -482,29 +483,31 @@ export async function readWords(
 }
 
 /**
- * A recall frame's whole body as text, for `recallOf` to parse, or null when
- * none was kept, it cannot be read, it does not hash to its digest, or it is
- * larger than any manifest. A half's text is cut at the zoom's cap, and a
- * manifest cut short does not parse, so this reads the body on its own.
+ * A recall frame's whole body as text, for `recallOf` to parse, or why there
+ * is none: the frame kept no body, the body cannot be read or no longer
+ * hashes to its digest, or it is larger than any manifest. A half's text is
+ * cut at the zoom's cap, and a manifest cut short does not parse, so this
+ * reads the body on its own.
  */
 async function recallBody(
   bodies: Pick<EvidenceStore, "getBody">,
   scope: RunScope,
   frame: RunFrame,
-): Promise<string | null> {
+): Promise<RecallBody> {
   const { bodyRef, bodyDigest } = frame.body;
-  if (bodyRef === null || bodyDigest === null) return null;
+  if (bodyRef === null || bodyDigest === null) return { state: "unretained" };
   try {
     const stored = await bodies.getBody(scope, bodyRef);
-    if (stored.bytes.byteLength > RECALL_BODY_MAX) return null;
-    if (digestBytes(stored.bytes) !== bodyDigest) return null;
-    return decoder.decode(stored.bytes);
+    if (stored.bytes.byteLength > RECALL_BODY_MAX) return { state: "unlisted" };
+    if (digestBytes(stored.bytes) !== bodyDigest)
+      return { state: "unreadable" };
+    return { state: "kept", text: decoder.decode(stored.bytes) };
   } catch (err) {
     logger.warn(
       { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
       "get_run_transcript: a recall body could not be read; its recall falls back to the recorded count",
     );
-    return null;
+    return { state: "unreadable" };
   }
 }
 

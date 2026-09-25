@@ -390,7 +390,8 @@ export const transcriptDecisionSchema = z
 /**
  * What a recall frame put in front of the model, read on the server from the
  * body it kept: a steering manifest's items (ADR-093) or a context frame's
- * frames, or else the frame count the ledger recorded.
+ * frames, each with its outcome, or else the frame count the ledger
+ * recorded. No reader parses the body again (ADR-182).
  */
 export const transcriptRecallSchema = z
   .object({
@@ -400,7 +401,11 @@ export const transcriptRecallSchema = z
     tokens: z.number().int().nonnegative().nullable(),
     /** Items the manifest listed and cut; null when it recorded none. */
     cut: z.number().int().nonnegative().nullable(),
-    /** The items that reached the model, in the order listed, at most 2,000. */
+    /**
+     * Every item listed, included and cut, in the order listed, at most
+     * 2,000. A listing that records no outcome put every item in front of
+     * the model.
+     */
     items: z
       .array(
         z
@@ -408,10 +413,27 @@ export const transcriptRecallSchema = z
             kind: z.string(),
             label: z.string(),
             tokens: z.number().int().nonnegative().nullable(),
+            /** Whether the item reached the model; any recorded outcome but `included` is a cut. */
+            outcome: z.enum(["included", "cut"]),
+            /** The reason recorded for a cut; null when none was. */
+            reason: z.string().nullable(),
+            /** The item that replaced a cut one; null when none was recorded. */
+            supersededBy: z.string().nullable(),
+            /** The force the item carried (`must`, `should`, `may`, `info`); null when not recorded. */
+            force: z.string().nullable(),
           })
           .strict(),
       )
       .max(2_000),
+    /** The policy bundle a manifest was assembled on; null when it names none. */
+    bundleVersion: z.number().int().nonnegative().nullable(),
+    /**
+     * What the server made of the body: `listed` when it read a list from
+     * it, `unretained` when the frame kept none, `unreadable` when the kept
+     * body could not be read or no longer hashes to its digest, `unlisted`
+     * when it lists nothing or is too large to be a listing.
+     */
+    body: z.enum(["listed", "unretained", "unreadable", "unlisted"]),
   })
   .strict();
 

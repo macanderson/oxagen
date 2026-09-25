@@ -1723,8 +1723,16 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       spent_tokens: 120,
       items: [
         { id: "rec_1", kind: "rule", tokens: 120, outcome: "included" },
-        { id: "rec_2", kind: "fact", tokens: 900, outcome: "cut" },
+        {
+          id: "rec_2",
+          kind: "fact",
+          force: "may",
+          tokens: 900,
+          outcome: "cut",
+          reason: "budget",
+        },
       ],
+      bundle_version: 41,
     });
     const { transcript } = harness([
       tachoRow(0, { kind: "steering.manifest", ...blank, ...stored(manifest) }),
@@ -1736,12 +1744,35 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       }),
     ]);
     const out = await transcript(input({ zoom: "everything" }), ctx());
+    // Every item comes with its outcome, so no reader parses the manifest
+    // again to find what was cut (ADR-182).
     expect(out.entries[0]?.recall).toEqual({
       unit: "items",
       count: 1,
       tokens: 120,
       cut: 1,
-      items: [{ kind: "rule", label: "rec_1", tokens: 120 }],
+      items: [
+        {
+          kind: "rule",
+          label: "rec_1",
+          tokens: 120,
+          outcome: "included",
+          reason: null,
+          supersededBy: null,
+          force: null,
+        },
+        {
+          kind: "fact",
+          label: "rec_2",
+          tokens: 900,
+          outcome: "cut",
+          reason: "budget",
+          supersededBy: null,
+          force: "may",
+        },
+      ],
+      bundleVersion: 41,
+      body: "listed",
     });
     expect(out.entries[1]?.recall).toEqual({
       unit: "frames",
@@ -1749,7 +1780,19 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       tokens: null,
       cut: null,
       items: [],
+      bundleVersion: null,
+      body: "unreadable",
     });
+  });
+
+  it("says a recall frame that kept no body is unretained, and reads nothing for it (negative)", async () => {
+    const { transcript, getBody } = harness([
+      tachoRow(0, { kind: "steering.manifest", ...blank }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(out.entries[0]?.recall?.body).toBe("unretained");
+    expect(out.entries[0]?.recall?.items).toEqual([]);
+    expect(getBody).not.toHaveBeenCalled();
   });
 
   it("reads a recall's body once per read, for its recall and never as a half", async () => {
@@ -1783,6 +1826,7 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     ]);
     const out = await transcript(input({ zoom: "everything" }), ctx());
     expect(out.entries[0]?.recall?.count).toBeNull();
+    expect(out.entries[0]?.recall?.body).toBe("unreadable");
   });
 
   it("names the tool step that recorded each call a reply made, and none for a call nobody recorded", async () => {

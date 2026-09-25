@@ -1102,6 +1102,37 @@ export function toolUseClaimer(
 
 // ── Recall ──────────────────────────────────────────────────────────────────
 
+/** One item a recall listed, and what became of it. */
+export interface TranscriptRecallItem {
+  kind: string;
+  label: string;
+  tokens: number | null;
+  /**
+   * Whether the item reached the model. A listing that records no outcome
+   * put every item in front of it; any outcome but `included` is a cut.
+   */
+  outcome: "included" | "cut";
+  /** The reason recorded for a cut (`budget`, `tier`, or a later word); null when none. */
+  reason: string | null;
+  /** The item that replaced a cut one; null when none was recorded. */
+  supersededBy: string | null;
+  /** The force the item carried (`must`, `should`, `may`, `info`); null when not recorded. */
+  force: string | null;
+}
+
+/**
+ * What the server made of a recall frame's body: `listed` when it read a
+ * list of items or frames from it, `unretained` when the frame kept no body,
+ * `unreadable` when the kept body could not be read or no longer hashes to
+ * its digest, and `unlisted` when it lists neither or is too large to be a
+ * listing.
+ */
+export type TranscriptRecallBody =
+  | "listed"
+  | "unretained"
+  | "unreadable"
+  | "unlisted";
+
 /** What a recall frame says it put in front of the model. */
 export interface TranscriptRecall {
   /** What `count` counts: context frames, or the items a manifest included. */
@@ -1109,9 +1140,21 @@ export interface TranscriptRecall {
   count: number | null;
   tokens: number | null;
   cut: number | null;
-  /** The items that reached the model, in the order listed. */
-  items: { kind: string; label: string; tokens: number | null }[];
+  /** Every item listed, in the order listed, each with its outcome. */
+  items: TranscriptRecallItem[];
+  /** The policy bundle a manifest was assembled on; null when it names none. */
+  bundleVersion: number | null;
+  body: TranscriptRecallBody;
 }
+
+/**
+ * A recall frame's body as the server found it: the text it kept, or why
+ * there is none to parse. `unlisted` is a body too large to be any listing,
+ * so it is never read.
+ */
+export type RecallBody =
+  | { state: "kept"; text: string }
+  | { state: Exclude<TranscriptRecallBody, "listed"> };
 
 /** The most listed items a recall carries; a manifest holds at most this many. */
 export const RECALL_ITEM_MAX = 2_000;
@@ -1135,19 +1178,16 @@ function count(value: unknown): number | null {
 /**
  * What a recall frame put in front of the model, read from its kept body:
  * a steering manifest (ADR-093) lists its items with the outcome of each, and
- * a context frame lists its frames. A body that lists neither, or none kept,
- * falls back to the frame count the ledger's `context.frames_selected`
- * records. Only items that reached the model are listed; the rest are
- * counted in `cut`.
+ * a context frame lists its frames. Every listed item is carried with its
+ * outcome and the reason recorded for a cut, so no reader parses the body
+ * again (ADR-182). A body that lists neither, or none kept, falls back to
+ * the frame count the ledger's `context.frames_selected` records.
  */
-export function recallOf(
-  frame: RunFrame,
-  body: string | null,
-): TranscriptRecall {
+export function recallOf(frame: RunFrame, body: RecallBody): TranscriptRecall {
   let parsed: unknown = null;
-  if (body !== null) {
+  if (body.state === "kept") {
     try {
-      parsed = JSON.parse(body);
+      parsed = JSON.parse(body.text);
     } catch {
       parsed = null;
     }
@@ -1160,24 +1200,29 @@ export function recallOf(
       : undefined;
   if (isRecord(parsed) && Array.isArray(list)) {
     const listed = list.filter(isRecord);
-    const kept = listed.filter(
-      (item) => item["outcome"] === undefined || item["outcome"] === "included",
-    );
+    const included = (item: Record<string, unknown>) =>
+      item["outcome"] === undefined || item["outcome"] === "included";
+    const kept = listed.filter(included).length;
     // A manifest that records the outcome of each item and no total of what
     // it cut has cut what it listed and did not include.
     const judged = listed.some((item) => item["outcome"] !== undefined);
     return {
       unit: Array.isArray(items) ? "items" : "frames",
-      count: count(parsed["included"]) ?? kept.length,
+      count: count(parsed["included"]) ?? kept,
       tokens: count(parsed["spent_tokens"]) ?? count(parsed["tokens"]),
-      cut:
-        count(parsed["cut"]) ?? (judged ? listed.length - kept.length : null),
-      items: kept.slice(0, RECALL_ITEM_MAX).map((item) => ({
+      cut: count(parsed["cut"]) ?? (judged ? listed.length - kept : null),
+      items: listed.slice(0, RECALL_ITEM_MAX).map((item) => ({
         kind: text(item, "kind") ?? text(item, "type") ?? "",
         label:
           text(item, "label") ?? text(item, "id") ?? text(item, "name") ?? "",
         tokens: count(item["tokens"]) ?? count(item["tok"]),
+        outcome: included(item) ? "included" : "cut",
+        reason: text(item, "reason"),
+        supersededBy: text(item, "superseded_by"),
+        force: text(item, "force"),
       })),
+      bundleVersion: count(parsed["bundle_version"]),
+      body: "listed",
     };
   }
   return {
@@ -1186,5 +1231,7 @@ export function recallOf(
     tokens: null,
     cut: null,
     items: [],
+    bundleVersion: null,
+    body: body.state === "kept" ? "unlisted" : body.state,
   };
 }

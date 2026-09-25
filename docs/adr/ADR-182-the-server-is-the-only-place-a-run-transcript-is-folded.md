@@ -45,9 +45,10 @@ counting of frames of its own.
 2. Every fact the browser used to derive is a field of the entry or of the
    response. On the entry, that covers its key, the spawning step, the
    outcome, the approval id, the gates, the subject, the tool family, the
-   duration, the entry it repeats, the recall tally, and the `tool_use`
-   blocks a tool entry claims. On the response, it covers the count per
-   kind, the page figures, and the search matches.
+   duration, the entry it repeats, each item a recall listed with whether
+   it reached the model and why it was cut, and the `tool_use` blocks a
+   tool entry claims. On the response, it covers the count per kind, the
+   page figures, and the search matches.
 3. A fact is never written into a label for a client to parse.
 4. `kinds` filters entries after the fold, so a filtered transcript shows the
    same steps as an unfiltered one.

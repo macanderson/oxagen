@@ -229,24 +229,52 @@ describe("what the fold states about an entry (ADR-182)", () => {
     }
   });
 
-  it("carries a recall read from the body, and refuses a negative count (negative)", () => {
+  it("carries a recall read from the body, each item with its outcome, and refuses a negative count (negative)", () => {
+    const included = {
+      kind: "rule",
+      label: "rec_1",
+      tokens: 200,
+      outcome: "included",
+      reason: null,
+      supersededBy: null,
+      force: "must",
+    };
     const recall = {
       unit: "items",
-      count: 2,
+      count: 1,
       tokens: 340,
       cut: 1,
-      items: [{ kind: "rule", label: "rec_1", tokens: 200 }],
+      items: [
+        included,
+        {
+          ...included,
+          label: "rec_2",
+          outcome: "cut",
+          reason: "superseded",
+          supersededBy: "rec_1",
+        },
+      ],
+      bundleVersion: 41,
+      body: "listed",
     };
     expect(
       transcriptEntrySchema.safeParse({ ...entry, ...facts, recall }).success,
     ).toBe(true);
-    expect(
-      transcriptEntrySchema.safeParse({
-        ...entry,
-        ...facts,
-        recall: { ...recall, count: -1 },
-      }).success,
-    ).toBe(false);
+    for (const bad of [
+      { count: -1 },
+      { body: "parsed" },
+      { items: [{ ...included, outcome: "withheld" }] },
+      // An item without its outcome would leave a reader to guess it.
+      { items: [{ kind: "rule", label: "rec_1", tokens: 200 }] },
+    ]) {
+      expect(
+        transcriptEntrySchema.safeParse({
+          ...entry,
+          ...facts,
+          recall: { ...recall, ...bad },
+        }).success,
+      ).toBe(false);
+    }
   });
 
   it("answers the run's counts beside the page", () => {

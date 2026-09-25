@@ -1,6 +1,6 @@
 // What the Context tab reads out of the transcript, without a render: the
 // first prompt, the first model step and the input it reported, and the
-// manifest body read loosely but refused when it is not a manifest. Pairing a
+// manifest as the server read it (`recall`), never parsed here. Pairing a
 // request with the response that reported its usage is the server's fold
 // (`packages/run-ledger/src/transcript-steps.test.ts`), so the first model
 // step arrives here as one entry.
@@ -10,10 +10,10 @@ import {
   firstPrompt,
   firstRequest,
   manifestEntry,
-  parseManifest,
+  manifestOf,
 } from "./context-model";
 import { transcriptBody, transcriptEntry } from "./run.builders";
-import { evidenceTranscript, manifestText } from "./sections.builders";
+import { evidenceTranscript, manifestRecall } from "./sections.builders";
 
 const entries = evidenceTranscript().entries;
 
@@ -144,33 +144,46 @@ describe("firstRequest", () => {
 });
 
 describe("the manifest", () => {
-  it("finds the manifest frame and reads its items", () => {
-    expect(manifestEntry(entries)?.seq).toBe("1");
-    const manifest = parseManifest(manifestText());
-    expect(manifest?.bundle_version).toBe(41);
-    expect(manifest?.items).toHaveLength(8);
-  });
-
-  it("reads a word the vocabulary gains later as the recorded word", () => {
-    const manifest = parseManifest(
-      manifestText({
-        items: [
-          {
-            id: "x",
-            kind: "playbook",
-            force: "must",
-            tokens: 3,
-            outcome: "included",
-            recorded_at: "",
-          },
-        ],
-      }),
+  const withRecall = (recall: TranscriptEntry["recall"]): TranscriptEntry[] =>
+    entries.map((entry) =>
+      entry.type === "steering.manifest" ? { ...entry, recall } : entry,
     );
-    expect(manifest?.items[0]?.kind).toBe("playbook");
+
+  it("finds the manifest frame and takes its items from the server's reading", () => {
+    expect(manifestEntry(entries)?.seq).toBe("1");
+    const manifest = manifestOf(entries);
+    if (manifest?.state !== "read") throw new Error("a read manifest");
+    expect(manifest.recall.bundleVersion).toBe(41);
+    expect(manifest.recall.items).toHaveLength(8);
+    expect(
+      manifest.recall.items.filter((item) => item.outcome === "cut"),
+    ).toHaveLength(5);
   });
 
-  it("refuses a body that is not JSON or not a manifest (negative)", () => {
-    expect(parseManifest("{not json")).toBeNull();
-    expect(parseManifest(JSON.stringify({ items: "none" }))).toBeNull();
+  it("names why the server listed no items, and parses nothing itself (negative)", () => {
+    expect(manifestOf(withRecall(manifestRecall(null)))?.state).toBe(
+      "unretained",
+    );
+    expect(
+      manifestOf(withRecall(manifestRecall({ state: "unreadable" })))?.state,
+    ).toBe("failed");
+    expect(
+      manifestOf(withRecall(manifestRecall(JSON.stringify({ items: "none" }))))
+        ?.state,
+    ).toBe("unparsed");
+    // A body that lists frames is a context frame's listing, not a manifest.
+    expect(
+      manifestOf(withRecall(manifestRecall(JSON.stringify({ frames: [] }))))
+        ?.state,
+    ).toBe("unparsed");
+    // The manifest text is still on the entry; without the server's reading
+    // the page does not read it.
+    expect(manifestOf(withRecall(null))?.state).toBe("unparsed");
+  });
+
+  it("answers null when the run sealed no manifest", () => {
+    expect(
+      manifestOf(entries.filter((entry) => entry.type !== "steering.manifest")),
+    ).toBeNull();
   });
 });

@@ -443,16 +443,45 @@ const TranscriptDecision = z.object({
   at: z.iso.datetime({ offset: true }),
 });
 
-/** What a recall entry put in front of the model, read on the server from the body it kept. */
+/**
+ * One item a recall listed, and what the server read became of it: whether it
+ * reached the model, and for a cut the reason and the item that replaced it.
+ */
+export const TranscriptRecallItem = z.object({
+  kind: z.string(),
+  label: z.string(),
+  tokens: Count.nullable(),
+  outcome: z.enum(["included", "cut"]),
+  /** The reason recorded for a cut (`budget`, `tier`, or a later word); null when none. */
+  reason: z.string().nullable(),
+  /** The item that replaced a cut one; null when none was recorded. */
+  supersededBy: z.string().nullable(),
+  /** The force the item carried; null when not recorded. */
+  force: z.string().nullable(),
+});
+export type TranscriptRecallItem = z.infer<typeof TranscriptRecallItem>;
+
+/**
+ * What a recall entry put in front of the model, read on the server from the
+ * body it kept (ADR-182). The page never parses the body itself.
+ */
 export const TranscriptRecall = z.object({
   /** What `count` counts: context frames, or the items a manifest included. */
   unit: z.enum(["frames", "items"]),
   count: Count.nullable(),
   tokens: Count.nullable(),
   cut: Count.nullable(),
-  items: z.array(
-    z.object({ kind: z.string(), label: z.string(), tokens: Count.nullable() }),
-  ),
+  /** Every item listed, included and cut, in the order listed. */
+  items: z.array(TranscriptRecallItem),
+  /** The policy bundle a manifest was assembled on; null when it names none. */
+  bundleVersion: Count.nullable(),
+  /**
+   * What the server made of the body: `listed`, or why it lists nothing:
+   * `unretained` (no body kept), `unreadable` (the read failed or the body
+   * no longer hashes to its digest), `unlisted` (it lists neither items nor
+   * frames).
+   */
+  body: z.enum(["listed", "unretained", "unreadable", "unlisted"]),
 });
 export type TranscriptRecall = z.infer<typeof TranscriptRecall>;
 
