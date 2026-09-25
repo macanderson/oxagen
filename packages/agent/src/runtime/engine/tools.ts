@@ -23,6 +23,7 @@ import type {
   ToolContractWire,
   ToolOutput,
 } from "@oxagen/stella-engine-client";
+import { ApprovalPendingError } from "../approval-pending";
 import type { ToolGovernance } from "../materialize-tools";
 
 /**
@@ -130,6 +131,13 @@ export interface ToolExecution {
   failed: boolean;
   /** The thrown value, when it failed. */
   error?: unknown;
+  /**
+   * Set when the call parked for a person's approval rather than failing.
+   * The engine is still answered `refused_by_policy`, because its closed
+   * error vocabulary has no word for a wait. The host's own record reads
+   * this to write the call as parked, not denied.
+   */
+  parked?: { approvalPublicId?: string };
 }
 
 /**
@@ -138,7 +146,8 @@ export interface ToolExecution {
  * A thrown tool becomes the `error` arm rather than a rejection, because tool
  * failure is ordinary and the engine's job is to hand it to the model as text
  * it can react to. A refusal by a gate carries the class the engine reads as
- * a refusal, so a policy "no" is not mistaken for a fault.
+ * a refusal, so a policy "no" is not mistaken for a fault. A call parked for
+ * approval is answered the same way, and is marked `parked` for the host.
  */
 export async function executeToolRequest(
   tools: ToolSet,
@@ -168,7 +177,11 @@ export async function executeToolRequest(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // Read by type, not by message: the park's message happens to say
+    // "refused", and that match is what used to record it as denied.
+    const parked = error instanceof ApprovalPendingError ? error : null;
     const refused =
+      parked !== null ||
       /approval (denied|expired)|blocked by|consent (denied|expired)|refused/i.test(
         message,
       );
@@ -179,6 +192,14 @@ export async function executeToolRequest(
       raw: undefined,
       failed: true,
       error,
+      ...(parked === null
+        ? {}
+        : {
+            parked:
+              parked.approvalPublicId === undefined
+                ? {}
+                : { approvalPublicId: parked.approvalPublicId },
+          }),
     };
   }
 }

@@ -18,9 +18,10 @@
 
 export type ConnectionHealthStatus = "healthy" | "degraded" | "errored";
 
-/** First failure already downgrades health to `degraded`. */
-export const DEGRADED_AFTER_FAILURES = 1;
-/** Nth consecutive failure escalates health to `errored`. */
+/**
+ * Nth consecutive failure escalates health to `errored`. The first failure
+ * already downgrades health to `degraded`, so that threshold needs no constant.
+ */
 export const ERRORED_AFTER_FAILURES = 4;
 
 /** Backoff floor — the delay after a single failure (before jitter). */

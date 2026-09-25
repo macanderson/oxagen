@@ -4100,7 +4100,7 @@
       "writes": []
     }
   ],
-  "contentHash": "540157713918917a7360451d0cc4b5b39efe38729cb236898afc233e56b2490e",
+  "contentHash": "40e59402a361255c98bb46b4d87d8e1be975ee29b2b75d4f23a11a61d7fbcf84",
   "domains": [
     {
       "name": "agent",
@@ -6089,7 +6089,7 @@
       },
       "name": "EntityNode",
       "store": "neo4j",
-      "tenantScoped": false
+      "tenantScoped": true
     },
     {
       "columns": [
@@ -12407,6 +12407,12 @@
         },
         {
           "name": "code_binding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "history_summary",
           "nullable": true,
           "primaryKey": false,
           "type": "jsonb"

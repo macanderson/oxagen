@@ -36,6 +36,7 @@ import { digestJcs } from "@oxagen/run-evidence";
 import {
   canonicalJson,
   createPostgresRunStore,
+  digestOfCanonicalJson,
   parseRunSpecV2,
   RETENTION_CONTENT_CLASSES,
   TERMINAL_EVENT_TYPE,
@@ -44,6 +45,7 @@ import {
   type PlatformSurface,
   type ResolvedEngineIdentity,
   type RunStore,
+  type ToolEngineCallOutcome,
 } from "@oxagen/run-ledger";
 import {
   deferredEvidenceArchive,
@@ -53,7 +55,8 @@ import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
-import type { WorkspaceInstructionsFrame } from "./workspace-instructions";
+import type { AssistantSteeringFrame } from "./assistant-steering";
+import type { HistorySummaryFrame } from "./history-summary";
 import type {
   TurnLedger,
   TurnLedgerModelCall,
@@ -121,22 +124,37 @@ const logger = pino({
 const GOAL_MAX_CHARS = 8192;
 
 /**
+ * The summary of a thread's older messages, as the spec's context policy and
+ * the `context.history_summarized` frame name it (`history-summary.ts`).
+ */
+export const HISTORY_SUMMARY_PROVIDER = "conversation_history";
+
+/**
  * The context the turn frames, as the spec names it. `engram` is the
  * workspace memory `recallWorkspaceMemoryMessage` reads; `page` is the
- * page-context message the app's turn carries. Both are assembled in this
- * process, which is why they are named here rather than resolved from a
- * provider registry the turn does not consult.
+ * page-context message the app's turn carries; `conversation_history` is the
+ * summary of the messages older than the turn's history window (#4171). All
+ * three are assembled in this process, which is why they are named here
+ * rather than resolved from a provider registry the turn does not consult.
  */
-export const ASSISTANT_CONTEXT_PROVIDERS = ["engram", "page"] as const;
+export const ASSISTANT_CONTEXT_PROVIDERS = [
+  "engram",
+  "page",
+  HISTORY_SUMMARY_PROVIDER,
+] as const;
 
-/** One recalled-memory message and one page-context message, at most. */
+/**
+ * One recalled-memory message, one page-context message and one history
+ * summary, at most.
+ */
 export const ASSISTANT_MAX_CONTEXT_FRAMES = ASSISTANT_CONTEXT_PROVIDERS.length;
 
 /**
- * The ceiling those frames are built under. Both are bounded at assembly —
- * the recall by its own row and query limits, the page context by the
- * contract's page-context schema — so this is the spec's statement of the
- * budget, not a second gate.
+ * The ceiling those frames are built under. Each is bounded at assembly: the
+ * recall by its own row and query limits, the page context by the contract's
+ * page-context schema, and the history summary by its output ceiling
+ * (`HISTORY_SUMMARY_MAX_OUTPUT_TOKENS`). So this is the spec's statement of
+ * the budget, not a second gate.
  */
 export const ASSISTANT_MAX_CONTEXT_TOKENS = 8192;
 
@@ -195,9 +213,6 @@ export type AssistantRunReceipt =
   | ({ kind: "model" } & TurnLedgerModelCall)
   | ({ kind: "tool" } & TurnLedgerToolCall);
 
-/** Where the checked instructions came from, as the frame's payload names it. */
-export const WORKSPACE_INSTRUCTIONS_PROVIDER = "workspace_prompt_config";
-
 /** A recorded assistant run: the ledger hook the turn writes through, plus its ids. */
 export interface AssistantRunRecorder extends TurnLedger {
   readonly runId: string;
@@ -216,11 +231,17 @@ export interface AssistantRunRecorder extends TurnLedger {
    */
   readonly receipts: readonly AssistantRunReceipt[];
   /**
-   * The workspace instructions this turn's prompt carried, or the ones it
-   * refused (#3303). Written before the engine is asked anything, so the
+   * What the steering assembler put in this turn's prompt and what it cut
+   * (ADR-093, #4158). Written before the engine is asked anything, so the
    * record states what the model was told even when the turn then fails.
    */
-  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void>;
+  steeringManifest(frame: AssistantSteeringFrame): Promise<void>;
+  /**
+   * The summary this turn carried in place of the messages older than its
+   * history window, or why it carried an old one or none (#4171). Written
+   * before the engine is asked anything, beside the steering manifest.
+   */
+  historySummary(frame: HistorySummaryFrame): Promise<void>;
 }
 
 /** What admission resolved about who acts and under which retention policy. */
@@ -815,25 +836,60 @@ class Recorder implements AssistantRunRecorder {
   }
 
   /**
-   * The workspace's standing instructions as a context frame: the digest of
-   * the exact text, its length against the budget it was checked under, and
-   * whether the prompt carried it. The text itself is the frame's body, so a
-   * reader of the run can see what the workspace told the agent without the
-   * payload carrying content.
+   * The assembler's manifest as a `steering.manifest` frame, the kind a
+   * wrapped agent's host seals for the same account. The payload is the
+   * manifest's summary and digests: the text the model read, the manifest
+   * itself, and the workspace instructions when they were a candidate. The
+   * manifest, one item per candidate with its outcome and the reason for a
+   * cut, is the frame's body, which the Run page's Context tab reads.
    */
-  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void> {
-    const eventType = "context.instructions_applied";
+  steeringManifest(frame: AssistantSteeringFrame): Promise<void> {
+    const eventType = "steering.manifest";
+    const { manifest } = frame;
     return this.append({
       eventType,
       payload: {
-        provider: WORKSPACE_INSTRUCTIONS_PROVIDER,
+        schema: manifest.schema,
+        delivers: manifest.delivers,
+        budget_tokens: manifest.budget_tokens,
+        spent_tokens: manifest.spent_tokens,
+        included: manifest.included,
+        cut: manifest.cut,
+        text_digest: manifest.text_digest,
+        manifest_digest: digestOfCanonicalJson(manifest),
+        ...(frame.instructionsDigest
+          ? { instructions_digest: frame.instructionsDigest }
+          : {}),
+        ...(frame.unavailableKinds.length > 0
+          ? { unavailable_kinds: [...frame.unavailableKinds] }
+          : {}),
+      },
+      body: jsonBody(eventType, manifest),
+    });
+  }
+
+  /**
+   * The history summary as a context frame: the digest of the exact summary,
+   * how many messages it stands in for, how many the turn carried word for
+   * word, and whether this turn wrote it. The summary itself is the frame's
+   * body. A turn that carried none writes no body.
+   */
+  historySummary(frame: HistorySummaryFrame): Promise<void> {
+    const eventType = "context.history_summarized";
+    return this.append({
+      eventType,
+      payload: {
+        provider: HISTORY_SUMMARY_PROVIDER,
         outcome: frame.outcome,
-        instructions_digest: frame.digest,
-        instructions_chars: frame.chars,
-        budget_chars: frame.budgetChars,
+        ...(frame.digest !== null && frame.chars !== null
+          ? { summary_digest: frame.digest, summary_chars: frame.chars }
+          : {}),
+        covered_message_count: frame.coveredMessages,
+        window_message_count: frame.windowMessages,
+        regenerated: frame.regenerated,
         ...(frame.reasonCode ? { reason_code: frame.reasonCode } : {}),
       },
-      body: jsonBody(eventType, frame.text),
+      body: frame.text === null ? undefined : jsonBody(eventType, frame.text),
     });
   }
 
@@ -924,7 +980,16 @@ class Recorder implements AssistantRunRecorder {
         engine_seq: record.seq,
         tool_call_id: record.requestId,
         tool_name: record.toolName,
-        outcome: record.outcome,
+        // The registry lists the outcomes the ledger accepts. An outcome the
+        // turn adds without it fails to compile here, rather than refusing the
+        // receipt and cancelling the turn at run time.
+        outcome: record.outcome satisfies ToolEngineCallOutcome,
+        // The approval a parked call waits on, so the Run page can say which
+        // one. Only a parked receipt carries it; the registry refuses it on
+        // any other outcome.
+        ...(record.outcome === "parked" && record.approvalPublicId
+          ? { approval_public_id: record.approvalPublicId }
+          : {}),
         input_digest: digestJcs(record.input ?? null),
         ...(record.outcome === "completed"
           ? { output_digest: digestJcs(record.output ?? null) }
