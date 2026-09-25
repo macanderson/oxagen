@@ -149,12 +149,28 @@ command lines are double-quoted for `cmd.exe`, and paths go through
 | Executable | Role |
 |---|---|
 | `tachod` (`src/collector/`) | The collector. Listens on a Unix socket and `127.0.0.1:<port>` with a per-install bearer; normalizes hooks, OTLP, and spool replays into per-session hash chains; appends to an NDJSON WAL; ships batches to `ingest_tacho_events` at least once with backoff and bisection; applies operator commands from the control envelope; watches for hooks removed and transcripts that advance with no hook stream; signs chain-head checkpoints with the device key; continues every chain across a restart from `daemon.json` |
-| `tacho-hook` (`src/claude-code/hook-main.ts`) | The command hook Claude Code runs on `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, and `Stop`. Hands the payload to the daemon over the socket inside a 50 ms connect budget; if the daemon is down it decides from the cached, signature-verified bundle, spools the event, and still answers, so enforcement never depends on the daemon |
+| `tacho-hook` (`src/claude-code/hook-main.ts`) | The command hook Claude Code runs on `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `Stop`, and `SessionEnd`. Hands the payload to the daemon over the socket inside a 50 ms connect budget; if the daemon is down it decides from the cached, signature-verified bundle, spools the event, and still answers, so enforcement never depends on the daemon |
 | `tacho` (`src/cli/`) | `enroll`, `status`, `reassign`, `unenroll`, `export` (tacho NDJSON, `contextgraph-trace` journal, OTLP JSON), `verify`, `daemon`, `hook`, `credential issue` (what Claude Code runs as its `apiKeyHelper`) and `credential status` |
 
-Telemetry-only events (`PostToolUse`, `SubagentStart`, `SessionEnd`, and the
-rest of the 28 http events) post straight to the daemon; a failure there is
-recorded as a chained `telemetry_gap`, never as a blocked action.
+Telemetry-only events (`PostToolUse`, `SubagentStart`, and the rest of the
+25 http events) post straight to the daemon; a failure there is recorded as a
+chained `telemetry_gap`, never as a blocked action. `SessionEnd` is the
+exception: it runs `tacho-hook` like the enforcement events, so a session
+that ends while the daemon is down is spooled and sealed when the daemon
+replays the spool (`SPOOLED_HOOK_EVENTS`).
+
+The daemon also seals a session when its harness process exits, within one
+sweep (30 s). Claude Code exports its pid as `CLAUDE_PID`. For Stella and
+Codex, `tacho-hook` walks up from its parent with `ps` to the harness process
+and passes it as `TACHO_HARNESS_PID`. An operator's `cancel` sends that pid
+`SIGTERM`. The Codex walk runs at `SessionStart` and at each prompt, stops
+after 500 ms, and takes only a process named `codex` or `codex-<target>`.
+A Codex hook carries no pid on Windows, or under a Codex process that serves
+many threads: `app-server`, which the Codex GUI drives, `exec-server`, and
+the MCP server modes. A Cursor hook carries none
+either, because the process that runs Cursor's hooks serves many
+conversations and outlives each of them. Those sessions end on the harness's
+own `SessionEnd`, or after six idle hours.
 
 ## The gateway: the loopback model proxy
 
@@ -435,7 +451,8 @@ denies non-read-only tools regardless. An unverified bundle denies them in
 either mode, because the mode it claims is not signed. A bundle signed for
 another host counts as unverified. Five events run as
 command hooks (`COMMAND_HOOK_EVENTS`), and four of them can refuse. `Stop` is
-the fifth.
+the fifth. `SessionEnd` also runs `tacho-hook`, so it spools, and it refuses
+nothing.
 
 The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
 `contained`, computed from what was actually routed.
