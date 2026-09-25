@@ -15,14 +15,17 @@
 //   5. agent run unresolved — an agent run without its resolution fails closed;
 //   6. delegation ceiling — the resolver's agent ∩ human outcome (deny wins,
 //      `pending_approval` stays visible and routes to approval at call time);
-//   7. kill switch — an active emergency deny naming the capability;
+//   7. kill switch — an active emergency deny naming the capability. It
+//      reaches an agent run through the run's principals, the in-app
+//      assistant's turn through the agent it runs as, and any person's turn
+//      through a deny that names no principal, as the per-call gate does;
 //   8. entitlement — a plugin-claimed contract needs the plugin installed;
 //   9. the contract's own `agent.requiresApproval`.
 //
 // MCP tools are decided by the run's effective `resourceScope.mcp` rules and
 // the agent-subject consent ledger (`decideMcpToolForBelt`).
 import type { ActiveEmergencyDeny } from "@oxagen/iam";
-import { matchEmergencyDeny } from "@oxagen/iam";
+import { matchEmergencyDeny, resourceScopeDigestOf } from "@oxagen/iam";
 import {
   resolveAgentRunCapability,
   type AgentRunIAMContext,
@@ -35,6 +38,7 @@ import {
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { capabilityMutates } from "@oxagen/oxagen/types";
 import type { RegistryCapability } from "../registry-loader";
+import type { ActingAgent } from "./kill-switch-gate";
 
 type BeltOutcome = "allow" | "require_approval" | "deny";
 
@@ -61,6 +65,12 @@ export interface CapabilityBeltEnv {
   clientIp: string | null;
   /** Active emergency denies in scope; empty when none were read. */
   emergencyDenies: readonly ActiveEmergencyDeny[];
+  /**
+   * The agent a person's turn runs as (the in-app assistant), when there is
+   * one. A deny naming its principal, or an `agent` switch on it, cuts the
+   * tool. Ignored when `agentRun` is set.
+   */
+  actingAgent?: ActingAgent | null;
   /**
    * Plugin ids the org is entitled to, or `"unavailable"` when the read
    * failed (every plugin-claimed contract is then denied, fail closed).
@@ -181,20 +191,41 @@ export function decideCapabilityForBelt(
     rule = ceilingRule(perms);
     if (perms.outcome === "deny") return deny(rule);
     if (perms.outcome === "pending_approval") outcome = "require_approval";
-    const run = env.agentRun;
-    const killed =
-      env.emergencyDenies.length === 0
-        ? null
-        : matchEmergencyDeny(env.emergencyDenies, {
-            capability: cap.name,
-            principalIds: [
-              run.agentPrincipal.id,
-              ...(run.humanPrincipal ? [run.humanPrincipal.id] : []),
-            ],
-            resourceScopeDigest: null,
-          });
-    if (killed !== null) return deny("kill_switch");
   }
+
+  // The kill switch reaches every caller, not only an agent run. The in-app
+  // assistant lists its tools as the person who asked (ADR-053 §1) and never
+  // carries an agent run. While this check sat inside the agent-run branch, a
+  // switched tool stayed on the assistant's belt and the per-call gate
+  // refused every call to it (R4, #3370 finding 9). With no run, a person's
+  // own turn has no principal ids, so only a deny that names no principal
+  // matches. The assistant's turn also answers to the agent it runs as: a
+  // deny naming that agent's principal, or an `agent` switch on it.
+  // `createKillSwitchGate` matches each call on the same agent and principal,
+  // but it reads kill switches only. A plain deny naming the principal, which
+  // `set_kill_switch` never writes, is cut here and not refused per call.
+  const run = env.agentRun;
+  const acting = run === null ? (env.actingAgent ?? null) : null;
+  const killed =
+    env.emergencyDenies.length === 0
+      ? null
+      : matchEmergencyDeny(env.emergencyDenies, {
+          capability: cap.name,
+          principalIds:
+            run !== null
+              ? [
+                  run.agentPrincipal.id,
+                  ...(run.humanPrincipal ? [run.humanPrincipal.id] : []),
+                ]
+              : acting?.principalId
+                ? [acting.principalId]
+                : [],
+          resourceScopeDigest: null,
+          scopeDigests: acting
+            ? [resourceScopeDigestOf({ kind: "agent", id: acting.agentId })]
+            : [],
+        });
+  if (killed !== null) return deny("kill_switch");
 
   const plugin = pluginForContract(cap.name);
   if (plugin) {

@@ -4,7 +4,8 @@
  *
  * Ensures EVERY workspace has the built-in `qa-chat` interactive agent: a
  * published v1 with a schema-conforming config (graph access, instructions, and
- * agentTools referencing the builtin skills), status 'active', deploymentStatus
+ * agentTools naming INTERACTIVE_AGENT_CAPABILITIES in
+ * packages/oxagen/src/interactive-agent.ts), status 'active', deploymentStatus
  * 'active'. This is the single agent backing both the MCP server and the in-app
  * Q&A surface — it makes the chat.stream lookup (slug "qa-chat") resolve to a
  * definition with an activeVersionId so executions are recorded (SOC 2 trail).

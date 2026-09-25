@@ -37,7 +37,7 @@ time. Four jobs:
 
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
-| `digestJcs` | export | `packages/run-evidence/src/digest.ts` | `packages/iam/src/authorization-snapshot.ts`, `packages/iam/src/check-iam.ts`, `packages/agent/src/runtime/assistant-run.ts`, `packages/agent/src/runtime/workspace-instructions.ts` |
+| `digestJcs` | export | `packages/run-evidence/src/digest.ts` | `packages/iam/src/authorization-snapshot.ts`, `packages/iam/src/check-iam.ts`, `packages/agent/src/runtime/assistant-run.ts`, `packages/agent/src/runtime/assistant-steering.ts` |
 | `recordHash` | export | `packages/run-evidence/src/record-hash.ts` | `packages/handlers/src/context.records.append.ts`, `packages/handlers/src/context.steering.file.ts` |
 | `PROOF_VERDICTS` / `DISCLOSURE_GRAINS` / `proofObservedBodySchema` | export | `packages/run-evidence/src/proof.ts` | Contracts in `packages/oxagen/src/contracts/` (`run.list.ts`, `run.proof.get.ts`, `tacho.events.ingest.ts`, `evidence.disclosure_grain.set.ts`), `packages/database/src/schema/cost.ts`, and `packages/database/src/schema/run-evidence-foundation.ts` |
 | `aggregateRunVerdict` | export | `packages/run-evidence/src/proof.ts` | `packages/database/src/proof.ts`, `packages/handlers/src/run.proof.get.ts` |

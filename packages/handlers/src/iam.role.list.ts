@@ -23,6 +23,12 @@ import { logger } from "./logger";
  * withSystemDb, so tenant isolation is enforced HERE explicitly: every query
  * filters by ctx.orgId. Never relax this — role/grant data is the org's
  * permission model.
+ *
+ * Role gate (INV-29): org Owner, Admin or Compliance, the roles the contract
+ * declares. The kernel's IAM check allows every capability for a
+ * non-enterprise organization, so without this a Member could read the role
+ * catalogue, its scopes and the enforcement tier through the API and MCP. An
+ * API key acts as its creator (resolveActingUserId).
  */
 export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
   input,

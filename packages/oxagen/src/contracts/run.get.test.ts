@@ -18,6 +18,15 @@ describe("get_run contract", () => {
     expect(runGet.layers).not.toContain("e2e");
   });
 
+  it("is a low-risk read the in-app agent may call without approval", () => {
+    expect(runGet.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(runGet.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "run",
+    });
+  });
+
   it("defaults the frame page and the wait, and bounds both", () => {
     expect(runGet.input.parse({ runId: LEDGER_ID })).toEqual({
       runId: LEDGER_ID,

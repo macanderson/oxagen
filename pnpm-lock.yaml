@@ -1058,6 +1058,9 @@ importers:
       '@oxagen/run-ledger':
         specifier: workspace:*
         version: link:../run-ledger
+      '@oxagen/steering-assembler':
+        specifier: workspace:*
+        version: link:../steering-assembler
       '@oxagen/stella-engine-client':
         specifier: workspace:*
         version: link:../stella-engine-client

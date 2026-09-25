@@ -2,18 +2,14 @@
  * Slash-command registry — the single source of truth for the in-app
  * assistant's slash commands.
  *
- * Consumed in TWO places that must never drift:
- *  1. The composer autocomplete menu (apps/app — `slash-command-menu.tsx`),
- *     which lets the user discover and insert a command.
- *  2. The chat system prompt (`@oxagen/agent`'s `buildChatSystemPrompt`, via
- *     `slashCommandsPromptSection`), which documents each command so the AGENT
- *     knows what tool to call when it receives `/ci main`.
+ * Its one reader is the composer autocomplete menu in apps/app_deprecated
+ * (`slash-command-menu.tsx`). The apps/app flyout has no slash menu, so
+ * stella's system prompt no longer carries a slash-command table, and
+ * `agentGuidance` is read by nothing outside that menu's tests.
  *
- * Slash commands are NOT a client-side router: the composer sends the literal
- * text (e.g. "/ci main") and the agent — told about these commands in its
- * system prompt — maps it to the right capability. Every command is
- * agent-interpreted; ADR-043 removed the one client-handled command (`/pin`,
- * which named a repository sandbox that no longer exists).
+ * Slash commands are not a client-side router. The composer sends the literal
+ * text (for example "/ci main"). ADR-043 removed the one client-handled
+ * command (`/pin`, which named a repository sandbox that no longer exists).
  */
 
 export interface SlashCommand {
@@ -21,13 +17,9 @@ export interface SlashCommand {
   readonly name: string;
   /** Human-readable argument hint shown in the menu, e.g. "<pr-number>". */
   readonly args?: string;
-  /** One-line description shown in the menu and the system-prompt table. */
+  /** One-line description shown in the menu. */
   readonly summary: string;
-  /**
-   * The capability the agent should call and a short instruction. Documented
-   * verbatim in the system prompt so the agent resolves the command
-   * deterministically.
-   */
+  /** The capability the command maps to, and a short instruction. */
   readonly agentGuidance: string;
 }
 
@@ -57,7 +49,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     name: "repos",
     summary: "List the GitHub repositories connected to this workspace.",
     agentGuidance:
-      "List the workspace's connected GitHub repositories (list_connections filtered to the GitHub connector) so the user can pick one to pin.",
+      "List the workspace's connected GitHub repositories (list_connections filtered to the GitHub connector) so the person can name one.",
   },
 ] as const;
 
@@ -66,22 +58,4 @@ export function matchSlashCommands(query: string): readonly SlashCommand[] {
   const q = query.trim().toLowerCase();
   if (q.length === 0) return SLASH_COMMANDS;
   return SLASH_COMMANDS.filter((c) => c.name.startsWith(q));
-}
-
-/**
- * The "## Slash commands" section injected into the chat system prompt so the
- * agent can act on a slash command the user typed. Built from the same registry
- * the composer menu uses, so the two can never disagree.
- */
-export function slashCommandsPromptSection(): string {
-  const rows = SLASH_COMMANDS.map(
-    (c) => `- \`/${c.name}${c.args ? ` ${c.args}` : ""}\` — ${c.agentGuidance}`,
-  ).join("\n");
-  return `## Slash commands
-
-The user can type a slash command in the composer. When a message begins with one of these, treat it as that command and act immediately — do not ask the user to rephrase in natural language:
-
-${rows}
-
-These commands are READ-ONLY views of a connected repository. Oxagen does not edit repositories, so never offer to change one. If you cannot tell which repository the user means, ask — never guess.`;
 }

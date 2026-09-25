@@ -12,6 +12,7 @@ export const connectionCreate = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "write" },
   sensitivity: "high",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

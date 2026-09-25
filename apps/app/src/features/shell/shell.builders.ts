@@ -15,6 +15,7 @@ const SHELL_VIEWER = {
   emailVerified: true,
   twoFactorEnabled: true,
   timeZone: "America/Los_Angeles",
+  enterToSubmit: false,
 } as const;
 
 const SHELL_ORG = {

@@ -37,6 +37,12 @@ An org Owner or Admin, or a workspace Owner or Admin. The handler checks the con
 Postgres workspace_prompt_settings updated. Changes take effect immediately on
 next AI invocation.
 
+The in-app assistant carries `additionalInstructions` as one SHOULD item in
+its steering, beside the workspace's published context records. The steering
+assembler ranks every published MUST record above the instructions and fits
+both to 4,096 budget tokens. Text that does not fit is cut, and the turn's
+`steering.manifest` frame names the cut (ADR-093 §7).
+
 ## Errors
 
 None explicitly defined in the contract.

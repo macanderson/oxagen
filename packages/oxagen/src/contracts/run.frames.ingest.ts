@@ -47,7 +47,22 @@ export const runFramesIngest = registerCapability({
                 .strict()
                 .optional(),
             })
-            .strict(),
+            .strict()
+            // The ledger stores an event's payload inline or as an encrypted
+            // blob reference, never both and never neither. Checking it here
+            // answers a malformed frame with a 400 instead of letting the
+            // store refuse it later as a server fault.
+            .superRefine((event, ctx) => {
+              const hasInline = event.payload !== undefined;
+              const hasEncrypted = event.encryptedPayloadRef !== undefined;
+              if (hasInline === hasEncrypted)
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  path: hasInline ? ["encryptedPayloadRef"] : ["payload"],
+                  message:
+                    "An event carries exactly one of payload or encryptedPayloadRef",
+                });
+            }),
         )
         .min(1)
         .max(200),
@@ -58,12 +73,13 @@ export const runFramesIngest = registerCapability({
       expiresAt: z.string().datetime(),
       lastAttemptSeq: z.number().int(),
       lastRunSeq: z.string(),
+      // A receipt names the event by its sequence and digest. The ledger row
+      // id is an internal key and is not part of the public response.
       events: z.array(
         z
           .object({
             attemptSeq: z.number().int(),
             runSeq: z.string(),
-            eventId: z.string(),
             eventDigest: z.string(),
             idempotent: z.boolean(),
           })
