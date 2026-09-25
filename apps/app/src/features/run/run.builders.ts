@@ -16,7 +16,6 @@ import type {
   TranscriptCounts,
   TranscriptEntry,
   TranscriptFigures,
-  TranscriptKind,
   TranscriptZoom,
 } from "@/data/contracts/run";
 import type {
@@ -28,6 +27,7 @@ import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { PriceBook } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
+import { frameFolds, tachoFrame } from "@oxagen/run-ledger";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import { type Read, readOk } from "@/data/read";
 
@@ -358,7 +358,14 @@ export function mockupTranscript(
       turn: 1,
       text: "Both failures predate the release scope.",
     },
-    { seq: 9, type: "turn_start", kind: "frame", label: "turn_start", turn: 2 },
+    {
+      seq: 9,
+      type: "turn_start",
+      kind: "frame",
+      label: "turn_start",
+      turn: 2,
+      text: "Tag the release candidate.",
+    },
     {
       seq: 10,
       type: "llm_call",
@@ -384,35 +391,51 @@ export function mockupTranscript(
       decision: "deny",
     },
   ];
-  /**
-   * The chips a frame answers to, as `frameKinds` in `@oxagen/run-ledger`
-   * assigns them: `prompt` is the operator's words, and a decision adds
-   * `policy` to the entry it rides.
-   */
-  const kindsOf = (spec: Spec, request: boolean): TranscriptKind[] => {
-    const kinds: TranscriptKind[] = [];
-    if (spec.type === "turn_start") kinds.push("prompt");
-    // A model response answers `responses` only when its body was kept.
-    if (
-      spec.kind === "model_call" &&
-      !request &&
-      (spec.fidelity ?? "full") !== "digest_only"
-    )
-      kinds.push("responses");
-    if (spec.kind === "tool_call") kinds.push("tools");
-    if (spec.type === "policy_decision" || spec.decision !== undefined)
-      kinds.push("policy");
-    if (spec.type === "context.assembled") kinds.push("recall");
-    if (spec.costMicros !== undefined) kinds.push("usage");
-    return kinds;
-  };
+  // What the server's fold states about each frame read as its own entry
+  // (`frameFolds`, the `everything` zoom): its chips, its node, whether it
+  // draws nothing, its outcome and the tool it is about. The frames are the
+  // specs recorded as a wrapped session's rows, so no fact here is stated by
+  // a second copy of the server's rules.
+  const folds = frameFolds(
+    specs.map((spec) =>
+      tachoFrame({
+        seq: spec.seq,
+        ts: at(-3600 + spec.seq * 2),
+        kind: spec.type,
+        hash: "",
+        contentDigest:
+          spec.text === undefined && spec.fidelity !== "digest_only"
+            ? ""
+            : `sha256:${"a".repeat(64)}`,
+        bytesRef:
+          spec.text === undefined || spec.fidelity === "digest_only"
+            ? ""
+            : "evb:v1:k:abc",
+        redactions: "",
+        toolName:
+          spec.kind === "tool_call" ? (spec.label.split(" ")[0] ?? "") : "",
+        toolStatus:
+          spec.kind === "tool_call" ? (spec.label.split(" ")[1] ?? "") : "",
+        toolUseId: "",
+        model: "",
+        provider: "",
+        policyDecision: spec.decision ?? "",
+        costUsdMicros:
+          spec.costMicros === undefined ? null : Number(spec.costMicros),
+        turnSeq: spec.turn,
+      }),
+    ),
+  );
   // The run's own prefix sum, exactly as `get_run_transcript` computes it:
   // an entry's cumulative cost is what the run had spent by then.
   let running: bigint | null = null;
-  const entries = specs.map((spec) => {
+  const entries = specs.map((spec, index) => {
     if (spec.costMicros !== undefined) {
       running = (running ?? 0n) + BigInt(spec.costMicros);
     }
+    const fold = folds[index];
+    if (fold === undefined)
+      throw new Error(`no fold for seq ${String(spec.seq)}`);
     const fidelity = spec.fidelity ?? "full";
     const body = transcriptBody({
       seq: String(spec.seq),
@@ -422,54 +445,22 @@ export function mockupTranscript(
       bytesRef: fidelity === "digest_only" ? null : "evb:v1:k:abc",
     });
     const request = REQUEST_TYPES.has(spec.type);
-    const kinds = kindsOf(spec, request);
-    // What the server's fold states about each frame read as its own entry.
-    // A call's request frame says nothing about how the call ended, so the
-    // server states no outcome for it at `everything` (`frameFolds`), and a
-    // model frame that draws no row, no kept reply and no figures, is quiet.
-    const tool = spec.kind === "tool_call";
-    const [head] = spec.label.split(" ");
-    const facts: Partial<TranscriptEntry> =
-      spec.kind === "model_call"
-        ? {
-            node: "model",
-            quiet: !kinds.includes("responses") && !kinds.includes("usage"),
-            outcome: request ? null : "ok",
-            model: spec.label,
-          }
-        : tool
-          ? {
-              node: "tool",
-              subject: head ?? spec.label,
-              family: "tool",
-              outcome: request ? null : "ok",
-              model: null,
-            }
-          : {
-              node:
-                spec.type === "turn_start"
-                  ? "prompt"
-                  : spec.type === "turn_end"
-                    ? "reply"
-                    : spec.type === "context.assembled"
-                      ? "recall"
-                      : spec.type === "policy_decision"
-                        ? "policy"
-                        : "control",
-              quiet: spec.type === "agent_start",
-              outcome: spec.decision === "deny" ? "denied" : null,
-              // The mockup's gates (`policy allow`) name no call.
-              subject: null,
-              model: null,
-            };
+    const facts: Partial<TranscriptEntry> = {
+      kind: fold.kind,
+      kinds: [...fold.kinds],
+      node: fold.node,
+      quiet: fold.quiet,
+      outcome: fold.outcome,
+      subject: fold.subject,
+      family: fold.family,
+      model: spec.kind === "model_call" ? spec.label : null,
+    };
     return transcriptEntry({
       ...facts,
-      kinds,
       seq: String(spec.seq),
       endSeq: String(spec.seq),
       at: at(-3600 + spec.seq * 2),
       elapsedMs: spec.seq * 2000,
-      kind: spec.kind,
       type: spec.type,
       label: spec.label,
       turn: spec.turn,
