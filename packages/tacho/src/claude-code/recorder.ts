@@ -210,8 +210,13 @@ export interface ChainMark {
   cursor: ChainCursor;
   /** Events sealed on this chain when the mark was taken. */
   events: number;
-  /** Bodies waiting for the caller that takes the events with them. */
-  pendingBodies: number;
+  /**
+   * The bodies waiting for the caller that takes the events with them, as
+   * the mark found them. A list and not a count: a caller that fails after
+   * `takeBodies` has already drained these, and a count can trim the list
+   * but cannot put a drained body back.
+   */
+  pendingBodies: readonly FrameBody[];
   pendingChildGenesis: number;
   turnSeq: number;
   turnOpen: boolean;
@@ -653,7 +658,7 @@ export class SessionRecorder {
     return {
       cursor: { ...this.cursor },
       events: this.events.length,
-      pendingBodies: this.pendingBodies.length,
+      pendingBodies: [...this.pendingBodies],
       pendingChildGenesis: this.pendingChildGenesis.length,
       turnSeq: this.turnSeq,
       turnOpen: this.turnOpen,
@@ -709,7 +714,10 @@ export class SessionRecorder {
     }
     this.cursor = { ...mark.cursor };
     this.events.splice(mark.events);
-    this.pendingBodies.splice(mark.pendingBodies);
+    // Restore the list rather than trim it. The daemon drains bodies into
+    // the write that fails, so the ones sealed before the mark may no longer
+    // be here, and they still belong to events nothing has written.
+    this.pendingBodies = [...mark.pendingBodies];
     this.pendingChildGenesis.splice(mark.pendingChildGenesis);
     this.turnSeq = mark.turnSeq;
     this.turnOpen = mark.turnOpen;
