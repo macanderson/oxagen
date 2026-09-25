@@ -60,6 +60,7 @@ import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { PullRequestFilter, RunPage } from "./contracts/runs";
 import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
 import type {
+  AssistantEngine,
   OrgChoice,
   NavCounts,
   NotificationFeed,
@@ -143,6 +144,14 @@ export interface DataSource {
      * features/shell/source.ts.
      */
     notifications(ctx: WsCtx): Promise<Read<NotificationFeed>>;
+    /**
+     * get_assistant_engine, whether stella's engine can take a turn. Read on
+     * demand, never when a layout renders: the flyout reads it when it opens,
+     * when the window takes focus, and from its Check again control, and the
+     * probe of a down engine can take up to seven seconds; caller:
+     * features/shell/engine-actions.ts (ADR-167).
+     */
+    assistantEngine(ctx: WsCtx): Promise<Read<AssistantEngine>>;
   };
   /**
    * The Billing page's six noBillingGate reads, each Owner, Admin or Billing

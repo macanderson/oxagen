@@ -71,3 +71,22 @@ export const NotificationFeed = z.object({
   unread: Count,
 });
 export type NotificationFeed = z.infer<typeof NotificationFeed>;
+
+/**
+ * Whether stella's engine can take a turn (`get_assistant_engine`), as the
+ * assistant flyout reads it before the first question (#3227). Only `ready`
+ * takes one. `error` is the last failed probe's code, such as `ECONNREFUSED`,
+ * and null when the engine answered. The host and port the probe was aimed at
+ * stay on the server: the flyout says the engine is down, not where it runs.
+ */
+export const AssistantEngine = z.object({
+  state: z.enum([
+    "ready",
+    "starting",
+    "draining",
+    "unreachable",
+    "unconfigured",
+  ]),
+  error: z.string().nullable(),
+});
+export type AssistantEngine = z.infer<typeof AssistantEngine>;

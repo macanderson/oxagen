@@ -1,7 +1,9 @@
 // The shell port on the kernel (ARCHITECTURE.md §3.3): the organizations the
 // viewer belongs to (list_orgs), the current organization's workspaces
-// (list_workspaces), and the person's own clock (get_user_preferences).
+// (list_workspaces), the person's own clock (get_user_preferences), and
+// whether stella's engine can take a turn (get_assistant_engine).
 import "server-only";
+import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.get";
 import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
 import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
@@ -13,6 +15,7 @@ import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { captureError } from "@oxagen/telemetry";
 import { cache } from "react";
 import {
+  AssistantEngine,
   NavCounts,
   NotificationFeed,
   ShellContext,
@@ -22,7 +25,7 @@ import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import { toOrgChoices, toWorkspaceChoices } from "./mappers/pretenant";
-import { toNotificationFeed } from "./mappers/shell";
+import { toAssistantEngine, toNotificationFeed } from "./mappers/shell";
 
 /** The newest rows the bell lists; the unread count covers the whole feed. */
 const FEED_LIMIT = 50;
@@ -126,6 +129,25 @@ export const shell: DataSource["shell"] = {
         source: "app",
         orgId: ctx.orgId,
         context: "shell.notifications record_unmappable",
+      });
+      return readError("record_unmappable", 502);
+    }
+    return readOk(view.data);
+  },
+  async assistantEngine(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: assistantEngineGet,
+      input: {},
+      page: "shell",
+    });
+    if (!read.ok) return read;
+    const view = AssistantEngine.safeParse(toAssistantEngine(read.value));
+    if (!view.success) {
+      captureError({
+        error: view.error,
+        source: "app",
+        orgId: ctx.orgId,
+        context: "shell.assistantEngine record_unmappable",
       });
       return readError("record_unmappable", 502);
     }

@@ -60,9 +60,18 @@ const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
  * The module resolves its own viewer first (INV-19, actions.test.ts) and
  * answers in `ActionResult`. The list is exact: a second module needs its own
  * reason here and in ADR-167.
+ *
+ * `engine-actions` reads `shell.assistantEngine` when the assistant flyout
+ * opens, on window focus, and from its Check again control (#3227). No render
+ * can make that read: a down engine's probe takes up to seven seconds, and a
+ * layout that waited on it would hold every workspace page. The port is where
+ * the answer is checked against its view model and where the engine's host
+ * and port are dropped, so the flyout's action reads the port rather than
+ * mapping a kernel read in a feature lane.
  */
 const PORT_READING_ACTIONS: readonly string[] = [
   "features/shell/choice-actions",
+  "features/shell/engine-actions",
 ];
 
 const isVocabulary = (target: string): boolean =>

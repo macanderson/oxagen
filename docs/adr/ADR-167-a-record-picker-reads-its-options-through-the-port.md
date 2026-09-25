@@ -4,7 +4,7 @@
 - **Date:** 2026-09-24
 - **Owners:** app
 - **Related:** ADR-089 (an on-demand read lives in a `"use server"` module),
-  ADR-110 (a merge can drop a branch's change), #4040, #4045, #3983,
+  ADR-110 (a merge can drop a branch's change), #4040, #4045, #3983, #3227,
   `apps/app/ARCHITECTURE.md` §2 (the layer matrix) and "Shell activity
   boundaries", `apps/app/src/test/arch/layers.ts` (`PORT_READING_ACTIONS`),
   `apps/app/src/test/arch/probes/import-graph/data-source-use-server.ts`
@@ -85,3 +85,33 @@ Workspace settings dialog.
   activity boundaries" says where a picker's reads live.
 - The rule is a list with one entry. A reviewer who sees a second entry
   without a matching change here has found a defect.
+
+## Amendment 2026-09-25: the assistant flyout's engine read
+
+`features/shell/engine-actions.ts` joins the list, with the same terms:
+`"use server"`, `requireViewer` before the read, and an `ActionResult`
+answer.
+
+The assistant flyout reads `get_assistant_engine` before the first question
+(#3227). It reads when the panel opens, when the window takes focus again,
+and when a person presses Check again. No render can make that read. The
+probe tries the engine three times with a two-second timeout each, so a
+layout that read it would hold every workspace page for up to seven seconds
+while the engine is down.
+
+The read goes through the `shell.assistantEngine` port rather than
+`kernelRead`, for two reasons:
+
+- The maintainer's work list of 2026-09-25 (item R10) and the definition of
+  done on #3227 both put the read in a data port with a live adapter. The
+  port holds it to INV-06 (a live read on a registered contract) and INV-17
+  (a production caller).
+- The port's view model is where the probe's `endpoint`, an internal host
+  and port, is dropped, and where the answer is checked at the data
+  boundary. A feature lane that mapped the kernel's answer itself would carry
+  that decision where no port test sees it.
+
+The probes follow: `data-source-use-server.ts` passes at `engine-actions.ts`,
+and `imports-data-source.ts` fails there without the directive. The list now
+has two entries, and a third still needs its own reason here and in
+`layers.ts`.

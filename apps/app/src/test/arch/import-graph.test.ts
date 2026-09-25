@@ -297,11 +297,14 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/app/[org]/page.tsx", expect: null },
     // The named module without the directive is not an action (ADR-167).
     { at: "src/features/shell/choice-actions.ts", expect: "layer" },
+    { at: "src/features/shell/engine-actions.ts", expect: "layer" },
   ],
-  // ADR-167: the record picker's actions read the port by name. Any other
-  // "use server" feature module reads on demand through the kernel seam.
+  // ADR-167: the record picker's actions and the flyout's engine read reach
+  // the port by name. Any other "use server" feature module reads on demand
+  // through the kernel seam.
   "data-source-use-server.ts": [
     { at: "src/features/shell/choice-actions.ts", expect: null },
+    { at: "src/features/shell/engine-actions.ts", expect: null },
     { at: "src/features/shell/account-actions.ts", expect: "layer" },
     { at: "src/features/tools/actions.ts", expect: "layer" },
   ],

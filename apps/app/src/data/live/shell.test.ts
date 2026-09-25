@@ -1,6 +1,7 @@
 // The shell port: two kernel reads for the layout's organization context,
 // mapped into the shell's view model, with either read's refusal passed
 // through and an unmappable record reported once.
+import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.get";
 import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
 import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
@@ -314,5 +315,53 @@ describe("shell.notifications", () => {
     };
     kernelRead.mockResolvedValue(denied);
     expect(await shell.notifications(wsCtx)).toEqual(denied);
+  });
+});
+
+describe("shell.assistantEngine", () => {
+  const probe = {
+    state: "unreachable",
+    endpoint: "engine.oxagen.internal:8080",
+    attempts: 3,
+    error: "ECONNREFUSED",
+    checkedAt: "2026-09-25T09:14:00.000Z",
+    incident: null,
+  };
+
+  it("reads get_assistant_engine and answers the state and code, never the host it probed", async () => {
+    kernelRead.mockResolvedValue(readOk(probe));
+    const read = await shell.assistantEngine(wsCtx);
+    expect(read).toEqual(
+      readOk({ state: "unreachable", error: "ECONNREFUSED" }),
+    );
+    expect(JSON.stringify(read)).not.toContain("engine.oxagen.internal");
+    expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
+      contract: assistantEngineGet,
+      input: {},
+      page: "shell",
+    });
+  });
+
+  it("keeps a ready engine's null code null", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ ...probe, state: "ready", attempts: 1, error: null }),
+    );
+    expect(await shell.assistantEngine(wsCtx)).toEqual(
+      readOk({ state: "ready", error: null }),
+    );
+  });
+
+  it("answers record_unmappable and reports once for a state the view does not know (negative)", async () => {
+    kernelRead.mockResolvedValue(readOk({ ...probe, state: "sleeping" }));
+    expect(await shell.assistantEngine(wsCtx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+
+  it("passes a refusal through (negative)", async () => {
+    const down = readError("control_plane_unavailable", 503);
+    kernelRead.mockResolvedValue(down);
+    expect(await shell.assistantEngine(wsCtx)).toEqual(down);
   });
 });
