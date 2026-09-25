@@ -40,6 +40,7 @@ import {
   type PlatformSurface,
   type ResolvedEngineIdentity,
   type RunStore,
+  type ToolEngineCallOutcome,
 } from "@oxagen/run-ledger";
 import {
   deferredEvidenceArchive,
@@ -868,7 +869,16 @@ class Recorder implements AssistantRunRecorder {
         engine_seq: record.seq,
         tool_call_id: record.requestId,
         tool_name: record.toolName,
-        outcome: record.outcome,
+        // The registry lists the outcomes the ledger accepts. An outcome the
+        // turn adds without it fails to compile here, rather than refusing the
+        // receipt and cancelling the turn at run time.
+        outcome: record.outcome satisfies ToolEngineCallOutcome,
+        // The approval a parked call waits on, so the Run page can say which
+        // one. Only a parked receipt carries it; the registry refuses it on
+        // any other outcome.
+        ...(record.outcome === "parked" && record.approvalPublicId
+          ? { approval_public_id: record.approvalPublicId }
+          : {}),
         input_digest: digestJcs(record.input ?? null),
         ...(record.outcome === "completed"
           ? { output_digest: digestJcs(record.output ?? null) }

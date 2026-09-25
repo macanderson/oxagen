@@ -126,6 +126,8 @@ type AnyCapability = RegistryCapability;
 
 export interface ApprovalRequiredEvent {
   approvalId: string;
+  /** The approval's public id (`apr_…`), when the writer returned one. */
+  approvalPublicId?: string;
   capability: string;
   inputPreview: unknown;
   riskLevel: "low" | "medium" | "high";
@@ -753,7 +755,12 @@ export async function materializeTools(
                 expiresAt,
               });
               if (opts.approvalMode === "park") {
-                throw new ApprovalPendingError(cap.name, approvalId, expiresAt);
+                throw new ApprovalPendingError(
+                  cap.name,
+                  approvalId,
+                  expiresAt,
+                  approval.approvalPublicId,
+                );
               }
               const resolution = await waitForApproval(approvalId);
               if (resolution.resolution !== "approved") {
@@ -1177,6 +1184,7 @@ export async function materializeTools(
                           event.capability,
                           event.approvalId,
                           event.expiresAt,
+                          event.approvalPublicId,
                         );
                     }
                   : undefined,

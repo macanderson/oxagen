@@ -754,8 +754,15 @@ function stepsFromReceipts(
       requestPayload: receipt.input,
       ...(receipt.outcome === "completed"
         ? { responsePayload: receipt.output }
-        : { responsePayload: { error: receipt.error ?? receipt.outcome } }),
-      status: receipt.outcome === "completed" ? "completed" : "failed",
+        : receipt.outcome === "parked"
+          ? {
+              responsePayload: {
+                error: receipt.error ?? receipt.outcome,
+                approvalPublicId: receipt.approvalPublicId ?? null,
+              },
+            }
+          : { responsePayload: { error: receipt.error ?? receipt.outcome } }),
+      status: executionStatusOf(receipt.outcome),
       latencyMs: Math.max(0, Math.round(receipt.durationMs)),
     });
   }
@@ -765,6 +772,23 @@ function stepsFromReceipts(
 type ChatMessageExecutionStep = NonNullable<
   ChatMessageExecutionInput["steps"]
 >[number];
+
+type ExecutionToolCallStatus = NonNullable<
+  ChatMessageExecutionStep["toolCalls"]
+>[number]["status"];
+
+/**
+ * A tool receipt's outcome as an `agent_tool_calls` status. A parked call did
+ * not run and waits on a person, so it is `pending`, never `failed`: the
+ * execution trace would otherwise count every parked write as a failure.
+ */
+function executionStatusOf(
+  outcome: Extract<AssistantRunReceipt, { kind: "tool" }>["outcome"],
+): ExecutionToolCallStatus {
+  if (outcome === "completed") return "completed";
+  if (outcome === "parked") return "pending";
+  return "failed";
+}
 
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
 type Scope = { orgId: string; workspaceId: string };

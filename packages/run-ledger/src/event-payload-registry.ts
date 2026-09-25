@@ -389,24 +389,64 @@ const modelEngineCallStartedSchema = z
   .strict();
 
 /**
+ * An approval's public id (`apr_…`), as `idMixin("apr")` mints it: lowercase
+ * Crockford base32. This is the id Fleet and the Run page show an approval
+ * by, so a receipt that names one can be joined to the card a person decides.
+ */
+const approvalPublicIdSchema = z
+  .string()
+  .regex(/^apr_[0-9a-z]{1,64}$/, "expected an approval public id (apr_…)");
+
+/**
+ * How the host answered one engine tool call. `denied` is a gate or a person
+ * refusing it. `parked` is a call that did not run because it waits on a
+ * person's approval: the engine is told `refused_by_policy`, since its error
+ * vocabulary has no wait, but the record says what happened.
+ *
+ * Adding `parked` leaves every sealed receipt valid: a sealed payload never
+ * named it, and its digest is over the bytes it was written with.
+ */
+export const TOOL_ENGINE_CALL_OUTCOMES = [
+  "completed",
+  "failed",
+  "denied",
+  "cancelled",
+  "parked",
+] as const;
+export type ToolEngineCallOutcome = (typeof TOOL_ENGINE_CALL_OUTCOMES)[number];
+
+/**
  * A tool call the host answered for the in-app agent's engine (`tool_request`
  * frame with a `seq`): the tool's model-facing name, how it ended and the
  * digests of what went in and came out. `search_tools` and `load_tools`, the
  * two belt meta-tools of MC spec §6.6, are recorded through this same type,
  * so the record shows what the model looked for and what it was shown.
+ *
+ * A `parked` receipt may name the approval it waits on in
+ * `approval_public_id`. No other outcome may carry one: a completed or
+ * refused call waits on nothing.
  */
 const toolEngineCallCompletedSchema = z
   .object({
     engine_seq: countSchema,
     tool_call_id: shortLabelSchema,
     tool_name: shortLabelSchema,
-    outcome: z.enum(["completed", "failed", "denied", "cancelled"]),
+    outcome: z.enum(TOOL_ENGINE_CALL_OUTCOMES),
+    approval_public_id: approvalPublicIdSchema.optional(),
     input_digest: sha256DigestSchema,
     output_digest: sha256DigestSchema.optional(),
     error_digest: sha256DigestSchema.optional(),
     duration_ms: countSchema,
   })
-  .strict();
+  .strict()
+  .refine(
+    (payload) =>
+      payload.approval_public_id === undefined || payload.outcome === "parked",
+    {
+      message: "only a parked call names the approval it waits on",
+      path: ["approval_public_id"],
+    },
+  );
 
 /**
  * Write-ahead intention: the host is about to invoke a tool. Appended BEFORE

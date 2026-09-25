@@ -44,6 +44,7 @@ import {
   RunSpecValidationError,
   UnknownRunEventTypeError,
 } from "./run-errors";
+import { digestOfCanonicalJson } from "./run-spec-v2";
 
 const DIGEST_A =
   "sha256:0000000000000000000000000000000000000000000000000000000000000001";
@@ -365,6 +366,69 @@ describe("validateInlineEventPayload", () => {
     expect(retentionContentClassOf("tool.engine_call_completed")).toBe(
       "tool_call",
     );
+  });
+
+  it("accepts a parked engine tool call, and only a parked one names an approval", () => {
+    const receipt = {
+      engine_seq: 9,
+      tool_call_id: "req_2",
+      tool_name: "create_workspace",
+      input_digest: DIGEST_A,
+      error_digest: DIGEST_B,
+      duration_ms: 4,
+    };
+    const parked = validateInlineEventPayload("tool.engine_call_completed", {
+      ...receipt,
+      outcome: "parked",
+      approval_public_id: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+    });
+    expect(parked.payload).toMatchObject({
+      outcome: "parked",
+      approval_public_id: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+    });
+    // A park whose writer returned no public id is still a park.
+    expect(() =>
+      validateInlineEventPayload("tool.engine_call_completed", {
+        ...receipt,
+        outcome: "parked",
+      }),
+    ).not.toThrow();
+    // Only a parked call waits on an approval.
+    expect(() =>
+      validateInlineEventPayload("tool.engine_call_completed", {
+        ...receipt,
+        outcome: "denied",
+        approval_public_id: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+      }),
+    ).toThrow(RunSpecValidationError);
+    // The approval is named by its public id, never its row uuid.
+    expect(() =>
+      validateInlineEventPayload("tool.engine_call_completed", {
+        ...receipt,
+        outcome: "parked",
+        approval_public_id: "0192f0c4-0000-7000-8000-000000000001",
+      }),
+    ).toThrow(RunSpecValidationError);
+  });
+
+  it("digests a receipt written before `parked` existed over the same bytes", () => {
+    // A sealed receipt stays verifiable: the schema adds no key and no
+    // default, so the payload it digests is exactly the one that was stored.
+    const sealed = {
+      engine_seq: 9,
+      tool_call_id: "req_2",
+      tool_name: "create_workspace",
+      outcome: "denied",
+      input_digest: DIGEST_A,
+      error_digest: DIGEST_B,
+      duration_ms: 4,
+    };
+    const validated = validateInlineEventPayload(
+      "tool.engine_call_completed",
+      sealed,
+    );
+    expect(validated.payload).toEqual(sealed);
+    expect(validated.payloadDigest).toBe(digestOfCanonicalJson(sealed));
   });
 
   it("accepts the write-ahead model intention and keeps it unreadable as a call", () => {

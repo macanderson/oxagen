@@ -34,7 +34,7 @@ The Run page's header and one page of its frames (`apps/app/ARCHITECTURE.md` §1
 | `frames.cursor` | string or null | the point to continue from, past every frame this read consumed; null when nothing lay past `framesAfter`, so the caller keeps its cursor, and null on a sealed run whose page had nothing behind it (the handler reads one frame past the page to know); a live run keeps its cursor on every non-empty page |
 | `witnessFor` | string or null | the worker run this run witnessed, by the first `proof.observed` verdict naming it (spec §8.5 "Stamping", ADR-064); a witness run renders its own tab set. Null for every other run |
 
-A read that starts at the page cursor or at any frame's own cursor repeats nothing and skips nothing. `summary` is a short label built from identifiers in the frame's receipt (engine, model, tool, outcome, policy decision); an encrypted payload shows the event type and nothing it cannot read. A wrapped frame's `stage` is the stage its kind belongs to (`session`, `turn`, `model`, `tool`, `policy`, `effect`, `proof`, `control`, `chain`).
+A read that starts at the page cursor or at any frame's own cursor repeats nothing and skips nothing. `summary` is a short label built from identifiers in the frame's receipt (engine, model, tool, outcome, policy decision); an encrypted payload shows the event type and nothing it cannot read. A tool receipt whose outcome is `parked` names the approval it waits on as a third word (`create_workspace parked apr_…`), and the Run page pairs the receipt with that approval's card by it. A wrapped frame's `stage` is the stage its kind belongs to (`session`, `turn`, `model`, `tool`, `policy`, `effect`, `proof`, `control`, `chain`).
 
 ## Errors
 

@@ -1031,6 +1031,54 @@ describe("the prepared turn", () => {
       ]);
     });
 
+    it("records a parked tool call as pending with the approval it waits on, not failed", async () => {
+      mocks.runGovernedTurn.mockImplementationOnce(
+        async (args: {
+          ledger: {
+            modelCall: (r: unknown) => Promise<void>;
+            toolCall: (r: unknown) => Promise<void>;
+          };
+        }) => {
+          await args.ledger.modelCall({
+            seq: 1,
+            requestId: "mc-1",
+            role: "worker",
+            provider: "anthropic",
+            model: "claude",
+            outcome: "completed",
+          });
+          await args.ledger.toolCall({
+            seq: 2,
+            requestId: "tc-1",
+            toolName: "set_budget",
+            outcome: "parked",
+            approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+            input: { usd: 5 },
+            error: "refused: set_budget is waiting for approval",
+            durationMs: 1,
+          });
+          return fakeTurn({});
+        },
+      );
+      await runTurn(request);
+      const input = executionCall()![1] as {
+        steps: Array<{ toolCalls?: Array<Record<string, unknown>> }>;
+      };
+      expect(input.steps[0]!.toolCalls).toEqual([
+        {
+          toolName: "set_budget",
+          toolType: "capability",
+          requestPayload: { usd: 5 },
+          responsePayload: {
+            error: "refused: set_budget is waiting for approval",
+            approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+          },
+          status: "pending",
+          latencyMs: 1,
+        },
+      ]);
+    });
+
     // The reply is already persisted and, on the SSE route, already sent. A
     // missing audit record is a defect, so it is logged — but it must not take
     // the answer away from the person who already has it.

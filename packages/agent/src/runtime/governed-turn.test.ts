@@ -798,7 +798,9 @@ describe("runGovernedTurn on the engine", () => {
     ]);
   });
 
-  it("records a call parked for approval, and how the engine is answered", async () => {
+  it("records a call parked for approval as parked, naming its approval", async () => {
+    // The park used to read as `denied`: the engine is answered
+    // `refused_by_policy`, and the outcome was read off that class alone.
     const { engine, client } = setup();
     const toolCalls: TurnLedgerToolCall[] = [];
     const result = await runGovernedTurn({
@@ -833,12 +835,56 @@ describe("runGovernedTurn on the engine", () => {
       },
     });
     await drain(result);
+    // The engine's vocabulary has no wait, so it is still told a refusal.
     const answer = engine.posts.find((p) => p.route === "tool-result")!
       .body as { output: { error: { class?: string } } };
     expect(answer.output.error.class).toBe("refused_by_policy");
     expect(toolCalls).toEqual([
-      expect.objectContaining({ toolName: "search_nodes", outcome: "denied" }),
+      expect.objectContaining({
+        toolName: "search_nodes",
+        outcome: "parked",
+        approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+        error: expect.stringContaining("is waiting for approval"),
+      }),
     ]);
+  });
+
+  it("records a parked call with no public id as parked, naming nothing", async () => {
+    const { client } = setup();
+    const toolCalls: TurnLedgerToolCall[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => {
+            throw new ApprovalPendingError(
+              "create_workspace",
+              "0192f0c4-0000-7000-8000-000000000001",
+              "2026-09-25T12:05:00.000Z",
+            );
+          },
+        } as never,
+      },
+      engine: client,
+      ledger: {
+        modelCallStarted: async () => undefined,
+        modelCall: async () => undefined,
+        toolCallStarted: async () => undefined,
+        toolCall: async (record) => {
+          toolCalls.push(record);
+        },
+        seal: async () => undefined,
+      },
+    });
+    await drain(result);
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]?.outcome).toBe("parked");
+    expect(toolCalls[0]).not.toHaveProperty("approvalPublicId");
   });
 
   it("cancels the turn and does not answer when a receipt cannot be written", async () => {

@@ -9,7 +9,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
-import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
+import {
+  RETENTION_CONTENT_CLASSES,
+  validateInlineEventPayload,
+} from "@oxagen/run-ledger";
 import type {
   AppendAttemptBatchInput,
   CreateAttemptInput,
@@ -638,6 +641,60 @@ describe("openAssistantRun", () => {
         }),
       }),
     ]);
+  });
+
+  it("records a parked call as parked, naming its approval, in a receipt the ledger accepts", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "make a workspace",
+      maxSteps: 4,
+      toolAllowlist: ["create_workspace"],
+      store: ledger.store,
+    });
+    await recorder.toolCall({
+      seq: 3,
+      requestId: "tool-1-0",
+      toolName: "create_workspace",
+      outcome: "parked",
+      approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+      input: { name: "ops" },
+      error: "refused: create_workspace is waiting for approval",
+      durationMs: 4,
+    });
+    // A denied call names no approval even when handed one: only a park
+    // waits on a person.
+    await recorder.toolCall({
+      seq: 5,
+      requestId: "tool-1-1",
+      toolName: "create_workspace",
+      outcome: "denied",
+      approvalPublicId: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+      input: { name: "ops" },
+      error: "approval denied",
+      durationMs: 2,
+    });
+    const parked = ledger.batches[1]!.events[0]!;
+    const denied = ledger.batches[2]!.events[0]!;
+    expect(parked.eventType).toBe("tool.engine_call_completed");
+    expect(parked.payload).toMatchObject({
+      outcome: "parked",
+      approval_public_id: "apr_0a1b2c3d4e5f6g7h8j9k0m",
+      error_digest: expect.stringMatching(/^sha256:/),
+    });
+    expect(denied.payload).toMatchObject({ outcome: "denied" });
+    expect(denied.payload).not.toHaveProperty("approval_public_id");
+    // The real registry, which the Postgres store runs before any SQL.
+    for (const event of [parked, denied])
+      expect(() =>
+        validateInlineEventPayload(event.eventType, event.payload),
+      ).not.toThrow();
+    expect(
+      recorder.receipts.map((r) => r.kind === "tool" && r.outcome),
+    ).toEqual(["parked", "denied"]);
   });
 
   it("seals an aborted turn as cancelled and a failed one as failed", async () => {

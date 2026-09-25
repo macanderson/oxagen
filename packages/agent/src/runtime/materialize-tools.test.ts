@@ -288,7 +288,11 @@ vi.mock("./mcp-snapshots", async (importOriginal) => {
 });
 
 const mocks = vi.hoisted(() => ({
-  createApprovalRequest: vi.fn(async () => ({ approvalId: "appr_x" })),
+  createApprovalRequest: vi.fn(
+    async (): Promise<{ approvalId: string; approvalPublicId?: string }> => ({
+      approvalId: "appr_x",
+    }),
+  ),
   waitForApproval: vi.fn(
     async (): Promise<{
       approvalId: string;
@@ -575,6 +579,10 @@ describe("materializeTools", () => {
 
   it("parks the call under approvalMode park: the request is created, the event fires, nothing waits and the handler never runs", async () => {
     mocks.createApprovalRequest.mockClear();
+    mocks.createApprovalRequest.mockResolvedValueOnce({
+      approvalId: "appr_x",
+      approvalPublicId: "apr_x",
+    });
     mocks.waitForApproval.mockClear();
     vi.mocked(invoke).mockClear();
     const fixtureGated = [
@@ -606,7 +614,10 @@ describe("materializeTools", () => {
       (e) =>
         e instanceof ApprovalPendingError &&
         e.code === "pending_approval" &&
-        e.capability === FIXTURE[2]!.name,
+        e.capability === FIXTURE[2]!.name &&
+        // The public id rides the park, so the turn's ledger can name the
+        // approval the call waits on.
+        e.approvalPublicId === "apr_x",
     );
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     expect(mocks.waitForApproval).not.toHaveBeenCalled();
@@ -1017,6 +1028,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       const args = externalRulesFactory.mock.calls[0]?.[0] as {
         onApprovalRequired: (event: {
           approvalId: string;
+          approvalPublicId?: string;
           capability: string;
           inputPreview: unknown;
           riskLevel: "high";
@@ -1025,6 +1037,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       };
       args.onApprovalRequired({
         approvalId: "parked-external",
+        approvalPublicId: "apr_parked",
         capability: "external",
         inputPreview: {},
         riskLevel: "high",
@@ -1041,6 +1054,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     await expect(t.execute({})).rejects.toMatchObject({
       code: "pending_approval",
       approvalId: "parked-external",
+      approvalPublicId: "apr_parked",
     });
     expect(onApprovalRequired).toHaveBeenCalledOnce();
     expect(fakeExecute).not.toHaveBeenCalled();
