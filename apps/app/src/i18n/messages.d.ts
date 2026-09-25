@@ -5934,6 +5934,7 @@ type Messages = {
       noResult: string;
       parked: string;
       parkedNote: string;
+      parkedApproval: string;
       gate: string;
       frame: string;
       subagentFrame: string;
