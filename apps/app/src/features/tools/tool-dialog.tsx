@@ -39,12 +39,12 @@ import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { useNavigate } from "@/ui/navigation";
 import { ProseMarkdown } from "@/ui/prose-markdown";
+import { ProviderIcon } from "@/ui/provider-icon";
 import { tabCount } from "@/ui/route-tabs";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { setToolClassification } from "./actions";
 import { Chip, Fact, Facts, NotCarried, useDate } from "./parts";
-import { ProviderIcon } from "./provider-icon";
 import { GateDot, HazardCell } from "./registry-cells";
 import { splitToolDescription, type ToolDescription } from "./tool-description";
 import {
