@@ -5936,6 +5936,7 @@ type Messages = {
       noResult: string;
       parked: string;
       parkedNote: string;
+      parkedApproval: string;
       gate: string;
       frame: string;
       subagentFrame: string;
@@ -7586,6 +7587,11 @@ type Messages = {
       intro: {
         title: string;
         body: string;
+      };
+      thread: {
+        new: string;
+        loading: string;
+        loadFailed: string;
       };
       suggestions: {
         title: string;

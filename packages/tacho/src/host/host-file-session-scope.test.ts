@@ -1,7 +1,7 @@
 /**
  * `sessionScopeOf` and `sessionScopeForEnrollment`: what tachod derives
  * session uuids from, and when an enrollment keeps its predecessor's scope
- * (ADR-173). A scope that changed on re-enrollment split every live session
+ * (ADR-178). A scope that changed on re-enrollment split every live session
  * into a second run that replayed its transcript (#4201). A scope that
  * carried where ingest would not hand the session over left the session
  * refused as another host's.

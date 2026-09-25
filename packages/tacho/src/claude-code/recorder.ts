@@ -116,7 +116,7 @@ export interface RecorderOptions {
   /** The harness's own session id (Claude Code's UUID). */
   harnessSessionId: string;
   /**
-   * The host's session scope (`sessionScopeOf`, ADR-173) for enrolled hosts,
+   * The host's session scope (`sessionScopeOf`, ADR-178) for enrolled hosts,
    * or the agent key for SDK agents.
    */
   scope: string;

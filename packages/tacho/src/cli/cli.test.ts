@@ -2261,7 +2261,7 @@ const WHERE_CORE = {
   apiUrl: "https://api.test",
 } as const;
 
-describe("session scope (ADR-173)", () => {
+describe("session scope (ADR-178)", () => {
   // tachod hashes a session's uuid from host.json's session scope. When it
   // followed the enrollment id, re-enrolling split every live session into a
   // second run that replayed its transcript (#4201).

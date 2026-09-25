@@ -46,7 +46,7 @@ export const hostFileSchema = z
     schema: z.literal(HOST_FILE_SCHEMA),
     host_enrollment_id: z.string().min(1),
     /**
-     * What tachod derives session uuids from (ADR-173). A new enrollment sets
+     * What tachod derives session uuids from (ADR-178). A new enrollment sets
      * it to its own enrollment id. An enrollment that replaces this one on the
      * same machine and in the same workspace carries it forward, so a live
      * session keeps its uuid and its run. Optional: a host enrolled before the
@@ -222,7 +222,7 @@ export function sessionScopeOf(
 }
 
 /**
- * The session scope a new enrollment writes into `host.json` (ADR-173).
+ * The session scope a new enrollment writes into `host.json` (ADR-178).
  *
  * It keeps the scope of the enrollment it replaces when the two name the same
  * organization and workspace, the device key is the same one, and the control

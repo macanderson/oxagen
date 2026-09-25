@@ -476,7 +476,7 @@ describe("tachod", () => {
 
   it("derives session uuids from host.json's session scope, not its enrollment id", async () => {
     // A re-enrollment into the same workspace carries the old scope forward
-    // (ADR-173). A daemon that hashed the new enrollment id instead gave
+    // (ADR-178). A daemon that hashed the new enrollment id instead gave
     // every live session a second uuid, so a second run that replayed its
     // transcript (#4201).
     const paths = scratchPaths();

@@ -37,7 +37,7 @@ export function uuidv5(namespace: string, name: string): string {
  * `session_uuid = uuidv5(NS_TACHO_SESSION, "<scope>/<harness session id>")`
  * where scope is the host's session scope for enrolled hosts (`session_scope`
  * in host.json, or the enrollment id on a host enrolled before that field
- * existed; ADR-173) or the agent key for SDK agents.
+ * existed; ADR-178) or the agent key for SDK agents.
  */
 export function sessionUuid(scope: string, harnessSessionId: string): string {
   return uuidv5(NS_TACHO_SESSION, `${scope}/${harnessSessionId}`);
