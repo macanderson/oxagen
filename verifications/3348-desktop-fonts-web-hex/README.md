@@ -24,9 +24,12 @@ of `.tex-hex` carried `%23FFFFFF`.
 
 ## pnpm check:brand
 
-`check-brand.txt` is `sync-brand-assets.mjs --check` against
-`~/Projects/oxagen-brand` (kit 2.3.0). It reports drift in two files only,
-`.claude/skills/oxagen-branding/Archive.zip` and `SKILL.md`. #3497 edited that
-skill copy on purpose after the kit sync (ADR-113), so the check fails the
-same way on main. Nothing this change touches (fonts, tokens, web assets) is
-reported.
+`check-brand.txt` holds two runs of `sync-brand-assets.mjs --check`, the
+script behind `pnpm check:brand`.
+
+- Against the kit's committed tip (`oxagen-brand` at 8f2fd84, extracted with
+  `git archive`): every vendored asset matches house kit 2.3.0, exit 0.
+- Against the local working copy at `~/Projects/oxagen-brand`: exit 1, on
+  `.claude/skills/oxagen-branding/Archive.zip` and `SKILL.md` only. That
+  checkout carries uncommitted edits to `skills/oxagen-branding`, so the
+  failure is local to this machine and fails the same way on main.
