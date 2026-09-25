@@ -195,6 +195,7 @@
         "linuxRpm": ".rpm (Fedora, RHEL)",
         "linuxAppImage": "AppImage"
       },
+      "macosFirstLaunch": "macOS refuses the first launch until builds are notarized. Choose Done, then click Open Anyway in System Settings > Privacy & Security.",
       "all": "Every version, with SHA-256 checksums"
     },
     "picker": {

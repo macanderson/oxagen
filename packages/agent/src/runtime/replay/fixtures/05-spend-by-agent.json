@@ -1,0 +1,186 @@
+{
+  "turn": "05 spend by agent",
+  "question": "How much has each agent spent this month?",
+  "source": "hand-authored",
+  "handlers": {
+    "get_spend": {
+      "period": {
+        "from": "2026-09-01",
+        "to": "2026-09-24"
+      },
+      "groupBy": "agent",
+      "total": {
+        "cost": {
+          "micros": "1840000",
+          "currency": "USD",
+          "basis": "gateway_observed"
+        },
+        "calls": 210,
+        "runs": 14,
+        "proven": null,
+        "accepted": null,
+        "productiveRatio": null
+      },
+      "rows": [
+        {
+          "cost": {
+            "micros": "1140000",
+            "currency": "USD",
+            "basis": "gateway_observed"
+          },
+          "calls": 130,
+          "runs": 9,
+          "proven": null,
+          "accepted": null,
+          "productiveRatio": null,
+          "key": "agt_replay",
+          "provider": null,
+          "tokens": {
+            "input_uncached": 48000,
+            "cache_read": 120000,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 6100,
+            "reasoning": 0
+          },
+          "operator": null
+        },
+        {
+          "cost": {
+            "micros": "700000",
+            "currency": "USD",
+            "basis": "gateway_observed"
+          },
+          "calls": 80,
+          "runs": 5,
+          "proven": null,
+          "accepted": null,
+          "productiveRatio": null,
+          "key": "agt_triage",
+          "provider": null,
+          "tokens": {
+            "input_uncached": 48000,
+            "cache_read": 120000,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 6100,
+            "reasoning": 0
+          },
+          "operator": null
+        }
+      ]
+    }
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "How much has each agent spent this month?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "get_spend",
+      "input": {
+        "period": {
+          "from": "2026-09-01",
+          "to": "2026-09-24"
+        },
+        "groupBy": "agent"
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "get_spend",
+          "input": {
+            "period": {
+              "from": "2026-09-01",
+              "to": "2026-09-24"
+            },
+            "groupBy": "agent"
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "How much has each agent spent this month?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "release-bot spent $1.14 and agt_triage spent $0.70 this month."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "release-bot spent $1.14 and agt_triage spent $0.70 this month.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["get_spend"],
+    "gates": [
+      "emergency_denies none",
+      "kill_switch get_spend open",
+      "iam get_spend allow",
+      "handler get_spend"
+    ],
+    "ledger": [
+      "model completed",
+      "tool get_spend completed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["ok"],
+    "refusals": [],
+    "invocations": ["get_spend completed"],
+    "approvals": [],
+    "answer": "release-bot spent $1.14 and agt_triage spent $0.70 this month."
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "turn": "09 a switched-off tool cannot be loaded",
+  "question": "What did run arun_replay3 cost?",
+  "source": "hand-authored",
+  "gates": {
+    "killSwitch": ["get_run_cost"]
+  },
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What did run arun_replay3 cost?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "load_tools",
+      "input": {
+        "names": ["get_run_cost"]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "load_tools",
+          "input": {
+            "names": ["get_run_cost"]
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What did run arun_replay3 cost?"
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "A kill switch has turned off run cost reads in this workspace."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "A kill switch has turned off run cost reads in this workspace.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["load_tools"],
+    "gates": ["emergency_denies get_run_cost"],
+    "ledger": [
+      "model completed",
+      "tool load_tools completed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["ok"],
+    "refusals": [],
+    "invocations": [],
+    "approvals": [],
+    "answer": "A kill switch has turned off run cost reads in this workspace.",
+    "loadUnknown": ["get_run_cost"]
+  }
+}

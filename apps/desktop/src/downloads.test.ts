@@ -211,6 +211,21 @@ describe("the version-free names", () => {
       for (const name of names) expect(text, consumer).toContain(`"${name}"`);
     }
   });
+
+  // The docs tables carry their own macOS note, so the first-launch steps
+  // must reach them too, and the removed Control-click route must not.
+  it("carry the macOS first-launch steps in both docs tables", () => {
+    for (const consumer of [
+      "../../docs/src/components/mdx/latest-downloads.tsx",
+      "../../docs/src/components/mdx/release-downloads.tsx",
+    ]) {
+      const text = readFileSync(new URL(consumer, import.meta.url), "utf8");
+      expect(text, consumer).toContain(
+        "Choose Done, then click Open Anyway in System Settings > Privacy & Security.",
+      );
+      expect(text, consumer).not.toMatch(/(right|control|ctrl)[- ]click/i);
+    }
+  });
 });
 
 describe("check-latest.mjs", () => {
@@ -345,6 +360,54 @@ describe("page helpers", () => {
       publishedAt: "d",
     });
     expect(empty).not.toContain('id="pick"');
+  });
+
+  it("gives macOS the first-launch steps that still work on macOS 15", () => {
+    const entries: PageEntry[] = FILES.map((f) => ({
+      ...classifyInstaller(f, V)!,
+      bytes: 1,
+      sha256: "0".repeat(64),
+    }));
+    const html = renderIndexHtml({ version: V, entries, publishedAt: "d" });
+    expect(html).toContain('<div id="macos-first-launch">');
+    expect(html).toContain('href="#macos-first-launch"');
+    expect(html).toContain("Open Anyway");
+    expect(html).toContain(
+      "<pre>xattr -dr com.apple.quarantine /Applications/Oxagen.app</pre>",
+    );
+    // macOS 15 removed the Control-click Open override, so the page must not
+    // send anyone looking for it.
+    expect(html).not.toMatch(/(right|control|ctrl)[- ]click/i);
+    // A version with no macOS build carries no macOS steps.
+    const noMac = renderIndexHtml({
+      version: V,
+      entries: entries.filter((e) => e.os !== "macOS"),
+      publishedAt: "d",
+    });
+    expect(noMac).not.toContain("macos-first-launch");
+  });
+
+  it("links an App guide page the docs site carries", () => {
+    const html = renderIndexHtml({ version: V, entries: [], publishedAt: "d" });
+    expect(html).toContain(
+      '<a href="https://docs.oxagen.sh/docs/cli/desktop">App guide</a>',
+    );
+    const page = readFileSync(
+      fileURLToPath(
+        new URL("../../docs/content/docs/cli/desktop.mdx", import.meta.url),
+      ),
+      "utf8",
+    );
+    expect(page).toContain("## First launch on macOS");
+    const nav = JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL("../../docs/content/docs/cli/meta.json", import.meta.url),
+        ),
+        "utf8",
+      ),
+    ) as { pages: string[] };
+    expect(nav.pages).toContain("desktop");
   });
 
   it("links every version to its release notes and its GitHub release", () => {

@@ -1,0 +1,105 @@
+{
+  "turn": "15 retire_agent cannot be loaded",
+  "question": "Retire agent agt_replay.",
+  "source": "hand-authored",
+  "frames": [
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-0",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Retire agent agt_replay."
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "tool_request",
+      "request_id": "tool-1-0",
+      "name": "load_tools",
+      "input": {
+        "names": ["retire_agent"]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_start",
+        "call": {
+          "call_id": "call_1",
+          "name": "load_tools",
+          "input": {
+            "names": ["retire_agent"]
+          }
+        }
+      }
+    },
+    {
+      "type": "provider_request",
+      "request_id": "prov-1-1",
+      "provider_id": "openrouter",
+      "role": "worker",
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Retire agent agt_replay."
+          }
+        ],
+        "max_output_tokens": 16384,
+        "temperature": 0
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "tool_result",
+        "call_id": "call_1",
+        "output": {
+          "ok": {
+            "content": "replayed"
+          }
+        },
+        "duration_ms": 0,
+        "speculated": false
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "type": "text",
+        "text": "I cannot retire agents. Retire it from the Agents page."
+      }
+    },
+    {
+      "type": "turn_complete",
+      "outcome": {
+        "status": "completed",
+        "text": "I cannot retire agents. Retire it from the Agents page.",
+        "cost_usd": 0.002
+      }
+    }
+  ],
+  "expect": {
+    "tools": ["load_tools"],
+    "gates": ["emergency_denies none"],
+    "ledger": [
+      "model completed",
+      "tool load_tools completed",
+      "model completed",
+      "seal completed"
+    ],
+    "answers": ["ok"],
+    "refusals": [],
+    "invocations": [],
+    "approvals": [],
+    "answer": "I cannot retire agents. Retire it from the Agents page.",
+    "loadUnknown": ["retire_agent"]
+  }
+}
