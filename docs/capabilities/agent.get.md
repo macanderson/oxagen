@@ -4,7 +4,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** org + workspace
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`)
 
@@ -42,6 +42,7 @@ None. Read-only; audit-exempt.
 
 - `POST /api/v1/{org}/{ws}/agents/get`
 - MCP tool `get_agent`
+- Agent: the in-app assistant finds it with `search_tools` and loads it with `load_tools`. Low risk, no approval.
 - CLI `oxagen agent status <agent>`
 
 ## Errors

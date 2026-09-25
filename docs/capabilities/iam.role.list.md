@@ -12,7 +12,7 @@ List the org's IAM roles with their capability grants (`allow` / `deny` / `requi
 - App: Organization › Roles (`/{org}/roles`)
 
 ## Access
-Admin-level. Default roles: org `Owner`/`Admin`/`Compliance`. Sensitivity: **medium** (reveals the org's permission model). `noBillingGate`. Tenant isolation is enforced in the handler — every underlying query filters by the caller's `orgId`.
+Admin-level. Default roles: org `Owner`/`Admin`/`Compliance`. The handler asserts those roles itself (INV-29), because the kernel's IAM check admits every capability for a non-enterprise organization; any other caller, an API key's creator included, is refused `forbidden`. Sensitivity: **medium** (reveals the org's permission model). `noBillingGate`. Tenant isolation is enforced in the handler — every underlying query filters by the caller's `orgId`.
 
 ## Input
 | Parameter | Type | Required | Description |

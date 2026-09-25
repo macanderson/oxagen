@@ -106,15 +106,17 @@ export function proxy(req: NextRequest): NextResponse {
   if (isPublicPath(pathname)) return NextResponse.next();
   const moved = legacyTarget(pathname);
   if (moved !== null) return responseRedirect(req, moved, 308);
-  if (hasSessionCookie(req)) return NextResponse.next();
   // Better Auth's default OAuth error page redirects to `/?error=<code>`. Lift
   // that code onto /login so LoginForm can show it. Without this, the error is
   // buried in `?next=/?error=…` and every failed Google/GitHub attempt looks
-  // like a blank login page.
+  // like a blank login page. The lift runs before the session check because a
+  // stale session cookie from an earlier sign-in would otherwise pass the
+  // request through and drop the error (#3409).
   const oauthError = req.nextUrl.searchParams.get("error");
   if (pathname === "/" && oauthError !== null && oauthError !== "") {
     return responseRedirect(req, routes.loginWithOAuthError(oauthError));
   }
+  if (hasSessionCookie(req)) return NextResponse.next();
   const next = sanitizeNext(`${pathname}${search}`, routes.root());
   return responseRedirect(req, routes.login(next));
 }

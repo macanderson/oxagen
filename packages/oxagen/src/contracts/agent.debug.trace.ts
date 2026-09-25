@@ -156,6 +156,9 @@ export const agentDebugTrace = registerCapability({
     category: "introspection",
   },
   sensitivity: "low",
+  // Reads the execution, its steps and tool calls, then asks a model for a
+  // diagnosis. It stores nothing.
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

@@ -8,8 +8,11 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 
 ## Surface
 
+**Surfaces:** api, mcp, agent
+
 - API: `POST /v1/:org_slug/:workspace_slug/spend`
 - MCP: `get_spend`
+- Agent: one of the in-app assistant's seven pins, offered on every turn (`INTERACTIVE_AGENT_CAPABILITIES`). Low risk, no approval.
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `get_spend`
 - Not billed (`noBillingGate: true`): reading your own spend is never a governed action (ADR-052 exclusion 2). IAM default-deny; medium sensitivity.

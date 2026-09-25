@@ -198,9 +198,12 @@ describe("Register an agent", () => {
     });
     expect(
       await within(dialog).findByText(
-        "Pull request #526 opened. The agent exists when it merges.",
+        "Pull request #526 opened. After it merges, register the agent from where it runs to create its identity.",
       ),
     ).toBeInTheDocument();
+    // No merge consumer creates the agent (#3501), so the dialog must not
+    // say that the merge alone makes it exist.
+    expect(within(dialog).queryByText(/exists when it merges/)).toBeNull();
     expect(
       within(dialog).getByRole("link", { name: "Open the pull request" }),
     ).toHaveAttribute("href", "https://github.com/acme/platform/pull/526");
@@ -283,7 +286,7 @@ describe("Register an agent while the dialog is open", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: t("confirm") }));
     expect(
       await within(dialog).findByText(
-        "Pull request #7 opened. The agent exists when it merges.",
+        "Pull request #7 opened. After it merges, register the agent from where it runs to create its identity.",
       ),
     ).toBeInTheDocument();
     expect(within(dialog).queryByRole("link")).toBeNull();
@@ -292,7 +295,7 @@ describe("Register an agent while the dialog is open", () => {
     expect(within(again).getByLabelText("Slug")).toHaveValue("");
     expect(
       within(again).queryByText(
-        "Pull request #7 opened. The agent exists when it merges.",
+        "Pull request #7 opened. After it merges, register the agent from where it runs to create its identity.",
       ),
     ).toBeNull();
   });

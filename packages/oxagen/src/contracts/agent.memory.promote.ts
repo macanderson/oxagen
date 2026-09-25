@@ -21,6 +21,7 @@ export const agentMemoryPromote = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "memory" },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

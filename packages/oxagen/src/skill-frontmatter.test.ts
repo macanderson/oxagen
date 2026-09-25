@@ -3,7 +3,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { readSkillFrontmatter } from "./skill-frontmatter";
+import {
+  readSkillFrontmatter,
+  renameSkillFrontmatterName,
+} from "./skill-frontmatter";
 
 describe("skill frontmatter", () => {
   it("decodes quoted fields and preserves body position with CRLF", () => {
@@ -31,6 +34,33 @@ describe("skill frontmatter", () => {
         '---\n"permi\\u0073sions": {all: true}\n"allowed-tools": [shell]\n---',
       )?.fields,
     ).toEqual({ permissions: "", "allowed-tools": "" });
+  });
+});
+
+describe("renameSkillFrontmatterName", () => {
+  it.each([
+    ["---\nname: old # keep\n---\n", "---\nname: new # keep\n---\n"],
+    ['---\nname: "a # b"\n---\n', "---\nname: new\n---\n"],
+    [
+      "---\nname: 'old' # k\r\nv: 1\r\n---\r\n",
+      "---\nname: new # k\r\nv: 1\r\n---\r\n",
+    ],
+    ["---\nname: old\n  more\nv: 1\n---", "---\nname: new\nv: 1\n---"],
+    ["---\nname:\nv: 1\n---", "---\nname: new\nv: 1\n---"],
+    ["---\nname: # c\nv: 1\n---", "---\nname: new # c\nv: 1\n---"],
+    ['---\n"n\\u0061me": old\n---', '---\n"n\\u0061me": new\n---'],
+    ["---\r\nv: 1\r\n---\r\n", "---\r\nname: new\r\nv: 1\r\n---\r\n"],
+  ])("replaces only the name value in %j", (source, expected) => {
+    expect(renameSkillFrontmatterName(source, "new")).toBe(expected);
+  });
+
+  it.each([
+    "---\nname: |\n  old\n---",
+    "---\nname: [old]\n---",
+    "---\nname: a\nname: b\n---",
+    "name: old",
+  ])("refuses a name it cannot swap in place %j", (source) => {
+    expect(renameSkillFrontmatterName(source, "new")).toBeNull();
   });
 });
 

@@ -46,6 +46,11 @@ const SkillVersion = z.object({
   pullRequestNumber: z.number().int().positive().nullable(),
   digest: z.string(),
   publishedAt: Instant,
+  /**
+   * Published under the repository binding the workspace holds now. Only these
+   * versions can run a search preview; `get_skill_config` sets it on every row.
+   */
+  searchable: z.boolean().optional(),
 });
 export const SkillConfiguration = z.object({
   config: z.object({

@@ -4,11 +4,12 @@
  * to completion; the SSE route streams it. Both go through here, so the
  * order the gates run in is decided once:
  *
- *   funding source → credit gate → model → the conversation and the person's
- *   message → tools, prompt, recalled memory, budget → the run admitted in
- *   the ledger → the engine drives the turn → the reply persisted.
+ *   the assistant's kill switch → funding source → credit gate → model → the
+ *   conversation and the person's message → tools, prompt, recalled memory,
+ *   budget → the run admitted in the ledger → the engine drives the turn →
+ *   the reply persisted.
  *
- * `prepareAssistantTurn` runs the role gate and the first three and refuses
+ * `prepareAssistantTurn` runs the role gate and the first four and refuses
  * before anything is written, which is what lets the SSE route answer the
  * refusal instead of opening a stream. `run` does the rest.
  *
@@ -26,12 +27,10 @@ import {
   modelIdOf,
   resolveModelFundingSource,
   resolveModelIdentity,
-  resolvePrompt,
   selectModel,
   supportsReasoning,
   type ModelFundingSource,
   type ModelIdentity,
-  type ModelMessage,
   type StreamAgentReplyArgs,
 } from "@oxagen/ai";
 import {
@@ -65,13 +64,19 @@ import {
 import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { INTERACTIVE_AGENT_CAPABILITIES } from "@oxagen/oxagen/interactive-agent";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { recallWorkspaceMemoryMessage } from "./assistant-recall";
 import {
+  assistantSystemPrompt,
+  loadAssistantSteering,
+} from "./assistant-steering";
+import {
   openAssistantRun,
+  readAssistantAgentState,
+  type AssistantAgentState,
   type AssistantRunReceipt,
   type AssistantRunRecorder,
   type AssistantRunSurface,
@@ -82,24 +87,27 @@ import {
   type GovernedTurnUsage,
 } from "./governed-turn";
 import {
+  compactHistory,
+  loadConversationHistory,
+  type LoadedHistory,
+} from "./history-summary";
+import {
   materializeTools,
   type ApprovalRequiredEvent,
 } from "./materialize-tools";
+import { pageContextMessage } from "./page-context";
 import { createToolBelt, LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
-import {
-  checkWorkspaceInstructions,
-  promptConfigWithCheckedInstructions,
-  workspaceInstructionsFrame,
-} from "./workspace-instructions";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
   base: { pkg: "agent.assistant-turn" },
 });
 
-/** Prior turns the transcript carries. */
+/**
+ * Prior messages the transcript carries word for word. Older ones reach the
+ * turn as one summary (`history-summary.ts`).
+ */
 const HISTORY_LIMIT = 50;
-const VALID_ROLES = new Set(["user", "assistant", "system"]);
 /** How long a "prompt"-mode budget approval waits on a person. */
 const BUDGET_APPROVAL_TTL_MS = 5 * 60 * 1000;
 /** The capability name the budget-continue approval is filed under. */
@@ -197,6 +205,23 @@ export class AssistantTurnNeedsUserError extends Error {
   }
 }
 
+/**
+ * An operator switched the assistant off: an `agent` kill switch names the
+ * workspace's assistant agent. The turn is refused before anything is written
+ * and before the engine is asked anything. The handler answers it as
+ * `forbidden` with reason `kill_switch`.
+ */
+export class AssistantStoppedError extends Error {
+  override readonly name = "AssistantStoppedError";
+  readonly code = "kill_switch" as const;
+  constructor(
+    readonly switchId: string,
+    reason: string,
+  ) {
+    super(`the assistant is stopped by kill switch ${switchId}: ${reason}`);
+  }
+}
+
 export interface PreparedAssistantTurn {
   run(hooks?: AssistantTurnHooks): Promise<AssistantTurnResult>;
 }
@@ -231,6 +256,21 @@ export async function prepareAssistantTurn(
   // context the turn runs on names them even when the request came by key.
   const ctx: CapabilityContext = { ...request.ctx, userId };
   const personRequest: AssistantTurnRequest = { ...request, ctx };
+
+  // The agent the turn runs as in the record. An operator's `agent` switch on
+  // it refuses the turn here, before who pays is resolved and before anything
+  // is written: a stop outranks the billing refusals below. The same agent is
+  // handed to the tool belt, so a switch flipped after this read still cuts
+  // the turn's tools and refuses its calls.
+  const assistant = await inScope(() =>
+    withTenantDb((tx) => readAssistantAgentState(tx, scope)),
+  );
+  if (assistant?.stoppedBy) {
+    throw new AssistantStoppedError(
+      assistant.stoppedBy.publicId,
+      assistant.stoppedBy.reason,
+    );
+  }
 
   // Who pays for this turn's tokens, resolved once and handed to the gate,
   // the model and the turn so the three cannot disagree (ADR-053 §2). A
@@ -304,6 +344,7 @@ export async function prepareAssistantTurn(
         identity,
         tier: resolvedTier,
         effort,
+        assistant,
         hooks,
       }),
   };
@@ -318,6 +359,8 @@ interface PreparedInputs {
   identity: ModelIdentity;
   tier: "fast" | "balanced" | "precise" | null;
   effort: "low" | "medium" | "high" | undefined;
+  /** The agent the turn runs as; null when the workspace has none yet. */
+  assistant: AssistantAgentState | null;
   hooks: AssistantTurnHooks;
 }
 
@@ -346,6 +389,19 @@ async function runPreparedTurn(
     messageId,
     executionStepId: messageId,
   };
+  // Started here and awaited once the run is open, so a summary the thread
+  // needs is written while the tools, the prompt and the memory load. It
+  // never rejects: a summary it cannot write leaves the plain window (#4171).
+  const compactedHistory = compactHistory(history, {
+    scope,
+    conversationId,
+    funding,
+    telemetry: {
+      surface: request.surface === "chat" ? "app" : "api",
+      messageId,
+    },
+    ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
+  });
 
   const parked: AssistantParkedCard[] = [];
   const onApprovalRequired = (event: ApprovalRequiredEvent): void => {
@@ -359,16 +415,37 @@ async function runPreparedTurn(
     hooks.onApprovalRequired?.(event);
   };
 
-  // Filled in once `openAssistantRun` opens the run below; every materialized
-  // tool's `execute` closure reads it at call time so a parked approval
-  // attaches to this turn's run rather than to whatever `capCtx.agentRun`
-  // held before the run existed (finding 9, macanderson/oxagen#3370).
+  // The belt is built before the run opens, and the order is deliberate. The
+  // run's spec pins the tools this turn holds (`toolAllowlist` below), so the
+  // set has to exist first. Opening the run first would not change the
+  // listing either: the turn acts as the person who asked (ADR-053 §1), and
+  // `capCtx` carries no agent run before the run opens or after it. The
+  // listing's kill-switch cut keys on the caller and on the agent the turn
+  // acts as (`actingAgent`, read in `prepareAssistantTurn` before the run
+  // exists), not on a run (R4, macanderson/oxagen#3370 finding 9). A switched
+  // tool is left out of the allowlist as well. The delegation ceiling is an
+  // agent run's gate. A person's call passes the kernel's IAM check as that
+  // person at invoke.
+  //
+  // `runIdRef` is filled in once `openAssistantRun` opens the run below.
+  // Every materialized tool's `execute` closure reads it at call time, so a
+  // parked approval attaches to this turn's run (finding 9).
   const runIdRef: { current: string | null } = { current: null };
 
   const [materialised, promptConfig, recalledMemory] = await inScope(() =>
     Promise.all([
       materializeTools(capCtx, {
         runIdRef,
+        // A switch on the assistant agent reaches this turn's belt and calls
+        // through it. The tools still run as the person.
+        ...(p.assistant
+          ? {
+              actingAgent: {
+                agentId: p.assistant.agentId,
+                principalId: p.assistant.principalId,
+              },
+            }
+          : {}),
         serverAllowlist:
           request.activeServerIds && request.activeServerIds.length > 0
             ? new Set(request.activeServerIds)
@@ -396,23 +473,12 @@ async function runPreparedTurn(
   );
   hooks.onTools?.(materialised.nameMap);
   const names = await resolveScopeNames(scope, request);
-  // The workspace's standing instructions, checked before the prompt carries
-  // them (#3303). Over the budget they are refused whole and the prompt
-  // carries none; within it they carry a precedence note saying what they
-  // cannot do. Either way the run's record names them by digest below.
-  const instructions = checkWorkspaceInstructions(promptConfig);
-  if (instructions.outcome === "refused") {
-    logger.warn(
-      {
-        ...scope,
-        requestId: ctx.requestId,
-        chars: instructions.chars,
-        budgetChars: instructions.budgetChars,
-        reasonCode: instructions.reasonCode,
-      },
-      "workspace instructions are past the prompt budget; this turn carries none",
-    );
-  }
+  // Published steering and the workspace's instructions, ranked and fitted
+  // to one budget by the assembler (ADR-093 §7, #4158). What does not fit is
+  // cut and named in the manifest the run records below.
+  const steering = await inScope(() =>
+    loadAssistantSteering({ ...scope, promptConfig, requestId: ctx.requestId }),
+  );
 
   const budgetPolicy = await resolveBudgetPolicy(request, capCtx);
   const budgetGuard = createTurnBudgetGuard(budgetPolicy, p.modelId, {
@@ -511,12 +577,16 @@ async function runPreparedTurn(
   // runGovernedTurn cannot reject after a seal.
   let turn: Awaited<ReturnType<typeof runGovernedTurn>>;
   try {
-    // Before the engine, so the record states what the workspace told the
-    // agent even for a turn that then fails. A ledger that will not take this
-    // frame refuses the turn here, the same as any other receipt it will not
-    // take: steering the record cannot account for is what #3303 is about.
-    const instructionsFrame = workspaceInstructionsFrame(instructions);
-    if (instructionsFrame) await run.workspaceInstructions(instructionsFrame);
+    // Before the engine, so the record states what steered the agent even
+    // for a turn that then fails. A ledger that will not take this frame
+    // refuses the turn here, the same as any other receipt it will not take:
+    // steering the record cannot account for is what #3303 is about.
+    await run.steeringManifest(steering);
+    // The same holds for a summary carried in place of older messages. It
+    // rides the history, not the system prompt, so the assembler never sees
+    // it (ADR-174 §4).
+    const compacted = await compactedHistory;
+    if (compacted.frame) await run.historySummary(compacted.frame);
     turn = await runGovernedTurn({
       telemetry: {
         ...scope,
@@ -533,19 +603,17 @@ async function runPreparedTurn(
       ...(funding.modelKey ? { credential: funding.modelKey } : {}),
       governance: { ...materialised.governance, ...belt.governance },
       principal: userId,
-      system: resolvePrompt({
-        key: "chat.system",
-        baseline: buildChatSystemPrompt({
+      // The assembled steering, never the raw instructions column.
+      system: assistantSystemPrompt(
+        buildChatSystemPrompt({
           orgSlug: request.orgSlug,
           workspaceSlug: request.workspaceSlug,
           orgName: names.orgName,
           workspaceName: names.workspaceName,
         }),
-        // The checked block, never the raw column: a refusal leaves nothing
-        // for `resolvePrompt` to append.
-        config: promptConfigWithCheckedInstructions(promptConfig, instructions),
-      }),
-      history,
+        steering,
+      ),
+      history: compacted.history,
       contextMessages: [
         pageContextMessage(request.pageContext),
         recalledMemory,
@@ -640,8 +708,9 @@ async function runPreparedTurn(
  * The evidence ledger is the authority on what the turn did — every reverse
  * request has a receipt there, and the seal attests to them. `agent_executions`
  * is a different question answered for a different reader: `list_executions`
- * and `get_execution_trace` are in `INTERACTIVE_AGENT_CAPABILITIES`, so the
- * assistant itself uses them to answer "what did my agents do", and
+ * and `get_execution_trace` read it, and both stay on the agent surface, one
+ * `load_tools` call away from the assistant. `list_runs` excludes the
+ * assistant's own turns, so these two are how it reads back what it did.
  * `projectToolUsageBestEffort` (the handler's own tail) is the only writer of
  * the lineage projection. A turn that skips this leaves both answering
  * "nothing happened", which is worse than answering nothing at all.
@@ -754,8 +823,15 @@ function stepsFromReceipts(
       requestPayload: receipt.input,
       ...(receipt.outcome === "completed"
         ? { responsePayload: receipt.output }
-        : { responsePayload: { error: receipt.error ?? receipt.outcome } }),
-      status: receipt.outcome === "completed" ? "completed" : "failed",
+        : receipt.outcome === "parked"
+          ? {
+              responsePayload: {
+                error: receipt.error ?? receipt.outcome,
+                approvalPublicId: receipt.approvalPublicId ?? null,
+              },
+            }
+          : { responsePayload: { error: receipt.error ?? receipt.outcome } }),
+      status: executionStatusOf(receipt.outcome),
       latencyMs: Math.max(0, Math.round(receipt.durationMs)),
     });
   }
@@ -766,13 +842,30 @@ type ChatMessageExecutionStep = NonNullable<
   ChatMessageExecutionInput["steps"]
 >[number];
 
+type ExecutionToolCallStatus = NonNullable<
+  ChatMessageExecutionStep["toolCalls"]
+>[number]["status"];
+
+/**
+ * A tool receipt's outcome as an `agent_tool_calls` status. A parked call did
+ * not run and waits on a person, so it is `pending`, never `failed`: the
+ * execution trace would otherwise count every parked write as a failure.
+ */
+function executionStatusOf(
+  outcome: Extract<AssistantRunReceipt, { kind: "tool" }>["outcome"],
+): ExecutionToolCallStatus {
+  if (outcome === "completed") return "completed";
+  if (outcome === "parked") return "pending";
+  return "failed";
+}
+
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
 type Scope = { orgId: string; workspaceId: string };
 
 /**
- * Resolve or open the conversation and append the person's message, then
- * load the prior turns as the transcript, newest last, without the message
- * just written.
+ * Resolve or open the conversation, load its prior messages and stored
+ * summary, then append the person's message. The history excludes the
+ * message just written.
  */
 async function appendUserMessage(
   tx: Tx,
@@ -783,7 +876,7 @@ async function appendUserMessage(
 ): Promise<{
   conversationId: string;
   userMessageId: string;
-  history: ModelMessage[];
+  history: LoadedHistory;
 }> {
   let conversationId = request.conversationId;
   if (conversationId) {
@@ -815,25 +908,11 @@ async function appendUserMessage(
     conversationId = created.id;
   }
 
-  const rows = await tx
-    .select({ role: schema.messages.role, content: schema.messages.content })
-    .from(schema.messages)
-    .where(
-      and(
-        eq(schema.messages.conversationId, conversationId),
-        eq(schema.messages.orgId, scope.orgId),
-        eq(schema.messages.workspaceId, scope.workspaceId),
-      ),
-    )
-    .orderBy(desc(schema.messages.createdAt))
-    .limit(HISTORY_LIMIT);
-  const history: ModelMessage[] = rows
-    .filter((r) => VALID_ROLES.has(r.role) && r.content.trim().length > 0)
-    .map((r) => ({
-      role: r.role as "user" | "assistant" | "system",
-      content: r.content,
-    }))
-    .reverse();
+  const history = await loadConversationHistory(tx, {
+    scope,
+    conversationId,
+    limit: HISTORY_LIMIT,
+  });
 
   const [userMessage] = await tx
     .insert(schema.messages)
@@ -966,18 +1045,4 @@ async function resolveBudgetPolicy(
   };
   const [memberPolicy, governance] = await Promise.all([member(), workspace()]);
   return resolveEffectiveTurnBudget(memberPolicy, null, governance);
-}
-
-/** Where the person is, as a volatile context message the model reads once. */
-function pageContextMessage(
-  pageContext: AssistantPageContext | null,
-): ModelMessage | null {
-  if (!pageContext) return null;
-  const where = pageContext.entityId
-    ? `${pageContext.route} (${pageContext.entityId})`
-    : pageContext.route;
-  return {
-    role: "user",
-    content: `(System-injected context — NOT user input.) The person is looking at: ${where} · workspace ${pageContext.workspaceSlug} of ${pageContext.orgSlug}.`,
-  };
 }

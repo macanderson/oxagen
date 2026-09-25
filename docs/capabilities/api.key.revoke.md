@@ -10,7 +10,7 @@
 
 Revoke an API key by its `aky_*` public ID. The key is soft-deleted (sets `deleted_at`) and immediately invalid for all subsequent requests — `resolveApiKey` filters on `isNull(deletedAt)`. The row is retained for audit. Audited as `api_key.revoked`.
 
-This capability is not exposed on the agent surface by default (`surfaces` excludes `agent`). It requires explicit approval when invoked via MCP.
+This capability is on the `agent` surface. When an agent turn calls it, the call waits for a person to approve it (`requiresApproval: true`). The `api` and `mcp` surfaces do not read that flag. There, IAM limits the call to org Owner or Admin, the workspace's decision rules apply, and the handler refuses the server-owned credentials listed below. The billing gate does not apply (`noBillingGate: true`).
 
 ## Input
 
@@ -67,8 +67,9 @@ deliberate, not drift.
 
 ## Surfaces
 
-- `DELETE /api/v1/{org}/{ws}/api-keys/{keyPublicId}`
-- MCP tool `api_key_revoke` (requires approval)
+- `DELETE /v1/{org}/{workspace}/api-keys/revoke` with the body `{ "keyPublicId": "aky_..." }`
+- MCP tool `revoke_api_key`, gated like the API route
+- Agent tool `revoke_api_key`, which waits for a person's approval
 
 ## Errors
 
