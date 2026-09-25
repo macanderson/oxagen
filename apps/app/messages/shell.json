@@ -318,7 +318,20 @@
         "model": "The model provider refused or failed stella’s request, so this question was not answered. An owner can check the key and model under Model funding. Ask again.",
         "unavailable": "stella could not be reached. Try again."
       },
-      "retry": "Ask again"
+      "retry": "Ask again",
+      "feedback": {
+        "label": "Rate this reply",
+        "useful": "Useful",
+        "wrong": "Wrong",
+        "noteLabel": "What was wrong? Optional.",
+        "notePlaceholder": "The run, number, or step it got wrong",
+        "noteHint": "Up to {max} characters.",
+        "send": "Record as wrong",
+        "cancel": "Cancel",
+        "recordedUseful": "Recorded as useful against this run.",
+        "recordedWrong": "Recorded as wrong against this run.",
+        "failed": "Your rating was not recorded. Try again."
+      }
     },
     "avatar": {
       "title": "Your avatar",

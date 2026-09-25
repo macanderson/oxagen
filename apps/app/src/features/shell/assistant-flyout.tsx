@@ -120,6 +120,7 @@ import {
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
+import { AssistantReplyFeedback } from "./assistant-reply-feedback";
 import { AssistantStreamingText } from "./assistant-streaming-text";
 import { AssistantThinking } from "./assistant-thinking";
 import {
@@ -884,6 +885,21 @@ export function AssistantFlyout() {
                         {t("parked", { count: entry.parked.length })}
                       </p>
                     )}
+                    {/*
+                      Useful or wrong, recorded against the run (#4169). Only
+                      inside a workspace, like the run link: the vote names the
+                      workspace the thread was asked in.
+                    */}
+                    {org !== null &&
+                    ws !== null &&
+                    thread.conversationId !== null ? (
+                      <AssistantReplyFeedback
+                        org={org}
+                        ws={ws}
+                        conversationId={thread.conversationId}
+                        runId={entry.runId}
+                      />
+                    ) : null}
                   </div>
                 ) : (
                   <div>

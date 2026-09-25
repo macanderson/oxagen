@@ -1053,6 +1053,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "record_reply_feedback": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "The Useful and Wrong controls under each answered reply in the shell's assistant flyout, inside a workspace; Wrong takes an optional note (features/shell/assistant-reply-feedback.tsx, features/shell/assistant-feedback-actions.ts)",
+      "testid": "assistant-feedback-useful",
+      "proof": "apps/app/src/features/shell/assistant-flyout.feedback.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
+    },
     "register_agent": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
