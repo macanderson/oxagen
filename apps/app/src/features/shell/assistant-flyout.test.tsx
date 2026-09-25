@@ -46,6 +46,29 @@ declare global {
 const askAssistant = vi.fn();
 vi.mock("./assistant-actions", () => ({ askAssistant }));
 
+// The parked cards read approval rows and decide through Fleet's action; they
+// have their own tests (assistant-parked-approvals.test.tsx). This stand-in
+// shows what the flyout hands them.
+type ParkedProps = {
+  org: string;
+  ws: string;
+  runId: string;
+  cards: readonly { approvalId: string }[];
+};
+const parkedApprovals = vi.fn<(props: ParkedProps) => void>();
+vi.mock("./assistant-parked-approvals", () => ({
+  AssistantParkedApprovals: (props: ParkedProps) => {
+    parkedApprovals(props);
+    return (
+      <ul data-testid="parked-cards">
+        {props.cards.map((card) => (
+          <li key={card.approvalId}>{card.approvalId}</li>
+        ))}
+      </ul>
+    );
+  },
+}));
+
 // One `url` for both hooks, split the way Next.js splits it: `usePathname`
 // omits the query string, which is the whole of finding #4040859958.
 const pathname = vi.fn(() => "/acme/core-platform");
@@ -170,6 +193,7 @@ beforeEach(() => {
   document.cookie = "assistant_width=; Max-Age=0; Path=/";
   askAssistant.mockReset();
   refresh.mockReset();
+  parkedApprovals.mockReset();
   askAssistant.mockResolvedValue(turn());
   pathname.mockReturnValue("/acme/core-platform");
 });
@@ -444,7 +468,41 @@ describe("AssistantFlyout", () => {
     const { user } = await openFlyout();
     await ask(user, "retire the stale agent");
     expect(await screen.findByTestId("assistant-parked")).toHaveTextContent(
-      "2 writes are waiting on a person",
+      "This turn parked 2 writes for a person to decide",
+    );
+  });
+
+  // #4162: each parked write is a card in the thread, decided in the
+  // workspace the turn was asked in and read from the rows the turn's run
+  // records, including while the person stands on an organization page.
+  it("draws the parked writes as cards for the turn's workspace and run", async () => {
+    askAssistant.mockResolvedValue(
+      turn({
+        parkedCards: [
+          {
+            approvalId: "apr_1",
+            capability: "retire_agent",
+            expiresAt: "2026-09-17T18:00:00Z",
+          },
+        ],
+      }),
+    );
+    const { user, renavigate } = await openFlyout();
+    await ask(user, "retire the stale agent");
+    expect(await screen.findByTestId("parked-cards")).toHaveTextContent(
+      "apr_1",
+    );
+    expect(parkedApprovals).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        org: "acme",
+        ws: "core-platform",
+        runId: "arun_01k9",
+      }),
+    );
+    renavigate("/acme");
+    expect(screen.getByTestId("parked-cards")).toHaveTextContent("apr_1");
+    expect(parkedApprovals).toHaveBeenLastCalledWith(
+      expect.objectContaining({ org: "acme", ws: "core-platform" }),
     );
   });
 

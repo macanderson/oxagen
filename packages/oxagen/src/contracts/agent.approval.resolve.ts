@@ -38,7 +38,7 @@ export function isApprovalPublicId(value: string): boolean {
  * never run. `runId` is the fresh run the call was recorded as; `reason` is the
  * refusal or failure code.
  */
-export const approvalExecutionSchema = z.object({
+const approvalExecutionSchema = z.object({
   status: z.string(),
   runId: z.string().nullable(),
   reason: z.string().nullable(),
