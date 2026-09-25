@@ -42,6 +42,15 @@ export interface RegistryCapability {
    * capability's default (Agent RBAC spec §3.5: one resolution, two readers).
    */
   defaultEffect?: "allow" | "deny" | "require_approval";
+  /**
+   * The contract's role grants, by IAM role name. Optional here (decoupled
+   * structural view); the belt's role rule reads a missing map as granting
+   * nothing, the same fail-closed reading the handler's gate applies.
+   */
+  defaultRoles?: {
+    org: Readonly<Record<string, string | undefined>>;
+    workspace: Readonly<Record<string, string | undefined>>;
+  };
   /** Zod schema or equivalent — typed as unknown to avoid coupling. */
   input?: unknown;
   /** Mirrors `CapabilitySurface` (packages/oxagen/src/types.ts). */

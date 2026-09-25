@@ -2905,3 +2905,101 @@ describe("digestInputFor", () => {
     expect(digestInputFor(cap(schema), { a: 1 })).toEqual({ a: 1 });
   });
 });
+
+// The role rule (#4194): materializeTools reads the person's roles once and
+// leaves off the belt what their roles are not granted. The handlers refuse
+// such a call anyway; the belt stops stella being offered it.
+describe("materializeTools role rule", () => {
+  const OWNER_ONLY = {
+    ...FIXTURE[1],
+    name: "install_plugin",
+    defaultRoles: {
+      org: { Owner: "allow", Admin: "allow" },
+      workspace: {},
+    },
+  };
+  const FOR_MEMBERS = {
+    ...FIXTURE[1],
+    name: "get_rate_card",
+    defaultRoles: {
+      org: { Owner: "allow" },
+      workspace: { Owner: "allow", Member: "allow" },
+    },
+  };
+
+  const roleReads = { org: vi.fn(), workspace: vi.fn() };
+
+  async function beltFor(
+    roles: { org: string[]; workspace: string[] },
+    ctx: Record<string, unknown> = {},
+  ): Promise<string[]> {
+    roleReads.org.mockReset().mockResolvedValue(roles.org);
+    roleReads.workspace.mockReset().mockResolvedValue(roles.workspace);
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => [OWNER_ONLY, FOR_MEMBERS, FIXTURE[1]],
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.doMock("@oxagen/iam/org-role", () => ({
+      resolveActingUserId: async (c: { userId: string | null }) => c.userId,
+      resolveActorOrgRoles: roleReads.org,
+      resolveActorWorkspaceRoles: roleReads.workspace,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const { nameMap } = await mt({ ...CTX, ...ctx });
+    vi.doUnmock("@oxagen/oxagen");
+    vi.doUnmock("@oxagen/iam/org-role");
+    return Object.values(nameMap).sort();
+  }
+
+  it("omits an Owner-only capability from a workspace Member's belt", async () => {
+    const belt = await beltFor({ org: [], workspace: ["Member"] });
+    expect(belt).not.toContain("install_plugin");
+    expect(belt).toContain("get_rate_card");
+    // A capability with no role map is outside the rule.
+    expect(belt).toContain("capA");
+  });
+
+  it("includes it on an org Owner's belt", async () => {
+    const belt = await beltFor({ org: ["Owner"], workspace: [] });
+    expect(belt).toEqual(
+      expect.arrayContaining(["install_plugin", "get_rate_card", "capA"]),
+    );
+  });
+
+  it("reads the roles once per materialization", async () => {
+    await beltFor({ org: ["Owner"], workspace: [] });
+    expect(roleReads.org).toHaveBeenCalledTimes(1);
+    expect(roleReads.workspace).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops every role-mapped capability when the read fails", async () => {
+    roleReads.org.mockReset();
+    const belt = await (async () => {
+      vi.doMock("@oxagen/oxagen", () => ({
+        listCapabilities: () => [OWNER_ONLY, FOR_MEMBERS, FIXTURE[1]],
+        getSurfaces: (c: { surfaces?: readonly string[] }) =>
+          c.surfaces ?? ["api", "mcp"],
+        getCapability: () => undefined,
+      }));
+      vi.doMock("@oxagen/iam/org-role", () => ({
+        resolveActingUserId: async () => {
+          throw new Error("database unreachable");
+        },
+        resolveActorOrgRoles: roleReads.org,
+        resolveActorWorkspaceRoles: roleReads.workspace,
+      }));
+      vi.resetModules();
+      const { materializeTools: mt } = await import("./materialize-tools");
+      const { nameMap } = await mt(CTX);
+      vi.doUnmock("@oxagen/oxagen");
+      vi.doUnmock("@oxagen/iam/org-role");
+      return Object.values(nameMap);
+    })();
+    expect(belt).toContain("capA");
+    expect(belt).not.toContain("install_plugin");
+    expect(belt).not.toContain("get_rate_card");
+  });
+});

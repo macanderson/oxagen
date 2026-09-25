@@ -252,6 +252,7 @@ export async function resumeApprovedCall(
           allowlist: new Set([cap.name]),
           riskCeiling: payload.riskLevel,
           serverAllowlist: new Set(),
+          callerRoles: { org: orgRoles, workspace: workspaceRoles },
         });
         if (!Object.values(tools.nameMap).includes(cap.name))
           throw new ApprovalResumeError("tool_authorization_changed");
