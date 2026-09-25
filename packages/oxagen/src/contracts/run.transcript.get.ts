@@ -530,7 +530,12 @@ export const transcriptEntrySchema = z
     parentKey: z.string().nullable().optional(),
     /** What kind of row the entry is; null for a turn, which is a group. */
     node: transcriptNodeSchema.nullable().optional(),
-    /** True when the entry has nothing to show a reader beyond its frames. */
+    /**
+     * True when the entry has nothing to show a reader beyond its frames: a
+     * prompt or reply with no words to show, a reply that repeats words the
+     * reader was just shown (`echoOf`), or an event with no decision and no
+     * failure. `counts` counts no quiet entry.
+     */
     quiet: z.boolean().optional(),
     /**
      * How the entry's call ended; null for an entry that records no call. At
@@ -557,9 +562,12 @@ export const transcriptEntrySchema = z
      */
     durationMs: z.number().int().nonnegative().nullable().optional(),
     /**
-     * The `key` of an earlier entry in the same turn whose kept body this one
-     * repeats byte for byte: a message that echoes the operator's prompt, or
-     * a reply that says again what the last one said. Null otherwise.
+     * The `key` of an earlier entry in the same turn whose words this reply
+     * says again, ignoring surrounding whitespace: on the run's own chain, the
+     * operator's prompt; on any chain, the model step or reply said last
+     * before it, such as a turn's closing message that repeats the model's
+     * last text block. The words are compared, not the digests. Null
+     * otherwise. An entry that repeats another is `quiet`.
      */
     echoOf: z.string().nullable().optional(),
     /** What a recall entry put in front of the model; null on other entries. */
@@ -577,8 +585,10 @@ export const transcriptEntrySchema = z
   .strict();
 
 /**
- * What the whole run holds at the zoom read, counted over every entry
- * whatever the chips pressed, so a chip's count and the page agree.
+ * What the whole run holds at the zoom read, counted over every entry that is
+ * not `quiet`, whatever the chips pressed, so a chip's count and the entries
+ * the page draws under it agree. The unit is the entry: a model step that
+ * said two things counts once.
  */
 export const transcriptCountsSchema = z
   .object({

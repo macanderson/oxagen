@@ -527,7 +527,7 @@ export const TranscriptEntry = z.object({
   parentKey: z.string().nullable(),
   /** What kind of row the entry is; null for a turn. */
   node: TranscriptNode.nullable(),
-  /** The entry has nothing to show beyond its frames. */
+  /** The entry has nothing to show beyond its frames, which includes a reply that repeats one (`echoOf`); it draws no row. */
   quiet: z.boolean(),
   /** How the entry's call ended; null for an entry that records no call. */
   outcome: TranscriptOutcome.nullable(),
@@ -543,7 +543,7 @@ export const TranscriptEntry = z.object({
   model: z.string().nullable(),
   /** First frame to last, in ms; null for one frame or a call with no result yet. */
   durationMs: z.number().int().nonnegative().nullable(),
-  /** The earlier entry whose kept body this one repeats; null otherwise. */
+  /** The earlier entry whose words this reply says again; null otherwise. */
   echoOf: z.string().nullable(),
   /** What a recall entry put in front of the model; null on other entries. */
   recall: TranscriptRecall.nullable(),
@@ -554,9 +554,9 @@ export type TranscriptEntry = z.infer<typeof TranscriptEntry>;
 
 /** The run's entries counted at the zoom read, whatever the chips or the search. */
 export const TranscriptCounts = z.object({
-  /** Entries per chip; an entry that answers two chips counts under both. */
+  /** Entries per chip that are not `quiet`; an entry that answers two chips counts under both. */
   kinds: z.record(TranscriptKind, Count),
-  /** Entries that have something to show. */
+  /** Entries that are not `quiet`: the entries that draw rows. */
   entries: Count,
   /** Entries that failed or were refused. */
   errors: Count,

@@ -11,12 +11,16 @@
 //
 // Every fact a reader would otherwise derive from an entry's frames is the
 // fold's, and goes out as a field of the entry: its key, parent, node,
-// outcome, gates, subject, family, duration and echo. Two need bytes the fold
-// does not read, so they are added here: a recall entry's items, parsed from
-// the body it kept (`recallOf`), and each reply's `tool_use` blocks, which
-// name the tool step that recorded the call (`toolUseClaimer`) and what came
-// back. `counts` counts the run's entries at the zoom, and `figures` the
-// run's steps, calls and time (`transcriptFigures`), whatever the chips.
+// outcome, gates, subject, family and duration. Three need bytes the fold
+// does not read, so the bodies are read here and the rule that needs them
+// runs over what was read: which prompts and replies have nothing to show,
+// and which reply repeats words the reader was just shown (`markWords`, over
+// the words `readWords` reads for the whole run); a recall entry's items,
+// parsed from the body it kept (`recallOf`); and each reply's `tool_use`
+// blocks, which name the tool step that recorded the call (`toolUseClaimer`)
+// and what came back. `counts` counts the run's entries at the zoom, and
+// `figures` the run's steps, calls and time (`transcriptFigures`), whatever
+// the chips.
 //
 // A `query` narrows the entries the chips kept (`searchFolds`). Label, tool
 // and target are matched on the entry; each half's text is read from the
@@ -59,6 +63,8 @@ import {
   filterFoldsByKind,
   frameFolds,
   frameKey,
+  markWords,
+  type MessageAssembly,
   recallOf,
   type RunFrame,
   stepFolds,
@@ -69,8 +75,10 @@ import {
   transcriptFigures,
   type TranscriptDecision,
   type TranscriptFold,
+  type TranscriptWords,
   turnFolds,
   withoutDuplicateModelCalls,
+  wordsHalf,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
@@ -110,6 +118,12 @@ const TRANSCRIPT_FRAME_CAP = 10_000;
 const RECALL_BODY_MAX = 1_048_576;
 /** Bodies read at once. */
 const BODY_CONCURRENCY = 8;
+/**
+ * The most halves one read reads for their words (`readWords`): about three
+ * per turn, the prompt, the reply and the model step before the reply. An
+ * entry past it keeps what the fold said about it.
+ */
+export const TRANSCRIPT_WORDS_HALF_MAX = 2_000;
 
 const DECIMAL = /^\d+$/;
 /** The tacho start cursor: frames are numbered from 0, so a read from the start sits at -1. */
@@ -299,6 +313,55 @@ function foldThrough(
 // ---- Bodies ---------------------------------------------------------------------------
 
 /**
+ * A half's kept body as the record vouches for it: the message a recorded
+ * model stream was (`assembly`), or else its text. Null when no body was
+ * kept, the store cannot answer, the bytes no longer hash to the recorded
+ * digest, or they are not UTF-8 text.
+ *
+ * One body the store cannot answer (an object gone missing, a key id this
+ * deployment no longer holds, a transient read failure) leaves its own half
+ * unread. It must not fail the read: every other half is still readable, and
+ * the Policy, Context and stats tabs read through this same handler.
+ */
+async function readBody(
+  bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
+  scope: RunScope,
+  frame: RunFrame,
+): Promise<{ text: string; assembly: MessageAssembly | null } | null> {
+  const { bodyRef, bodyDigest } = frame.body;
+  if (bodyRef === null || bodyDigest === null) return null;
+  let stored: Awaited<ReturnType<typeof bodies.getBody>>;
+  try {
+    stored = await bodies.getBody(scope, bodyRef);
+  } catch (err) {
+    logger.warn(
+      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
+      "get_run_transcript: a frame body could not be read; its half is shown without text",
+    );
+    return null;
+  }
+  if (digestBytes(stored.bytes) !== bodyDigest) return null;
+  let text: string;
+  try {
+    text = decoder.decode(stored.bytes);
+  } catch {
+    return null;
+  }
+  try {
+    return {
+      text,
+      assembly: await readAssembly(bodies, scope, bodyRef, text, frame),
+    };
+  } catch (err) {
+    logger.warn(
+      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
+      "get_run_transcript: a frame's reassembly could not be read; its half is shown without text",
+    );
+    return null;
+  }
+}
+
+/**
  * One half of the exchange.
  *
  * A half whose bytes are a recorded model stream carries the REASSEMBLY —
@@ -330,52 +393,65 @@ async function half(
     })),
     fidelity,
   };
-  if (bodyRef === null || bodyDigest === null) {
+  const body = await readBody(bodies, scope, frame);
+  if (body === null)
     return { ...base, text: null, truncated: false, assembly: null };
-  }
-  const unread = { ...base, text: null, truncated: false, assembly: null };
-  // One body the store cannot answer (an object gone missing, a key id this
-  // deployment no longer holds, a transient read failure) leaves its own half
-  // unread. It must not fail the page: every other half is still readable,
-  // and the Policy, Context and stats tabs read through this same page.
-  let stored: Awaited<ReturnType<typeof bodies.getBody>>;
-  try {
-    stored = await bodies.getBody(scope, bodyRef);
-  } catch (err) {
-    logger.warn(
-      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
-      "get_run_transcript: a frame body could not be read; its half is shown without text",
-    );
-    return unread;
-  }
-  if (digestBytes(stored.bytes) !== bodyDigest) return unread;
-  let text: string;
-  try {
-    text = decoder.decode(stored.bytes);
-  } catch {
-    return unread;
-  }
-  let assembly: Awaited<ReturnType<typeof readAssembly>>;
-  try {
-    assembly = await readAssembly(bodies, scope, bodyRef, text, frame);
-  } catch (err) {
-    logger.warn(
-      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
-      "get_run_transcript: a frame's reassembly could not be read; its half is shown without text",
-    );
-    return unread;
-  }
-  if (assembly !== null) {
+  if (body.assembly !== null) {
     return {
       ...base,
       text: null,
       truncated: false,
-      assembly: assemblyView(assembly, outputRate(frame)),
+      assembly: assemblyView(body.assembly, outputRate(frame)),
     };
   }
+  const { text } = body;
   return text.length > textMax
     ? { ...base, text: text.slice(0, textMax), truncated: true, assembly: null }
     : { ...base, text, truncated: false, assembly: null };
+}
+
+/**
+ * The words each entry of `needed` shows a reader, for `markWords`: read the
+ * way `half` reads the half a reader is shown, whole rather than cut at the
+ * zoom's cap. A prompt or reply shows the text of its half, and none when the
+ * half is a recorded model stream, which a reader is shown as a message with
+ * no text. A model step shows the last text block of its reply, or the
+ * reply's text where the recorder assembled none.
+ *
+ * At most `halfMax` halves are read, in the order given. An entry past the
+ * bound is left out of the answer, so `markWords` leaves it as the fold said.
+ * A half with no kept body shows no words and costs no read.
+ */
+export async function readWords(
+  bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
+  scope: RunScope,
+  needed: readonly TranscriptFold[],
+  halfMax: number = TRANSCRIPT_WORDS_HALF_MAX,
+): Promise<Map<TranscriptFold, TranscriptWords>> {
+  const words = new Map<TranscriptFold, TranscriptWords>();
+  const reads: { fold: TranscriptFold; frame: RunFrame }[] = [];
+  for (const fold of needed) {
+    const frame = wordsHalf(fold);
+    if (frame === null || frame.body.bodyRef === null) words.set(fold, null);
+    else if (reads.length < halfMax) reads.push({ fold, frame });
+  }
+  const said = await mapConcurrent(
+    reads,
+    BODY_CONCURRENCY,
+    async ({ fold, frame }): Promise<TranscriptWords> => {
+      const body = await readBody(bodies, scope, frame);
+      if (body === null) return null;
+      if (body.assembly === null) return body.text;
+      if (fold.node !== "model") return null;
+      const blocks = body.assembly.blocks.filter(
+        (block) => block.kind === "text" && block.text.trim() !== "",
+      );
+      const last = blocks[blocks.length - 1];
+      return last?.kind === "text" ? last.text : null;
+    },
+  );
+  reads.forEach(({ fold }, i) => words.set(fold, said[i] ?? null));
+  return words;
 }
 
 /**
@@ -572,6 +648,12 @@ export function createRunTranscriptGetHandler(
         : input.zoom === "turns"
           ? turnFolds(shown, steps)
           : frameFolds(shown);
+    // Which prompts and replies show nothing, and which reply repeats words
+    // the reader was just shown, need their words. They are read over the
+    // whole run, before the counts, so an entry that draws no row counts
+    // nowhere. A turn is a group, and nothing in it is settled this way.
+    if (input.zoom !== "turns")
+      await markWords(all, (needed) => readWords(deps.bodies, scope, needed));
     // Counted over every entry at the zoom, whatever the chips or query, so
     // a chip's count and the rows it shows agree.
     const counts = transcriptCounts(all, TRANSCRIPT_KINDS);

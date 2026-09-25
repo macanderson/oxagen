@@ -43,9 +43,12 @@
  * names none either. An effect frame that names another call stays its own
  * step.
  *
- * Nothing here reads a body. A frame carries its body reference, and the fold
- * prefers a half whose body was kept; the caller reads the bodies of the
- * halves it names.
+ * Nothing in the fold reads a body. A frame carries its body reference, and
+ * the fold prefers a half whose body was kept; the caller reads the bodies of
+ * the halves it names. Two facts need the words themselves, and `markWords`
+ * settles them once the caller has read those words: which prompts and
+ * replies have nothing to show, and which reply repeats words the reader was
+ * just shown.
  */
 import {
   addFrameUsage,
@@ -171,9 +174,9 @@ export interface TranscriptFold {
   /** First frame to last, in milliseconds; null for one frame or an unfinished call. */
   durationMs: number | null;
   /**
-   * The key of an earlier entry in the same turn whose kept body this one
-   * repeats byte for byte: a message that echoes the operator's prompt, or a
-   * reply that says again what the last one said. Null otherwise.
+   * The key of an earlier entry in the same turn whose words this reply says
+   * again: the operator's prompt, or the words said last before it on its
+   * chain (`markWords`). Null otherwise, and null until `markWords` runs.
    */
   echoOf: string | null;
 }
@@ -715,42 +718,108 @@ function nestSubagents(folds: readonly TranscriptFold[]): void {
 }
 
 /**
- * Each reply that repeats an earlier entry of its turn byte for byte. On the
- * run's own chain, a message whose body is the operator's prompt is that
- * prompt again (a run recorded before #4051 sealed the transcript's copy of
- * it). On any chain, a reply identical to the reply before it is the same
- * words twice. Bodies compare by their recorded digest.
+ * What an entry says, as `markWords` reads it: the words a reader is shown
+ * for it. For a prompt, the text of its request; for a reply, the text of its
+ * response; for a model step, the last text block of its reply, or the
+ * reply's text where the recorder assembled none. Null when the entry shows
+ * no words: the half kept no body, the body could not be read or is not
+ * text, or a prompt or reply was kept as a model stream, which a reader is
+ * shown no text for.
  */
-function markEchoes(folds: readonly TranscriptFold[]): void {
+export type TranscriptWords = string | null;
+
+/**
+ * The half whose words an entry says: a prompt's request, and the response
+ * of a reply or a model step.
+ */
+export function wordsHalf(fold: TranscriptFold): RunFrame | null {
+  return fold.node === "prompt" ? fold.request : fold.response;
+}
+
+/**
+ * Settles the two facts about an entry that need its words, once `read` has
+ * read them (ADR-182). The fold reads no body, so it cannot settle either:
+ *
+ * - A prompt or reply with no words to show, or only whitespace, is `quiet`.
+ * - A reply that says again what the reader was just shown repeats it
+ *   (`echoOf`), and is `quiet` too. On the run's own chain, that is the
+ *   operator's prompt of its turn: a run recorded before #4051 also sealed
+ *   the transcript's copy of the prompt with its words. On any chain, it is
+ *   the words said last before the reply in its turn on that chain, by a
+ *   model step or an earlier reply: a turn's closing message repeats the
+ *   model's last text block on every harness that records both.
+ *
+ * Words compare with their surrounding whitespace trimmed. They are compared
+ * as text and never by digest: a model's reply is kept as the stream it
+ * arrived in, and a turn's closing message as plain words, so the two never
+ * share a digest even when they say the same thing.
+ *
+ * `read` is asked once, for every prompt and reply and for the model step or
+ * reply said right before each reply. An entry it leaves out of its answer
+ * (a read bound it passed) keeps what the fold said about it.
+ */
+export async function markWords(
+  folds: readonly TranscriptFold[],
+  read: (
+    needed: readonly TranscriptFold[],
+  ) => Promise<ReadonlyMap<TranscriptFold, TranscriptWords>>,
+): Promise<void> {
+  const needed = new Set<TranscriptFold>();
+  const prompts = new Map<TranscriptFold, TranscriptFold[]>();
+  const before = new Map<TranscriptFold, TranscriptFold>();
   let turn: number | null | undefined;
-  let prompts = new Map<string, string>();
-  let previous = null as { digest: string; key: string } | null;
+  let asked: TranscriptFold[] = [];
+  let said = new Map<string, TranscriptFold>();
   for (const fold of folds) {
     if (fold.turn !== turn) {
       turn = fold.turn;
-      prompts = new Map();
-      previous = null;
+      asked = [];
+      said = new Map();
     }
+    if (fold.quiet || wordsHalf(fold) === null) continue;
+    const chain = chainOf(fold.opening);
     if (fold.node === "prompt") {
-      const digest = fold.request?.body.bodyDigest ?? null;
-      if (digest !== null && !prompts.has(digest))
-        prompts.set(digest, fold.key);
+      needed.add(fold);
+      asked.push(fold);
+    } else if (fold.node === "reply") {
+      needed.add(fold);
+      if (fold.opening.chain === undefined) prompts.set(fold, [...asked]);
+      const last = said.get(chain);
+      if (last !== undefined) {
+        needed.add(last);
+        before.set(fold, last);
+      }
+      said.set(chain, fold);
+    } else if (fold.node === "model") {
+      said.set(chain, fold);
+    }
+  }
+  if (needed.size === 0) return;
+  const words = await read([...needed]);
+  const trimmed = (fold: TranscriptFold | undefined) => {
+    const found = fold === undefined ? null : (words.get(fold) ?? null);
+    return found === null ? null : found.trim();
+  };
+  for (const fold of needed) {
+    if (fold.node !== "prompt" && fold.node !== "reply") continue;
+    if (!words.has(fold)) continue;
+    const text = trimmed(fold);
+    if (text === null || text === "") {
+      fold.quiet = true;
       continue;
     }
     if (fold.node !== "reply") continue;
-    const digest = fold.response?.body.bodyDigest ?? null;
-    if (digest === null) continue;
-    const prompt =
-      fold.opening.chain === undefined ? prompts.get(digest) : undefined;
-    if (prompt !== undefined) fold.echoOf = prompt;
-    else if (previous?.digest === digest) fold.echoOf = previous.key;
-    else previous = { digest, key: fold.key };
+    const echoed =
+      prompts.get(fold)?.find((prompt) => trimmed(prompt) === text) ??
+      (trimmed(before.get(fold)) === text ? before.get(fold) : undefined);
+    if (echoed === undefined) continue;
+    fold.echoOf = echoed.key;
+    fold.quiet = true;
   }
 }
 
 function withRelations(folds: TranscriptFold[]): TranscriptFold[] {
   nestSubagents(folds);
-  markEchoes(folds);
   return folds;
 }
 
@@ -909,11 +978,20 @@ export function filterFoldsByKind(
   return folds.filter((fold) => [...fold.kinds].some((k) => wanted.has(k)));
 }
 
-/** What a folded run holds, counted over every entry whatever the chips. */
+/**
+ * What a folded run holds, counted over every entry whatever the chips.
+ *
+ * Every figure counts only the entries a reader is shown something for
+ * (`quiet` false). An entry with nothing to show, and a reply that repeats
+ * words the reader was just shown (`markWords`), draws no row, so no chip and
+ * no total counts it: a count and the rows it stands for agree (ADR-182).
+ * The unit is the entry, not the row: a model step that said three things is
+ * one entry under `responses`.
+ */
 export interface TranscriptCounts {
   /** Entries per chip. An entry that answers two chips counts under both. */
   kinds: Record<TranscriptKind, number>;
-  /** Entries that have something to show (`quiet` false). */
+  /** Entries that have something to show. */
   entries: number;
   /** Entries that failed or were refused, or that answer the errors chip. */
   errors: number;
@@ -932,8 +1010,9 @@ export function transcriptCounts(
   let errors = 0;
   let policy = 0;
   for (const fold of folds) {
+    if (fold.quiet) continue;
     for (const kind of fold.kinds) kinds[kind] = (kinds[kind] ?? 0) + 1;
-    if (!fold.quiet) entries += 1;
+    entries += 1;
     if (
       fold.outcome === "failed" ||
       fold.outcome === "denied" ||

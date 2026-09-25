@@ -6,10 +6,11 @@
 // The server is the only place a run's transcript is folded (ADR-182). It
 // pairs the halves of each call, gathers every frame of one call into one
 // entry, nests a subagent's entries under the call that spawned them, and
-// states each entry's outcome, gates, subject, family, duration, echo and
-// recall, and which `tool_use` block a tool entry already draws. This module
-// folds nothing. `rowsOf` reads one entry into the rows it draws, and every
-// fact on a row is a field of that entry or of one of its halves.
+// states each entry's outcome, gates, subject, family, duration and recall,
+// whether it has anything to show, and which `tool_use` block a tool entry
+// already draws. This module folds nothing. `rowsOf` reads one entry into
+// the rows it draws, and every fact on a row is a field of that entry or of
+// one of its halves.
 //
 // Pure, so every row is tested without a render. A figure the entry did not
 // carry is left out rather than drawn as a zero.
@@ -526,13 +527,15 @@ function eventRow(entry: TranscriptEntry): FeedRow {
 }
 
 /**
- * The rows one entry draws, in the order they read. An entry with nothing to
- * show (`quiet`) draws none, nor does one that repeats an earlier entry's
- * words (`echoOf`): the operator's prompt copied into a message, or a reply
- * said twice. A turn (`node` null) is a group, not a row.
+ * The rows one entry draws, in the order they read. An entry the server says
+ * has nothing to show (`quiet`) draws none. That includes a prompt or reply
+ * with no words, and a reply that repeats words the reader was just shown
+ * (`echoOf`): the server compares the words, and its counts leave out every
+ * quiet entry, so a count and the rows drawn agree (ADR-182). A turn (`node`
+ * null) is a group, not a row.
  */
 export function rowsOf(entry: TranscriptEntry): FeedRow[] {
-  if (entry.quiet || entry.echoOf !== null) return [];
+  if (entry.quiet) return [];
   switch (entry.node) {
     case "prompt": {
       const text = wordsOf(entry.request);

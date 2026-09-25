@@ -412,6 +412,7 @@ describe("an event's rows", () => {
           node: "reply",
           turn: 1,
           echoOf: "0",
+          quiet: true,
           response: { seq: 2, type: "oxagen:message", text: "Cut it." },
         },
       ]),

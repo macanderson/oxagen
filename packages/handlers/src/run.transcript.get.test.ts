@@ -6,7 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { digestBytes } from "@oxagen/tacho";
 import type { TachoFrameRow } from "@oxagen/telemetry";
-import { tachoFrame as tachoFrameOf } from "@oxagen/run-ledger";
+import { stepFolds, tachoFrame as tachoFrameOf } from "@oxagen/run-ledger";
 import { describe, expect, it, vi } from "vitest";
 import {
   createRunTranscriptGetHandler,
@@ -15,6 +15,7 @@ import {
   elapsedMs,
   encodeTranscriptCursor,
   planTranscriptPage,
+  readWords,
   type RunTranscriptGetDeps,
   toolResultsOf,
   withToolUseFacts,
@@ -22,6 +23,7 @@ import {
 import {
   ctx,
   event,
+  SCOPE,
   ledgerRun,
   memoryEvents,
   memoryStores,
@@ -1143,7 +1145,8 @@ describe("get_run_transcript and one unreadable body", () => {
       }),
     ]);
     const out = await transcript(input({ zoom: "everything" }), ctx());
-    expect(getBody).toHaveBeenCalledTimes(2);
+    // The prompt is read for its words (`readWords`) and for the page.
+    expect(getBody).toHaveBeenCalledTimes(3);
     expect(out.entries.map((e) => e.request?.text ?? null)).toEqual([
       "Fix the build.",
       null,
@@ -1493,7 +1496,8 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     ).toEqual([
       ["0", "prompt", false, null, null],
       ["1", "tool", false, "ok", null],
-      ["4", "reply", false, null, "0"],
+      // The prompt's copy repeats the operator's words: nothing new to show.
+      ["4", "reply", true, null, "0"],
       ["5", "control", true, null, null],
     ]);
     const call = out.entries[1];
@@ -1522,8 +1526,14 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     );
     expect(tools.entries.map((e) => e.key)).toEqual(["1"]);
     expect(tools.counts).toEqual(all.counts);
-    expect(all.counts).toMatchObject({ entries: 3, errors: 0, policy: 1 });
-    expect(all.counts?.kinds).toMatchObject({ prompt: 1, tools: 1, policy: 1 });
+    // The prompt's copy draws no row, so no count holds it.
+    expect(all.counts).toMatchObject({ entries: 2, errors: 0, policy: 1 });
+    expect(all.counts?.kinds).toMatchObject({
+      prompt: 1,
+      tools: 1,
+      policy: 1,
+      responses: 0,
+    });
     // A later page says what the whole run holds, not what the page holds.
     const first = await transcript(input({ zoom: "steps", limit: 2 }), ctx());
     const later = await transcript(
@@ -1532,6 +1542,127 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
     );
     expect(later.entries.map((e) => e.key)).toEqual(["4", "5"]);
     expect(later.counts).toEqual(all.counts);
+  });
+
+  it("reads a turn's closing message that repeats the model's streamed reply as an echo, and counts it nowhere", async () => {
+    // The model's reply is kept as the stream it arrived in and the turn's
+    // closing message as plain words: two digests, the same words.
+    const rows = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: 1,
+        ...stored(modelStream(["Shipped ", "it."]), "text/event-stream"),
+      }),
+      tachoRow(2, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Shipped it.\n"),
+      }),
+    ];
+    const { transcript } = harness(rows);
+    for (const zoom of ["steps", "everything"] as const) {
+      const out = await transcript(input({ zoom }), ctx());
+      expect(
+        out.entries.map((e) => [e.key, e.node, e.quiet, e.echoOf]),
+      ).toEqual([
+        ["0", "prompt", false, null],
+        ["1", "model", false, null],
+        ["2", "reply", true, "1"],
+      ]);
+      expect(out.counts).toMatchObject({ entries: 2 });
+      expect(out.counts?.kinds).toMatchObject({ prompt: 1, responses: 1 });
+    }
+  });
+
+  it("keeps a closing message that says something new, and reads a blank prompt as showing nothing (negative)", async () => {
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("  \n"),
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: 1,
+        ...stored(modelStream(["Shipped it."]), "text/event-stream"),
+      }),
+      tachoRow(2, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Shipped it, and tagged v2."),
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(out.entries.map((e) => [e.key, e.quiet, e.echoOf])).toEqual([
+      ["0", true, null],
+      ["1", false, null],
+      ["2", false, null],
+    ]);
+    expect(out.counts).toMatchObject({ entries: 2 });
+    expect(out.counts?.kinds).toMatchObject({ prompt: 0, responses: 2 });
+  });
+
+  it("reads each entry's words from the half a reader is shown, within its bound", async () => {
+    const { deps, getBody } = harness([]);
+    const frames = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: 1,
+        ...stored(modelStream(["Shipped."]), "text/event-stream"),
+      }),
+      tachoRow(2, { kind: "turn_end", ...blank, turnSeq: 1 }),
+      // A closing message kept as a model stream shows no words.
+      tachoRow(3, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored(modelStream(["Also streamed."]), "text/event-stream"),
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const folds = stepFolds(frames);
+    const words = await readWords(deps.bodies, SCOPE, folds);
+    expect(folds.map((fold) => words.get(fold))).toEqual([
+      "Ship it.",
+      "Shipped.",
+      null,
+      null,
+    ]);
+    // The turn end that kept no body cost no read.
+    expect(getBody).toHaveBeenCalledTimes(3);
+
+    getBody.mockClear();
+    const bounded = await readWords(deps.bodies, SCOPE, folds, 1);
+    expect(getBody).toHaveBeenCalledTimes(1);
+    expect(folds.map((fold) => bounded.has(fold))).toEqual([
+      true,
+      false,
+      true,
+      false,
+    ]);
   });
 
   it("carries the whole body when asked, and an excerpt when asked", async () => {

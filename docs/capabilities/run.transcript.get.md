@@ -112,7 +112,7 @@ The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `
 | `entries[].cumulativeCost` | `{ micros, currency, basis }` or null | every cost record of the run up to and including this entry (spec §8.4 prefix sum), so a page never restates the run's spend as the page's |
 | `cursor` | string or null | the point to continue from; null when nothing lies past this page |
 | `complete` | boolean | false when the run has more than 10 000 frames, so the transcript is a prefix |
-| `counts` | object | the run's entries at the zoom read, counted over every entry whatever the chips or query: `kinds` (entries per chip), `entries` (entries that are not `quiet`), `errors` (entries that failed or were refused, or answer the errors chip), and `policy` (entries that answer the policy chip, except the harness checking itself) |
+| `counts` | object | the run's entries at the zoom read, counted over every entry that is not `quiet`, whatever the chips or query: `kinds` (entries per chip), `entries`, `errors` (entries that failed or were refused, or answer the errors chip), and `policy` (entries that answer the policy chip, except the harness checking itself). A quiet entry draws no row, so no count holds it. The unit is the entry: a model step that said two things counts once |
 | `figures` | object | the run's steps, calls and recorded time, whatever the zoom, chips or query (see Figures) |
 | `search` | object or absent | on a read with a `query`: `{ query, matched, unsearched }` (see Search) |
 | `entries[].matches` | string[] or absent | on a read with a `query`: where the entry matched, from `label`, `subject`, `target`, `request` and `response` |
@@ -126,7 +126,7 @@ The server is the only place a transcript is folded (ADR-182), so every fact a r
 | `entries[].key` | string | the entry's name within the run: the opening frame's `seq` on the run's own chain, `<sessionUuid>:<seq>` on a subagent's. Stable across reads |
 | `entries[].parentKey` | string or null | on a subagent's entry, the `key` of the entry that spawned its chain: the call whose `tool_use_id` the chain names, or else the latest entry on the parent chain that recorded a `subagent_start`. Null on the run's own chain |
 | `entries[].node` | string or null | what kind of row the entry is: `prompt` (the operator's words), `reply` (a `turn_end` or a message the agent reported), `model`, `tool`, `policy` (a decision on no recorded call, or an operator's command), `recall`, `seal` (the run's own stop), `control` (a frame that frames the run, such as the agent starting), or `event`. Null for a turn |
-| `entries[].quiet` | boolean | true when the entry has nothing to show beyond its frames: a prompt or reply that kept no body, or an event with no decision and no failure |
+| `entries[].quiet` | boolean | true when the entry has nothing to show beyond its frames: a prompt or reply with no words to show (no body kept, a body that cannot be read, or only whitespace), a reply that repeats words just shown (`echoOf`), or an event with no decision and no failure |
 | `entries[].outcome` | string or null | `ok`, `failed`, `denied` (a rule or the harness refused it), `parked` (it waits on an approval), or `pending` (nothing came back yet); null for an entry that records no call. At `everything`, a call's request frame cannot say how the call ended, so its entry's outcome is null |
 | `entries[].approvalId` | string or null | the approval a parked call waits on (`apr_…`), when its receipt named one |
 | `entries[].gates` | object[] | every decision folded into the entry, in the order recorded, each shaped like `decision`. `decision` is the last of them |
@@ -134,8 +134,12 @@ The server is the only place a transcript is folded (ADR-182), so every fact a r
 | `entries[].family` | string or null | the tool's family: `shell`, `read`, `edit`, `create`, `delete`, `search`, `web`, `skill`, `agent`, `plan`, `notebook`, `mcp` or `tool` |
 | `entries[].model` | string or null | `provider/model` of a model call |
 | `entries[].durationMs` | integer or null | first frame to last; null for one frame, and for a call with no result yet |
-| `entries[].echoOf` | string or null | the `key` of an earlier entry in the same turn whose kept body this one repeats byte for byte: a message that echoes the operator's prompt, or a reply that says again what the last one said |
+| `entries[].echoOf` | string or null | the `key` of an earlier entry in the same turn whose words this reply says again, ignoring surrounding whitespace: on the run's own chain, the operator's prompt (a run recorded before #4051 sealed the transcript's copy of it); on any chain, the model step or reply said last before it, such as a turn's closing message that repeats the model's last text block. The words are compared, not the digests: a model's reply is kept as the stream it arrived in and a closing message as plain words, so the two never share a digest. An entry that repeats another is `quiet` |
 | `entries[].recall` | object or null | on a recall entry, what it put in front of the model, read from the body it kept: `{ unit, count, tokens, cut, items[] }`. A steering manifest counts `items` and lists the ones that reached the model; a context frame counts `frames`. A body that cannot be read falls back to the frame count the ledger recorded |
+
+### Words
+
+Two facts need an entry's words, which the fold does not read: whether a prompt or reply has anything to show, and whether a reply repeats words just shown (`echoOf`). At `steps` and `everything`, every read settles both over the whole run before it counts, so `counts` and the rows a reader draws agree. It reads the half a reader is shown, whole: a prompt's request, a reply's response, and for the model step or reply said right before each reply, its response. A model step's words are the last text block of its reply. One read reads at most **2 000** halves for their words (`TRANSCRIPT_WORDS_HALF_MAX` in the handler), about three a turn; an entry past that bound keeps what the fold said about it. A half with no kept body costs no read.
 
 ## Search
 

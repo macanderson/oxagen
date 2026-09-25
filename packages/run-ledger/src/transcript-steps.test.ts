@@ -19,6 +19,7 @@ import {
   filterFoldsByKind,
   foldTranscript,
   frameFolds,
+  markWords,
   RECALL_ITEM_MAX,
   recallOf,
   stepFolds,
@@ -26,6 +27,7 @@ import {
   type TranscriptFold,
   transcriptCounts,
   turnFolds,
+  wordsHalf,
 } from "./transcript-steps";
 
 const ROOT = "0192d4a8-7c1e-7a00-8000-00000000000a";
@@ -1038,33 +1040,15 @@ describe("turn boundaries and replies", () => {
     expect(entry?.response?.seq).toBe("3");
   });
 
-  it("marks a message that repeats the operator's prompt, and a reply that repeats the last one", () => {
-    const reply = (seq: number, digest: string, over = {}) =>
-      w(seq, "turn_end", { turnSeq: 1, ...kept(digest), ...over });
+  it("leaves the echo unsettled until the words are read: the fold compares no digests", () => {
     const folded = stepFolds([
       w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
-      reply(2, "prompt"),
-      reply(3, "answer"),
-      reply(4, "answer"),
-      reply(5, "other"),
+      w(2, "turn_end", { turnSeq: 1, ...kept("prompt") }),
     ]);
-    expect(folded.map((f) => [f.key, f.echoOf])).toEqual([
-      ["1", null],
-      ["2", "1"],
-      ["3", null],
-      ["4", "3"],
-      ["5", null],
+    expect(folded.map((f) => [f.echoOf, f.quiet])).toEqual([
+      [null, false],
+      [null, false],
     ]);
-  });
-
-  it("keeps a subagent's message that repeats the operator's words, and never echoes across turns (negative)", () => {
-    const folded = stepFolds([
-      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
-      s(SUB, 0, "turn_end", kept("prompt")),
-      w(2, "turn_start", { turnSeq: 2, ...kept("prompt2") }),
-      w(3, "turn_end", { turnSeq: 2, ...kept("prompt") }),
-    ]);
-    expect(folded.map((f) => f.echoOf)).toEqual([null, null, null, null]);
   });
 
   it("reads the run's stop as its seal, and a subagent's stop as control (negative)", () => {
@@ -1249,7 +1233,173 @@ describe("a subagent's entries", () => {
   });
 });
 
+/** A `markWords` reader that answers from a table of words by entry key. */
+function reader(table: Record<string, string | null>) {
+  const asked: string[][] = [];
+  const read = (needed: readonly TranscriptFold[]) => {
+    asked.push(needed.map((fold) => fold.key));
+    return Promise.resolve(
+      new Map(
+        needed.flatMap((fold) =>
+          fold.key in table ? [[fold, table[fold.key] ?? null] as const] : [],
+        ),
+      ),
+    );
+  };
+  return { read, asked };
+}
+
+describe("markWords", () => {
+  const facts = (folds: readonly TranscriptFold[]) =>
+    folds.map((f) => [f.key, f.node, f.quiet, f.echoOf]);
+
+  it("reads a turn's closing message that repeats the model's last words as an echo of that step", async () => {
+    // The model's reply is kept as the stream it arrived in and the closing
+    // message as plain words, so their digests differ; their words do not.
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+      w(2, "llm_call", { turnSeq: 1, model: "m", ...kept("stream") }),
+      w(3, "turn_end", { turnSeq: 1, ...kept("words") }),
+    ]);
+    const { read, asked } = reader({
+      "1": "Fix the build.",
+      "2": "Fixed it.\n",
+      "3": "  Fixed it.",
+    });
+    await markWords(folds, read);
+    expect(facts(folds)).toEqual([
+      ["1", "prompt", false, null],
+      ["2", "model", false, null],
+      ["3", "reply", true, "2"],
+    ]);
+    // One read, for the prompt, the reply and the step said before the reply.
+    expect(asked).toEqual([["1", "3", "2"]]);
+  });
+
+  it("reads a message that repeats the operator's prompt, and a reply that repeats the reply before it", async () => {
+    const reply = (seq: number) =>
+      w(seq, "turn_end", { turnSeq: 1, ...kept(`r${String(seq)}`) });
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+      reply(2),
+      reply(3),
+      reply(4),
+      reply(5),
+    ]);
+    const { read } = reader({
+      "1": "Fix the build.",
+      "2": "Fix the build.",
+      "3": "Done.",
+      "4": "Done.",
+      "5": "Anything else?",
+    });
+    await markWords(folds, read);
+    expect(folds.map((f) => f.echoOf)).toEqual([null, "1", null, "3", null]);
+    expect(folds.map((f) => f.quiet)).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+    ]);
+  });
+
+  it("keeps a subagent's words that repeat the operator's or the run's, and never echoes across turns (negative)", async () => {
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+      w(2, "llm_call", { turnSeq: 1, model: "m", ...kept("stream") }),
+      s(SUB, 0, "turn_end", kept("brief")),
+      w(3, "turn_start", { turnSeq: 2, ...kept("prompt2") }),
+      w(4, "turn_end", { turnSeq: 2, ...kept("late") }),
+    ]);
+    const { read } = reader({
+      "1": "Look around.",
+      "2": "Looked.",
+      [`${SUB}:0`]: "Look around.",
+      "3": "Again.",
+      "4": "Looked.",
+    });
+    await markWords(folds, read);
+    expect(folds.map((f) => [f.echoOf, f.quiet])).toEqual([
+      [null, false],
+      [null, false],
+      [null, false],
+      [null, false],
+      [null, false],
+    ]);
+  });
+
+  it("reads a prompt or reply with only whitespace, or no words to show, as having nothing to show", async () => {
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("blank") }),
+      w(2, "turn_end", { turnSeq: 1, ...kept("stream") }),
+      w(3, "oxagen:message", {
+        turnSeq: 1,
+        ...kept("r"),
+        body: JSON.stringify({ last_assistant_message_digest: "sha256:r" }),
+      }),
+    ]);
+    const { read } = reader({ "1": " \n\t", "2": null, "3": "Released." });
+    await markWords(folds, read);
+    expect(facts(folds)).toEqual([
+      ["1", "prompt", true, null],
+      ["2", "reply", true, null],
+      ["3", "reply", false, null],
+    ]);
+  });
+
+  it("leaves an entry the read did not answer as the fold said, and reads nothing when nothing has words (negative)", async () => {
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+      w(2, "turn_end", { turnSeq: 1, ...kept("reply") }),
+    ]);
+    await markWords(folds, reader({}).read);
+    expect(folds.map((f) => [f.quiet, f.echoOf])).toEqual([
+      [false, null],
+      [false, null],
+    ]);
+
+    const silent = stepFolds([
+      w(1, "turn_start", { turnSeq: 1 }),
+      w(2, "llm_call", { turnSeq: 1, model: "m", ...kept("stream") }),
+      w(3, "tool_call", { turnSeq: 1, toolName: "Bash", toolStatus: "ok" }),
+    ]);
+    const { read, asked } = reader({});
+    await markWords(silent, read);
+    expect(asked).toEqual([]);
+  });
+
+  it("names the half an entry says its words in", () => {
+    const [prompt, model, reply] = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("p") }),
+      w(2, "llm_call", { turnSeq: 1, model: "m", ...kept("m") }),
+      w(3, "turn_end", { turnSeq: 1, ...kept("r") }),
+    ]);
+    expect(prompt && wordsHalf(prompt)?.seq).toBe("1");
+    expect(model && wordsHalf(model)?.seq).toBe("2");
+    expect(reply && wordsHalf(reply)?.seq).toBe("3");
+  });
+});
+
 describe("transcriptCounts", () => {
+  it("counts no entry a reader is shown nothing for: a quiet one, or a reply that repeats words just shown", async () => {
+    const folds = stepFolds([
+      w(0, "agent_start"),
+      // A prompt that kept no body is quiet from the fold.
+      w(1, "turn_start", { turnSeq: 1 }),
+      w(2, "turn_start", { turnSeq: 2, ...kept("prompt") }),
+      w(3, "llm_call", { turnSeq: 2, model: "m", ...kept("stream") }),
+      w(4, "turn_end", { turnSeq: 2, ...kept("words") }),
+    ]);
+    await markWords(
+      folds,
+      reader({ "2": "Ship it.", "3": "Shipped.", "4": "Shipped." }).read,
+    );
+    const counts = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    expect(counts.entries).toBe(2);
+    expect(counts.kinds).toMatchObject({ prompt: 1, responses: 1 });
+  });
+
   it("counts every entry per chip, the entries with something to show, errors and decisions", () => {
     const folds = frameFolds([
       w(0, "agent_start"),

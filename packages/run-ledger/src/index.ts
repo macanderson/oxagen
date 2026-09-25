@@ -127,6 +127,8 @@ export {
   filterFoldsByKind,
   transcriptCounts,
   toolUseClaimer,
+  markWords,
+  wordsHalf,
   recallOf,
   RECALL_ITEM_MAX,
   TRANSCRIPT_NODES,
@@ -138,6 +140,7 @@ export {
   type TranscriptNode,
   type TranscriptOutcome,
   type TranscriptRecall,
+  type TranscriptWords,
   type TranscriptZoom,
   type ToolUseRef,
 } from "./transcript-steps";
