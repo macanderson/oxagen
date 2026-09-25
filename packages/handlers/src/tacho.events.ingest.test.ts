@@ -112,6 +112,11 @@ import {
 
 const HOST_PUBLIC = "tch_0123456789abcdefghjkmn";
 const HOST_ID = "11111111-1111-4111-8111-111111111111";
+/** The device key fingerprint the fixture's host enrolled with. */
+const DEVICE_KEY = `sha256:${"d".repeat(64)}`;
+/** An earlier enrollment of the same machine (ADR-173). */
+const PREDECESSOR_PUBLIC = "tch_predecessor00000000000";
+const PREDECESSOR_ID = "44444444-4444-4444-8444-444444444444";
 const ENROLLER_USER_ID = "22222222-2222-4222-8222-222222222222";
 const ENROLLER_PRINCIPAL_ID = "33333333-3333-4333-8333-333333333333";
 const CONTEXT: CapabilityContext = {
@@ -432,6 +437,7 @@ function fakeDb(): FakeDb {
         expiresAt: new Date("2027-01-01T00:00:00.000Z"),
         bundleVersionServed: null,
         createdById: ENROLLER_USER_ID,
+        deviceKeyFingerprint: DEVICE_KEY,
       },
     ],
     principals: [
@@ -763,7 +769,19 @@ function wire(db: FakeDb): void {
             // each chain up by name — so a chain nobody served is still a
             // miss, which is the property these tests are about.
             where: async () =>
-              tableName(table) === "sessions"
+              tableName(table) === "hosts"
+                ? // `readSuccessionHosts`: the hosts a batch names or that hold
+                  // the sessions it names. The handler keeps only the ids it
+                  // asked for, so every host is answered.
+                  db.hosts.map((row) => ({
+                    id: row["id"],
+                    publicId: row["publicId"],
+                    status: row["status"],
+                    orgId: row["orgId"],
+                    workspaceId: row["workspaceId"],
+                    deviceKeyFingerprint: row["deviceKeyFingerprint"],
+                  }))
+                : tableName(table) === "sessions"
                 ? // The ownership read before any body is written: which
                   // host opened each session the batch names.
                   [...db.sessions.values()].map((row) => ({
@@ -1945,6 +1963,135 @@ describe("ingest_tacho_events", () => {
     await tachoEventsIngestHandler(batch(session()), CONTEXT);
     expect(mocks.recordSpend).toHaveBeenCalledTimes(3);
     expect(mocks.loggerError).not.toHaveBeenCalled();
+  });
+
+  describe("a successor enrollment (ADR-173)", () => {
+    /** The fixture's host, preceded by a revoked enrollment of the same machine. */
+    function withPredecessor(
+      overrides: Record<string, unknown> = {},
+    ): FakeDb {
+      const db = fakeDb();
+      db.hosts.push({
+        ...(db.hosts[0] as Record<string, unknown>),
+        id: PREDECESSOR_ID,
+        publicId: PREDECESSOR_PUBLIC,
+        apiKeyId: "aky_predecessor",
+        status: "revoked",
+        ...overrides,
+      });
+      return db;
+    }
+
+    /** The session again, with each frame naming the enrollment `at` gives it. */
+    function resealed(at: (seq: number) => string): TachoEvent[] {
+      let cursor: ChainCursor = GENESIS_CURSOR;
+      return session().map((event) => {
+        const {
+          seq,
+          prev_hash: _prev,
+          hash: _hash,
+          event_id_idem: _idem,
+          ...rest
+        } = event;
+        const sealed = sealEvent(
+          {
+            ...rest,
+            agent: { ...rest.agent, host_enrollment_id: at(seq) },
+          } as UnsealedTachoEvent,
+          cursor,
+        );
+        cursor = sealed.next;
+        return sealed.event;
+      });
+    }
+
+    function heldByPredecessor(db: FakeDb, events: TachoEvent[]): void {
+      db.sessions.set(SESSION, {
+        id: "s1",
+        sessionUuid: SESSION,
+        seqCount: 3,
+        lastHash: events[2]?.hash,
+        chainVerified: true,
+        hostId: PREDECESSOR_ID,
+      });
+    }
+
+    it("carries on a session its revoked predecessor opened and moves the session to itself", async () => {
+      const db = withPredecessor();
+      wire(db);
+      // Frames 3 and 4 were recorded before the re-enrollment and never
+      // shipped, so they still name the predecessor. The rest are new.
+      const events = resealed((seq) =>
+        seq < 5 ? PREDECESSOR_PUBLIC : HOST_PUBLIC,
+      );
+      heldByPredecessor(db, events);
+      const result = await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: events.slice(3),
+        },
+        CONTEXT,
+      );
+      expect(result.chain_breaks).toEqual([]);
+      expect(db.sessions.get(SESSION)?.["hostId"]).toBe(HOST_ID);
+      expect(mocks.insertTachoEvents).toHaveBeenCalled();
+    });
+
+    it.each([
+      ["a live predecessor", { status: "active" }],
+      ["another machine", { deviceKeyFingerprint: `sha256:${"e".repeat(64)}` }],
+      ["another workspace", { workspaceId: "33333333-3333-4333-8333-333333333333" }],
+    ])("refuses the session from %s and writes none of the batch", async (_, overrides) => {
+      const db = withPredecessor(overrides);
+      wire(db);
+      const events = resealed(() => HOST_PUBLIC);
+      heldByPredecessor(db, events);
+      await expect(
+        tachoEventsIngestHandler(
+          {
+            schema: "tacho.batch.v1",
+            host_enrollment_id: HOST_PUBLIC,
+            events: events.slice(3),
+          },
+          CONTEXT,
+        ),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("refuses frames naming an enrollment the host does not succeed", async () => {
+      const db = withPredecessor({ status: "active" });
+      wire(db);
+      const events = resealed((seq) =>
+        seq < 2 ? PREDECESSOR_PUBLIC : HOST_PUBLIC,
+      );
+      await expect(
+        tachoEventsIngestHandler(batch(events), CONTEXT),
+      ).rejects.toThrow(/event names another host/);
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("moves a session only on a batch that continues its recorded head", async () => {
+      const db = withPredecessor();
+      wire(db);
+      const events = resealed(() => HOST_PUBLIC);
+      heldByPredecessor(db, events);
+      (db.sessions.get(SESSION) as Record<string, unknown>)["lastHash"] =
+        `sha256:${"f".repeat(64)}`;
+      await expect(
+        tachoEventsIngestHandler(
+          {
+            schema: "tacho.batch.v1",
+            host_enrollment_id: HOST_PUBLIC,
+            events: events.slice(3),
+          },
+          CONTEXT,
+        ),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(db.sessions.get(SESSION)?.["hostId"]).toBe(PREDECESSOR_ID);
+    });
   });
 
   it("refuses a session another host opened before writing any of the batch's bodies", async () => {
