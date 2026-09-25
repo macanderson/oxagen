@@ -111,11 +111,12 @@ export const runGet = registerCapability({
   description:
     "Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
