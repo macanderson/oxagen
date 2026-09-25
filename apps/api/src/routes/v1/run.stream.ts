@@ -157,6 +157,8 @@ runStreamRoute.get("/", async (c) => {
               ? err.message
               : "Run stream unavailable",
           code: code ?? "stream_unavailable",
+          // A handler refusal's sub-code, as the error middleware sends it.
+          reason: isHandlerError(err) ? err.reason : undefined,
           cursor: cursor ?? null,
         })}\n\n`,
       );
@@ -211,9 +213,15 @@ export const CLIENT_FACING_CAPABILITY_CODES: ReadonlySet<CapabilityErrorCode> =
  * the failure a resuming client is most likely to hit, so reading only the
  * former would leave exactly that case uncoded. Undefined means a server
  * fault, which the caller logs and does not describe.
+ *
+ * A handler's `forbidden` refusal is sent as `forbidden`, not as its reason.
+ * Whatever the reason (`session_required`, `run_token_invalid`), it means the
+ * viewer may no longer read the run, and the client keys that case on the
+ * code. The reason still travels in the event's `reason` field.
  */
 function streamErrorCode(err: unknown): string | undefined {
-  if (isHandlerError(err)) return err.reason;
+  if (isHandlerError(err))
+    return err.code === "forbidden" ? "forbidden" : err.reason;
   return err instanceof CapabilityError &&
     CLIENT_FACING_CAPABILITY_CODES.has(err.code)
     ? err.code

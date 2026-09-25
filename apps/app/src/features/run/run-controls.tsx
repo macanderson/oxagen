@@ -102,6 +102,10 @@ function useFollowHalt(paused: boolean): (expected: boolean) => void {
     refreshRef.current = navigate.refresh;
   }, [navigate.refresh]);
   const [expected, setExpected] = useState<boolean | null>(null);
+  // Counts queued commands. A second pause queued after the reads ran out
+  // leaves `expected` and `following` unchanged, so this is what starts a
+  // fresh count of reads for it.
+  const [attempt, setAttempt] = useState(0);
   // The status caught up, so stop following. Setting state while rendering is
   // React's pattern for state that tracks a prop.
   if (expected !== null && expected === paused) setExpected(null);
@@ -117,8 +121,11 @@ function useFollowHalt(paused: boolean): (expected: boolean) => void {
     return () => {
       clearInterval(timer);
     };
-  }, [following]);
-  return setExpected;
+  }, [following, attempt]);
+  return (value: boolean) => {
+    setExpected(value);
+    setAttempt((n) => n + 1);
+  };
 }
 
 /**
