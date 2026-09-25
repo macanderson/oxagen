@@ -1,0 +1,62 @@
+---
+title: Oxagen app
+description: Download the Oxagen app, open it the first time on macOS, Windows, or Linux, and find the oxagen and tacho commands it puts on your PATH.
+---
+
+The Oxagen app puts one machine under Oxagen control. It bundles the `oxagen` and `tacho` commands, and enrollment runs through them.
+
+## Download
+
+<LatestDownloads />
+
+Every version, with a SHA-256 for each file, is listed at [downloads.oxagen.sh](https://downloads.oxagen.sh/). To check a download, put that version's `SHA256SUMS.txt` beside the file and run:
+
+```bash
+shasum -a 256 -c SHA256SUMS.txt
+```
+
+## First launch on macOS
+
+Builds are not yet notarized, so macOS refuses the first launch and offers **Move to Trash**. Choose **Done** or **Cancel** instead.
+
+1. Open **System Settings > Privacy & Security**. On macOS 12 it is **System Preferences > Security & Privacy**.
+2. Scroll to the message about Oxagen and click **Open Anyway**.
+3. Confirm with **Open** and your login password.
+
+The **Open Anyway** button shows for about an hour after the refused launch. macOS 15 removed the older Control-click and **Open** route, so that route no longer works.
+
+If you already have a terminal open, clearing the quarantine flag does the same thing:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Oxagen.app
+```
+
+Then open Oxagen as usual. Either way, macOS asks only once.
+
+## First launch on Windows
+
+Builds are not yet signed, so SmartScreen warns that the publisher is unknown. Choose **More info**, then **Run anyway**.
+
+## Linux
+
+The packages are unsigned and no apt or dnf repository exists yet. Install the file you downloaded directly:
+
+```bash
+sudo dpkg -i Oxagen_amd64.deb
+sudo rpm -i Oxagen.x86_64.rpm
+chmod +x Oxagen_amd64.AppImage && ./Oxagen_amd64.AppImage
+```
+
+## Command line
+
+The app links `oxagen` and `tacho` into `~/.local/bin` on macOS and Linux. On Windows it writes `.cmd` shims to a directory on your user `PATH`. It never asks for administrator rights, and it never replaces a file it did not write.
+
+Open a new terminal after the first launch. On macOS and Linux, this prints both paths:
+
+```bash
+command -v oxagen tacho
+```
+
+## Next step
+
+[Set up your Oxagen account](/docs/cli/account-setup) and enroll this machine.
