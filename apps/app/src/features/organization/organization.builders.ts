@@ -208,6 +208,7 @@ export function orgSource(reads: OrgReads): {
       preferences: refuse,
       counts: refuse,
       notifications: refuse,
+      assistantEngine: refuse,
     },
     billing: {
       plan: refuse,

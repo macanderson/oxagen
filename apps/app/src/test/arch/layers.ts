@@ -69,16 +69,25 @@ const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
  * answers in `ActionResult`. The list is exact: another module needs its own
  * reason here and in ADR-167.
  *
- * `assistant-approval-actions` is the second (#4162). The assistant flyout
- * draws each write a turn parked as a card, and the card reads its approval
- * row whenever it changes: after a decision, and while it waits for Fleet, a
- * second viewer or the expiry. The rows arrive with the turn, long after the
+ * `engine-actions` reads `shell.assistantEngine` when the assistant flyout
+ * opens, on window focus, and from its Check again control (#3227). No render
+ * can make that read: a down engine's probe takes up to seven seconds, and a
+ * layout that waited on it would hold every workspace page. The port is where
+ * the answer is checked against its view model and where the engine's host
+ * and port are dropped, so the flyout's action reads the port rather than
+ * mapping a kernel read in a feature lane.
+ *
+ * `assistant-approval-actions` serves the assistant flyout's parked writes
+ * (#4162). The flyout draws each write a turn parked as a card, and the card
+ * reads its approval row whenever it changes: after a decision, and while it
+ * waits for Fleet, a second viewer or the expiry. The rows arrive with the turn, long after the
  * layout rendered, so no route render can hand them down. The approvals
  * port's `pending` and `resolved` already hold the kernel call, the mapping
  * and the view-model check the Run page uses for the same rows.
  */
 const PORT_READING_ACTIONS: readonly string[] = [
   "features/shell/choice-actions",
+  "features/shell/engine-actions",
   "features/shell/assistant-approval-actions",
   "features/shell/assistant-thread-actions",
 ];

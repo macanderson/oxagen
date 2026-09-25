@@ -5,6 +5,7 @@ import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
 import { costRunProgress } from "./functions/cost.run-progress";
 import { tachoSessionIdleClose } from "./functions/tacho.session-idle-close";
+import { runLedgerIdleClose } from "./functions/run.ledger-idle-close";
 import { costDailyRollup } from "./functions/cost.daily-rollup";
 import { costPriceBookSync } from "./functions/cost.price-book-sync";
 import { costPriceBookReprice } from "./functions/cost.price-book-reprice";
@@ -49,6 +50,7 @@ import {
   evidenceRunExportOnFailure,
 } from "./functions/evidence.run-export";
 import { evidenceFrameCompaction } from "./functions/evidence.frame-compaction";
+import { evidenceAssistantRunAbandon } from "./functions/evidence.assistant-run-abandon";
 import {
   runEnrich,
   runEnrichOnFailure,
@@ -68,6 +70,7 @@ export const functions: any[] = [
   costRunRollup,
   costRunProgress,
   tachoSessionIdleClose,
+  runLedgerIdleClose,
   costDailyRollup,
   costPriceBookSync,
   costPriceBookReprice,
@@ -103,6 +106,7 @@ export const functions: any[] = [
   evidenceRunExport,
   evidenceRunExportOnFailure,
   evidenceFrameCompaction,
+  evidenceAssistantRunAbandon,
   runEnrich,
   runEnrichOnFailure,
   runEnrichmentSweep,

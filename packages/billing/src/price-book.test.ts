@@ -42,6 +42,9 @@ import {
   listPriceEntries,
   loadPriceBook,
   loadPriceBookInTenantScope,
+  loadPriceBookSlice,
+  loadPriceBookSliceInTenantScope,
+  priceBookNames,
   BOUNDARY_MARGIN_MS,
   COLD_BOOK_EFFECTIVE_FROM,
   nextPriceBookBoundary,
@@ -55,6 +58,7 @@ import {
   type PriceEntry,
   type PriceEntrySeed,
 } from "./price-book";
+import { isSameModelIdentity } from "./model-identity";
 import {
   initializationRow,
   makeFakePriceStore,
@@ -474,6 +478,139 @@ describe("loading the whole book", () => {
     expect(ids(await loadPriceBookInTenantScope({ orgId: ORG }))).toContain(
       "closed-row",
     );
+  });
+});
+
+describe("loading one read's slice of the book", () => {
+  // #4202. The cost rollup loaded every row of `cost.price_entries`, 28,246 in
+  // production on 2026-09-24, for each run it priced, and the API ran out of
+  // heap. A slice read returns only the rows that could price the run's
+  // models over the run's span, and must return every one of those.
+  let fake: FakePriceStore;
+  const SPAN = {
+    from: new Date("2026-09-20T10:00:00.000Z"),
+    to: new Date("2026-09-20T12:00:00.000Z"),
+  };
+
+  beforeEach(() => {
+    fake = makeFakePriceStore();
+    fakeClock.now = null;
+    store.tx = makeFakePriceTx(fake);
+    store.seams = [];
+  });
+
+  const ids = (rows: readonly PriceEntry[]) => rows.map((r) => r.id).sort();
+
+  it("returns the rows the resolver could pick, and leaves every other model out", async () => {
+    fake.rows.push(
+      priceRow({ id: "exact", model: "claude-sonnet-5" }),
+      // The resolver prices a stamped id by its family's row.
+      priceRow({ id: "family", model: "gpt-4o", provider: "openai" }),
+      // It also matches an alias, after stripping a `creator/` prefix.
+      priceRow({
+        id: "alias",
+        model: "gemini-3-pro-preview",
+        provider: "google",
+        modelAliases: ["gemini-3-pro"],
+      }),
+      priceRow({ id: "other-model", model: "gpt-4o-mini", provider: "openai" }),
+      priceRow({ id: "not-a-stamp", model: "gpt-5", provider: "openai" }),
+      priceRow({
+        id: "other-org",
+        model: "claude-sonnet-5",
+        orgId: OTHER,
+        source: "negotiated",
+      }),
+    );
+
+    const rows = await loadPriceBookSlice({
+      orgId: ORG,
+      models: [
+        "anthropic/claude-sonnet-5",
+        "gpt-4o-2026-08-01",
+        "google/gemini-3-pro",
+        "gpt-5.2",
+      ],
+      ...SPAN,
+    });
+
+    expect(store.seams).toEqual(["system"]);
+    expect(ids(rows)).toEqual(["alias", "exact", "family"]);
+  });
+
+  it("keeps a closed window that overlaps the span, and drops one outside it", async () => {
+    fake.rows.push(
+      priceRow({
+        id: "closed-inside",
+        effectiveFrom: new Date("2026-09-01T00:00:00.000Z"),
+        effectiveTo: new Date("2026-09-20T11:00:00.000Z"),
+      }),
+      priceRow({
+        id: "closed-before",
+        effectiveFrom: new Date("2026-09-02T00:00:00.000Z"),
+        effectiveTo: SPAN.from,
+      }),
+      priceRow({
+        id: "starts-after",
+        effectiveFrom: new Date("2026-09-20T12:00:00.001Z"),
+      }),
+      priceRow({ id: "starts-at-end", effectiveFrom: SPAN.to }),
+    );
+
+    const rows = await loadPriceBookSliceInTenantScope({
+      orgId: ORG,
+      models: ["claude-sonnet-5"],
+      ...SPAN,
+    });
+
+    expect(store.seams).toEqual(["tenant"]);
+    expect(ids(rows)).toEqual(["closed-inside", "starts-at-end"]);
+  });
+
+  it("answers no models with no rows, and never asks the store", async () => {
+    // An empty name list must not reach the store: drizzle's `or()` of
+    // nothing is no filter, which would select the whole table again.
+    fake.rows.push(priceRow({ id: "any" }));
+
+    expect(
+      await loadPriceBookSlice({ orgId: ORG, models: [], ...SPAN }),
+    ).toEqual([]);
+    expect(
+      await loadPriceBookSliceInTenantScope({ orgId: ORG, models: [], ...SPAN }),
+    ).toEqual([]);
+    expect(store.seams).toEqual([]);
+  });
+
+  it("asks for every name the resolver would accept as the same model", () => {
+    // The store filter is a list of names, and the resolver's test is
+    // `isSameModelIdentity`. If the two ever disagree, a row the resolver
+    // needs is never loaded and the frame silently prices as estimated.
+    const ids = [
+      "anthropic/claude-sonnet-5-20260901",
+      "gpt-4-0613",
+      "claude-sonnet-5-latest",
+      "gpt-5.2",
+      "openai/gpt-4o-2026-08-01",
+    ];
+    for (const id of ids) {
+      const names = new Set(priceBookNames([id]));
+      const slash = id.indexOf("/");
+      for (const target of slash < 0 ? [id] : [id, id.slice(slash + 1)])
+        for (let end = 1; end <= target.length; end++) {
+          const claimed = target.slice(0, end);
+          if (isSameModelIdentity(target, claimed))
+            expect(names.has(claimed), `${id} ← ${claimed}`).toBe(true);
+        }
+    }
+    // A handful of names per model, which is what keeps the read small.
+    expect(priceBookNames(["anthropic/claude-sonnet-5-20260901"])).toEqual([
+      "anthropic/claude-sonnet-5-20260901",
+      "anthropic/claude-sonnet-5",
+      "anthropic/claude-sonnet-5-",
+      "claude-sonnet-5-20260901",
+      "claude-sonnet-5",
+      "claude-sonnet-5-",
+    ]);
   });
 });
 

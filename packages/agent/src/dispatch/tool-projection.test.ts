@@ -49,8 +49,8 @@ interface ToolUsageFixture {
   declared_public_id: string | null;
   call_count: number;
   failed_call_count: number;
-  first_invoked_at: Date;
-  last_invoked_at: Date;
+  first_invoked_at: Date | string;
+  last_invoked_at: Date | string;
 }
 
 // Declared in the asset registry — carries agent.tools.public_id.
@@ -341,6 +341,31 @@ describe("projectExecutionToolUsage — four-store boundary", () => {
       "publicId",
       "toolType",
     ]);
+  });
+});
+
+describe("projectExecutionToolUsage — timestamp shapes", () => {
+  // postgres-js hands a raw tx.execute timestamptz back as Postgres text, which
+  // has no toISOString. Every execution with a tool call threw here (#4244).
+  it("projects Postgres text timestamps as ISO instants", async () => {
+    mockPostgres(
+      [{ id: EXECUTION_ID }],
+      [
+        {
+          ...SEARCH_TOOL,
+          first_invoked_at: "2026-09-24 12:34:56.789+00",
+          last_invoked_at: "2026-09-24 14:04:56.5+05:30",
+        },
+      ],
+    );
+
+    await projectExecutionToolUsage(baseArgs());
+
+    const [tool] = capturedRunCalls()[1]![1]!.tools as Array<
+      Record<string, unknown>
+    >;
+    expect(tool!.firstInvokedAt).toBe("2026-09-24T12:34:56.789Z");
+    expect(tool!.lastInvokedAt).toBe("2026-09-24T08:34:56.500Z");
   });
 });
 

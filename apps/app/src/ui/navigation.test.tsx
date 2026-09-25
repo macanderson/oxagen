@@ -68,6 +68,17 @@ describe("useNavigate", () => {
     expect(router.replace).toHaveBeenCalledWith("/acme");
     expect(router.refresh).toHaveBeenCalledOnce();
   });
+
+  it("advances in place: a replace that keeps the scroll and reads once", () => {
+    router.replace.mockClear();
+    router.refresh.mockClear();
+    const { result } = renderHook(() => useNavigate());
+    result.current.advance(routes.fleet("acme", "core"));
+    expect(router.replace).toHaveBeenCalledWith("/acme/core", {
+      scroll: false,
+    });
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
 });
 
 describe("HostedInvoiceLink", () => {
