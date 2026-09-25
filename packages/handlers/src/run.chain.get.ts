@@ -186,11 +186,13 @@ export function sequenceGaps(
 }
 
 /**
- * Frames that owe a body and whose bytes were not retained, under the rule
- * both seals derive `body_missing` from (`frameOwesBody`): a content-bearing
- * frame with no body reference, or any frame whose digest was recorded and
- * whose bytes were not. A wrapped session's later sighting of a model call
- * owes nothing, because the frame sealed first holds the call's content.
+ * Frames that owe a body and whose bytes were not all retained, under the
+ * rule both seals derive `body_missing` from (`frameOwesBody`,
+ * `bodyIsPartial`): a content-bearing frame with no body reference, any frame
+ * whose digest was recorded and whose bytes were not, or a model call whose
+ * body holds one half of the exchange. A wrapped session's later sighting of
+ * a model call owes nothing, because the frame sealed first holds the call's
+ * content.
  */
 export function missingBodies(frames: readonly RunFrame[]): number {
   return frames.filter(
@@ -199,7 +201,8 @@ export function missingBodies(frames: readonly RunFrame[]): number {
         type: frame.type,
         digest: frame.body.bodyDigest,
         laterSighting: (frame.llmCall?.duplicateOf ?? null) !== null,
-      }) && frame.body.bodyRef === null,
+      }) &&
+      (frame.body.bodyRef === null || frame.llmCall?.partial === true),
   ).length;
 }
 

@@ -212,6 +212,35 @@ describe("missingBodies", () => {
     ] as never[];
     expect(missingBodies(otelOnly)).toBe(1);
   });
+
+  it("counts a model call whose body holds one half of the exchange", () => {
+    // The seal leaves a half body out of `body_frames` and records
+    // `body_missing`. Counting it retained showed that rung beside
+    // "0 missing bodies".
+    const frames = [
+      {
+        type: "llm_call",
+        body: { bodyRef: "evb:1", bodyDigest: "sha256:a" },
+        llmCall: {
+          duplicateOf: null,
+          keys: [],
+          source: "collector",
+          partial: true,
+        },
+      },
+      {
+        type: "llm_call",
+        body: { bodyRef: "evb:2", bodyDigest: "sha256:b" },
+        llmCall: {
+          duplicateOf: null,
+          keys: [],
+          source: "collector",
+          partial: false,
+        },
+      },
+    ] as never[];
+    expect(missingBodies(frames)).toBe(1);
+  });
 });
 
 describe("get_run_chain", () => {
