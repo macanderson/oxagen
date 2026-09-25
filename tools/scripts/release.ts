@@ -25,7 +25,9 @@
  *                 what the release leads with; the model opens the notes with
  *                 it, as far as the diff supports it
  *   --no-notes    skip the Anthropic release-notes generation (plain changelog)
- *   --no-git      skip the commit + tag
+ *   --no-git      skip the commit + tag. Without it, the tree must be clean
+ *                 before the run starts, and the commit stages only the files
+ *                 this script wrote, so nothing else in the tree can ride along
  *   --no-npm      skip the CLI build + npm publish (even if NPM_TOKEN is available)
  *   --install-links
  *                 end the notes with an "## Install" section that links every
@@ -68,6 +70,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { argv, env, exit } from "node:process";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import kleur from "kleur";
 import { formatError } from "./lib/format-error";
 import { npmCfg, publishCliToNpm } from "./lib/npm-cli";
@@ -126,12 +129,56 @@ function git(args: string[]): string {
   }).trim();
 }
 
+/** Like `git`, but keeps leading whitespace, which porcelain status needs. */
+function gitRaw(args: string[]): string {
+  return execFileSync("git", args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+}
+
 function gitSafe(args: string[]): string | null {
   try {
     return git(args);
   } catch {
     return null;
   }
+}
+
+// ── the release commit's contents ───────────────────────────────────────────
+
+/**
+ * Throw when `git status --porcelain` reports anything. The release commit
+ * must carry the bump and the notes and nothing else, so a modified, staged or
+ * untracked file (a stray `.env` copy, a scratch file) stops the run before
+ * any file is written. The message names every dirty path.
+ */
+export function assertCleanTree(porcelain: string): void {
+  const dirty = porcelain
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => line.slice(3));
+  if (dirty.length === 0) return;
+  throw new Error(
+    `the tree has uncommitted changes. Commit or discard them first, because the release commit carries only the bump and the notes:\n${dirty.map((p) => `  ${p}`).join("\n")}`,
+  );
+}
+
+/**
+ * The paths the release commit stages: the manifests the bump rewrote and the
+ * notes files, relative to the repository root, each once. Only files this
+ * script wrote are listed, so `git add` never picks up an unrelated file.
+ */
+export function releaseFilesToStage(
+  root: string,
+  written: readonly string[],
+): string[] {
+  const prefix = root.endsWith("/") ? root : `${root}/`;
+  const relative = written.map((p) =>
+    p.startsWith(prefix) ? p.slice(prefix.length) : p,
+  );
+  return [...new Set(relative)];
 }
 
 function bumpVersion(current: string, bump: Bump): string {
@@ -357,7 +404,7 @@ function writeNotes(
   version: string,
   notes: ReleaseNotes,
   install: string | null,
-): { changelog: string; release: string; page: string } {
+): { changelog: string; release: string; page: string; meta: string } {
   const entry = releaseBody(version, notes, install);
   const releasesDir = join(ROOT, "releases");
   mkdirSync(releasesDir, { recursive: true });
@@ -395,7 +442,7 @@ function writeNotes(
     meta,
     releasesMeta(existsSync(meta) ? readFileSync(meta, "utf8") : null, version),
   );
-  return { changelog: changelogFile, release: releaseFile, page };
+  return { changelog: changelogFile, release: releaseFile, page, meta };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -468,6 +515,18 @@ async function main(): Promise<void> {
     ),
   );
 
+  // The commit this run makes must hold only what it writes, so check before
+  // the first write. A dry run writes nothing and only warns.
+  if (opts.git) {
+    try {
+      assertCleanTree(gitRaw(["status", "--porcelain"]));
+    } catch (err) {
+      if (!opts.dryRun) throw err;
+      console.log(kleur.yellow(`  ${formatError(err)} (dry run: continuing)`));
+    }
+  }
+  const toStage: string[] = [];
+
   // Every manifest, whatever its language: package.json, Cargo.toml, the
   // crate's Cargo.lock entry (tools/scripts/lib/versions.ts). CI's
   // check:versions fails when any of them drifts from the root.
@@ -482,6 +541,7 @@ async function main(): Promise<void> {
     }
   } else {
     const written = setAllVersions(ROOT, next);
+    for (const m of written) toStage.push(m.file);
     console.log(kleur.bold(`  Manifests (${written.length}):`));
     for (const m of written)
       console.log(
@@ -504,6 +564,12 @@ async function main(): Promise<void> {
     notes = await generateNotes(history);
     if (!opts.dryRun) {
       const written = writeNotes(next, notes, install);
+      toStage.push(
+        written.release,
+        written.changelog,
+        written.page,
+        written.meta,
+      );
       console.log(
         kleur.green(
           `    ✓ ${written.release.replace(ROOT + "/", "")}  +  CHANGELOG.md  +  ${written.page.replace(ROOT + "/", "")}`,
@@ -527,7 +593,7 @@ async function main(): Promise<void> {
   // ── Git commit + tag ──
   if (opts.git && !opts.dryRun) {
     console.log(kleur.bold("\n  Git:"));
-    git(["add", "-A"]);
+    git(["add", "--", ...releaseFilesToStage(ROOT, toStage)]);
     git(["commit", "-m", `chore(release): v${next}`]);
     const tagBody =
       notes === null
@@ -562,9 +628,17 @@ async function main(): Promise<void> {
   );
 }
 
-main().catch((err) => {
-  console.error(
-    kleur.red(err instanceof Error ? (err.stack ?? err.message) : String(err)),
-  );
-  exit(1);
-});
+// Run only when invoked as a script, so a test can import the helpers above.
+const invokedDirectly =
+  argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(resolve(argv[1])).href;
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(
+      kleur.red(
+        err instanceof Error ? (err.stack ?? err.message) : String(err),
+      ),
+    );
+    exit(1);
+  });
+}
