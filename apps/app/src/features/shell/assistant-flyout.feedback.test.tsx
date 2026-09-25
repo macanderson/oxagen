@@ -75,6 +75,7 @@ const turn = {
     runId: RUN,
     reply: "Three runs are live.",
     parkedCards: [],
+    toolCalls: [],
     stopped: false,
   },
 };
