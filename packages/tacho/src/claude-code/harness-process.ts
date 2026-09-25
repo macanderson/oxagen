@@ -89,16 +89,22 @@ export function codexHarnessPid(
 ): number | undefined {
   if (platform === "win32") return undefined;
   const deadline = now() + WALK_BUDGET_MS;
-  const left = (): number => deadline - now();
+  // Read once per call: a timeout of 0 would mean no timeout to `spawnSync`.
+  const left = (): number | undefined => {
+    const ms = deadline - now();
+    return ms > 0 ? ms : undefined;
+  };
   let pid = parentPid;
   for (let hop = 0; hop < MAX_HOPS && pid > 1; hop += 1) {
-    if (left() <= 0) return undefined;
-    const info = lookup(pid, left());
+    const lookupMs = left();
+    if (lookupMs === undefined) return undefined;
+    const info = lookup(pid, lookupMs);
     if (info === undefined) return undefined;
     const name = info.comm.split("/").pop() ?? "";
     if (CODEX_EXECUTABLE.test(name)) {
-      if (left() <= 0) return undefined;
-      const args = argsOf(pid, left());
+      const argsMs = left();
+      if (argsMs === undefined) return undefined;
+      const args = argsOf(pid, argsMs);
       return args === undefined || CODEX_SHARED_HOST.test(args)
         ? undefined
         : pid;
