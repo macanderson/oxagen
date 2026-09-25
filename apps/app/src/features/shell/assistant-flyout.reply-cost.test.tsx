@@ -45,7 +45,9 @@ vi.mock("next/navigation", () => ({
 
 const { AssistantFlyout } = await import("./assistant-flyout");
 const { AssistantReplyCost } = await import("./assistant-reply-cost");
-const { REPLY_COST_REREAD_MS } = await import("./use-reply-cost");
+// The hook's re-read delay (`use-reply-cost.ts`), stated here rather than
+// exported from the module: the hook is its only production reader.
+const REPLY_COST_REREAD_MS = 60_000;
 const actual =
   await vi.importActual<typeof import("./assistant-actions")>(
     "./assistant-actions",

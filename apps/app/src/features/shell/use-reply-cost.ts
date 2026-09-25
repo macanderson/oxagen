@@ -30,7 +30,7 @@ import { type ReplyCost, readReplyCost } from "./assistant-actions";
  * waits for the nightly sweep, and the line says "pending", which is what
  * the record says.
  */
-export const REPLY_COST_REREAD_MS = 60_000;
+const REPLY_COST_REREAD_MS = 60_000;
 
 /** The line's state: a read in flight, a read that failed, or what the record said. */
 export type ReplyCostView = { kind: "reading" } | { kind: "unread" } | ReplyCost;
