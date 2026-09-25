@@ -2,7 +2,8 @@
 // The frame player's play, pause and speed, driven the way the Run page
 // drives them: each step is a navigation, and the page renders the bar again
 // at the frame that landed. The rerender stands in for that landing, so the
-// tests can hold play to one read at a time.
+// tests can hold play to one read at a time. Play replaces the history entry
+// and keeps the scroll; a step by hand pushes one.
 import {
   act,
   cleanup,
@@ -17,7 +18,8 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
 const push = vi.fn();
-const router = { push, replace: vi.fn(), refresh: vi.fn() };
+const replace = vi.fn();
+const router = { push, replace, refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/features/shell/client", () => ({ openApprovals: vi.fn() }));
 
@@ -62,6 +64,8 @@ function bar(index: number, hrefs: readonly SafePath[] = HREFS) {
 }
 
 const play = () => screen.getByTestId("player-play");
+/** The frames play opened, in order. */
+const played = () => replace.mock.calls.map(([path]) => path);
 const advance = (ms: number) => {
   act(() => {
     vi.advanceTimersByTime(ms);
@@ -72,6 +76,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   push.mockClear();
+  replace.mockClear();
 });
 
 describe("stepMs", () => {
@@ -102,31 +107,34 @@ describe("play", () => {
     fireEvent.click(play());
     expect(play()).toHaveAccessibleName("pause");
     advance(999);
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
     advance(1);
-    expect(push).toHaveBeenLastCalledWith(HREFS[1]);
+    // Play replaces the entry and keeps the scroll, so a long run adds one
+    // history entry for the whole playback and the page does not jump.
+    expect(replace).toHaveBeenLastCalledWith(HREFS[1], { scroll: false });
     // The frame has not landed, so play reads nothing more.
     advance(10_000);
-    expect(push).toHaveBeenCalledTimes(1);
+    expect(played()).toHaveLength(1);
     view.rerender(bar(1));
     advance(4999);
-    expect(push).toHaveBeenCalledTimes(1);
+    expect(played()).toHaveLength(1);
     advance(1);
-    expect(push).toHaveBeenLastCalledWith(HREFS[2]);
+    expect(played().at(-1)).toBe(HREFS[2]);
     view.rerender(bar(2));
     advance(250);
-    expect(push).toHaveBeenLastCalledWith(HREFS[3]);
+    expect(played().at(-1)).toBe(HREFS[3]);
     view.rerender(bar(3));
     expect(play()).toHaveAccessibleName("replay");
     advance(10_000);
-    expect(push).toHaveBeenCalledTimes(3);
+    expect(played()).toHaveLength(3);
     // Replay starts over from the first frame and plays on from there.
     fireEvent.click(play());
-    expect(push).toHaveBeenLastCalledWith(HREFS[0]);
+    expect(played().at(-1)).toBe(HREFS[0]);
     view.rerender(bar(0));
     expect(play()).toHaveAccessibleName("pause");
     advance(1000);
-    expect(push).toHaveBeenLastCalledWith(HREFS[1]);
+    expect(played().at(-1)).toBe(HREFS[1]);
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("holds the open frame once paused (negative)", () => {
@@ -135,7 +143,7 @@ describe("play", () => {
     fireEvent.click(play());
     expect(play()).toHaveAccessibleName("play");
     advance(10_000);
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("divides each hold by the speed pressed", () => {
@@ -163,9 +171,9 @@ describe("play", () => {
     // arithmetic itself, including its fractional case. What this asserts is
     // that play uses the divided hold and not the 1 s one.
     advance(61);
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
     advance(1);
-    expect(push).toHaveBeenLastCalledWith(HREFS[1]);
+    expect(played().at(-1)).toBe(HREFS[1]);
   });
 
   it("plays and pauses on space, and leaves space to a field or a focused button", () => {
@@ -191,6 +199,7 @@ describe("play", () => {
     expect(play()).toHaveAccessibleName("play");
     advance(10_000);
     expect(push).toHaveBeenCalledTimes(1);
+    expect(replace).not.toHaveBeenCalled();
     fireEvent.click(play());
     fireEvent.click(screen.getByTestId("step-link"));
     expect(play()).toHaveAccessibleName("play");
@@ -215,20 +224,21 @@ describe("play", () => {
     expect(play()).toHaveAccessibleName("play");
     advance(10_000);
     expect(push).toHaveBeenCalledTimes(1);
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("does not start again when a frame opens after play ran out (negative)", () => {
     const view = render(bar(2));
     fireEvent.click(play());
     advance(250);
-    expect(push).toHaveBeenLastCalledWith(HREFS[3]);
+    expect(played().at(-1)).toBe(HREFS[3]);
     view.rerender(bar(3));
     expect(play()).toHaveAccessibleName("replay");
     // A row of the frame list, or the browser's Back, opens an earlier frame.
     view.rerender(bar(1));
     expect(play()).toHaveAccessibleName("play");
     advance(10_000);
-    expect(push).toHaveBeenCalledTimes(1);
+    expect(played()).toHaveLength(1);
   });
 
   it("stops at a frame it did not open, and stays stopped on a return to the frame it left (negative)", () => {
@@ -239,17 +249,17 @@ describe("play", () => {
     view.rerender(bar(0));
     expect(play()).toHaveAccessibleName("play");
     advance(10_000);
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("starts from the first frame when the page does not hold the open one", () => {
     const view = render(bar(-1));
     fireEvent.click(play());
-    expect(push).toHaveBeenLastCalledWith(HREFS[0]);
+    expect(played().at(-1)).toBe(HREFS[0]);
     expect(play()).toHaveAccessibleName("pause");
     view.rerender(bar(0));
     advance(1000);
-    expect(push).toHaveBeenLastCalledWith(HREFS[1]);
+    expect(played().at(-1)).toBe(HREFS[1]);
   });
 
   it("has nothing to play on a page of one frame (negative)", () => {
@@ -258,7 +268,7 @@ describe("play", () => {
     expect(play()).toHaveAccessibleName("play");
     fireEvent.keyDown(document.body, { key: " " });
     advance(10_000);
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 });
 

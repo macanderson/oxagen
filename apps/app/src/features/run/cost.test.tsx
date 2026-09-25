@@ -657,6 +657,91 @@ describe("CostTab", () => {
     );
   });
 
+  it("prints a live wrapped run's reported spend by model, labelled provisional, before the rollup reaches it (#4032)", async () => {
+    const reported = (micros: string) => ({
+      micros,
+      currency: "USD",
+      basis: "client_attested" as const,
+    });
+    await renderTab(
+      props({
+        run: runRow({ ...RELEASE_RUN, cost: null }),
+        cost: readOk({
+          rollup: null,
+          provisional: {
+            byModel: [
+              {
+                model: "claude-haiku-5",
+                provider: "anthropic",
+                calls: 1,
+                cost: reported("20000"),
+              },
+              {
+                model: "claude-opus-5",
+                provider: "anthropic",
+                calls: 12,
+                cost: reported("1200000"),
+              },
+            ],
+            toolCalls: 9,
+            asOf: new Date(NOW - 60_000).toISOString(),
+          },
+        }),
+      }),
+      { withStats: true },
+    );
+    const tile = screen.getByTestId("inst-cost");
+    expect(screen.getByTestId("inst-cost-value")).toHaveTextContent("$1.22");
+    expect(tile).toHaveTextContent("agent reported, provisional");
+    // Dearest first, each with its calls.
+    expect(screen.getByTestId("inst-cost-provisional")).toHaveTextContent(
+      "claude-opus-5 $1.20 over 12 calls, claude-haiku-5 $0.02 over 1 call",
+    );
+    // The stat row prints the same figure under the same label.
+    const stat = screen.getByTestId("run-stat-cost");
+    expect(stat).toHaveTextContent("$1.22");
+    expect(stat).toHaveTextContent("agent reported, provisional");
+  });
+
+  it("marks a provisional sum as a floor when a model reported no cost (negative)", async () => {
+    await renderTab(
+      props({
+        run: runRow({ ...RELEASE_RUN, cost: null }),
+        cost: readOk({
+          rollup: null,
+          provisional: {
+            byModel: [
+              {
+                model: "local-llama",
+                provider: null,
+                calls: 4,
+                cost: null,
+              },
+              {
+                model: "claude-opus-5",
+                provider: "anthropic",
+                calls: 12,
+                cost: {
+                  micros: "1200000",
+                  currency: "USD",
+                  basis: "client_attested",
+                },
+              },
+            ],
+            toolCalls: 9,
+            asOf: new Date(NOW - 60_000).toISOString(),
+          },
+        }),
+      }),
+      { withStats: true },
+    );
+    expect(screen.getByTestId("inst-cost-value")).toHaveTextContent("$1.20+");
+    expect(screen.getByTestId("inst-cost-provisional")).toHaveTextContent(
+      "local-llama over 4 calls, cost not reported",
+    );
+    expect(screen.getByTestId("run-stat-cost")).toHaveTextContent("$1.20+");
+  });
+
   it("keeps the run row's cost when the cost read fails, names no basis it lacks, and claims no retry count (negative)", async () => {
     await renderTab(
       props({
