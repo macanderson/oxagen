@@ -46,12 +46,14 @@ describe("messages/shell.json", () => {
     // The command menu carries the mockup's groups, its runs coming from
     // search_tools (ARCHITECTURE.md §1.2). The Account dialog and the assistant render and write
     // (update_profile, ask_assistant); the rev1 design put the approvals
-    // drawer and the bell back in the top bar (fleet.md "Shell").
+    // drawer and the bell back in the top bar (fleet.md "Shell"). `choices`
+    // is the words a record picker's tool rows carry (choice-actions.ts).
     expect(Object.keys(messages).sort()).toEqual([
       "account",
       "approvals",
       "assistant",
       "avatar",
+      "choices",
       "commands",
       "denied",
       "drawer",

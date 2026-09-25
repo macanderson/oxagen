@@ -1,6 +1,8 @@
 "use client";
 // A provider's icon (#4132): the https icon its registry entry names, or its
-// initial on a tile when there is none or the image fails to load.
+// initial on a tile when there is none or the image fails to load. The Tools
+// page draws it beside a server, and a record picker beside each tool that
+// server provides, in the list and on the chip.
 //
 // The image is the vendor's own URL, loaded by the viewer's browser, so it is
 // fetched with no referrer: the vendor learns an Oxagen page showed its icon,
