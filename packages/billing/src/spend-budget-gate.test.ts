@@ -186,6 +186,7 @@ describe("assertWithinSpendBudget — threshold notifications", () => {
     expect(claimThreshold).toHaveBeenCalledWith(
       expect.objectContaining({
         threshold: 80,
+        orgId: budgetRow().orgId,
         workspaceId: budgetRow().workspaceId,
       }),
     );
@@ -350,11 +351,14 @@ describe("invalidateSpendBudgetScope", () => {
 
 describe("getSpendBudgetStatuses", () => {
   it("returns burn + a monthly projection per configured ceiling", async () => {
-    const statuses = await getSpendBudgetStatuses({
-      loadBudgets: async () => [budgetRow({ limitMicros: 10_000_000n })],
-      readSpend: async () => 5_000_000n, // $5 spent
-      now: () => new Date("2026-07-16T00:00:00Z").getTime(), // ~half the month
-    });
+    const statuses = await getSpendBudgetStatuses(
+      { orgId: "org-1" },
+      {
+        loadBudgets: async () => [budgetRow({ limitMicros: 10_000_000n })],
+        readSpend: async () => 5_000_000n, // $5 spent
+        now: () => new Date("2026-07-16T00:00:00Z").getTime(), // ~half the month
+      },
+    );
     expect(statuses).toHaveLength(1);
     const s = statuses[0]!;
     expect(s.spentMicros).toBe(5_000_000n);
@@ -366,12 +370,15 @@ describe("getSpendBudgetStatuses", () => {
 
   it("a spend-read failure propagates rather than reporting spent 0 and state ok (#3064)", async () => {
     await expect(
-      getSpendBudgetStatuses({
-        loadBudgets: async () => [budgetRow({ limitMicros: 1n })],
-        readSpend: async () => {
-          throw new Error("counter down");
+      getSpendBudgetStatuses(
+        { orgId: "org-1" },
+        {
+          loadBudgets: async () => [budgetRow({ limitMicros: 1n })],
+          readSpend: async () => {
+            throw new Error("counter down");
+          },
         },
-      }),
+      ),
     ).rejects.toThrow("counter down");
   });
 });
@@ -400,12 +407,15 @@ describe("the spend read is the recorders' counter (ADR-060 §5)", () => {
 
   it("the statuses panel reads the same counter", async () => {
     counter.sumSpendCounter.mockResolvedValue(2_500_000n);
-    const statuses = await getSpendBudgetStatuses({
-      loadBudgets: async () => [
-        budgetRow({ scope: "workspace", workspaceId: "ws-1" }),
-      ],
-      now: () => new Date("2026-07-16T00:00:00Z").getTime(),
-    });
+    const statuses = await getSpendBudgetStatuses(
+      { orgId: "org-1" },
+      {
+        loadBudgets: async () => [
+          budgetRow({ scope: "workspace", workspaceId: "ws-1" }),
+        ],
+        now: () => new Date("2026-07-16T00:00:00Z").getTime(),
+      },
+    );
     expect(statuses[0]!.spentMicros).toBe(2_500_000n);
     expect(counter.sumSpendCounter).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),

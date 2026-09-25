@@ -36,13 +36,11 @@ export function SkillSearch({
 
   // A preview runs against the repository the workspace binds now:
   // `preview_skill_search` refuses a version published under an earlier
-  // binding. `get_skill_config` picks `current` by the active binding but
-  // returns every historical version, so a workspace with nothing published
-  // for its current binding has no version that can produce a preview, and
-  // this offers none (#3666). Versions of an earlier binding published
-  // alongside a current one are still offered; telling those apart needs the
-  // binding on each version, which the contract does not carry.
-  const choices = configuration.current === null ? [] : configuration.versions;
+  // binding. `get_skill_config` returns every historical version and marks the
+  // ones published under the current binding `searchable`, so only those are
+  // offered. A workspace with nothing published for its current binding has
+  // none (#3666).
+  const choices = configuration.versions.filter((row) => row.searchable);
 
   function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();

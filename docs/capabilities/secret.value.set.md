@@ -5,7 +5,7 @@
 **Scope:** tenant + workspace
 **Surfaces:** api, mcp, agent
 **Risk level:** high
-**Requires approval:** no
+**Requires approval:** yes, on the agent surface (riskLevel: high)
 
 ## Intent
 
@@ -36,6 +36,17 @@ vault tables (PostgreSQL). When the key is sensitive, `value` is envelope-encryp
 (`value_enc` + `value_kms_key_id`); otherwise stored as plaintext text. Metering,
 IAM, and audit run through the kernel.
 - **Writes a `secret.value_changed` row to `security_events`** (`capability: set_secret_value`). Before ADR-050 this action left no audit trail anywhere — `secret_access_log` records reads, not writes.
+
+## Approval
+
+When an agent turn calls this capability on the `agent` surface, the call waits
+for a person to approve it before it runs (`requiresApproval: true`). When the
+in-app assistant parks the call, the approval row keeps only a digest of the
+input. The input, `value` included, is stored encrypted until the approved call
+resumes.
+
+The `api` and `mcp` surfaces do not read `requiresApproval`. IAM (org Owner or
+Admin) and the workspace's decision rules gate those calls.
 
 ## API
 

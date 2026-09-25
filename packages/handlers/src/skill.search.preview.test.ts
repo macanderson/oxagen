@@ -199,6 +199,30 @@ describe("repository skill catalog", () => {
       readSkillCatalog(repo, currentSha, "workspace", new Set(["review"])),
     ).rejects.toMatchObject({ reason: "skill_catalog_too_large" });
   });
+  // #3666: a pinned file edited on the production branch skips propose_skill,
+  // so the catalog refuses a grant or a credential itself.
+  it.each([
+    [
+      "grants tools",
+      "---\nname: review\nversion: 1.0.0\nscope: workspace\nallowed-tools: Bash\n---\nBody",
+    ],
+    [
+      "leaks a token in its description",
+      `---\nname: review\nversion: 1.0.0\nscope: workspace\ndescription: use ghp_${"a".repeat(36)}\n---\nBody`,
+    ],
+  ])("refuses a pinned skill that %s", async (label, body) => {
+    const repo = repository({
+      getTree: vi.fn().mockResolvedValue([".oxagen/skills/review/SKILL.md"]),
+      getFileContent: vi.fn().mockResolvedValue(body),
+    });
+    repo.bindingId = `unsafe-${label}`;
+    await expect(
+      readSkillCatalog(repo, currentSha, "workspace", new Set(["review"])),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "skill_catalog_unsafe",
+    });
+  });
 });
 
 // #3668: the tree is one request and every pinned skill is one more, so a

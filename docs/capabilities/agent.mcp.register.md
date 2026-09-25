@@ -22,6 +22,14 @@ agent's tool surface so they behave like first-class Oxagen tools.
 | `authStrategy`  | `"none" \| "bearer" \| "header"`      | Defaults to `"none"`.                       |
 | `authConfig`    | `Record<string,string>?`              | Credentials per strategy.                   |
 
+Every transport checks `endpointUrl` before the health check and before
+the insert. For `streamable-http`, the handler refuses an address that
+carries a username or a password, that is not `http:` or `https:`, or that
+resolves to a loopback, private, link-local, or cloud-metadata address. A
+`stdio` endpoint is a command URI such as `stdio://linear`, not a network
+address, so only the credential check applies: the URI is stored and shown,
+and the handler refuses one that carries a username or a password.
+
 ## Output
 
 | Field             | Type                                       | Notes                                  |

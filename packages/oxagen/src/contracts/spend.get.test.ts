@@ -20,6 +20,15 @@ describe("get_spend contract", () => {
     expect(spendGet.layers).not.toContain("e2e");
   });
 
+  it("is a low-risk read the in-app agent may call without approval", () => {
+    expect(spendGet.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(spendGet.agent).toEqual({
+      requiresApproval: false,
+      riskLevel: "low",
+      category: "billing",
+    });
+  });
+
   it("takes an inclusive day range and one of the five levels, and nothing else", () => {
     expect(
       spendGet.input.parse({

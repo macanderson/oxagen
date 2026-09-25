@@ -8,6 +8,13 @@ describe("secret.value.unset contract", () => {
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(secretValueUnset.surfaces).toEqual(["api", "mcp", "agent"]);
   });
+  it("waits for a person's approval on the agent surface", () => {
+    expect(secretValueUnset.agent).toEqual({
+      requiresApproval: true,
+      riskLevel: "high",
+      category: "secret",
+    });
+  });
   it("accepts a valid input", () => {
     expect(() =>
       secretValueUnset.input.parse({ keyId: "sk_1", environmentId: "env_1" }),

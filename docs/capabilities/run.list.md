@@ -10,8 +10,11 @@ The in-app agent's turns are excluded. Each turn is a run of its own (MC spec §
 
 ## Surface
 
+**Surfaces:** api, mcp, agent
+
 - API: `POST /v1/:org_slug/:workspace_slug/runs`
 - MCP: `list_runs`
+- Agent: one of the in-app assistant's seven pins, offered on every turn (`INTERACTIVE_AGENT_CAPABILITIES`). Low risk, no approval.
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `list_runs`
 - Not billed (`noBillingGate: true`): a console read is never a governed action (ADR-052 exclusion 2), so a page load stays off the GAU meter and reachable at `remaining = 0`. IAM default-deny; medium sensitivity.

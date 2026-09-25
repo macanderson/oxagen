@@ -136,12 +136,20 @@ describe("measure values", () => {
     expect(measureDeclarationReadSchema.safeParse(stored).success).toBe(true);
   });
 
-  it.each(["USD", "EUR", "JPY", "GBP", "CLF", "CHE", "USN", "XAU", "ZWG"])(
-    "isIso4217Currency accepts %s",
-    (code) => {
-      expect(isIso4217Currency(code)).toBe(true);
-    },
-  );
+  it.each([
+    "USD",
+    "EUR",
+    "JPY",
+    "GBP",
+    "CLF",
+    "CHE",
+    "USN",
+    "XAU",
+    "XCG",
+    "ZWG",
+  ])("isIso4217Currency accepts %s", (code) => {
+    expect(isIso4217Currency(code)).toBe(true);
+  });
 
   it.each(["USDC", "GAU", "RPM", "xyz", ""])(
     "isIso4217Currency refuses %j",

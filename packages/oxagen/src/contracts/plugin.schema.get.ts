@@ -167,6 +167,9 @@ export const pluginSchemaGet = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: false,
   sensitivity: "low",
+  // Upserts a built-in connector's bundled schema into the
+  // connector_schemas cache.
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

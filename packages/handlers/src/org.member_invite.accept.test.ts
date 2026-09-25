@@ -17,6 +17,8 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 // ── iam-provision mock ───────────────────────────────────────────────────────
 
@@ -187,6 +189,35 @@ describe("orgMemberInviteAcceptHandler", () => {
     await expect(
       orgMemberInviteAcceptHandler({ invitationPublicId: "inv_EXPIRED" }, ctx),
     ).rejects.toMatchObject({ code: "conflict", reason: "invitation_expired" });
+  });
+
+  // The expiry read ran in an earlier transaction, so an Owner can resend the
+  // invitation before the mark-expired write lands. A resend keeps the row
+  // pending and moves expires_at forward. When the write matched by id alone,
+  // it overwrote the renewed row with `expired` and undid the resend.
+  it("mark-expired write matches only a row still pending and past expiry", async () => {
+    const pastDate = new Date(Date.now() - 1000);
+    mockDb.query.invitations.findFirst.mockResolvedValue(
+      makeInvitation({ expiresAt: pastDate }),
+    );
+    const chain = makeUpdateChain();
+    mockUpdate.mockReturnValue(chain);
+
+    await expect(
+      orgMemberInviteAcceptHandler(
+        { invitationPublicId: "inv_EXPIRED" },
+        makeCtx(),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "invitation_expired" });
+
+    expect(chain.where).toHaveBeenCalledTimes(1);
+    const whereArg = (chain.where.mock.calls[0] as unknown[])[0] as SQL;
+    const { sql: text, params } = new PgDialect().sqlToQuery(whereArg);
+    expect(text).toContain('"invitations"."id" = $');
+    expect(text).toContain('"invitations"."status" = $');
+    expect(text).toContain('"invitations"."expires_at" < $');
+    expect(params).toContain("inv-uuid-001");
+    expect(params).toContain("pending");
   });
 
   it("expired invitation with failing mark-expired update → logs warning, still throws expired", async () => {

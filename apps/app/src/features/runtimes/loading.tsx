@@ -1,9 +1,11 @@
 // The Runtimes pages while the read is in flight (runtimes.md, States:
 // "the shell stays; the page body, header included, is replaced by the
 // skeleton"): four tile blocks and a panel of seven rows, the mockup's
-// `skeleton()`. The landmark carries no `id`: while the page streams in,
-// React holds the resolved page hidden beside this fallback, and two
-// `main#main` in one document is what the page-load check refused.
+// `skeleton()`. The frame is a busy region, not a `main`: while the page
+// streams in, React holds the resolved page hidden beside this fallback, and
+// only the page may own the landmark. A second `main`, with or without an
+// `id`, gives the document two main landmarks during the swap (#4053,
+// arch/loading-landmarks.test.ts).
 import { useTranslations } from "next-intl";
 import { panel, panelBody, panelHeader, statStrip } from "@/ui/control-styles";
 
@@ -16,7 +18,7 @@ const bone = "skeleton";
 export function RuntimesLoading() {
   const t = useTranslations("runtimes.page");
   return (
-    <main
+    <div
       aria-busy="true"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
@@ -54,6 +56,6 @@ export function RuntimesLoading() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -120,7 +120,9 @@ const context = { params: Promise.resolve({ org: "acme" }) };
 beforeEach(() => {
   exportEvents.mockReset();
   preferences.mockReset();
-  preferences.mockResolvedValue(readOk({ timeZone: "America/Los_Angeles" }));
+  preferences.mockResolvedValue(
+    readOk({ timeZone: "America/Los_Angeles", enterToSubmit: false }),
+  );
   resolveViewer.mockReset();
   resolveViewer.mockResolvedValue({ kind: "ok", ctx });
   exportEvents.mockResolvedValue(readOk(file));
