@@ -99,8 +99,9 @@ interface OrgRow {
  * live in `orgsWithoutKeyQuery`, where a test can read them.
  */
 async function orgsWithoutKey(): Promise<OrgRow[]> {
-  // tenancy: system bypass via withSystemDb (cross-tenant backfill; no single
-  // organisation's scope applies) (see docs/specs/tenancy-rls/spec.md)
+  // tenancy: cross-tenant backfill over all orgs, so no single organisation's
+  // scope applies. The query is filtered to live organisations with no key and
+  // reads only each one's owner (see docs/specs/tenancy-rls/spec.md).
   const rows = await withSystemDb(async (tx) => orgsWithoutKeyQuery(tx));
   return firstRowPerOrg(rows);
 }
