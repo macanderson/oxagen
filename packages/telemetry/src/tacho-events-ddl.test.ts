@@ -152,6 +152,23 @@ describe("tacho_events DDL", () => {
     }
   });
 
+  it("expires rows thirteen months after the control plane received them (#3944)", () => {
+    // The hot window ADR-058 sets for a run's frame rows. The clock is
+    // received_at, the server's, never ts, which the producer chooses. The
+    // TTL is not materialized on existing parts, because rewriting them all
+    // at once holds the app node at its memory cap (ADR-181).
+    const ttl = readFileSync(
+      join(here, "migrations", "0032_tacho_events_ttl.sql"),
+      "utf8",
+    );
+    const statements = ttl
+      .split("\n")
+      .filter((line) => line.trim() !== "" && !line.startsWith("--"));
+    expect(statements).toEqual([
+      "ALTER TABLE tacho_events MODIFY TTL toDateTime(received_at) + INTERVAL 13 MONTH SETTINGS materialize_ttl_after_modify = 0;",
+    ]);
+  });
+
   it("orders by tenant, session, and seq under ReplacingMergeTree", () => {
     const ddl = tachoEventsMigration();
     expect(ddl).toContain("ENGINE = ReplacingMergeTree(received_at)");

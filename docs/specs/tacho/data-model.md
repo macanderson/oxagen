@@ -30,7 +30,9 @@
 
 ## 2. ClickHouse `tacho_events` — one row per event, every scalar typed
 
-Engine `ReplacingMergeTree(received_at)`, `PARTITION BY toYYYYMM(ts)`, `ORDER BY (org_id, workspace_id, session_uuid, seq)`, with a skipping index on `event_id_idem` and `tool_use_id`. TTL follows `events` (90 days) unless the workspace's retention policy pins longer. Types: `LC` = `LowCardinality(String)`, `N(...)` = `Nullable`.
+Engine `ReplacingMergeTree(received_at)`, `PARTITION BY toYYYYMM(ts)`, `ORDER BY (org_id, workspace_id, session_uuid, seq)`, with a skipping index on `event_id_idem` and `tool_use_id`. Types: `LC` = `LowCardinality(String)`, `N(...)` = `Nullable`.
+
+Retention: a row expires thirteen months after `received_at` (migration 0032). That is the hot window ADR-058 sets for a run's frame rows, and `tacho_events` holds the frame rows of wrapped sessions. The clock is the control plane's, not the producer's `ts`. The table TTL does not read a workspace's retention policy. A wrapped session has no archive segment yet, so an expired frame is gone, and its `tacho.sessions` row stays. Moving the partition key to `received_at` needs a table rebuild, which #4297 carries.
 
 ### 2.1 Tenancy and identity (stamped)
 | Column | Type | From |
