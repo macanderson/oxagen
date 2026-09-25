@@ -855,22 +855,51 @@ async function initializeDaemon(
     session: SessionRecord;
     messages: SessionRecord["control"]["messages"];
     resumeOwed: string | undefined;
+    sealed: boolean;
   }> {
     return registry.list().map((session) => ({
       session,
       messages: [...session.control.messages],
       resumeOwed: session.control.resumeOwed,
+      sealed: session.sealed,
     }));
+  }
+
+  /**
+   * Withdraw the `expired` acknowledgements a failed hook's seal queued for
+   * the marked messages. A SessionEnd seals its record inside
+   * `handleHookEvent`, and the seal turns every queued message into an
+   * `expired` ack before the terminal frame is written. When that write
+   * fails the messages go back on their queues, so the acks must not ship:
+   * the plane would record the steer expired and then hear a later boundary
+   * report it `applied`. The ack may already have moved to `pendingAcks` if
+   * a tick drained the registry during the hook's awaits, so it is taken
+   * from there too.
+   */
+  function withdrawExpiredAcks(marks: ReturnType<typeof markEveryQueue>): void {
+    const ids = new Set(
+      marks.flatMap(({ messages }) => messages.map((message) => message.id)),
+    );
+    if (ids.size === 0) return;
+    registry.withdrawExpiredOnSeal(ids);
+    const kept = pendingAcks.filter(
+      (ack) => !(ack.status === "expired" && ids.has(ack.command_id)),
+    );
+    pendingAcks.splice(0, pendingAcks.length, ...kept);
   }
 
   /**
    * Put each marked queue back ahead of anything queued while the hook ran.
    * A command applied during the hook's awaits stays behind the ones it
    * found, in the order it arrived, and an item already put back is not
-   * queued twice.
+   * queued twice. A record the hook sealed is unsealed, since its terminal
+   * frame never landed, and the `expired` acks the seal queued are
+   * withdrawn.
    */
   function restoreEveryQueue(marks: ReturnType<typeof markEveryQueue>): void {
-    for (const { session, messages, resumeOwed } of marks) {
+    withdrawExpiredAcks(marks);
+    for (const { session, messages, resumeOwed, sealed } of marks) {
+      if (session.sealed && !sealed) session.sealed = false;
       const held = new Set(messages.map((message) => message.id));
       const arrived = session.control.messages.filter(
         (message) => !held.has(message.id),
@@ -2254,6 +2283,9 @@ async function initializeDaemon(
       } catch (error) {
         delete pending.terminal;
         if (before !== undefined) registry.restore(before);
+        // The restore puts the queues back, but the `expired` acks the seal
+        // queued live outside the state it restores.
+        withdrawExpiredAcks(queues);
         throw error;
       }
       // The journal now holds the delivery frames, and a failed flush below

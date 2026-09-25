@@ -761,6 +761,21 @@ export class SessionRegistry {
     return this.expiredOnSeal.splice(0);
   }
 
+  /**
+   * Drop the queued `expired` acknowledgements for these commands. A caller
+   * that puts a sealed session's messages back on its queue, because the
+   * write that sealed it failed, calls this: a message waiting for a
+   * boundary has not expired, and an `expired` ack sent for it would
+   * contradict the `applied` a later boundary reports.
+   */
+  withdrawExpiredOnSeal(commandIds: ReadonlySet<string>): void {
+    if (commandIds.size === 0) return;
+    const kept = this.expiredOnSeal.filter(
+      (ack) => !commandIds.has(ack.command_id),
+    );
+    this.expiredOnSeal.splice(0, this.expiredOnSeal.length, ...kept);
+  }
+
   touch(harnessSessionId: string): void {
     const record = this.get(harnessSessionId);
     if (record) {

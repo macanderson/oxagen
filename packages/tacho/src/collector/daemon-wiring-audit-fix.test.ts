@@ -333,6 +333,57 @@ describe("the daemon's audit wiring", () => {
     ]);
   });
 
+  it("sends no expired ack for a steer whose SessionEnd write failed", async () => {
+    const { handle, plane } = await boot();
+    await handle.api.handleHook(hook("SessionStart"));
+    const record = handle.registry.get(SESSION)!;
+    const uuid = record.recorder.sessionUuid;
+    plane.queue(
+      command({
+        id: "cmd_kept",
+        command: "steer",
+        session_uuid: uuid,
+        payload: { text: "Stop after this file." },
+      }),
+    );
+    await handle.tick();
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_kept"]);
+
+    // The seal queues `expired` for the steer before the terminal frame is
+    // written. The write fails, so the seal did not happen.
+    const append = handle.wal.append.bind(handle.wal);
+    handle.wal.append = () => {
+      throw new Error("ENOSPC: no space left on device");
+    };
+    await expect(handle.api.handleHook(hook("SessionEnd"))).rejects.toThrow(
+      /ENOSPC/,
+    );
+    handle.wal.append = append;
+
+    expect(record.sealed).toBe(false);
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_kept"]);
+    await handle.tick();
+    expect(
+      plane.acks
+        .filter((a) => a.command_id === "cmd_kept")
+        .map((a) => a.status),
+    ).toEqual(["received"]);
+
+    // A boundary still delivers it, and the plane hears one outcome.
+    const response = await handle.api.handleHook(
+      hook("UserPromptSubmit", { prompt: "go on" }),
+    );
+    expect(response).toMatchObject({
+      hookSpecificOutput: { additionalContext: "Stop after this file." },
+    });
+    await handle.tick();
+    expect(
+      plane.acks
+        .filter((a) => a.command_id === "cmd_kept")
+        .map((a) => a.status),
+    ).toEqual(["received", "applied"]);
+  });
+
   it("keeps the baseline across a cd inside the same repository", async () => {
     let head = BASELINE_SHA;
     const { handle } = await boot({ git: () => repoAnswers(head) });
