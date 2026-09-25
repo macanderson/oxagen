@@ -66,6 +66,36 @@ export type SteeringGatePolicy = z.infer<typeof steeringGatePolicy>;
 /** The same two gates as a partial, for a write that sets one of them. */
 export const steeringGatePolicyPatch = steeringGatePolicy.partial();
 
+/** One problem the repository sync found in a record file. */
+export const steeringSyncFinding = z.object({
+  /** `error` published nothing from the file; `warning` published it. */
+  level: z.enum(["error", "warning"]),
+  path: z.string(),
+  lineageId: z.string().nullable(),
+  code: z.string(),
+  message: z.string(),
+});
+
+/** Where the repository sync stands for the workspace (ADR-184). */
+export const steeringSyncState = z.object({
+  /**
+   * `pending` while a push or merge has asked for a sync that has not
+   * finished; `synced` when the last one found nothing wrong; `problems`
+   * when it published around findings; `failed` when it could not read the
+   * repository.
+   */
+  status: z.enum(["pending", "synced", "problems", "failed"]),
+  /** The production-branch commit the registry last matched. */
+  headSha: z.string().nullable(),
+  requestedAt: z.string().datetime({ offset: true }).nullable(),
+  syncedAt: z.string().datetime({ offset: true }).nullable(),
+  /** Why the last sync failed, when it did. */
+  error: z.string().nullable(),
+  findings: z.array(steeringSyncFinding),
+});
+
+export type SteeringSyncState = z.infer<typeof steeringSyncState>;
+
 export const contextSteeringFreshness = registerCapability({
   name: "get_steering_freshness",
   domain: "context",
@@ -157,6 +187,13 @@ export const contextSteeringFreshness = registerCapability({
     defaultBranch: z.string().nullable(),
     /** The workspace's two gates. Both off unless the workspace turned one on. */
     policy: steeringGatePolicy,
+    /**
+     * The repository sync (ADR-184): which production-branch commit the
+     * registry last matched, and what was wrong with the record files there.
+     * Null until the workspace's first sync is requested. Optional, so a
+     * client built before the field keeps parsing.
+     */
+    sync: steeringSyncState.nullable().optional(),
   }),
 });
 

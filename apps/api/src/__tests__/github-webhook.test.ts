@@ -11,6 +11,8 @@
  * - Repo mismatch → 200 { dispatched: 0 }
  * - parseWebhookEvent returns [] → 200 { dispatched: 0 }
  * - entity.received event shape (sourceRecordType + unwrapped record)
+ * - push / pull_request → steering sync request (ADR-184); its failure never
+ *   changes the response
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -28,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   inngestSend: vi.fn(),
   getConnector: vi.fn(),
   parseWebhookEvent: vi.fn(),
+  githubSyncTargets: vi.fn(),
+  requestSteeringSync: vi.fn(),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -88,6 +92,15 @@ vi.mock("@oxagen/inngest-functions/client", () => ({
 
 vi.mock("@oxagen/ingestion/connectors", () => ({
   getConnector: mocks.getConnector,
+}));
+
+// The steering sync request (ADR-184) reads the repository binding registry
+// and sends its own event. Its matching logic has its own suite; here it is
+// a seam, so these tests assert what the route hands it and that its failure
+// never reaches GitHub.
+vi.mock("@oxagen/handlers/context.steering.sync.request", () => ({
+  githubSyncTargets: mocks.githubSyncTargets,
+  requestSteeringSync: mocks.requestSteeringSync,
 }));
 
 import { app } from "../app";
@@ -162,6 +175,8 @@ beforeEach(() => {
   mocks.withSystemDb.mockImplementation(
     (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx([CONNECTED_ROW])),
   );
+  mocks.githubSyncTargets.mockResolvedValue([]);
+  mocks.requestSteeringSync.mockResolvedValue(0);
 });
 
 afterEach(() => {
@@ -588,5 +603,164 @@ describe("github app webhook – routing & dispatch", () => {
     expect(((await res.json()) as { dispatched: number }).dispatched).toBe(2);
     const sent = mocks.inngestSend.mock.calls[0]?.[0] as unknown[];
     expect(sent).toHaveLength(2);
+  });
+});
+
+describe("github app webhook – steering sync request (ADR-184)", () => {
+  const TARGETS = [
+    { orgId: "org-1", workspaceId: "ws-1" },
+    { orgId: "org-2", workspaceId: "ws-2" },
+  ];
+
+  it("asks for a sync on a push, with the event, the body and the installation", async () => {
+    mocks.githubSyncTargets.mockResolvedValue(TARGETS);
+    const body = {
+      ref: "refs/heads/main",
+      installation: { id: 555 },
+      repository: { id: 90210, full_name: "acme/widgets" },
+    };
+    const res = await app.fetch(signedPost("push", body));
+    expect(res.status).toBe(200);
+    expect(mocks.githubSyncTargets).toHaveBeenCalledTimes(1);
+    expect(mocks.githubSyncTargets).toHaveBeenCalledWith({
+      eventName: "push",
+      body,
+      installationId: "555",
+    });
+    // The targets go through untouched: the route decides nothing about
+    // which workspaces sync.
+    expect(mocks.requestSteeringSync).toHaveBeenCalledTimes(1);
+    expect(mocks.requestSteeringSync).toHaveBeenCalledWith(TARGETS, "push");
+  });
+
+  it("asks for a sync on a pull_request delivery, with that reason", async () => {
+    mocks.githubSyncTargets.mockResolvedValue(TARGETS);
+    const body = {
+      action: "closed",
+      installation: { id: 555 },
+      repository: { id: 90210, full_name: "acme/widgets" },
+      pull_request: { number: 7, base: { ref: "main" } },
+    };
+    const res = await app.fetch(signedPost("pull_request", body));
+    expect(res.status).toBe(200);
+    expect(mocks.githubSyncTargets).toHaveBeenCalledWith({
+      eventName: "pull_request",
+      body,
+      installationId: "555",
+    });
+    expect(mocks.requestSteeringSync).toHaveBeenCalledWith(
+      TARGETS,
+      "pull_request",
+    );
+  });
+
+  it("asks for a sync on a push that carries no installation", async () => {
+    // The sync sits above the early return for a delivery with no
+    // installation. A workspace bound through a repository binding does not
+    // need one, so moving the request below that return would silently stop
+    // its syncs.
+    const body = {
+      ref: "refs/heads/main",
+      repository: { id: 90210, full_name: "acme/widgets" },
+    };
+    const res = await app.fetch(signedPost("push", body));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(0);
+    expect(mocks.githubSyncTargets).toHaveBeenCalledWith({
+      eventName: "push",
+      body,
+      installationId: null,
+    });
+    expect(mocks.requestSteeringSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks for a sync on a push to a repository that is not an ingestion source", async () => {
+    // The ingestion routing answers early when no connection matches the
+    // repository. A main repository with no ingestion connection still syncs.
+    const res = await app.fetch(
+      signedPost("push", {
+        ref: "refs/heads/main",
+        installation: { id: 555 },
+        repository: { id: 1, full_name: "acme/other-repo" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(0);
+    expect(mocks.requestSteeringSync).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["ping", "issues", "installation", "star"])(
+    "does not ask for a sync on a %s delivery",
+    async (event) => {
+      const res = await app.fetch(
+        signedPost(event, {
+          action: "created",
+          installation: { id: 555 },
+          repository: { id: 90210, full_name: "acme/widgets" },
+        }),
+      );
+      expect(res.status).toBe(200);
+      expect(mocks.githubSyncTargets).not.toHaveBeenCalled();
+      expect(mocks.requestSteeringSync).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not ask for a sync on a delivery whose signature fails", async () => {
+    const res = await app.fetch(
+      signedPost(
+        "push",
+        { ref: "refs/heads/main", installation: { id: 555 } },
+        { badSig: true },
+      ),
+    );
+    expect(res.status).toBe(401);
+    expect(mocks.githubSyncTargets).not.toHaveBeenCalled();
+  });
+
+  it("answers GitHub as usual and logs when finding the targets fails", async () => {
+    // GitHub retries a failed delivery and disables a hook that keeps
+    // failing. The five-minute sweep syncs every main repository anyway, so a
+    // failure here must cost nothing but a log line: same 200, same ingestion.
+    mocks.githubSyncTargets.mockRejectedValue(new Error("pool exhausted"));
+    const res = await app.fetch(
+      signedPost("push", {
+        ref: "refs/heads/main",
+        installation: { id: 555 },
+        repository: { id: 90210, full_name: "acme/widgets" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
+    expect(mocks.requestSteeringSync).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
+    const sent = mocks.inngestSend.mock.calls[0]?.[0] as Array<{
+      name: string;
+    }>;
+    expect(sent[0]?.name).toBe("ingestion/entity.received");
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ eventName: "push", err: expect.any(Error) }),
+      expect.stringContaining("steering sync"),
+    );
+  });
+
+  it("answers GitHub as usual and logs when sending the request fails", async () => {
+    // The send is the likelier failure in practice: the event service is
+    // down while the database is fine.
+    mocks.githubSyncTargets.mockResolvedValue(TARGETS);
+    mocks.requestSteeringSync.mockRejectedValue(new Error("inngest 503"));
+    const res = await app.fetch(
+      signedPost("pull_request", {
+        action: "closed",
+        installation: { id: 555 },
+        repository: { id: 90210, full_name: "acme/widgets" },
+        pull_request: { number: 7, base: { ref: "main" } },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ eventName: "pull_request" }),
+      expect.stringContaining("steering sync"),
+    );
   });
 });

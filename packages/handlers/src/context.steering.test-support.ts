@@ -25,6 +25,17 @@ import {
 } from "./context.steering.store";
 import { canonicalJson, sha256Hex } from "./registry-digest";
 import { readRecordFile } from "./context.steering.file";
+import type { RegistryRecord, SyncPlan } from "./context.steering.sync.plan";
+import {
+  SYNC_POLICY_VERSION,
+  type AppliedSync,
+  type ApplyInput,
+  type SyncState,
+  type SyncStateWrite,
+  type SyncStore,
+} from "./context.steering.sync.store";
+
+type SyncScope = { orgId: string; workspaceId: string };
 
 export const SCOPE = {
   orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
@@ -88,6 +99,8 @@ export class MemoryStore implements SteeringStore {
     prev: string | null;
     policyVersion: string;
     approverUserId: string | null;
+    /** `promote` when absent; the repository sync also writes `retire`. */
+    action?: "promote" | "retire";
   }[] = [];
   appends: AppendRow[] = [];
 
@@ -437,7 +450,15 @@ export class MemoryStore implements SteeringStore {
     const latest = this.versions
       .filter((v) => v.recordId === record.id)
       .sort((a, b) => b.version - a.version)[0];
-    const version = {
+    // As the Postgres store does: bytes the repository sync already
+    // published are reused, not written again (ADR-184).
+    const reused = existing
+      ? this.versions.find(
+          (v) =>
+            v.id === existing.activeVersionId && v.checksum === input.checksum,
+        )
+      : undefined;
+    const version = reused ?? {
       id: uuid(),
       publicId: nextId("crv"),
       recordId: record.id,
@@ -486,8 +507,10 @@ export class MemoryStore implements SteeringStore {
     )
       throw alreadyMerged(proposal.publicId);
     if (!existing) this.records.push(record);
-    if (latest) latest.isLatest = false;
-    this.versions.push(version);
+    if (!reused) {
+      if (latest) latest.isLatest = false;
+      this.versions.push(version);
+    }
     Object.assign(record, classification, {
       activeVersionId: version.id,
       version: version.version,
@@ -666,15 +689,27 @@ export class FakeGitHub implements SteeringGitHub {
     path: string,
     ref: string,
   ) {
+    // A directory's content is every file under it, so the same walk answers
+    // the commit that last changed anything in `.oxagen/rules/`.
+    const snapshot = (sha: string): string | undefined => {
+      const exact = this.files.get(`${sha}:${path}`);
+      if (exact !== undefined) return exact;
+      const under = [...this.tree(sha)]
+        .filter(([p]) => p.startsWith(`${path}/`))
+        .sort(([a], [b]) => a.localeCompare(b));
+      return under.length > 0 ? JSON.stringify(under) : undefined;
+    };
     for (const sha of this.lineage(this.shaOf(ref))) {
       // GitHub lists the commits that CHANGED the path, not the ones whose
       // tree happens to hold it. Every commit after a file lands carries that
       // file forward, so a fake that ignored the parent would hand a record
       // the provenance of whatever landed on the branch last.
-      const content = this.files.get(`${sha}:${path}`);
-      if (content === undefined) continue;
+      // A commit that removed the path changed it too, as GitHub counts it.
+      const content = snapshot(sha);
       const parent = this.parents.get(sha);
-      if (parent && this.files.get(`${parent}:${path}`) === content) continue;
+      const before = parent ? snapshot(parent) : undefined;
+      if (content === undefined && before === undefined) continue;
+      if (parent && before === content) continue;
       const meta = this.commitMeta.get(sha);
       // No recorded commit means the file came from the constructor's seed,
       // which has no commit behind it. Null, so a test can see the provenance
@@ -814,10 +849,63 @@ export class FakeGitHub implements SteeringGitHub {
     return {
       baseRef: pr.base,
       headSha: pr.state === "open" ? this.shaOf(pr.head) : pr.headSha,
+      open: pr.state === "open",
       merged: pr.merged,
       mergeCommitSha: pr.mergeCommitSha,
       mergedAt: pr.mergedAt,
     };
+  }
+  async branchHead(_repo: SteeringRepository, branch: string) {
+    return this.heads.get(branch) ?? null;
+  }
+  async listFiles(_repo: SteeringRepository, ref: string, dir: string) {
+    return [...this.tree(this.shaOf(ref)).keys()]
+      .filter((path) => path.startsWith(`${dir}/`))
+      .sort();
+  }
+  /** Remove a file on a branch, as a person with push access does. */
+  remove(branch: string, path: string, message = ""): string {
+    const sha = this.commit(branch, path, "", message);
+    this.files.delete(`${sha}:${path}`);
+    return sha;
+  }
+  /** Rename a file on a branch in one commit, as `git mv` does. */
+  rename(branch: string, from: string, to: string, message = ""): string {
+    const content = this.files.get(`${this.shaOf(branch)}:${from}`);
+    if (content === undefined) throw new Error(`no ${from} on ${branch}`);
+    const sha = this.commit(branch, to, content, message);
+    this.files.delete(`${sha}:${from}`);
+    return sha;
+  }
+  /** Merge an open PR on the host, as a person clicking Merge on GitHub does. */
+  mergeOnHost(number: number): string {
+    const pr = this.pull(number);
+    const head = this.shaOf(pr.head);
+    const base = this.shaOf(pr.base);
+    const mergeSha = `hostmerge${number}`;
+    for (const [key, content] of this.files)
+      if (key.startsWith(`${head}:`))
+        this.files.set(`${mergeSha}:${key.slice(head.length + 1)}`, content);
+    this.parents.set(mergeSha, base);
+    const mergedAt = this.clock();
+    this.commitMeta.set(mergeSha, {
+      at: mergedAt,
+      message: `Merge #${number}`,
+    });
+    this.heads.set(pr.base, mergeSha);
+    Object.assign(pr, {
+      state: "closed",
+      merged: true,
+      mergeCommitSha: mergeSha,
+      mergedAt,
+      headSha: head,
+    });
+    return mergeSha;
+  }
+  /** Close an open PR on the host without merging it. */
+  closeOnHost(number: number): void {
+    const pr = this.pull(number);
+    Object.assign(pr, { state: "closed", headSha: this.shaOf(pr.head) });
   }
   async reportCheckRun(
     _repo: SteeringRepository,
@@ -917,4 +1005,240 @@ export function harness(files: Record<string, string> = {}): Harness {
     events,
     roleOf,
   };
+}
+
+/**
+ * The repository sync's store (ADR-184) over a `MemoryStore`'s own arrays, so
+ * a test can run `merge_context_pr` and the sync against one registry and see
+ * whether they agree. `apply` writes versions and ledger links the way the
+ * Postgres store does: one version per publication, the chain digest over the
+ * same canonical fields, and a `retire` link with no version.
+ */
+export class MemorySyncStore implements SyncStore {
+  state: SyncState | null = null;
+  applied = 0;
+  constructor(private readonly store: MemoryStore) {}
+
+  async readState() {
+    return this.state;
+  }
+  async markRequested(_scope: SyncScope, at: Date) {
+    this.state = {
+      ...(this.state ?? {
+        provider: null,
+        repository: null,
+        branch: null,
+        headSha: null,
+        rulesSha: null,
+        status: "pending" as const,
+        findings: [],
+        error: null,
+        syncedAt: null,
+      }),
+      requestedAt: at,
+    };
+  }
+  async writeState(_scope: SyncScope, state: SyncStateWrite) {
+    this.state = { ...state, requestedAt: this.state?.requestedAt ?? null };
+  }
+
+  private chain(
+    recordId: string,
+    versionId: string | null,
+    action: "promote" | "retire",
+  ) {
+    const head = this.store.ledger
+      .filter((l) => l.recordId === recordId)
+      .sort((a, b) => b.seq - a.seq)[0];
+    const seq = (head?.seq ?? 0) + 1;
+    const prev = head?.chainDigest ?? null;
+    const chainDigest = sha256Hex(
+      (prev ?? "") +
+        canonicalJson({
+          action,
+          approver_user_id: null,
+          policy_version: SYNC_POLICY_VERSION,
+          record_id: recordId,
+          seq,
+          version_id: versionId,
+        }),
+    );
+    this.store.ledger.push({
+      id: uuid(),
+      publicId: nextId("ctp"),
+      recordId,
+      seq,
+      chainDigest,
+      prev,
+      policyVersion: SYNC_POLICY_VERSION,
+      approverUserId: null,
+      action,
+    });
+  }
+
+  async apply(
+    scope: SyncScope,
+    input: ApplyInput,
+    planFor: (records: RegistryRecord[]) => SyncPlan,
+  ): Promise<AppliedSync> {
+    this.applied += 1;
+    const mine = this.store.records.filter(
+      (r) => r.workspaceId === scope.workspaceId,
+    );
+    const plan = planFor(
+      mine.map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        path: r.path,
+        status: r.status,
+        deleted: r.deletedAt !== null,
+        label: r.label ?? null,
+        kind: r.kind,
+        constraintEffect: r.constraintEffect,
+        statement: r.statement,
+        body:
+          this.store.versions.find((v) => v.id === r.activeVersionId)?.body ??
+          null,
+      })),
+    );
+    let created = 0;
+    let revised = 0;
+    for (const p of plan.publish) {
+      let record = p.recordId
+        ? this.store.records.find((r) => r.id === p.recordId)
+        : undefined;
+      if (!record) {
+        record = {
+          id: uuid(),
+          publicId: nextId("ctr"),
+          createdAt: input.now,
+          createdById: null,
+          updatedById: null,
+          deletedAt: null,
+          deletedById: null,
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          slug: p.lineageId,
+          title: p.content.statement,
+          label: p.content.label ?? contextRecordLabel(p.lineageId),
+          status: "active",
+          kind: p.content.kind,
+          force: p.content.force,
+          constraintEffect: p.content.constraintEffect,
+          sharingScope: p.content.sharingScope,
+          statement: p.content.statement,
+          commitSha: input.commitSha,
+          path: p.path,
+          publishedAt: input.publishedAt,
+          activatedByUserId: null,
+          activatedAt: input.publishedAt,
+          updatedAt: input.now,
+          activeVersionId: null,
+          validUntil: null,
+          version: null,
+          checksum: null,
+        };
+        this.store.records.push(record);
+        created += 1;
+      } else revised += 1;
+      const target = record;
+      const latest = this.store.versions
+        .filter((v) => v.recordId === target.id)
+        .sort((a, b) => b.version - a.version)[0];
+      if (latest) latest.isLatest = false;
+      const version = {
+        id: uuid(),
+        publicId: nextId("crv"),
+        recordId: target.id,
+        version: (latest?.version ?? 0) + 1,
+        checksum: p.checksum,
+        isLatest: true,
+        publishedAt: input.publishedAt,
+        body: p.body,
+        kind: p.content.kind,
+        force: p.content.force,
+        constraintEffect: p.content.constraintEffect,
+        statement: p.content.statement,
+      };
+      this.store.versions.push(version);
+      Object.assign(target, {
+        slug: p.lineageId,
+        label: p.content.label ?? target.label,
+        status: "active",
+        kind: p.content.kind,
+        force: p.content.force,
+        constraintEffect: p.content.constraintEffect,
+        sharingScope: p.content.sharingScope,
+        statement: p.content.statement,
+        commitSha: input.commitSha,
+        path: p.path,
+        publishedAt: input.publishedAt,
+        deletedAt: null,
+        activeVersionId: version.id,
+        version: version.version,
+        checksum: version.checksum,
+      });
+      this.chain(target.id, version.id, "promote");
+    }
+    for (const u of plan.update) {
+      const record = this.store.records.find((r) => r.id === u.recordId);
+      if (!record) continue;
+      if (u.slug !== undefined) record.slug = u.slug;
+      if (u.path !== undefined) record.path = u.path;
+      if (u.label !== undefined) record.label = u.label;
+    }
+    for (const r of plan.retire) {
+      const record = this.store.records.find((x) => x.id === r.recordId);
+      if (!record) continue;
+      Object.assign(record, {
+        status: "retired",
+        commitSha: input.commitSha,
+        publishedAt: input.publishedAt,
+      });
+      this.chain(record.id, null, "retire");
+    }
+    return {
+      plan,
+      created,
+      revised,
+      updated: plan.update.length,
+      retired: plan.retire.length,
+    };
+  }
+
+  async openProposals(scope: SyncScope) {
+    return this.store.proposals.filter(
+      (p) => p.workspaceId === scope.workspaceId && OPEN.has(p.status),
+    );
+  }
+
+  async linkMergedProposal(
+    scope: SyncScope,
+    proposalId: string,
+    args: { lineageId: string; mergedCommit: string; mergedAt: Date },
+  ) {
+    const record = this.store.records.find(
+      (r) =>
+        r.workspaceId === scope.workspaceId &&
+        r.slug === args.lineageId &&
+        r.status === "active" &&
+        r.deletedAt === null,
+    );
+    if (!record) return false;
+    const promotion = this.store.ledger
+      .filter((l) => l.recordId === record.id && l.action !== "retire")
+      .sort((a, b) => b.seq - a.seq)[0];
+    if (!promotion) return false;
+    const proposal = this.store.proposals.find((p) => p.id === proposalId);
+    if (!proposal || !OPEN.has(proposal.status)) return false;
+    Object.assign(proposal, {
+      status: "merged",
+      mergedCommit: args.mergedCommit,
+      mergedAt: args.mergedAt,
+      mergedByUserId: null,
+      publishedRecordId: record.id,
+      promotionEventId: promotion.id,
+    });
+    return true;
+  }
 }

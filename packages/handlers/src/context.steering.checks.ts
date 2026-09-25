@@ -14,7 +14,7 @@ import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
 import {
   RECORD_SCHEMA_TAG,
   parseRecordFile,
-  recordFilePath,
+  RULES_DIR,
   stampRecordObject,
   type RecordFileRecord,
 } from "./context.steering.file";
@@ -259,14 +259,20 @@ function checkLineageUniqueness(ctx: CheckContext): CheckOutcome {
       summary: `the file declares ${lineage}; the proposal is about ${ctx.proposal.lineageId}`,
     };
   }
-  if (ctx.path !== recordFilePath(lineage)) {
+  // The lineage inside the file is the record's identity, not the file's
+  // name (ADR-184). Any `.toml` file under the rules directory can hold it.
+  if (!ctx.path.startsWith(`${RULES_DIR}/`) || !ctx.path.endsWith(".toml")) {
     return {
       ok: false,
-      summary: `${ctx.path} does not hold lineage ${lineage}; the file stem is the lineage id`,
+      summary: `${ctx.path} is not a .toml file under ${RULES_DIR}/, where record files live`,
     };
   }
   const published = ctx.published;
-  if (published?.path && published.path !== ctx.path) {
+  if (
+    published?.path &&
+    published.path.startsWith(`${RULES_DIR}/`) &&
+    published.path !== ctx.path
+  ) {
     return {
       ok: false,
       summary: `${lineage} is already published at ${published.path}; one lineage, one file`,
