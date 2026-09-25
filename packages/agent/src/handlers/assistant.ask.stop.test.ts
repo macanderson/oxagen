@@ -130,6 +130,29 @@ describe("ask_assistant with a turn id", () => {
     expect(out.stopped).toBe(true);
   });
 
+  // The flyout can press Stop before the turn registers, while the gates and
+  // the context are still being prepared. The registry holds that stop, so
+  // the turn starts already stopped.
+  it("hands the turn an already aborted stop when the person stopped it before it registered", async () => {
+    mocks.prepareAssistantTurn.mockImplementation(async () => {
+      // Nothing is registered yet, so the stop is held, not lost.
+      expect(stopAssistantTurn(KEY)).toEqual({ found: false });
+      return { userId: "u-1", run: mocks.run };
+    });
+    let seen: AssistantTurnHooks | undefined;
+    mocks.run.mockImplementation(async (hooks?: AssistantTurnHooks) => {
+      seen = hooks;
+      return { ...RESULT, reply: "", stopped: true };
+    });
+
+    const out = await assistantAskHandler({ ...INPUT, turnId: TURN_ID }, CTX);
+
+    expect(seen?.stopSignal?.aborted).toBe(true);
+    expect(seen?.stopSignal?.reason).toBe(ASSISTANT_TURN_STOP_REASON);
+    expect(seen?.abortSignal?.aborted).toBe(true);
+    expect(out.stopped).toBe(true);
+  });
+
   it("forgets the turn once it returns: a later stop finds nothing", async () => {
     await assistantAskHandler({ ...INPUT, turnId: TURN_ID }, CTX);
     expect(stopAssistantTurn(KEY)).toEqual({ found: false });

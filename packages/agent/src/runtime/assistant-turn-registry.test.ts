@@ -69,6 +69,13 @@ describe("assistant turn registry", () => {
     expect(registerAssistantTurn(KEY).signal.aborted).toBe(false);
   });
 
+  it("still applies a held stop one millisecond before its time is up", () => {
+    vi.useFakeTimers();
+    stopAssistantTurn(KEY);
+    vi.advanceTimersByTime(HELD_STOP_TTL_MS - 1);
+    expect(registerAssistantTurn(KEY).signal.aborted).toBe(true);
+  });
+
   it("drops a held stop after its time is up (negative)", () => {
     vi.useFakeTimers();
     stopAssistantTurn(KEY);

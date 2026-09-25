@@ -605,6 +605,9 @@ describe("prepareAssistantTurn", () => {
       ...request,
       ctx: { ...CTX, userId: null, apiKeyId: "aky-1" },
     });
+    // The handler registers the turn under this id, so a stop from the key's
+    // creator is the one that reaches it (#4164).
+    expect(prepared.userId).toBe("creator-1");
     const result = await prepared.run();
     expect(result.runId).toBe("arun_0123456789abcdef012345");
     expect(mocks.openAssistantRun).toHaveBeenCalledWith(
@@ -1675,6 +1678,8 @@ describe("a person's stop (#4164)", () => {
     expect(mocks.runGovernedTurn.mock.calls[0]![0].abortSignal).toBe(
       hooks.abortSignal,
     );
+    // The literal, not ASSISTANT_MESSAGE_STOPPED: `get_conversation` reads
+    // saved rows by this string, so the writer must keep writing it.
     expect(assistantInsert()?.values).toMatchObject({
       content: "The run failed at",
       metadata: { status: "stopped" },
@@ -1686,8 +1691,15 @@ describe("a person's stop (#4164)", () => {
     mocks.runGovernedTurn.mockImplementationOnce(async () =>
       abortedTurn([], ""),
     );
-    const result = await runTurn(request, stoppedHooks());
+    const hooks = stoppedHooks();
+    const result = await runTurn(request, hooks);
 
+    // The governed turn starts with the signal already aborted.
+    // `governed-turn.test.ts` shows it then sends nothing and ends with the
+    // `engine_aborted` part this mock yields.
+    expect(mocks.runGovernedTurn.mock.calls[0]![0].abortSignal.aborted).toBe(
+      true,
+    );
     expect(result).toMatchObject({ stopped: true, reply: "" });
     expect(assistantInsert()?.values).toMatchObject({
       content: "",

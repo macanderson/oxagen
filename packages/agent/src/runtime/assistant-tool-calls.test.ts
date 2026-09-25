@@ -8,17 +8,10 @@ import {
 
 const PUBLIC_ID = "apr_01k5rt9xq7v3m8n2p4s6t8w0";
 const ROW_ID = "0a1b2c3d-0000-4000-8000-00000000a001";
-const OTHER_ROW_ID = "0a1b2c3d-0000-4000-8000-00000000a002";
-
-const card = (approvalId: string, capability = "set_budget") => ({
-  approvalId,
-  capability,
-  expiresAt: "2026-09-24T10:05:00.000Z",
-});
 
 /**
  * The error `ApprovalPendingError` carries onto the receipt of a parked call.
- * It names the public id, or the row uuid when the writer returned none.
+ * The list never reads it: a parked call's approval comes from its public id.
  */
 const parkedError = (capability: string, approvalId: string) =>
   `refused: ${capability} is waiting for approval ${approvalId} until 2026-09-24T10:05:00.000Z`;
@@ -50,33 +43,30 @@ const model: AssistantRunReceipt = {
 
 describe("toolCallsFromReceipts", () => {
   it("lists each tool receipt in order with its outcome and whole-millisecond duration, and skips completions", () => {
-    const calls = toolCallsFromReceipts(
-      [
-        model,
-        tool({ requestId: "tc-1", toolName: "list_runs", durationMs: 12.6 }),
-        tool({
-          requestId: "tc-2",
-          toolName: "get_run",
-          outcome: "failed",
-          error: "run not found",
-          durationMs: 3,
-        }),
-        tool({
-          requestId: "tc-3",
-          toolName: "search_tools",
-          outcome: "cancelled",
-          durationMs: -1,
-        }),
-        tool({
-          requestId: "tc-4",
-          toolName: "retire_agent",
-          outcome: "denied",
-          error: "refused: retire_agent blocked by a decision rule",
-          durationMs: 1,
-        }),
-      ],
-      [],
-    );
+    const calls = toolCallsFromReceipts([
+      model,
+      tool({ requestId: "tc-1", toolName: "list_runs", durationMs: 12.6 }),
+      tool({
+        requestId: "tc-2",
+        toolName: "get_run",
+        outcome: "failed",
+        error: "run not found",
+        durationMs: 3,
+      }),
+      tool({
+        requestId: "tc-3",
+        toolName: "search_tools",
+        outcome: "cancelled",
+        durationMs: -1,
+      }),
+      tool({
+        requestId: "tc-4",
+        toolName: "retire_agent",
+        outcome: "denied",
+        error: "refused: retire_agent blocked by a decision rule",
+        durationMs: 1,
+      }),
+    ]);
     expect(calls).toEqual([
       {
         toolCallId: "tc-1",
@@ -110,17 +100,14 @@ describe("toolCallsFromReceipts", () => {
   });
 
   it("reads a parked receipt with the approval's public id, the id its card holds", () => {
-    const calls = toolCallsFromReceipts(
-      [
-        tool({
-          toolName: "set_budget",
-          outcome: "parked",
-          approvalPublicId: PUBLIC_ID,
-          error: parkedError("set_budget", PUBLIC_ID),
-        }),
-      ],
-      [card(PUBLIC_ID)],
-    );
+    const calls = toolCallsFromReceipts([
+      tool({
+        toolName: "set_budget",
+        outcome: "parked",
+        approvalPublicId: PUBLIC_ID,
+        error: parkedError("set_budget", PUBLIC_ID),
+      }),
+    ]);
     expect(calls).toEqual([
       {
         toolCallId: "tc-1",
@@ -132,75 +119,30 @@ describe("toolCallsFromReceipts", () => {
     ]);
   });
 
-  it("keeps the public id when no card was collected for the call", () => {
-    const calls = toolCallsFromReceipts(
-      [
-        tool({
-          outcome: "parked",
-          approvalPublicId: PUBLIC_ID,
-          error: parkedError("set_budget", PUBLIC_ID),
-        }),
-      ],
-      [],
-    );
-    expect(calls[0]).toMatchObject({
-      outcome: "parked",
-      approvalId: PUBLIC_ID,
-    });
-  });
-
-  it("falls back to the card whose row uuid the error names when the receipt has no public id", () => {
-    const calls = toolCallsFromReceipts(
-      [
-        tool({
-          requestId: "tc-1",
-          outcome: "parked",
-          error: parkedError("set_budget", OTHER_ROW_ID),
-        }),
-        tool({
-          requestId: "tc-2",
-          outcome: "parked",
-          error: parkedError("set_budget", ROW_ID),
-        }),
-      ],
-      [card(ROW_ID), card(OTHER_ROW_ID)],
-    );
-    expect(calls.map((c) => [c.toolCallId, c.approvalId])).toEqual([
-      ["tc-1", OTHER_ROW_ID],
-      ["tc-2", ROW_ID],
+  it("reads null for a parked receipt with no public id, even when its error names an approval (negative)", () => {
+    const calls = toolCallsFromReceipts([
+      tool({
+        outcome: "parked",
+        error: parkedError("set_budget", ROW_ID),
+      }),
     ]);
-  });
-
-  it("matches the row uuid as a whole word, not a prefix (negative)", () => {
-    const calls = toolCallsFromReceipts(
-      [
-        tool({
-          outcome: "parked",
-          error: parkedError("set_budget", `${ROW_ID}-9`),
-        }),
-      ],
-      [card(ROW_ID)],
-    );
     expect(calls[0]).toMatchObject({ outcome: "parked", approvalId: null });
   });
 
   it("gives no approval id to a denied or failed receipt, whatever its error says (negative)", () => {
-    const calls = toolCallsFromReceipts(
-      [
-        tool({
-          requestId: "tc-1",
-          outcome: "denied",
-          error: parkedError("set_budget", ROW_ID),
-        }),
-        tool({
-          requestId: "tc-2",
-          outcome: "failed",
-          approvalPublicId: PUBLIC_ID,
-          error: parkedError("set_budget", ROW_ID),
-        }),
-      ],
-      [card(ROW_ID), card(PUBLIC_ID)],
-    );
+    const calls = toolCallsFromReceipts([
+      tool({
+        requestId: "tc-1",
+        outcome: "denied",
+        error: parkedError("set_budget", ROW_ID),
+      }),
+      tool({
+        requestId: "tc-2",
+        outcome: "failed",
+        approvalPublicId: PUBLIC_ID,
+        error: parkedError("set_budget", ROW_ID),
+      }),
+    ]);
     expect(calls.map((c) => [c.outcome, c.approvalId])).toEqual([
       ["denied", null],
       ["failed", null],
@@ -232,20 +174,17 @@ describe("toolCallsFromLedger", () => {
         approvalPublicId: PUBLIC_ID,
       }),
     ];
-    const restored = toolCallsFromLedger(records, [card(PUBLIC_ID)]);
-    const live = toolCallsFromReceipts(
-      [
-        tool({ requestId: "tc-1", toolName: "list_runs" }),
-        tool({
-          requestId: "tc-2",
-          toolName: "set_budget",
-          outcome: "parked",
-          durationMs: 3,
-          approvalPublicId: PUBLIC_ID,
-        }),
-      ],
-      [card(PUBLIC_ID)],
-    );
+    const restored = toolCallsFromLedger(records);
+    const live = toolCallsFromReceipts([
+      tool({ requestId: "tc-1", toolName: "list_runs" }),
+      tool({
+        requestId: "tc-2",
+        toolName: "set_budget",
+        outcome: "parked",
+        durationMs: 3,
+        approvalPublicId: PUBLIC_ID,
+      }),
+    ]);
     expect(restored).toEqual(live);
     expect(restored).toEqual([
       {
@@ -265,15 +204,12 @@ describe("toolCallsFromLedger", () => {
     ]);
   });
 
-  it("reads null for a parked call whose frame names no approval, since the ledger keeps no error text to match (negative)", () => {
-    const calls = toolCallsFromLedger(
-      [ledgerCall({ outcome: "parked" })],
-      [card(ROW_ID)],
-    );
+  it("reads null for a parked call whose frame names no approval (negative)", () => {
+    const calls = toolCallsFromLedger([ledgerCall({ outcome: "parked" })]);
     expect(calls[0]).toMatchObject({ outcome: "parked", approvalId: null });
   });
 
   it("lists nothing for a run with no calls", () => {
-    expect(toolCallsFromLedger([], [card(PUBLIC_ID)])).toEqual([]);
+    expect(toolCallsFromLedger([])).toEqual([]);
   });
 });

@@ -3230,6 +3230,48 @@ describe("readToolCallsForRuns", () => {
     };
   }
 
+  /**
+   * Stores one compacted attempt's frames as a segment and returns the seal
+   * row that names it. Frame n carries run_seq n.
+   */
+  async function compactedSeal(
+    archive: ReturnType<typeof fakeArchiveStore>,
+    runPublicId: string,
+    events: Parameters<typeof prepareAttemptEvent>[0][],
+  ) {
+    const rows = events.map((event, i) =>
+      durableRow(
+        prepareAttemptEvent(event),
+        `0192d4a8-7c1e-7a00-8000-00000000000${i + 1}`,
+        String(i + 1),
+      ),
+    );
+    const bytes = buildArchiveSegment(rows.map(archiveFrameOf)).bytes;
+    const { ref } = await archive.store.putSegment({
+      digest: digestBytes(bytes),
+      bytes,
+    });
+    return {
+      run_public_id: runPublicId,
+      attempt_id: UUID_ATTEMPT,
+      attempt_public_id: "arat_0123456789abcdefghjkmn",
+      archive_segment_ref: ref,
+      final_run_seq: String(rows.length),
+    };
+  }
+
+  function completedToolEvent(
+    attemptSeq: number,
+    payload: ReturnType<typeof engineToolPayload>,
+  ) {
+    return {
+      attemptSeq,
+      eventType: "tool.engine_call_completed",
+      observedAt: OBSERVED_AT,
+      payload,
+    };
+  }
+
   it("builds one statement for every run, joined on the public id and filtered to the engine's tool frames", () => {
     const { sql: text, params } = compile(
       buildReadToolCallsForRunsSql([RUN_A, RUN_B]),
@@ -3384,6 +3426,99 @@ describe("readToolCallsForRuns", () => {
       ["1", "call_old"],
       ["5", "call_new"],
     ]);
+  });
+
+  it("orders a run's calls by run_seq as a number, so 9 comes before 10", async () => {
+    const { tx } = makeRoutingTx([
+      { match: /NOT EXISTS/, rows: [] },
+      {
+        match: TOOL_FRAMES,
+        rows: [
+          frameRow(RUN_A, "10", engineToolPayload("call_10", "completed")),
+          frameRow(RUN_A, "9", engineToolPayload("call_9", "completed")),
+        ],
+      },
+    ]);
+    useTx(tx);
+    const calls = await createPostgresRunStore().readToolCallsForRuns([RUN_A]);
+    expect(calls.get(RUN_A)?.map((c) => [c.runSeq, c.toolCallId])).toEqual([
+      ["9", "call_9"],
+      ["10", "call_10"],
+    ]);
+  });
+
+  it("reads only the completed tool frames of a segment, so a started frame is neither a call nor a warning (negative)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const archive = fakeArchiveStore();
+    const seal = await compactedSeal(archive, RUN_A, [
+      {
+        attemptSeq: 1,
+        eventType: "tool.engine_call_started",
+        observedAt: OBSERVED_AT,
+        payload: {
+          engine_seq: 1,
+          tool_call_id: "call_old",
+          tool_name: "list_runs",
+          input_digest: SHA_1,
+        },
+      },
+      completedToolEvent(2, engineToolPayload("call_old", "completed")),
+      terminalEvent(3),
+    ]);
+    const { tx } = makeRoutingTx([
+      { match: /NOT EXISTS/, rows: [seal] },
+      { match: TOOL_FRAMES, rows: [] },
+    ]);
+    useTx(tx);
+    const calls = await createPostgresRunStore({
+      archive: archive.store,
+    }).readToolCallsForRuns([RUN_A]);
+    expect(calls.get(RUN_A)?.map((c) => [c.runSeq, c.toolCallId])).toEqual([
+      ["2", "call_old"],
+    ]);
+    // Without the filter, the started and terminal frames would each fail
+    // the completed frame's schema and be warned about as unparseable.
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("reads a compacted run and a hot run in one call, and keeps each run's calls apart where their run_seq values meet", async () => {
+    const archive = fakeArchiveStore();
+    const seal = await compactedSeal(archive, RUN_A, [
+      completedToolEvent(1, engineToolPayload("call_a1", "completed")),
+      completedToolEvent(
+        2,
+        engineToolPayload("call_a2", "failed", { engine_seq: 2 }),
+      ),
+      terminalEvent(3),
+    ]);
+    const { tx } = makeRoutingTx([
+      { match: /NOT EXISTS/, rows: [seal] },
+      {
+        match: TOOL_FRAMES,
+        rows: [
+          frameRow(RUN_B, "1", engineToolPayload("call_b1", "completed")),
+          frameRow(
+            RUN_B,
+            "2",
+            engineToolPayload("call_b2", "denied", { engine_seq: 2 }),
+          ),
+        ],
+      },
+    ]);
+    useTx(tx);
+    const calls = await createPostgresRunStore({
+      archive: archive.store,
+    }).readToolCallsForRuns([RUN_A, RUN_B]);
+    expect(calls.get(RUN_A)?.map((c) => [c.runSeq, c.toolCallId])).toEqual([
+      ["1", "call_a1"],
+      ["2", "call_a2"],
+    ]);
+    expect(calls.get(RUN_B)?.map((c) => [c.runSeq, c.toolCallId])).toEqual([
+      ["1", "call_b1"],
+      ["2", "call_b2"],
+    ]);
+    expect(archive.store.getSegment).toHaveBeenCalledOnce();
   });
 
   it("fails rather than answers fewer calls when a compacted attempt has no archive store (negative)", async () => {

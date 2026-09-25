@@ -78,6 +78,7 @@ import {
   requireInvitee,
   requireUser,
   requireViewer,
+  resolveViewer,
   resolveWorkspaceViewer,
   WsCtx,
   type WsFields,
@@ -309,6 +310,55 @@ describe("requireViewer", () => {
       "NEXT_PERMANENT_REDIRECT",
     );
     expect(nav.permanentRedirect).toHaveBeenLastCalledWith("/acme");
+  });
+});
+
+// A route handler's viewer (#4164): the same resolution, answered as a value
+// so the handler writes its own response, never as an interrupt.
+describe("resolveViewer with a workspace", () => {
+  const {
+    orgId: _o,
+    orgSlug: _s,
+    orgName: _n,
+    orgRole: _r,
+    userId: _u,
+    ...ws
+  } = wsFields;
+
+  it("hands the workspace slug to the resolver and mints a WsCtx for a member", async () => {
+    getSessionMock.mockResolvedValue(session);
+    resolveMock.mockResolvedValue({ kind: "ok", org: orgFields, ws });
+    const out = await resolveViewer("acme", "core-platform");
+    expect(resolveMock).toHaveBeenCalledWith(
+      expect.objectContaining({ session, lookups: systemLookups }),
+      "acme",
+      "core-platform",
+    );
+    if (out.kind !== "ok") throw new Error(`resolved ${out.kind}, not ok`);
+    expect(WsCtx.is(out.ctx)).toBe(true);
+    expect(fieldsOf(out.ctx)).toEqual(wsFields);
+  });
+
+  it("answers not_found for someone who is not in the workspace, with no interrupt (negative)", async () => {
+    resolveMock.mockResolvedValue({ kind: "not_found" });
+    await expect(resolveViewer("acme", "finops")).resolves.toEqual({
+      kind: "not_found",
+    });
+    expect(nav.notFound).not.toHaveBeenCalled();
+  });
+
+  it("answers a renamed slug as a redirect value, not a redirect (negative)", async () => {
+    resolveMock.mockResolvedValue({
+      kind: "redirect",
+      org: "acme",
+      ws: "core-platform",
+    });
+    await expect(resolveViewer("acme", "platform")).resolves.toEqual({
+      kind: "redirect",
+      org: "acme",
+      ws: "core-platform",
+    });
+    expect(nav.permanentRedirect).not.toHaveBeenCalled();
   });
 });
 

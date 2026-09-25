@@ -1398,21 +1398,43 @@ describe("a person's stop (#4164)", () => {
   function recordingLedger() {
     const started: TurnLedgerModelIntent[] = [];
     const modelCalls: TurnLedgerModelCall[] = [];
+    const toolIntents: TurnLedgerToolIntent[] = [];
+    const toolCalls: TurnLedgerToolCall[] = [];
     const outcomes: TurnLedgerOutcome[] = [];
+    // Every write in the order it landed, so a case can show the tool receipt
+    // came before the seal.
+    const writes: string[] = [];
     const ledger: TurnLedger = {
       modelCallStarted: async (record) => {
+        writes.push("modelCallStarted");
         started.push(record);
       },
       modelCall: async (record) => {
+        writes.push(`modelCall:${record.outcome}`);
         modelCalls.push(record);
       },
-      toolCallStarted: async () => undefined,
-      toolCall: async () => undefined,
+      toolCallStarted: async (record) => {
+        writes.push("toolCallStarted");
+        toolIntents.push(record);
+      },
+      toolCall: async (record) => {
+        writes.push(`toolCall:${record.outcome}`);
+        toolCalls.push(record);
+      },
       seal: async (outcome) => {
+        writes.push(`seal:${outcome.status}`);
         outcomes.push(outcome);
       },
     };
-    return { ledger, started, modelCalls, outcomes };
+    return {
+      ledger,
+      started,
+      modelCalls,
+      toolIntents,
+      toolCalls,
+      outcomes,
+      writes,
+    };
   }
 
   /** A turn whose caller aborts as the engine asks for the first completion. */
@@ -1480,5 +1502,110 @@ describe("a person's stop (#4164)", () => {
     });
     await drain(result);
     expect(log.outcomes).toEqual([{ status: "aborted", reason: "cancelled" }]);
+  });
+
+  it("sends nothing and seals with the person's reason when the stop landed before the turn began", async () => {
+    // The flyout can stop a turn the server has not registered yet. The
+    // registry holds that stop, so the turn starts with its signal already
+    // aborted.
+    const { client } = setup();
+    const controller = new AbortController();
+    controller.abort(PERSON);
+    const log = recordingLedger();
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      abortSignal: controller.signal,
+      engine: client,
+      ledger: log.ledger,
+    });
+    const parts = await drain(result);
+    expect(streamAgentReply).not.toHaveBeenCalled();
+    // The cancel reaches the engine before it asks for anything, so no model
+    // call is started or recorded.
+    expect(log.started).toEqual([]);
+    expect(log.modelCalls).toEqual([]);
+    expect(log.outcomes).toEqual([{ status: "aborted", reason: PERSON }]);
+    expect(parts.find((p) => p.type === "error")).toMatchObject({
+      error: expect.objectContaining({ code: "engine_aborted" }),
+    });
+    expect(await result.finalText).toBe("");
+  });
+
+  it("records the tool that was running, asks for nothing more, and seals with the person's reason", async () => {
+    // A text event before the tool call stands in for what the person had
+    // already read when they pressed Stop.
+    const script = goldenScript();
+    script.splice(1, 0, {
+      type: "event",
+      event: { type: "text", text: "Searching." },
+    } as ServerFrame);
+    const { engine, client } = setup(script);
+    streamAgentReply.mockImplementationOnce(() =>
+      fakeStream({
+        toolCalls: [
+          {
+            toolCallId: "call_1",
+            toolName: "search_nodes",
+            input: { q: "nodes" },
+          },
+        ],
+      }),
+    );
+    const controller = new AbortController();
+    const log = recordingLedger();
+    const execute = vi.fn(async () => {
+      controller.abort(PERSON);
+      return { rows: ["n1"] };
+    });
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "list the nodes",
+      tools: {
+        search_nodes: {
+          description: "Search graph nodes",
+          inputSchema: { type: "object" } as never,
+          execute,
+        } as never,
+      },
+      abortSignal: controller.signal,
+      engine: client,
+      ledger: log.ledger,
+    });
+    const parts = await drain(result);
+    expect(execute).toHaveBeenCalledTimes(1);
+    // The tool ran and its receipt is written before the seal.
+    expect(log.toolIntents).toHaveLength(1);
+    expect(log.toolCalls).toHaveLength(1);
+    expect(log.toolCalls[0]).toMatchObject({
+      toolName: "search_nodes",
+      outcome: "completed",
+    });
+    expect(log.writes).toEqual([
+      "modelCallStarted",
+      "modelCall:completed",
+      "toolCallStarted",
+      "toolCall:completed",
+      "seal:aborted",
+    ]);
+    // The cancel reaches the engine during the tool, so it never asks for the
+    // completion that would have read the result. Only the first was sent.
+    expect(streamAgentReply).toHaveBeenCalledTimes(1);
+    expect(log.modelCalls.map((c) => c.outcome)).toEqual(["completed"]);
+    expect(
+      engine.posts.filter((p) => p.route === "provider-result"),
+    ).toHaveLength(1);
+    expect(log.outcomes).toEqual([{ status: "aborted", reason: PERSON }]);
+    expect(parts.find((p) => p.type === "error")).toMatchObject({
+      error: expect.objectContaining({ code: "engine_aborted" }),
+    });
+    // The reply is what the engine said before the stop, never the answer
+    // the second completion would have written.
+    expect(await result.finalText).toBe("Searching.");
   });
 });

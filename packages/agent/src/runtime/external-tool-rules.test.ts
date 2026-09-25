@@ -51,7 +51,10 @@ beforeEach(() => {
     schema: "oxagen.decision-rules.v2",
     rules: [],
   });
-  mocks.create.mockResolvedValue({ approvalId: "approval-1" });
+  mocks.create.mockResolvedValue({
+    approvalId: "approval-1",
+    approvalPublicId: "apr_2",
+  });
   mocks.wait.mockResolvedValue({ resolution: "approved" });
   gate();
 });
@@ -190,6 +193,18 @@ describe("external decision admission", () => {
     ).rejects.toBe(parked);
     expect(mocks.create).toHaveBeenCalledOnce();
     expect(mocks.wait).not.toHaveBeenCalled();
+  });
+  it("names the approval it waits on by its public id", async () => {
+    rule("require_approval");
+    const event = vi.fn();
+    await check(event)();
+    expect(event).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvalId: "approval-1",
+        approvalPublicId: "apr_2",
+      }),
+    );
+    expect(mocks.wait).toHaveBeenCalledWith("approval-1");
   });
   it("names the parked approval by its public id", async () => {
     rule("require_approval");

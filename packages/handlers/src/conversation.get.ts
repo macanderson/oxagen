@@ -23,6 +23,7 @@ import {
   type ConversationGetOutput,
   type ConversationMessage,
 } from "@oxagen/oxagen/contracts/conversation.get";
+import { ASSISTANT_MESSAGE_STOPPED } from "@oxagen/agent/runtime/assistant-message-status";
 import { toolCallsFromLedger } from "@oxagen/agent/runtime/assistant-tool-calls";
 import { schema, withTenantDb } from "@oxagen/database";
 import { resolveActingUserId } from "@oxagen/iam/org-role";
@@ -153,10 +154,7 @@ async function getConversation(
     ...message,
     toolCalls:
       message.role === "assistant" && message.runId !== null
-        ? toolCallsFromLedger(
-            callsByRun.get(message.runId) ?? [],
-            message.parkedCards,
-          )
+        ? toolCallsFromLedger(callsByRun.get(message.runId) ?? [])
         : [],
   }));
 
@@ -244,8 +242,8 @@ function toMessage(row: MessageRow): StoredMessage | null {
     createdAt: row.createdAt.toISOString(),
     runId: typeof metadata.runId === "string" ? metadata.runId : null,
     parkedCards: parkedCardsOf(metadata.parkedCards),
-    // `appendAssistantMessage` saves a reply the person stopped as "stopped" (#4164).
-    stopped: metadata.status === "stopped",
+    // `appendAssistantMessage` saves a reply the person stopped with this status (#4164).
+    stopped: metadata.status === ASSISTANT_MESSAGE_STOPPED,
   };
 }
 

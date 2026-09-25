@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
       _runPublicIds: readonly string[],
     ): Promise<ReadonlyMap<string, RunToolCallRecord[]>> => new Map(),
   ),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -32,6 +33,8 @@ vi.mock("@oxagen/iam/org-role", () => ({
     apiKeyId: string | null;
   }) => ctx.userId ?? (ctx.apiKeyId ? mocks.apiKeyCreator() : null),
 }));
+
+vi.mock("./logger", () => ({ logger: mocks.logger }));
 
 import { createConversationGetHandler } from "./conversation.get";
 import { makeCTX } from "./test-utils/fixtures";
@@ -245,6 +248,8 @@ describe("get_conversation", () => {
       parentMessageId: null,
       role: "assistant",
       content: "Two runs are",
+      // The literal, not ASSISTANT_MESSAGE_STOPPED: saved rows carry this
+      // string, so the reader must keep reading it.
       metadata: { status: "stopped", surface: "chat", runId: "arun_0003" },
       createdAt: at(4),
     };
@@ -455,6 +460,33 @@ describe("get_conversation", () => {
     expect(messages).toHaveLength(4);
     expect(messages.map((m) => m.toolCalls)).toEqual([[], [], [], []]);
     expect(messages[3]?.parkedCards).toEqual([CARD]);
+    // The failure is logged with the cause and how many runs went unread.
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error), runCount: 2 }),
+      expect.stringContaining("run ledger"),
+    );
+  });
+
+  it("lists no calls on a person's message that carries a run id, and never asks the ledger for that run (negative)", async () => {
+    mocks.readToolCallsForRuns.mockImplementation(
+      async () => new Map([...LEDGER, ["arun_0009", [ledgerCall("9")]]]),
+    );
+    const asked = {
+      ...MESSAGE_ROWS[2],
+      metadata: { surface: "chat", runId: "arun_0009" },
+    };
+    const rows = [MESSAGE_ROWS[0], MESSAGE_ROWS[1], asked, MESSAGE_ROWS[3]];
+    const { out } = run(
+      { conversationId: null },
+      { conversations: [CONVERSATION_ROW], messages: rows },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    expect(mocks.readToolCallsForRuns).toHaveBeenCalledWith([
+      "arun_0001",
+      "arun_0002",
+    ]);
+    expect(messages[2]?.toolCalls).toEqual([]);
+    expect(messages[3]?.toolCalls).toHaveLength(2);
   });
 
   it("reads an API key's conversations as the person who created the key", async () => {
