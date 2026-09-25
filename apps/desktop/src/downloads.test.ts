@@ -347,6 +347,54 @@ describe("page helpers", () => {
     expect(empty).not.toContain('id="pick"');
   });
 
+  it("gives macOS the first-launch steps that still work on macOS 15", () => {
+    const entries: PageEntry[] = FILES.map((f) => ({
+      ...classifyInstaller(f, V)!,
+      bytes: 1,
+      sha256: "0".repeat(64),
+    }));
+    const html = renderIndexHtml({ version: V, entries, publishedAt: "d" });
+    expect(html).toContain('<div id="macos-first-launch">');
+    expect(html).toContain('href="#macos-first-launch"');
+    expect(html).toContain("Open Anyway");
+    expect(html).toContain(
+      "<pre>xattr -dr com.apple.quarantine /Applications/Oxagen.app</pre>",
+    );
+    // macOS 15 removed the Control-click Open override, so the page must not
+    // send anyone looking for it.
+    expect(html.toLowerCase()).not.toContain("right-click");
+    // A version with no macOS build carries no macOS steps.
+    const noMac = renderIndexHtml({
+      version: V,
+      entries: entries.filter((e) => e.os !== "macOS"),
+      publishedAt: "d",
+    });
+    expect(noMac).not.toContain("macos-first-launch");
+  });
+
+  it("links an App guide page the docs site carries", () => {
+    const html = renderIndexHtml({ version: V, entries: [], publishedAt: "d" });
+    expect(html).toContain(
+      '<a href="https://docs.oxagen.sh/docs/cli/desktop">App guide</a>',
+    );
+    const page = readFileSync(
+      fileURLToPath(
+        new URL("../../docs/content/docs/cli/desktop.mdx", import.meta.url),
+      ),
+      "utf8",
+    );
+    expect(page).toContain("## First launch on macOS");
+    const nav = JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL("../../docs/content/docs/cli/meta.json", import.meta.url),
+        ),
+        "utf8",
+      ),
+    ) as { pages: string[] };
+    expect(nav.pages).toContain("desktop");
+  });
+
   it("links every version to its release notes and its GitHub release", () => {
     expect(releaseLinks("2.1.1")).toEqual({
       notes: "https://docs.oxagen.sh/docs/releases/v2.1.1",

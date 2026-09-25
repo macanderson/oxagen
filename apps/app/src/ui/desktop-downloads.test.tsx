@@ -74,6 +74,16 @@ describe("DesktopDownloads", () => {
     await expectNoAxe(document.body);
   });
 
+  it("tells a macOS reader how to open an un-notarized build the first time", () => {
+    renderDownloads();
+    const note = screen.getByTestId("desktop-downloads-macos-first-launch");
+    expect(note).toHaveTextContent(
+      "macOS refuses the first launch until builds are notarized. Choose Done, then click Open Anyway in System Settings > Privacy & Security.",
+    );
+    // macOS 15 removed the Control-click Open override.
+    expect(note.textContent.toLowerCase()).not.toContain("right-click");
+  });
+
   it("groups the installers under macOS, Windows and Linux, in that order", () => {
     renderDownloads();
     const terms = screen.getAllByRole("term").map((term) => term.textContent);
