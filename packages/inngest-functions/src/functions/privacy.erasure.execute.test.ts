@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 // Drizzle tx mock:
 //   tx.update(table).set(payload).where(cond) — records every set().
 //   tx.delete(table).where(cond)              — records every delete target.
-//   tx.select(cols).from(table).where().limit() — reads the subject's email.
+//   tx.select(cols).from(table).where().limit(): reads the subject's email.
 function makeTx() {
   return {
     select: () => ({
