@@ -223,6 +223,9 @@
               },
               "publishedAt": {
                 "type": "string"
+              },
+              "searchable": {
+                "type": "boolean"
               }
             },
             "required": [

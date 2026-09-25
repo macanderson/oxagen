@@ -121,6 +121,7 @@ import {
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { AssistantStreamingText } from "./assistant-streaming-text";
+import { AssistantSuggestions } from "./assistant-suggestions";
 import { AssistantThinking } from "./assistant-thinking";
 import {
   ASSISTANT_MIN_WIDTH,
@@ -841,6 +842,7 @@ export function AssistantFlyout() {
           >
             <h3 className="text-sm font-semibold">{t("intro.title")}</h3>
             <p className="text-sm text-muted-foreground">{t("intro.body")}</p>
+            <AssistantSuggestions />
           </div>
         ) : (
           <ol className="flex flex-col gap-3" data-testid="assistant-log">

@@ -59,6 +59,55 @@ describe("get_skill_config", () => {
       handler({ version: "skl_v2" }, makeCTX()),
     ).rejects.toMatchObject({ reason: "skill_config_missing" });
   });
+  it("marks only versions of the current binding as searchable (#3666)", async () => {
+    const earlier = {
+      id: "skv_111",
+      version: "skl_v1",
+      repositoryBindingId: "old-binding",
+      config: skillConfigSchema.parse({}),
+      commitSha: "a".repeat(40),
+      digest: `sha256:${"b".repeat(64)}`,
+      pullRequestNumber: 11,
+      publishedAt: "2026-09-19T10:00:00.000Z",
+    };
+    const later = {
+      ...earlier,
+      id: "skv_222",
+      version: "skl_v2",
+      repositoryBindingId: "new-binding",
+      pullRequestNumber: 12,
+      publishedAt: "2026-09-20T10:00:00.000Z",
+    };
+    const binding = vi.fn().mockResolvedValue({ bindingId: "new-binding" });
+    const handler = createSkillConfigGetHandler(
+      { list: vi.fn().mockResolvedValue([later, earlier]), publish: vi.fn() },
+      binding,
+    );
+    const result = skillConfigGet.output.parse(await handler({}, makeCTX()));
+    expect(result.current).toMatchObject({
+      version: "skl_v2",
+      searchable: true,
+    });
+    expect(result.versions.map((row) => [row.version, row.searchable])).toEqual(
+      [
+        ["skl_v2", true],
+        ["skl_v1", false],
+      ],
+    );
+    // Naming an earlier version still reports it as unsearchable.
+    const named = await handler({ version: "skl_v1" }, makeCTX());
+    expect(named.current).toMatchObject({
+      version: "skl_v1",
+      searchable: false,
+    });
+    // An unbound workspace has no searchable version at all.
+    binding.mockResolvedValue(undefined);
+    const unbound = await handler({}, makeCTX());
+    expect(unbound.current).toBeNull();
+    expect(unbound.versions.every((row) => row.searchable === false)).toBe(
+      true,
+    );
+  });
   it("checks the human role before reading any configuration", async () => {
     const store = { list: vi.fn(), publish: vi.fn() };
     gate.assertOrgRole.mockRejectedValue(new Error("denied"));

@@ -263,6 +263,9 @@ export function CommitDialog({
   );
 }
 
+/** Keys that only modify the next key, and so end no find jump. */
+const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
+
 export function SourceEditor({
   org,
   ws,
@@ -306,6 +309,11 @@ export function SourceEditor({
   const [current, setCurrent] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const findInputRef = useRef<HTMLInputElement>(null);
+  // The match a find jump selected in the editor, or null once the person
+  // does anything else there. While it is set, Enter and Shift+Enter in the
+  // editor keep stepping through matches instead of typing a newline over
+  // the selected match (#4035).
+  const jumpedRef = useRef<{ start: number; end: number } | null>(null);
   const parsed = useMemo(() => parseTomlSubset(draft), [draft]);
   const matches = useMemo(() => findAll(draft, find), [draft, find]);
   const dirty = draft !== base;
@@ -331,11 +339,45 @@ export function SourceEditor({
     const at = matches[index] ?? 0;
     setCurrent(index);
     setCaret(at);
+    // The textarea paints no selection without focus, so the jump focuses it.
+    jumpedRef.current = { start: at, end: at + find.length };
     textareaRef.current?.focus();
     textareaRef.current?.setSelectionRange(at, at + find.length);
   }
 
+  /**
+   * Keys that belong to the find while the editor still shows the match a jump
+   * selected: Enter steps on, Shift+Enter steps back, Escape returns to the
+   * find box. A click or a caret move changes the selection, which ends it.
+   */
+  function onFindKey(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+    // A modifier pressed on its own, such as the Shift of Shift+Enter, is
+    // part of the next key and leaves the jump in place.
+    if (MODIFIER_KEYS.has(event.key)) return false;
+    const jumped = jumpedRef.current;
+    jumpedRef.current = null;
+    if (jumped === null || event.nativeEvent.isComposing) return false;
+    const { selectionStart, selectionEnd } = event.currentTarget;
+    if (selectionStart !== jumped.start || selectionEnd !== jumped.end) {
+      return false;
+    }
+    const mod = event.metaKey || event.ctrlKey || event.altKey;
+    if (event.key === "Enter" && !mod) {
+      event.preventDefault();
+      jump(event.shiftKey ? -1 : 1);
+      return true;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      findInputRef.current?.focus();
+      findInputRef.current?.select();
+      return true;
+    }
+    return false;
+  }
+
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (onFindKey(event)) return;
     const mod = event.metaKey || event.ctrlKey;
     const {
       selectionStart: start,
@@ -469,6 +511,7 @@ export function SourceEditor({
               onChange={(event) => {
                 setFind(event.target.value);
                 setCurrent(null);
+                jumpedRef.current = null;
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {

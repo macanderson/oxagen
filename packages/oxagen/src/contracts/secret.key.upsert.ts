@@ -8,7 +8,7 @@ export const secretKeyUpsert = registerCapability({
     "Create or update a vault secret key (workspace root). Sensitive keys (default) are envelope-encrypted; an optional default value applies when an environment has no override.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "high", category: "secret" },
+  agent: { requiresApproval: true, riskLevel: "high", category: "secret" },
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "high",

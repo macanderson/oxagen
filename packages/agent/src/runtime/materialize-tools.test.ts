@@ -967,12 +967,14 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     });
     expect(fakeExecute).toHaveBeenCalledOnce();
     expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+    // The audit cause is the code alone: the remote tool's error payload
+    // stays out of the audit row.
     expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
       `mcp.${MCP_SERVER.id}.list_pull_requests`,
       CTX,
       "error",
       expect.any(Number),
-      expect.objectContaining({ code: "mcp_tool_execution_failed" }),
+      { code: "mcp_tool_execution_failed" },
     );
     expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1084,8 +1086,10 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     );
   });
 
-  it("records one error outcome when the external transport throws", async () => {
-    const error = new Error("transport failed");
+  it("records one transport failure when the external transport throws", async () => {
+    const error = new Error(
+      "transport failed: https://user:secret@mcp.example",
+    );
     fakeExecute.mockRejectedValueOnce(error);
     const { tools } = await materializeTools(CTX);
     const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
@@ -1093,12 +1097,14 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     };
     await expect(t.execute({})).rejects.toBe(error);
     expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+    // A transport failure is not a refusal, and the audit cause carries no
+    // part of the error message, which can hold a credential.
     expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
       `mcp.${MCP_SERVER.id}.list_pull_requests`,
       CTX,
       "error",
       expect.any(Number),
-      error,
+      { code: "mcp_transport_failed" },
     );
   });
 

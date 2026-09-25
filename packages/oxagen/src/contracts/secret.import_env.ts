@@ -8,7 +8,7 @@ export const secretImportEnv = registerCapability({
     "Parse pasted .env text and (optionally) upsert keys + set values for the workspace defaults or a chosen environment. Returns a preview of new vs override rows; commit must be explicit.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "high", category: "secret" },
+  agent: { requiresApproval: true, riskLevel: "high", category: "secret" },
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "high",

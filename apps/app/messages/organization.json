@@ -205,6 +205,8 @@
       "actions": "Actions",
       "resend": "Resend",
       "revoke": "Revoke",
+      "resendFor": "Resend invitation to {email}",
+      "revokeFor": "Revoke invitation to {email}",
       "working": "Saving invitation",
       "resent": "Invitation email sent. It expires in seven days.",
       "revoked": "Invitation revoked.",

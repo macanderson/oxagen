@@ -12,6 +12,7 @@ import {
   invoke,
   authorizeExternalCapability,
   emitExternalCapabilityOutcome,
+  type ExternalExecutionFailureCode,
   type ExternalRefusalCode,
   type KernelSecurityOutcome,
 } from "@oxagen/oxagen/kernel";
@@ -341,6 +342,27 @@ class ExternalToolRefusal {
     readonly code: ExternalRefusalCode | "authz_denied",
     readonly message: string,
   ) {}
+}
+
+/**
+ * The audit cause for a call that passed every gate and then failed in the
+ * remote tool or on the way to it. An MCP `isError` result arrives as an
+ * error carrying `mcp_tool_execution_failed` (`McpToolExecutionError`);
+ * anything else thrown there is a transport failure. Only the code is kept,
+ * so the remote payload and any credential in an error message never reach
+ * the audit row.
+ */
+function externalExecutionFailure(err: unknown): {
+  code: ExternalExecutionFailureCode;
+} {
+  const code =
+    err && typeof err === "object" && "code" in err ? err.code : undefined;
+  return {
+    code:
+      code === "mcp_tool_execution_failed"
+        ? "mcp_tool_execution_failed"
+        : "mcp_transport_failed",
+  };
 }
 
 /**
@@ -1017,6 +1039,12 @@ export async function materializeTools(
 
             let outcome: KernelSecurityOutcome = "deny";
             let auditError: unknown;
+            // Set only when the remote call itself failed, after every gate
+            // allowed it, so the audit row names an execution failure rather
+            // than a refusal.
+            let executionFailure:
+              | { code: ExternalExecutionFailureCode }
+              | undefined;
             let parked = false;
             // A gate that answers the model with text instead of a throw still
             // owes the audit boundary its code.
@@ -1615,10 +1643,16 @@ export async function materializeTools(
                 });
               try {
                 outcome = "allow";
-                const result = await capturedExecute(input, {
-                  toolCallId: invocationId,
-                  messages: [],
-                });
+                let result: unknown;
+                try {
+                  result = await capturedExecute(input, {
+                    toolCallId: invocationId,
+                    messages: [],
+                  });
+                } catch (err) {
+                  executionFailure = externalExecutionFailure(err);
+                  throw err;
+                }
                 _otelToolSpan.setAttributes({
                   "tool.status": "completed",
                   "tool.latency_ms": Date.now() - startedAt,
@@ -1702,7 +1736,7 @@ export async function materializeTools(
               }
             } catch (error) {
               parked = error instanceof ApprovalPendingError;
-              auditError = error;
+              auditError = executionFailure ?? error;
               const code =
                 error && typeof error === "object" && "code" in error
                   ? error.code

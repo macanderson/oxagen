@@ -6,6 +6,28 @@ import type { SkillConfigStore, SkillScope } from "./skill-config.store";
 import type { SkillRepository } from "./skill-config.repository";
 
 const PATH = ".oxagen/skills.toml";
+
+/**
+ * The newest commit reachable from `ref` that touched the configuration file.
+ * A pull request is the latest change to the file when this commit is the same
+ * from its merge commit and from the production head. Matching bytes alone
+ * cannot show that: a later revert restores the same bytes under a different
+ * pull request, and the earlier one must not publish as the authority.
+ */
+async function lastConfigCommit(
+  repository: SkillRepository,
+  ref: string,
+): Promise<string | null> {
+  const [commit] = await repository.github.listPathCommits({
+    owner: repository.owner,
+    repo: repository.repo,
+    path: PATH,
+    ref,
+    limit: 1,
+  });
+  return commit?.sha ?? null;
+}
+
 export type SkillConfigServiceDeps = {
   repository(scope: SkillScope): Promise<SkillRepository>;
   store: SkillConfigStore;
@@ -136,7 +158,12 @@ export function createSkillConfigService(deps: SkillConfigServiceDeps) {
                 path: PATH,
                 ref: current.sha,
               });
-        if (currentFile !== file)
+        if (
+          currentFile !== file ||
+          (current.sha !== commitSha &&
+            (await lastConfigCommit(repository, current.sha)) !==
+              (await lastConfigCommit(repository, commitSha)))
+        )
           throw new HandlerError({
             code: "conflict",
             reason: "skill_config_superseded",
