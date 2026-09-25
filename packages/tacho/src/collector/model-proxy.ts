@@ -813,9 +813,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
    * then permits the call rather than refusing on an absence.
    *
    * `modelAmbiguous` says the request named more than one model, so no single
-   * string describes what the vendor will run. That is refused under an
-   * enforced mandate whatever the clauses say, because a model the proxy
-   * cannot pin is refused on a metered endpoint when model lists are armed.
+   * string describes what the vendor will run. It is refused only when the
+   * workspace armed a `models` clause, because only then can a model the
+   * proxy cannot pin slip past a list the call must answer to. With no
+   * clause there is no list to slip past, so the call is forwarded, and its
+   * `llm_call` frame carries `oxagen.model_ambiguous`. Unless the vendor
+   * reports the model it ran, that frame records and prices the last
+   * duplicate, the one a JSON parser keeps, and the attribute says so.
    */
   function refusalFor(
     record: SessionRecord | undefined,
@@ -1203,6 +1207,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
               ...(askedModel !== undefined
                 ? { "oxagen.model": askedModel.slice(0, 512) }
                 : {}),
+              ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
               ...(record !== undefined
                 ? {
                     "oxagen.session_spend_usd_micros": String(
@@ -1572,6 +1577,10 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                   ? { "oxagen.response_content_type": responseType }
                   : {}),
                 ...(injected ? { "oxagen.request_injected": "1" } : {}),
+                // The body named more than one model and no `models` clause
+                // refused it, so `model` above may be a duplicate the vendor
+                // never ran. The frame says so rather than reading as pinned.
+                ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
                 ...(fold !== undefined && requestContentText === undefined
                   ? { "oxagen.request_body_omitted": "too_large" }
                   : fold === undefined && sent === undefined && body.length > 0
