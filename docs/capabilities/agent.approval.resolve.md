@@ -3,7 +3,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent
@@ -13,6 +13,8 @@ Approve or deny a pending tool-call approval request. Approving a stored built-i
 The delivered call is its own governed action. It runs outside the decision's invocation, so it is metered and admitted the way the worker's delivery is, and the decision is still the one billed action of this capability.
 
 Legacy approvals without stored arguments keep their existing wait or caller-retry behavior. External MCP approvals do not use the stored-call worker.
+
+A person makes this decision. The contract is not on the `agent` surface, so no model is offered it as a tool (ADR-175). People resolve from Fleet, the Run page, and the shell's approvals drawer, which invoke through the app's kernel seam.
 
 ## Input
 
@@ -33,7 +35,7 @@ Legacy approvals without stored arguments keep their existing wait or caller-ret
 
 ## Roles
 
-Org Owner or Admin, or workspace Owner or Member, checked by the handler (`assertOrgRole`, INV-29). A row the mandate gate parked (ADR-059 decision 4) is answered by the office accountable for the consequence (MC spec §6.9): the caller also holds an org role the workspace's consequence roles name for every tag on the mandate (`assertConsequenceRole`), is one of the mandate's `approval.approvers` when the rule names any (`assertApprover`), and is not an agent principal. Every refusal comes before the ledger or the row is touched.
+Org Owner or Admin, or workspace Owner or Member, checked by the handler (`assertOrgRole`, INV-29). A row the mandate gate parked (ADR-059 decision 4) is answered by the office accountable for the consequence (MC spec §6.9): the caller also holds an org role the workspace's consequence roles name for every tag on the mandate (`assertConsequenceRole`), is one of the mandate's `approval.approvers` when the rule names any (`assertApprover`), and is not an agent principal. On any row, a call that carries the run the row records as raising the approval is refused. Every refusal comes before the ledger or the row is touched.
 
 ## Billing
 
@@ -78,6 +80,7 @@ Fleet, by another person, or by expiry shows the same way in both places.
 | `forbidden` | `no_role_covers_all_tags` | On a row a mandate parked: no single org role is named for all of the mandate's consequence tags (403). |
 | `forbidden` | `not_an_approver` | On a row a mandate parked whose approval rule names `approvers`: the acting user is neither a `user:` entry nor holds a `role:` entry (403). |
 | `forbidden` | `agent_cannot_resolve_own_mandate` | On a row a mandate parked: the caller is an agent principal. A person answers (403). |
+| `forbidden` | `run_cannot_resolve_own_approval` | The call carries the run that raised the approval (`run_public_id` on the row, matched by the run's internal or public id). A person approves or denies it on Fleet (403). |
 | `conflict`  | `approval_expired`  | No pending row matched: unknown id, expired, already resolved, or another workspace (409). The call is not a governed action and is never billed. |
 
 ## SPEC references
