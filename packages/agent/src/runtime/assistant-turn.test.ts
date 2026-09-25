@@ -405,6 +405,7 @@ const request = {
     orgSlug: "acme",
     workspaceSlug: "core",
     entityId: "arun_x",
+    entityLabel: null,
   },
 };
 

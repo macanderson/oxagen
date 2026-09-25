@@ -132,6 +132,7 @@ import {
   widthForKey,
 } from "./assistant-width";
 import { parseShellPath } from "./nav";
+import { labelOnPage } from "./page-label";
 import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
 import { routes } from "@/shared/safe-path";
@@ -689,11 +690,15 @@ export function AssistantFlyout() {
       pending: true,
     }));
     try {
+      const entityId = recordOnPage(declaredRecord, rest[1]);
+      const entityLabel = labelOnPage(declaredRecord, entityId);
       const result = await askAssistant(org, ws, {
         conversationId,
         content,
         route,
-        entityId: recordOnPage(declaredRecord, rest[1]),
+        entityId,
+        // Only a page that named its record sends a label.
+        ...(entityLabel === null ? {} : { entityLabel }),
       });
       if (result.ok) {
         const answered: Entry = {

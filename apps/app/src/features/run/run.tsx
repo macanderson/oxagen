@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, readError } from "@/data/read";
+import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { Money } from "@/ui/money";
 import { GovernedActionsTab } from "./actions-tab";
@@ -211,8 +212,18 @@ export async function Run({
   const detail = read.value;
   const run = detail.run;
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug, runId: run.id };
+  // The run the assistant is asked about, by the id the URL names and the
+  // title the header prints (`When`): its name, else its task reference.
+  const record = (
+    <PageRecord route="runs" id={runId} label={run.name ?? run.taskRef} />
+  );
   if (run.frames === 0)
-    return <RunEmpty run={run} org={place.org} ws={place.ws} />;
+    return (
+      <>
+        {record}
+        <RunEmpty run={run} org={place.org} ws={place.ws} />
+      </>
+    );
   const agentSlug = run.agentKey?.split(".").at(-1) ?? null;
   // Started, never awaited here: provider latency (GitHub pull requests,
   // checks, diffs) streams inside the boundaries that draw it and cannot hold
@@ -271,6 +282,7 @@ export async function Run({
   const section = await sectionOf(selected, props);
   return (
     <div data-testid="run-page" className="flex flex-col">
+      {record}
       <RunHeader
         run={run}
         agent={agent}
