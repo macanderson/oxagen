@@ -49,6 +49,7 @@ import {
   evidenceRunExportOnFailure,
 } from "./functions/evidence.run-export";
 import { evidenceFrameCompaction } from "./functions/evidence.frame-compaction";
+import { evidenceAssistantRunAbandon } from "./functions/evidence.assistant-run-abandon";
 import {
   runEnrich,
   runEnrichOnFailure,
@@ -103,6 +104,7 @@ export const functions: any[] = [
   evidenceRunExport,
   evidenceRunExportOnFailure,
   evidenceFrameCompaction,
+  evidenceAssistantRunAbandon,
   runEnrich,
   runEnrichOnFailure,
   runEnrichmentSweep,
