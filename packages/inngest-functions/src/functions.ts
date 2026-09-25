@@ -5,6 +5,7 @@ import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
 import { costRunProgress } from "./functions/cost.run-progress";
 import { tachoSessionIdleClose } from "./functions/tacho.session-idle-close";
+import { runLedgerIdleClose } from "./functions/run.ledger-idle-close";
 import { costDailyRollup } from "./functions/cost.daily-rollup";
 import { costPriceBookSync } from "./functions/cost.price-book-sync";
 import { costPriceBookReprice } from "./functions/cost.price-book-reprice";
@@ -68,6 +69,7 @@ export const functions: any[] = [
   costRunRollup,
   costRunProgress,
   tachoSessionIdleClose,
+  runLedgerIdleClose,
   costDailyRollup,
   costPriceBookSync,
   costPriceBookReprice,

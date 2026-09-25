@@ -328,6 +328,34 @@ describe("transcript fold", () => {
     expect(turn.response?.seq).toBe("2");
   });
 
+  // #3370: the chips of a fold are collected from every frame it absorbs, so
+  // a failed tool call behind a model response still marks the turn.
+  it("collects the chips of every frame a fold absorbs, beyond its opening and halves", () => {
+    const folded = foldTranscript(
+      [
+        tachoFrame(tachoRow(0, "turn_start", { turnSeq: 1 })),
+        tachoFrame(tachoRow(1, "llm_call", { model: "m", turnSeq: 1 })),
+        tachoFrame(
+          tachoRow(2, "tool_call", {
+            toolName: "Read",
+            toolStatus: "failed",
+            turnSeq: 1,
+          }),
+        ),
+      ],
+      "turns",
+    );
+    expect(folded).toHaveLength(1);
+    const turn = folded[0]!;
+    expect(turn.response?.seq).toBe("1");
+    expect([...turn.kinds].sort()).toEqual([
+      "errors",
+      "prompt",
+      "responses",
+      "tools",
+    ]);
+  });
+
   it("steps opens at model and tool calls, folding the rest into the step before except a policy decision, which holds for the step after", () => {
     const folded = foldTranscript(frames, "steps");
     expect(
@@ -826,6 +854,23 @@ describe("frameKinds and filterFramesByKind", () => {
     expect(frameKinds(usage).sort()).toEqual(["responses", "usage"]);
     expect(frameKinds(policy)).toEqual(["policy"]);
     expect(frameKinds(recall)).toEqual(["recall"]);
+  });
+
+  // #3370 finding 11: tacho's tool outcomes are ok, error, rejected and
+  // cancelled. A call the harness rejected did not do what it was asked, so
+  // the errors chip must keep it.
+  it("answers errors for a wrapped tool call the harness rejected", () => {
+    const rejected = tachoFrame(
+      tachoRow(12, "tool_call", { toolName: "Bash", toolStatus: "rejected" }),
+    );
+    const ok = tachoFrame(
+      tachoRow(13, "tool_call", { toolName: "Bash", toolStatus: "ok" }),
+    );
+    expect(frameKinds(rejected).sort()).toEqual(["errors", "tools"]);
+    expect(frameKinds(ok)).toEqual(["tools"]);
+    expect(
+      filterFramesByKind([ok, rejected], ["errors"]).map((f) => f.seq),
+    ).toEqual(["12"]);
   });
 
   it("files a history summary under recall and names what it stands in for (#4171)", () => {

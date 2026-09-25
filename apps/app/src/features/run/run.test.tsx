@@ -357,6 +357,36 @@ describe("header", () => {
     ).not.toBeChecked();
   });
 
+  it("prints the run's instants in the viewer's time zone, not the server's (#3368)", async () => {
+    const { source } = runSource({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    const element = await Run({
+      ctx,
+      source,
+      runId: "tse_7k2m9q",
+      tab: null,
+      kinds: null,
+      frames: null,
+      body: null,
+      reads: null,
+      spine: null,
+      now: NOW,
+    });
+    await act(async () => {
+      render(<IntlProvider timeZone="Asia/Tokyo">{element}</IntlProvider>);
+      await Promise.resolve();
+    });
+    // Started 08:00 and sealed 08:55 UTC, which is 17:00 and 17:55 in Tokyo.
+    const when = screen.getByTestId("run-when");
+    expect(when).toHaveTextContent("5:00:00 PM");
+    expect(when).toHaveTextContent("5:55:00 PM");
+    expect(when).not.toHaveTextContent("8:00:00 AM");
+    // The summary's generated time reads in the same zone: 08:58 UTC.
+    expect(screen.getByTestId("run-summary")).toHaveTextContent("5:58 PM");
+  });
+
   it("falls back to the task label when names are disabled and the harness gave none", async () => {
     await renderRun({
       detail: ok(
@@ -651,7 +681,7 @@ describe("header", () => {
     });
     // A wrapped run's host refuses tool calls. It holds no ingress fence.
     expect(screen.getByTestId("run-paused")).toHaveTextContent(
-      "Paused. The host refuses the agent's tool calls until you resume it.",
+      "Paused. The host refuses this agent's tool calls until you resume it.",
     );
     expect(screen.getByTestId("run-paused")).not.toHaveTextContent("Ingress");
     cleanup();
@@ -694,11 +724,9 @@ describe("header", () => {
       approvals: ok({ items: [approval()], more: false }),
     });
     expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
-    expect(screen.getByTestId("run-paused")).toHaveTextContent(
-      "Paused. Ingress is paused.",
-    );
-    // Resume sits with Pause and Cancel in the header; the banner only says
-    // why the run is waiting.
+    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
+    // Resume takes Pause's place in the header, beside Cancel; the banner only
+    // says why the run is waiting.
     expect(screen.getByTestId("run-resume")).toHaveTextContent("Resume run");
     expect(screen.getAllByRole("button", { name: /resume/i })).toHaveLength(1);
     expect(screen.getByTestId("run-paused").querySelector("button")).toBeNull();
@@ -997,7 +1025,7 @@ describe("header", () => {
 });
 
 describe("controls", () => {
-  it("draws pause, steer and cancel on a live wrapped run, and no Resume", async () => {
+  it("draws pause, steer and cancel on a live wrapped run, and no Resume beside Pause", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ status: "live" }) })),
       transcript: ok(runTranscript()),
@@ -1008,18 +1036,70 @@ describe("controls", () => {
     expect(screen.queryByTestId("run-resume")).toBeNull();
   });
 
-  it("draws Resume in Pause's place once a wrapped run's host has paused it (#4112)", async () => {
-    await renderRun({
+  // #4112: the host applied a pause, so the row reads paused and the header
+  // says so, offers Resume in Pause's place, and names what a session pause
+  // holds.
+  it("reads a paused wrapped run as paused and offers Resume alone", async () => {
+    const { container } = await renderRun({
       detail: ok(
-        runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            ingressPaused: true,
+          }),
+        }),
       ),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
-    for (const command of ["resume", "steer", "cancel"]) {
+    expect(screen.getByTestId("run-resume")).not.toBeDisabled();
+    expect(screen.getByTestId("run-resume")).toHaveTextContent("▶ Resume run");
+    expect(screen.queryByTestId("run-pause")).toBeNull();
+    for (const command of ["steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
+    const banner = screen.getByTestId("run-paused");
+    expect(banner).toHaveTextContent("refuses this agent's tool calls");
+    expect(banner).not.toHaveTextContent("Evidence ingress");
+    await expectNoAxe(container);
+  });
+
+  it("names evidence ingress in a paused ledger run's banner", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "ledger",
+            ingressPaused: true,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const banner = screen.getByTestId("run-paused");
+    expect(banner).toHaveTextContent("Evidence ingress is paused");
+    expect(banner).not.toHaveTextContent("tool calls");
+  });
+
+  it("draws Resume alone, disabled, on a paused wrapped run a viewer cannot command (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            run: runRow({ status: "live", ingressPaused: true }),
+          }),
+        ),
+        transcript: ok(runTranscript()),
+      },
+      { viewer: viewerCtx },
+    );
+    expect(screen.getByTestId("run-resume")).toBeDisabled();
     expect(screen.queryByTestId("run-pause")).toBeNull();
+    expect(screen.getByTestId("role-no-control")).toBeTruthy();
   });
 
   it("disables only Steer on a live run whose harness carries no mid-session prompt", async () => {
@@ -1969,7 +2049,7 @@ describe("approvals on the run", () => {
       {
         detail: ok(runDetail()),
         approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       // Transcript, not Governed actions: the parked dot reads on every tab.
       { tab: "transcript" },
@@ -1984,7 +2064,7 @@ describe("approvals on the run", () => {
       {
         detail: ok(runDetail()),
         approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -2013,7 +2093,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -2052,7 +2132,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -2091,7 +2171,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
         mandates: mandateList([mandateRow()]),
       },
       { tab: "approvals" },
@@ -2126,7 +2206,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -2387,17 +2467,20 @@ describe("the work", () => {
         "src/release/cut.ts",
       ),
     ).toBeTruthy();
-    // No read carries the base branch or a release, so each row the design
-    // draws says so rather than naming one.
+    // The base is the branch the pull request merges into (#3890). No read
+    // carries a release, so that row says so rather than naming one.
     const rows = changes
       .getAllByRole("term")
       .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
     expect(rows).toEqual(
       expect.arrayContaining([
-        ["Base", "not recorded"],
+        ["Base", "main"],
         ["Release", "not recorded"],
       ]),
     );
+    expect(
+      changes.getByRole("link", { name: "main" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/tree/main");
     await expectNoAxe(container);
   });
 
