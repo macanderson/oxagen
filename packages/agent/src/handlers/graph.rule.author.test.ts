@@ -34,6 +34,7 @@ import {
   graphRuleAuthor,
   type GraphRule,
 } from "@oxagen/oxagen/contracts/graph.rule.author";
+import { EngineUnavailableError } from "../runtime/engine/client";
 import {
   RULE_AUTHORING_ROUNDS,
   ruleAuthoringGoal,
@@ -198,6 +199,31 @@ describe("author_graph_rule sends the rule-authoring goal", () => {
     });
   });
 
+  it("passes an unreachable engine through as engine_unavailable (negative)", async () => {
+    mocks.ask.mockRejectedValue(new EngineUnavailableError("not ready"));
+
+    const err = await authorRule({ rule: RULE }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(EngineUnavailableError);
+    expect(err).toMatchObject({ code: "engine_unavailable" });
+  });
+
+  it("sends no turnId and no note line when the caller gave neither", async () => {
+    await authorRule({ rule: RULE });
+
+    const sent = mocks.ask.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty("turnId");
+    expect(sent.content).toBe(ruleAuthoringInstruction(RULE));
+    expect(sent.content).not.toContain("The person's note");
+  });
+
+  it("continues the conversation the caller named", async () => {
+    await authorRule({ rule: RULE, conversationId: "cnv_01k9x2tq" });
+
+    const sent = mocks.ask.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent.conversationId).toBe("cnv_01k9x2tq");
+  });
+
   it("builds a goal under the cap for the longest names the contract accepts", async () => {
     const longest = {
       relationshipType: `R${"_".repeat(62)}`,
@@ -244,6 +270,33 @@ describe("author_graph_rule starts no turn it may not start", () => {
 
     expect(isHandlerError(err) && err.reason).toBe("no_principal");
     expect(mocks.ask).not.toHaveBeenCalled();
+  });
+
+  it("checks the roles of the API key's creator when the call carries no user", async () => {
+    // The MCP and CLI shape: an API key and no session user. The role check
+    // must run as the person resolveActingUserId names, not as the null user
+    // on the context, or every machine call is refused as no_principal.
+    const creator = "00000000-0000-4000-8000-00000000000d";
+    const keyCtx: CapabilityContext = {
+      ...CTX,
+      userId: null,
+      apiKeyId: "00000000-0000-4000-8000-00000000000e",
+      surface: "mcp",
+    };
+    mocks.resolveActingUserId.mockResolvedValue(creator);
+
+    await kernel.invoke(graphRuleAuthor.name, { rule: RULE }, keyCtx, {
+      surface: "mcp",
+    });
+
+    expect(mocks.resolveActingUserId).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKeyId: keyCtx.apiKeyId }),
+    );
+    expect(mocks.assertOrgRole).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: creator, orgId: CTX.orgId }),
+      expect.anything(),
+    );
+    expect(mocks.ask).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a rule within one source before any turn (negative)", async () => {
