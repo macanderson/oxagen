@@ -97,9 +97,12 @@ ls /opt/oxagen/services/<service>/releases
 `stella-serve` is the Stella engine the in-app agent runs on (ADR-053). It
 is not built here: the artifact is a manifest naming the published image
 `ghcr.io/macanderson/stella-serve:<version>`, written by
-`tools/scripts/package-for-node.sh stella-serve`, which is the one place the
-version is written. It listens on loopback port 4300 and has no Caddy route
-and no public hostname; `app` and `api` reach it as `http://127.0.0.1:4300`.
+`tools/scripts/package-for-node.sh stella-serve`. The script reads the
+version from `STELLA_SERVE_PINNED_VERSION` in
+`packages/stella-engine-client/src/version.ts`, the one place it is written.
+That package's README has the bump steps. The engine listens on loopback
+port 4300 and has no Caddy route and no public hostname. `app` and `api`
+reach it as `http://127.0.0.1:4300`.
 
 Before its first deploy an operator creates three parameters:
 
