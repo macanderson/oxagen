@@ -46,14 +46,24 @@ const BUTTON =
 export function AssistantSendOrStop({
   stop,
   sendDisabled,
+  unavailableReasonId,
 }: {
   /**
    * Null shows Send. Otherwise Stop shows, and `stopping` holds it while a
    * stop it sent is on its way, so a second press sends nothing.
    */
   stop: { onStop: () => void; stopping: boolean } | null;
-  /** Send is shown but refuses: an empty draft, or a turn with no Stop. */
+  /**
+   * Send is shown but refuses: an empty draft, an engine that is down, or a
+   * turn with no Stop. The submit path refuses the same cases.
+   */
   sendDisabled: boolean;
+  /**
+   * The id of the text that says why no question can be sent now, such as
+   * the engine notice. Send points at it and looks unavailable. Null when
+   * nothing stands in the way.
+   */
+  unavailableReasonId: string | null;
 }) {
   const t = useTranslations("shell.assistant.composer");
   if (stop === null) {
@@ -62,8 +72,11 @@ export function AssistantSendOrStop({
         type="submit"
         aria-label={t("send")}
         aria-disabled={sendDisabled || undefined}
+        aria-describedby={unavailableReasonId ?? undefined}
         data-testid="assistant-send"
-        className={`${BUTTON} disabled:opacity-60`}
+        className={`${BUTTON} disabled:opacity-60 ${
+          unavailableReasonId === null ? "" : "cursor-not-allowed opacity-60"
+        }`}
       >
         <Send aria-hidden="true" className="size-4" />
       </button>

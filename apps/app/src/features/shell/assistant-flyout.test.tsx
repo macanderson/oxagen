@@ -45,6 +45,11 @@ declare global {
 
 const askAssistant = vi.fn();
 vi.mock("./assistant-actions", () => ({ askAssistant }));
+// The engine read has its own file (assistant-flyout.engine-health.test.tsx).
+// Here it never answers, so nothing but a turn in flight holds Send.
+vi.mock("./engine-actions", () => ({
+  readAssistantEngine: () => new Promise(() => undefined),
+}));
 // Each workspace reads back as having no thread yet, filed under its own id.
 // assistant-flyout.threads.test.tsx covers the read itself (#4163).
 vi.mock("./assistant-thread-actions", () => ({

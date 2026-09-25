@@ -20,6 +20,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       preferences: refuse,
       counts: refuse,
       notifications: refuse,
+      assistantEngine: refuse,
     },
     billing: {
       plan: refuse,
