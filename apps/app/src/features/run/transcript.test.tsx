@@ -344,7 +344,7 @@ describe("the rows", () => {
     const [first] = rows();
     expect(first).toHaveAttribute("data-kind", "prompt");
     const you = screen.getByTestId("transcript-you");
-    expect(you).toHaveTextContent(/^YOU⏵Cut the 4\.11\.0 release notes/);
+    expect(you).toHaveTextContent(/^You⏵Cut the 4\.11\.0 release notes/);
     expect(you).not.toHaveTextContent("first prompt");
     fireEvent.click(within(you).getByRole("button", { name: "Show in full" }));
     expect(you).toHaveTextContent(
@@ -519,12 +519,17 @@ describe("the rows", () => {
   it("reads the agent's last words as the answer once the run has stopped, and not while it runs", () => {
     renderSection();
     const agents = screen.getAllByTestId("transcript-agent");
-    expect(agents.at(-1)).toHaveTextContent(/^ANSWER/);
-    expect(agents[0]).toHaveTextContent(/^AGENT/);
+    // The catalogue says the role in sentence case; the tag's style sets it
+    // in capitals (#3375).
+    expect(agents.at(-1)?.querySelector("span")?.className).toContain(
+      "uppercase",
+    );
+    expect(agents.at(-1)).toHaveTextContent(/^Answer/);
+    expect(agents[0]).toHaveTextContent(/^Agent/);
     cleanup();
     renderSection({ status: "live" });
     expect(screen.getAllByTestId("transcript-agent").at(-1)).toHaveTextContent(
-      /^AGENT/,
+      /^Agent/,
     );
   });
 

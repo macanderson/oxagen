@@ -300,10 +300,11 @@ const txRoleGut = "pr-3.5 text-right max-md:p-0 max-md:text-left";
 /**
  * `.tx-roletag { font-size:10px; font-weight:700; letter-spacing:.14em;
  * padding:1px 7px; border-radius:4px; color:var(--ink) }`, on `--tx-you`
- * (the muted ink) for YOU and `--tx-agent` (the ink) for the agent.
+ * (the muted ink) for YOU and `--tx-agent` (the ink) for the agent. The
+ * words are sentence case in the catalogue, and the capitals are the style's.
  */
 const txRoleTag =
-  "rounded px-[7px] py-px text-[10px] font-bold tracking-[0.14em] text-background";
+  "rounded px-[7px] py-px text-[10px] font-bold uppercase tracking-[0.14em] text-background";
 /**
  * `.tx-prose { max-width:72ch; white-space:pre-wrap; color:var(--body) }`,
  * open. Closed, the same column holds one line, cut with an ellipsis. The ink
