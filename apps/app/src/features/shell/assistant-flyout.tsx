@@ -491,14 +491,28 @@ export function AssistantFlyout({
   // workspace.
   const [shownScope, setShownScope] = useState(scope);
   if (scope !== null && scope !== shownScope) setShownScope(scope);
+  // The slugs of that workspace, which is where its parked writes were
+  // recorded, even on an organization page. They are held apart from
+  // `shownScope` because a restored thread is filed under the workspace's
+  // key rather than its `org/ws` slugs (#4207), so the scope cannot be split
+  // back into them.
+  const [shownSlugs, setShownSlugs] = useState<{
+    org: string;
+    ws: string;
+  } | null>(org !== null && ws !== null ? { org, ws } : null);
+  if (
+    org !== null &&
+    ws !== null &&
+    (shownSlugs?.org !== org || shownSlugs.ws !== ws)
+  )
+    setShownSlugs({ org, ws });
   const thread: Thread =
     shownScope === null
       ? EMPTY_THREAD
       : (threadOf(shownScope) ?? EMPTY_THREAD);
   const { entries, draft, pending } = thread;
-  // The workspace whose thread is on screen, which is where its parked writes
-  // were recorded, even on an organization page. Slugs hold no "/".
-  const [threadOrg, threadWs] = shownScope?.split("/") ?? [];
+  const threadOrg = shownSlugs?.org;
+  const threadWs = shownSlugs?.ws;
 
   useEffect(() => {
     const receiveDraft = (event: Event) => {
