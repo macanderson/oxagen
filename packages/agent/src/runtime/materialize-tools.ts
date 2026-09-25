@@ -1,3 +1,4 @@
+import { ApprovalPendingError } from "./approval-pending";
 import { ApprovalResumeError } from "./approval-resume-payload";
 import { tool, jsonSchema, type Tool, type ToolSet } from "@oxagen/ai";
 import { type ZodTypeAny } from "zod";
@@ -73,6 +74,24 @@ function byteSize(v: unknown): number {
   }
 }
 
+/**
+ * How a call that threw ends in `tool_invocations`. A call parked for a
+ * person's approval is `parked` with no error class: it did not fail, and it
+ * used to land as `failed` / `ApprovalPendingError`, which counted every
+ * parked write as a tool failure. Anything else is `failed` with its class.
+ */
+function thrownOutcome(
+  err: unknown,
+  fallbackClass: string,
+): Pick<ToolInvocationRow, "status" | "error_class"> {
+  if (err instanceof ApprovalPendingError)
+    return { status: "parked", error_class: null };
+  return {
+    status: "failed",
+    error_class: err instanceof Error ? err.name : fallbackClass,
+  };
+}
+
 // Central factory for tool invocation telemetry rows.
 // Keeps the 15+ shared fields in one place and makes varying fields explicit,
 // preventing silent desync across the five call sites in materializeTools.
@@ -127,6 +146,8 @@ type AnyCapability = RegistryCapability;
 
 export interface ApprovalRequiredEvent {
   approvalId: string;
+  /** The approval's public id (`apr_…`), when the writer returned one. */
+  approvalPublicId?: string;
   capability: string;
   inputPreview: unknown;
   riskLevel: "low" | "medium" | "high";
@@ -225,24 +246,9 @@ export interface MaterializeOptions {
   runIdRef?: { current: string | null };
 }
 
-/**
- * A governed write the turn opened that is waiting on a person. Thrown out of
- * a tool's `execute` under `approvalMode: "park"`; the engine reads it as a
- * refusal by policy and the surface reads the fields as the parked card.
- */
-export class ApprovalPendingError extends Error {
-  override readonly name = "ApprovalPendingError";
-  readonly code = "pending_approval" as const;
-  constructor(
-    readonly capability: string,
-    readonly approvalId: string,
-    readonly expiresAt: string,
-  ) {
-    super(
-      `refused: ${capability} is waiting for approval ${approvalId} until ${expiresAt}`,
-    );
-  }
-}
+// Re-exported from its own module, which the engine port reads without
+// pulling this one in (see approval-pending.ts).
+export { ApprovalPendingError } from "./approval-pending";
 
 // Result of materializeTools: the Vercel AI SDK tool map keyed by *model-safe*
 // names, plus a reverse map from each model-safe name back to the real
@@ -821,7 +827,12 @@ export async function materializeTools(
                 expiresAt,
               });
               if (opts.approvalMode === "park") {
-                throw new ApprovalPendingError(cap.name, approvalId, expiresAt);
+                throw new ApprovalPendingError(
+                  cap.name,
+                  approvalId,
+                  expiresAt,
+                  approval.approvalPublicId,
+                );
               }
               const resolution = await waitForApproval(approvalId);
               if (resolution.resolution !== "approved") {
@@ -874,6 +885,9 @@ export async function materializeTools(
             }
             return result;
           } catch (err) {
+            // The approval gate above throws its park inside this try, so a
+            // parked call ends here too, and is recorded as parked.
+            const ended = thrownOutcome(err, "UnknownError");
             try {
               await insertToolInvocation(
                 buildInvocationPayload(
@@ -886,11 +900,10 @@ export async function materializeTools(
                     inputBytes,
                   },
                   {
-                    status: "failed",
+                    status: ended.status,
                     outputBytes: 0,
                     latencyMs: Date.now() - startedAt,
-                    errorClass:
-                      err instanceof Error ? err.name : "UnknownError",
+                    errorClass: ended.error_class,
                   },
                 ),
               );
@@ -1251,6 +1264,7 @@ export async function materializeTools(
                           event.capability,
                           event.approvalId,
                           event.expiresAt,
+                          event.approvalPublicId,
                         );
                     }
                   : undefined,
@@ -1261,6 +1275,8 @@ export async function materializeTools(
                 try {
                   await admitExternalDecision(options);
                 } catch (error) {
+                  // A rule's approval parks here under `approvalMode: "park"`.
+                  const ended = thrownOutcome(error, "ExternalDecisionRefused");
                   try {
                     await insertToolInvocation(
                       buildInvocationPayload(
@@ -1272,13 +1288,10 @@ export async function materializeTools(
                           inputBytes: byteSize(input),
                         },
                         {
-                          status: "failed",
+                          status: ended.status,
                           outputBytes: 0,
                           latencyMs: Date.now() - startedAt,
-                          errorClass:
-                            error instanceof Error
-                              ? error.name
-                              : "ExternalDecisionRefused",
+                          errorClass: ended.error_class,
                         },
                       ),
                     );

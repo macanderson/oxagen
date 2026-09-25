@@ -678,7 +678,19 @@ export interface ToolInvocationRow {
   message_id: string;
   parent_message_id: string | null;
   execution_step_id: string | null;
-  status: "started" | "completed" | "failed" | "cancelled" | "timed_out";
+  /**
+   * How the call ended. `parked` is a call that did not run because it waits
+   * on a person's approval: it is not a failure, and a failure rate that
+   * counts `failed` rows leaves it out. The column is `LowCardinality(String)`
+   * with no enum or constraint, so a new value needs no migration.
+   */
+  status:
+    | "started"
+    | "completed"
+    | "failed"
+    | "cancelled"
+    | "timed_out"
+    | "parked";
   input_size_bytes: number;
   output_size_bytes: number;
   latency_ms: number;
