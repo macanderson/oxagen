@@ -145,8 +145,12 @@ function buildInvocationPayload(
 type AnyCapability = RegistryCapability;
 
 export interface ApprovalRequiredEvent {
+  /** The row uuid, which waiters and NOTIFY are keyed by. */
   approvalId: string;
-  /** The approval's public id (`apr_…`), when the writer returned one. */
+  /**
+   * The public id (`apr_…`) that list reads, Fleet and the assistant's parked
+   * card show. Absent where the writer did not return one.
+   */
   approvalPublicId?: string;
   capability: string;
   inputPreview: unknown;
@@ -821,6 +825,9 @@ export async function materializeTools(
               // approval card never renders — the stream appears hung.
               opts.onApprovalRequired?.({
                 approvalId,
+                ...(approval.publicId === undefined
+                  ? {}
+                  : { approvalPublicId: approval.publicId }),
                 capability: cap.name,
                 inputPreview: input,
                 riskLevel,
@@ -1458,6 +1465,7 @@ export async function materializeTools(
                           inputPreview: input,
                           riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
                           ttlMs: CONSENT_PROMPT_TTL_MS,
+                          kind: "consent",
                         }),
                     );
                     opts.onConsentRequired?.({
@@ -1581,6 +1589,7 @@ export async function materializeTools(
                         inputPreview: input,
                         riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
                         ttlMs: CONSENT_PROMPT_TTL_MS,
+                        kind: "consent",
                       }),
                   );
                   opts.onConsentRequired?.({

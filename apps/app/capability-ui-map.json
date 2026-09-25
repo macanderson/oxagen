@@ -696,7 +696,18 @@
       "entry": "/[org]/[ws] \u2014 the Fleet Waiting on a human tile counts list_approvals and marks the runs a parked call names, and the Run page reads it narrowed to one run for the tab's parked dot and the Governed actions cards (data/live/approvals.ts, features/fleet/board.tsx, features/fleet/approvals-panel.tsx, features/run/run.tsx, features/run/actions-tab.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-24",
-      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
+      "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/layout.tsx",
+          "entry": "the assistant flyout: a parked write's card reads its approval row through the approvals port's pending read, narrowed to the turn's run, so it shows the state Fleet shows (features/shell/assistant-approval-actions.ts, features/shell/assistant-parked-approvals.tsx, data/live/approvals.ts)",
+          "testid": "assistant-parked-outcome",
+          "proof": "apps/app/src/features/shell/assistant-parked-approvals.test.tsx",
+          "verifiedAt": "2026-09-25",
+          "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
+        }
+      ]
     },
     "list_connections": {
       "route": "/[org]/[ws]/tools/providers",
@@ -871,6 +882,15 @@
           "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
           "verifiedAt": "2026-09-23",
           "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+        },
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/layout.tsx",
+          "entry": "the assistant flyout: a parked write's card reads its approval row through the approvals port's resolved read, narrowed to the turn's run, so it shows the state Fleet shows (features/shell/assistant-approval-actions.ts, features/shell/assistant-parked-approvals.tsx, data/live/approvals.ts)",
+          "testid": "assistant-parked-outcome",
+          "proof": "apps/app/src/features/shell/assistant-parked-approvals.test.tsx",
+          "verifiedAt": "2026-09-25",
+          "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
         }
       ]
     },
@@ -1158,6 +1178,15 @@
           "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
           "verifiedAt": "2026-09-23",
           "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+        },
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/layout.tsx",
+          "entry": "the assistant flyout: each write a turn parked is a card in the thread with Approve and Deny, which call Fleet's resolveApprovalAction as the signed-in viewer through the kernel seam, and the card then says what became of the call (features/shell/assistant-parked-approvals.tsx, features/fleet/client.ts, features/fleet/actions.ts)",
+          "testid": "assistant-parked-approve",
+          "proof": "apps/app/src/features/shell/assistant-parked-approvals.test.tsx",
+          "verifiedAt": "2026-09-25",
+          "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
         }
       ]
     },
