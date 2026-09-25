@@ -1914,6 +1914,11 @@ describe("materializeTools — first-use consent gate", () => {
       "list_pull_requests",
     );
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    // Written as a consent request, the only kind resolve_mcp_consent
+    // answers (ADR-175).
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "consent" }),
+    );
     expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
     expect(events).toEqual([
       {

@@ -8,14 +8,20 @@
 //   2. Read the row by either id form (#2906) inside the caller's org and
 //      workspace while it is unexpired and unresolved. No row → HandlerError
 //      conflict `approval_expired`.
-//   3. On a row the mandate gate parked (ADR-059 decision 4), the mandate's
+//   3. A call from the run the row records as raising the approval is
+//      refused `run_cannot_resolve_own_approval` (ADR-175). The in-app
+//      assistant acts as the person who typed, so the role gate cannot tell
+//      the turn from the person. The run is what differs. The contract is off
+//      the agent surface, so no model reaches this handler today, and the
+//      check holds for any other caller that carries a run.
+//   4. On a row the mandate gate parked (ADR-059 decision 4), the mandate's
 //      approval rule decides who answers (MC spec §6.9): an agent principal
 //      is refused `agent_cannot_resolve_own_mandate`; the caller holds an
 //      org role the workspace names for every consequence tag on the mandate
 //      (assertConsequenceRole, INV-29); and, when the rule names approvers,
 //      is one of them (assertApprover). Each refusal is `forbidden` and
 //      leaves before the ledger or the row is touched.
-//   4. One transaction: on a mandate row lock the mandate and, for `denied`,
+//   5. One transaction: on a mandate row lock the mandate and, for `denied`,
 //      release the reservation; then the UPDATE that sets the resolution,
 //      guarded by the WHERE of step 2. The lock order is the one the gate
 //      and the expiry job use: mandate row, then approval_requests. No row
@@ -23,9 +29,9 @@
 //      release back, and leaves through the kernel's catch, so the usage
 //      recorder never runs and the no-op is not a governed action (§3.9
 //      item 15).
-//   5. `approved` leaves the reservation held for the agent's retry, whose
+//   6. `approved` leaves the reservation held for the agent's retry, whose
 //      receipt settles it. The output reports the settlement.
-//   6. A matched row writes the approval.resolved feed row for the person
+//   7. A matched row writes the approval.resolved feed row for the person
 //      whose message parked the call, in the same transaction.
 //   7. On a row that stores the parked call (ADR-118), the UPDATE queues it
 //      when approved. This request then delivers it: the call runs now, as
@@ -47,8 +53,7 @@ import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import { runOutsideGovernedAction } from "@oxagen/oxagen/kernel";
 import { lockMandate, parseMandateRow, release } from "@oxagen/rules";
 import { and, eq, sql } from "drizzle-orm";
-import pino from "pino";
-import { notifyResolution } from "../runtime/approval";
+import { notifyResolution, raisedByCallingRun } from "../runtime/approval";
 import { APPROVAL_RESOLVER_ROLES } from "@oxagen/rules/approval-notify";
 import { approvalIdCondition } from "../runtime/approval-id";
 import type {
@@ -94,12 +99,14 @@ export async function agentApprovalResolveHandler(
       .select({
         mandateId: schema.approvalRequests.mandateId,
         toolCallId: schema.approvalRequests.toolCallId,
+        runPublicId: schema.approvalRequests.runPublicId,
       })
       .from(schema.approvalRequests)
       .where(pending)
       .limit(1);
     if (!row) return null;
-    if (!row.mandateId || !row.toolCallId) return { row, parked: null };
+    const ownRun = await raisedByCallingRun(tx, ctx, row.runPublicId);
+    if (!row.mandateId || !row.toolCallId) return { ownRun, parked: null };
     const [mandateRow] = await tx
       .select()
       .from(schema.mandates)
@@ -107,7 +114,7 @@ export async function agentApprovalResolveHandler(
       .limit(1);
     if (!mandateRow) throw expired();
     return {
-      row,
+      ownRun,
       parked: {
         mandateId: row.mandateId,
         toolCallId: row.toolCallId,
@@ -117,6 +124,15 @@ export async function agentApprovalResolveHandler(
     };
   });
   if (!found) throw expired();
+
+  if (found.ownRun) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "run_cannot_resolve_own_approval",
+      message:
+        "The run that raised this approval cannot resolve it. Approve or deny it on Fleet.",
+    });
+  }
 
   const { parked } = found;
   if (parked) {

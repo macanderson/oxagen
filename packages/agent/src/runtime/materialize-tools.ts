@@ -1465,6 +1465,7 @@ export async function materializeTools(
                           inputPreview: input,
                           riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
                           ttlMs: CONSENT_PROMPT_TTL_MS,
+                          kind: "consent",
                         }),
                     );
                     opts.onConsentRequired?.({
@@ -1588,6 +1589,7 @@ export async function materializeTools(
                         inputPreview: input,
                         riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
                         ttlMs: CONSENT_PROMPT_TTL_MS,
+                        kind: "consent",
                       }),
                   );
                   opts.onConsentRequired?.({
