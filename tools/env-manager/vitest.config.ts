@@ -9,11 +9,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // Scope to the pure, testable logic behind the secrets DB. Excluded:
-      // pull-secrets.ts (drives gcloud + runs main() on import), server.ts /
+      // Scope to the pure, testable logic behind the secrets DB, including the
+      // gcloud helpers, which take an injected runner. Excluded:
+      // pull-secrets.ts (runs main() on import), server.ts /
       // vercel.ts / config.ts / sources.ts / catalog.ts (Vercel-deploy side of
       // the tool, network-bound), and *.test.ts.
       include: [
+        "src/gcloud-secrets.ts",
         "src/secrets-db.ts",
         "src/secrets-meta.ts",
         "src/secrets-reconcile.ts",

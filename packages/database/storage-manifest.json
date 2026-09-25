@@ -6099,7 +6099,7 @@
       },
       "name": "EntityNode",
       "store": "neo4j",
-      "tenantScoped": false
+      "tenantScoped": true
     },
     {
       "columns": [
@@ -12417,6 +12417,12 @@
         },
         {
           "name": "code_binding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "history_summary",
           "nullable": true,
           "primaryKey": false,
           "type": "jsonb"

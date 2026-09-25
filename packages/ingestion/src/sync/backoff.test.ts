@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as backoffModule from "./backoff";
 import {
   BASE_BACKOFF_MS,
   MAX_BACKOFF_MS,
@@ -23,6 +24,13 @@ describe("healthForFailureCount", () => {
   it("escalates to errored at the threshold and beyond", () => {
     expect(healthForFailureCount(ERRORED_AFTER_FAILURES)).toBe("errored");
     expect(healthForFailureCount(ERRORED_AFTER_FAILURES + 10)).toBe("errored");
+  });
+
+  it("exports only the thresholds the health model reads (#1464)", () => {
+    // The first failure degrades health with no threshold to read, so a
+    // DEGRADED_AFTER_FAILURES export would be dead code that no caller imports.
+    expect(Object.keys(backoffModule)).not.toContain("DEGRADED_AFTER_FAILURES");
+    expect(healthForFailureCount(1)).toBe("degraded");
   });
 });
 
