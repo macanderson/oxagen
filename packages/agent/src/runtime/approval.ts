@@ -61,7 +61,7 @@ export interface CreateApprovalArgs {
   ttlMs?: number;
   resumeRequesterUserId?: string;
   /**
-   * What the row asks a person for (ADR-XXX). The first-use consent gate
+   * What the row asks a person for (ADR-175). The first-use consent gate
    * passes `consent`, the only kind `resolve_mcp_consent` answers. Every
    * other caller leaves it out and writes `approval`.
    */
@@ -102,7 +102,7 @@ export async function resolveRunPublicId(
 
 /**
  * Whether a call comes from the run an approval row records as raising it
- * (ADR-XXX). `resolve_approval` and `resolve_mcp_consent` both refuse such a
+ * (ADR-175). `resolve_approval` and `resolve_mcp_consent` both refuse such a
  * call: a run never answers the question it put to a person.
  *
  * The row records that run's public id (`arun_…` or `tse_…`, #3286). The call

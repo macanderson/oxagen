@@ -1,6 +1,6 @@
 /**
  * Can an in-app assistant turn answer the approval its own write parked?
- * ADR-XXX records the answer and the change that made it no.
+ * ADR-175 records the answer and the change that made it no.
  *
  * The turn is assembled the way `runPreparedTurn` (runtime/assistant-turn.ts)
  * assembles it: the person's context carrying the turn's message id, the belt
@@ -317,7 +317,7 @@ afterEach(() => {
 });
 
 describe("resolve_approval: a turn answering its own parked write", () => {
-  // Before ADR-XXX this belt carried resolve_approval, and a call from it
+  // Before ADR-175 this belt carried resolve_approval, and a call from it
   // resolved: the model approved the key revocation its own turn had parked,
   // as the person, with the id the refusal had just told it.
 
@@ -412,7 +412,7 @@ describe("resolve_approval: a turn answering its own parked write", () => {
 });
 
 describe("resolve_mcp_consent: a turn answering a question its run put to a person", () => {
-  // Before ADR-XXX the belt carried resolve_mcp_consent too, and its handler
+  // Before ADR-175 the belt carried resolve_mcp_consent too, and its handler
   // answered any pending row by uuid. A call from the turn resolved the
   // approval the turn's write had parked, as the person.
 

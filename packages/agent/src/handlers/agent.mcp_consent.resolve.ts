@@ -1,5 +1,5 @@
 // resolve_mcp_consent: a person's answer to a first-use consent request for
-// an external MCP tool (ADR-XXX).
+// an external MCP tool (ADR-175).
 //
 //   1. Role gate: assertOrgRole with the contract's own defaultRoles, for the
 //      signed-in user or the creator of the API key (resolveActingUserId), as
@@ -8,7 +8,7 @@
 //   2. Read the row inside the caller's org and workspace while it is
 //      unexpired and unresolved. No row answers `expired`.
 //   3. A row that is not a consent request is refused `conflict` /
-//      `not_a_consent_request`. Before ADR-XXX this handler answered any
+//      `not_a_consent_request`. Before ADR-175 this handler answered any
 //      pending row by its uuid, so a model holding the tool could approve a
 //      write its own turn had parked.
 //   4. A call from the run the row records is refused `forbidden` /

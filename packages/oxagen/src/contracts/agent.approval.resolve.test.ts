@@ -112,7 +112,7 @@ describe("agent.approval.resolve capability", () => {
     ).toBeUndefined();
   });
 
-  it("is not on the agent surface: a person resolves an approval, never a model (ADR-XXX)", () => {
+  it("is not on the agent surface: a person resolves an approval, never a model (ADR-175)", () => {
     expect(agentApprovalResolve.surfaces).toEqual(["api", "mcp"]);
     expect(agentApprovalResolve.surfaces).not.toContain("agent");
   });

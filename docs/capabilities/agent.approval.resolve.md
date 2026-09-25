@@ -12,7 +12,7 @@ Approve or deny a pending tool-call approval request. Approving a stored built-i
 
 Legacy approvals without stored arguments keep their existing wait or caller-retry behavior. External MCP approvals do not use the stored-call worker.
 
-A person makes this decision. The contract is not on the `agent` surface, so no model is offered it as a tool (ADR-XXX). People resolve from Fleet, the Run page, and the shell's approvals drawer, which invoke through the app's kernel seam.
+A person makes this decision. The contract is not on the `agent` surface, so no model is offered it as a tool (ADR-175). People resolve from Fleet, the Run page, and the shell's approvals drawer, which invoke through the app's kernel seam.
 
 ## Input
 

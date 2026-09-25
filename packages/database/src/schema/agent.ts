@@ -204,7 +204,7 @@ export const approvalRequests = agentSchema.table(
     capabilityName: text("capability_name").notNull(),
     inputPreview: jsonb("input_preview").notNull(),
     riskLevel: text("risk_level").notNull(),
-    // What the row asks a person for (ADR-XXX): `approval` of a parked call,
+    // What the row asks a person for (ADR-175): `approval` of a parked call,
     // or first-use `consent` to an external MCP tool. The writer records it,
     // because an external tool's rule-driven approval carries the same
     // `mcp.<server>.<tool>` name as its consent request. `resolve_mcp_consent`

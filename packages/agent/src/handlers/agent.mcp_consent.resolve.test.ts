@@ -1,5 +1,5 @@
 /**
- * Unit tests for the resolve_mcp_consent handler (ADR-XXX).
+ * Unit tests for the resolve_mcp_consent handler (ADR-175).
  *
  * Guards and their negatives:
  *   - role gate: the contract's defaultRoles through assertOrgRole; a Viewer

@@ -29,7 +29,7 @@
  *     Billing user resolves; approvers narrow it: a role outside the list
  *     → `not_an_approver`, a user the list names resolves; a mandate row
  *     gone at the read → `approval_expired`
- *   - a run and the approval it raised (ADR-XXX): a call whose run is the
+ *   - a run and the approval it raised (ADR-175): a call whose run is the
  *     one the row records, by its internal id or its public id → forbidden
  *     `run_cannot_resolve_own_approval`, no UPDATE, no NOTIFY, nothing
  *     recorded through the kernel; a call with no run, a call from another

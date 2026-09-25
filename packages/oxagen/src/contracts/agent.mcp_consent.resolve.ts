@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 // Consent to an external MCP tool is a person's decision, so the contract is
-// not on the `agent` surface (ADR-XXX, the same decision as
+// not on the `agent` surface (ADR-175, the same decision as
 // `resolve_approval`). The handler answers only a row the consent gate wrote
 // (`kind = 'consent'`), and refuses a call from the run the row records.
 export const agentMcpConsentResolve = registerCapability({

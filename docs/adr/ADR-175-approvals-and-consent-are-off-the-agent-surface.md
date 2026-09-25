@@ -1,4 +1,4 @@
-# ADR-XXX: Approvals and consent requests are off the agent surface
+# ADR-175: Approvals and consent requests are off the agent surface
 
 - **Status:** Accepted
 - **Date:** 2026-09-25

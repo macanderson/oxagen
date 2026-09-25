@@ -160,7 +160,7 @@ describe("approval runtime", () => {
     ["an approval when the caller names no kind", undefined, "approval"],
     ["a consent request when the consent gate asks", "consent", "consent"],
   ] as const)(
-    "records the row's kind: %s (ADR-XXX)",
+    "records the row's kind: %s (ADR-175)",
     async (_why, kind, recorded) => {
       await createApprovalRequest({
         orgId: "ten_1",

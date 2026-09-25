@@ -9,7 +9,7 @@
 //      workspace while it is unexpired and unresolved. No row → HandlerError
 //      conflict `approval_expired`.
 //   3. A call from the run the row records as raising the approval is
-//      refused `run_cannot_resolve_own_approval` (ADR-XXX). The in-app
+//      refused `run_cannot_resolve_own_approval` (ADR-175). The in-app
 //      assistant acts as the person who typed, so the role gate cannot tell
 //      the turn from the person. The run is what differs. The contract is off
 //      the agent surface, so no model reaches this handler today, and the

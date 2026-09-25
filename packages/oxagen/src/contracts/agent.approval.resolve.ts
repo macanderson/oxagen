@@ -37,7 +37,7 @@ export function isApprovalPublicId(value: string): boolean {
 // two decisions a caller can make (§3.9 item 15).
 //
 // An approval is a person's decision, so the contract is not on the `agent`
-// surface (ADR-XXX). The in-app assistant acts as the person who typed, and a
+// surface (ADR-175). The in-app assistant acts as the person who typed, and a
 // model holding this tool approved the write its own turn had parked. People
 // resolve from Fleet, the Run page and the shell's approvals drawer, which
 // invoke through the app's kernel seam and name no surface.

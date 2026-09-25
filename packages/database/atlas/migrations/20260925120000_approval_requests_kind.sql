@@ -1,4 +1,4 @@
--- What an approval row asks a person for (ADR-XXX): `approval` of a parked
+-- What an approval row asks a person for (ADR-175): `approval` of a parked
 -- call, or first-use `consent` to an external MCP tool.
 --
 -- `resolve_mcp_consent` answers a consent row and refuses every other kind.

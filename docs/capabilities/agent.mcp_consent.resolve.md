@@ -14,7 +14,7 @@ the same tool no longer re-prompts. When `grantAllTools` is set on a
 `granted` decision, every tool on the server is pre-granted.
 
 A person makes this decision. The contract is not on the `agent` surface, so
-no model is offered it as a tool (ADR-XXX). It answers only a consent request:
+no model is offered it as a tool (ADR-175). It answers only a consent request:
 a row the first-use consent gate wrote with `kind = 'consent'`.
 
 ## Input
