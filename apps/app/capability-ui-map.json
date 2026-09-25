@@ -38,11 +38,11 @@
     "ask_assistant": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Ask the assistant at the foot of the sidebar, and of the phone's nav drawer \u2014 the shell's assistant flyout, whose composer invokes ask_assistant inside a workspace (features/shell/assistant-flyout.tsx, features/shell/assistant-actions.ts)",
+      "entry": "Ask the assistant at the foot of the sidebar, and of the phone's nav drawer. The shell's assistant flyout asks inside a workspace, and its reply streams in over the API's chat stream, the streaming adapter that invokes ask_assistant (features/shell/assistant-flyout.tsx, features/shell/assistant-stream-client.ts)",
       "testid": "assistant-send",
-      "proof": "apps/app/src/features/shell/assistant-flyout.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session-7172f7a7-in-app-assistant"
+      "proof": "apps/app/src/features/shell/assistant-flyout.streaming.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
     },
     "assign_agent_role": {
       "route": "/[org]/[ws]/agents/[agent]",
@@ -341,6 +341,15 @@
       "proof": "apps/app/src/features/agents/toolbelt.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-mc-3-schemas"
+    },
+    "get_assistant_reply": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Load the finished reply, which the shell's assistant flyout offers when a turn's stream drops before the reply finishes. It reads get_assistant_reply by the run the stream named, in the workspace the question was asked in (features/shell/assistant-stream-reply.tsx, features/shell/assistant-actions.ts)",
+      "testid": "assistant-load-reply",
+      "proof": "apps/app/src/features/shell/assistant-flyout.streaming.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
     },
     "get_auto_eligibility": {
       "route": "/[org]/[ws]/runs/[run]",

@@ -1,6 +1,6 @@
 # get_assistant_reply
 
-The reply an in-app agent turn left on the record, read by the run the turn was recorded as (ADR-XXX).
+The reply an in-app agent turn left on the record, read by the run the turn was recorded as (ADR-176).
 
 The app streams a turn over `POST /v1/:org_slug/:workspace_slug/chat/stream`. A dropped connection does not stop the turn: it runs to completion and persists its reply as the assistant's message (ADR-092). This read is how a client that lost the stream gets the finished reply back. The stream's first event names the run, before the engine is asked anything, so a client that received any of the stream holds the id this read takes. The assistant flyout offers it as "Load the finished reply".
 

@@ -1,5 +1,5 @@
 // get_assistant_reply: the reply an in-app agent turn left on the record, read
-// by its run (ADR-XXX). The flyout reads it after its stream dropped. The turn
+// by its run (ADR-176). The flyout reads it after its stream dropped. The turn
 // ran on and persisted its reply (ADR-092), and this is how the person gets it
 // back without asking again.
 //

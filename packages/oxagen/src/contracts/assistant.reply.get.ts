@@ -1,6 +1,6 @@
 /**
  * `get_assistant_reply`: the reply an in-app agent turn left on the record,
- * read by the run the turn was recorded as (ADR-XXX).
+ * read by the run the turn was recorded as (ADR-176).
  *
  * The app streams a turn over `POST /v1/:org/:ws/chat/stream`, and a dropped
  * connection does not stop it: the turn runs to completion and persists its

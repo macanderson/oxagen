@@ -57,7 +57,7 @@ export const CHAT_STREAM_HEARTBEAT_MS = 15_000;
 // POST /:org_slug/:workspace_slug/chat/stream
 //
 // The one SSE transport of the in-app agent (apps/app/ARCHITECTURE.md §3.5,
-// ADR-XXX): the streaming adapter of `ask_assistant`, and the transport the
+// ADR-176): the streaming adapter of `ask_assistant`, and the transport the
 // app's assistant flyout reads, same-origin through the app's `/api/v1/*`
 // rewrite. Body: this route's BodySchema, the contract's input plus the
 // surface's model and budget overrides. Each SSE line: `data: <JSON
@@ -72,7 +72,7 @@ export const CHAT_STREAM_HEARTBEAT_MS = 15_000;
 // /assistant/ask answers; after that the stream is open and a failure is a
 // typed `error` event.
 //
-// A dropped connection does not stop the turn (ADR-092, ADR-XXX). The turn
+// A dropped connection does not stop the turn (ADR-092, ADR-176). The turn
 // runs to completion and persists its reply, so a client that lost the
 // stream can read the finished reply with `get_assistant_reply`. Stopping a
 // turn on purpose belongs to run controls (#2953), not to a socket closing:

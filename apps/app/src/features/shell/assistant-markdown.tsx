@@ -2,11 +2,10 @@
 // Renders an assistant reply as markdown instead of a plain string, so
 // headings, lists and prose get real line-height and sizing and a fenced code
 // block gets a monospace, per-language syntax highlighter instead of a plain
-// `<pre>`. Streamdown is the one place that config lives; `assistant-streaming-
-// text.tsx` is the only other caller, passing `streaming: true` while it is
-// still revealing characters so an unterminated fence or bold marker never
-// renders as broken HTML mid-reveal (`parseIncompleteMarkdown`).
-import type * as React from "react";
+// `<pre>`. Streamdown is the one place that config lives. A reply still
+// streaming in (`assistant-stream-reply.tsx`) passes `streaming: true`, so an
+// unterminated fence or bold marker never renders as broken HTML mid-reply
+// (`parseIncompleteMarkdown`).
 import { Streamdown } from "streamdown";
 import { createCodePlugin } from "@streamdown/code";
 
@@ -32,15 +31,6 @@ function InertImage({ alt }: { alt?: string }) {
 }
 
 /**
- * A link in the screen-reader copy a reveal announces, read as its text. That
- * copy is visually hidden, so a real anchor in it would be a tab stop nobody
- * can see.
- */
-function PlainLink({ children }: { children?: React.ReactNode }) {
-  return <span>{children}</span>;
-}
-
-/**
  * `text-sm` alone: its own line-height (1.25rem) matches the user bubble and
  * the intro copy beside a reply. `leading-relaxed` on top made every paragraph
  * and list item a taller line than the rest of the flyout. Streamdown keeps
@@ -54,32 +44,24 @@ const PROSE_CLASS =
   "max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_li]:py-0.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto";
 
 const COMPONENTS = { img: InertImage };
-const READ_ONLY_COMPONENTS = { img: InertImage, a: PlainLink };
 
 export interface AssistantMarkdownProps {
   children: string;
-  /** True while the text is still being revealed (see `assistant-streaming-text.tsx`). */
+  /** True while the reply is still streaming in (see `assistant-stream-reply.tsx`). */
   streaming?: boolean;
-  /**
-   * False for the screen-reader copy a reveal announces: it is visually
-   * hidden, so a copy button or a link in it would be a tab stop nobody can
-   * see. Both render as text.
-   */
-  interactive?: boolean;
 }
 
 export function AssistantMarkdown({
   children,
   streaming = false,
-  interactive = true,
 }: AssistantMarkdownProps) {
   return (
     <Streamdown
       parseIncompleteMarkdown={streaming}
       shikiTheme={["github-light", "github-dark"]}
-      components={interactive ? COMPONENTS : READ_ONLY_COMPONENTS}
+      components={COMPONENTS}
       plugins={{ code: codePlugin }}
-      controls={interactive ? { code: { copy: true, download: false } } : false}
+      controls={{ code: { copy: true, download: false } }}
       className={PROSE_CLASS}
     >
       {children}

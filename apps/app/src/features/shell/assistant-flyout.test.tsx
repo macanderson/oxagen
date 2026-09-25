@@ -43,8 +43,16 @@ declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
 }
 
+// The turn's transport (assistant-stream-client.ts) answers in the shape the
+// Server Action it replaced did, so these cases drive it through one fake
+// that takes the same three arguments. What arrives while a turn streams is
+// assistant-flyout.streaming.test.tsx.
 const askAssistant = vi.fn();
-vi.mock("./assistant-actions", () => ({ askAssistant }));
+vi.mock("./assistant-stream-client", () => ({
+  askAssistantStream: (org: string, ws: string, question: unknown) =>
+    askAssistant(org, ws, question),
+}));
+vi.mock("./assistant-actions", () => ({ readAssistantReply: vi.fn() }));
 
 // One `url` for both hooks, split the way Next.js splits it: `usePathname`
 // omits the query string, which is the whole of finding #4040859958.
@@ -113,12 +121,7 @@ async function ask(user: ReturnType<typeof userEvent.setup>, text: string) {
   await user.click(screen.getByTestId("assistant-send"));
 }
 
-/**
- * A reply reveals a few characters at a time (assistant-streaming-text.tsx)
- * rather than snapping in whole, so a check against the full text has to wait
- * for the reveal to catch up instead of asserting the instant the answer
- * lands in the DOM.
- */
+/** The finished reply, once the turn has settled and its entry has rendered. */
 async function findAnswerText(text: string) {
   await waitFor(() => {
     expect(screen.getByTestId("assistant-answer")).toHaveTextContent(text);
@@ -1164,53 +1167,6 @@ describe("AssistantFlyout", () => {
     expect(log).toContainElement(answer);
   });
 
-  // The transcript is a live region, and a reveal rewrites the answer's text
-  // on every frame. Frozen mid-reveal here (no animation frame ever runs), the
-  // growing copy has to be out of the accessibility tree and the whole reply
-  // present once, in the copy the region announces.
-  it("announces the whole reply once rather than every frame of its reveal", async () => {
-    const frames = vi
-      .spyOn(window, "requestAnimationFrame")
-      .mockImplementation(() => 1);
-    try {
-      const { user } = await openFlyout();
-      await ask(user, "what is live?");
-      const answer = await screen.findByTestId("assistant-answer");
-
-      expect(answer.querySelector("[inert]")).toHaveAttribute(
-        "aria-hidden",
-        "true",
-      );
-      expect(
-        screen.getByTestId("assistant-answer-announced"),
-      ).toHaveTextContent("Three runs are live.");
-    } finally {
-      frames.mockRestore();
-    }
-  });
-
-  // The announced copy is visually hidden, and the growing copy is inert, so a
-  // real anchor in the announced copy would be the only tab stop in the answer
-  // and one nobody can see.
-  it("puts no link from the hidden announced copy in the tab order (negative)", async () => {
-    askAssistant.mockResolvedValue(
-      turn({ reply: "Read [the runbook](https://oxagen.sh/docs) first." }),
-    );
-    const frames = vi
-      .spyOn(window, "requestAnimationFrame")
-      .mockImplementation(() => 1);
-    try {
-      const { user } = await openFlyout();
-      await ask(user, "what is live?");
-      const announced = await screen.findByTestId("assistant-answer-announced");
-
-      expect(announced).toHaveTextContent("Read the runbook first.");
-      expect(announced.querySelector("a")).toBeNull();
-    } finally {
-      frames.mockRestore();
-    }
-  });
-
   // A reply is model output, and an image in it would be fetched the moment it
   // rendered, carrying whatever the model put in its URL to that host.
   it("renders an image in a reply as its alt text and never fetches it (negative)", async () => {
@@ -1224,26 +1180,6 @@ describe("AssistantFlyout", () => {
     await findAnswerText("workspace secret");
 
     expect(flyout.querySelector("img")).toBeNull();
-  });
-
-  // Only the thread on screen is mounted, so coming back to a workspace
-  // remounts every answer in it. One that already finished its reveal paints
-  // whole on the way back instead of typing itself out again.
-  it("paints an answer already revealed whole when the person comes back to its workspace", async () => {
-    const { user, renavigate } = await openFlyout();
-    await ask(user, "what is live?");
-    await findAnswerText("Three runs are live.");
-    await waitFor(() => {
-      expect(screen.queryByTestId("assistant-answer-announced")).toBeNull();
-    });
-
-    renavigate("/acme/payments");
-    renavigate("/acme/core-platform");
-
-    expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
-      "Three runs are live.",
-    );
-    expect(screen.queryByTestId("assistant-answer-announced")).toBeNull();
   });
 
   // The right edge widens the panel to whatever width the person wants, and

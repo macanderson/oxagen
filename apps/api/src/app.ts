@@ -853,7 +853,7 @@ orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
 // The shell (#2968): the in-app agent's turn and engine probe, the reply a
-// dropped stream left on the record (ADR-XXX), the command menu's search,
+// dropped stream left on the record (ADR-176), the command menu's search,
 // belt definitions and recent runs, the sidebar counts.
 orgScoped.route("/assistant/ask", assistantAskRoute);
 orgScoped.route("/assistant/engine", assistantEngineGetRoute);

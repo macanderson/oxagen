@@ -37,6 +37,13 @@
 // of winning it: there is no timing at which a reply can reach the wrong
 // thread.
 //
+// A reply streams in as the engine writes it (ADR-176), over the API's chat
+// stream (`assistant-stream-client.ts`), with each tool call named while it
+// runs. The stream is not the turn: a connection that drops mid-reply keeps
+// what arrived, the turn runs on and saves its reply with the run (ADR-092),
+// and the person can load the finished reply (`get_assistant_reply`) instead
+// of asking again.
+//
 // Stopping a turn on purpose is a different thing from walking away from it,
 // and it is not here. It belongs to run controls (#2953), whose job is to
 // cancel any run through one mechanism rather than one per surface. An
@@ -119,8 +126,19 @@ import {
   assistantDraftOf,
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
-import { askAssistant, type ParkedCard } from "./assistant-actions";
-import { AssistantStreamingText } from "./assistant-streaming-text";
+import { readAssistantReply } from "./assistant-actions";
+import { AssistantMarkdown } from "./assistant-markdown";
+import {
+  askAssistantStream,
+  type AssistantRefusal,
+  type ParkedCard,
+} from "./assistant-stream-client";
+import {
+  AssistantAnswering,
+  AssistantDropped,
+  type DroppedLoad,
+  type StreamedTool,
+} from "./assistant-stream-reply";
 import { AssistantThinking } from "./assistant-thinking";
 import {
   ASSISTANT_MIN_WIDTH,
@@ -140,12 +158,34 @@ import { StellaIcon, StellaWordmark } from "@/ui/stella-mark";
 
 type Entry =
   | { kind: "asked"; id: string; text: string }
+  /** A reply the engine is still writing, painted as it arrives. */
+  | {
+      kind: "answering";
+      id: string;
+      text: string;
+      runId: string | null;
+      tools: readonly StreamedTool[];
+      parked: readonly ParkedCard[];
+    }
   | {
       kind: "answered";
       id: string;
       text: string;
       runId: string;
       parked: readonly ParkedCard[];
+    }
+  /** A reply whose stream dropped. The turn ran on and saves its reply. */
+  | {
+      kind: "dropped";
+      id: string;
+      text: string;
+      runId: string | null;
+      parked: readonly ParkedCard[];
+      /** The workspace the question was asked in, which the load reads. */
+      org: string;
+      ws: string;
+      question: string;
+      load: DroppedLoad;
     }
   | {
       kind: "refused";
@@ -156,6 +196,9 @@ type Entry =
       /** The question that was refused, so "Ask again" can send it unchanged. */
       question: string;
     };
+
+type AnsweringEntry = Extract<Entry, { kind: "answering" }>;
+type DroppedEntry = Extract<Entry, { kind: "dropped" }>;
 
 /**
  * One workspace's conversation with the assistant: what was said, the
@@ -319,7 +362,7 @@ function recordOnPage(
   return found;
 }
 
-type Refused = Extract<Awaited<ReturnType<typeof askAssistant>>, { ok: false }>;
+type Refused = AssistantRefusal;
 
 function refusalKey(result: Refused): Refusal {
   switch (result.reason) {
@@ -444,16 +487,9 @@ export function AssistantFlyout() {
   const [threads, setThreads] = useState<ReadonlyMap<string, Thread>>(
     () => new Map(),
   );
-  // Answers whose reveal has already run. Only the thread on screen is
-  // mounted, so a workspace round trip remounts every answer in it; without
-  // this each would start over from nothing and the transcript would retype.
-  const [revealed, setRevealed] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  // Whether the reader is at the bottom of the transcript. A reveal grows the
-  // newest answer frame by frame, which the `entries` effect below never sees,
-  // so the growth follows the tail only while the reader has not scrolled up
-  // to read something else.
+  // Whether the reader is at the bottom of the transcript. A streamed reply
+  // grows fragment by fragment, and the growth follows the tail only while the
+  // reader has not scrolled up to read something else.
   const pinnedRef = useRef(true);
 
   // The workspace the person is standing in, "org/ws". Null on an organization
@@ -573,26 +609,21 @@ export function AssistantFlyout() {
     return release;
   }, [modal]);
 
-  // Keep the newest turn in view. Guarded because scrollTo is a browser
-  // affordance jsdom does not implement, and the shell's own tests mount this
-  // host on every render — a cosmetic scroll must not fail them.
+  // Keep the newest turn in view. A new entry, such as the question just
+  // asked, always scrolls to it. A streamed reply growing in place follows
+  // the tail only while the reader is pinned there. Guarded because scrollTo
+  // is a browser affordance jsdom does not implement, and the shell's own
+  // tests mount this host on every render — a cosmetic scroll must not fail
+  // them.
+  const entryCountRef = useRef(entries.length);
   useEffect(() => {
     const log = logRef.current;
+    const added = entries.length !== entryCountRef.current;
+    entryCountRef.current = entries.length;
     if (log === null || typeof log.scrollTo !== "function") return;
+    if (!added && !pinnedRef.current) return;
     log.scrollTo({ top: log.scrollHeight });
   }, [entries]);
-
-  /** Follow a growing answer down, unless the reader has scrolled away from the bottom. */
-  function followReveal() {
-    const log = logRef.current;
-    if (
-      log === null ||
-      !pinnedRef.current ||
-      typeof log.scrollTo !== "function"
-    )
-      return;
-    log.scrollTo({ top: log.scrollHeight });
-  }
 
   // The width the person left the panel at. The cookie is read as a store:
   // the server renders the designed width, and the first client read corrects
@@ -681,31 +712,93 @@ export function AssistantFlyout() {
      */
     const asked = scope;
     const { conversationId } = thread;
+    const answeringId = `${id}-s`;
     updateThread(asked, (t) => ({
       ...t,
-      entries: [...t.entries, { kind: "asked", id, text: content }],
+      entries: [
+        ...t.entries,
+        { kind: "asked", id, text: content },
+        {
+          kind: "answering",
+          id: answeringId,
+          text: "",
+          runId: null,
+          tools: [],
+          parked: [],
+        },
+      ],
       ...(fromDraft ? { draft: "", draftTooLong: false } : {}),
       pending: true,
     }));
+    /** Change this turn's reply in progress, in the thread it was asked in. */
+    const answering = (change: (entry: AnsweringEntry) => Entry) => {
+      updateThread(asked, (t) => ({
+        ...t,
+        entries: t.entries.map((entry) =>
+          entry.id === answeringId && entry.kind === "answering"
+            ? change(entry)
+            : entry,
+        ),
+      }));
+    };
+    // Parked writes counted as they stream in, for the refresh a dropped
+    // stream still owes: the approval is on the record either way.
+    let parkedSeen = 0;
     try {
-      const result = await askAssistant(org, ws, {
-        conversationId,
-        content,
-        route,
-        entityId: recordOnPage(declaredRecord, rest[1]),
-      });
+      const result = await askAssistantStream(
+        org,
+        ws,
+        {
+          conversationId,
+          content,
+          route,
+          entityId: recordOnPage(declaredRecord, rest[1]),
+        },
+        {
+          onRun: (runId) => {
+            answering((entry) => ({ ...entry, runId }));
+          },
+          onText: (delta) => {
+            answering((entry) => ({ ...entry, text: entry.text + delta }));
+          },
+          onToolStart: (call) => {
+            const running: StreamedTool = { ...call, status: "running" };
+            answering((entry) => ({
+              ...entry,
+              tools: [...entry.tools, running],
+            }));
+          },
+          onToolEnd: (call) => {
+            answering((entry) => ({
+              ...entry,
+              tools: entry.tools.map((tool) =>
+                tool.id === call.id ? { ...tool, status: call.status } : tool,
+              ),
+            }));
+          },
+          onParked: (card) => {
+            parkedSeen += 1;
+            answering((entry) => ({
+              ...entry,
+              parked: [...entry.parked, card],
+            }));
+          },
+        },
+      );
       if (result.ok) {
-        const answered: Entry = {
+        const { value } = result;
+        // A new entry rather than the one in progress changed in place, so
+        // the log announces the finished reply whole, once.
+        answering(() => ({
           kind: "answered",
           id: `${id}-a`,
-          text: result.value.reply,
-          runId: result.value.runId,
-          parked: result.value.parkedCards,
-        };
+          text: value.reply,
+          runId: value.runId,
+          parked: value.parkedCards,
+        }));
         updateThread(asked, (t) => ({
           ...t,
-          conversationId: result.value.conversationId,
-          entries: [...t.entries, answered],
+          conversationId: value.conversationId,
         }));
         // A parked write is a new approval on the record, created after Fleet
         // and the shell's waiting count were server-rendered
@@ -721,37 +814,95 @@ export function AssistantFlyout() {
         // The shell's waiting count spans the organization, so it is stale
         // wherever they are standing, and the parked notice itself waits in
         // this turn's thread for when they come back.
-        if (result.value.parkedCards.length > 0) navigate.refresh();
+        if (value.parkedCards.length > 0) navigate.refresh();
+      } else if (result.reason === "dropped") {
+        // The stream ended early and the turn did not (ADR-092). What arrived
+        // stays, and the finished reply can be loaded from the run.
+        answering((entry) => ({
+          kind: "dropped",
+          id: `${id}-d`,
+          text: entry.text,
+          runId: result.runId ?? entry.runId,
+          parked: entry.parked,
+          org,
+          ws,
+          question: content,
+          load: "idle",
+        }));
+        if (parkedSeen > 0) navigate.refresh();
       } else {
-        const refused: Entry = {
+        // A refusal mid-stream saves nothing as a reply, so what arrived
+        // before it is not kept as one.
+        answering(() => ({
           kind: "refused",
           id: `${id}-a`,
           code: refusalKey(result),
           detail: refusalDetail(result),
           question: content,
-        };
-        updateThread(asked, (t) => ({
-          ...t,
-          entries: [...t.entries, refused],
         }));
       }
     } catch {
-      const unavailable: Entry = {
+      answering(() => ({
         kind: "refused",
         id: `${id}-a`,
         code: "unavailable",
         detail: null,
         question: content,
-      };
-      updateThread(asked, (t) => ({
-        ...t,
-        entries: [...t.entries, unavailable],
       }));
     } finally {
       updateThread(asked, (t) => ({ ...t, pending: false }));
       // An answer, a refusal, or an unreachable engine is each something the
       // person has not read yet if the panel was closed while it ran.
       noteAssistantReply();
+    }
+  }
+
+  /**
+   * Load the finished reply of a turn whose stream dropped, from the run it
+   * was recorded as, into the thread it was asked in. A reply still being
+   * saved, or a turn that ended without one, says so and keeps the entry.
+   */
+  async function loadReply(key: string, dropped: DroppedEntry) {
+    const { runId } = dropped;
+    if (runId === null) return;
+    const settle = (change: (entry: DroppedEntry) => Entry) => {
+      updateThread(key, (t) => ({
+        ...t,
+        entries: t.entries.map((entry) =>
+          entry.id === dropped.id && entry.kind === "dropped"
+            ? change(entry)
+            : entry,
+        ),
+      }));
+    };
+    settle((entry) => ({ ...entry, load: "loading" }));
+    try {
+      const result = await readAssistantReply(dropped.org, dropped.ws, runId);
+      if (!result.ok) {
+        settle((entry) => ({ ...entry, load: "unread" }));
+        return;
+      }
+      const found = result.value;
+      if (found.state !== "answered") {
+        settle((entry) => ({ ...entry, load: found.state }));
+        return;
+      }
+      settle((entry) => ({
+        kind: "answered",
+        id: `${entry.id}-a`,
+        text: found.reply,
+        runId,
+        parked: entry.parked,
+      }));
+      // The next question continues the conversation the reply was saved in,
+      // unless the thread has started another since the stream dropped.
+      updateThread(key, (t) =>
+        t.conversationId === null
+          ? { ...t, conversationId: found.conversationId }
+          : t,
+      );
+    } catch {
+      settle((entry) => ({ ...entry, load: "unread" }));
     }
   }
 
@@ -850,16 +1001,27 @@ export function AssistantFlyout() {
                   <p className="ml-auto w-fit max-w-[85%] rounded-lg bg-secondary px-3 py-2 text-sm text-secondary-foreground">
                     {entry.text}
                   </p>
+                ) : entry.kind === "answering" ? (
+                  <AssistantAnswering text={entry.text} tools={entry.tools} />
+                ) : entry.kind === "dropped" ? (
+                  <AssistantDropped
+                    text={entry.text}
+                    runId={entry.runId}
+                    load={entry.load}
+                    org={entry.org}
+                    ws={entry.ws}
+                    retryDisabled={pending}
+                    onLoad={() => {
+                      if (shownScope !== null)
+                        void loadReply(shownScope, entry);
+                    }}
+                    onRetry={() => {
+                      void send(entry.question, { fromDraft: false });
+                    }}
+                  />
                 ) : entry.kind === "answered" ? (
                   <div data-testid="assistant-answer">
-                    <AssistantStreamingText
-                      text={entry.text}
-                      reveal={!revealed.has(entry.id)}
-                      onRevealed={() => {
-                        setRevealed((prior) => new Set(prior).add(entry.id));
-                      }}
-                      onGrow={followReveal}
-                    />
+                    <AssistantMarkdown>{entry.text}</AssistantMarkdown>
                     <p
                       data-testid="assistant-recorded-as"
                       className="mt-1 font-mono text-[11px] text-muted-foreground"

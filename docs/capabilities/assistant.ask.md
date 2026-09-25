@@ -60,3 +60,5 @@ The engine is declared every governed tool plus the two meta-tools. Each complet
 | `insufficient_credits`, `billing_suspended`, `assistant_spend_cap` | 402 | the platform-funded turn credit gate refused the turn |
 
 On the SSE route a failure after the turn is prepared arrives as an `error` event carrying the code (or the handler refusal's reason), followed by `event: done` with `[DONE]`.
+
+While the turn is quiet, the SSE route writes a `: keep-alive` comment every 15 seconds, so a proxy or load balancer does not close an idle connection. A dropped connection does not stop the turn (ADR-092, ADR-176): the turn runs to completion and persists its reply, and a client that lost the stream reads the finished reply with [`get_assistant_reply`](assistant.reply.get.md) by the run the stream's first event named. Stopping a turn on purpose belongs to run controls (#2953).

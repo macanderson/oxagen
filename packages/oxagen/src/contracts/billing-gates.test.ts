@@ -72,7 +72,7 @@ const CONSOLE_CONTRACTS = [
   "update_workspace_settings",
   "archive_workspace",
   // The shell's reads and its one settings write (#2968): the engine probe,
-  // the reply a dropped stream left on the record (ADR-XXX), the command
+  // the reply a dropped stream left on the record (ADR-176), the command
   // menu, the sidebar counts, the account preferences.
   "get_assistant_engine",
   "get_assistant_reply",

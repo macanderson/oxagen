@@ -318,6 +318,18 @@
         "model": "The model provider refused or failed stella’s request, so this question was not answered. An owner can check the key and model under Model funding. Ask again.",
         "unavailable": "stella could not be reached. Try again."
       },
+      "answering": {
+        "tool": "Calling {capability}…"
+      },
+      "dropped": {
+        "body": "The connection dropped before the reply finished. stella is still working on it and saves the finished reply with the run.",
+        "noRun": "The connection dropped before stella named the run, so this reply cannot be loaded. Ask again.",
+        "load": "Load the finished reply",
+        "loading": "Loading the reply…",
+        "running": "stella has not saved the reply yet. Try again in a moment.",
+        "ended": "This turn ended without a reply. The run records why.",
+        "unread": "The reply could not be loaded. Try again."
+      },
       "retry": "Ask again"
     },
     "avatar": {

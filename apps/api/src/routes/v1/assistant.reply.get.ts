@@ -7,7 +7,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * The reply an in-app agent turn left on the record, by its run: how a client
- * whose `/chat/stream` dropped reads the finished reply (ADR-XXX). Mounted on
+ * whose `/chat/stream` dropped reads the finished reply (ADR-176). Mounted on
  * the org-scoped router behind session auth.
  */
 export const assistantReplyGetRoute = new Hono<AppEnv>();
