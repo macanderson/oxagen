@@ -1,8 +1,7 @@
 // The assistant's thread as the flyout reopens it (#4163): the viewer's
 // latest conversation in a workspace, read back through `get_conversation`,
 // and the turns on it. Only what the flyout draws is carried: the question,
-// the reply with the run it was recorded as, the writes it parked, and
-// whether the person stopped it.
+// the reply with the run it was recorded as, and the writes it parked.
 import { z } from "zod";
 import { PublicId } from "./common";
 
