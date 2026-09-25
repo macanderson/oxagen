@@ -32,14 +32,17 @@
 // button that ends in `org_role_required`.
 //
 // Pause and Resume share one slot, enabled or disabled: a running run offers
-// Pause and a paused one offers Resume, never both. `ingressPaused` says
-// which. A ledger run reads it from its ingress fence, a wrapped run from the
-// last pause or resume its host applied.
+// Pause and a paused one offers Resume, never both (#4112). `ingressPaused`
+// says which. A ledger run reads it from its ingress fence, a wrapped run from
+// the last pause or resume its host applied. After a pause or resume is queued
+// and its dialog closed, the page re-reads the run every few seconds, for at
+// most a minute, until the status says the command took effect, so a person
+// does not have to reload to see it.
 //
 // Re-reading the run refreshes the route the person is on, so the tab, zoom
 // and frames page they were using stay put.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useId, useState } from "react";
+import { type SyntheticEvent, useEffect, useId, useRef, useState } from "react";
 import {
   type CommandBlock,
   DeliveryMode,
@@ -74,6 +77,58 @@ type Command = "pause" | "resume" | "steer" | "cancel";
  */
 function commandsFor(paused: boolean): readonly Command[] {
   return [paused ? "resume" : "pause", "steer", "cancel"];
+}
+
+/**
+ * How often the page re-reads a run after a pause or resume was queued, and
+ * how many times. A host applies a command on its next poll, so a minute
+ * covers a live host; past it, the status is left to the next reload.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
+export const HALT_FOLLOW_EVERY_MS = 4_000;
+/** @internal Exported for its unit test; nothing outside this module imports it. */
+export const HALT_FOLLOW_READS = 15;
+
+/**
+ * Re-read the run until its paused state matches the one a queued pause or
+ * resume asked for, at most `HALT_FOLLOW_READS` times. Returns the function
+ * that starts following: `true` for a pause, `false` for a resume.
+ */
+function useFollowHalt(paused: boolean): (expected: boolean) => void {
+  const navigate = useNavigate();
+  // Read through a ref so a new router object does not restart the count. The
+  // write sits in an effect rather than in the body: React does not promise a
+  // render-phase ref write survives, and `react-hooks/refs` refuses one.
+  const refreshRef = useRef(navigate.refresh);
+  useEffect(() => {
+    refreshRef.current = navigate.refresh;
+  }, [navigate.refresh]);
+  const [expected, setExpected] = useState<boolean | null>(null);
+  // Counts queued commands. A second pause queued after the reads ran out
+  // leaves `expected` and `following` unchanged, so this is what starts a
+  // fresh count of reads for it.
+  const [attempt, setAttempt] = useState(0);
+  // The status caught up, so stop following. Setting state while rendering is
+  // React's pattern for state that tracks a prop.
+  if (expected !== null && expected === paused) setExpected(null);
+  const following = expected !== null && expected !== paused;
+  useEffect(() => {
+    if (!following) return;
+    let reads = 0;
+    const timer = setInterval(() => {
+      reads += 1;
+      refreshRef.current();
+      if (reads >= HALT_FOLLOW_READS) clearInterval(timer);
+    }, HALT_FOLLOW_EVERY_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [following, attempt]);
+  return (value: boolean) => {
+    setExpected(value);
+    setAttempt((n) => n + 1);
+  };
 }
 
 /**
@@ -145,10 +200,16 @@ function CommandDialog({
   runId,
   write,
   ledgerControl = false,
+  onQueuedClose,
 }: {
   command: Command;
   runId: string;
   ledgerControl?: boolean;
+  /**
+   * Called when the dialog closes after the control plane queued the command
+   * for at least one recipient, so the page can follow the run's status.
+   */
+  onQueuedClose?: () => void;
   /**
    * The reason a pause carries, or the text a steer sends with the delivery
    * mode picked for it. A halt ignores the mode: the contract refuses a
@@ -179,6 +240,7 @@ function CommandDialog({
 
   function openChange(next: boolean) {
     setOpen(next);
+    if (!next && queued !== null && queued.length > 0) onQueuedClose?.();
     if (!next) {
       setFailure(null);
       setQueued(null);
@@ -314,6 +376,7 @@ function DisabledControls({
 }: {
   reason: string;
   testId: string;
+  /** Draws Resume in Pause's slot, as the enabled set would. */
   paused: boolean;
 }) {
   const t = useTranslations("run.commands");
@@ -375,7 +438,13 @@ export function RunControls({
   wsRole: WsRole;
 }) {
   const t = useTranslations("run.commands");
+  const follow = useFollowHalt(ingressPaused);
   if (status !== "live") return null;
+  // The one slot Pause and Resume share, and the command it sends.
+  const halt = ingressPaused ? "resume" : "pause";
+  const followHalt = () => {
+    follow(halt === "pause");
+  };
   if (source !== "ledger" && commandBlock !== null) {
     return (
       <DisabledControls
@@ -424,6 +493,7 @@ export function RunControls({
                 runId={runId}
                 ledgerControl
                 write={(text) => haltRun(org, ws, runId, command, text)}
+                {...(command === "cancel" ? {} : { onQueuedClose: followHalt })}
               />
             ),
           )}
@@ -450,16 +520,20 @@ export function RunControls({
           >
             {t("steer.open")}
           </button>
+        ) : command === "steer" ? (
+          <CommandDialog
+            key={command}
+            command={command}
+            runId={runId}
+            write={(text, mode) => steerRun(org, ws, runId, text, mode)}
+          />
         ) : (
           <CommandDialog
             key={command}
             command={command}
             runId={runId}
-            write={(text, mode) =>
-              command === "steer"
-                ? steerRun(org, ws, runId, text, mode)
-                : haltRun(org, ws, runId, command, text)
-            }
+            write={(text) => haltRun(org, ws, runId, command, text)}
+            {...(command === "cancel" ? {} : { onQueuedClose: followHalt })}
           />
         ),
       )}
