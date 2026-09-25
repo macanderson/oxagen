@@ -530,7 +530,7 @@ describe("the Library, All shelf", () => {
     ]);
     const [must, should] = rows;
     // The item leads with the label (the title stands in until the record
-    // declares one), then the statement, then the slug (ADR-173).
+    // declares one), then the statement, then the slug (ADR-174).
     expect(must?.querySelector('[data-term="label"]')).toHaveTextContent(
       /^Read CHANGELOG.md once per run$/,
     );
@@ -884,7 +884,7 @@ describe("Records", () => {
     ).toBeVisible();
   });
 
-  it("leads a card with the record's label and prints its statement under it (ADR-173)", async () => {
+  it("leads a card with the record's label and prints its statement under it (ADR-174)", async () => {
     await renderSteering("/records", {
       records: readOk({
         records: [publishedRecord({ label: "Read the changelog once" })],

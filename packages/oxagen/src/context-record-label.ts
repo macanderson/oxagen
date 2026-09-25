@@ -2,7 +2,7 @@
 export const CONTEXT_RECORD_LINEAGE = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/;
 
 /**
- * The longest label a context record carries (ADR-173). A label is the
+ * The longest label a context record carries (ADR-174). A label is the
  * record's name on every surface, so it has to fit a heading, a list row and a
  * breadcrumb. The statement is where the sentence goes.
  */

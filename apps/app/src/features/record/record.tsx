@@ -2,7 +2,7 @@
 // mockups/pages/record.md), presented by its kind.
 //
 // The label is the headline and the breadcrumb's last step, the slug under it
-// is the address that never changes (ADR-173), and the commit and the
+// is the address that never changes (ADR-174), and the commit and the
 // counters read as the metadata they are. The statement is editable in a real
 // source editor, and saving opens a pull request: a published record is
 // changed the way it was published.

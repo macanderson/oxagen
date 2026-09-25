@@ -495,7 +495,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       title: "Do not re-read CHANGELOG.md more than once in a run.",
       label: contextRecordLabel(`${labelLineage}.blank`),
     });
-    // The merged file names the record (ADR-173), over the proposal.
+    // The merged file names the record (ADR-174), over the proposal.
     const named = serializeRecordFile(
       buildRecordFile({
         lineageId: labelLineage,

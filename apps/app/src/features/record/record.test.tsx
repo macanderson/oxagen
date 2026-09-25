@@ -165,7 +165,7 @@ describe("Record › the address", () => {
 });
 
 describe("Record › the header", () => {
-  it("makes the label the h1 and prints the slug under it (ADR-173)", async () => {
+  it("makes the label the h1 and prints the slug under it (ADR-174)", async () => {
     await renderRecord({
       record: readOk(
         recordDetail({

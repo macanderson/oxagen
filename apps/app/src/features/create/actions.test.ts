@@ -122,7 +122,7 @@ describe("readMainRepository", () => {
 });
 
 describe("proposeRecord", () => {
-  it("proposes create-only, so a new record never revises one that holds its slug (ADR-173)", async () => {
+  it("proposes create-only, so a new record never revises one that holds its slug (ADR-174)", async () => {
     kernelWrite.mockResolvedValue({
       ok: true,
       value: {

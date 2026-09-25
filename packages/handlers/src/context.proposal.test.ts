@@ -96,7 +96,7 @@ describe("propose_record", () => {
     ).toBe("findings job · fnd_01K5RT6C");
   });
 
-  it("asks the store for a new lineage only when the call or the handler says create-only (ADR-173)", async () => {
+  it("asks the store for a new lineage only when the call or the handler says create-only (ADR-174)", async () => {
     const h = harness();
     const insert = vi.spyOn(h.store, "insertProposal");
     await createProposeRecordHandler(h)(proposal(), ctx());

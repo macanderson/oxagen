@@ -132,7 +132,7 @@ describe("clone editor identity", () => {
               instructions: "Edited instructions",
             }
           : {
-              // A record's name is its label (ADR-173). A title the editor
+              // A record's name is its label (ADR-174). A title the editor
               // left in the source stays, since it names nothing.
               lineageId: "chosen-clone",
               title: "Stale",

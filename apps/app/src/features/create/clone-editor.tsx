@@ -141,7 +141,7 @@ export function CloneEditor({
           </label>
           {kind === "skill" ? null : (
             <label>
-              {/* A record's name is its label, capped at 36 (ADR-173). */}
+              {/* A record's name is its label, capped at 36 (ADR-174). */}
               {kind === "record" ? t("label") : t("name")}
               <input
                 className={inputBase}

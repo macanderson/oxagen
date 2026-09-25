@@ -257,7 +257,7 @@ export async function proposeRecord(
   const ctx = await requireViewer(org, ws);
   // A create never revises: a label need not be unique, so a new record can
   // derive a slug another record holds, and createOnly refuses it rather than
-  // proposing a new version of that record (ADR-173).
+  // proposing a new version of that record (ADR-174).
   const result = await kernelWrite(ctx, contextProposalCreate, {
     record: input.record,
     rationale: input.rationale.trim(),

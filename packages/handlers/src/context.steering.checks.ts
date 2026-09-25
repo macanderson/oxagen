@@ -128,7 +128,7 @@ export function parseChecked(fileText: string):
     const lineage_id = str("lineage_id");
     if (!lineage_id)
       return { ok: false, reason: `${at}.lineage_id is missing` };
-    // Optional: a file written before ADR-173 has none. Present, it is a name
+    // Optional: a file written before ADR-174 has none. Present, it is a name
     // a heading can hold.
     const label = raw.label;
     if (

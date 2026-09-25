@@ -6,7 +6,7 @@
 // `rec_<slug>_<12 hex>`; pass 2 hashes again with the id in the preimage.
 // Stella re-serializes its typed `Record` struct before it recomputes the hash,
 // so a member that struct does not carry never reaches its preimage. The one
-// such member Oxagen writes is `label`, the record's display name (ADR-173),
+// such member Oxagen writes is `label`, the record's display name (ADR-174),
 // and it is kept out of the preimage here too: renaming a record is not a new
 // version of what it says, and both sides agree on the hash.
 import { parse, stringify } from "smol-toml";
@@ -39,7 +39,7 @@ interface RecordFileInput {
 /** The record as it appears under `[[record]]`, in Stella's field order. */
 export interface RecordFileRecord {
   lineage_id: string;
-  /** Absent from files written before ADR-173. */
+  /** Absent from files written before ADR-174. */
   label?: string;
   record_id: string;
   record_hash: string;
@@ -76,7 +76,7 @@ export function contextBranch(lineageId: string): string {
  * Stamp `record_id` and `record_hash` from the content, Stella's two passes,
  * over the record exactly as it will be serialized: every present member
  * except `label` enters the preimage, `record_id` and `record_hash` are minted
- * last. The label is a name, not content (ADR-173), and Stella's struct has no
+ * last. The label is a name, not content (ADR-174), and Stella's struct has no
  * field for it, so a label in the preimage would split the two hashes.
  */
 export function stampRecordObject(raw: Record<string, unknown>): {
@@ -148,7 +148,7 @@ export function parseRecordFile(text: string): unknown {
 export interface ParsedRecordFile {
   setId: string;
   lineageId: string;
-  /** The file's label, or null for a file written before ADR-173. */
+  /** The file's label, or null for a file written before ADR-174. */
   label: string | null;
   recordId: string;
   recordHash: string;

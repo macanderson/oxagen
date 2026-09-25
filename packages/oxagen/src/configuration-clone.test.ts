@@ -40,7 +40,7 @@ describe("clone names", () => {
     expect(limited.slug).toMatch(/-cloned-99$/);
     expect(limited.name).toHaveLength(200);
   });
-  it("caps a record's name at its 36-character label (ADR-173)", () => {
+  it("caps a record's name at its 36-character label (ADR-174)", () => {
     const label = configurationCloneName(
       "ctx.core.review",
       "Review every changed file before merge",

@@ -24,7 +24,7 @@ export type RelatedItem = {
   force: RecordForce | null;
   constraintEffect: ConstraintEffect | null;
   scope: SharingScope;
-  /** The record's name (ADR-173), or its title while it declares none. */
+  /** The record's name (ADR-174), or its title while it declares none. */
   label: string;
   statement: string | null;
   commit: string | null;

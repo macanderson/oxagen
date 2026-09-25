@@ -85,7 +85,7 @@ describe("RelatedList", () => {
     expect(list).toHaveTextContent("4d5e6f7");
   });
 
-  it("leads each card with its label, prints the statement under it, and sorts by the label (ADR-173)", async () => {
+  it("leads each card with its label, prints the statement under it, and sorts by the label (ADR-174)", async () => {
     const user = userEvent.setup();
     render(
       <IntlProvider>

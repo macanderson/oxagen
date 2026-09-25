@@ -99,7 +99,7 @@ describe("record file", () => {
     );
   });
 
-  it("writes the label after the lineage and keeps it out of the hash (ADR-173)", () => {
+  it("writes the label after the lineage and keeps it out of the hash (ADR-174)", () => {
     const input = {
       lineageId: "ctx.release.no-reread-changelog",
       kind: "rule" as const,

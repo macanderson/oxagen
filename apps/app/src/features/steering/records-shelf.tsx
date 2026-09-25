@@ -327,7 +327,7 @@ function RecordShelfCard({
           </span>
         </div>
         {/* The label names the record and the statement says what it asks
-            (ADR-173). A record no Context PR wrote carries no statement, and
+            (ADR-174). A record no Context PR wrote carries no statement, and
             its title stands in as the label. */}
         <p
           data-term="label"

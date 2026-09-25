@@ -166,7 +166,7 @@ describe("configuration clone editor", () => {
       name: "Triage fork",
     });
   });
-  it("names a record clone by its label and caps it at 36 characters (ADR-173)", async () => {
+  it("names a record clone by its label and caps it at 36 characters (ADR-174)", async () => {
     actions.readCloneDraft.mockResolvedValue({ ok: true, value: recordDraft });
     mount("record");
     const label = await screen.findByLabelText<HTMLInputElement>("Label");

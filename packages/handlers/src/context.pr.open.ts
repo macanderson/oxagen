@@ -149,7 +149,7 @@ export function createOpenContextPrHandler(
       if (row.branch !== branch) {
         row = await deps.store.updateProposal(row.id, { branch }, ["proposed"]);
       }
-      // The file carries the record's name (ADR-173): the proposal's when it
+      // The file carries the record's name (ADR-174): the proposal's when it
       // renames the record, else the name the record already has, else one
       // derived from the slug.
       const held = row.label

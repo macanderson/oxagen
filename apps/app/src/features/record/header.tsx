@@ -1,12 +1,12 @@
 "use client";
-// The record's header (#3395; ADR-173).
+// The record's header (#3395; ADR-174).
 //
 // The label is the headline. A record is named first and its slug is derived
 // from that name, so the label is what a reader calls the record, and the
 // slug under it is the address that never changes. The statement is what the
 // record says, and it opens the editor directly below, where it can be read
 // whole and changed. A sentence-long statement as the h1 buried every other
-// fact on the page, which is what ADR-173 replaced.
+// fact on the page, which is what ADR-174 replaced.
 //
 // The properties are named, not bare chips: "must" alone does not say it is
 // the force a run applies the record at.

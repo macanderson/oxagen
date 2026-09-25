@@ -98,7 +98,7 @@ describe("get_clone_draft", () => {
       "review-cloned-2",
     );
   });
-  it("names a record clone by a label of at most 36 characters and lets the label repeat (ADR-173)", async () => {
+  it("names a record clone by a label of at most 36 characters and lets the label repeat (ADR-174)", async () => {
     const record: ConfigurationSource = {
       ...original,
       kind: "record",
