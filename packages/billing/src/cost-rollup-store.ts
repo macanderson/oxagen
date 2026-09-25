@@ -36,6 +36,7 @@ import {
   or,
   sql,
   type AnyColumn,
+  type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
@@ -70,13 +71,17 @@ const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
 
 /**
- * A ledger model call hides the run's turn count when its payload is
- * encrypted or names no `turn_index`, which an engine call's schema never
- * does. The seal's rollup (`deriveSealRollup`) and the Runs list read the
- * field the same way, so a run's turns do not change when compaction swaps
- * its rows for the seal (#3372).
+ * Whether a ledger model call hides the run's turn count: its payload is
+ * encrypted, or names no `turn_index`, which an engine call's schema never
+ * does. This is the seal rollup's rule (`deriveSealRollup`) in SQL, and the
+ * Runs list reads it from here, so a run's turns do not change when
+ * compaction swaps its rows for the seal (#3372).
+ * `cost-rollup-ledger-reads.pg.test.ts` has Postgres check the two agree.
  */
-export const LEDGER_CALL_HIDES_TURN = sql`(${events.payloadInline} is null or ${events.payloadInline}->>'turn_index' is null)`;
+export function modelCallHidesTurn(payload: AnyColumn | SQL): SQL {
+  return sql`(${payload} is null or ${payload}->>'turn_index' is null)`;
+}
+export const LEDGER_CALL_HIDES_TURN = modelCallHidesTurn(events.payloadInline);
 
 /**
  * A ledger tool call's name, under either payload's name for it:
@@ -85,9 +90,12 @@ export const LEDGER_CALL_HIDES_TURN = sql`(${events.payloadInline} is null or ${
  * tool call a null name, so it counted toward `toolCalls` and was left out
  * of `breakdown.tools` (#3372).
  */
-export const LEDGER_TOOL_NAME = sql<
-  string | null
->`coalesce(${events.payloadInline}->>'capability_name', ${events.payloadInline}->>'tool_name')`;
+export function toolCallName(payload: AnyColumn | SQL): SQL<string | null> {
+  return sql<
+    string | null
+  >`coalesce(${payload}->>'capability_name', ${payload}->>'tool_name')`;
+}
+export const LEDGER_TOOL_NAME = toolCallName(events.payloadInline);
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
 const principals = schema.principals;

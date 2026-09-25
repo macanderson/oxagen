@@ -68,6 +68,7 @@ import {
   MODEL_CALL_EVENT_TYPES,
   TOOL_CALL_EVENT_TYPES,
 } from "@oxagen/run-ledger";
+import { LEDGER_CALL_HIDES_TURN } from "@oxagen/billing";
 import { modelFactsOf } from "./lib/model-facts";
 import {
   matchesPullRequestFilter,
@@ -325,14 +326,6 @@ const MODEL_CALL_TYPES = [...MODEL_CALL_EVENT_TYPES];
 const TOOL_CALL_TYPES = [...TOOL_CALL_EVENT_TYPES];
 const IS_MODEL_CALL = inArray(events.eventType, MODEL_CALL_TYPES);
 const IS_TOOL_CALL = inArray(events.eventType, TOOL_CALL_TYPES);
-/**
- * A model call hides the run's turn count when its payload is encrypted or
- * names no `turn_index`, which an engine call's schema never does. The seal's
- * rollup (`deriveSealRollup`) reads the field the same way. Testing the
- * payload for null alone counted an engine call as legible, so the Runs page
- * listed `turns: 0` until compaction swapped in the seal's `null` (#3372).
- */
-const HIDES_TURN = sql`(${events.payloadInline} is null or ${events.payloadInline}->>'turn_index' is null)`;
 
 /** Frame, step and turn counts folded from the V2 event log, per run. */
 export function ledgerRollupQuery(
@@ -357,7 +350,10 @@ export function ledgerRollupQuery(
           Number,
         ),
       opaqueModelCalls:
-        sql<number>`(count(*) filter (where ${IS_MODEL_CALL} and ${HIDES_TURN}))::int`.mapWith(
+        // The cost rollup's rule, which is the seal's. Testing the payload for
+        // null alone counted an engine call as legible, so the Runs page listed
+        // `turns: 0` until compaction swapped in the seal's `null` (#3372).
+        sql<number>`(count(*) filter (where ${IS_MODEL_CALL} and ${LEDGER_CALL_HIDES_TURN}))::int`.mapWith(
           Number,
         ),
     })
