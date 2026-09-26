@@ -97,11 +97,13 @@ started in.
     holds, since the server stamps one receipt time on a whole batch. An
     entry at or before the cursor with a frame received after the receipt is
     sent again, after the grown entries and before the new ones. The receipt
-    trails the read by a settle margin of 10 seconds (`RECEIPT_SETTLE_MS`),
-    because ingest commits the session row in Postgres before it inserts the
-    frame into ClickHouse. The one-frame and two-frame cursors still decode,
-    and so does the four-part `seen` cursor #4384 wrote, as a receipt the
-    settle margin before its time.
+    trails the read by a settle margin of 60 seconds (`RECEIPT_SETTLE_MS`).
+    Ingest stamps the receipt before it waits on the ClickHouse insert, which
+    lands within the client's 30-second default timeout or fails, and the
+    host resends a failed batch with a later stamp that `FINAL` keeps. The
+    margin is the bound #4384 set for the same gap. The one-frame and
+    two-frame cursors still decode, and so does the four-part `seen` cursor
+    #4384 wrote, as a receipt the settle margin before its time.
 11. **A read from a transcript cursor reads a window of the run (#3823).**
     The cursor names the frame on the run's own chain that opens the latest
     turn the reader was sent, with the run's turn and cumulative cost there.
@@ -132,7 +134,9 @@ started in.
 - A live reader is sent a late subagent entry on the first tail read after
   its receipt, with no reload. An entry with a frame received inside the
   settle margin is sent again on each read until the margin passes it, and
-  the reader replaces the copy it holds.
+  the reader replaces the copy it holds. On a live run that is every entry
+  of the last minute, with its bodies, on every read. A live read asks for
+  500 entries, so the resends do not hold new entries back.
 - A reader of a long run pages past frame 10 000, because each page reads a
   window. A subagent chain that began before the window and keeps recording
   sends every read back to the whole run until it stops.
@@ -164,3 +168,14 @@ started in.
 - **A receipt with no settle margin.** A read taken between the Postgres
   commit and the ClickHouse insert would move the receipt past a frame it
   never read, and that frame would never be sent.
+- **A 10-second settle margin.** The first merge of #4384 into this batch
+  kept it. An insert can land up to 30 seconds after its stamp, so a
+  subagent frame that landed later than 10 seconds, in an entry no later
+  frame touched, reached the reader only when the page loaded again.
+- **#4384's digest of the frames received in the last minute.** It resends
+  an entry only when a frame did land late, where the margin resends every
+  recent entry on every read. The digest must be taken over the same frames
+  on every read, and a window of the run does not hold the frames before
+  it. A window that moved within the minute would read as a late frame and
+  resend anyway. It is the cheaper design once a read can take the digest
+  over the frames the next window will hold.

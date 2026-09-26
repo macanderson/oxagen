@@ -184,9 +184,7 @@ No entry after a grown or late entry is sent again. A reader keeps each entry on
 
 A subagent chain numbers its frames from 0, so a frame it records after a read can fold before that read's `through`. Its position alone cannot say it is new, and before #4083 a live reader was not sent it until the run sealed. The receipt closes that gap: an entry with a frame received after it is late, and a later read sends it. The server stamps one receipt time on a whole batch of frames, so the receipt also counts the late entries of that batch already sent, and a page that stops inside a batch carries on after it.
 
-Ingest moves the chain's session row in Postgres before it inserts the batch into ClickHouse, so a read can miss a frame whose receipt time is earlier than the read. The receipt therefore trails the read by a settle margin of **10** seconds (`RECEIPT_SETTLE_MS` in the handler). An entry with a frame received inside the margin is sent again on the next read, and the reader replaces the copy it holds.
-
-The margin does not cover every insert. Ingest stamps the receipt time before it waits on the ClickHouse insert, and that insert can take up to the client's 30-second default timeout. A subagent frame that becomes readable more than 10 seconds after its stamp, in an entry no later frame touches, reaches the reader only when the page loads again.
+Ingest stamps the receipt time before it waits on the ClickHouse insert, so a read can miss a frame whose receipt time is earlier than the read. The insert lands within the ClickHouse client's 30-second default timeout, or it fails and the host resends the batch with a later receipt time, which the table keeps. The receipt therefore trails the read by a settle margin of **60** seconds (`RECEIPT_SETTLE_MS` in the handler), the bound #4384 set. A frame that becomes readable 30 seconds after its stamp is sent on the next read. An entry with a frame received inside the margin is sent again on each read until the margin passes it, and the reader replaces the copy it holds. A live read asks for 500 entries, and a minute of entries at `steps` is far fewer, so these resends do not hold new entries back.
 
 ### The window (#3823)
 
@@ -196,7 +194,7 @@ A window counts turns and cost from its own first frame, and `from` carries the 
 
 A read falls back to the whole run when only the whole run can place its entries:
 
-- a subagent chain that began before the window and has recorded since the receipt, less the settle margin, or that the cursor names;
+- a subagent chain that began before the window and has recorded since the receipt, less 10 seconds for the ingest's own Postgres write, or that the cursor names;
 - a subagent chain that names a spawn the window does not hold yet began inside it, as a subagent left running in the background does;
 - a frame the cursor names that the window does not hold.
 

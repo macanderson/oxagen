@@ -303,25 +303,43 @@ export interface TranscriptWindowFrom {
 }
 
 /**
- * How long after a read a frame received before the read can still first
- * appear in one. Ingest moves a chain's session row in Postgres, then stamps
- * the batch's receipt time, then inserts it into ClickHouse, so a read can
- * miss a frame whose receipt time is earlier than the read. The cursor's
- * receipt therefore trails the read by this margin, and an entry with a
- * frame received inside it is sent again on the next read.
+ * How long after its receipt time a frame can first become readable. Ingest
+ * moves a chain's session row in Postgres, then stamps the batch's receipt
+ * time, then inserts it into ClickHouse, so a read can miss a frame whose
+ * receipt time is earlier than the read. The cursor's receipt therefore
+ * trails the read by this margin, and an entry with a frame received inside
+ * it is sent again on the next read.
  *
- * The margin does not cover every insert. `insertTachoEvents` stamps the
- * receipt before it awaits the ClickHouse insert, and the ClickHouse client
- * sets no request timeout, so its 30-second default applies: a batch can
- * become readable up to about 30 seconds after its stamp. A subagent frame
- * that lands more than this margin after its stamp, in an entry that no
- * later frame touches, reaches a reader only when the page loads again. A
- * wider margin would close that gap but resends every entry inside it, with
- * its bodies, on every live read, and pushes the window's start back by the
- * same amount. Batch A1 (#4384) closed it with a digest of the frames
- * received in the last minute, which this cursor does not carry.
+ * `insertTachoEvents` stamps the receipt before it awaits the ClickHouse
+ * insert. The ClickHouse client sets no request timeout, so its 30-second
+ * default applies. The host resends a batch whose insert failed, and the
+ * resend carries a later stamp, which `FINAL` keeps (`ReplacingMergeTree`
+ * on `received_at`). So a batch lands within 30 seconds of its stamp or
+ * comes back as a later one. Sixty seconds covers that with room for the
+ * server to finish a write the client stopped waiting for. It is the bound
+ * batch A1 (#4384) set as `RECEIPT_OVERLAP_MS`.
+ *
+ * The cost is resends. Every live read sends again each entry with a frame
+ * received in the minute before it, with its bodies. A live read asks for
+ * the contract's largest page (`TRANSCRIPT_ENTRY_MAX`, 500), which a minute
+ * of `steps` entries does not come near, so the resends do not hold new
+ * entries back. A1's digest of the frames received in the last minute
+ * resends only when a frame did land late. It needs every read to hold the
+ * same frames, which a window of the run does not (#3823).
  */
-export const RECEIPT_SETTLE_MS = 10_000;
+export const RECEIPT_SETTLE_MS = 60_000;
+
+/**
+ * How far a chain's session row can run ahead of its batch's receipt time.
+ * Ingest sets `last_event_at` to the time the request arrived, checks and
+ * writes the batch in Postgres, and only then stamps the receipt, so the
+ * row's time is earlier than the receipt by however long that work takes. A
+ * window of the run counts a subagent chain as moved when its row moved
+ * after the cursor's receipt less this lead (`readTranscriptWindow`). The
+ * receipt already trails the read by the settle margin, so the lead covers
+ * only the ingest's own work, and it does not grow with the margin.
+ */
+const SESSION_MOVE_LEAD_MS = 10_000;
 
 /** The contract's cap on a cursor (`after`). */
 const CURSOR_MAX = 256;
@@ -415,8 +433,8 @@ function decodeFrom(
  * A cursor from the `seen` receipt that came before this one
  * (`t:<through>,<high>,<at>,<window>`, #4384) names the latest receipt time
  * its read held. It reads as a receipt the settle margin before that time,
- * so the next read sends again every entry with a frame received near it,
- * and the reader replaces its copies. Its digest of those frames is checked
+ * the same minute A1 read back over, so the next read sends again every
+ * entry with a frame received near it, and the reader replaces its copies. Its digest of those frames is checked
  * for form and then set aside. It names no window, so the next read reads the
  * whole run.
  */
@@ -1436,10 +1454,11 @@ function windowHolds(
  * whole run from its first frame, with `from` null.
  *
  * The window cannot answer when a subagent chain that began before it moved
- * after the cursor's receipt, less the settle margin, since only a read of
- * the whole run places that chain's new frames (`readTranscriptWindow`). Nor
- * when it does not hold both of the cursor's frames: the positions the
- * cursor names would then read differently in it.
+ * after the cursor's receipt, less the lead its session row can run ahead of
+ * a receipt (`SESSION_MOVE_LEAD_MS`), since only a read of the whole run
+ * places that chain's new frames (`readTranscriptWindow`). Nor when it does
+ * not hold both of the cursor's frames: the positions the cursor names would
+ * then read differently in it.
  */
 async function transcriptFrames(
   deps: RunReadDeps,
@@ -1461,7 +1480,7 @@ async function transcriptFrames(
               movedAfter:
                 received === null
                   ? null
-                  : new Date(received.after - RECEIPT_SETTLE_MS),
+                  : new Date(received.after - SESSION_MOVE_LEAD_MS),
               holds: chainsNamed(after),
             },
             TRANSCRIPT_FRAME_CAP,

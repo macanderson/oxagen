@@ -1893,14 +1893,18 @@ describe("get_run_transcript and a late subagent frame (#4083)", () => {
   // Batch A1 (#4384) tested these cases against its `seen` receipt. Its
   // idle-read case is the four-read case below, which sends the frame again
   // while it is inside the settle margin (`RECEIPT_SETTLE_MS`). Its
-  // unreadable-frame case is the settle-margin case, and its paging case is
-  // the planner's "stops inside a batch that shares one receipt time".
+  // unreadable-frame case is the two settle-margin cases, one of them a
+  // frame readable 30 seconds after its stamp, and its paging case is the
+  // planner's "stops inside a batch that shares one receipt time".
   const A = "0192d4a8-7c1e-7a00-8000-00000000a0a0";
   const B = "0192d4a8-7c1e-7a00-8000-00000000b0b0";
   const bare = { toolName: "", toolStatus: "" };
   const live = { outcome: "running", sealedAt: null };
-  /** When the server received every frame the run held at its first read. */
-  const early = receipt(NOW - 60_000);
+  /**
+   * When the server received every frame the run held at its first read:
+   * before the settle margin of that read, so no read counts them as late.
+   */
+  const early = receipt(NOW - 2 * RECEIPT_SETTLE_MS);
   const onChain =
     (sessionUuid: string, subagentId: string, spawnToolUseId: string) =>
     (seq: number, over: Partial<TachoFrameRow>): TachoFrameRow =>
@@ -2037,12 +2041,13 @@ describe("get_run_transcript and a late subagent frame (#4083)", () => {
       expect(decodeTranscriptCursor(second.cursor as string)).toMatchObject({
         through: `${B}:1`,
         high: `${B}:1`,
-        received: { after: NOW - 5_000, sent: 0 },
+        received: { after: NOW + 5_000 - RECEIPT_SETTLE_MS, sent: 0 },
       });
 
-      // The frame is still inside the settle margin, so the next read sends
-      // it once more.
-      clock = NOW + 20_000;
+      // The frame is still inside that receipt's settle margin, so the next
+      // read sends it once more. That read's clock has passed the frame by
+      // the margin, so its receipt passes the frame.
+      clock = NOW + 2_000 + RECEIPT_SETTLE_MS;
       const third = await transcript(
         input({ zoom: "everything", after: second.cursor as string }),
         ctx(),
@@ -2051,7 +2056,7 @@ describe("get_run_transcript and a late subagent frame (#4083)", () => {
         third.entries.map((e) => [e.seq, e.subagent?.sessionUuid]),
       ).toEqual([["1", A]]);
       expect(decodeTranscriptCursor(third.cursor as string)?.received).toEqual(
-        { after: NOW + 10_000, sent: 0 },
+        { after: NOW + 2_000, sent: 0 },
       );
       // Once the receipt has passed it, it is not sent again.
       const fourth = await transcript(
@@ -2109,6 +2114,51 @@ describe("get_run_transcript and a late subagent frame (#4083)", () => {
     expect(missed.entries).toEqual([]);
   });
 
+  it("sends a frame that became readable 30 seconds after its receipt time (#4384)", async () => {
+    // Ingest stamps a batch's receipt time before it awaits the ClickHouse
+    // insert, and the insert can take the client's 30-second default
+    // timeout. The margin this batch first shipped with was 10 seconds, so
+    // an idle read after such an insert never sent the frame.
+    const { root, children, chains } = twoSubagents();
+    let clock = NOW;
+    const { transcript } = harness(root, live, children, {
+      chains,
+      now: () => clock,
+    });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    const cursor = decodeTranscriptCursor(first.cursor as string);
+    // Stamped 30 seconds before the first read, and readable only after it.
+    children.push(
+      onA(1, {
+        kind: "llm_call",
+        ...bare,
+        costUsdMicros: 300,
+        receivedAt: receipt(NOW - 30_000),
+      }),
+    );
+    clock = NOW + 5_000;
+    const second = await transcript(
+      input({ zoom: "everything", after: first.cursor as string }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["1", A]],
+    );
+    // Negative control: the receipt a 10-second margin wrote lies past the
+    // frame, and the read from it never sends it.
+    const tenSeconds = encodeTranscriptCursor({
+      through: `${B}:1`,
+      high: `${B}:1`,
+      received: { after: NOW - 10_000, sent: 0 },
+      from: cursor?.from ?? null,
+    });
+    const missed = await transcript(
+      input({ zoom: "everything", after: tenSeconds }),
+      ctx(),
+    );
+    expect(missed.entries).toEqual([]);
+  });
+
   it("reads a cursor written before the receipt, and answers one that carries it", async () => {
     const { root, children } = twoSubagents();
     let clock = NOW;
@@ -2136,7 +2186,7 @@ describe("get_run_transcript and a late subagent frame (#4083)", () => {
     // cursor it answers carries the receipt from then on.
     expect(second.entries).toEqual([]);
     expect(decodeTranscriptCursor(second.cursor as string)?.received).toEqual(
-      { after: NOW - 5_000, sent: 0 },
+      { after: NOW + 5_000 - RECEIPT_SETTLE_MS, sent: 0 },
     );
   });
 
@@ -2185,7 +2235,7 @@ describe("get_run_transcript and a late subagent frame (#4083)", () => {
       spawnToolUseId: "toolu_A",
       seqCount: 2,
       startedAt: new Date("2026-09-11T09:00:02.000Z"),
-      lastEventAt: new Date(NOW - 60_000),
+      lastEventAt: new Date(NOW - 2 * RECEIPT_SETTLE_MS),
     });
     let clock = NOW;
     const { transcript, tachoFrames } = harness(root, live, children, {
