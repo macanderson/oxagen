@@ -319,23 +319,59 @@ async function diffAgainst(
   return { entries: parseNameStatusZ(names), counts: parseNumstat(numstat) };
 }
 
+/** One commit as `--format=%H %ct %at %ce` prints it. */
+interface LoggedCommit {
+  sha: string;
+  committedAt: number;
+  authoredAt: number;
+  email: string;
+}
+
+const LOG_FORMAT = "--format=%H %ct %at %ce";
+
+function parseLog(stdout: string): LoggedCommit[] {
+  const out: LoggedCommit[] = [];
+  for (const record of stdout.split("\0")) {
+    const [sha, committed, authored, ...rest] = record.trim().split(" ");
+    if (sha === undefined || !COMMIT_NAME.test(sha) || authored === undefined)
+      continue;
+    out.push({
+      sha,
+      committedAt: Number(committed),
+      authoredAt: Number(authored),
+      email: rest.join(" ").toLowerCase(),
+    });
+  }
+  return out;
+}
+
 /**
  * The commits this session made in one worktree, oldest first: the ones an
  * earlier read counted that `baseline..head` no longer lists (a squash merge
  * pulled back is the common case), then every commit that range lists as
  * the session's. Undefined when the range cannot be read.
  *
- * A commit is the session's when it is not a merge, its committer email is
- * the one this repository stamps, and both its committer date and its
- * author date are at or after the session's first read. The committer date
- * alone is not enough. A rebase, an amend, and a cherry-pick stamp a new
- * committer date on a commit someone wrote earlier, so a same-email commit
- * from before the session that the session replayed would count as its own.
- * The author date survives all three.
+ * A commit is the session's when it is not a merge, both its committer date
+ * and its author date are at or after the session's first read, and either:
  *
- * Only the commits carried over are bounded here. One still in the range is
- * listed again on every read, so leaving it out of the count would drop its
- * files from one frame and bring them back in the next.
+ * - no remote-tracking ref reaches it. A pull fetches before it merges, so
+ *   every commit a pull brings in is on a remote-tracking ref by the time
+ *   `HEAD` holds it. A commit made here is on none until it is pushed. This
+ *   is what counts a commit the agent made under another email, such as a
+ *   `GIT_COMMITTER_EMAIL` its shell exports, which tachod cannot see; or
+ * - its committer email is the one this repository stamps. This counts a
+ *   commit the session pushed before this read, when the push happened in
+ *   the same turn as the commit.
+ *
+ * The dates matter as well as the refs. A rebase, an amend, and a
+ * cherry-pick stamp a new committer date on a commit someone wrote earlier,
+ * so a commit from before the session that the session replayed would count
+ * as its own. The author date survives all three.
+ *
+ * Both lists are filtered and cut in git, so a long range stays a bounded
+ * read. Only the commits carried over are bounded here. One still in the
+ * range is listed again on every read, so leaving it out of the count would
+ * drop its files from one frame and bring them back in the next.
  */
 async function sessionCommits(
   exec: ExecAsync,
@@ -347,37 +383,54 @@ async function sessionCommits(
 ): Promise<string[] | undefined> {
   if (head === baseline) return [...known];
   const email = await committerEmail(exec, cwd);
-  // No commit here can carry an email git cannot name.
-  if (email === undefined) return [...known];
-  const range = await git(exec, cwd, [
-    "log",
-    "--no-merges",
-    "-z",
-    // Filtered and cut in git, so a long range stays a bounded read.
-    // `--committer` matches a pattern anywhere in the ident, and the brackets
-    // pin it to the email. The exact comparison is still made below.
-    "--fixed-strings",
-    "--regexp-ignore-case",
-    `--committer=<${email}>`,
-    `--max-count=${MAX_RANGE_COMMITS}`,
-    "--format=%H %ct %at %ce",
-    `${baseline}..${head}`,
-    "--",
+  const [local, byEmail] = await Promise.all([
+    git(exec, cwd, [
+      "log",
+      "--no-merges",
+      "-z",
+      `--max-count=${MAX_RANGE_COMMITS}`,
+      LOG_FORMAT,
+      `${baseline}..${head}`,
+      "--not",
+      "--remotes",
+      "--",
+    ]),
+    // No commit carries an email git cannot name.
+    email === undefined
+      ? ""
+      : git(exec, cwd, [
+          "log",
+          "--no-merges",
+          "-z",
+          // `--committer` matches a pattern anywhere in the ident, and the
+          // brackets pin it to the email. The exact comparison is still made
+          // below.
+          "--fixed-strings",
+          "--regexp-ignore-case",
+          `--committer=<${email}>`,
+          `--max-count=${MAX_RANGE_COMMITS}`,
+          LOG_FORMAT,
+          `${baseline}..${head}`,
+          "--",
+        ]),
   ]);
-  if (range === undefined) return undefined;
+  if (local === undefined || byEmail === undefined) return undefined;
   // Git dates are whole seconds. A commit made in the same second as the
   // first read counts.
   const since = Math.floor(firstReadAt / 1000);
-  const inRange: string[] = [];
-  // `git log` lists newest first. Reversed, so the list stays oldest first.
-  for (const record of range.split("\0").reverse()) {
-    const [sha, committed, authored, ...rest] = record.trim().split(" ");
-    if (sha === undefined || sha.length === 0 || authored === undefined)
-      continue;
-    if (rest.join(" ").toLowerCase() !== email) continue;
-    if (!(Number(committed) >= since && Number(authored) >= since)) continue;
-    inRange.push(sha);
-  }
+  const counted = new Map<string, LoggedCommit>();
+  for (const commit of [
+    ...parseLog(local),
+    ...parseLog(byEmail).filter((commit) => commit.email === email),
+  ])
+    if (commit.committedAt >= since && commit.authoredAt >= since)
+      counted.set(commit.sha, commit);
+  // Oldest first. `git log` lists newest first, and the two lists interleave,
+  // so they are merged by committer date, which a rebase sets in order.
+  const inRange = [...counted.values()]
+    .reverse()
+    .sort((a, b) => a.committedAt - b.committedAt)
+    .map((commit) => commit.sha);
   const listed = new Set(inRange);
   const carried = known.filter((sha) => !listed.has(sha));
   return [...carried.slice(-MAX_SESSION_COMMITS), ...inRange];
@@ -427,33 +480,36 @@ async function filesOfCommits(
  * The rule, recorded in ADR-188. A path is reported when either:
  *
  * - a commit the session made touched it. The session's commits are the
- *   non-merge commits in `baseline..HEAD` whose committer email is the one
- *   this repository stamps (`committerEmail`) and whose committer and author
- *   dates are both at or after the session's first git read, together with
- *   the commits an earlier read already counted (`sessionCommits`). Its
- *   status and counts come from the worktree against the baseline, which
- *   covers the committed and the uncommitted work on it; or
+ *   non-merge commits in `baseline..HEAD` whose committer and author dates
+ *   are both at or after the session's first git read, and which either no
+ *   remote-tracking ref reaches or carry the committer email this repository
+ *   stamps (`committerEmail`), together with the commits an earlier read
+ *   already counted (`sessionCommits`). Its status and counts come from the
+ *   worktree against the baseline, which covers the committed and the
+ *   uncommitted work on it; or
  * - the worktree differs from `HEAD` there, tracked or untracked, and the
  *   path is not one the worktree already held that way at the session's
  *   first read (`readPreexistingPaths`) with its content unchanged since.
  *   Its status and counts come from the worktree against `HEAD`.
  *
  * So a pull, a fetch and reset to upstream, or a rebase onto upstream adds
- * no upstream file: those commits carry someone else's committer email, or
- * dates before the session. The session's own rebased commits still count,
- * because a rebase keeps their author date and stamps the session's email
- * and the time it ran. A same-email commit written before the session and
- * replayed by it does not, because its author date is older. And a commit
- * counted once stays counted, so work a squash merge brought back through a
- * pull is still reported, measured against the baseline. A person's
- * uncommitted edit that was there first is left out until its content
- * changes.
+ * no upstream file: those commits are on a remote-tracking ref, and carry
+ * someone else's committer email or dates before the session. The session's
+ * own rebased commits still count, because a rebase keeps their author date
+ * and gives them new names no remote holds. A commit written before the
+ * session and replayed by it does not, because its author date is older.
+ * And a commit counted once stays counted, so work a squash merge brought
+ * back through a pull is still reported, measured against the baseline. A
+ * person's uncommitted edit that was there first is left out until its
+ * content changes.
  *
- * The ADR names what the rule cannot tell apart: a commit written in this
- * repository by anything else using the same email after the session's
- * first read (another session in a sibling worktree, or a person at the
- * keyboard), and an upstream path the session also touched, whose counts
- * include the upstream change.
+ * The ADR names what the rule cannot tell apart: a commit made after the
+ * session's first read by anything else that reaches this worktree before
+ * a remote holds it, or that carries the same email (another session in a
+ * sibling worktree, or a person at the keyboard); a commit under another
+ * email that was pushed before the read that would count it; and an
+ * upstream path the session also committed, whose counts include the
+ * upstream change.
  *
  * A session restored from a state file older than the first-read time is
  * measured the old way, every change since the baseline commit, and says

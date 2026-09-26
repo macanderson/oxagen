@@ -8,16 +8,8 @@
  * these tests run git against repositories made in a temporary directory,
  * never against a checkout.
  */
-import { execFile, execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
+import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { TachoEvent } from "../envelope";
@@ -36,118 +28,28 @@ import { toProtocolTimestamp } from "../timestamp";
 import { type DaemonHandle, startDaemon } from "./daemon";
 import { readWorkingTreeChanges } from "./git-facts";
 import {
+  datedNow,
+  ME,
+  pushUpstream,
+  type Rig,
+  removeRigs,
+  rig,
+} from "./git-rig.test-support";
+import {
   MAX_SESSION_COMMITS,
   readPreexistingPaths,
   readSessionChanges,
   type WorktreeAttribution,
 } from "./session-changes";
 
-const ME = "agent@example.com";
-const OTHER = "someone-else@example.com";
+/** An identity the agent's shell sets, which the repository's config does not name. */
+const AGENT_EMAIL = "agent-bot@example.com";
 
-const scratch: string[] = [];
 const daemons: DaemonHandle[] = [];
 afterEach(async () => {
   for (const handle of daemons.splice(0)) await handle.stop();
-  for (const dir of scratch.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  removeRigs();
 });
-
-/** Git with no global or system configuration, so the host's cannot leak in. */
-function gitEnv(dir: string): NodeJS.ProcessEnv {
-  const empty = join(dir, ".gitconfig-empty");
-  writeFileSync(empty, "");
-  return {
-    ...process.env,
-    GIT_CONFIG_GLOBAL: empty,
-    GIT_CONFIG_NOSYSTEM: "1",
-    GIT_TERMINAL_PROMPT: "0",
-  };
-}
-
-interface Rig {
-  /** The bare repository every clone pushes to. */
-  origin: string;
-  /** The checkout the session works in. */
-  work: string;
-  /** Another clone, where someone else commits and pushes. */
-  upstream: string;
-  git: (cwd: string, args: string[], env?: NodeJS.ProcessEnv) => string;
-  exec: ExecAsync;
-  /** The environment every git call here runs in. */
-  env: NodeJS.ProcessEnv;
-}
-
-function rig(): Rig {
-  // Real path, because git answers `--show-toplevel` with one and macOS
-  // puts the temporary directory behind a symlink.
-  const root = realpathSync(
-    mkdtempSync(join(tmpdir(), "tacho-session-changes-")),
-  );
-  scratch.push(root);
-  const env = gitEnv(root);
-  const git = (cwd: string, args: string[], extra: NodeJS.ProcessEnv = {}) =>
-    execFileSync(
-      "git",
-      ["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...args],
-      { cwd, env: { ...env, ...extra }, encoding: "utf8" },
-    );
-  const exec: ExecAsync = (command, args) =>
-    new Promise((resolve) => {
-      execFile(
-        command,
-        args,
-        { env, encoding: "utf8" },
-        (error, stdout, stderr) => {
-          const code = (error as (Error & { code?: unknown }) | null)?.code;
-          resolve({
-            status: error === null ? 0 : typeof code === "number" ? code : null,
-            stdout,
-            stderr,
-          });
-        },
-      );
-    });
-  const origin = join(root, "origin.git");
-  git(root, ["init", "-q", "--bare", "-b", "main", origin]);
-  const seed = join(root, "seed");
-  git(root, ["clone", "-q", origin, seed]);
-  identify(git, seed, ME);
-  writeFileSync(join(seed, "a.txt"), "one\ntwo\nthree\n");
-  writeFileSync(join(seed, "shared.txt"), "shared\n");
-  git(seed, ["add", "."]);
-  git(seed, ["commit", "-q", "-m", "seed"], datedNow());
-  git(seed, ["push", "-q", "origin", "main"]);
-  const work = join(root, "work");
-  git(root, ["clone", "-q", origin, work]);
-  identify(git, work, ME);
-  const upstream = join(root, "upstream");
-  git(root, ["clone", "-q", origin, upstream]);
-  identify(git, upstream, OTHER);
-  return { origin, work, upstream, git, exec, env };
-}
-
-function identify(git: Rig["git"], cwd: string, email: string): void {
-  git(cwd, ["config", "user.email", email]);
-  git(cwd, ["config", "user.name", email.split("@")[0] ?? "someone"]);
-}
-
-/** A commit dated now, which a clock read before it counts from. */
-function datedNow(): NodeJS.ProcessEnv {
-  const at = `@${Math.floor(Date.now() / 1000)} +0000`;
-  return { GIT_AUTHOR_DATE: at, GIT_COMMITTER_DATE: at };
-}
-
-/** Someone else commits two files upstream and pushes. */
-function pushUpstream(r: Rig): void {
-  r.git(r.upstream, ["pull", "-q", "--ff-only", "origin", "main"]);
-  writeFileSync(join(r.upstream, "upstream-1.txt"), "theirs\n");
-  writeFileSync(join(r.upstream, "upstream-2.txt"), "theirs too\n");
-  writeFileSync(join(r.upstream, "shared.txt"), "shared\nupstream line\n");
-  r.git(r.upstream, ["add", "."]);
-  r.git(r.upstream, ["commit", "-q", "-m", "upstream work"], datedNow());
-  r.git(r.upstream, ["push", "-q", "origin", "main"]);
-}
 
 /**
  * The forge squash-merges the session's branch as one commit under its own
@@ -244,6 +146,38 @@ describe("readSessionChanges against a real repository", () => {
       ownCommits: committed?.ownCommits,
     });
     expect(paths(rebased?.changes)).toEqual(["a.txt", "mine.txt"]);
+  });
+
+  it("reports a commit the session made under another email, and still leaves out a pull", async () => {
+    const r = rig();
+    const start = await firstRead(r);
+    // The agent's shell exports its own identity. tachod's does not, so the
+    // email the repository stamps is still ME.
+    const agent = {
+      GIT_AUTHOR_EMAIL: AGENT_EMAIL,
+      GIT_COMMITTER_EMAIL: AGENT_EMAIL,
+    };
+    writeFileSync(join(r.work, "agent.txt"), "the agent wrote this\n");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "agent work"], {
+      ...datedNow(),
+      ...agent,
+    });
+    const committed = await readSessionChanges(r.exec, r.work, start);
+    expect(paths(committed?.changes)).toEqual(["agent.txt"]);
+
+    // Upstream moves, and the agent pulls it in with a rebase under the same
+    // identity. The upstream commit is on `origin/main`, so it stays out.
+    pushUpstream(r);
+    r.git(r.work, ["pull", "-q", "--rebase", "origin", "main"], {
+      ...datedNow(),
+      ...agent,
+    });
+    const pulled = await readSessionChanges(r.exec, r.work, {
+      ...start,
+      ownCommits: committed?.ownCommits,
+    });
+    expect(paths(pulled?.changes)).toEqual(["agent.txt"]);
   });
 
   it("does not count a commit with the session's email made before its first read", async () => {
@@ -556,6 +490,22 @@ describe("the daemon's reconciliation against a real repository", () => {
       pre_session_changes: "excluded",
     });
   });
+  it("records a file the agent committed under its own GIT_COMMITTER_EMAIL", async () => {
+    const r = rig();
+    const handle = await boot(r.exec);
+    await handle.api.handleHook(hook("SessionStart", r.work));
+    await handle.tick();
+    writeFileSync(join(r.work, "agent.txt"), "the agent wrote this\n");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "agent work"], {
+      ...datedNow(),
+      GIT_COMMITTER_EMAIL: AGENT_EMAIL,
+    });
+    await handle.api.handleHook(hook("Stop", r.work));
+    await handle.tick();
+    expect(listed(handle)).toEqual([["agent.txt"]]);
+  });
+
   it("reports a file written before a replayed SessionStart reached the daemon", async () => {
     const r = rig();
     // The daemon is down as the session starts. The hook spools the

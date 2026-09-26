@@ -1,6 +1,7 @@
 # ADR-188: A reconciliation reports what the session changed
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended 2026-09-25 (#4320): the commit rule and the
+  captured diff. See the amendment at the end.
 - **Date:** 2026-09-25
 - **Owners:** tacho, evidence
 - **Related:** issue #4104, issue #3384 (finding 29), ADR-095 (observed and
@@ -38,11 +39,16 @@ A path is in a reconciliation when the session changed it. The rule lives in
 
 1. **The session's own commits.** The lane stamps the session's first git
    read (`gitFirstReadAt`). A commit is the session's when it is a non-merge
-   commit in `baseline..HEAD`, its committer email equals the email the
+   commit in `baseline..HEAD`, both its committer date and its author date
+   are at or after that first read, floored to the second, and either no
+   remote-tracking ref reaches it or its committer email equals the email the
    repository stamps (its `user.email`, or the identity git derives when none
-   is set), and both its committer date and its author date are at or after
-   that first read, floored to the second. A commit counted once stays
-   counted for that worktree (`sessionCommits`).
+   is set). A commit counted once stays counted for that worktree
+   (`sessionCommits`).
+
+   > Amended 2026-09-25 (#4320). As first decided, the email was the only
+   > test beside the dates, so an agent that committed under another email
+   > had none of its commits counted. See the amendment at the end.
 2. **What is reported.** The files those commits touched, measured against the
    baseline, plus the worktree's changes against `HEAD`, tracked and
    untracked.
@@ -72,12 +78,12 @@ A path is in a reconciliation when the session changed it. The rule lives in
    so replaces no frame at all.
 
 A pull, a fetch and reset to upstream, and a rebase onto upstream therefore
-add no upstream file. Upstream commits carry another committer email, or
-dates before the session. A rebase stamps every commit it replays with the
-current user's email and the time it ran, but it keeps each one's author
-date. So the session's own rebased commits still count, and a same-email
-commit written before the session, which the session checks out and
-rebases, does not. The same holds for an amend without `--reset-author`,
+add no upstream file. Upstream commits are on a remote-tracking ref once
+fetched, and carry another committer email or dates before the session. A
+rebase gives every commit it replays a new name and the time it ran, but it
+keeps each one's author date. So the session's own rebased commits still
+count, and a commit written before the session, which the session checks
+out and rebases, does not. The same holds for an amend without `--reset-author`,
 and for a `cherry-pick` of a commit written before the session.
 
 ### Two refinements to the rule as first decided
@@ -132,18 +138,21 @@ is not credited for the amendment.
 The rule cannot tell these apart, and the record overstates or understates in
 each case as named.
 
-- **Another writer with the same email after the first read.** A sibling
-  session in another worktree whose commits reach this one through a merge
-  commit, and a person committing in the same repository, both write commits
-  with the session's email and dates after its first read. These are reported
-  as the session's. Squash and rebase merges on GitHub carry GitHub's
-  committer email, so they are not.
-- **An agent that commits under another email** than the repository's
-  configuration, for example through `GIT_COMMITTER_EMAIL` in its own
-  environment. Its commits read as someone else's and are not reported. The
-  hook forwards only an allowlist of environment variables, and `GIT_*` is
-  not on it, so the daemon cannot see that email today. Issue #4320 tracks
-  the fix.
+- **Another writer after the first read.** A sibling session in another
+  worktree whose commits reach this one through a merge, and a person
+  committing in the same repository, both write commits dated after the
+  session's first read. These are reported as the session's when they reach
+  this worktree before any remote holds them, or carry the session's email.
+  Squash and rebase merges on GitHub carry GitHub's committer email and
+  arrive through a fetch, so they are not.
+- **An agent that commits under another email and pushes in the same turn.**
+  Amended 2026-09-25 (#4320). By the end-of-turn read, the commit is on a
+  remote-tracking ref and its email is not the repository's, so it reads as
+  pulled and is not reported. A commit under another email that is still
+  unpushed at a read is reported, and stays counted after a later push.
+- **A pull that updates no remote-tracking ref**, such as
+  `git pull <url> <branch>`, brings in commits no remote-tracking ref holds.
+  Those dated after the first read are reported as the session's.
 - **An amendment to a commit written before the session.** The amended
   commit keeps the older author date and is not counted.
 - **A row and its hunk can measure different intervals.** A row for an
@@ -181,7 +190,37 @@ each case as named.
 - The first read of each worktree costs one whole-tree `git status` and a hash
   of each recorded path. A reconciliation after `HEAD` moved adds a
   `git config` read, a `git log` of the range filtered to the session's email,
-  and one `git log` of the counted commits.
+  a `git log` of the range less every remote-tracking ref, and one `git log`
+  of the counted commits.
 - `daemon.json` holds the record and the counted commits with the session,
   within the bounds above.
 - The captured diff after a pull no longer carries the upstream files.
+
+## Amendment 2026-09-25: a commit no remote holds is the session's (#4320)
+
+The rule as first decided counted a commit only when its committer email
+was the repository's. An agent whose shell exports `GIT_COMMITTER_EMAIL`, or
+that runs `git -c user.email=... commit`, stamps another email, and the
+daemon reads the repository's configuration in its own environment. None of
+that agent's commits were reported.
+
+A commit now also counts when no remote-tracking ref reaches it. A pull
+fetches before it merges, so every commit a pull brings in is on a
+remote-tracking ref by the time `HEAD` holds it. A commit made in this
+worktree is on none until it is pushed. The date test still applies, so a
+commit written before the session stays out whatever reaches it.
+
+The email test stays beside the new one. Without it, a commit the session
+made and pushed in the same turn would be on a remote-tracking ref at the
+end-of-turn read and would read as pulled.
+
+- **Rejected: forward `GIT_COMMITTER_EMAIL` from the hook.** The hook sees
+  the environment the harness started in. It does not see an identity set
+  for one tool call, `GIT_COMMITTER_EMAIL=... git commit` or
+  `git -c user.email=...`, so it would fix one of the three cases. It would
+  also send an email address in every hook for a case the ref test already
+  covers. The hook's environment allowlist is unchanged.
+- **Rejected: the tips of the remote-tracking refs at the first read.**
+  Upstream commits pushed after the first read are not reachable from those
+  tips, and a fast-forward pull brings them in with no merge commit to
+  exclude. The test has to read the refs as they stand at each read.
