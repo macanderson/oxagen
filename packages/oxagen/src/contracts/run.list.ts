@@ -283,6 +283,61 @@ export const runDiffSchema = z
 export const RUN_PULL_REQUEST_FILTERS = ["any", "with", "without"] as const;
 
 /**
+ * Where a run's pause stands (#3972).
+ *
+ * - `pausing`: a pause is queued and no host has applied it yet.
+ * - `paused`: the host applied the pause, and no resume has followed.
+ * - `resuming`: the run is paused and a resume is queued behind it.
+ *
+ * A run with no pause in force reads no pause at all, so the field is null.
+ */
+export const RUN_PAUSE_STATES = ["pausing", "paused", "resuming"] as const;
+
+/**
+ * The pause in force on a run: its state, the commands behind it, where it
+ * took hold, who asked for it, and when. Read from the run's
+ * `tacho.control_commands` rows, so every field is a recorded one.
+ */
+export const runPauseSchema = z
+  .object({
+    state: z.enum(RUN_PAUSE_STATES),
+    /** The pause command (`tcm_…`). */
+    commandId: z.string().min(1),
+    /** The resume command queued behind it (`tcm_…`); set only while `resuming`. */
+    resumeCommandId: z.string().min(1).nullable(),
+    /**
+     * The `seq` of the `oxagen:command_applied` frame the host sealed on the
+     * run's own chain, as a decimal string. Null while `pausing`, and for a
+     * ledger run, whose pause fences ingress and seals no frame.
+     */
+    seq: z.string().regex(/^\d+$/).nullable(),
+    /**
+     * The turn and step, both 1-based, at `seq`, or at the run's latest frame
+     * while `pausing`. Null when the position could not be read, and for a
+     * ledger run.
+     */
+    turn: z.number().int().positive().nullable(),
+    step: z.number().int().positive().nullable(),
+    /** The person who issued the pause; null when the row names none. */
+    by: z
+      .object({
+        /** The person's public id (`usr_…`). */
+        id: z.string().min(1),
+        /** Null when the user record holds no name. */
+        name: z.string().nullable(),
+      })
+      .strict()
+      .nullable(),
+    /** RFC 3339; when the pause was issued. */
+    issuedAt: z.string().datetime(),
+    /** RFC 3339; when the host applied it. Null while `pausing`. */
+    appliedAt: z.string().datetime().nullable(),
+    /** The reason the person gave; null when none was given. */
+    reason: z.string().nullable(),
+  })
+  .strict();
+
+/**
  * The replay grades a page can filter on, plus `not_recorded` for a run whose
  * seal recorded no grade (`replayGrade: null`).
  */
@@ -322,6 +377,12 @@ export const runItemSchema = z
      * resume its host applied (#4112). A sealed wrapped run is never paused.
      */
     ingressPaused: z.boolean().optional(),
+    /**
+     * The pause in force, with its place, actor, time and reason (#3972).
+     * Null when no pause is in force. `get_run` answers it; `list_runs`
+     * leaves it out.
+     */
+    pause: runPauseSchema.nullable().optional(),
     /** `org_ns.ws_ns.slug` (ADR-024); null when the ledger row names no agent. */
     agentKey: z.string().nullable(),
     /** The initiating principal's public id; null when none was recorded. */
@@ -752,6 +813,8 @@ export type RunListOutput = z.output<typeof runList.output>;
 export type RunItem = z.output<typeof runItemSchema>;
 export type RunPullRequest = z.output<typeof runPullRequestSchema>;
 export type RunDiff = z.output<typeof runDiffSchema>;
+export type RunPause = z.output<typeof runPauseSchema>;
+export type RunPauseState = (typeof RUN_PAUSE_STATES)[number];
 export type RunPullRequestFilter = (typeof RUN_PULL_REQUEST_FILTERS)[number];
 export type RunSortKey = (typeof RUN_SORT_KEYS)[number];
 export type RunReplayFilter = (typeof RUN_REPLAY_FILTERS)[number];

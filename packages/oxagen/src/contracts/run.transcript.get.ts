@@ -50,7 +50,19 @@
  * `counts` and `figures` are counted over the whole run read, whatever the
  * chips or the query, so a reader's counts and figures never move when it
  * narrows the transcript. They share the read's frame cap: when `complete`
- * is false they cover a prefix of the run.
+ * is false they cover a prefix of the run. They ride only a read that starts
+ * at the run's first frame (#3823): a read from a cursor reads a window of
+ * the run and carries neither, so a reader keeps the ones its first read
+ * returned. A read with `query` set is not windowed: it searches the run up
+ * to the read's frame cap, as it did before, so a search still reaches
+ * entries past the page a reader loaded.
+ *
+ * The cursor is opaque. It names the opening of the last entry sent, the
+ * latest frame any page delivered, when the read was taken, and where the
+ * window it reads from starts. An entry that grew since it was sent, or that
+ * a subagent chain reported late, is sent again once, ahead of the new
+ * entries (#4048, #4083). A cursor written in an older form is still
+ * accepted.
  *
  * A `digest_only` recording produces halves with `text: null` and
  * `fidelity: "digest_only"`, and the transcript says so on every half; the
@@ -338,7 +350,8 @@ export const transcriptBodySchema = z
     /**
      * The subagent chain the frame was recorded on; absent on the run's own
      * chain. A subagent's chain is numbered from 0 like the run's, so `seq`
-     * names a frame only together with this.
+     * names a frame only together with this. `get_run_frame_body` opens the
+     * frame when passed both.
      */
     sessionUuid: z.string().uuid().optional(),
     /** The frame's recorded type or kind. */
@@ -473,7 +486,8 @@ export const transcriptEntrySchema = z
      * their own, each numbered from 0, and the transcript places each chain
      * directly after the `subagent_start` that spawned it. `seq` and `endSeq`
      * are positions on that chain, so they name a frame only together with
-     * `sessionUuid`; `get_run_frame_body` reads the run's own chain.
+     * `sessionUuid`. `get_run_frame_body` opens such a frame when passed
+     * `sessionUuid` beside `seq`.
      */
     subagent: z
       .object({
@@ -817,10 +831,10 @@ export const runTranscriptGet = registerCapability({
   name: "get_run_transcript",
   domain: "run",
   description:
-    "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries, and carries the run's counts and figures.",
+    "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries. A read from the run's start carries the run's counts and figures.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  surfaces: ["api", "mcp", "cli"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
@@ -839,7 +853,11 @@ export const runTranscriptGet = registerCapability({
         .array(transcriptKindSchema)
         .max(TRANSCRIPT_KINDS.length)
         .default([]),
-      /** An entry cursor from an earlier read; omitted reads from the start. */
+      /**
+       * An entry cursor from an earlier read; omitted reads from the start.
+       * A read from a cursor carries no `counts` or `figures`. With no
+       * `query`, it reads a window of the run past the cursor.
+       */
       after: z.string().max(256).optional(),
       /** How much of each body to carry; omitted takes the zoom's cap. */
       text: transcriptTextSchema.optional(),
@@ -867,7 +885,8 @@ export const runTranscriptGet = registerCapability({
       /**
        * False when the run has more frames than the read could fold, so the
        * transcript is a prefix and the caller says so rather than presenting
-       * it as the whole.
+       * it as the whole. It describes what this read reached: a read from a
+       * cursor that reached the run's last frame answers true.
        */
       complete: z.boolean(),
       /**
@@ -877,9 +896,16 @@ export const runTranscriptGet = registerCapability({
        * the frames this read did not hold rather than the whole run again.
        */
       frameCursor: z.string().nullable().optional(),
-      /** The run's entries counted at this zoom, whatever the chips. */
+      /**
+       * The run's entries counted at this zoom, whatever the chips. Present
+       * only on a read that starts at the run's first frame, and absent on a
+       * read from a cursor.
+       */
       counts: transcriptCountsSchema.optional(),
-      /** The run's figures, whatever the zoom, chips or query. */
+      /**
+       * The run's figures, whatever the zoom, chips or query. Present only
+       * on a read that starts at the run's first frame, like `counts`.
+       */
       figures: transcriptFiguresSchema.optional(),
       /** What the query found; absent on a read with no query. */
       search: transcriptSearchSchema.optional(),

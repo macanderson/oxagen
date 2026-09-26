@@ -16,9 +16,11 @@ A body the store cannot return reads as `text: null` on its half; the rest of th
 
 ## Surface
 
+**Surfaces:** api, mcp, cli
+
 - API: `POST /v1/:org_slug/:workspace_slug/runs/transcript`
 - MCP: `get_run_transcript`
-- CLI: none
+- CLI: `oxagen run transcript <run-id> [--zoom <zoom>] [--kinds <kinds>] [--query <words>] [--after <cursor>] [--json]`
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `get_run_transcript`
 - Not billed (`noBillingGate: true`): reading a recording is a console read (ADR-052 exclusion 2). IAM default-deny; high sensitivity.

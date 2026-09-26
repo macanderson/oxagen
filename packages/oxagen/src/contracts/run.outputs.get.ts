@@ -107,11 +107,17 @@ const runOutputNodeSchema = z
     /**
      * The frame that produced it, decimal, so the `fr N` chip opens the
      * transcript there. Null on a gate and its `would`: the approval record
-     * carries no frame sequence, and a position must not be invented. Null
-     * too on a path a subagent chain touched, whose frame is numbered on that
-     * chain rather than on the run's.
+     * carries no frame sequence, and a position must not be invented. On a
+     * node a subagent chain produced, it is the frame's position on that
+     * chain, and `sessionUuid` names the chain.
      */
     seq: z.string().regex(/^\d+$/).nullable(),
+    /**
+     * The subagent chain that produced the node; absent on the run's own
+     * chain. A subagent chain numbers its frames from 0, so `seq` names a
+     * frame only together with this (#3823).
+     */
+    sessionUuid: z.string().uuid().optional(),
     kind: z.enum(RUN_OUTPUT_KINDS),
     /**
      * The mono name: a repository-relative path, a commit sha, `#482`, the

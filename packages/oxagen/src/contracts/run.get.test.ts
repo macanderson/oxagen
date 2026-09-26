@@ -19,7 +19,7 @@ describe("get_run contract", () => {
   });
 
   it("is a low-risk read the in-app agent may call without approval", () => {
-    expect(runGet.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(runGet.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
     expect(runGet.agent).toEqual({
       requiresApproval: false,
       riskLevel: "low",

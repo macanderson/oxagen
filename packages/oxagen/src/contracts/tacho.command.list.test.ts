@@ -5,6 +5,7 @@ const RUN = "tse_0123456789abcdefghjkmn";
 
 const item = {
   id: "tcm_1",
+  runId: RUN,
   command: "steer",
   status: "applied",
   requestedMode: "interrupt",
@@ -18,6 +19,8 @@ const item = {
   appliedAt: "2026-09-08T10:00:09.000Z",
   appliedAtSeq: 41,
   detail: null,
+  issuedBy: { id: "usr_0123456789abcdefghjkmn", name: "Ada Park" },
+  text: "Run the migration tests before you push.",
 };
 
 describe("list_commands contract", () => {

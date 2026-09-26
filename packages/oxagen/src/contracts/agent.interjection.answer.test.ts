@@ -10,7 +10,7 @@ describe("answer_interjection contract", () => {
     expect(agentInterjectionAnswer.mutates).toBe(true);
     expect(agentInterjectionAnswer.noBillingGate).toBe(true);
     expect(agentInterjectionAnswer.scoped).toBe(true);
-    expect(agentInterjectionAnswer.surfaces).toEqual(["api", "mcp"]);
+    expect(agentInterjectionAnswer.surfaces).toEqual(["api", "mcp", "cli"]);
     expect(agentInterjectionAnswer.layers).not.toContain("app");
   });
 
@@ -59,6 +59,10 @@ describe("answer_interjection contract", () => {
       runId: "tse_4q8r1t6v3x5z0b2d7h2k9m",
       answeredAt: "2026-09-25T10:05:00.000Z",
       commandIds: ["tcm_0123"],
+      receiptId: "rcp_0123",
+      path: null,
+      repository: null,
+      workspace: null,
     };
     expect(agentInterjectionAnswer.output.parse(queued)).toEqual(queued);
     const ledger = { ...queued, runId: "arun_7k2", commandIds: [] };

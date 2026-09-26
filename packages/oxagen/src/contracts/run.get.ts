@@ -16,6 +16,13 @@
  * than one per client tick. The poll is inside the handler, after the gates,
  * so IAM and the audit emissions happen once per invoke whatever `waitMs` is.
  *
+ * A wrapped run's subagents record on chains of their own, each numbered from
+ * 0 (#3823). A read pages the run's own chain unless `sessionUuid` names a
+ * subagent chain, and a frame from a subagent chain carries its
+ * `sessionUuid`, so `seq` names a frame only together with it. `chains` lists
+ * each subagent chain's head, so a reader following the run learns that a
+ * subagent recorded more even when the run's own chain did not move.
+ *
  * Frames carry their body reference (spec §8.2 `content`): the digest of the
  * redacted bytes, where they were retained, what was redacted, and the
  * fidelity the recorder kept. Bodies are never inline; `get_run_frame_body`
@@ -33,6 +40,8 @@ export const FRAME_LIMIT_MAX = 500;
 export const FRAME_LIMIT_DEFAULT = 200;
 /** The longest a read may wait for an event past its cursor. */
 export const WAIT_MS_MAX = 20_000;
+/** The most subagent chains one read lists in `chains.heads`. */
+export const RUN_CHAIN_HEADS_MAX = 200;
 
 export const frameFidelitySchema = z.enum(["full", "digest_only"]);
 
@@ -71,6 +80,12 @@ export const runFrameSchema = z
      * session's dense `seq`, as a decimal string.
      */
     seq: z.string().regex(/^\d+$/),
+    /**
+     * The subagent chain the frame was recorded on; absent on the run's own
+     * chain. A subagent chain numbers its frames from 0, so `seq` names a
+     * frame only together with this.
+     */
+    sessionUuid: z.string().uuid().optional(),
     /** The recorded event type or kind, e.g. `model.call_completed`, `tool_call`. */
     type: z.string(),
     /** The evidence stage the event belongs to. */
@@ -129,6 +144,45 @@ export const runFramePageSchema = z
   })
   .strict();
 
+/** One subagent chain's head: its place in the run and its last readable frame. */
+export const runChainHeadSchema = z
+  .object({
+    sessionUuid: z.string().uuid(),
+    /** The chain that spawned this one; null when none was recorded. */
+    parentSessionUuid: z.string().uuid().nullable(),
+    /** The harness's id for the subagent; null when none was recorded. */
+    subagentId: z.string().nullable(),
+    /** The subagent's type (`Explore`, `general-purpose`); null when none was recorded. */
+    subagentType: z.string().nullable(),
+    /** The parent's tool call that spawned the subagent; null when none was recorded. */
+    spawnCallId: z.string().nullable(),
+    /**
+     * The chain's last frame a read can return, as a decimal string, read
+     * from the frame store. Null when the chain holds no readable frame yet.
+     */
+    lastSeq: z.string().regex(/^\d+$/).nullable(),
+    /** Frames the chain holds. */
+    frameCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
+/**
+ * Every subagent chain under a wrapped run, with its head. Absent on a
+ * ledger run, which records one chain.
+ */
+export const runChainsSchema = z
+  .object({
+    /**
+     * Opaque: pass as `chainsAfter` so a long poll also wakes when any
+     * subagent chain moves past these heads.
+     */
+    cursor: z.string(),
+    heads: z.array(runChainHeadSchema).max(RUN_CHAIN_HEADS_MAX),
+    /** False when the run has more subagent chains than `heads` lists. */
+    complete: z.boolean(),
+  })
+  .strict();
+
 /** Why a read answered the run header without its frames. */
 export const runFramesErrorSchema = z
   .object({
@@ -141,10 +195,10 @@ export const runGet = registerCapability({
   name: "get_run",
   domain: "run",
   description:
-    "Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame.",
+    "Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame. A wrapped run's read pages one chain, its own or a subagent's, and lists the head of every subagent chain.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  surfaces: ["api", "mcp", "agent", "cli"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
@@ -158,8 +212,25 @@ export const runGet = registerCapability({
   input: z
     .object({
       runId: runPublicIdSchema,
-      /** A frame or page cursor from an earlier read; omitted reads from the start. */
+      /**
+       * A frame or page cursor from an earlier read; omitted reads from the
+       * start. A cursor minted on another chain than the one read is refused
+       * as an invalid cursor.
+       */
       framesAfter: z.string().max(256).optional(),
+      /**
+       * The subagent chain to page, from a frame's, a head's or a transcript
+       * entry's `sessionUuid`. Omitted, or the run's own session, pages the
+       * run's own chain. A chain that is not under this run answers
+       * `not_found`, and so does any chain on a ledger run.
+       */
+      sessionUuid: z.string().uuid().optional(),
+      /**
+       * `chains.cursor` from an earlier read. With `waitMs` set, the long poll
+       * also returns once any subagent chain holds a readable frame past the
+       * heads that cursor named.
+       */
+      chainsAfter: z.string().max(64).optional(),
       frameLimit: z
         .number()
         .int()
@@ -185,6 +256,8 @@ export const runGet = registerCapability({
        * frames were read (#4243).
        */
       framesError: runFramesErrorSchema.optional(),
+      /** Every subagent chain's head (#3823); absent on a ledger run. */
+      chains: runChainsSchema.optional(),
     })
     .strict(),
 });
@@ -192,3 +265,5 @@ export const runGet = registerCapability({
 export type RunGetInput = z.output<typeof runGet.input>;
 export type RunGetOutput = z.output<typeof runGet.output>;
 export type RunFrame = z.output<typeof runFrameSchema>;
+export type RunChainHead = z.output<typeof runChainHeadSchema>;
+export type RunChains = z.output<typeof runChainsSchema>;

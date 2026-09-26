@@ -9,10 +9,27 @@
 //
 // Workspace-scoped: the shell sums it per workspace, as it sums
 // `list_approvals`.
+//
+// A `repo_unknown` row (#3941) is raised by the host's `control.interject`
+// frame, which the ingest copies onto the row verbatim as `body`. The Run
+// page reads the question, the paths and the timeout from it, and the answer
+// state from the rest of the row.
+import {
+  INTERJECTION_PATHS,
+  INTERJECTION_RECEIPT_ID_PATTERN,
+  interjectBodySchema,
+} from "@oxagen/tacho";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
 const instant = z.string().datetime({ offset: true });
+
+/**
+ * What raised the interjection. `question` is an agent asking in its own
+ * words (#3839). `repo_unknown` is a host holding a session that started in
+ * a repository the workspace has not bound (#3941).
+ */
+export const INTERJECTION_KINDS = ["question", "repo_unknown"] as const;
 
 export const interjectionListItem = z
   .object({
@@ -33,6 +50,28 @@ export const interjectionListItem = z
     answer: z.string().nullable(),
     /** The public id (`usr_…`) of the person who answered; null while open. */
     answeredBy: z.string().nullable(),
+    kind: z.enum(INTERJECTION_KINDS),
+    /**
+     * The `seq` of the `control.interject` frame that raised it, on the
+     * run's own chain, as a decimal string. Null on a `question` row, which
+     * no frame raised.
+     */
+    raisedSeq: z.string().regex(/^\d+$/).nullable(),
+    /** The `control.interject` body as the host sealed it; null on a `question` row. */
+    body: interjectBodySchema.nullable(),
+    /**
+     * The repository (`owner/name`) the control plane resolved from the
+     * body's remote digest. Null until it is resolved, when no connected
+     * repository matches, and on a `question` row.
+     */
+    repository: z.string().min(1).nullable(),
+    /** How a `repo_unknown` row was settled; null while open and on a `question` row. */
+    path: z.enum(INTERJECTION_PATHS).nullable(),
+    /**
+     * The receipt minted with the answer (`rcp_…`). Null while open, and on
+     * a row answered before answers carried receipts.
+     */
+    receiptId: z.string().regex(INTERJECTION_RECEIPT_ID_PATTERN).nullable(),
   })
   .strict();
 

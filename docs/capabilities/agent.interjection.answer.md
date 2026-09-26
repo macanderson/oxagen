@@ -4,7 +4,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, cli
 **Risk level:** low
 **Billing:** `noBillingGate: true`. ADR-055's 2026-09-15 ratification makes `resolve_approval` the only billable action.
 **Mutates:** yes
@@ -24,6 +24,7 @@ the approvals drawer lists the question and links to its run.
 
 - API: `POST /v1/:org_slug/:workspace_slug/agent/interjections/answer`
 - MCP: `answer_interjection`
+- CLI: `oxagen run answer <interjection-id> (--text <answer> | --link | --create <name> --slug <slug>)`
 - Authentication: session or API key
 
 ## Input

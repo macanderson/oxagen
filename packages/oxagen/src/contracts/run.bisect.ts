@@ -12,6 +12,12 @@
  * at the first frame the longer one has alone, and the shorter run's key
  * there is null.
  *
+ * A wrapped run is read as every chain it recorded, each subagent chain
+ * placed after the `subagent_start` that spawned it, with every frame kept
+ * (#3823). A divergence on a subagent's frame names that chain in
+ * `divergentSessionUuid`, because a subagent chain numbers its frames from 0
+ * and `divergentSeq` alone would name a frame on the run's own chain.
+ *
  * Bodies are not read: the key is built from the frame's recorded receipt,
  * so bisect works at grade `inspect` and above.
  *
@@ -48,6 +54,11 @@ export const runBisect = registerCapability({
     .object({
       /** The position of the first differing frame; null when none differs. */
       divergentSeq: z.string().regex(/^\d+$/).nullable(),
+      /**
+       * The subagent chain `divergentSeq` lies on, in whichever run it names a
+       * frame. Absent when that frame is on the run's own chain.
+       */
+      divergentSessionUuid: z.string().uuid().optional(),
       /** Run A's key at that position; null when A has no frame there. */
       keyA: z.string().nullable(),
       /** Run B's key at that position; null when B has no frame there. */

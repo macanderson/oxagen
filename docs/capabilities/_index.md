@@ -32,7 +32,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
-| [answer_interjection](agent.interjection.answer.md) | [agent.interjection.answer.ts](../../packages/oxagen/src/contracts/agent.interjection.answer.ts) | api, mcp |
+| [answer_interjection](agent.interjection.answer.md) | [agent.interjection.answer.ts](../../packages/oxagen/src/contracts/agent.interjection.answer.ts) | api, mcp, cli |
 | [assign_agent_role](agent.role.assign.md) | [agent.role.assign.ts](../../packages/oxagen/src/contracts/agent.role.assign.ts) | api, mcp, agent |
 | [attach_memory_evidence](agent.memory_evidence.attach.md) | [agent.memory_evidence.attach.ts](../../packages/oxagen/src/contracts/agent.memory_evidence.attach.ts) | api, mcp, agent |
 | [authorize_mcp_server](agent.mcp.authorize.complete.md) | [agent.mcp.authorize.complete.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.complete.ts) | api, mcp |
@@ -481,7 +481,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [bisect_runs](run.bisect.md) | [run.bisect.ts](../../packages/oxagen/src/contracts/run.bisect.ts) | api, mcp |
 | [export_run](run.export.md) | [run.export.ts](../../packages/oxagen/src/contracts/run.export.ts) | api |
 | [fork_run](run.fork.md) | [run.fork.ts](../../packages/oxagen/src/contracts/run.fork.ts) | api |
-| [get_run](run.get.md) | [run.get.ts](../../packages/oxagen/src/contracts/run.get.ts) | api, mcp, agent |
+| [get_run](run.get.md) | [run.get.ts](../../packages/oxagen/src/contracts/run.get.ts) | api, mcp, agent, cli |
 | [get_run_chain](run.chain.get.md) | [run.chain.get.ts](../../packages/oxagen/src/contracts/run.chain.get.ts) | api, mcp |
 | [get_run_cost](run.cost.md) | [run.cost.ts](../../packages/oxagen/src/contracts/run.cost.ts) | api, mcp, agent |
 | [get_run_export](run.export.get.md) | [run.export.get.ts](../../packages/oxagen/src/contracts/run.export.get.ts) | api, mcp, cli |
@@ -489,7 +489,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [create_run_token](run.token.issue.md) | [run.token.issue.ts](../../packages/oxagen/src/contracts/run.token.issue.ts) | api |
 | [ingest_run_frames](run.frames.ingest.md) | [run.frames.ingest.ts](../../packages/oxagen/src/contracts/run.frames.ingest.ts) | api |
 | [get_run_proof](run.proof.get.md) | [run.proof.get.ts](../../packages/oxagen/src/contracts/run.proof.get.ts) | api |
-| [get_run_transcript](run.transcript.get.md) | [run.transcript.get.ts](../../packages/oxagen/src/contracts/run.transcript.get.ts) | api, mcp |
+| [get_run_transcript](run.transcript.get.md) | [run.transcript.get.ts](../../packages/oxagen/src/contracts/run.transcript.get.ts) | api, mcp, cli |
 | [get_run_turns](run.turns.get.md) | [run.turns.get.ts](../../packages/oxagen/src/contracts/run.turns.get.ts) | api, mcp, cli |
 | [list_recent_runs](run.recent.list.md) | [run.recent.list.ts](../../packages/oxagen/src/contracts/run.recent.list.ts) | api, mcp, agent |
 | [list_runs](run.list.md) | [run.list.ts](../../packages/oxagen/src/contracts/run.list.ts) | api, mcp, agent, cli |
