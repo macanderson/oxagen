@@ -828,6 +828,60 @@ describe("mergeEntries", () => {
     const held = [entry("1")] as const;
     expect(mergeEntries(held, [])).toEqual([entry("1")]);
   });
+
+  it("places a subagent's new entry after the entries held under its call, not at the foot (#4083)", () => {
+    const held = [
+      entry("1"),
+      entry("2"),
+      entry("0", { subagent: sub, parentKey: "2" }),
+      entry("3"),
+    ] as const;
+    const merged = mergeEntries(held, [
+      entry("1", { subagent: sub, parentKey: "2" }),
+      entry("2", { subagent: sub, parentKey: "2" }),
+      entry("4"),
+    ]);
+    expect(merged.map(entryKey)).toEqual([
+      "1",
+      "2",
+      `${CHAIN}:0`,
+      `${CHAIN}:1`,
+      `${CHAIN}:2`,
+      "3",
+      "4",
+    ]);
+  });
+
+  it("places it after entries held under its call at any depth", () => {
+    const INNER = "0192d4a8-7c1e-7a00-8000-0000000000c2";
+    const inner = { chainRef: INNER, type: "Explore" };
+    const held = [
+      entry("1"),
+      entry("2"),
+      entry("0", { subagent: sub, parentKey: "2" }),
+      entry("0", { subagent: inner, parentKey: `${CHAIN}:0` }),
+      entry("3"),
+    ] as const;
+    const merged = mergeEntries(held, [
+      entry("1", { subagent: sub, parentKey: "2" }),
+    ]);
+    expect(merged.map(entryKey)).toEqual([
+      "1",
+      "2",
+      `${CHAIN}:0`,
+      `${INNER}:0`,
+      `${CHAIN}:1`,
+      "3",
+    ]);
+  });
+
+  it("appends a subagent's entry whose call the reader does not hold (negative)", () => {
+    const merged = mergeEntries(
+      [entry("1"), entry("2")],
+      [entry("0", { subagent: sub, parentKey: "9" })],
+    );
+    expect(merged.map(entryKey)).toEqual(["1", "2", `${CHAIN}:0`]);
+  });
 });
 
 describe("rebaseEntries", () => {
@@ -837,28 +891,24 @@ describe("rebaseEntries", () => {
     transcriptEntry({ seq, endSeq: seq, frames: 1, ...over });
 
   it("takes a fresh read's order, so a late subagent entry sits under its call, not at the foot (#4083)", () => {
+    const late = entry("1", { subagent: sub, parentKey: "2" });
     const held = [
       entry("1"),
       entry("2"),
-      entry("0", { subagent: sub }),
+      entry("0", { subagent: sub, parentKey: "2" }),
       entry("3"),
     ] as const;
     const fresh = [
       entry("1"),
       entry("2"),
-      entry("0", { subagent: sub }),
-      entry("1", { subagent: sub }),
+      entry("0", { subagent: sub, parentKey: "2" }),
+      late,
       entry("3"),
     ] as const;
-    expect(rebaseEntries(fresh, held).map(entryKey)).toEqual([
-      "1",
-      "2",
-      `${CHAIN}:0`,
-      `${CHAIN}:1`,
-      "3",
-    ]);
-    // Appending, as a tail page does, would have drawn it after seq 3.
-    expect(mergeEntries(held, fresh).map(entryKey).at(-1)).toBe(`${CHAIN}:1`);
+    const order = ["1", "2", `${CHAIN}:0`, `${CHAIN}:1`, "3"];
+    expect(rebaseEntries(fresh, held).map(entryKey)).toEqual(order);
+    // A tail page that sends only the late entry places it the same way.
+    expect(mergeEntries(held, [late]).map(entryKey)).toEqual(order);
   });
 
   it("keeps the held entries a fresh read stopped short of, after its own", () => {

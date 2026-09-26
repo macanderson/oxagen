@@ -69,15 +69,22 @@ export function isNonEmpty(
 }
 
 /**
- * `page` merged into `held` by each entry's key: an entry the reader already
- * holds is replaced where it stands, and a new one is appended in the order
- * the page sent it.
+ * `page` merged into `held` by each entry's key. An entry the reader already
+ * holds is replaced where it stands. A new entry is added in the order the
+ * page sent it: one whose parent the reader holds goes after the last entry
+ * held under that parent, and any other goes at the end.
  *
  * `get_run_transcript` sends an entry again when it has grown since it was
  * sent: a step that gained its result, a turn that gained a step, a Task call
  * whose subagent recorded more (#4048). The grown copy is the one to show,
  * and appending it drew the same step twice. Replacing in place keeps the
  * row where the reader saw it, and keeps the last entry the run's latest.
+ *
+ * A tail page also sends a subagent's entry that landed before the cursor
+ * (#4083). The server places it under the call that spawned it, ahead of
+ * entries the reader holds. Placed there here too, the list keeps the
+ * server's order, so the transport reaches it with its call and not at the
+ * foot of the run.
  */
 export function mergeEntries(
   held: Frames,
@@ -92,16 +99,48 @@ export function mergeEntries(
   page: readonly TranscriptEntry[],
 ): readonly TranscriptEntry[] {
   const out = [...held];
-  const at = new Map(out.map((entry, index) => [entryKey(entry), index]));
+  let at = new Map(out.map((entry, index) => [entryKey(entry), index]));
   for (const entry of page) {
     const key = entryKey(entry);
     const index = at.get(key);
-    if (index === undefined) {
+    if (index !== undefined) {
+      out[index] = entry;
+      continue;
+    }
+    const parent =
+      entry.parentKey === null ? undefined : at.get(entry.parentKey);
+    const place =
+      parent === undefined ? out.length : subtreeEnd(out, parent) + 1;
+    if (place === out.length) {
       at.set(key, out.length);
       out.push(entry);
-    } else out[index] = entry;
+    } else {
+      out.splice(place, 0, entry);
+      at = new Map(out.map((kept, i) => [entryKey(kept), i]));
+    }
   }
   return out;
+}
+
+/**
+ * The position of the last entry in `entries` under the one at `root`, at any
+ * depth, or `root` when none is. The server places a subagent's entries after
+ * the call that spawned it, so each one's parent comes before it.
+ */
+function subtreeEnd(entries: readonly TranscriptEntry[], root: number): number {
+  const rootEntry = entries[root];
+  if (rootEntry === undefined) return root;
+  const under = new Set([entryKey(rootEntry)]);
+  let end = root;
+  for (let index = root + 1; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (entry === undefined || entry.parentKey === null) continue;
+    if (under.has(entry.parentKey)) {
+      under.add(entryKey(entry));
+      end = index;
+    }
+  }
+  return end;
 }
 
 /**
@@ -109,10 +148,10 @@ export function mergeEntries(
  * read's entries in the fresh read's order, then each held entry it does not
  * carry, which a reader paged in past that read's bound.
  *
- * `mergeEntries` appends what is new, which is right for a tail page and
- * wrong here. A subagent frame recorded late is placed by the server after
- * the call that spawned it, before entries the reader already holds (#4083).
- * Appended, it would draw at the foot of the run, away from its call.
+ * `mergeEntries` places a new entry under its parent or at the end, which is
+ * right for a tail page. A fresh read carries the server's order for every
+ * entry, including a subagent's entry recorded late under the call that
+ * spawned it (#4083), so this takes that order whole.
  */
 export function rebaseEntries(
   fresh: Frames,
