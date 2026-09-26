@@ -253,6 +253,11 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     expect(first.commandIds).toHaveLength(2);
     const liveRows = await rowsFor(publicIds.live);
     expect(liveRows).toHaveLength(1);
+    // The fan-out orders its recipients by start time, and both sessions
+    // here start at the same instant, so the live run's command is read from
+    // its own row rather than from a position in `commandIds`.
+    const firstLiveId = liveRows[0]?.publicId ?? "";
+    expect(first.commandIds).toContain(firstLiveId);
     expect(liveRows[0]).toMatchObject({
       hostId,
       sessionId: sessionIds.live,
@@ -291,7 +296,7 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     });
     const afterSupersede = await rowsFor(publicIds.live);
     const byId = new Map(afterSupersede.map((r) => [r.publicId, r]));
-    expect(byId.get(first.commandIds[0] ?? "")).toMatchObject({
+    expect(byId.get(firstLiveId)).toMatchObject({
       outcome: "cancelled",
       outcomeDetail: `superseded_by:${second.commandIds[0]}`,
     });
@@ -323,7 +328,7 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     // 4. An acknowledgement lands on the sent steer; one aimed at the
     //    cancelled steer changes nothing and is not counted.
     const steerId = second.commandIds[0] ?? "";
-    const cancelledId = first.commandIds[0] ?? "";
+    const cancelledId = firstLiveId;
     const acked = await fetch({
       schema: "tacho.commands.v2",
       host_enrollment_id: hostPublicId,

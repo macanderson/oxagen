@@ -201,11 +201,14 @@ export const postgresRunGitDiffs: ReadRunGitDiffs = async (
       .select({
         chain: sessions.sessionUuid,
         root: sessions.rootSessionUuid,
-        added: sql<number>`coalesce(sum(${files.linesAdded}), 0)::int`.mapWith(
-          Number,
-        ),
+        // bigint: one file's count can pass 2^31 - 1 (#3944, S-02), and an
+        // ::int cast then fails the page's whole read.
+        added:
+          sql<number>`coalesce(sum(${files.linesAdded}), 0)::bigint`.mapWith(
+            Number,
+          ),
         removed:
-          sql<number>`coalesce(sum(${files.linesRemoved}), 0)::int`.mapWith(
+          sql<number>`coalesce(sum(${files.linesRemoved}), 0)::bigint`.mapWith(
             Number,
           ),
       })

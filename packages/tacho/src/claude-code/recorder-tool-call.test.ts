@@ -8,6 +8,7 @@
  * that the ledger survives a restart and a chain rollback.
  */
 import { describe, expect, it } from "vitest";
+import { jsonContent } from "../evidence/frame-body";
 import type { ClaudeCodeContext } from "./context";
 import { SessionRecorder } from "./recorder";
 import {
@@ -194,6 +195,137 @@ describe("a tool call reported by every source", () => {
     const child = [...chain.openChildren.values()][0];
     expect(child).toBeDefined();
     expect(child === undefined ? [] : toolCalls(child)).toHaveLength(1);
+  });
+});
+
+/** The PreToolUse payload that opens a call before any source reports it. */
+function preToolUse(toolUseId: string): Record<string, unknown> {
+  return {
+    session_id: ID,
+    hook_event_name: "PreToolUse",
+    tool_name: "mcp__oxagen__query_ontology",
+    tool_use_id: toolUseId,
+    tool_input: { q: "x" },
+  };
+}
+
+/** What the daemon hands the recorder for one call the MCP gateway served. */
+function gatewayCall(chain: SessionRecorder, toolUseId: string) {
+  return chain.sealGatewayCall(
+    "tool_call",
+    {
+      tool_name: "query_ontology",
+      tool_source: "mcp",
+      tool_status: "ok",
+      tool_use_id: toolUseId,
+    },
+    {
+      attrs: { "oxagen.enforcement_tier": "gateway" },
+      content: jsonContent('{"input":{"q":"x"},"output":{}}'),
+    },
+  );
+}
+
+describe("a tool call the MCP gateway served for a hooked session", () => {
+  it("is awaited from its PreToolUse until a source seals it", () => {
+    const chain = recorder();
+    expect(chain.awaitsToolCall(TOOL_USE_ID)).toBe(false);
+    chain.ingestHook(preToolUse(TOOL_USE_ID), {}, at);
+    expect(chain.awaitsToolCall(TOOL_USE_ID)).toBe(true);
+    expect(gatewayCall(chain, TOOL_USE_ID)).toHaveLength(1);
+    expect(chain.awaitsToolCall(TOOL_USE_ID)).toBe(false);
+  });
+
+  it("seals the gateway's frame, and the PostToolUse for the same call seals nothing", () => {
+    const chain = recorder();
+    chain.ingestHook(preToolUse(TOOL_USE_ID), {}, at);
+    gatewayCall(chain, TOOL_USE_ID);
+    chain.ingestHook(
+      { ...postToolUse(TOOL_USE_ID), tool_name: "mcp__oxagen__query_ontology" },
+      {},
+      at,
+    );
+    chain.ingestOtlp(otelToolResult(TOOL_USE_ID));
+    const calls = toolCalls(chain);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.attrs["oxagen.enforcement_tier"]).toBe("gateway");
+    expect(calls[0]?.body).toMatchObject({ tool_use_id: TOOL_USE_ID });
+  });
+
+  it("lands on the chain of the subagent that made the call", () => {
+    const chain = recorder();
+    chain.ingestHook(
+      {
+        session_id: ID,
+        hook_event_name: "SubagentStart",
+        agent_id: "child",
+        agent_type: "reviewer",
+      },
+      {},
+      at,
+    );
+    chain.ingestHook(
+      { ...preToolUse("toolu_01child"), agent_id: "child" },
+      {},
+      at,
+    );
+    expect(chain.awaitsToolCall("toolu_01child")).toBe(true);
+    gatewayCall(chain, "toolu_01child");
+    chain.ingestHook(
+      { ...postToolUse("toolu_01child"), agent_id: "child" },
+      {},
+      at,
+    );
+    expect(toolCalls(chain)).toHaveLength(0);
+    const child = [...chain.openChildren.values()][0];
+    const calls = child === undefined ? [] : toolCalls(child);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.attrs["oxagen.enforcement_tier"]).toBe("gateway");
+  });
+
+  it("seals a refusal beside the tool_call the hook then seals", () => {
+    const chain = recorder();
+    chain.ingestHook(preToolUse(TOOL_USE_ID), {}, at);
+    chain.sealGatewayCall("policy_decision", {
+      tool_name: "query_ontology",
+      tool_use_id: TOOL_USE_ID,
+      policy_decision: "deny",
+      policy_source: "kernel",
+    });
+    // A refusal is not a sighting of the call, so the call is still awaited.
+    expect(chain.awaitsToolCall(TOOL_USE_ID)).toBe(true);
+    chain.ingestHook(
+      {
+        ...postToolUse(TOOL_USE_ID),
+        hook_event_name: "PostToolUseFailure",
+        error: "refused",
+      },
+      {},
+      at,
+    );
+    expect(toolCalls(chain)).toHaveLength(1);
+    expect(
+      chain.sealedEvents.filter(
+        (event) =>
+          event.kind === "policy_decision" &&
+          (event.body as { policy_source?: string }).policy_source === "kernel",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("keeps the awaited call through a restart and forgets it on a rollback", () => {
+    const chain = recorder();
+    const mark = chain.markChain();
+    chain.ingestHook(preToolUse(TOOL_USE_ID), {}, at);
+    const resumed = new SessionRecorder({
+      context,
+      harnessSessionId: ID,
+      scope: SCOPE,
+      restore: chain.state(),
+    });
+    expect(resumed.awaitsToolCall(TOOL_USE_ID)).toBe(true);
+    chain.rollbackChain(mark);
+    expect(chain.awaitsToolCall(TOOL_USE_ID)).toBe(false);
   });
 });
 

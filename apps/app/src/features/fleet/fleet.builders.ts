@@ -117,8 +117,14 @@ export const NO_INTERJECTIONS: Read<InterjectionQueue> = interjectionQueue([]);
 export function runPage(
   runs: RunRow[],
   nextCursor: string | null = null,
+  /** The workspace's live runs, as `list_runs` counts them; omitted when not counted. */
+  liveRuns?: number,
 ): Read<RunPage> {
-  return readOk({ runs, nextCursor });
+  return readOk({
+    runs,
+    nextCursor,
+    ...(liveRuns === undefined ? {} : { liveRuns }),
+  });
 }
 
 /**

@@ -2266,6 +2266,16 @@
       "complete": {
         "type": "boolean"
       },
+      "frameCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "counts": {
         "type": "object",
         "properties": {

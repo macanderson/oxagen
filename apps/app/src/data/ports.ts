@@ -237,6 +237,11 @@ export interface DataSource {
         offset?: number;
         /** Answer the page's `total`. Only a caller that draws a pager asks. */
         count?: boolean;
+        /**
+         * Ask for the workspace's live count (`RunPage.liveRuns`). It reads
+         * every root session the workspace holds, so only Fleet's tile asks.
+         */
+        countLive?: boolean;
       },
     ): Promise<Read<RunPage>>;
     get(

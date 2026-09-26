@@ -155,6 +155,11 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   numToolCalls: number;
   seqCount: number;
   startedAt: Date;
+  /**
+   * The row's server-clock birth, at or before its first frame's receipt.
+   * Absent where a reader did not select it.
+   */
+  createdAt?: Date;
   sealedAt: Date | null;
   /** `agent_stop`, `idle_timeout` or `operator`; null while open or on a seal older than the column. */
   sealSource?: string | null;
@@ -167,6 +172,14 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   costBasis?: string | null;
   /** The effort level the harness reported in its context frames. */
   effort?: string | null;
+  /** The directories and git branches the session's start recorded; absent where not selected. */
+  cwd?: string | null;
+  projectDir?: string | null;
+  worktreePath?: string | null;
+  gitBranch?: string | null;
+  worktreeBranch?: string | null;
+  /** The digest of the session's git remote; absent where not selected. */
+  gitRemoteDigest?: string | null;
   permissionModeInitial?: string | null;
   permissionModeFinal?: string | null;
   /** Token counters ingest folds from the session's counted `llm_call` frames. */
@@ -242,6 +255,17 @@ const LEDGER_RUN_STATUS: Readonly<Record<string, RunItem["status"]>> = {
   failed: "sealed",
   cancelled: "halted",
 };
+
+/**
+ * The ledger statuses `ledgerRunStatus` reads as live, from its own table, so
+ * the count and the rows cannot disagree on which runs are open.
+ */
+export const LEDGER_LIVE_STATUSES: readonly string[] = Object.keys(
+  LEDGER_RUN_STATUS,
+).filter((status) => LEDGER_RUN_STATUS[status] === "live");
+
+/** The session outcomes `tachoRunStatus` reads as live. */
+export const TACHO_LIVE_OUTCOMES: readonly string[] = ["running"];
 
 /**
  * `pending` (admitted, no attempt yet) and `running` are both open runs. Every
@@ -500,6 +524,7 @@ export function toLedgerRunItem(
     permissionMode: null,
     reportedTokens: null,
     machine: null,
+    place: null,
     name: run.name,
     summary: generatedSummary(run),
     ...enrichmentError(run),
@@ -631,6 +656,39 @@ export function reportedTokensOf(
   return { input, output, cacheRead, cacheWrite };
 }
 
+/**
+ * Where the session ran, as its start recorded it. A session that ran in a
+ * worktree names the worktree and its branch, the branch its work went to.
+ * The path is read in the order `get_run_work` names a checkout's
+ * (`coalesce(worktree_path, project_dir, cwd)`), so the header shows the same
+ * folder before and after that read answers. Omitted when the reader selected
+ * none of the columns, so a caller reads "not known" rather than "not
+ * recorded"; null when the session recorded neither a path nor a branch.
+ */
+export function tachoPlace(
+  session: Pick<
+    TachoSessionColumns,
+    "cwd" | "projectDir" | "worktreePath" | "gitBranch" | "worktreeBranch"
+  >,
+): Pick<RunItem, "place"> {
+  if (
+    session.cwd === undefined &&
+    session.projectDir === undefined &&
+    session.worktreePath === undefined &&
+    session.gitBranch === undefined &&
+    session.worktreeBranch === undefined
+  )
+    return {};
+  const path =
+    blankToNull(session.worktreePath ?? null) ??
+    blankToNull(session.projectDir ?? null) ??
+    blankToNull(session.cwd ?? null);
+  const branch =
+    blankToNull(session.worktreeBranch ?? null) ??
+    blankToNull(session.gitBranch ?? null);
+  return { place: path === null && branch === null ? null : { path, branch } };
+}
+
 export function toTachoRunItem(
   row: TachoSessionRow,
   totals: RunRollup | undefined,
@@ -701,6 +759,7 @@ export function toTachoRunItem(
     ),
     reportedTokens: reportedTokensOf(session),
     machine: toRunMachine(row.host, row.session.machineSnapshot),
+    ...tachoPlace(session),
     harness: session.harness
       ? {
           name: session.harness,

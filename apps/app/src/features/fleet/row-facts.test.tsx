@@ -76,9 +76,12 @@ const counts = (total: number) => ({
   reasoning: 0,
 });
 
-async function renderFleet(runs: Parameters<typeof runPage>[0]) {
+async function renderFleet(
+  runs: Parameters<typeof runPage>[0],
+  liveRuns?: number,
+) {
   const { source } = fleetSource({
-    runs: runPage(runs),
+    runs: runPage(runs, null, liveRuns),
     approvals: approvalQueue([]),
     agents: agentPage(["acme.core.release-bot"], 1),
   });
@@ -246,11 +249,14 @@ describe("paused and compacted rows (#3835)", () => {
     );
   });
 
-  it("does not count a paused run in Live runs, as it is waiting on a person (negative)", async () => {
-    await renderFleet(runs);
+  // Live runs is the workspace's count from list_runs (#4343), not a count of
+  // the rows, and it counts an open run whatever its word: the live chip lists
+  // a paused run too (ADR-193). The rows here hold one live and one paused run.
+  it("reads Live runs from the workspace count, not from the paused and live rows", async () => {
+    await renderFleet(runs, 5);
     const tile = screen
       .getAllByTestId("tile")
       .find((t) => t.firstElementChild?.textContent === "Live runs");
-    expect(tile).toHaveTextContent("Live runs1");
+    expect(tile).toHaveTextContent("Live runs5");
   });
 });

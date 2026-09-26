@@ -506,6 +506,13 @@ export const tachoSessions = tachoSchema.table(
     totalCostMicros: bigint("total_cost_micros", { mode: "number" })
       .notNull()
       .default(0),
+    // The total the harness reported for itself at `agent_stop`
+    // (`total_cost_usd_micros`), kept apart from `total_cost_micros`. A
+    // session the host's model proxy metered keeps its observed total, and
+    // this column holds what the harness claimed beside it (#3944, S-07).
+    harnessReportedCostMicros: bigint("harness_reported_cost_micros", {
+      mode: "number",
+    }),
     costBasis: text("cost_basis"),
     hasUnknownModelCost: boolean("has_unknown_model_cost"),
     durationMs: bigint("duration_ms", { mode: "number" }),
@@ -643,6 +650,14 @@ export const tachoSessions = tachoSchema.table(
     // Why the last automatic account failed, as a short reason code; null
     // once an account is written or the run is no longer due.
     summaryError: text("summary_error"),
+    // What enrichment has spent on this run's accounts across every job, in
+    // micro-dollars. `run.enrich` adds each model call's price and stops at
+    // `ENRICHMENT_RUN_TOTAL_BUDGET_USD` (#4312).
+    summarySpentUsdMicros: bigint("summary_spent_usd_micros", {
+      mode: "number",
+    })
+      .notNull()
+      .default(0),
     // The title the harness gave the session itself (Claude Code's
     // `ai-title`), and the frame time it carried. It outranks `name` and
     // `title` on the Run page, and an older frame never replaces it.
@@ -767,8 +782,12 @@ export const tachoSessionFiles = tachoSchema.table(
     bytesWritten: bigint("bytes_written", { mode: "number" })
       .notNull()
       .default(0),
-    linesAdded: integer("lines_added").notNull().default(0),
-    linesRemoved: integer("lines_removed").notNull().default(0),
+    // bigint: git reconciliation assigns these from the envelope's u32, which
+    // passes the int4 limit (#3944, S-02).
+    linesAdded: bigint("lines_added", { mode: "number" }).notNull().default(0),
+    linesRemoved: bigint("lines_removed", { mode: "number" })
+      .notNull()
+      .default(0),
     /**
      * What git said about this path at the last reconciliation: added,
      * modified, deleted or renamed. Null means no current changed-file

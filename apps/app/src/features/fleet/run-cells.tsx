@@ -5,7 +5,12 @@
 // under 1,500 lines.
 import { GitPullRequest } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import type { RunDiff, RunPullRequest, RunRow } from "@/data/contracts/runs";
+import {
+  type RunDiff,
+  type RunPullRequest,
+  type RunRow,
+  staleReason,
+} from "@/data/contracts/runs";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import {
@@ -320,6 +325,10 @@ export type RowWord = RowState | "paused" | "compacted";
  * run's lifecycle status (ADR-193), so each draws its own word here, and
  * paused and compacted say on hover what the word means. Every other state
  * is the lifecycle word `StatusBadge` draws.
+ *
+ * A stale run's host went quiet, so its parked call or its pause is no longer
+ * news of the run: stale wins over both, as on the Run page's header. A
+ * compacted run is sealed, and a sealed run never reads stale.
  */
 export function RowStatusBadge({
   run,
@@ -329,6 +338,16 @@ export function RowStatusBadge({
   state: RowWord;
 }) {
   const t = useTranslations("fleet.runs");
+  const stale = staleReason(run);
+  if (stale !== null)
+    return (
+      <StatusBadge
+        status={run.status}
+        outcome={run.outcome}
+        vocabulary="lifecycle"
+        stale={stale}
+      />
+    );
   switch (state) {
     case "parked":
       return (

@@ -371,6 +371,7 @@ export function toRunTranscript(
     })),
     cursor: out.cursor,
     complete: out.complete,
+    frameCursor: out.frameCursor ?? null,
     counts: countsOf(out.counts),
     figures: out.figures ?? null,
     search: out.search ?? null,

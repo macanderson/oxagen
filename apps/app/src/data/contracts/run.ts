@@ -706,6 +706,13 @@ export const RunTranscript = z.object({
   cursor: z.string().nullable(),
   /** False when the run has more frames than one transcript could carry. */
   complete: z.boolean(),
+  /**
+   * Where the run's stream opens for a reader holding this transcript: the
+   * cursor of the last frame on the run's own chain the read folded. Null or
+   * absent when the read folded none, and the stream then opens at the run's
+   * first frame.
+   */
+  frameCursor: z.string().nullable().optional(),
   /** The run's entries counted at this zoom; null when the answer carried none. */
   counts: TranscriptCounts.nullable(),
   /** The run's figures; null when the answer carried none. */

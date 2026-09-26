@@ -88,7 +88,9 @@ async function readFleet(
 ) {
   const [runs, approvals, interjections, agents] = await Promise.all([
     // The search, the facets, the order and the page are the read's (#3837).
-    source.runs.list(ctx, toRunsListQuery(list, at)),
+    // Every page also asks for the workspace's live count, since the Live
+    // runs tile sits above each page.
+    source.runs.list(ctx, { ...toRunsListQuery(list, at), countLive: true }),
     source.approvals.pending(ctx, { runId: null }),
     source.interjections.open(ctx, { runId: null }),
     readAgentRoster(ctx, source),
@@ -221,6 +223,7 @@ export async function Fleet({
         approvals={approvals}
         interjections={interjections}
         agentTotal={agents.ok ? agents.value.totals.identities : null}
+        liveRuns={runs.value.liveRuns ?? null}
         now={now}
         canCommand={canCommand}
       />

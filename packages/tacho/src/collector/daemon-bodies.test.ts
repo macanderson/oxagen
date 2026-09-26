@@ -5,8 +5,18 @@
  * the log. Kept apart from daemon.test.ts, whose fake control plane accepts
  * events and never looks at bodies.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  promises as fsp,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { request } from "node:http";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { digestBytes, digestJcs } from "../digest";
@@ -328,6 +338,467 @@ describe("tachod and frame bodies", () => {
       output: MCP_RESULT,
     });
     expect(frame?.content?.digest).toBe(digestBytes(new Uint8Array(bytes)));
+  });
+
+  it("seals one tool_call for a gateway call a hooked session made, on that session's chain", async () => {
+    // Claude Code with the gateway as one of its MCP servers: the call's
+    // PreToolUse, the gateway's forward, and its PostToolUse all report one
+    // call, and each used to seal its own identity (G-11, ADR-189).
+    const { fetch, batches } = plane();
+    const { handle, host } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const port = handle.port as number;
+    const hooked = "sess-gateway-1";
+    const toolUseId = "toolu_01GatewayCall";
+    const tool = {
+      session_id: hooked,
+      tool_name: "mcp__oxagen__query_ontology",
+      tool_input: MCP_ARGUMENTS,
+      tool_use_id: toolUseId,
+    };
+    for (const hook of [
+      { session_id: hooked, hook_event_name: "SessionStart", cwd: "/repo" },
+      { session_id: hooked, hook_event_name: "UserPromptSubmit", prompt: "q" },
+      { ...tool, hook_event_name: "PreToolUse" },
+    ])
+      expect(await post(port, host.local_token, hook)).toBe(200);
+    const answer = await handle.api.mcp?.(
+      {
+        jsonrpc: "2.0",
+        id: 9,
+        method: "tools/call",
+        params: {
+          name: "query_ontology",
+          arguments: MCP_ARGUMENTS,
+          _meta: { "claudecode/toolUseId": toolUseId },
+        },
+      },
+      { sessionId: "mcp-sess-2" },
+    );
+    expect(answer?.status).toBe(200);
+    expect(
+      await post(port, host.local_token, {
+        ...tool,
+        hook_event_name: "PostToolUse",
+        tool_response: MCP_RESULT,
+      }),
+    ).toBe(200);
+    await handle.tick();
+
+    const frames = batches
+      .flatMap((b) => b.events)
+      .filter((event) => event.kind === "tool_call");
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.session_uuid).toBe(
+      handle.registry.get(hooked)?.recorder.sessionUuid,
+    );
+    expect(frames[0]?.body).toMatchObject({
+      tool_use_id: toolUseId,
+      tool_input_digest: digestJcs(MCP_ARGUMENTS),
+      tool_output_digest: digestJcs(MCP_RESULT),
+    });
+    expect(frames[0]?.attrs).toMatchObject({
+      "oxagen.enforcement_tier": "gateway",
+      "oxagen.mcp_session": "mcp-sess-2",
+    });
+    // The daemon's own chain holds nothing for the call.
+    expect(handle.wal.read(handle.hostRecorder.sessionUuid)).not.toContainEqual(
+      expect.objectContaining({ kind: "tool_call" }),
+    );
+  });
+
+  it("leaves a gateway call to its PostToolUse when the session chain write fails", async () => {
+    // ADR-189 decision 5: the gateway's frame is written on the serial queue
+    // after the client has its answer. A failed write is logged and rolled
+    // back, the call stays claimed, and the hook seals the call's one frame.
+    const { fetch, batches } = plane();
+    const { handle, host, log } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const port = handle.port as number;
+    const hooked = "sess-gateway-rollback";
+    const toolUseId = "toolu_01GatewayRollback";
+    const tool = {
+      session_id: hooked,
+      tool_name: "mcp__oxagen__query_ontology",
+      tool_input: MCP_ARGUMENTS,
+      tool_use_id: toolUseId,
+    };
+    for (const hook of [
+      { session_id: hooked, hook_event_name: "SessionStart", cwd: "/repo" },
+      { session_id: hooked, hook_event_name: "UserPromptSubmit", prompt: "q" },
+      { ...tool, hook_event_name: "PreToolUse" },
+    ])
+      expect(await post(port, host.local_token, hook)).toBe(200);
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = false;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (
+          !failed &&
+          events.some(
+            (event) =>
+              event.kind === "tool_call" &&
+              event.attrs["oxagen.enforcement_tier"] === "gateway",
+          )
+        ) {
+          failed = true;
+          throw Object.assign(new Error("event disk full"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    const answer = await handle.api.mcp?.(
+      {
+        jsonrpc: "2.0",
+        id: 11,
+        method: "tools/call",
+        params: {
+          name: "query_ontology",
+          arguments: MCP_ARGUMENTS,
+          _meta: { "claudecode/toolUseId": toolUseId },
+        },
+      },
+      { sessionId: "mcp-sess-4" },
+    );
+    expect(answer?.status).toBe(200);
+    // The hook runs on the same queue, after the gateway's write.
+    expect(
+      await post(port, host.local_token, {
+        ...tool,
+        hook_event_name: "PostToolUse",
+        tool_response: MCP_RESULT,
+      }),
+    ).toBe(200);
+    fault.mockRestore();
+    await handle.tick();
+
+    expect(failed).toBe(true);
+    expect(
+      log.some((line) =>
+        line.includes(
+          `mcp gateway could not record query_ontology (${toolUseId}): event disk full`,
+        ),
+      ),
+    ).toBe(true);
+    const session = handle.registry.get(hooked)?.recorder.sessionUuid;
+    const frames = batches
+      .flatMap((b) => b.events)
+      .filter((event) => event.kind === "tool_call");
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.session_uuid).toBe(session);
+    expect(frames[0]?.body).toMatchObject({ tool_use_id: toolUseId });
+    expect(frames[0]?.attrs["oxagen.enforcement_tier"]).not.toBe("gateway");
+    // The rollback left no hole in the session's chain.
+    const seqs = handle.wal.read(session as string).map((event) => event.seq);
+    expect(seqs).toEqual(seqs.map((_, index) => index));
+  });
+
+  /**
+   * Hold the next tick inside the serial queue, at the tailer's listing of
+   * `transcript`'s subagents directory. `reached` settles once the tick is
+   * held there, and `release` lets it go on.
+   */
+  function holdTickAt(transcript: string) {
+    const subagents = join(transcript.slice(0, -".jsonl".length), "subagents");
+    let held: () => void = () => {};
+    const reached = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const readdir = fsp.readdir.bind(fsp) as (
+      path: string,
+    ) => Promise<string[]>;
+    const spy = vi.spyOn(fsp, "readdir").mockImplementation((async (
+      path: string,
+    ) => {
+      if (String(path) === subagents) {
+        held();
+        await gate;
+      }
+      return readdir(path);
+    }) as unknown as typeof fsp.readdir);
+    return { reached, release, restore: () => spy.mockRestore() };
+  }
+
+  /** A hooked session that has requested one gateway tool call. */
+  async function hookedCall(
+    port: number,
+    token: string,
+    hooked: string,
+    toolUseId: string,
+  ) {
+    const dir = mkdtempSync(join(tmpdir(), "tacho-gateway-transcript-"));
+    const transcript = join(dir, `${hooked}.jsonl`);
+    const tool = {
+      session_id: hooked,
+      tool_name: "mcp__oxagen__query_ontology",
+      tool_input: MCP_ARGUMENTS,
+      tool_use_id: toolUseId,
+    };
+    for (const hook of [
+      {
+        session_id: hooked,
+        hook_event_name: "SessionStart",
+        cwd: "/repo",
+        transcript_path: transcript,
+      },
+      { session_id: hooked, hook_event_name: "UserPromptSubmit", prompt: "q" },
+      { ...tool, hook_event_name: "PreToolUse" },
+    ])
+      expect(await post(port, token, hook)).toBe(200);
+    return { tool, transcript, dir };
+  }
+
+  function gatewayCall(toolUseId: string, id: number) {
+    return {
+      jsonrpc: "2.0" as const,
+      id,
+      method: "tools/call",
+      params: {
+        name: "query_ontology",
+        arguments: MCP_ARGUMENTS,
+        _meta: { "claudecode/toolUseId": toolUseId },
+      },
+    };
+  }
+
+  it("seals a gateway call on its session's chain when the transcript reported it while the frame was queued", async () => {
+    // A tick already on the queue reads the call's tool_result from the
+    // transcript before the gateway's frame is written. The frame was then
+    // sealed on the daemon's chain with no tool_use_id, a second identity
+    // for the call (G-11).
+    const { fetch, batches } = plane();
+    const { handle, host } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const port = handle.port as number;
+    const hooked = "sess-gateway-queued";
+    const toolUseId = "toolu_01GatewayQueued";
+    const { tool, transcript, dir } = await hookedCall(
+      port,
+      host.local_token,
+      hooked,
+      toolUseId,
+    );
+    try {
+      writeFileSync(
+        transcript,
+        `${JSON.stringify({
+          type: "user",
+          timestamp: "2026-09-25T00:00:00.000Z",
+          toolUseResult: MCP_RESULT,
+          message: {
+            role: "user",
+            content: [{ type: "tool_result", tool_use_id: toolUseId }],
+          },
+        })}\n`,
+      );
+      const hold = holdTickAt(transcript);
+      let ticking: Promise<void>;
+      try {
+        ticking = handle.tick();
+        await hold.reached;
+        const answer = await handle.api.mcp?.(gatewayCall(toolUseId, 12), {
+          sessionId: "mcp-sess-5",
+        });
+        expect(answer?.status).toBe(200);
+      } finally {
+        hold.release();
+        hold.restore();
+      }
+      await ticking;
+      expect(
+        await post(port, host.local_token, {
+          ...tool,
+          hook_event_name: "PostToolUse",
+          tool_response: MCP_RESULT,
+        }),
+      ).toBe(200);
+      await handle.tick();
+
+      const session = handle.registry.get(hooked)?.recorder.sessionUuid;
+      const frames = batches
+        .flatMap((b) => b.events)
+        .filter((event) => event.kind === "tool_call");
+      expect(frames.map((frame) => frame.session_uuid)).toEqual(
+        frames.map(() => session),
+      );
+      expect(frames.map((frame) => frame.body)).toEqual(
+        frames.map(() => expect.objectContaining({ tool_use_id: toolUseId })),
+      );
+      // One counted call: the transcript's sighting, and the gateway's body
+      // stamped as its duplicate.
+      const counted = frames.filter(
+        (frame) => frame.attrs["oxagen.tool_call_duplicate_of"] === undefined,
+      );
+      expect(counted).toHaveLength(1);
+      expect(counted[0]?.source).toBe("transcript");
+      expect(
+        frames.find(
+          (frame) => frame.attrs["oxagen.enforcement_tier"] === "gateway",
+        )?.attrs["oxagen.tool_call_duplicate_of"],
+      ).toBe("transcript");
+      expect(
+        handle.wal.read(handle.hostRecorder.sessionUuid),
+      ).not.toContainEqual(expect.objectContaining({ kind: "tool_call" }));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("seals a second gateway call naming a queued id on the daemon's chain", async () => {
+    // Only the first call is the one the session waits on. The second is
+    // recorded where it would be once the first had landed, not dropped as
+    // a repeat of it.
+    const { fetch, batches } = plane();
+    const { handle, host } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const port = handle.port as number;
+    const hooked = "sess-gateway-twice";
+    const toolUseId = "toolu_01GatewayTwice";
+    const { transcript, dir } = await hookedCall(
+      port,
+      host.local_token,
+      hooked,
+      toolUseId,
+    );
+    try {
+      const hold = holdTickAt(transcript);
+      let ticking: Promise<void>;
+      try {
+        ticking = handle.tick();
+        await hold.reached;
+        for (const [id, mcpSession] of [
+          [14, "mcp-sess-7"],
+          [15, "mcp-sess-8"],
+        ] as const)
+          expect(
+            (
+              await handle.api.mcp?.(gatewayCall(toolUseId, id), {
+                sessionId: mcpSession,
+              })
+            )?.status,
+          ).toBe(200);
+      } finally {
+        hold.release();
+        hold.restore();
+      }
+      await ticking;
+      await handle.tick();
+
+      const frames = batches
+        .flatMap((b) => b.events)
+        .filter((event) => event.kind === "tool_call");
+      expect(
+        frames.map((frame) => [
+          frame.session_uuid,
+          frame.attrs["oxagen.mcp_session"],
+        ]),
+      ).toEqual(
+        expect.arrayContaining([
+          [handle.registry.get(hooked)?.recorder.sessionUuid, "mcp-sess-7"],
+          [handle.hostRecorder.sessionUuid, "mcp-sess-8"],
+        ]),
+      );
+      expect(frames).toHaveLength(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("says so when a queued gateway frame falls back to the daemon's chain", async () => {
+    // The session's chain closed while the frame waited on the queue: an
+    // idle sweep in the tick ahead of it sealed the session.
+    let clock = Date.parse("2026-09-25T00:00:00.000Z");
+    const { fetch, batches } = plane();
+    const { handle, host, log } = await boot(
+      fetch,
+      { mode: "content_exact", classes: ["tool_call"] },
+      () => clock,
+    );
+    const port = handle.port as number;
+    const hooked = "sess-gateway-swept";
+    const toolUseId = "toolu_01GatewaySwept";
+    const { transcript, dir } = await hookedCall(
+      port,
+      host.local_token,
+      hooked,
+      toolUseId,
+    );
+    try {
+      const hold = holdTickAt(transcript);
+      let ticking: Promise<void>;
+      try {
+        ticking = handle.tick();
+        await hold.reached;
+        const answer = await handle.api.mcp?.(gatewayCall(toolUseId, 13), {
+          sessionId: "mcp-sess-6",
+        });
+        expect(answer?.status).toBe(200);
+        // Seven hours on: the held tick's sweep finds the session idle.
+        clock += 7 * 60 * 60_000;
+      } finally {
+        hold.release();
+        hold.restore();
+      }
+      await ticking;
+      await handle.tick();
+
+      expect(handle.registry.get(hooked)?.sealed).toBe(true);
+      expect(
+        log.some((line) =>
+          line.includes(
+            `mcp gateway recorded query_ontology (${toolUseId}) on the daemon's chain: session ${hooked} closed`,
+          ),
+        ),
+      ).toBe(true);
+      const frames = batches
+        .flatMap((b) => b.events)
+        .filter((event) => event.kind === "tool_call");
+      expect(frames).toHaveLength(1);
+      expect(frames[0]?.session_uuid).toBe(handle.hostRecorder.sessionUuid);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("seals a gateway call on the daemon's chain when no session is waiting on its id", async () => {
+    const { fetch, batches } = plane();
+    const { handle } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    await handle.api.mcp?.(
+      {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "tools/call",
+        params: {
+          name: "query_ontology",
+          arguments: MCP_ARGUMENTS,
+          _meta: { "claudecode/toolUseId": "toolu_01NobodyAsked" },
+        },
+      },
+      { sessionId: "mcp-sess-3" },
+    );
+    await handle.tick();
+    const frames = batches
+      .flatMap((b) => b.events)
+      .filter((event) => event.kind === "tool_call");
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.session_uuid).toBe(handle.hostRecorder.sessionUuid);
   });
 
   it("reseals a gateway call whose WAL write failed with its body and no hole", async () => {

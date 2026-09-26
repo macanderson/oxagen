@@ -82,6 +82,7 @@ export function toRunRow(
       ? {}
       : { cacheHitRate: run.cacheHitRate }),
     machine: run.machine,
+    place: run.place ?? null,
     harness: run.harness ?? null,
     taskRef: run.taskRef,
     name: run.name,
@@ -136,6 +137,7 @@ export function toRunPage(out: RunListOutput): z.input<typeof RunPage> {
   return {
     runs: out.runs.map(toRunRow),
     nextCursor: out.nextCursor,
+    ...(out.liveRuns === undefined ? {} : { liveRuns: out.liveRuns }),
     ...(out.warnings === undefined ? {} : { warnings: out.warnings }),
     // Absent when the read did not count; null past the bound (#3837).
     ...(out.total === undefined ? {} : { total: out.total }),

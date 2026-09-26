@@ -38,5 +38,6 @@ export function toRunListInput(q: RunListQuery): RunListInput {
       : { sort: q.sort }),
     ...(q.offset === undefined || q.offset === 0 ? {} : { offset: q.offset }),
     ...(q.count === true ? { count: true } : {}),
+    ...(q.countLive === true ? { countLive: true } : {}),
   };
 }

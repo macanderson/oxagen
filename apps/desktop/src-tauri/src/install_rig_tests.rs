@@ -7,8 +7,8 @@
 //! `packages/tacho/src/cli/install-rig.test.ts`.
 
 use crate::cli_install::{
-    ensure_cli_installed_in, link_cli_in, remove_everything_in, unlink_cli_in, write_auto_link_cli, CliInstallState,
-    InstallEnv,
+    ensure_cli_installed_in, link_cli_in, record_config_dir, remove_everything_in, unlink_cli_in, write_auto_link_cli,
+    CliInstallState, InstallEnv,
 };
 use crate::machine::test_support::{scratch_roots, snapshot};
 use crate::machine::Roots;
@@ -297,4 +297,74 @@ fn every_pass_stores_its_outcome_while_it_still_holds_the_lock() {
     assert!(removed.is_ok(), "{removed:?}");
     let linked = fs::symlink_metadata(env.roots.home.join(".local/bin/tacho")).is_ok();
     assert_eq!(current(&state) == "linked", linked, "{launch:?}");
+}
+
+/// #4318: an empty `~/.config` the person had before Oxagen is still there
+/// after Uninstall. Only a launch that found no `~/.config` records that the
+/// app made it, and only then does Uninstall remove it.
+#[cfg(unix)]
+#[test]
+fn an_empty_config_directory_the_person_already_had_is_kept() {
+    let roots = scratch_roots("config-kept", "/bin/zsh");
+    fs::create_dir_all(roots.home.join(".config")).unwrap();
+    let env = env_for(roots, false);
+    let before = snapshot(&env.roots.home);
+    // Launch, then what `oxagen login` writes, then Link into PATH.
+    record_config_dir(&env.roots).unwrap();
+    put(&env.roots.oxagen_dir().join("config.json"), b"{\"token\":\"t\"}\n");
+    link_cli_in(&env, &CliInstallState::default()).unwrap();
+    remove_everything_in(&env, &CliInstallState::default()).unwrap();
+    assert!(env.roots.home.join(".config").is_dir());
+    assert_eq!(snapshot(&env.roots.home), before);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_config_directory_the_app_created_goes_with_it() {
+    let env = env_for(scratch_roots("config-created", "/bin/zsh"), false);
+    let before = snapshot(&env.roots.home);
+    assert!(!env.roots.home.join(".config").exists());
+    record_config_dir(&env.roots).unwrap();
+    assert!(env.roots.home.join(".config").is_dir());
+    // A second launch finds `~/.config` and changes nothing.
+    let launched = snapshot(&env.roots.home);
+    record_config_dir(&env.roots).unwrap();
+    assert_eq!(snapshot(&env.roots.home), launched);
+    put(&env.roots.oxagen_dir().join("config.json"), b"{\"token\":\"t\"}\n");
+    let report = remove_everything_in(&env, &CliInstallState::default()).unwrap();
+    assert!(!env.roots.home.join(".config").exists());
+    assert!(
+        report.removed.iter().any(|path| path.ends_with(".config")),
+        "{report:?}"
+    );
+    assert_eq!(snapshot(&env.roots.home), before);
+}
+
+/// Audit D-06: an offline `tacho unenroll` keeps a retired `host.json` so the
+/// revoke can be finished, and Uninstall then deletes it. The report names
+/// the agent key the fleet page still lists, read before the file goes.
+#[cfg(unix)]
+#[test]
+fn uninstall_names_the_revoke_a_retired_host_still_owes() {
+    let env = env_for(scratch_roots("pending-revoke", "/bin/zsh"), false);
+    let host = env.roots.tacho_root().join("host.json");
+    put(
+        &host,
+        br#"{"host_enrollment_id":"tch_1","agent_key":"acme.core.cc-laptop","revoked_at":"2026-09-18T00:00:00Z"}"#,
+    );
+    let report = remove_everything_in(&env, &CliInstallState::default()).unwrap();
+    assert!(!host.exists());
+    let pending = report
+        .pending_revoke
+        .as_ref()
+        .expect("the retired host's revoke is reported");
+    assert_eq!(pending.agent_key, "acme.core.cc-laptop");
+    assert_eq!(pending.host_enrollment_id, "tch_1");
+    assert!(report.left.is_empty(), "{report:?}");
+    // Nothing retired, nothing owed.
+    let clean = env_for(scratch_roots("no-revoke", "/bin/zsh"), false);
+    assert!(remove_everything_in(&clean, &CliInstallState::default())
+        .unwrap()
+        .pending_revoke
+        .is_none());
 }

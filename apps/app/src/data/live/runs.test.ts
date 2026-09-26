@@ -132,6 +132,7 @@ describe("runs.list", () => {
             model: viewModel,
             harness: null,
             machine,
+            place: null,
             taskRef: null,
             name: null,
             summary: null,
@@ -184,6 +185,24 @@ describe("runs.list", () => {
     expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
       contract: runList,
       input: { limit: 10, cursor: "c2" },
+      page: "fleet",
+    });
+  });
+
+  it("asks list_runs for the live count only when the caller does (#4343 review)", async () => {
+    kernelRead.mockResolvedValue(readOk({ runs: [], nextCursor: null }));
+    await runs.list(ctx, { cursor: "c2", limit: 25, countLive: true });
+    expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
+      contract: runList,
+      input: { limit: 25, cursor: "c2", countLive: true },
+      page: "fleet",
+    });
+    // Negative: the agents page, the onboarding gate and the choice dialogs
+    // read runs without the tile, so their reads count nothing.
+    await runs.list(ctx, { cursor: null, countLive: false });
+    expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
+      contract: runList,
+      input: { limit: 100 },
       page: "fleet",
     });
   });
