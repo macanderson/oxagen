@@ -46,6 +46,7 @@ import {
   transcriptEntry,
   transcriptFigures,
 } from "./run.builders";
+import { runIssue, runIssues } from "./issues.builders";
 import { releaseTranscript } from "./transcript.builders";
 
 /**
@@ -1344,6 +1345,8 @@ describe("tabs", () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
+      // One issue: the task (#3970).
+      issues: ok(runIssues()),
     });
     const tabs = within(screen.getByRole("tablist", { name: "Run sections" }));
     expect(
@@ -2879,9 +2882,28 @@ describe("an open run's cost and the idle close (#3980)", () => {
 });
 
 describe("issues", () => {
-  it("lists the task the run was started on", async () => {
+  it("lists the issues get_run_issues answers, the task first", async () => {
     const { container } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        issues: ok(
+          runIssues({
+            issues: [
+              runIssue({
+                ref: "ENG-4121",
+                repository: null,
+                number: null,
+                title: null,
+                status: null,
+                statusRead: "not_github",
+                readAt: null,
+                url: null,
+              }),
+            ],
+          }),
+        ),
+      },
       { tab: "issues" },
     );
     const issues = within(screen.getByRole("region", { name: "Issues" }));
@@ -2894,7 +2916,7 @@ describe("issues", () => {
     await expectNoAxe(container);
   });
 
-  it("says a run with no task reference names no issue, and counts a floor while GitHub's closing list is unread (negative)", async () => {
+  it("says a run that names no issue has none, and counts a floor when a limit cut the list (negative)", async () => {
     await renderRun(
       {
         detail: ok(runDetail({ run: runRow({ taskRef: null }) })),
@@ -2902,11 +2924,8 @@ describe("issues", () => {
       },
       { tab: "issues" },
     );
-    // No pull request was recorded, so the answer is exact.
     expect(
-      screen.getByText(
-        "This run names no issue, and no pull request it opened closes one.",
-      ),
+      screen.getByText("No issue is linked to this session."),
     ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent(/^0$/);
     cleanup();
@@ -2914,44 +2933,45 @@ describe("issues", () => {
       {
         detail: ok(runDetail({ run: runRow({ taskRef: null }) })),
         transcript: ok(runTranscript()),
-        work: ok(runWork()),
+        issues: ok(
+          runIssues({
+            issues: [],
+            complete: false,
+            warnings: ["closing_issues_read_failed"],
+          }),
+        ),
       },
       { tab: "issues" },
     );
-    // A recorded pull request whose closing list GitHub did not return.
-    expect(
-      screen.getByText(
-        "This run names no issue. GitHub did not return the issues its pull requests close.",
-      ),
-    ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("0+");
   });
 
-  it("counts the issues the run's pull requests close in the tab, the same rows the table draws", async () => {
-    const work = runWork();
+  it("counts the rows the table draws in the tab, from the one issues read", async () => {
     await renderRun(
       {
         detail: ok(runDetail()),
         transcript: ok(runTranscript()),
-        work: ok({
-          ...work,
-          pullRequests: work.pullRequests.map((pr) => ({
-            ...pr,
-            closingIssues: {
-              issues: [
-                {
-                  owner: "acme",
-                  repo: "platform",
-                  number: 490,
-                  title: "Release checklist",
-                  url: "https://github.com/acme/platform/issues/490",
-                  state: "open" as const,
-                },
-              ],
-              complete: true,
-            },
-          })),
-        }),
+        issues: ok(
+          runIssues({
+            issues: [
+              runIssue(),
+              runIssue({
+                ref: "a-intel/platform#490",
+                number: 490,
+                relation: "resolves",
+                resolvedBy: [
+                  {
+                    number: 511,
+                    url: "https://github.com/a-intel/platform/pull/511",
+                  },
+                ],
+                edge: "observed",
+                frameSeqs: ["36"],
+                url: "https://github.com/a-intel/platform/issues/490",
+              }),
+            ],
+          }),
+        ),
       },
       { tab: "issues" },
     );

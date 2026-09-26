@@ -4,8 +4,8 @@
 // side column, "The work", holds the Changes panel and the Outputs spine.
 //
 // The page makes the reads every part shares (the run, the whole-run
-// transcript at `steps`, the cost rollup, the outputs, the work, the agent
-// and the approvals parked on the run), shapes the figures once
+// transcript at `steps`, the cost rollup, the outputs, the work, the issues,
+// the agent and the approvals parked on the run), shapes the figures once
 // (`runMetrics`), and hands the open tab the whole bundle. The transcript is
 // folded and counted on the server (ADR-182): the tab counts are its
 // `counts`, and the figures its `figures`. The run at `everything`, one entry
@@ -44,6 +44,7 @@ import {
 import { parseKinds, TranscriptTab } from "./transcript";
 import { readWholeTranscript } from "./whole-transcript";
 import { ChangesLoading, ChangesPanel } from "./work";
+import { readRunIssues } from "./run-issues";
 import { readRunWork } from "./work-ci";
 
 /** The tab strip, with what each tab carries beside its name, from the reads the page already made. */
@@ -81,14 +82,14 @@ function Tabs({
     // The entries the Transcript tab draws, which its header line counts
     // too, so the tab and the line cannot disagree.
     transcript: { count: countOf((counts) => counts.entries) },
-    // The task reference now, and the issues the run's pull requests close
-    // once GitHub answers; the table under the tab counts the same rows.
+    // The task reference now, and every issue `get_run_issues` lists once it
+    // answers; the table under the tab counts the same rows (#3970).
     issues: {
       count: (
         <Suspense
           fallback={t("atLeast", { count: run.taskRef === null ? 0 : 1 })}
         >
-          <IssuesCount run={run} work={props.work} />
+          <IssuesCount run={run} issues={props.issues} />
         </Suspense>
       ),
     },
@@ -258,6 +259,10 @@ export async function Run({
   // checks, diffs) streams inside the boundaries that draw it and cannot hold
   // the rest of the page.
   const work = readRunWork(ctx, source, run.id);
+  // The Issues tab's read, started beside the work read for the same reason:
+  // its count is in the tab strip on every tab, and GitHub's latency streams
+  // inside the boundaries that draw it (#3970).
+  const issues = readRunIssues(ctx, source, run.id);
   // The tabs that list the run's frames read them to their end. Every other
   // tab needs only their counts, which the `steps` read carries.
   const listsFrames =
@@ -311,6 +316,7 @@ export async function Run({
     cost,
     outputs,
     work,
+    issues,
     agent,
     now,
   };

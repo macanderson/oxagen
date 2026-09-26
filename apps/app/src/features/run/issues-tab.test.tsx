@@ -1,17 +1,29 @@
 // @vitest-environment jsdom
-// The Issues tab (mockup `issuesTab` then `linkedWork`): the one issue the
-// record keeps, with its status said to be not recorded and a link to its
-// tracker where Oxagen can name one; then Linked work, whose every row says
-// how Oxagen knows it, from the same work and outputs reads the header and
-// the Changes panel draw; then the run follow-through panels.
-import { act, cleanup, render, screen, within } from "@testing-library/react";
-import type { ReactNode } from "react";
+// The Issues tab (mockup `issuesTab` then `linkedWork`): the issues
+// `get_run_issues` lists (#3970), each with its status as GitHub read it,
+// its relation, its edge with the frames that show it, and a link to its
+// tracker; the Status filter and the Rows pager over them; then Linked work,
+// whose every row says how Oxagen knows it, from the same work and outputs
+// reads the header and the Changes panel draw; then the run follow-through
+// panels.
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { type ReactNode, Suspense } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunOutputs } from "@/data/contracts/run";
+import type { RunIssues } from "@/data/contracts/run-issues";
 import type { RunWork } from "@/data/contracts/run-work";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { runIssue, runIssues } from "./issues.builders";
 import {
   runDetail,
   runOutputNode,
@@ -42,7 +54,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { IssuesTab } = await import("./sections");
-const { issueUrl } = await import("./issues-tab");
+const { IssuesCount } = await import("./issues-tab");
 
 afterEach(cleanup);
 
@@ -100,11 +112,13 @@ const OUTPUTS = runOutputs([
 async function renderIssues({
   run = runRow({ taskRef: "a-intel/platform#482" }),
   work = readOk(runWork()),
+  issues = readOk(runIssues()),
   outputs = readOk(OUTPUTS),
   outcomes,
 }: {
   run?: ReturnType<typeof runRow>;
   work?: Read<RunWork>;
+  issues?: Read<RunIssues>;
   outputs?: Read<RunOutputs>;
   outcomes?: "throws";
 } = {}) {
@@ -123,8 +137,11 @@ async function renderIssues({
     outcomes === "throws"
       ? () => Promise.reject(new Error("store down"))
       : settings;
-  const body = await IssuesTab(tabProps({ ctx, source, run, work, outputs }));
-  // Linked work suspends on the work read, so the render is awaited.
+  const body = await IssuesTab(
+    tabProps({ ctx, source, run, work, issues, outputs }),
+  );
+  // The Issues table and Linked work suspend on their reads, so the render
+  // is awaited.
   const { container } = await act(async () => {
     const rendered = render(<IntlProvider>{body}</IntlProvider>);
     await Promise.resolve();
@@ -135,11 +152,49 @@ async function renderIssues({
 
 const region = (name: string) => within(screen.getByRole("region", { name }));
 
+/** The demo run's three issues (pages/run.md, Issues), task first. */
+const DEMO = [
+  runIssue(),
+  runIssue({
+    ref: "a-intel/platform#490",
+    number: 490,
+    title: "Release checklist",
+    status: "closed",
+    relation: "resolves",
+    resolvedBy: [
+      { number: 511, url: "https://github.com/a-intel/platform/pull/511" },
+    ],
+    edge: "observed",
+    frameSeqs: ["36"],
+    url: "https://github.com/a-intel/platform/issues/490",
+  }),
+  runIssue({
+    ref: "a-intel/platform#480",
+    number: 480,
+    title: "Changelog misses breaking changes",
+    status: "open",
+    relation: "referenced",
+    actions: ["viewed", "commented"],
+    edge: "observed",
+    frameSeqs: ["9", "12"],
+    url: "https://github.com/a-intel/platform/issues/480",
+  }),
+];
+
+/** The rows a reader sees, by their issue reference. */
+const visible = () =>
+  screen
+    .getAllByTestId("run-issue")
+    .filter((row) => row.style.display !== "none")
+    .map((row) => within(row).getAllByText(/#\d+$/)[0]?.textContent);
+
 describe("the Issues panel", () => {
-  it("lists the task with its relation, its stated edge and a link to its tracker, and says its status is not recorded", async () => {
-    const { container } = await renderIssues();
+  it("draws get_run_issues row for row, in its order, each with its status, relation, edge and link", async () => {
+    const { container } = await renderIssues({
+      issues: readOk(runIssues({ issues: DEMO })),
+    });
     const issues = region("Issues");
-    expect(issues.getByText("1 in this session")).toBeTruthy();
+    expect(issues.getByText("3 in this session")).toBeTruthy();
     const table = issues.getByRole("table", { name: "Issues" });
     expect(
       within(table)
@@ -148,165 +203,234 @@ describe("the Issues panel", () => {
           (header) => header.textContent || header.getAttribute("aria-label"),
         ),
     ).toEqual(["Issue", "Status", "Relation", "Edge", "Tracker page"]);
-    const row = screen.getByTestId("run-issue");
-    expect(within(row).getByText("a-intel/platform#482")).toBeTruthy();
-    expect(within(row).getByText("not recorded")).toBeTruthy();
-    expect(within(row).getByText("task")).toBeTruthy();
-    expect(within(row).getByText("stated")).toBeTruthy();
+    expect(visible()).toEqual([
+      "a-intel/platform#482",
+      "a-intel/platform#490",
+      "a-intel/platform#480",
+    ]);
+    const [task, resolves, referenced] = screen.getAllByTestId("run-issue");
+    if (task === undefined || resolves === undefined || referenced === undefined)
+      throw new Error("expected three rows");
+    // The reference in mono and the title GitHub records under it.
+    expect(within(task).getByText("Release notes for 4.11.0")).toBeTruthy();
+    expect(within(task).getByText("open")).toBeTruthy();
+    expect(within(task).getByText("task")).toBeTruthy();
+    expect(within(task).getByText("stated")).toBeTruthy();
+    expect(within(resolves).getByText("closed")).toBeTruthy();
+    expect(within(resolves).getByText("closed by #511")).toBeTruthy();
+    expect(within(resolves).getByText("observed")).toBeTruthy();
+    // One chip per frame the edge cites, each opening that frame.
     expect(
-      within(row).getByRole("link", {
-        name: "View a-intel/platform#482 on its tracker",
+      within(resolves).getByRole("link", { name: "fr 36" }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=36");
+    expect(within(referenced).getByText("referenced")).toBeTruthy();
+    expect(within(referenced).getByRole("link", { name: "fr 9" })).toBeTruthy();
+    expect(within(referenced).getByRole("link", { name: "fr 12" })).toBeTruthy();
+    expect(
+      within(referenced).getByRole("link", {
+        name: "View a-intel/platform#480 on its tracker",
       }),
-    ).toHaveAttribute("href", "https://github.com/a-intel/platform/issues/482");
-    expect(
-      issues.getByText(/The task comes from the run's dispatch,/),
-    ).toBeTruthy();
+    ).toHaveAttribute("href", "https://github.com/a-intel/platform/issues/480");
+    // Every status was read, so none carries the tracker gap.
+    expect(container.querySelector('[data-gap="tracker"]')).toBeNull();
+    // The panel has no standing note under the table (run-evidence.md).
+    expect(screen.queryByTestId("run-issues-incomplete")).toBeNull();
     await screen.findByTestId("run-linked-work");
     await expectNoAxe(container);
   });
 
-  it("links no tracker for a reference that names no host (negative)", async () => {
-    await renderIssues({ run: runRow({ taskRef: "ENG-4121" }) });
-    const row = screen.getByTestId("run-issue");
-    expect(within(row).queryByRole("link")).toBeNull();
-    expect(within(row).getByText("no link")).toBeTruthy();
-    expect(issueUrl("ENG-4121")).toBeNull();
-    expect(issueUrl("https://github.com/a-intel/platform/issues/9")).toBe(
-      "https://github.com/a-intel/platform/issues/9",
-    );
-  });
-
-  it("says a run with no task names no issue, and draws no table, when its pull requests close none (negative)", async () => {
+  it("marks only a status that was not read with the tracker gap, and says why (negative)", async () => {
     await renderIssues({
-      run: runRow({ taskRef: null }),
-      work: readOk(closing({ issues: [], complete: true })),
-    });
-    expect(
-      screen.getByText(
-        "This run names no issue, and no pull request it opened closes one.",
-      ),
-    ).toBeTruthy();
-    expect(screen.getByText("0 in this session")).toBeTruthy();
-    expect(screen.queryByRole("table", { name: "Issues" })).toBeNull();
-  });
-
-  it("never reads an unread closing list as closing nothing (negative)", async () => {
-    await renderIssues({ run: runRow({ taskRef: null }) });
-    expect(
-      screen.getByText(
-        "This run names no issue. GitHub did not return the issues its pull requests close.",
-      ),
-    ).toBeTruthy();
-  });
-
-  it("lists the issues the run's own pull requests close, with GitHub's state, the closing pull request, an observed edge and a link", async () => {
-    const { container } = await renderIssues({
-      work: readOk(
-        closing({
+      issues: readOk(
+        runIssues({
           issues: [
-            issue(490, "open"),
-            issue(477, "closed"),
-            // The task reference is one row, however many sources name it.
-            issue(482, "open"),
+            runIssue(),
+            runIssue({
+              ref: "ENG-4121",
+              repository: null,
+              number: null,
+              title: null,
+              status: null,
+              statusRead: "not_github",
+              readAt: null,
+              relation: "referenced",
+              edge: "observed",
+              url: null,
+            }),
           ],
-          complete: true,
         }),
       ),
     });
-    const rows = screen.getAllByTestId("run-issue");
-    // The task first, then each issue a pull request closes, the task not again.
-    expect(
-      rows.map(
-        (row) =>
-          within(row).getAllByText(/^a-intel\/platform#/)[0]?.textContent,
-      ),
-    ).toEqual([
-      "a-intel/platform#482",
-      "a-intel/platform#490",
-      "a-intel/platform#477",
-    ]);
-    expect(screen.getByText("3 in this session")).toBeTruthy();
-    const open = rows.find((row) => row.textContent.includes("#490"));
-    if (open === undefined) throw new Error("expected the #490 row");
-    expect(within(open).getByText("open")).toBeTruthy();
-    expect(within(open).getByText("closed by #511")).toBeTruthy();
-    expect(within(open).getByText("observed")).toBeTruthy();
-    expect(
-      within(open).getByRole("link", {
-        name: "View a-intel/platform#490 on its tracker",
-      }),
-    ).toHaveAttribute("href", "https://github.com/a-intel/platform/issues/490");
-    const shut = rows.find((row) => row.textContent.includes("#477"));
-    if (shut === undefined) throw new Error("expected the #477 row");
-    expect(within(shut).getByText("closed")).toBeTruthy();
-    expect(screen.queryByText(/so this list may be short/)).toBeNull();
-    await expectNoAxe(container);
+    const [read, unread] = screen.getAllByTestId("run-issue");
+    if (read === undefined || unread === undefined)
+      throw new Error("expected two rows");
+    expect(read.querySelector('[data-gap="tracker"]')).toBeNull();
+    const gap = unread.querySelector('[data-gap="tracker"]');
+    expect(gap).toHaveTextContent("status unknown");
+    expect(gap).toHaveAttribute(
+      "title",
+      "This tracker is not GitHub, so Oxagen does not read its status.",
+    );
+    // No page is named, so the row links nowhere.
+    expect(within(unread).queryByRole("link")).toBeNull();
+    expect(within(unread).getByText("no link")).toBeTruthy();
   });
 
-  it("adds nothing for a pull request matched only by branch or head commit (negative)", async () => {
-    for (const association of ["branch", "head_commit"] as const) {
-      await renderIssues({
-        work: readOk(
-          closing(
-            { issues: [issue(490, "open")], complete: true },
-            association,
-          ),
-        ),
-      });
-      expect(screen.getAllByTestId("run-issue")).toHaveLength(1);
-      expect(screen.queryByText("closed by #511")).toBeNull();
-      cleanup();
-    }
-  });
-
-  it("says the list may be short when GitHub cut it short (negative)", async () => {
+  it("filters the rows by status, and keeps an unread status under All alone", async () => {
     await renderIssues({
-      work: readOk(closing({ issues: [issue(490, "open")], complete: false })),
+      issues: readOk(
+        runIssues({
+          issues: [
+            ...DEMO,
+            runIssue({
+              ref: "#3",
+              repository: null,
+              number: 3,
+              title: null,
+              status: null,
+              statusRead: "repository_unknown",
+              readAt: null,
+              relation: "referenced",
+              edge: "observed",
+              url: null,
+            }),
+          ],
+        }),
+      ),
     });
-    expect(screen.getAllByTestId("run-issue")).toHaveLength(2);
+    const filter = screen.getByRole("combobox", { name: "Filter by status" });
+    expect(
+      within(filter)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["All · Status", "open", "closed", "in progress", "blocked"]);
+    await userEvent.selectOptions(filter, "closed");
+    expect(visible()).toEqual(["a-intel/platform#490"]);
+    await userEvent.selectOptions(filter, "open");
+    expect(visible()).toEqual(["a-intel/platform#482", "a-intel/platform#480"]);
+    await userEvent.selectOptions(filter, "blocked");
+    expect(screen.queryAllByTestId("run-issue")).toHaveLength(0);
+    expect(screen.getByText("No issue has this status.")).toBeTruthy();
+    await userEvent.selectOptions(filter, "");
+    expect(visible()).toHaveLength(4);
+  });
+
+  it("pages the rows with the list's Rows select", async () => {
+    const many = Array.from({ length: 7 }, (_, i) =>
+      runIssue({
+        ref: `a-intel/platform#${String(500 + i)}`,
+        number: 500 + i,
+        relation: "referenced",
+        edge: "observed",
+        frameSeqs: [String(i + 1)],
+        url: `https://github.com/a-intel/platform/issues/${String(500 + i)}`,
+      }),
+    );
+    await renderIssues({ issues: readOk(runIssues({ issues: many })) });
+    expect(visible()).toHaveLength(7);
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Rows" }),
+      "5",
+    );
+    expect(visible()).toEqual([
+      "a-intel/platform#500",
+      "a-intel/platform#501",
+      "a-intel/platform#502",
+      "a-intel/platform#503",
+      "a-intel/platform#504",
+    ]);
+    const pager = screen.getByRole("navigation", { name: "Issues pages" });
+    expect(pager).toHaveTextContent("1–5 of 7");
+    await userEvent.click(
+      within(pager).getByRole("button", { name: "Next page" }),
+    );
+    expect(visible()).toEqual(["a-intel/platform#505", "a-intel/platform#506"]);
+  });
+
+  it("says the list may be short, and counts a floor, when a limit cut it (negative)", async () => {
+    await renderIssues({
+      issues: readOk(
+        runIssues({
+          complete: false,
+          warnings: ["closing_issues_read_failed"],
+        }),
+      ),
+    });
+    expect(region("Issues").getByText("1+ in this session")).toBeTruthy();
+    expect(screen.getByTestId("run-issues-incomplete")).toHaveTextContent(
+      "Some records could not be read, so this list may be short.",
+    );
+  });
+
+  it("says no issue is linked, and draws no table, when the run names none (negative)", async () => {
+    await renderIssues({
+      run: runRow({ taskRef: null }),
+      issues: readOk(runIssues({ issues: [] })),
+    });
+    expect(screen.getByText("No issue is linked to this session.")).toBeTruthy();
+    expect(screen.getByText("0 in this session")).toBeTruthy();
+    expect(screen.queryByRole("table", { name: "Issues" })).toBeNull();
+    cleanup();
+    await renderIssues({
+      run: runRow({ taskRef: null }),
+      issues: readOk(runIssues({ issues: [], complete: false })),
+    });
     expect(
       screen.getByText(
-        "GitHub did not return every issue the run's pull requests close, so this list may be short.",
+        "No issue was found in what Oxagen could read. Some records could not be read, so an issue may be missing.",
       ),
     ).toBeTruthy();
   });
 
-  it("keeps the task and names the failed read when the pull requests could not be read (negative)", async () => {
-    await renderIssues({ work: readError("frame_store_unreachable", 502) });
+  it("names the failed read and draws no rows when the issues could not be loaded (negative)", async () => {
+    await renderIssues({ issues: readError("frame_store_unreachable", 502) });
     const issues = region("Issues");
-    expect(issues.getAllByTestId("run-issue")).toHaveLength(1);
-    expect(
-      issues.getByText(/The run's pull requests could not be loaded/),
-    ).toBeTruthy();
+    expect(issues.queryAllByTestId("run-issue")).toHaveLength(0);
+    expect(issues.getByText(/Issues could not be loaded/)).toBeTruthy();
   });
 });
 
-/** The work read with the one recorded pull request closing what GitHub lists. */
-function closing(
-  closingIssues: NonNullable<RunWork["pullRequests"][number]["closingIssues"]>,
-  association: RunWork["pullRequests"][number]["association"] = "recorded",
-): RunWork {
-  const work = runWork();
-  return {
-    ...work,
-    pullRequests: work.pullRequests.map((pr) => ({
-      ...pr,
-      association,
-      closingIssues,
-    })),
-  };
-}
+describe("the Issues tab count", () => {
+  async function renderCount(
+    read: Read<RunIssues>,
+    run = runRow({ taskRef: "a-intel/platform#482" }),
+  ) {
+    await act(async () => {
+      render(
+        <IntlProvider>
+          <span data-testid="count">
+            <Suspense fallback="…">
+              <IssuesCount run={run} issues={Promise.resolve(read)} />
+            </Suspense>
+          </span>
+        </IntlProvider>,
+      );
+      await Promise.resolve();
+    });
+    const count = screen.getByTestId("count");
+    // The count suspends on the read; wait for it to leave the fallback.
+    await waitFor(() => {
+      expect(count).not.toHaveTextContent("…");
+    });
+    return count;
+  }
 
-function issue(number: number, state: "open" | "closed") {
-  return {
-    owner: "a-intel",
-    repo: "platform",
-    number,
-    title: `Issue ${String(number)}`,
-    url: `https://github.com/a-intel/platform/issues/${String(number)}`,
-    state,
-  };
-}
+  it("counts the rows the table draws", async () => {
+    const count = await renderCount(readOk(runIssues({ issues: DEMO })));
+    expect(count).toHaveTextContent(/^3$/);
+  });
+
+  it("counts a floor when a limit cut the list, or when the read failed (negative)", async () => {
+    expect(
+      await renderCount(readOk(runIssues({ issues: DEMO, complete: false }))),
+    ).toHaveTextContent(/^3\+$/);
+    cleanup();
+    // A failed read knows only the task the run names.
+    expect(
+      await renderCount(readError("frame_store_unreachable", 502)),
+    ).toHaveTextContent(/^1\+$/);
+  });
+});
 
 describe("Linked work", () => {
   it("lists the recorded checkout's repository as observed, with the frames that saw it", async () => {

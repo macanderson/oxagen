@@ -1009,6 +1009,7 @@
     "issues": {
       "title": "Issues",
       "count": "{count} in this session",
+      "countAtLeast": "{count}+ in this session",
       "issue": "Issue",
       "status": "Status",
       "relation": "Relation",
@@ -1018,19 +1019,30 @@
       "viewLabel": "View {ref} on its tracker",
       "noLink": "no link",
       "task": "task",
-      "statusWhy": "No tracker read is recorded for this run, so the issue's status is not shown.",
-      "empty": "This run names no issue, and no pull request it opened closes one.",
-      "emptyUnread": "This run names no issue. GitHub did not return the issues its pull requests close.",
-      "loading": "Reading the issues the run's pull requests close.",
-      "closingUnread": "GitHub did not return every issue the run's pull requests close, so this list may be short.",
-      "pullRequests": "The run's pull requests",
+      "referenced": "referenced",
       "closedBy": "closed by #{number}",
+      "empty": "No issue is linked to this session.",
+      "emptyIncomplete": "No issue was found in what Oxagen could read. Some records could not be read, so an issue may be missing.",
+      "incomplete": "Some records could not be read, so this list may be short.",
+      "loading": "Reading the run's issues.",
       "state": {
         "open": "open",
-        "closed": "closed"
+        "closed": "closed",
+        "in_progress": "in progress",
+        "blocked": "blocked"
       },
-      "stateWhy": "GitHub's state for the issue when the run's pull requests were read.",
-      "note": "The task comes from the run's dispatch, and no tracker read gives its status. The other rows are the issues GitHub records each pull request the run opened as closing. Issues the run only read or referenced are not captured.",
+      "stateAt": "GitHub's state when this page loaded, read at {at}.",
+      "statusUnknown": "status unknown",
+      "statusRead": {
+        "no_connection": "This workspace has no connection to the issue's repository, so GitHub was not read.",
+        "not_github": "This tracker is not GitHub, so Oxagen does not read its status.",
+        "repository_unknown": "The record does not name the issue's repository.",
+        "not_found": "GitHub has no issue with this number.",
+        "read_failed": "GitHub could not be read.",
+        "read_limit": "The run names more issues than one page load reads."
+      },
+      "statusFilter": "Filter by status",
+      "noMatch": "No issue has this status.",
       "linked": {
         "title": "Linked work",
         "edge": {
