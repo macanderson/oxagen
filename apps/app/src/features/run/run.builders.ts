@@ -27,7 +27,7 @@ import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { PriceBook } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
-import { frameFolds, tachoFrame } from "@oxagen/run-ledger";
+import { countsAsError, frameFolds, tachoFrame } from "@oxagen/run-ledger";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import { type Read, readOk } from "@/data/read";
 
@@ -236,6 +236,7 @@ export function transcriptEntry(
     node: "model",
     quiet: false,
     outcome: "ok",
+    error: false,
     approvalId: null,
     gates: [],
     subject: null,
@@ -451,6 +452,7 @@ export function mockupTranscript(
       node: fold.node,
       quiet: fold.quiet,
       outcome: fold.outcome,
+      error: countsAsError(fold),
       subject: fold.subject,
       family: fold.family,
       model: spec.kind === "model_call" ? spec.label : null,

@@ -358,6 +358,7 @@ export function toRunTranscript(
       node: entry.node ?? null,
       quiet: entry.quiet ?? false,
       outcome: entry.outcome ?? null,
+      error: entry.error ?? false,
       approvalId: entry.approvalId ?? null,
       gates: (entry.gates ?? []).map(toDecisionView),
       subject: entry.subject ?? null,

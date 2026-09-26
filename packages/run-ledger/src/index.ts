@@ -141,6 +141,7 @@ export {
   turnFolds,
   filterFoldsByKind,
   transcriptCounts,
+  countsAsError,
   frameCounts,
   toolUseClaimer,
   markWords,

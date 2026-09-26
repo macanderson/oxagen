@@ -1016,6 +1016,7 @@ describe("runs.transcript", () => {
             node: "tool",
             quiet: false,
             outcome: "parked",
+            error: true,
             approvalId: "apr_7Kq2",
             gates: [decision],
             subject: "claude_code__Bash",
@@ -1079,6 +1080,9 @@ describe("runs.transcript", () => {
       parentKey: "1",
       node: "tool",
       outcome: "parked",
+      // Carried as the server stated it, whatever the outcome says: the page
+      // marks rows failed by this alone.
+      error: true,
       approvalId: "apr_7Kq2",
       subject: "claude_code__Bash",
       tool: "Bash",
@@ -1156,6 +1160,7 @@ describe("runs.transcript", () => {
       node: null,
       quiet: false,
       outcome: null,
+      error: false,
       gates: [],
       matches: [],
     });

@@ -109,6 +109,8 @@ export type StepSpec = {
   }[];
   kinds?: TranscriptKind[];
   outcome?: TranscriptOutcome | null;
+  /** The server counts the step under `counts.errors`; absent means it does not. */
+  error?: boolean;
   subject?: string;
   /** The subject as the harness knows it, as the server reads it; absent means the answer did not say. */
   tool?: string;
@@ -287,6 +289,7 @@ export function stepsOf(
       node: spec.node,
       quiet: spec.quiet ?? false,
       outcome: spec.outcome ?? null,
+      ...(spec.error === undefined ? {} : { error: spec.error }),
       approvalId: spec.approvalId ?? null,
       gates,
       subject: spec.subject ?? null,
@@ -563,7 +566,12 @@ export function releaseSteps(): StepSpec[] {
           stderr: "",
         },
       },
-      { label: "Bash error", kinds: ["tools", "errors"], outcome: "failed" },
+      {
+        label: "Bash error",
+        kinds: ["tools", "errors"],
+        outcome: "failed",
+        error: true,
+      },
     ),
     modelStep(
       13,

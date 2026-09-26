@@ -257,7 +257,13 @@ describe("the kind chips", () => {
         stepsOf(
           releaseSteps().map((spec) =>
             spec.seq === 12
-              ? { ...spec, kinds: ["tools"], outcome: "ok", label: "Bash ok" }
+              ? {
+                  ...spec,
+                  kinds: ["tools"],
+                  outcome: "ok",
+                  error: false,
+                  label: "Bash ok",
+                }
               : spec,
           ),
           { counts: { ...releaseCounts(), errors: 0 } },
@@ -873,6 +879,7 @@ describe("event rows", () => {
       label: "deny Bash",
       subject: "Bash",
       outcome: "denied",
+      error: true,
       gates: [{ seq: 2, decision: "deny", type: "policy_decision" }],
       turn: 1,
     },
@@ -898,6 +905,7 @@ describe("event rows", () => {
       turn: 1,
       kinds: ["errors"],
       outcome: "failed",
+      error: true,
     },
   ];
   const events = () =>
@@ -1522,6 +1530,7 @@ describe("a call the in-app assistant parked", () => {
         outcome,
         ...(approvalId === undefined ? {} : { approvalId }),
         kinds: outcome === "denied" ? ["tools", "errors"] : ["tools"],
+        error: outcome === "denied",
         request: {
           seq: 3,
           type: "tool.engine_call_started",

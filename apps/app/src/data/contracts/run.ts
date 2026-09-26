@@ -597,6 +597,12 @@ export const TranscriptEntry = z.object({
   quiet: z.boolean(),
   /** How the entry's call ended; null for an entry that records no call. */
   outcome: TranscriptOutcome.nullable(),
+  /**
+   * The server counts the entry under `counts.errors`: it failed, it was
+   * refused, or it answers the errors chip. The page marks its rows failed
+   * by this and by no rule of its own (ADR-182).
+   */
+  error: z.boolean(),
   /** The approval a parked call waits on (`apr_…`); null otherwise. */
   approvalId: PublicId.nullable(),
   /** Every decision folded into the entry, in the order recorded. */

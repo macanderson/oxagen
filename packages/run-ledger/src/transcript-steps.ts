@@ -591,10 +591,12 @@ function modelFacts(
   return {
     node: "model",
     // A model step draws a row under `responses` when its reply was kept,
-    // and a usage row when it carried a cost, tokens or an effort. One that
-    // did neither draws nothing: a call still waiting on its reply, or one
-    // kept as a digest with no figures. So it is quiet, and counts nowhere.
-    quiet: !kinds.has("responses") && !kinds.has("usage"),
+    // a usage row when it carried a cost, tokens or an effort, and a failed
+    // row when it failed with neither. One that did none of these draws
+    // nothing: a call still waiting on its reply, or one kept as a digest
+    // with no figures. So it is quiet, and counts nowhere.
+    quiet:
+      !kinds.has("responses") && !kinds.has("usage") && !kinds.has("errors"),
     outcome: kinds.has("errors")
       ? "failed"
       : halves.response === null
@@ -1059,6 +1061,20 @@ export interface TranscriptCounts {
   policy: number;
 }
 
+/**
+ * Whether the entry is an error of the run: it failed, it was refused, or a
+ * frame in it answers the errors chip. `counts.errors` counts these, and
+ * each entry states it (`error`), so a reader marks a row failed by the same
+ * rule and keeps none of its own (ADR-182).
+ */
+export function countsAsError(fold: TranscriptFold): boolean {
+  return (
+    fold.outcome === "failed" ||
+    fold.outcome === "denied" ||
+    fold.kinds.has("errors")
+  );
+}
+
 export function transcriptCounts(
   folds: readonly TranscriptFold[],
   vocabulary: readonly TranscriptKind[],
@@ -1073,12 +1089,7 @@ export function transcriptCounts(
     if (fold.quiet) continue;
     for (const kind of fold.kinds) kinds[kind] = (kinds[kind] ?? 0) + 1;
     entries += 1;
-    if (
-      fold.outcome === "failed" ||
-      fold.outcome === "denied" ||
-      fold.kinds.has("errors")
-    )
-      errors += 1;
+    if (countsAsError(fold)) errors += 1;
     if (fold.kinds.has("policy") && fold.decision?.harness !== true)
       policy += 1;
   }
