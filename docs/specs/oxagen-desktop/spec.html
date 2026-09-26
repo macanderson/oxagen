@@ -133,9 +133,9 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 <li>Sign in to an Oxagen org through the browser (the CLI's PKCE loopback flow), sign out, switch org.</li>
 <li>Enroll the machine and pick the workspace; change the workspace or org later with <code>tacho reassign</code>, which keeps the device key so the fleet page sees one continuous host.</li>
 <li>Wrap Claude Code, Codex, and Stella. Codex is a settings writer over the same hook, verified against the upstream hooks documentation (§6). Stella's hooks go into <code>~/.stella/stella.toml</code> (or <code>~/.stella/settings.json</code> when only that exists) as a marker-delimited block, since Stella has no dedicated hook-settings file of its own the way the other two do (§6).</li>
-<li>Wrap any other agent by calling <code>tacho hook --agent &lt;name&gt;</code> around its own steps, no settings file involved; the same enrollment covers it. The Wrapped agents panel shows it alongside the three built-in harnesses, with a per-agent health state (§3, §6).</li>
+<li>Wrap any other agent by calling <code>tacho hook --agent &lt;name&gt;</code> around its own steps, with no settings file involved. The machine's first enrollment covers it. The Wrapped agents panel shows it alongside the three built-in harnesses, with a per-agent health state (§3, §6).</li>
 <li>Install the CLIs on PATH from the app; remove the links again.</li>
-<li>Uninstall the wrapper: <code>tacho unenroll</code> strips the hooks in every wrapped harness, stops the service, revokes on the control plane and deletes the credentials; <code>--purge</code> drops the local event log; the app then removes <code>~/.config/oxagen</code> and points at the platform uninstaller.</li>
+<li>Uninstall the wrapper: <strong>Uninstall Oxagen…</strong> runs <code>tacho unenroll --all --purge</code>, which removes every agent enrolled on the machine (ADR-202). It strips the hooks in every wrapped harness, stops the service, revokes each enrollment on the control plane, deletes the credentials, and drops the local event log. When that exits 0, the app removes <code>~/.config/oxagen</code> and points at the platform uninstaller. A non-zero exit stops the uninstall before anything else is removed.</li>
 <li>Windows support in Tacho itself: a per-user Task Scheduler service, loopback TCP for the hook, <code>cmd.exe</code> quoting.</li>
 <li>Not yet: signing by default. Code signing runs only when the Apple / Azure secrets exist in CI (§9); a local build is ad-hoc signed and Gatekeeper warns on first open.</li>
 <li>Not yet: an in-app updater; a new version is a new download (§11).</li>
@@ -264,8 +264,8 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 <tr>
 <td>This machine</td>
 <td>agent key, reports-to slugs, enrollment id, status and mode, bundle version and age, collector uptime / spool / last ingest, service state, attestation tier, expiry</td>
-<td>org and workspace pickers before enrollment; <strong>Enroll this machine</strong>; Unenroll… (two-step) with <em>also delete the local event log</em></td>
-<td><code>tacho enroll --org … --workspace … --harness …</code>, <code>tacho unenroll [--purge]</code></td>
+<td>org and workspace pickers before enrollment; <strong>Enroll this machine</strong></td>
+<td><code>tacho enroll --org … --workspace … --harness …</code></td>
 </tr>
 <tr>
 <td>Workspace</td>
@@ -276,8 +276,8 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 <tr>
 <td>Wrapped agents</td>
 <td>Claude Code, Codex, and Stella with hook completeness per harness and the detected version, plus every custom agent the collector has seen, each with a health state (healthy, pending, degraded, down, idle, not wrapped)</td>
-<td>checkboxes for the three built-in harnesses (never empty); <strong>Reassign to …</strong> / <strong>Apply wrappers</strong>; Reset; custom agents are read-only here, added by their own <code>tacho hook --agent</code> call</td>
-<td><code>tacho reassign --harness …</code></td>
+<td>checkboxes for the three built-in harnesses (never empty); <strong>Reassign to …</strong> / <strong>Apply wrappers</strong>; Reset; custom agents are read-only here, added by their own <code>tacho hook --agent</code> call; <strong>De-register…</strong> per harness</td>
+<td><code>tacho reassign --harness …</code>. De-register runs <code>tacho reassign --harness &lt;the others&gt;</code>, or <code>tacho unenroll --harness &lt;harness&gt;</code> for the last one, which leaves any other agent on the machine enrolled (ADR-202). The panel reads the first enrollment only</td>
 </tr>
 <tr>
 <td>Command line</td>
@@ -293,9 +293,9 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 </tr>
 <tr>
 <td>Uninstall</td>
-<td>the order: unenroll, remove local data, then the platform uninstaller</td>
-<td>Remove local data… (only when unenrolled) · Fleet page</td>
-<td>Rust: delete <code>~/.config/oxagen</code></td>
+<td>what the uninstall removes, shown whether or not the machine is enrolled</td>
+<td><strong>Uninstall Oxagen…</strong>, confirmed twice</td>
+<td><code>tacho unenroll --all --purge</code>, then Rust: delete <code>~/.config/oxagen</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -667,7 +667,7 @@ surface for <code>list_tacho_hosts</code>, which now returns a <code>tiers</code
 <p><strong>What changes in the panels.</strong> This machine shows the tier as one word of the ladder, computed from what was actually routed. Spend shows its basis, <code>observed</code> or <code>self-reported</code>. Until Phase 4 lands every number for a wrapped agent is self-reported, and Codex and Stella show as absent, never as zero (oxagen issue #3304). A connected host (rev 2, ADR-078) reads on the ladder as ADR-095 sets out: it is on <code>gateway</code> for the Oxagen MCP calls that routed, it has no <code>harness</code> rung under it, and it is invisible otherwise. ADR-078 §2 is kept, so no panel renders a tier word as a score, a percentage or &quot;fully governed&quot;, and every panel still says what the tier records and what it does not.</p>
 <p><strong>The contained tier is not this app's job on a laptop.</strong> <code>oxagen run -- &lt;agent&gt;</code> (Phase 5) launches an agent under an OS sandbox whose only egress is the gateway. It is aimed at CI, headless runs, cloud runners and managed devices first, and it is never mandatory on a developer's own laptop. The app may show that a run was contained. It does not force containment.</p>
 
-<footer class="colophon"><span>Oxagen · Specification</span><span>Source: <code>spec.md</code> · rendered 2026-09-25</span></footer>
+<footer class="colophon"><span>Oxagen · Specification</span><span>Source: <code>spec.md</code> · rendered 2026-09-26</span></footer>
 </main>
 </div>
 </div>
