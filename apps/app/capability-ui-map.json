@@ -253,7 +253,7 @@
         {
           "route": "/[org]/[ws]",
           "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-          "entry": "/[org]/[ws] (Fleet) \u2014 Pause on a live run's row opens the pause dialog, which queues dispatch_command for that run, and Steer in the header queues one steer per selected agent at the turn boundary (features/fleet/actions.ts, features/fleet/board.tsx, features/fleet/steer-fleet.tsx)",
+          "entry": "/[org]/[ws] (Fleet) \u2014 Pause on a live run's row opens the pause dialog, which queues dispatch_command for that run and fences a ledger run's evidence ingress, and Steer in the header queues one steer per selected agent at the turn boundary, with Interrupt as the ceiling where a selected run is on the gateway or contained tier, and holds it for the next run of an idle agent (features/fleet/actions.ts, features/fleet/board.tsx, features/fleet/steer-fleet.tsx)",
           "proof": "apps/app/src/features/fleet/fleet.test.tsx",
           "verifiedAt": "2026-09-23",
           "verifiedBy": "session-01GDv3vs-fleet-rev1"
@@ -521,7 +521,7 @@
     "get_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] \u2014 the Run page's header, figures and Governed actions tab read get_run once per render (data/live/runs.ts, features/run/run.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 the Run page's header, figures and Governed actions tab read get_run once per render, and the pause banner and the header's Pausing and Resuming states read its pause (data/live/runs.ts, features/run/run.tsx, features/run/header.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
@@ -733,6 +733,30 @@
           "proof": "apps/app/src/features/shell/assistant-parked-approvals.test.tsx",
           "verifiedAt": "2026-09-25",
           "verifiedBy": "session_011Nbymg2FucE6MkzM74484s"
+        }
+      ]
+    },
+    "list_commands": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Delivery report in the Run header opens the delivery report: each command's status, the mode requested and the mode delivered as two facts, the issuer, a steer's text, and the frame an applied command landed on. A command frame on the Governed actions tab reads the same report for its inspector (features/run/delivery-report.tsx, features/run/control-inspector.tsx, features/run/actions.ts, data/live/runs.ts)",
+      "testid": "delivery-report-open",
+      "proof": "apps/app/src/features/run/delivery-report.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "session-live-run-page-controls",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq> \u2014 an open oxagen:command_applied frame reads list_commands and shows its command's status, modes, issuer, text and carrier (features/run/actions-tab.tsx, features/run/control-inspector.tsx)",
+          "proof": "apps/app/src/features/run/actions-tab.test.tsx"
+        },
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+          "entry": "/[org]/[ws] \u2014 Steer the fleet's receipt opens the delivery report for the command ids the send returned, through the dialog and read the Run page uses (features/fleet/steer-fleet.tsx, features/run/client.ts)",
+          "testid": "steer-report-open",
+          "proof": "apps/app/src/features/fleet/steer-fleet.test.tsx"
         }
       ]
     },

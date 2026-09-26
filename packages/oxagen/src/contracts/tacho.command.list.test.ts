@@ -6,6 +6,7 @@ const RUN = "tse_0123456789abcdefghjkmn";
 const item = {
   id: "tcm_1",
   runId: RUN,
+  agentKey: null,
   command: "steer",
   status: "applied",
   requestedMode: "interrupt",
@@ -67,6 +68,29 @@ describe("list_commands contract", () => {
     const { deliveryMode: _dropped, ...withoutMode } = item;
     expect(
       tachoCommandList.output.safeParse({ commands: [withoutMode] }).success,
+    ).toBe(false);
+  });
+
+  it("carries a steer held for an idle agent's next run with the agent in place of the run", () => {
+    const held = {
+      ...item,
+      runId: null,
+      agentKey: "acme.core.reviewer",
+      status: "queued",
+      deliveryMode: null,
+      degradedReason: null,
+      sentAt: null,
+      acknowledgedAt: null,
+      appliedAt: null,
+      appliedAtSeq: null,
+    };
+    expect(
+      tachoCommandList.output.safeParse({ commands: [held] }).success,
+    ).toBe(true);
+    // Every row says which it is waiting on: a run or an agent (negative).
+    const { agentKey: _missing, ...withoutAgent } = held;
+    expect(
+      tachoCommandList.output.safeParse({ commands: [withoutAgent] }).success,
     ).toBe(false);
   });
 });

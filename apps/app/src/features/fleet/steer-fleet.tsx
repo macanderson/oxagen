@@ -1,21 +1,36 @@
 "use client";
-// "Steer the fleet" (fleet.md, Header): every agent in the workspace, selected
-// by default in a typeahead picker, with All and None; a Steering text field;
-// and a Delivery block whose Interrupt switch is disabled and says it is not
-// yet available.
+// "Steer the fleet" (fleet.md, Header; agents.md, steerfleet): every agent in
+// the workspace, selected by default in a typeahead picker, with All and
+// None; a Steering text field; and a Delivery block with an Interrupt switch.
 //
-// Sending queues one `dispatch_command` steer per selected agent at the turn
-// boundary (`steerFleet` in ./actions). The control plane fans each out to the
-// agent's runs in flight and answers one command id per run it reached, so the
-// receipt counts runs, not agents. An agent with no run in flight is reached by
-// nothing: the command table addresses live runs only, and the Delivery copy
-// says so rather than promising a delivery at the agent's next run.
+// Sending queues one `dispatch_command` steer per selected agent
+// (`steerFleet` in ./actions). The control plane fans each out to the agent's
+// runs in flight and answers one command id per run it reached. An agent with
+// no run in flight gets one command held for its next run (#2953), so the
+// receipt counts commands, not runs.
+//
+// Interrupt asks for `interrupt` as a ceiling. Each run's connection point
+// carries the strongest mode it can at or below it, and the command records
+// both. The switch is offered when a selected agent has a run in flight whose
+// model calls pass through the host's proxy, which can cut a call in flight:
+// the `gateway` and `contained` tiers (ADR-094, ADR-095). With none, the
+// switch stays disabled and says why.
+//
+// The receipt opens the delivery report for the command ids the send
+// returned (mockup `deliveryreport`): the Run page's dialog, read through the
+// Run lane's client entry.
 import { STEER_TEXT_MAX } from "@oxagen/oxagen/tacho/command-limits";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState, useTransition } from "react";
-import type { RunRow } from "@/data/contracts/runs";
+import {
+  commandBlockOf,
+  type EnforcementTier,
+  type RunRow,
+} from "@/data/contracts/runs";
+import { DeliveryReport } from "@/features/run/client";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import {
+  buttonDanger,
   buttonPrimary,
   buttonSecondary,
   inputBase,
@@ -25,7 +40,7 @@ import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { type PickerOption, RecordMultiPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { type FleetSteer, steerFleet } from "./actions";
+import { type FleetSteer, type FleetSteerMode, steerFleet } from "./actions";
 import type { FleetAgent } from "./board";
 
 /** The newest live run of each agent, from the runs Fleet read (newest first). */
@@ -39,6 +54,46 @@ function liveRunByAgent(runs: readonly RunRow[]): Map<string, RunRow> {
     )
       live.set(run.agentKey, run);
   return live;
+}
+
+/**
+ * The tiers whose model calls pass through the host's loopback proxy, which
+ * can cut a call in flight (ADR-094, ADR-095). `dispatch_command` delivers
+ * `interrupt` there and degrades it elsewhere.
+ */
+const INTERRUPT_TIERS: ReadonlySet<EnforcementTier> = new Set([
+  "gateway",
+  "contained",
+]);
+
+/**
+ * The agents with a run in flight that can carry an interrupt: a wrapped run
+ * (a steer to an agent reaches its wrapped sessions only), on a tier whose
+ * proxy can cut the call, reachable by its host, and on a harness that takes
+ * steering text mid-run.
+ */
+function interruptCarriers(runs: readonly RunRow[]): Set<string> {
+  const carriers = new Set<string>();
+  for (const run of runs)
+    if (
+      run.status === "live" &&
+      run.source === "tacho" &&
+      run.agentKey !== null &&
+      INTERRUPT_TIERS.has(run.enforcementTier) &&
+      commandBlockOf(run) === null &&
+      (run.steerBlock ?? null) === null
+    )
+      carriers.add(run.agentKey);
+  return carriers;
+}
+
+/** The agents with a wrapped run in flight, the runs a steer to an agent reaches. */
+function wrappedInFlight(runs: readonly RunRow[]): Set<string> {
+  const agents = new Set<string>();
+  for (const run of runs)
+    if (run.status === "live" && run.source === "tacho" && run.agentKey)
+      agents.add(run.agentKey);
+  return agents;
 }
 
 export function SteerFleetDialog({
@@ -80,6 +135,7 @@ export function SteerFleetDialog({
     () => new Set(agents.map((agent) => agent.agentKey)),
   );
   const [text, setText] = useState("");
+  const [interrupt, setInterrupt] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<FleetSteer | null>(null);
   const [pending, startTransition] = useTransition();
@@ -91,6 +147,15 @@ export function SteerFleetDialog({
   const unlisted = Math.max(0, total - agents.length);
   const picked = agents.filter((agent) => selected.has(agent.agentKey));
   const inFlight = picked.filter((agent) => live.has(agent.agentKey)).length;
+  const carriers = interruptCarriers(runs);
+  const interruptible = picked.filter((agent) =>
+    carriers.has(agent.agentKey),
+  ).length;
+  const wrapped = wrappedInFlight(runs);
+  const wrappedPicked = picked.some((agent) => wrapped.has(agent.agentKey));
+  // Derived, so a selection that loses its last carrier turns Interrupt off.
+  const interrupting = interrupt && interruptible > 0;
+  const mode: FleetSteerMode = interrupting ? "interrupt" : "turn_boundary";
   const blocked = !canCommand || picked.length === 0 || text.trim() === "";
 
   // Each agent is offered by its key, with what it has in flight on the
@@ -120,6 +185,7 @@ export function SteerFleetDialog({
         const result = await steerFleet(org, ws, {
           agentKeys: picked.map((agent) => agent.agentKey),
           text,
+          requestedMode: mode,
         });
         if (!result.ok) setFailure(failureText(result));
         else {
@@ -148,7 +214,11 @@ export function SteerFleetDialog({
             closeLabel: t("cancel"),
             footerNote: (
               <span data-testid="steer-summary">
-                {t("footer", { agents: picked.length, live: inFlight })}
+                {t("footer", {
+                  agents: picked.length,
+                  live: inFlight,
+                  mode: interrupting ? "interrupt" : "boundary",
+                })}
               </span>
             ),
           }
@@ -160,9 +230,13 @@ export function SteerFleetDialog({
             form={formId}
             data-touch-target=""
             disabled={blocked || pending}
-            className={buttonPrimary}
+            className={interrupting ? buttonDanger : buttonPrimary}
           >
-            {pending ? t("sending") : t("send")}
+            {pending
+              ? t("sending")
+              : interrupting
+                ? t("sendInterrupt")
+                : t("send")}
           </button>
         ) : undefined
       }
@@ -174,6 +248,13 @@ export function SteerFleetDialog({
           className="flex flex-col gap-2 text-sm"
         >
           <p>{t("queued", { count: receipt.commandIds.length })}</p>
+          {receipt.commandIds.length > 0 ? (
+            <p className="text-muted-foreground">{t("queuedDetail")}</p>
+          ) : receipt.refused.length === 0 ? (
+            // Nothing refused and nothing queued: no run in flight, and no
+            // host enrolled as any selected agent to hold a steer for.
+            <p className="text-muted-foreground">{t("queuedNone")}</p>
+          ) : null}
           {receipt.refused.length === 0 ? null : (
             <p className="text-muted-foreground">
               {t("refused", {
@@ -183,6 +264,17 @@ export function SteerFleetDialog({
                   .join(", "),
               })}
             </p>
+          )}
+          {receipt.commandIds.length === 0 ? null : (
+            // A report of no ids has nothing to read, and the read refuses one.
+            <div>
+              <DeliveryReport
+                org={org}
+                ws={ws}
+                query={{ commandIds: receipt.commandIds }}
+                testId="steer-report"
+              />
+            </div>
           )}
         </div>
       ) : (
@@ -271,30 +363,49 @@ export function SteerFleetDialog({
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium">{t("delivery")}</span>
             <div className="flex items-start gap-3 rounded-lg border border-border px-3 py-2.5">
-              <div className="min-w-0 grow text-xs">
-                <b className="block text-sm">{t("boundary")}</b>
+              <div className="min-w-0 grow text-xs" data-testid="steer-mode">
+                <b className="block text-sm">
+                  {interrupting ? t("interruptNow") : t("boundary")}
+                </b>
                 <span className="text-muted-foreground">
-                  {t("boundaryBody")}
+                  {interrupting ? t("interruptBody") : t("boundaryBody")}
                 </span>
               </div>
               <span className="flex flex-none flex-col items-end gap-1">
                 <button
                   type="button"
                   role="switch"
-                  aria-checked="false"
+                  aria-checked={interrupting}
                   aria-label={t("interrupt")}
-                  aria-describedby={`${formId}-na`}
-                  disabled
-                  className="inline-flex min-h-8 items-center gap-2 rounded-full border border-border px-2.5 text-xs text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-describedby={`${formId}-interrupt`}
+                  disabled={interruptible === 0}
+                  onClick={() => {
+                    setInterrupt(!interrupting);
+                  }}
+                  className={`inline-flex min-h-8 items-center gap-2 rounded-full border px-2.5 text-xs disabled:cursor-not-allowed disabled:opacity-60 ${
+                    interrupting
+                      ? "border-info text-info"
+                      : "border-border text-muted-foreground"
+                  }`}
                 >
                   {t("interrupt")}
                   <i
                     aria-hidden="true"
-                    className="block h-3.5 w-6 rounded-full bg-border"
+                    className={`block h-3.5 w-6 rounded-full ${
+                      interrupting ? "bg-info" : "bg-border"
+                    }`}
                   />
                 </button>
-                <span id={`${formId}-na`} className="text-[11px] text-dim">
-                  {t("interruptUnavailable")}
+                <span
+                  id={`${formId}-interrupt`}
+                  data-testid="steer-interrupt-reason"
+                  className="max-w-48 text-right text-[11px] text-dim"
+                >
+                  {interruptible > 0
+                    ? t("interruptCarriers", { count: interruptible })
+                    : wrappedPicked
+                      ? t("interruptNoCarrier")
+                      : t("interruptNoRun")}
                 </span>
               </span>
             </div>

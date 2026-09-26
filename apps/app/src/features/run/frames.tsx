@@ -50,6 +50,7 @@ import {
   decisionOf,
   markOf,
   type OpenFrame,
+  presentedType,
   type RunState,
   type Steps,
 } from "./player-model";
@@ -295,6 +296,7 @@ export function FramePanel({
   tier,
   body,
   approvals,
+  control = null,
   steps,
   hrefOf,
   shown,
@@ -307,6 +309,8 @@ export function FramePanel({
   body: Read<RunFrameBody> | null;
   /** The parked call or the decision this frame records, when it is an approval frame. */
   approvals: ReactNode;
+  /** The operator's command this frame records, when it is a command frame (#2953). */
+  control?: ReactNode;
   steps: Steps;
   hrefOf: HrefOf;
   shown: number;
@@ -316,7 +320,9 @@ export function FramePanel({
   const locale = useLocale();
   const format = useFormatter();
   const { frame } = open;
-  const type = frame?.type ?? entry?.type ?? null;
+  const recorded = frame?.type ?? entry?.type ?? null;
+  // An operator's command reads as `control.<command>` (ADR-056).
+  const type = recorded === null ? null : presentedType(recorded, entry);
   const at = frame?.observedAt ?? entry?.at ?? null;
   const summary = frame?.summary ?? entry?.label ?? null;
   return (
@@ -368,6 +374,7 @@ export function FramePanel({
           </p>
         )}
         {approvals}
+        {control}
         <FrameFacts frame={frame} entry={entry} chainRef={open.chainRef} />
         {frame === null || (body !== null && body.ok) ? null : (
           // The body read lists its own redactions; without it, the envelope's.
@@ -473,7 +480,9 @@ export function FrameList({
                     aria-hidden="true"
                     className={`size-1.5 flex-none rounded-full ${mark === null ? "bg-transparent" : MARK_HUE[mark]}`}
                   />
-                  <span className="min-w-0 truncate">{frame.type}</span>
+                  <span className="min-w-0 truncate">
+                    {presentedType(frame.type, entries.get(frame.seq))}
+                  </span>
                   {frame.cost === null ? null : (
                     <span
                       className={costChip}

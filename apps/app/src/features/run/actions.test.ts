@@ -43,6 +43,7 @@ const {
   exportRun,
   forkRun,
   haltRun,
+  readDeliveryReport,
   readRunExport,
   readTranscriptPage,
   sealRun,
@@ -995,4 +996,92 @@ describe("readTranscriptPage", () => {
   // port maps it, so a value that clears that gate always clears the app's
   // looser view schema too. The `captureError` report on that branch belongs
   // to the port's `view()` helper and is proved in `data/live/runs.test.ts`.
+});
+
+// #2953: the delivery report reads list_commands through the runs port, one
+// run's commands or a broadcast's by id, and never reads for a query that
+// names neither.
+describe("readDeliveryReport", () => {
+  const command = {
+    id: "tcm_1",
+    runId: RUN,
+    agentKey: null,
+    command: "steer",
+    status: "applied",
+    requestedMode: "interrupt",
+    deliveryMode: "next_step",
+    degradedReason: "harness_tier",
+    reason: null,
+    issuedAt: "2026-09-15T08:10:00.000Z",
+    expiresAt: null,
+    sentAt: "2026-09-15T08:10:02.000Z",
+    acknowledgedAt: "2026-09-15T08:10:05.000Z",
+    appliedAt: "2026-09-15T08:10:05.000Z",
+    appliedAtSeq: 41,
+    detail: null,
+    issuedBy: { id: "usr_0a", name: "Ada Park" },
+    text: "Run the migration tests before you push.",
+  };
+
+  it("reads one run's commands and answers them with both modes", async () => {
+    invoke.mockResolvedValue({ commands: [command] });
+    expect(
+      await readDeliveryReport("acme", "core-platform", { runId: RUN }),
+    ).toEqual({ ok: true, value: { commands: [command] } });
+    expect(invoke).toHaveBeenCalledWith(
+      "list_commands",
+      { runId: RUN, limit: 100 },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("reads a broadcast's commands by their ids", async () => {
+    invoke.mockResolvedValue({ commands: [command] });
+    await readDeliveryReport("acme", "core-platform", {
+      commandIds: ["tcm_1", "tcm_2"],
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "list_commands",
+      { commandIds: ["tcm_1", "tcm_2"], limit: 2 },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses more command ids than one report reads, before any read (negative)", async () => {
+    const commandIds = Array.from({ length: 1_001 }, (_, i) => `tcm_${i}`);
+    expect(
+      await readDeliveryReport("acme", "core-platform", { commandIds }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "report_query",
+      field: "q",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a query that names neither a run nor a command, before any read (negative)", async () => {
+    for (const q of [{}, { commandIds: [] }, { runId: RUN, commandIds: ["tcm_1"] }]) {
+      expect(
+        await readDeliveryReport(
+          "acme",
+          "core-platform",
+          q as Parameters<typeof readDeliveryReport>[2],
+        ),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "report_query",
+        field: "q",
+      });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("answers a denied read as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("list_commands"));
+    expect(
+      await readDeliveryReport("acme", "core-platform", { runId: RUN }),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
 });

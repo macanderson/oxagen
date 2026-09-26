@@ -1,12 +1,16 @@
 /**
- * `oxagen run list`, `oxagen run export <run-id>`,
+ * `oxagen run list`, `oxagen run show <run-id>`, `oxagen run export <run-id>`,
  * `oxagen run export-status <export-id>`, `oxagen run download <export-id>`,
  * `oxagen run chain <run-id>`, `oxagen run turns <run-id>` and
  * `oxagen run transcript <run-id>`: the CLI parity surfaces for `list_runs`,
- * `export_run`, `get_run_export`, `get_run_chain`, `get_run_turns` and
- * `get_run_transcript` (Mission Control spec §12.9, §13.4, §14.1; ADR-058).
+ * `get_run`, `export_run`, `get_run_export`, `get_run_chain`, `get_run_turns`
+ * and `get_run_transcript` (Mission Control spec §12.9, §13.4, §14.1;
+ * ADR-058).
  *
  * `list` prints the workspace's runs, newest first, one page at a time.
+ *
+ * `show` prints one run's header, the pause in force, and the first page of
+ * its frames, as `get_run` answers them.
  *
  * `transcript` prints one page of a run's transcript at a zoom, narrowed to
  * the chips asked for and to the entries that hold a query, with each chip's
@@ -726,6 +730,170 @@ export async function runTranscript(
       "The run is longer than one read carries. These entries cover its first part.",
     );
   }
+}
+
+/** Mirrors the `get_run` contract's pause, as far as the CLI prints it. */
+interface RunShowPause {
+  state: "pausing" | "paused" | "resuming";
+  seq: string | null;
+  turn: number | null;
+  step: number | null;
+  by: { id: string; name: string | null } | null;
+  issuedAt: string;
+  appliedAt: string | null;
+  reason: string | null;
+}
+
+/** Mirrors the `get_run` contract output, as far as `oxagen run show` prints it. */
+export interface RunShowResult {
+  run: {
+    id: string;
+    name: string | null;
+    agentKey: string | null;
+    operatorId: string | null;
+    operatorName: string | null;
+    operatorAttribution: "initiator" | "host_enroller" | null;
+    status: "live" | "sealed" | "halted";
+    outcome: string;
+    turns: number | null;
+    steps: number;
+    frames: number;
+    cost: { micros: string; currency: string; basis: string } | null;
+    costIsEstimate?: boolean;
+    startedAt: string;
+    sealedAt: string | null;
+    replayGrade: string | null;
+    enforcementTier: string;
+    pause?: RunShowPause | null;
+  };
+  frames: {
+    frames: {
+      seq: string;
+      observedAt: string;
+      type: string;
+      summary: string;
+    }[];
+    cursor: string | null;
+  };
+  framesError?: { code: string; message: string };
+}
+
+/** What a pause state still waits on, for the states that wait on something. */
+const PAUSE_NOTES: Record<RunShowPause["state"], string | null> = {
+  pausing: "It takes effect at the next boundary.",
+  paused: null,
+  resuming: "A resume is queued behind it.",
+};
+
+/**
+ * Who the run names as its operator. A wrapped run names the person who
+ * enrolled its host, which is not always the person at the keyboard, so it
+ * says so.
+ */
+function operatorOf(run: RunShowResult["run"]): string {
+  const who = run.operatorName ?? run.operatorId;
+  if (who === null) return NOT_RECORDED;
+  return run.operatorAttribution === "host_enroller"
+    ? `${who} (enrolled the host)`
+    : who;
+}
+
+/** The pause's lines, with every part the record does not hold left out. */
+function pauseLines(pause: RunShowPause): string[] {
+  const lines = [`Pause: ${pause.state}`];
+  const note = PAUSE_NOTES[pause.state];
+  if (note !== null) lines.push(`  ${note}`);
+  const place = [
+    ...(pause.turn === null ? [] : [`turn ${pause.turn}`]),
+    ...(pause.step === null ? [] : [`step ${pause.step}`]),
+  ];
+  if (place.length > 0) lines.push(`  At: ${place.join(", ")}`);
+  const by = pause.by === null ? NOT_RECORDED : (pause.by.name ?? pause.by.id);
+  lines.push(`  Issued by: ${by} at ${pause.issuedAt}`);
+  if (pause.appliedAt !== null) lines.push(`  Applied: ${pause.appliedAt}`);
+  if (pause.reason !== null) lines.push(`  Reason: "${pause.reason}"`);
+  if (pause.seq !== null) lines.push(`  Pause frame: seq ${pause.seq}`);
+  return lines;
+}
+
+/**
+ * `oxagen run show <run-id>`: one run's header and the first page of its
+ * frames, from `get_run`. It prints the run's name, agent, status, outcome,
+ * operator, tier, replay grade, times, counts and cost, one fact per line.
+ * Then it prints the pause in force when there is one, and a line per frame.
+ * A fact the record does not carry prints as not recorded, never as a zero.
+ */
+export async function runShow(
+  runId: string,
+  opts: { json?: boolean } = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  let result: RunShowResult;
+  try {
+    result = await apiPostOrThrow<RunShowResult>("runs/get", { runId });
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  const { run } = result;
+  writer.write(run.name === null ? run.id : `${run.id}: ${run.name}`);
+  writer.write(`Agent: ${run.agentKey ?? NOT_RECORDED}`);
+  writer.write(`Status: ${run.status}`);
+  writer.write(`Outcome: ${run.outcome}`);
+  writer.write(`Operator: ${operatorOf(run)}`);
+  writer.write(`Tier: ${run.enforcementTier}`);
+  writer.write(`Replay grade: ${run.replayGrade ?? NOT_RECORDED}`);
+  writer.write(`Started: ${run.startedAt}`);
+  writer.write(`Sealed: ${run.sealedAt ?? "not sealed"}`);
+  writer.write(`Turns: ${run.turns ?? NOT_RECORDED}`);
+  writer.write(`Steps: ${run.steps}`);
+  writer.write(`Frames: ${run.frames}`);
+  writer.write(
+    `Cost: ${runCostOf(run.cost)}${run.cost !== null && run.costIsEstimate === true ? " (estimate)" : ""}`,
+  );
+  if (run.pause) for (const line of pauseLines(run.pause)) writer.write(line);
+
+  writer.write("");
+  const page = result.frames.frames;
+  if (result.framesError) {
+    writer.write(
+      `The frames could not be read: ${result.framesError.message}`,
+    );
+  } else if (page.length === 0) {
+    writer.write("The run has recorded no frame yet.");
+  } else {
+    const rows = [
+      ["Seq", "Observed", "Type", "Summary"],
+      ...page.map((f) => [f.seq, f.observedAt, f.type, f.summary]),
+    ];
+    const widths = (rows[0] ?? []).map((_, col) =>
+      Math.max(...rows.map((r) => (r[col] ?? "").length)),
+    );
+    for (const r of rows) {
+      writer.write(
+        r
+          .map((cell, col) =>
+            col === r.length - 1 ? cell : cell.padEnd(widths[col] ?? 0),
+          )
+          .join("  "),
+      );
+    }
+    if (run.frames > page.length) {
+      writer.write("");
+      writer.write(
+        `The run holds ${run.frames} frames. These are its first ${page.length}.`,
+      );
+    }
+  }
+  writer.write("");
+  writer.write(
+    `Read its cost by turn with \`oxagen run turns ${run.id}\` and its chain with \`oxagen run chain ${run.id}\`.`,
+  );
 }
 
 /**

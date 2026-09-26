@@ -6,9 +6,10 @@
 // The open frame is `?body=<seq>`, or `?body=<chain>:<seq>` for a subagent's
 // frame (#3823), and the first frame shown when the URL names none.
 // `GovernedActionsTab` makes the tab's own reads (the open frame's body,
-// the approvals recorded on the run, and the mandate ledger when a parked call
-// names a mandate) and returns the view; the page calls it as a function, so
-// it calls no hook itself and every component it returns is synchronous.
+// the approvals recorded on the run, the mandate ledger when a parked call
+// names a mandate, and the delivery report when the open frame records an
+// operator's command) and returns the view; the page calls it as a function,
+// so it calls no hook itself and every component it returns is synchronous.
 import type {
   ApprovalItem,
   ApprovalQueue,
@@ -17,16 +18,21 @@ import type {
 } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { RunFrameBody, TranscriptEntry } from "@/data/contracts/run";
+import type { CommandReport } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
+import { ControlInspector } from "./control-inspector";
 import { frameKey } from "./frame-link";
 import { FrameList, FramePanel, FramesEmpty, FramesPager } from "./frames";
 import { PlayerBar } from "./player-bar";
 import {
+  type ControlCommand,
+  controlOf,
   entriesBySeq,
   isApprovalFrame,
+  kindOf,
   markOf,
   matchApprovals,
   type OpenFrame,
@@ -99,12 +105,45 @@ async function readBody(
     : source.runs.frameBody(ctx, runId, open.seq, open.chainRef);
 }
 
+/**
+ * The operator's command the open frame records, or null for any other frame
+ * (`controlOf`). A frame off this page is read by the type its transcript
+ * entry carries.
+ */
+function openCommand(
+  open: OpenFrame | null,
+  entries: ReadonlyMap<string, TranscriptEntry>,
+): ControlCommand | null {
+  if (open === null) return null;
+  const entry = entries.get(open.seq);
+  const type = open.frame?.type ?? entry?.type ?? null;
+  return type === null ? null : controlOf(type, entry);
+}
+
+/**
+ * The delivery report, read only while the open frame records an operator's
+ * command, so its inspector can say how that command was asked for and how it
+ * was carried (#2953). Every other frame makes no read.
+ */
+function readCommands(
+  source: DataSource,
+  ctx: WsCtx,
+  runId: string,
+  command: ControlCommand | null,
+): Promise<Read<CommandReport> | null> {
+  return command === null
+    ? Promise.resolve(null)
+    : source.runs.commands(ctx, { runId });
+}
+
 export async function GovernedActionsTab(props: FrameTabProps) {
-  const { ctx, source, run, detail, view, now } = props;
+  const { ctx, source, run, detail, view, now, everything } = props;
   const open = openFrameOf(detail.frames.frames, view.body);
-  const [body, approvals] = await Promise.all([
+  const command = openCommand(open, entriesBySeq(everything));
+  const [body, approvals, commands] = await Promise.all([
     readBody(source, ctx, run.id, open),
     readApprovals(source, ctx, run.id, now),
+    readCommands(source, ctx, run.id, command),
   ]);
   return (
     <GovernedActions
@@ -115,6 +154,8 @@ export async function GovernedActionsTab(props: FrameTabProps) {
       resolved={approvals.resolved}
       mandates={approvals.mandates}
       now={approvals.now}
+      command={command}
+      commands={commands}
     />
   );
 }
@@ -133,6 +174,8 @@ function GovernedActions({
   resolved,
   mandates,
   now,
+  command,
+  commands,
 }: {
   props: FrameTabProps;
   open: OpenFrame | null;
@@ -141,6 +184,10 @@ function GovernedActions({
   resolved: Read<ResolvedApprovals>;
   mandates: ReadonlyMap<string, MandateRow>;
   now: number;
+  /** The operator's command the open frame records; null for any other frame. */
+  command: ControlCommand | null;
+  /** The delivery report, read only when `command` is set. */
+  commands: Read<CommandReport> | null;
 }) {
   const { run, detail, view, place, everything, metrics } = props;
   const page = detail.frames;
@@ -218,6 +265,13 @@ function GovernedActions({
   const approvalFrame =
     open.frame !== null &&
     isApprovalFrame(open.frame.type, open.frame.toolStatus);
+  // The model frame after a steer on this page: the call that carried it.
+  const carrierFrame =
+    open.index < 0
+      ? undefined
+      : frames
+          .slice(open.index + 1)
+          .find((frame) => kindOf(frame.type) === "model");
 
   return (
     <>
@@ -279,6 +333,26 @@ function GovernedActions({
                   )}
                 />
               ) : null
+            }
+            control={
+              command === null || commands === null ? null : (
+                <ControlInspector
+                  command={command}
+                  seq={open.seq}
+                  read={commands}
+                  carrier={
+                    carrierFrame === undefined
+                      ? null
+                      : {
+                          seq: carrierFrame.seq,
+                          href: hrefOf(carrierFrame.seq),
+                        }
+                  }
+                  org={place.org}
+                  ws={place.ws}
+                  runId={place.runId}
+                />
+              )
             }
             steps={steps}
             hrefOf={hrefOf}

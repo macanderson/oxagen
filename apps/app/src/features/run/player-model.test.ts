@@ -13,6 +13,7 @@ import {
   releaseTranscript,
 } from "./actions-tab.builders";
 import {
+  controlOf,
   entriesBySeq,
   isApprovalFrame,
   isParked,
@@ -21,6 +22,7 @@ import {
   markOf,
   matchApprovals,
   openFrameOf,
+  presentedType,
   runStateOf,
   stepsOf,
   tickPositions,
@@ -198,6 +200,104 @@ describe("timelineMarks", () => {
     const marks = timelineMarks(frames, xs, entries);
     expect(marks.map((mark) => mark.kind)).toEqual(["steer", "parked"]);
     expect(marks[1]?.at).toBe(xs[14]);
+  });
+});
+
+// #2953: a wrapped run records an operator's command as
+// `oxagen:command_applied`, with the command as the frame's decision
+// (ADR-056). The player looked for a `control.steer` type no store writes, so
+// a real steer drew neither its mark nor the band after it.
+describe("an operator's command on a wrapped run", () => {
+  const COMMAND = "oxagen:command_applied";
+  const instant = (seconds: number) =>
+    new Date(Date.parse("2026-09-15T09:00:00.000Z") + seconds * 1000)
+      .toISOString();
+  const wrapped = (command: string | null) => {
+    const frame = (seq: string, type: string, seconds: number) =>
+      runFrame({ seq, cursor: seq, type, observedAt: instant(seconds) });
+    const page = [
+      frame("1", "llm_call", 0),
+      frame("2", COMMAND, 9),
+      frame("3", "llm_call", 18),
+    ];
+    const byseq = new Map([
+      ["1", transcriptEntry({ seq: "1", turn: 1 })],
+      [
+        "2",
+        transcriptEntry({
+          seq: "2",
+          turn: 2,
+          type: COMMAND,
+          decision:
+            command === null
+              ? null
+              : {
+                  seq: "2",
+                  decision: command,
+                  type: COMMAND,
+                  source: "human",
+                  harness: false,
+                  at: instant(9),
+                },
+        }),
+      ],
+      ["3", transcriptEntry({ seq: "3", turn: 2 })],
+    ]);
+    return { page, byseq };
+  };
+
+  it("marks a steer and draws the band it opens as after a steer (regression)", () => {
+    const { page, byseq } = wrapped("steer");
+    const xs = tickPositions(page);
+    expect(timelineMarks(page, xs, byseq).map((mark) => mark.kind)).toEqual([
+      "steer",
+    ]);
+    expect(
+      turnBands(page, xs, byseq).map((band) => [band.turn, band.afterSteer]),
+    ).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
+  it("marks a message the way it marks a steer", () => {
+    const { page, byseq } = wrapped("message");
+    const xs = tickPositions(page);
+    expect(timelineMarks(page, xs, byseq)).toHaveLength(1);
+  });
+
+  it("marks no pause, and nothing when the transcript did not carry the command (negative)", () => {
+    for (const command of ["pause", null]) {
+      const { page, byseq } = wrapped(command);
+      const xs = tickPositions(page);
+      expect(timelineMarks(page, xs, byseq)).toEqual([]);
+      expect(turnBands(page, xs, byseq).some((b) => b.afterSteer)).toBe(false);
+    }
+  });
+
+  it("presents each command as control.<command> and any other frame as recorded", () => {
+    for (const command of [
+      "pause",
+      "resume",
+      "cancel",
+      "steer",
+      "message",
+      "kill",
+    ]) {
+      const { byseq } = wrapped(command);
+      expect(controlOf(COMMAND, byseq.get("2"))).toBe(command);
+      expect(presentedType(COMMAND, byseq.get("2"))).toBe(
+        `control.${command}`,
+      );
+    }
+    expect(controlOf("control.pause", undefined)).toBe("pause");
+    expect(presentedType("llm_call", undefined)).toBe("llm_call");
+    // A command outside the vocabulary, or one the transcript did not carry,
+    // is shown as the store recorded it.
+    const { byseq } = wrapped("refresh_bundle");
+    expect(controlOf(COMMAND, byseq.get("2"))).toBeNull();
+    expect(presentedType(COMMAND, undefined)).toBe(COMMAND);
+    expect(controlOf("control.unknown", undefined)).toBeNull();
   });
 });
 

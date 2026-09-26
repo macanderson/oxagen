@@ -28,7 +28,7 @@ import type {
   RunFrameBody,
   RunTranscript,
 } from "@/data/contracts/run";
-import type { RunRow } from "@/data/contracts/runs";
+import type { CommandReport, RunRow } from "@/data/contracts/runs";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -71,6 +71,8 @@ vi.mock("../fleet/actions", () => ({
   resolveApprovalAction,
   readApprovalEligibility,
 }));
+const readDeliveryReport = vi.fn();
+vi.mock("./actions", () => ({ readDeliveryReport }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -105,6 +107,8 @@ type Setup = {
   resolvedMore?: boolean;
   mandates?: Read<MandateList>;
   frameBody?: Read<RunFrameBody>;
+  /** `list_commands`, read only while a command frame is open (#2953). */
+  commands?: Read<CommandReport>;
   run?: Partial<RunRow>;
   /** `?frames=` */
   page?: string;
@@ -132,6 +136,7 @@ async function renderTab(setup: Setup = {}) {
   const { source, calls } = runSource({
     detail: ok(detail),
     frameBody: setup.frameBody,
+    commands: setup.commands,
     approvals: setup.approvals,
     resolvedApprovals:
       setup.resolved === undefined || !setup.resolved.ok
@@ -990,5 +995,134 @@ describe("decided calls", () => {
     });
     expect(screen.queryByTestId("resolved-approval")).toBeNull();
     expect(screen.queryByTestId("approval-unmatched")).toBeNull();
+  });
+});
+
+// #2953: a wrapped run records an operator's command as
+// `oxagen:command_applied`, with the command as the frame's decision. The
+// open frame reads as control.<command>, and its inspector reads the
+// delivery report's row the host applied at that frame.
+describe("a command frame's inspector", () => {
+  const COMMAND = "oxagen:command_applied";
+  const noBody = {
+    digest: null,
+    bytesRef: null,
+    redactions: [],
+    fidelity: "full" as const,
+  };
+  const frames = [
+    runFrame({ seq: "0", cursor: "c0", type: "agent_start", body: noBody }),
+    runFrame({ seq: "1", cursor: "c1", type: "llm_call", body: noBody }),
+    runFrame({ seq: "2", cursor: "c2", type: COMMAND, body: noBody }),
+    runFrame({ seq: "3", cursor: "c3", type: "llm_call", body: noBody }),
+  ];
+  const everything = ok({
+    ...releaseTranscript(),
+    entries: frames.map((frame) =>
+      transcriptEntry({
+        seq: frame.seq,
+        endSeq: frame.seq,
+        type: frame.type,
+        turn: 1,
+        frames: 1,
+        decision:
+          frame.type === COMMAND
+            ? {
+                seq: frame.seq,
+                decision: "steer",
+                type: COMMAND,
+                source: "human",
+                harness: false,
+                at: frame.observedAt,
+              }
+            : null,
+      }),
+    ),
+  });
+  const row: CommandReport["commands"][number] = {
+    id: "tcm_s",
+    runId: "tse_7k2m9q",
+    agentKey: null,
+    command: "steer",
+    status: "applied",
+    requestedMode: "interrupt",
+    deliveryMode: "next_step",
+    degradedReason: "harness_tier",
+    reason: null,
+    issuedAt: "2026-09-15T09:14:30.000Z",
+    expiresAt: null,
+    sentAt: "2026-09-15T09:14:31.000Z",
+    acknowledgedAt: "2026-09-15T09:14:33.000Z",
+    appliedAt: "2026-09-15T09:14:33.000Z",
+    appliedAtSeq: 2,
+    detail: null,
+    issuedBy: { id: "usr_0a", name: "Ada Park" },
+    text: "Run the migration tests before you push.",
+  };
+
+  it("names the frame control.steer and shows its status, both modes, the issuer, the text and the call that carried it", async () => {
+    const { container, calls } = await renderTab({
+      frames,
+      everything,
+      body: "2",
+      commands: ok({ commands: [row] }),
+    });
+    expect(screen.getByTestId("frame-open")).toHaveTextContent(
+      "control.steer",
+    );
+    const inspector = screen.getByTestId("control-inspector");
+    expect(inspector).toHaveAttribute("data-command", "steer");
+    expect(within(inspector).getByText("applied")).toBeTruthy();
+    // The mode asked for and the mode carried are two facts (INV-10).
+    expect(within(inspector).getByTestId("control-requested")).toHaveTextContent(
+      "Interrupt the step in flight",
+    );
+    expect(within(inspector).getByTestId("control-delivered")).toHaveTextContent(
+      "Before the next model call",
+    );
+    expect(within(inspector).getByTestId("control-issuer")).toHaveTextContent(
+      "Ada Park",
+    );
+    expect(within(inspector).getByTestId("control-text")).toHaveTextContent(
+      "Run the migration tests before you push.",
+    );
+    expect(
+      within(within(inspector).getByTestId("control-carrier")).getByRole(
+        "link",
+      ),
+    ).toHaveAttribute("href", frameLink("3"));
+    expect(calls.commands).toEqual([[ctx, { runId: "tse_7k2m9q" }]]);
+    await expectNoAxe(container);
+  });
+
+  it("says no command in the report was applied at the frame when none names it (negative)", async () => {
+    await renderTab({
+      frames,
+      everything,
+      body: "2",
+      commands: ok({ commands: [{ ...row, appliedAtSeq: 99 }] }),
+    });
+    expect(screen.getByTestId("control-unmatched")).toHaveTextContent(
+      "No command in the delivery report was applied at this frame.",
+    );
+    expect(screen.queryByTestId("control-text")).toBeNull();
+  });
+
+  it("names its own failure when the report read is refused (negative)", async () => {
+    await renderTab({
+      frames,
+      everything,
+      body: "2",
+      commands: { ok: false, reason: "denied", permission: "run.read" },
+    });
+    const inspector = screen.getByTestId("control-inspector");
+    expect(inspector).toHaveTextContent(/run\.read/);
+    expect(within(inspector).queryByTestId("control-issuer")).toBeNull();
+  });
+
+  it("reads no report for a frame that records no command (negative)", async () => {
+    const { calls } = await renderTab({ frames, everything, body: "1" });
+    expect(screen.queryByTestId("control-inspector")).toBeNull();
+    expect(calls.commands).toEqual([]);
   });
 });

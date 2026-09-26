@@ -41,6 +41,7 @@ import {
   runGet,
   type RunGetOutput,
 } from "@oxagen/oxagen/contracts/run.get";
+import type { RunPause } from "@oxagen/oxagen/contracts/run.list";
 import type { RunFrame, SubagentChainRow } from "@oxagen/run-ledger";
 import { selectTachoChainHeads } from "@oxagen/telemetry";
 import {
@@ -56,6 +57,12 @@ import {
   workDigest,
 } from "./lib/run-work";
 import { logger } from "./logger";
+import {
+  clickhousePausePosition,
+  postgresPauseCommands,
+  readRunPause,
+  type RunPauseDeps,
+} from "./lib/run-pause";
 import {
   defaultRunReadDeps,
   readChainFrames,
@@ -390,7 +397,55 @@ export type RunGetDeps = RunReadDeps & {
    * Absent, or without `tachoChains`, the read answers no `chains` field.
    */
   chainHeads?: typeof selectTachoChainHeads;
+  /**
+   * The pause read (#3972): the run's pause and resume rows, and the turn and
+   * step at a wrapped run's pause frame. Absent, the read answers no `pause`
+   * field, which a reader takes as not read.
+   */
+  pause?: RunPauseDeps;
 };
+
+/**
+ * The pause in force on a live run (#3972); a sealed run holds none. A read
+ * that fails leaves the field out, which the page reads as not read, rather
+ * than failing the page. A position that could not be read leaves the pause
+ * standing with no turn or step.
+ */
+function readPause(
+  deps: Pick<RunGetDeps, "pause" | "now">,
+  scope: RunScope,
+  run: ResolvedRun,
+): Promise<RunPause | null | undefined> {
+  const pause = deps.pause;
+  if (pause === undefined) return Promise.resolve(undefined);
+  if (run.item.status !== "live") return Promise.resolve(null);
+  const runId = run.item.id;
+  return readRunPause(
+    pause,
+    scope,
+    {
+      source: run.source,
+      publicId: runId,
+      sessionUuid: run.source === "tacho" ? run.sessionUuid : null,
+      held: run.item.ingressPaused === true,
+      turns: run.item.turns,
+      steps: run.item.steps,
+    },
+    new Date(deps.now()),
+    (err: unknown) => {
+      logger.warn(
+        { err, runId },
+        "get_run: the pause frame's turn and step could not be read; the pause names none",
+      );
+    },
+  ).catch((err: unknown) => {
+    logger.warn(
+      { err, runId },
+      "get_run: the run's pause could not be read; the page reads it as not read",
+    );
+    return undefined;
+  });
+}
 
 export function createRunGetHandler(
   deps: RunGetDeps,
@@ -454,6 +509,7 @@ export function createRunGetHandler(
     // session row holds, rather than failing the page. They are read while
     // the frames are, since neither needs the other. So is the repository.
     const repository = placeRepository(deps, runScope(ctx), run, input.runId);
+    const pause = readPause(deps, runScope(ctx), run);
     const header =
       run.source === "tacho"
         ? Promise.all([
@@ -508,11 +564,12 @@ export function createRunGetHandler(
         : moved === undefined
           ? watch.read()
           : polled.then(() => watch.latest());
-    const [[title, config], read, named, chains] = await Promise.all([
+    const [[title, config], read, named, chains, paused] = await Promise.all([
       header,
       polled,
       repository,
       heads,
+      pause,
     ]);
     const { batch } = read;
     const frames = batch.slice(0, input.frameLimit);
@@ -530,6 +587,7 @@ export function createRunGetHandler(
               thinking: config.thinking,
             }),
         ...withRepository(run.item.place, named),
+        ...(paused === undefined ? {} : { pause: paused }),
       },
       frames: {
         frames: frames.map(toFrame),
@@ -562,6 +620,10 @@ export function defaultRunGetDeps(): RunGetDeps {
     sessionConfig: readSessionConfig,
     sessionRepository: readSessionRepository,
     chainHeads: selectTachoChainHeads,
+    pause: {
+      pauseCommands: postgresPauseCommands,
+      pausePosition: clickhousePausePosition,
+    },
   };
 }
 

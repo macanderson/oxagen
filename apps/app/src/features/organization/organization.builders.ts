@@ -227,6 +227,7 @@ export function orgSource(reads: OrgReads): {
       turns: refuse,
       transcript: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,

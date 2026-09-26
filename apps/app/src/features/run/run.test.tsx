@@ -19,6 +19,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunTranscript, TranscriptZoom } from "@/data/contracts/run";
+import type { RunRow } from "@/data/contracts/runs";
 import type { PriceBook } from "@/data/contracts/spend";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -122,6 +123,40 @@ const DENIED = {
   permission: "run.read",
 } as const;
 const DOWN = readError("frame_store_unreachable", 502);
+
+/** A pause in force on the run (#3972), as `get_run` answers it. */
+function pauseRecord(
+  over: Partial<NonNullable<RunRow["pause"]>> = {},
+): NonNullable<RunRow["pause"]> {
+  return {
+    state: "paused",
+    commandId: "tcm_p",
+    resumeCommandId: null,
+    seq: "41",
+    turn: 3,
+    step: 12,
+    by: { id: "usr_0a", name: "Ada Park" },
+    issuedAt: "2026-09-15T08:56:00.000Z",
+    appliedAt: "2026-09-15T08:56:04.000Z",
+    reason: "budget review",
+    ...over,
+  };
+}
+
+/** A live wrapped run carrying `pause`, held unless the pause is on its way. */
+function pausedDetail(pause: NonNullable<RunRow["pause"]>) {
+  return ok(
+    runDetail({
+      run: runRow({
+        status: "live",
+        sealedAt: null,
+        source: "tacho",
+        ingressPaused: pause.state !== "pausing",
+        pause,
+      }),
+    }),
+  );
+}
 
 /** The same workspace seen by an organization Member: `export_run` refuses this role. */
 const memberCtx = unsafeMint(WsCtx, {
@@ -696,11 +731,12 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
-    // A wrapped run's host refuses tool calls. It holds no ingress fence.
-    expect(screen.getByTestId("run-paused")).toHaveTextContent(
-      "Paused. The host refuses this agent's tool calls until you resume it.",
-    );
-    expect(screen.getByTestId("run-paused")).not.toHaveTextContent("Ingress");
+    // A row whose read carried no pause says only that the run is paused:
+    // no place, no person and no frame is guessed for it (#3972).
+    const banner = screen.getByTestId("run-paused");
+    expect(within(banner).getByRole("status")).toHaveTextContent(/^Paused$/);
+    expect(screen.queryByTestId("run-pause-frame")).toBeNull();
+    expect(screen.queryByTestId("run-paused-no-frame")).toBeNull();
     cleanup();
     await renderRun({
       detail: ok(runDetail()),
@@ -725,7 +761,7 @@ describe("header", () => {
     await expectNoAxe(container);
   });
 
-  it("says paused over parked, and offers Resume once, with the run's other controls", async () => {
+  it("says paused over parked, and offers Resume in the header and in the banner", async () => {
     const { container } = await renderRun({
       detail: ok(
         runDetail({
@@ -741,12 +777,16 @@ describe("header", () => {
       approvals: ok({ items: [approval()], more: false }),
     });
     expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
-    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
-    // Resume takes Pause's place in the header, beside Cancel; the banner only
-    // says why the run is waiting.
+    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused");
+    // Resume takes Pause's place in the header, beside Cancel, and the banner
+    // carries its own, as pages/run.md draws it (#3972).
     expect(screen.getByTestId("run-resume")).toHaveTextContent("Resume run");
-    expect(screen.getAllByRole("button", { name: /resume/i })).toHaveLength(1);
-    expect(screen.getByTestId("run-paused").querySelector("button")).toBeNull();
+    expect(
+      within(screen.getByTestId("run-paused")).getByTestId(
+        "pause-banner-resume",
+      ),
+    ).toHaveTextContent("▶ Resume run");
+    expect(screen.getAllByRole("button", { name: /resume/i })).toHaveLength(2);
     await expectNoAxe(container);
   });
 
@@ -1401,13 +1441,16 @@ describe("controls", () => {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
     const banner = screen.getByTestId("run-paused");
-    expect(banner).toHaveTextContent("refuses this agent's tool calls");
-    expect(banner).not.toHaveTextContent("Evidence ingress");
+    expect(banner).toHaveAttribute("data-state", "paused");
+    expect(within(banner).getByTestId("pause-banner-resume")).toBeEnabled();
     await expectNoAxe(container);
   });
 
-  it("names evidence ingress in a paused ledger run's banner", async () => {
-    await renderRun({
+  // #3972: a ledger run's pause fences ingress and seals no frame, so the
+  // banner names who paused it and why, and says why there is no frame to
+  // open rather than offering one.
+  it("names who paused a ledger run and why, and says it sealed no frame", async () => {
+    const { container } = await renderRun({
       detail: ok(
         runDetail({
           run: runRow({
@@ -1415,14 +1458,118 @@ describe("controls", () => {
             sealedAt: null,
             source: "ledger",
             ingressPaused: true,
+            pause: {
+              state: "paused",
+              commandId: "tcm_p",
+              resumeCommandId: null,
+              seq: null,
+              turn: null,
+              step: null,
+              by: { id: "usr_0a", name: "Ada Park" },
+              issuedAt: "2026-09-15T08:56:00.000Z",
+              appliedAt: "2026-09-15T08:56:00.000Z",
+              reason: "budget review",
+            },
           }),
         }),
       ),
       transcript: ok(runTranscript()),
     });
+    const line = within(screen.getByTestId("run-paused")).getByRole("status");
+    expect(line).toHaveTextContent(/^Paused · by Ada Park at .+ · “budget review”/);
+    expect(line).not.toHaveTextContent("turn");
+    expect(screen.getByTestId("run-paused-no-frame")).toHaveTextContent(
+      "A ledger run's pause fences evidence ingress and seals no frame.",
+    );
+    expect(screen.queryByTestId("run-pause-frame")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("reads where a paused wrapped run stopped, who paused it, when and why, with Resume and its frame (#3972)", async () => {
+    const { container } = await renderRun({
+      detail: pausedDetail(pauseRecord()),
+      transcript: ok(runTranscript()),
+    });
     const banner = screen.getByTestId("run-paused");
-    expect(banner).toHaveTextContent("Evidence ingress is paused");
-    expect(banner).not.toHaveTextContent("tool calls");
+    expect(within(banner).getByRole("status")).toHaveTextContent(
+      /^Paused at turn 3 · step 12 · by Ada Park at .+ · “budget review”$/,
+    );
+    expect(within(banner).getByTestId("pause-banner-resume")).toBeEnabled();
+    expect(within(banner).getByTestId("run-pause-frame")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=41",
+    );
+    expect(screen.queryByTestId("run-paused-no-frame")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("reads a pause on its way at the run's head, with the header's disabled Pausing and no frame yet (#3972)", async () => {
+    const { container } = await renderRun({
+      detail: pausedDetail(
+        pauseRecord({
+          state: "pausing",
+          seq: null,
+          turn: 2,
+          step: 7,
+          appliedAt: null,
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const banner = screen.getByTestId("run-paused");
+    expect(within(banner).getByRole("status")).toHaveTextContent(
+      "Pausing at turn 2 · step 7 · takes effect at the next checkpoint · “budget review”",
+    );
+    expect(screen.getByTestId("run-paused-no-frame")).toHaveTextContent(
+      "The pause frame is written when the host applies the pause.",
+    );
+    expect(within(banner).queryByTestId("pause-banner-resume")).toBeNull();
+    expect(screen.queryByTestId("run-pause-frame")).toBeNull();
+    expect(screen.getByTestId("run-pausing")).toBeDisabled();
+    expect(screen.queryByTestId("run-pause")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("draws no banner while a resume is on its way, and the header's disabled Resuming says it (#3972)", async () => {
+    const { container } = await renderRun({
+      detail: pausedDetail(
+        pauseRecord({ state: "resuming", resumeCommandId: "tcm_r" }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-paused")).toBeNull();
+    expect(screen.getByTestId("run-resuming")).toBeDisabled();
+    expect(screen.queryByTestId("run-resume")).toBeNull();
+    expect(screen.queryByTestId("run-cancel")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("says the host recorded no frame when an applied pause names none, and offers no link (negative)", async () => {
+    await renderRun({
+      detail: pausedDetail(pauseRecord({ seq: null })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-paused-no-frame")).toHaveTextContent(
+      "The host recorded no frame for this pause.",
+    );
+    expect(screen.queryByTestId("run-pause-frame")).toBeNull();
+  });
+
+  it("leaves out each part the record does not hold, and names an unnamed person by id (negative)", async () => {
+    await renderRun({
+      detail: pausedDetail(
+        pauseRecord({
+          turn: null,
+          step: null,
+          by: { id: "usr_0a", name: null },
+          reason: null,
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const line = within(screen.getByTestId("run-paused")).getByRole("status");
+    expect(line).toHaveTextContent(/^Paused · by usr_0a at [^·]+$/);
+    expect(screen.queryByTestId("run-paused-reason")).toBeNull();
   });
 
   it("draws Resume alone, disabled, on a paused wrapped run a viewer cannot command (negative)", async () => {

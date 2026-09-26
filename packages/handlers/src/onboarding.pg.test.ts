@@ -659,6 +659,8 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
         .select({
           publicId: schema.tachoSessions.publicId,
           agentId: schema.tachoSessions.agentId,
+          initiatingPrincipalId: schema.tachoSessions.initiatingPrincipalId,
+          initiatingUserId: schema.tachoSessions.initiatingUserId,
           createdAt: schema.tachoSessions.createdAt,
           startedAt: schema.tachoSessions.startedAt,
         })
@@ -666,6 +668,23 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
         .where(eq(schema.tachoSessions.sessionUuid, session)),
     );
     expect(run?.agentId).toBe(agentId);
+    // The person who enrolled the host: the owner the token was issued to,
+    // through the human principal create_org gave them here (#2951).
+    const [ownerPrincipal] = await withSystemDb((tx) =>
+      tx
+        .select({ id: schema.principals.id })
+        .from(schema.principals)
+        .where(
+          and(
+            eq(schema.principals.orgId, orgId),
+            eq(schema.principals.parentUserId, ownerId),
+            eq(schema.principals.kind, "human"),
+          ),
+        ),
+    );
+    expect(ownerPrincipal?.id).toBeDefined();
+    expect(run?.initiatingPrincipalId).toBe(ownerPrincipal?.id);
+    expect(run?.initiatingUserId).toBe(ownerId);
     expect(gate).toMatchObject({ step: "unlocked", firstRunId: run?.publicId });
     expect(gate?.firstFrameAt).not.toBeNull();
     const [agent] = await withSystemDb((tx) =>

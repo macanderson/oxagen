@@ -12,7 +12,7 @@
 // what the record holds.
 import { Folder, GitBranch, GitPullRequest } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { Suspense, use } from "react";
+import { type ReactNode, Suspense, use } from "react";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
 import type { RunSubagent, RunWork } from "@/data/contracts/run-work";
@@ -20,23 +20,25 @@ import { isStale, type RunRow, staleReason } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
+import { routes } from "@/shared/safe-path";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
 import { Badge } from "@/ui/badge";
-import { eyebrow, linkChip } from "@/ui/control-styles";
+import { buttonSecondary, eyebrow, linkChip } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
-import { GitHubLink, PullRequestLink } from "@/ui/navigation";
+import { GitHubLink, PullRequestLink, SafeLink } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyPath } from "./copy-text";
+import { DeliveryReport } from "./delivery-report";
 import { runFit, type RunFit } from "./fit";
 import type { RunMetrics } from "./metrics";
 import { ExportAction } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
-import { RunControls } from "./run-controls";
+import { BannerResume, RunControls } from "./run-controls";
 import { SealRunAction } from "./seal-run";
 import type { Place } from "./tab-props";
 
@@ -815,23 +817,133 @@ function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
 }
 
 /**
- * The banner under the header while the run is paused. A ledger run's ingress
- * fence holds every step. A wrapped run's host refuses its tool calls, and the
- * model may still write text, so each source gets its own sentence.
+ * The banner under the header while a pause is on its way or in force
+ * (#3972; mockup `pauseBanner`, pages/run.md): one line, "Pausing" or
+ * "Paused" at turn N · step M, then "takes effect at the next checkpoint" or
+ * who paused it and when, and the reason in their words. Then ▶ Resume run
+ * when paused, and Open the pause frame. Every part is read from `get_run`'s
+ * `pause`, and a part the record does not hold is left out rather than
+ * guessed. A resume on its way hides the banner, as the mockup does; the
+ * header's disabled Resuming… says it.
+ *
+ * The pause frame is the `oxagen:command_applied` frame the host sealed. A
+ * pause on its way has sealed none yet, and a ledger run's pause fences
+ * ingress and seals none, so the link gives way to one sentence saying which.
+ * A row whose read did not carry the pause says only that the run is paused.
  */
-function PauseBanner({ run }: { run: RunRow }) {
-  const t = useTranslations("run.header");
-  if (run.status !== "live" || run.ingressPaused !== true) return null;
+function PauseBanner({
+  run,
+  place,
+  orgRole,
+  wsRole,
+}: {
+  run: RunRow;
+  place: Place;
+  orgRole: OrgRole;
+  wsRole: WsRole;
+}) {
+  const t = useTranslations("run.header.pause");
+  const format = useFormatter();
+  if (run.status !== "live") return null;
+  const pause = run.pause ?? null;
+  const state = pause?.state ?? (run.ingressPaused === true ? "paused" : null);
+  if (state === null || state === "resuming") return null;
+  const pausing = state === "pausing";
+  const clock = (iso: string) =>
+    format.dateTime(new Date(iso), { timeStyle: "short" });
+  // The line's parts, in the mockup's order, joined by " · ".
+  const parts: { key: string; node: ReactNode }[] = [];
+  if (pause !== null && pause.step !== null)
+    parts.push({ key: "step", node: t("step", { step: pause.step }) });
+  if (pausing) parts.push({ key: "checkpoint", node: t("checkpoint") });
+  else if (pause !== null && pause.appliedAt !== null) {
+    const time = clock(pause.appliedAt);
+    parts.push({
+      key: "by",
+      node:
+        pause.by === null
+          ? t("at", { time })
+          : t("by", { name: pause.by.name ?? pause.by.id, time }),
+    });
+  }
+  if (pause !== null && pause.reason !== null)
+    parts.push({
+      key: "reason",
+      node: (
+        <span data-testid="run-paused-reason">
+          {t("reason", { reason: pause.reason })}
+        </span>
+      ),
+    });
+  const why =
+    pause === null
+      ? null
+      : run.source === "ledger"
+        ? t("noFrameLedger")
+        : pausing
+          ? t("noFramePending")
+          : pause.seq === null
+            ? t("noFrameRecorded")
+            : null;
   return (
-    <p
-      role="status"
+    <div
       data-testid="run-paused"
       data-source={run.source}
-      className="mb-3.5 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
+      data-state={state}
+      className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
     >
-      <b className="text-info">{t("pausedTitle")}</b>{" "}
-      {run.source === "tacho" ? t("pausedSession") : t("paused")}
-    </p>
+      <span aria-hidden="true" className="text-info">
+        ❙❙
+      </span>
+      {/* The line is the live region, so a pause that lands is heard; the
+          actions beside it are not announced with it. */}
+      <p role="status" className="m-0 min-w-0 flex-1">
+        <b className="text-info">
+          {pause === null || pause.turn === null
+            ? t(pausing ? "pausing" : "paused")
+            : t(pausing ? "pausingAt" : "pausedAt", { turn: pause.turn })}
+        </b>
+        {parts.map((part) => (
+          <span key={part.key}>
+            {" · "}
+            {part.node}
+          </span>
+        ))}
+        {why === null ? null : (
+          <span
+            data-testid="run-paused-no-frame"
+            className="block text-muted-foreground"
+          >
+            {why}
+          </span>
+        )}
+      </p>
+      {pausing ? null : (
+        <BannerResume
+          org={place.org}
+          ws={place.ws}
+          runId={run.id}
+          source={run.source}
+          commandBlock={run.commandBlock ?? null}
+          ingressRevoked={run.ingressRevoked}
+          ingressPaused={run.ingressPaused}
+          orgRole={orgRole}
+          wsRole={wsRole}
+        />
+      )}
+      {pause === null || pause.seq === null ? null : (
+        <SafeLink
+          to={routes.run(place.org, place.ws, run.id, {
+            tab: "actions",
+            body: pause.seq,
+          })}
+          data-testid="run-pause-frame"
+          className={buttonSecondary}
+        >
+          {t("openFrame")}
+        </SafeLink>
+      )}
+    </div>
   );
 }
 
@@ -946,6 +1058,7 @@ export function RunHeader({
               steerBlock={run.steerBlock}
               ingressRevoked={run.ingressRevoked}
               ingressPaused={run.ingressPaused}
+              {...(run.pause === undefined ? {} : { pause: run.pause })}
               orgRole={orgRole}
               wsRole={wsRole}
             />
@@ -964,6 +1077,13 @@ export function RunHeader({
               wsRole={wsRole}
             />
           ) : null}
+          {/* Every command sent to the run and how far each got (#2953).
+              Export stays last, as the header always ends on it. */}
+          <DeliveryReport
+            org={place.org}
+            ws={place.ws}
+            query={{ runId: run.id }}
+          />
           <ExportAction
             org={place.org}
             ws={place.ws}
@@ -974,7 +1094,7 @@ export function RunHeader({
           />
         </div>
       </header>
-      <PauseBanner run={run} />
+      <PauseBanner run={run} place={place} orgRole={orgRole} wsRole={wsRole} />
     </>
   );
 }

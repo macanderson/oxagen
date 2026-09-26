@@ -82,6 +82,7 @@ function stubSource() {
       turns: vi.fn(),
       transcript: vi.fn(),
       chain: vi.fn(),
+      commands: vi.fn(),
       outputs: vi.fn(),
       work: vi.fn(),
       outcomesSettings: vi.fn(),

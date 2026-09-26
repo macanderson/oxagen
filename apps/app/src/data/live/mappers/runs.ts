@@ -10,6 +10,7 @@ import type { ContractOutput } from "@/server/kernel";
 type RunListOutput = ContractOutput<typeof runList>;
 type RunListItem = RunListOutput["runs"][number];
 type RunListTokens = NonNullable<RunListItem["tokens"]>;
+type RunListPause = NonNullable<RunListItem["pause"]>;
 
 /** The rollup's snake-case token classes as the view names them. */
 function toRunTokenCounts(tokens: RunListTokens) {
@@ -20,6 +21,33 @@ function toRunTokenCounts(tokens: RunListTokens) {
     cacheWrite1h: tokens.cache_write_1h,
     output: tokens.output,
     reasoning: tokens.reasoning,
+  };
+}
+
+/** A person's name as the view carries it: a blank one is none. */
+const nameOf = (name: string | null): string | null =>
+  name === null || name.trim() === "" ? null : name;
+
+/**
+ * `get_run`'s pause (#3972) as the Run header reads it: the commands by their
+ * `tcm_…` ids, the issuer by `usr_…`, and a blank name read as none, since
+ * the view refuses an empty one.
+ */
+function toRunPause(pause: RunListPause) {
+  return {
+    state: pause.state,
+    commandId: pause.commandId,
+    resumeCommandId: pause.resumeCommandId,
+    seq: pause.seq,
+    turn: pause.turn,
+    step: pause.step,
+    by:
+      pause.by === null
+        ? null
+        : { id: pause.by.id, name: nameOf(pause.by.name) },
+    issuedAt: pause.issuedAt,
+    appliedAt: pause.appliedAt,
+    reason: pause.reason,
   };
 }
 
@@ -122,6 +150,11 @@ export function toRunRow(
     steerBlock: run.steerBlock ?? null,
     ingressRevoked: run.ingressRevoked ?? false,
     ingressPaused: run.ingressPaused ?? false,
+    // `get_run` answers the pause; a `list_runs` row leaves it out. Absent is
+    // "not read" and null is "none in force", and each stays what it is.
+    ...(run.pause === undefined
+      ? {}
+      : { pause: run.pause === null ? null : toRunPause(run.pause) }),
     // Absent for a wrapped session, whose store records no compaction.
     ...(run.compacted === undefined ? {} : { compacted: run.compacted }),
     completenessGaps: run.completenessGaps,

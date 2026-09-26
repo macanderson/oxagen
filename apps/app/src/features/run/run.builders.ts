@@ -24,7 +24,7 @@ import type {
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
 import type { RunWork } from "@/data/contracts/run-work";
-import type { RunRow } from "@/data/contracts/runs";
+import type { CommandReport, RunRow } from "@/data/contracts/runs";
 import type { PriceBook } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { countsAsError, frameFolds, tachoFrame } from "@oxagen/run-ledger";
@@ -793,6 +793,11 @@ type RunReads = {
   /** Only read when the Chain and seal tab is open; refused when absent. */
   chain?: Read<RunChain>;
   /**
+   * `list_commands` for the run, read when the Governed actions tab has an
+   * operator's command frame open, for its inspector; refused when absent.
+   */
+  commands?: Read<CommandReport>;
+  /**
    * `get_run_turns`, only read when the Cost tab is open. A test that says
    * nothing about it gets the two turns `runTurns` builds.
    */
@@ -840,6 +845,7 @@ export function runSource(reads: RunReads) {
     approvals: unknown[][];
     resolvedApprovals: unknown[][];
     chain: unknown[][];
+    commands: unknown[][];
     turns: unknown[][];
     mandates: unknown[][];
     outputs: unknown[][];
@@ -854,6 +860,7 @@ export function runSource(reads: RunReads) {
     approvals: [],
     resolvedApprovals: [],
     chain: [],
+    commands: [],
     turns: [],
     mandates: [],
     outputs: [],
@@ -925,6 +932,7 @@ export function runSource(reads: RunReads) {
         );
       },
       chain: answer("chain", reads.chain),
+      commands: answer("commands", reads.commands),
       turns: answer("turns", reads.turns ?? readOk(runTurns())),
       outputs: (...args: unknown[]) => {
         calls.outputs.push(args);

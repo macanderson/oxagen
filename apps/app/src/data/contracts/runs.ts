@@ -556,8 +556,13 @@ export type RunPage = z.infer<typeof RunPage>;
  */
 const CommandReportItem = z.object({
   id: PublicId,
-  /** The run the command is addressed to. */
-  runId: PublicId,
+  /**
+   * The run the command is addressed to. Null on a steer held for an idle
+   * agent's next run, until that run opens.
+   */
+  runId: PublicId.nullable(),
+  /** The agent key a held steer waits on; null on a run's command. */
+  agentKey: z.string().min(1).nullable(),
   command: z.enum([
     "pause",
     "resume",

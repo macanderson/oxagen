@@ -451,6 +451,28 @@ describe("steerFleet", () => {
       );
   });
 
+  // #2953: Interrupt is a ceiling each run's connection point resolves.
+  it("asks for interrupt when the dialog's Interrupt is on", async () => {
+    invoke.mockResolvedValue({ commandIds: ["tcm_1"] });
+    await steerFleet("acme", "core-platform", {
+      agentKeys: ["acme.core.release-bot"],
+      text: "Stop and read the brief.",
+      requestedMode: "interrupt",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "dispatch_command",
+      {
+        target: { kind: "agent", id: "acme.core.release-bot" },
+        command: "steer",
+        payload: {
+          text: "Stop and read the brief.",
+          requestedMode: "interrupt",
+        },
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
   it("sends one steer for an agent named twice", async () => {
     invoke.mockResolvedValue({ commandIds: ["tcm_1"] });
     await steerFleet("acme", "core-platform", {
@@ -504,6 +526,12 @@ describe("steerFleet", () => {
       "text",
     ],
     ["no agent", { agentKeys: [], text: "Hold." }, "steer_agents", "agents"],
+    [
+      "a mode the dialog does not offer",
+      { agentKeys: KEYS, text: "Hold.", requestedMode: "next_step" },
+      "delivery_mode",
+      "requestedMode",
+    ],
   ])(
     "refuses %s before the kernel runs (negative)",
     async (_case, input, code, field) => {

@@ -529,6 +529,12 @@
         "pending": "Queueing",
         "queued": "The resume is queued. The run's status says when the agent has picked it up."
       },
+      "pausing": {
+        "open": "❙❙ Pausing…"
+      },
+      "resuming": {
+        "open": "▶ Resuming…"
+      },
       "steer": {
         "open": "Steer",
         "title": "Steer {run}",
@@ -940,8 +946,6 @@
       "ended": "ended",
       "sealNotRecorded": "ended with no seal recorded",
       "enrolledBy": "enrolled the host",
-      "paused": "Evidence ingress is paused. New batches are refused until you resume it. The external process may still be running.",
-      "pausedSession": "The host refuses this agent's tool calls until you resume it. The agent usually ends its turn on the refusal.",
       "copyLabel": "Copy {text}",
       "copied": "Copied {text}",
       "copyFailed": "Copy failed. Select the text and copy it.",
@@ -966,14 +970,28 @@
       "pathRecorded": "Oxagen recorded this checkout on {machine}. Click to copy the path.",
       "pathSession": "The session recorded this working directory on {machine}. Click to copy the path.",
       "withFacts": "{reading} {facts}",
-      "pausedTitle": "Paused.",
       "statusPaused": "paused",
       "statusParked": "parked",
       "fit": {
         "fit": "Model fit",
         "wrongTier": "Wrong model tier"
       },
-      "runs30d": "{count} runs 30d"
+      "runs30d": "{count} runs 30d",
+      "pause": {
+        "pausing": "Pausing",
+        "paused": "Paused",
+        "pausingAt": "Pausing at turn {turn}",
+        "pausedAt": "Paused at turn {turn}",
+        "step": "step {step}",
+        "checkpoint": "takes effect at the next checkpoint",
+        "by": "by {name} at {time}",
+        "at": "at {time}",
+        "reason": "“{reason}”",
+        "openFrame": "Open the pause frame",
+        "noFrameLedger": "A ledger run's pause fences evidence ingress and seals no frame.",
+        "noFramePending": "The pause frame is written when the host applies the pause.",
+        "noFrameRecorded": "The host recorded no frame for this pause."
+      }
     },
     "summary": {
       "title": "Summary",
@@ -1274,6 +1292,55 @@
         "title": "Your access request is waiting",
         "body": "Reading this run parked for approval. The request is {request}."
       }
+    },
+    "report": {
+      "open": "Delivery report",
+      "title": "Delivery report",
+      "reading": "Reading the report.",
+      "empty": "No command has been sent to this run.",
+      "failed": "The report could not be read: {code}. Open it again to retry.",
+      "unanswered": "The report read did not answer. Open it again to retry.",
+      "applied": "Applied",
+      "pending": "Pending",
+      "undelivered": "Undelivered",
+      "command": "control.{command}",
+      "heldForNextRun": "Held for this agent's next run.",
+      "status": {
+        "draft": "draft",
+        "queued": "queued",
+        "sent": "sent",
+        "received": "received",
+        "acknowledged": "acknowledged",
+        "applied": "applied",
+        "cancelled": "cancelled",
+        "expired": "expired",
+        "failed": "failed"
+      },
+      "requested": "Requested",
+      "delivered": "Delivered",
+      "noMode": "none",
+      "notResolved": "not resolved yet",
+      "downgrade": "Downgrade",
+      "degraded": {
+        "harness_tier": "Nothing on the run's path can cut a call in flight.",
+        "no_step_carrier": "The host delivers steering at the next prompt only."
+      },
+      "issuedBy": "Issued by",
+      "notRecorded": "not recorded",
+      "issued": "Issued",
+      "frame": "Frame",
+      "frameLink": "Frame {seq}",
+      "noFrame": "none yet",
+      "text": "Text",
+      "reason": "Reason",
+      "detail": "Detail"
+    },
+    "control": {
+      "heading": "Command",
+      "status": "Status",
+      "carriedBy": "Carried by",
+      "noCarrier": "not on this page",
+      "unmatched": "No command in the delivery report was applied at this frame."
     }
   }
 }

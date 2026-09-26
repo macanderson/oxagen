@@ -221,6 +221,7 @@ export function fleetSource(reads: FleetReads) {
       cost: refuse,
       turns: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,

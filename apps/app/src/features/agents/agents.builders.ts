@@ -506,6 +506,7 @@ export function agentsSource(reads: AgentReads) {
       turns: refuse,
       transcript: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,

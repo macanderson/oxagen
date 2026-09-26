@@ -9,6 +9,12 @@
 // the transcript did not carry draws no band, a decision it did not carry
 // draws no hue, and an approval the record cannot tie to a frame is left
 // unmatched rather than pinned to the nearest one.
+//
+// An operator's command reaches a wrapped run as `oxagen:command_applied`,
+// with the command in `command.name`, which the transcript carries as the
+// frame's decision (ADR-056). No store writes a `control.*` frame, so the
+// player presents that frame as `control.<command>` (`presentedType`), and
+// the steer mark and the band after a steer read the command from there.
 import type { ApprovalItem } from "@/data/contracts/approvals";
 import type {
   RunFrame,
@@ -85,6 +91,61 @@ export function entriesBySeq(
 /** The decision word the transcript recorded for a frame; null when it recorded none. */
 export function decisionOf(entry: TranscriptEntry | undefined): string | null {
   return entry?.decision?.decision ?? null;
+}
+
+/** The operator commands a control frame records (`dispatch_command`'s vocabulary on a run). */
+const CONTROL_COMMANDS = [
+  "pause",
+  "resume",
+  "cancel",
+  "steer",
+  "message",
+  "kill",
+] as const;
+export type ControlCommand = (typeof CONTROL_COMMANDS)[number];
+
+const CONTROL_PREFIX = "control.";
+
+/**
+ * The operator's command a frame records, or null for every other frame. A
+ * wrapped run's `oxagen:command_applied` names it in the decision the
+ * transcript carries for the frame; a frame typed `control.<command>` names
+ * it in its type. `summary` is a label for a person and is never read here
+ * (ADR-182 rule 3).
+ */
+export function controlOf(
+  type: string,
+  entry: TranscriptEntry | undefined,
+): ControlCommand | null {
+  const name =
+    type === COMMAND_APPLIED
+      ? decisionOf(entry)
+      : type.startsWith(CONTROL_PREFIX)
+        ? type.slice(CONTROL_PREFIX.length)
+        : null;
+  return name !== null &&
+    (CONTROL_COMMANDS as readonly string[]).includes(name)
+    ? (name as ControlCommand)
+    : null;
+}
+
+/** A frame's type as the player names it: an operator's command as `control.<command>`, any other as recorded. */
+export function presentedType(
+  type: string,
+  entry: TranscriptEntry | undefined,
+): string {
+  const command = controlOf(type, entry);
+  return command === null ? type : `${CONTROL_PREFIX}${command}`;
+}
+
+/** A steer or a message: the commands that put an operator's text in front of the model. */
+function isSteer(
+  frame: RunFrame | undefined,
+  entries: ReadonlyMap<string, TranscriptEntry>,
+): boolean {
+  if (frame === undefined) return false;
+  const command = controlOf(frame.type, entries.get(frame.seq));
+  return command === "steer" || command === "message";
 }
 
 /**
@@ -167,7 +228,7 @@ export type Band = {
   width: number;
   /** Every other band is drawn clear. */
   alt: boolean;
-  /** A `control.steer` frame opens the band or sits just before it. */
+  /** A steer or a message (`isSteer`) opens the band or sits just before it. */
   afterSteer: boolean;
 };
 
@@ -197,8 +258,7 @@ export function turnBands(
         width: Math.max(0, right - left),
         alt: bands.length % 2 === 1,
         afterSteer:
-          frames[i]?.type === "control.steer" ||
-          frames[i - 1]?.type === "control.steer",
+          isSteer(frames[i], entries) || isSteer(frames[i - 1], entries),
       });
     }
     i = j;
@@ -209,9 +269,9 @@ export function turnBands(
 export type TimelineMark = { at: number; kind: "steer" | "parked" };
 
 /**
- * "steer" over each `control.steer` frame, and "parked · approval" over each
- * frame that needs a person, once for a pair that sit side by side (the
- * decision that asked, then the request it raised).
+ * "steer" over each steer or message an operator sent (`isSteer`), and
+ * "parked · approval" over each frame that needs a person, once for a pair
+ * that sit side by side (the decision that asked, then the request it raised).
  */
 export function timelineMarks(
   frames: readonly RunFrame[],
@@ -222,7 +282,7 @@ export function timelineMarks(
   let parkedAt = -2;
   frames.forEach((frame, i) => {
     const at = xs[i] ?? 0;
-    if (frame.type === "control.steer") marks.push({ at, kind: "steer" });
+    if (isSteer(frame, entries)) marks.push({ at, kind: "steer" });
     if (
       isParked(frame.type, decisionOf(entries.get(frame.seq)), frame.toolStatus)
     ) {

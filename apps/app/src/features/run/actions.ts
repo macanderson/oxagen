@@ -13,7 +13,8 @@
 //
 // A later transcript page is read here too, through the `runs.transcript`
 // port rather than the kernel seam, so the Run page maps every page of a
-// transcript with one mapper (ADR-167, ADR-182).
+// transcript with one mapper (ADR-167, ADR-182). So is the delivery report,
+// through `runs.commands`, the read a control frame's inspector makes.
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import {
   COMMAND_REASON_MAX,
@@ -33,7 +34,7 @@ import type {
   TranscriptText,
   TranscriptZoom,
 } from "@/data/contracts/run";
-import { DeliveryMode } from "@/data/contracts/runs";
+import { type CommandReport, DeliveryMode } from "@/data/contracts/runs";
 import { dataSource } from "@/data/source";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
@@ -277,6 +278,54 @@ export async function readTranscriptPage(
         };
   }
   return readToActionResult(read);
+}
+
+/** Which commands a delivery report reads: one run's, or the ids a broadcast returned. */
+export type ReportQuery = { runId: string } | { commandIds: string[] };
+
+/**
+ * The most command ids one report reads. The port reads them 100 at a time,
+ * so this bounds a report at ten reads. A broadcast reaches at most 100
+ * agents, and 1,000 ids leaves each of them ten runs in flight.
+ */
+const REPORT_IDS_MAX = 1_000;
+
+/** The query as the report reads it, or null for anything else a caller sent. */
+function reportQueryOf(q: unknown): ReportQuery | null {
+  if (typeof q !== "object" || q === null) return null;
+  if ("runId" in q && !("commandIds" in q) && typeof q.runId === "string")
+    return { runId: q.runId };
+  if (
+    "commandIds" in q &&
+    !("runId" in q) &&
+    Array.isArray(q.commandIds) &&
+    q.commandIds.length > 0 &&
+    q.commandIds.length <= REPORT_IDS_MAX &&
+    q.commandIds.every((id: unknown) => typeof id === "string")
+  )
+    return { commandIds: q.commandIds as string[] };
+  return null;
+}
+
+/**
+ * The delivery report (`list_commands`, #2953), read when a person opens it:
+ * one run's commands, or the commands one broadcast queued, each with its
+ * status, the mode asked for and the mode carried, and the frame an applied
+ * one landed on. It reads the `runs.commands` port, the read and the mapper a
+ * control frame's inspector uses, so the two cannot disagree about a command.
+ * A query that names neither a run nor a command id is refused as `invalid`
+ * before anything is read.
+ */
+export async function readDeliveryReport(
+  org: string,
+  ws: string,
+  q: ReportQuery,
+): Promise<ActionResult<CommandReport>> {
+  const ctx = await requireViewer(org, ws);
+  const query = reportQueryOf(q);
+  if (query === null)
+    return { ok: false, reason: "invalid", code: "report_query", field: "q" };
+  return readToActionResult(await dataSource().runs.commands(ctx, query));
 }
 
 /**

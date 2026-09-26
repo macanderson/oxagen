@@ -7,7 +7,9 @@
  * A read names one run by `runId`, or a set of commands by `commandIds`: the
  * ids `dispatch_command` returned for a broadcast, so one report covers every
  * run the broadcast reached (#2953). Each row names its run, its issuer and,
- * for a steer or a message, its text.
+ * for a steer or a message, its text. A broadcast to an idle agent holds its
+ * steer for the agent's next run, so a read by ids also returns that held
+ * row, with the agent in place of the run.
  *
  * The status shown is the recorded one, with one derivation: a `queued`
  * command whose expiry has passed reads `expired`, what the host's next poll
@@ -33,8 +35,18 @@ export const LIST_COMMANDS_IDS_MAX = 100;
 export const commandReportItemSchema = z
   .object({
     id: z.string().min(1),
-    /** The run the command is addressed to: the row's `target_id`. */
-    runId: runPublicIdSchema,
+    /**
+     * The run the command is addressed to: the row's `target_id`. Null on a
+     * steer held for an idle agent's next run, until ingest re-addresses it
+     * to that run at genesis; the same id then reads with its run.
+     */
+    runId: runPublicIdSchema.nullable(),
+    /**
+     * The agent key (`org_ns.ws_ns.slug`) of a steer held for that agent's
+     * next run. Null on a command addressed to a run. Only a read by
+     * `commandIds` returns a held steer.
+     */
+    agentKey: z.string().min(1).nullable(),
     /** The wire vocabulary: what the row holds, including a kind an earlier contract queued. */
     command: tachoCommandSchema,
     status: tachoCommandStatusSchema,
@@ -78,10 +90,10 @@ export const tachoCommandList = registerCapability({
   name: "list_commands",
   domain: "control",
   description:
-    "The delivery report for one run, or for the commands one broadcast queued: every command, newest first, with its run, its issuer, its text, its status, the requested and achieved delivery mode, and the frame an applied command landed on.",
+    "The delivery report for one run, or for the commands one broadcast queued: every command, newest first, with its run (or its agent, for a steer held for an idle agent's next run), its issuer, its text, its status, the requested and achieved delivery mode, and the frame an applied command landed on.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: false,
   noBillingGate: true,
@@ -108,7 +120,8 @@ export const tachoCommandList = registerCapability({
       /**
        * The commands to list (`tcm_…`), such as the ids a broadcast
        * `dispatch_command` returned. An id outside the workspace, or one that
-       * names no command, is left out rather than refused.
+       * names no command, is left out rather than refused. A steer held for
+       * an idle agent's next run is returned with its `agentKey`.
        */
       commandIds: z
         .array(z.string().min(1))
