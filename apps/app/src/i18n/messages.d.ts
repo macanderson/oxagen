@@ -7371,8 +7371,6 @@ type Messages = {
       orgMetaNotBacked: string;
       wsMetaNotBacked: string;
       createWorkspace: string;
-      orgTileNotBacked: string;
-      wsTileNotBacked: string;
     };
     topbar: {
       label: string;
