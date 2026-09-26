@@ -2,9 +2,10 @@
 // Run page's default: the run as its operator saw it, with the kind chips,
 // the search, the transport, the header line and the burn meter over it.
 //
-// It reads nothing of its own to open. The page already read the whole-run
-// transcript at `steps` to its end, folded on the server (ADR-182), and the
-// tab draws and plays that; a search is the one read the tab makes itself.
+// It reads nothing of its own to open. The page already read the first page
+// of the transcript at `steps`, folded on the server (ADR-182), and the tab
+// draws it, then pages in the rest of the run and plays that (#4420). A
+// search is the other read the tab makes itself.
 // A chip's count is the server's count of what it shows. An entry whose body
 // was not retained draws no row rather than an empty one, a body cut at the
 // contract's ceiling says so and links to the whole of it, and a transcript
@@ -54,7 +55,7 @@ export function parseKinds(raw: string | null): KindFilter {
 }
 
 type TranscriptSectionProps = {
-  /** The whole-run transcript at `steps`, with whole bodies. */
+  /** The first page of the transcript at `steps`, with whole bodies. */
   read: Read<RunTranscript>;
   /** `compacted` is read here, for the note; the feed reads the rest. */
   run: TranscriptRun & Pick<RunRow, "compacted">;
@@ -89,7 +90,7 @@ function TranscriptFeed({
   ws,
   runId,
 }: {
-  /** The whole-run transcript at `steps`, with whole bodies. */
+  /** The first page of the transcript at `steps`, with whole bodies. */
   read: Read<RunTranscript>;
   run: TranscriptRun;
   /** The URL's `?kinds=`, which sets the chips the tab opens with. */

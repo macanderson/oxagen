@@ -42,6 +42,7 @@ const WINDOW = {
   ],
 };
 
+/** A call's start frame. `null` records it with no window at all. */
 const started = (seq: number, id: string, window: unknown = WINDOW) =>
   event(seq, "model.engine_call_started", {
     engine_seq: seq,
@@ -49,7 +50,7 @@ const started = (seq: number, id: string, window: unknown = WINDOW) =>
     role: "worker",
     provider: "oxagen",
     model: "anthropic/claude-sonnet-4",
-    ...(window === undefined ? {} : { window }),
+    ...(window === null ? {} : { window }),
   });
 
 const completed = (seq: number, id: string, input?: number) =>
@@ -98,7 +99,7 @@ describe("ledgerContextWindows", () => {
 
   it("counts a completed call with no window as unmeasured, never filling one in", () => {
     const { windows, unmeasured } = ledgerContextWindows([
-      started(2, "prov-1-0", undefined),
+      started(2, "prov-1-0", null),
       completed(3, "prov-1-0", 900),
       started(4, "prov-1-1"),
       completed(5, "prov-1-1", 1000),

@@ -529,7 +529,11 @@ export function runMetrics({
 }: {
   run: RunRow;
   cost: Read<RunCost>;
-  /** The whole-run transcript at `steps`, with the run's counts and figures. */
+  /**
+   * The first page of the transcript at `steps`, which carries the whole
+   * run's counts and figures. Only a live clock read with no `now` stops at
+   * its last entry.
+   */
   transcript: Read<RunTranscript>;
   /**
    * The instant the page was rendered, in epoch milliseconds. A live run's
