@@ -60,6 +60,12 @@
 // in the run as read, and a cursor names its frames as `<seq>` on the run's
 // own chain or `<session uuid>:<seq>` on a subagent's (`TranscriptCursor`).
 //
+// A position alone misses a subagent frame that lands after the reader was
+// sent later frames: the read places it before the cursor, among entries
+// already sent (#4083). So a cursor also carries the latest time the control
+// plane received a frame of the read (`TranscriptReceipt`), and the next read
+// sends each entry holding a frame received after it (`receivedSince`).
+//
 // Bodies are read a few at a time; a body that is not text, or that no longer
 // hashes to its recorded digest, leaves its half with `text: null` rather than
 // with bytes the record does not vouch for. So does a body the store cannot
@@ -165,6 +171,17 @@ export const TRANSCRIPT_WORDS_HALF_MAX = 2_000;
 const DECIMAL = /^\d+$/;
 /** The tacho start cursor: frames are numbered from 0, so a read from the start sits at -1. */
 const TACHO_START = "-1";
+/**
+ * How far behind the latest receipt a frame can still become readable. Ingest
+ * stamps `received_at` on a whole batch before its insert returns, so a batch
+ * stamped earlier can land after a read that saw a later one. Ten seconds is
+ * the margin this read allows such an insert to land in.
+ */
+export const RECEIPT_OVERLAP_MS = 10_000;
+/** A receipt's time: epoch milliseconds, 15 digits at most. */
+const RECEIPT_AT = /^\d{1,15}$/;
+/** A receipt's window digest: the first 12 hex digits of a SHA-256. */
+const RECEIPT_WINDOW = /^[0-9a-f]{12}$/;
 
 export type RunTranscriptGetDeps = RunReadDeps & {
   bodies: Pick<EvidenceStore, "getBody" | "getAssembly">;
@@ -213,16 +230,53 @@ const decoder = new TextDecoder("utf-8", { fatal: true });
  * entries were sent. The single-frame cursor that did re-sent a grown entry
  * together with every entry after it, and left the cursor where it was, so
  * each read of a live run returned the same page again (#4048).
+ *
+ * Two positions still miss a frame that lands before `high`. A subagent's
+ * chain is placed right after the `subagent_start` that spawned it, so when
+ * subagent A records after subagent B's frames were sent, A's new frame sits
+ * before the cursor, in an entry that neither opens after `through` nor ends
+ * past `high` (#4083). `seen` closes that gap: the next read sends each entry
+ * at or before `through` that holds a frame received after it
+ * (`receivedSince`). A read whose frames carry no receipt time, which is
+ * every ledger run, writes no `seen`.
  */
 export interface TranscriptCursor {
   through: string;
   high: string;
+  seen?: TranscriptReceipt;
 }
 
+/**
+ * What a reader has been sent, by receipt: when the control plane received
+ * the latest frame of the read (`RunFrame.receivedAt`), and a digest of which
+ * frames it had received in the `RECEIPT_OVERLAP_MS` up to then.
+ *
+ * The digest catches a frame received inside that window that was not yet
+ * readable when the cursor was written. It is a digest of the frames and not
+ * a count of them, because the read can hide one frame of the window (a
+ * model call's copy that a richer one replaced) while another lands, and a
+ * count would read the two as no change.
+ */
+export interface TranscriptReceipt {
+  /** Epoch milliseconds. */
+  at: number;
+  window: string;
+}
+
+/**
+ * `t:<through>,<high>`, with `,<at>,<window>` after it when the cursor
+ * carries a receipt. The longest, two subagent keys at the largest `seq` with
+ * a 15-digit receipt, is 192 characters, under the contract's 256.
+ */
 export function encodeTranscriptCursor(cursor: TranscriptCursor): string {
-  return Buffer.from(`t:${cursor.through},${cursor.high}`, "utf8").toString(
-    "base64url",
-  );
+  const seen =
+    cursor.seen === undefined
+      ? ""
+      : `,${cursor.seen.at},${cursor.seen.window}`;
+  return Buffer.from(
+    `t:${cursor.through},${cursor.high}${seen}`,
+    "utf8",
+  ).toString("base64url");
 }
 
 const CHAIN_KEY =
@@ -237,17 +291,88 @@ function decodeKey(key: string): string | null {
 /**
  * The position a cursor names, or null for a cursor this handler did not
  * write. A cursor issued before `high` existed names one frame, the last one
- * its page held (`t:<key>`), and reads as both halves.
+ * its page held (`t:<key>`), and reads as both halves. A cursor issued before
+ * `seen` existed (`t:<key>,<key>`) reads with none, so its next read sends
+ * what the positions alone send, and writes a cursor that carries one.
  */
 export function decodeTranscriptCursor(raw: string): TranscriptCursor | null {
   const text = Buffer.from(raw, "base64url").toString("utf8");
   if (!text.startsWith("t:")) return null;
   const parts = text.slice(2).split(",");
-  if (parts.length > 2) return null;
+  if (parts.length !== 1 && parts.length !== 2 && parts.length !== 4)
+    return null;
   const through = decodeKey(parts[0] as string);
-  const high = parts.length === 2 ? decodeKey(parts[1] as string) : through;
+  const high = parts.length === 1 ? through : decodeKey(parts[1] as string);
   if (through === null || high === null) return null;
-  return { through, high };
+  if (parts.length !== 4) return { through, high };
+  const at = parts[2] as string;
+  const digest = parts[3] as string;
+  if (!RECEIPT_AT.test(at) || !RECEIPT_WINDOW.test(digest)) return null;
+  return { through, high, seen: { at: Number(at), window: digest } };
+}
+
+/** When the control plane received `frame`, in epoch ms; null when unknown. */
+function receivedMs(frame: RunFrame): number | null {
+  const at = frame.receivedAt?.getTime();
+  return at === undefined || Number.isNaN(at) ? null : at;
+}
+
+/**
+ * A digest of which of `frames` the control plane received in the
+ * `RECEIPT_OVERLAP_MS` up to and including `at`, by `frameKey`.
+ */
+function receiptWindow(frames: readonly RunFrame[], at: number): string {
+  const keys: string[] = [];
+  for (const frame of frames) {
+    const received = receivedMs(frame);
+    if (
+      received !== null &&
+      received > at - RECEIPT_OVERLAP_MS &&
+      received <= at
+    )
+      keys.push(frameKey(frame));
+  }
+  keys.sort();
+  return digestBytes(keys.join("\n")).slice(7, 19);
+}
+
+/**
+ * The receipt a cursor written after reading `frames` carries: the latest
+ * `receivedAt` among them, over the whole run as read and not only the page.
+ * An entry past the page's `through` is sent by position on a later page
+ * whatever its frames' receipt, so the receipt need not wait for it. Null
+ * when no frame carries a receipt time.
+ */
+export function transcriptReceipt(
+  frames: readonly RunFrame[],
+): TranscriptReceipt | null {
+  let at: number | null = null;
+  for (const frame of frames) {
+    const received = receivedMs(frame);
+    if (received !== null && (at === null || received > at)) at = received;
+  }
+  return at === null ? null : { at, window: receiptWindow(frames, at) };
+}
+
+/**
+ * Whether an entry holds a frame the reader at `seen` has not been sent: one
+ * received after `seen.at`. When the frames received in the window before
+ * `seen.at` are no longer the ones the cursor saw, a frame landed there late,
+ * so an entry holding any frame of that window counts too, and is sent once
+ * more. That is the documented overlap: an idle read finds the window
+ * unchanged and sends nothing again.
+ */
+export function receivedSince(
+  frames: readonly RunFrame[],
+  seen: TranscriptReceipt,
+): (fold: { members: readonly RunFrame[] }) => boolean {
+  const moved = receiptWindow(frames, seen.at) !== seen.window;
+  const after = moved ? seen.at - RECEIPT_OVERLAP_MS : seen.at;
+  return (fold) =>
+    fold.members.some((frame) => {
+      const received = receivedMs(frame);
+      return received !== null && received > after;
+    });
 }
 
 /**
@@ -306,7 +431,10 @@ export interface FoldSpan {
 
 /** What one page sends, and where the reader stands after it. */
 export interface TranscriptPagePlan {
-  /** Fold indexes, in the order sent: grown entries first, then new ones. */
+  /**
+   * Fold indexes, in the order sent: grown and late entries first, then new
+   * ones. After a rewind, fold order from the first grown or late entry.
+   */
   indexes: number[];
   /** The last fold index sent in fold order; -1 before the first. */
   through: number;
@@ -323,21 +451,54 @@ export interface TranscriptPagePlan {
  * sent in the order their last frames landed, so a page cut short by `limit`
  * leaves only entries that end past the new `high`, and the next page sends
  * them. New entries fill whatever room the grown ones leave.
+ *
+ * `late` names the folds at or before `through` that hold a frame received
+ * after the cursor's receipt (`receivedSince`). They are sent with the grown
+ * ones. When the two together are more than `limit`, the page rewinds rather
+ * than holding the receipt back: it sends folds in fold order from the first
+ * of them and stands on the last one sent. A late fold can end at or before
+ * `high`, so nothing but the receipt would find it on the next read, and a
+ * receipt held back would find the same late folds first every time and send
+ * the same page forever. After a rewind, the pages that follow send folds in
+ * order again, some of them unchanged, until they pass the old `through`.
+ * That is the documented overlap, bounded by the folds from the first grown
+ * or late one to the old `through`. A reader keeps each entry once by its key.
  */
 export function planTranscriptPage(
   folds: readonly FoldSpan[],
   cursor: { through: number; high: number } | null,
   limit: number,
+  late: readonly number[] = [],
 ): TranscriptPagePlan {
   const through = cursor?.through ?? -1;
   let high = cursor?.high ?? -1;
-  const grown: number[] = [];
+  const resend = new Set<number>();
   for (let i = 0; i <= through && i < folds.length; i += 1) {
     const fold = folds[i] as FoldSpan;
-    if (fold.end > high) grown.push(i);
+    if (fold.end > high) resend.add(i);
   }
-  grown.sort((a, b) => (folds[a] as FoldSpan).end - (folds[b] as FoldSpan).end);
-  const resent = grown.slice(0, limit);
+  let anyLate = false;
+  for (const i of late) {
+    if (i < 0 || i > through || i >= folds.length) continue;
+    anyLate = true;
+    resend.add(i);
+  }
+  if (anyLate && resend.size > limit) {
+    // The first grown or late fold, so no grown fold before it is left
+    // behind a `high` the rewound page moved past its end.
+    let first = folds.length;
+    for (const i of resend) first = Math.min(first, i);
+    const indexes: number[] = [];
+    for (let i = first; i < folds.length && indexes.length < limit; i += 1) {
+      indexes.push(i);
+    }
+    for (const i of indexes) high = Math.max(high, (folds[i] as FoldSpan).end);
+    return { indexes, through: indexes.at(-1) ?? through, high };
+  }
+  const again = [...resend].sort(
+    (a, b) => (folds[a] as FoldSpan).end - (folds[b] as FoldSpan).end,
+  );
+  const resent = again.slice(0, limit);
   const room = limit - resent.length;
   const fresh: number[] = [];
   for (let i = through + 1; i < folds.length && fresh.length < room; i += 1) {
@@ -351,19 +512,24 @@ export function planTranscriptPage(
 /**
  * The folds a page read from a cursor can still send, the cursor given as
  * frame positions in the run as read (`cursorPosition`): those that open
- * after its `through` frame, and those at or before it whose last frame lies
- * past `high`, which `planTranscriptPage` sends again. Every other fold was
- * sent and has not changed since, so no page from this cursor on sends it.
- * Null reads from the start, where every fold can be sent.
+ * after its `through` frame, those at or before it whose last frame lies
+ * past `high`, and those `late` says hold a frame received after the
+ * cursor's receipt (`receivedSince`), which `planTranscriptPage` sends again.
+ * Every other fold was sent and has not changed since, so no page from this
+ * cursor on sends it. Null reads from the start, where every fold can be
+ * sent.
  */
 export function unsentFolds<T extends { span: FoldSpan }>(
   folds: readonly T[],
   cursor: { throughAt: number; highAt: number } | null,
+  late: ((fold: T) => boolean) | null = null,
 ): readonly T[] {
   if (cursor === null) return folds;
   return folds.filter(
     (fold) =>
-      fold.span.open > cursor.throughAt || fold.span.end > cursor.highAt,
+      fold.span.open > cursor.throughAt ||
+      fold.span.end > cursor.highAt ||
+      (late !== null && late(fold)),
   );
 }
 
@@ -1029,6 +1195,12 @@ export function createRunTranscriptGetHandler(
             throughAt: cursorPosition(shown, after.through),
             highAt: cursorPosition(shown, after.high),
           };
+    // Which entries hold a frame received after the cursor's receipt: a
+    // subagent frame that landed before the cursor's position once later
+    // frames were sent (#4083). Null for a cursor that carries no receipt,
+    // which then reads as the positions alone say.
+    const seen = after?.seen;
+    const late = seen === undefined ? null : receivedSince(shown, seen);
     // A query narrows what the chips kept, and the matches page on the same
     // cursor as any other read. Each half is searched as far as a full read
     // carries it, so a match is one a reader can see. A page read from a
@@ -1038,7 +1210,7 @@ export function createRunTranscriptGetHandler(
       input.query === undefined
         ? null
         : await searchFolds(
-            unsentFolds(chipped, at),
+            unsentFolds(chipped, at, late),
             input.query,
             async (frame) => {
               const body = await half(
@@ -1094,23 +1266,35 @@ export function createRunTranscriptGetHandler(
       spans,
       at === null ? null : { through, high: at.highAt },
       input.limit,
+      late === null
+        ? []
+        : folds.flatMap((fold, i) => (i <= through && late(fold) ? [i] : [])),
     );
     const page = plan.indexes.map((i) => folds[i] as TranscriptFold);
+    // The receipt covers every frame of the read. An entry this page did not
+    // reach is past its `through`, where the next page sends it by position,
+    // or it grew past its `high`, where the next page sends it again.
+    const receipt = transcriptReceipt(shown);
     // The cursor names frames by key, so it survives a later read that holds
     // more frames, or hides one this read showed. The reader's place in fold
     // order moves only when the page sends a new entry: a page of grown
     // entries alone leaves `through` where the cursor had it, which a fold
-    // before it (the one `foldThrough` falls back to) would move backward.
+    // before it (the one `foldThrough` falls back to) would move backward. A
+    // page that rewound to late entries moves it back on purpose
+    // (`planTranscriptPage`).
     const nextCursor = (): string =>
       encodeTranscriptCursor({
         through:
           plan.through === through
             ? (after?.through ?? startKey)
-            : frameKey((folds[plan.through] as TranscriptFold).opening),
+            : plan.through === -1
+              ? startKey
+              : frameKey((folds[plan.through] as TranscriptFold).opening),
         high:
           plan.high === -1
             ? (after?.high ?? startKey)
             : frameKey(shown[plan.high] as RunFrame),
+        ...(receipt === null ? {} : { seen: receipt }),
       });
     const more = plan.through + 1 < folds.length;
     const cursor = live || more ? nextCursor() : null;
