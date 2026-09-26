@@ -759,9 +759,11 @@ describe("the Agents pages", () => {
       "ctx",
       "cursor",
       "header",
+      "showRetired",
       "source",
       "viewerName",
     ]);
+    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ showRetired: false });
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
