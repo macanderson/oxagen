@@ -551,6 +551,26 @@
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_01QEwd1CHGAXDubLiTupVwv3"
     },
+    "get_run_context": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq>: the Governed actions tab reads get_run_context when the open frame is a model request or a steering.manifest and draws its window (tools offered, context frames, prompt tokens, prompt composition, message stack) or the assembler's budget and counts; the Context tab reads it for the Prompt panel, the Prompt window and Retrieval stats (data/live/runs.ts, features/run/actions-tab.tsx, features/run/request-window.tsx, features/run/context-tab.tsx)",
+      "testid": "window-panel",
+      "proof": "apps/app/src/features/run/actions-tab.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "session-b7da3f21-context-window",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=context: the Prompt panel's bars and tok sent, the Prompt window's composition, and Retrieval stats read get_run_context (features/run/context-tab.tsx)",
+          "testid": "run-context-window",
+          "proof": "apps/app/src/features/run/context-tab.test.tsx",
+          "verifiedAt": "2026-09-26",
+          "verifiedBy": "session-b7da3f21-context-window"
+        }
+      ]
+    },
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",

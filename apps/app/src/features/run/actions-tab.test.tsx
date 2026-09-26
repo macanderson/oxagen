@@ -28,6 +28,7 @@ import type {
   RunFrameBody,
   RunTranscript,
 } from "@/data/contracts/run";
+import type { RunContext } from "@/data/contracts/run-context";
 import type { RunRow } from "@/data/contracts/runs";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -41,7 +42,10 @@ import {
   releaseTranscript,
 } from "./actions-tab.builders";
 import {
+  contextAssembly,
+  contextWindow,
   NOW,
+  runContext,
   runCost,
   runDetail,
   runFrame,
@@ -109,6 +113,8 @@ type Setup = {
   page?: string;
   /** `?body=` */
   body?: string;
+  /** `get_run_context`, read only when a model request or a manifest is open. */
+  context?: Read<RunContext>;
 };
 
 /** The tab as the Run page calls it: a function over the page's props bundle. */
@@ -140,6 +146,7 @@ async function renderTab(setup: Setup = {}) {
             more: setup.resolvedMore ?? false,
           }),
     mandates: setup.mandates,
+    context: setup.context,
   });
   const everything = setup.everything ?? ok(releaseTranscript());
   const cost = ok(runCost());
@@ -908,5 +915,161 @@ describe("decided calls", () => {
     });
     expect(screen.queryByTestId("resolved-approval")).toBeNull();
     expect(screen.queryByTestId("approval-unmatched")).toBeNull();
+  });
+});
+
+describe("the open frame's window (ADR-193)", () => {
+  it("draws a model request's window: its tools, context, prompt tokens, composition and message stack", async () => {
+    const { calls, container } = await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: ok(
+        runContext({
+          windows: [contextWindow({ seq: "2", responseSeq: "3" })],
+        }),
+      ),
+    });
+    expect(calls.context).toEqual([[ctx, "tse_7k2m9q"]]);
+    const panel = within(screen.getByTestId("window-panel"));
+    expect(panel.getByText("Tools offered").nextSibling).toHaveTextContent(
+      "14 tools, 4,800 tok",
+    );
+    expect(panel.getByText("Context frames", { selector: "dt" }).nextSibling).toHaveTextContent(
+      "2 messages, 1,200 tok",
+    );
+    // The blocks are the provider's total split by bytes, so they sum to it.
+    expect(screen.getByTestId("window-prompt-tokens")).toHaveTextContent(
+      "12,000",
+    );
+    expect(
+      panel.getByRole("link", { name: "answered at frame 3" }),
+    ).toHaveAttribute("href", frameLink("3"));
+    expect(
+      screen
+        .getAllByTestId("window-part")
+        .map((part) => part.getAttribute("data-kind")),
+    ).toEqual(["system", "steering", "tools", "context", "conversation"]);
+    const stack = screen.getAllByTestId("window-stack-row");
+    expect(stack).toHaveLength(5);
+    expect(stack[4]).toHaveTextContent("Conversation5 messages4,200 tok");
+    await expectNoAxe(container);
+  });
+
+  it("says a wrapped window's context was counted with the conversation, and draws no band for it", async () => {
+    await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: ok(
+        runContext({
+          source: "wrapped",
+          windows: [
+            contextWindow({
+              seq: "2",
+              responseSeq: "2",
+              promptTokens: 1000,
+              bytes: 1000,
+              blocks: [
+                { kind: "system", bytes: 100, items: 1, tokens: 100 },
+                { kind: "tools", bytes: 300, items: 4, tokens: 300 },
+                { kind: "conversation", bytes: 600, items: 7, tokens: 600 },
+              ],
+            }),
+          ],
+        }),
+      ),
+    });
+    const panel = within(screen.getByTestId("window-panel"));
+    expect(panel.getByText("Context frames", { selector: "dt" }).nextSibling).toHaveTextContent(
+      "Counted with the conversation",
+    );
+    // The call answered on the frame that asked it, so no link leads away.
+    expect(panel.queryByRole("link")).toBeNull();
+    expect(screen.getAllByTestId("window-part")).toHaveLength(3);
+  });
+
+  it("draws bytes, not tokens, for a call that reported no input (negative)", async () => {
+    await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: ok(
+        runContext({
+          windows: [
+            contextWindow({
+              seq: "2",
+              responseSeq: null,
+              promptTokens: null,
+              bytes: 400,
+              blocks: [
+                { kind: "system", bytes: 100, items: 1, tokens: null },
+                { kind: "conversation", bytes: 300, items: 2, tokens: null },
+              ],
+            }),
+          ],
+        }),
+      ),
+    });
+    const panel = within(screen.getByTestId("window-panel"));
+    expect(panel.getByText("Prompt tokens").nextSibling).toHaveTextContent(
+      "not recorded",
+    );
+    expect(
+      panel.getByText("Bytes only, because the provider reported no input"),
+    ).toBeTruthy();
+    expect(screen.getAllByTestId("window-part")[1]).toHaveTextContent(
+      "Conversation 300 bytes",
+    );
+  });
+
+  it("says a model request the record measured no window for has none (negative)", async () => {
+    const { container } = await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: ok(runContext({ unmeasured: 3 })),
+    });
+    expect(screen.getByTestId("window-none")).toHaveTextContent(
+      "No window is on record for this request.",
+    );
+    expect(screen.queryByTestId("window-panel")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("names the context read's failure inside the frame (negative)", async () => {
+    await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: readError("frame_store_unreachable", 502),
+    });
+    expect(screen.getByTestId("frame-open")).toHaveTextContent(
+      "frame_store_unreachable",
+    );
+  });
+
+  it("draws the assembler's budget, spend and headroom on the frame it sealed", async () => {
+    const { container } = await renderTab({
+      body: "1",
+      frameBody: ok(runFrameBody({ seq: "1" })),
+      context: ok(runContext({ assemblies: [contextAssembly({ seq: "1" })] })),
+    });
+    expect(screen.getByTestId("assembled-used")).toHaveTextContent(
+      "600 tok, 30% of budget, 1,400 tok headroom",
+    );
+    const panel = within(screen.getByTestId("assembled-panel"));
+    expect(panel.getByText("Context frames", { selector: "dt" }).nextSibling).toHaveTextContent(
+      "4 included, 5 cut",
+    );
+    expect(panel.getByText("Assembled by").nextSibling).toHaveTextContent(
+      "The steering assembler",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("reads no context for a frame that is neither a model request nor a manifest (negative)", async () => {
+    const { calls } = await renderTab({
+      body: "4",
+      frameBody: ok(runFrameBody({ seq: "4" })),
+    });
+    expect(calls.context).toEqual([]);
+    expect(screen.queryByTestId("window-panel")).toBeNull();
+    expect(screen.queryByTestId("assembled-panel")).toBeNull();
   });
 });

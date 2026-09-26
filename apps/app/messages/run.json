@@ -218,6 +218,52 @@
           "halted": "halted"
         },
         "basisNotRecorded": "basis not recorded"
+      },
+      "window": {
+        "title": "Request window",
+        "provider": "Provider",
+        "model": "Model",
+        "tools": "Tools offered",
+        "context": "Context frames",
+        "promptTokens": "Prompt tokens",
+        "answeredAt": "answered at frame {seq}",
+        "notApart": "Counted with the conversation",
+        "itemsWithTokens": "{items}, {tokens} tok",
+        "composition": "Prompt composition",
+        "compositionNote": "Split by each block's share of the request's bytes",
+        "compositionBytes": "Bytes only, because the provider reported no input",
+        "stack": "Message stack",
+        "tokens": "{count} tok",
+        "bytes": "{count} bytes",
+        "none": "No window is on record for this request. Oxagen records one when the call passes through its gateway.",
+        "block": {
+          "system": "System",
+          "steering": "Steering",
+          "tools": "Tool definitions",
+          "context": "Context frames",
+          "conversation": "Conversation"
+        },
+        "items": {
+          "system": "{count, plural, one {# part} other {# parts}}",
+          "steering": "{count, plural, one {# part} other {# parts}}",
+          "tools": "{count, plural, one {# tool} other {# tools}}",
+          "context": "{count, plural, one {# message} other {# messages}}",
+          "conversation": "{count, plural, one {# message} other {# messages}}"
+        }
+      },
+      "assembled": {
+        "title": "Assembled context",
+        "budget": "Budget",
+        "used": "Used",
+        "usedValue": "{tokens} tok, {share} of budget, {headroom} tok headroom",
+        "tokens": "{count} tok",
+        "frames": "Context frames",
+        "framesValue": "{included, plural, one {# included} other {# included}}, {cut, plural, one {# cut} other {# cut}}",
+        "by": "Assembled by",
+        "assembler": "The steering assembler",
+        "digest": "Composition digest",
+        "noText": "No text was included",
+        "none": "This frame carries no manifest summary the record can read."
       }
     },
     "player": {
@@ -1158,7 +1204,8 @@
         "cachedOnly": "{cached} tokens of the first request came from cache. Its full input was not reported.",
         "noUsage": "The first request's usage was not reported.",
         "splitNotRecorded": "The request is not recorded block by block, so the split is not shown.",
-        "noRequest": "No model request is in view for this run, so the window is not shown."
+        "noRequest": "No model request is in view for this run, so the window is not shown.",
+        "splitByBytes": "Each block is its share of the request's bytes."
       },
       "manifest": {
         "label": "Steering manifest",
@@ -1196,7 +1243,10 @@
         "blocksNotRecorded": "not recorded block by block",
         "note": "The window is not recorded block by block yet, so its identity, steering, tools, context and brief are not split here. The total is the input the first model call reported.",
         "noneTitle": "No window on record",
-        "none": "The frames in view for {run} carry no model request, so there is no request to account for block by block."
+        "none": "The frames in view for {run} carry no model request, so there is no request to account for block by block.",
+        "frame": "frame {seq}",
+        "measured": "The provider reported this total, and each block is its share of the request's bytes.",
+        "measuredBytes": "The provider reported no input for this call, so the blocks are drawn by their bytes."
       },
       "frames": {
         "title": "Context frames",
@@ -1228,7 +1278,10 @@
         "digest": "Composition digest",
         "assembledAt": "Assembled at",
         "assembledFrame": "{type} · fr {seq}",
-        "note": "Retrieval is not recorded candidate by candidate yet, so these figures are not shown."
+        "note": "Retrieval is not recorded candidate by candidate yet, so these figures are not shown.",
+        "spent": "{spent} of {budget} tok",
+        "tokens": "{count} tok",
+        "recorded": "The assembler ranked these candidates and fitted them to its budget. It records no relevance floor."
       }
     },
     "work": {

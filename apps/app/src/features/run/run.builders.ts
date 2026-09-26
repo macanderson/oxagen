@@ -24,6 +24,11 @@ import type {
   ResolvedApprovals,
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
+import type {
+  ContextAssembly,
+  ContextWindow,
+  RunContext,
+} from "@/data/contracts/run-context";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { PriceBook, SpendFindingEvidence } from "@/data/contracts/spend";
@@ -613,6 +618,60 @@ export function runTranscript(
 }
 
 /**
+ * One measured window of `get_run_context`: an in-app request whose five
+ * blocks split the 12,000 prompt tokens its completion reported by their
+ * bytes, so they sum to it.
+ */
+export function contextWindow(
+  overrides: Partial<ContextWindow> = {},
+): ContextWindow {
+  return {
+    seq: "4",
+    responseSeq: "5",
+    callRef: "prov-1-0",
+    provider: "anthropic",
+    model: "claude-opus-5",
+    promptTokens: 12_000,
+    bytes: 24_000,
+    blocks: [
+      { kind: "system", bytes: 2400, items: 1, tokens: 1200 },
+      { kind: "steering", bytes: 1200, items: 1, tokens: 600 },
+      { kind: "tools", bytes: 9600, items: 14, tokens: 4800 },
+      { kind: "context", bytes: 2400, items: 2, tokens: 1200 },
+      { kind: "conversation", bytes: 8400, items: 5, tokens: 4200 },
+    ],
+    ...overrides,
+  };
+}
+
+/** The assembler's manifest as `get_run_context` summarises it. */
+export function contextAssembly(
+  overrides: Partial<ContextAssembly> = {},
+): ContextAssembly {
+  return {
+    seq: "3",
+    budgetTokens: 2000,
+    spentTokens: 600,
+    included: 4,
+    cut: 5,
+    textDigest: `sha256:${"b".repeat(64)}`,
+    ...overrides,
+  };
+}
+
+/** `get_run_context` for a run that recorded no window, or what a test names. */
+export function runContext(overrides: Partial<RunContext> = {}): RunContext {
+  return {
+    source: "ledger",
+    windows: [],
+    unmeasured: 0,
+    assemblies: [],
+    complete: true,
+    ...overrides,
+  };
+}
+
+/**
  * `get_run_turns` for a two-turn run: the first priced, with a cache hit, and
  * the second with nothing priced and no input reported.
  */
@@ -809,6 +868,12 @@ type RunReads = {
    */
   findings?: Read<RunFindings>;
   /**
+   * `get_run_context`, read by the Context tab and by the Governed actions
+   * tab when a model request or a manifest is open (#3894). A test that says
+   * nothing about it gets a run that recorded no window.
+   */
+  context?: Read<RunContext>;
+  /**
    * `get_finding_evidence`, only read when the Cost tab opens a finding's
    * evidence (`?finding=`); refused when absent.
    */
@@ -858,6 +923,7 @@ export function runSource(reads: RunReads) {
     chain: unknown[][];
     turns: unknown[][];
     findings: unknown[][];
+    context: unknown[][];
     findingEvidence: unknown[][];
     mandates: unknown[][];
     outputs: unknown[][];
@@ -874,6 +940,7 @@ export function runSource(reads: RunReads) {
     chain: [],
     turns: [],
     findings: [],
+    context: [],
     findingEvidence: [],
     mandates: [],
     outputs: [],
@@ -947,6 +1014,7 @@ export function runSource(reads: RunReads) {
       // Context and cost lane add their reads (#3970, #4001).
       issues: refuse,
       findings: answer("findings", reads.findings ?? readOk({ findings: [] })),
+      context: answer("context", reads.context ?? readOk(runContext())),
       turns: answer("turns", reads.turns ?? readOk(runTurns())),
       outputs: (...args: unknown[]) => {
         calls.outputs.push(args);

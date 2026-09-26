@@ -88,6 +88,7 @@ const source: DataSource = {
     work: vi.fn(),
     outcomesSettings: vi.fn(),
     issues: vi.fn(),
+    context: vi.fn(),
     findings: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },

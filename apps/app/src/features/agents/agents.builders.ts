@@ -510,6 +510,7 @@ export function agentsSource(reads: AgentReads) {
       work: refuse,
       outcomesSettings: refuse,
       issues: refuse,
+      context: refuse,
       findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },

@@ -192,6 +192,7 @@ export function onboardingSource(reads: Reads): {
       work: refuse("runs.transcript"),
       outcomesSettings: refuse("runs.transcript"),
       issues: refuse("runs.issues"),
+      context: refuse("runs.context"),
       findings: refuse("runs.findings"),
     },
     approvals: {
