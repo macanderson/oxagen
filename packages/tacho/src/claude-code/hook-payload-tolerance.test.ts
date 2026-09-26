@@ -60,6 +60,23 @@ describe("the hook schema", () => {
     expect(parsed.duration_ms).toBeUndefined();
   });
 
+  it("keeps a path only when it is a string, and notes a scalar path as left out", () => {
+    const raw = {
+      session_id: SESSION,
+      hook_event_name: "PostToolUse",
+      cwd: 17,
+      transcript_path: true,
+    };
+    const parsed = hookInputSchema.parse(raw);
+    // Read as text, these became the relative paths "17" and "true": the
+    // daemon ran its git reads in the first and tailed the second.
+    expect(parsed.cwd).toBeUndefined();
+    expect(parsed.transcript_path).toBeUndefined();
+    expect(payloadRepairs(raw)).toBe(
+      "cwd: a number, left out: 17; transcript_path: a boolean, left out: true",
+    );
+  });
+
   it("still refuses a payload with no session id or no event name", () => {
     expect(hookInputSchema.safeParse({ hook_event_name: "Stop" }).success).toBe(
       false,

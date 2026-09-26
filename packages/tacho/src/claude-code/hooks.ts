@@ -38,6 +38,18 @@ const textMember = z.preprocess((value) => {
 }, z.string().optional());
 
 /**
+ * An optional path member: `cwd` or `transcript_path`. It keeps a string
+ * only. `null` reads as absent, and any other value is left out. A number
+ * read as text would become a relative path such as `17`, where the daemon
+ * would run its git reads, and a bad `transcript_path` would move the tailer
+ * off a good transcript.
+ */
+const pathMember = z.preprocess(
+  (value) => (typeof value === "string" ? value : undefined),
+  z.string().optional(),
+);
+
+/**
  * Tolerant: passthrough so a new upstream member lands in `attrs`, and each
  * typed member reads a value of the wrong type rather than refusing the
  * event. Only `session_id` and `hook_event_name` stay strict, because an
@@ -48,8 +60,8 @@ export const hookInputSchema = z
     session_id: z.string(),
     hook_event_name: z.string(),
     // Codex sends `null` when there is no transcript; Claude Code omits it.
-    transcript_path: textMember,
-    cwd: textMember,
+    transcript_path: pathMember,
+    cwd: pathMember,
     prompt_id: textMember,
     permission_mode: textMember,
     agent_id: textMember,
@@ -86,14 +98,16 @@ export type HookInput = z.infer<typeof hookInputSchema>;
  */
 export const PAYLOAD_REPAIRS_ATTR = "oxagen.payload_repairs";
 
-const TEXT_MEMBERS = [
-  "cwd",
-  "prompt_id",
-  "permission_mode",
-  "agent_id",
-  "agent_type",
-  "tool_name",
-  "tool_use_id",
+/** The members `payloadRepairs` checks, in the order it lists them. */
+const TYPED_MEMBERS = [
+  ["cwd", "path"],
+  ["prompt_id", "text"],
+  ["permission_mode", "text"],
+  ["agent_id", "text"],
+  ["agent_type", "text"],
+  ["tool_name", "text"],
+  ["tool_use_id", "text"],
+  ["transcript_path", "path"],
 ] as const;
 
 function kindOf(value: unknown): string {
@@ -105,30 +119,28 @@ function kindOf(value: unknown): string {
 /**
  * What `hookInputSchema` changed on this payload, one clause per member, or
  * undefined when it changed nothing. A `null` reads as absent. A value that
- * cannot be read is left out of the parse and kept here as JSON. A
- * `transcript_path` of `null` is not listed: Codex sends one whenever there
- * is no transcript, and the schema has always read it as absent.
+ * cannot be read, including any path that is not a string, is left out of the
+ * parse and kept here as JSON. A `transcript_path` of `null` is not listed:
+ * Codex sends one whenever there is no transcript, and the schema has always
+ * read it as absent.
  */
 export function payloadRepairs(raw: unknown): string | undefined {
   if (!isRecord(raw)) return undefined;
   const notes: string[] = [];
   const setAside = (key: string, value: unknown) =>
     `${key}: ${kindOf(value)}, left out: ${JSON.stringify(value)}`;
-  for (const key of TEXT_MEMBERS) {
+  for (const [key, type] of TYPED_MEMBERS) {
     const value = raw[key];
     if (value === undefined || typeof value === "string") continue;
-    if (value === null) notes.push(`${key}: null, read as absent`);
-    else if (typeof value === "number" || typeof value === "boolean")
+    if (value === null) {
+      if (key !== "transcript_path") notes.push(`${key}: null, read as absent`);
+    } else if (
+      type === "text" &&
+      (typeof value === "number" || typeof value === "boolean")
+    )
       notes.push(`${key}: ${kindOf(value)}, read as text`);
     else notes.push(setAside(key, value));
   }
-  const path = raw["transcript_path"];
-  if (path !== undefined && path !== null && typeof path !== "string")
-    notes.push(
-      typeof path === "number" || typeof path === "boolean"
-        ? `transcript_path: ${kindOf(path)}, read as text`
-        : setAside("transcript_path", path),
-    );
   const input = raw["tool_input"];
   if (input === null) notes.push("tool_input: null, read as absent");
   else if (input !== undefined && !isRecord(input))
