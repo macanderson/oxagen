@@ -13,6 +13,8 @@
  * - entity.received event shape (sourceRecordType + unwrapped record)
  * - push / pull_request → steering sync request (ADR-184); its failure never
  *   changes the response
+ * - pull_request → the pull request's state is stored (ADR-189) once per
+ *   delivery with an installation; its failure never changes the response
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -32,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   parseWebhookEvent: vi.fn(),
   githubSyncTargets: vi.fn(),
   requestSteeringSync: vi.fn(),
+  recordGithubPullRequestState: vi.fn(),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -101,6 +104,14 @@ vi.mock("@oxagen/ingestion/connectors", () => ({
 vi.mock("@oxagen/handlers/context.steering.sync.request", () => ({
   githubSyncTargets: mocks.githubSyncTargets,
   requestSteeringSync: mocks.requestSteeringSync,
+}));
+
+// Storing the pull request's state (ADR-189) has its own suite; here it is a
+// seam, so these tests assert when the route calls it and that its failure
+// never reaches GitHub.
+vi.mock("@oxagen/handlers/github.pull-request.webhook", () => ({
+  githubPullRequestStateDeps: { tag: "real-deps" },
+  recordGithubPullRequestState: mocks.recordGithubPullRequestState,
 }));
 
 import { app } from "../app";
@@ -177,6 +188,10 @@ beforeEach(() => {
   );
   mocks.githubSyncTargets.mockResolvedValue([]);
   mocks.requestSteeringSync.mockResolvedValue(0);
+  mocks.recordGithubPullRequestState.mockResolvedValue({
+    outcome: "recorded",
+    rows: 1,
+  });
 });
 
 afterEach(() => {
@@ -761,6 +776,59 @@ describe("github app webhook – steering sync request (ADR-184)", () => {
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({ eventName: "pull_request" }),
       expect.stringContaining("steering sync"),
+    );
+  });
+});
+
+describe("github app webhook – pull request state (ADR-189)", () => {
+  const PR_BODY = {
+    action: "closed",
+    installation: { id: 555 },
+    repository: { id: 90210, full_name: "acme/widgets" },
+    pull_request: {
+      number: 7,
+      state: "closed",
+      merged: true,
+      updated_at: "2026-09-25T10:00:00Z",
+    },
+  };
+
+  it("stores the state once per pull_request delivery, with the body and the installation", async () => {
+    const res = await app.fetch(signedPost("pull_request", PR_BODY));
+    expect(res.status).toBe(200);
+    expect(mocks.recordGithubPullRequestState).toHaveBeenCalledTimes(1);
+    expect(mocks.recordGithubPullRequestState).toHaveBeenCalledWith(
+      { tag: "real-deps" },
+      { body: PR_BODY, installationId: "555" },
+    );
+    // Ingestion still runs after it.
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
+  });
+
+  it("stores nothing for a delivery with no installation (negative)", async () => {
+    const { installation: _installation, ...body } = PR_BODY;
+    const res = await app.fetch(signedPost("pull_request", body));
+    expect(res.status).toBe(200);
+    expect(mocks.recordGithubPullRequestState).not.toHaveBeenCalled();
+  });
+
+  it.each(["push", "issues", "ping"])(
+    "stores nothing for a %s delivery (negative)",
+    async (event) => {
+      const res = await app.fetch(signedPost(event, PR_BODY));
+      expect(res.status).toBe(200);
+      expect(mocks.recordGithubPullRequestState).not.toHaveBeenCalled();
+    },
+  );
+
+  it("answers GitHub as usual and logs when storing the state fails (negative)", async () => {
+    mocks.recordGithubPullRequestState.mockRejectedValue(new Error("pg down"));
+    const res = await app.fetch(signedPost("pull_request", PR_BODY));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ eventName: "pull_request" }),
+      expect.stringContaining("pull request's state"),
     );
   });
 });

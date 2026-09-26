@@ -221,7 +221,8 @@ export async function readStoredPullRequestStates(
     storedStatesQuery(tx, scope, sessionUuids),
   );
   for (const row of rows) {
-    const byUrl = out.get(row.session) ?? new Map();
+    const byUrl =
+      out.get(row.session) ?? new Map<string, StoredPullRequestState>();
     byUrl.set(row.url, {
       state: row.state === null ? null : wireStateOf(row),
       stateSeenAt: row.stateSeenAt?.toISOString() ?? null,
