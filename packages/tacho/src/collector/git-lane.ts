@@ -392,15 +392,13 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
                 ? {}
                 : {
                     reading,
+                    // Each path's hunk against what its row was counted
+                    // from, so the patch and the rows describe one change.
                     snapshot: await readWorktreeSnapshot(
                       execAsync,
                       cwd,
                       session.baselineCommit,
-                      reading.basis === "session"
-                        ? reading.changes.map(
-                            (change) => change.repo_relative_path,
-                          )
-                        : undefined,
+                      reading.measured,
                     ),
                   };
             })()

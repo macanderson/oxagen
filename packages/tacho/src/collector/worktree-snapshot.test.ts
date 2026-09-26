@@ -1,12 +1,107 @@
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  datedNow,
+  pushUpstream,
+  removeRigs,
+  rig,
+} from "./git-rig.test-support";
+import { readPreexistingPaths, readSessionChanges } from "./session-changes";
 import {
   readWorktreeSnapshot,
   safeRepositoryUrl,
   WORKTREE_PATCH_MAX_BYTES,
 } from "./worktree-snapshot";
+
+afterEach(removeRigs);
+
+/** The paths a patch names in its `diff --git` lines, in order. */
+function patched(patch: string | undefined): string[] {
+  return [...(patch ?? "").matchAll(/^diff --git a\/(.*) b\//gm)].map(
+    (match) => match[1] ?? "",
+  );
+}
+
+/** The added and removed lines of a patch, without the file headers. */
+function hunkLines(patch: string | undefined): string[] {
+  return (patch ?? "")
+    .split("\n")
+    .filter(
+      (line) =>
+        /^[+-]/.test(line) &&
+        !line.startsWith("+++") &&
+        !line.startsWith("---"),
+    );
+}
+
+describe("the patch beside a session-basis reconciliation", () => {
+  it("takes an uncommitted edit against HEAD, as its row counts it, after a pull changed the same file", async () => {
+    const r = rig();
+    const startedAt = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const baseline = r.git(r.work, ["rev-parse", "HEAD"]).trim();
+    const start = {
+      baseline,
+      firstReadAt: startedAt,
+      preexisting: await readPreexistingPaths(r.exec, r.work, startedAt),
+    };
+    // Someone else changes shared.txt upstream, and the session pulls it.
+    pushUpstream(r);
+    r.git(r.work, ["pull", "-q", "--ff-only", "origin", "main"]);
+    // The session edits the same file and does not commit.
+    writeFileSync(
+      join(r.work, "shared.txt"),
+      "shared\nupstream line\nsession line\n",
+    );
+
+    const reading = await readSessionChanges(r.exec, r.work, start);
+    expect(reading?.changes).toMatchObject([
+      { repo_relative_path: "shared.txt", lines_added: 1, lines_removed: 0 },
+    ]);
+    const snapshot = await readWorktreeSnapshot(
+      r.exec,
+      r.work,
+      baseline,
+      reading?.measured,
+    );
+    expect(patched(snapshot?.patch)).toEqual(["shared.txt"]);
+    // One added line, as the row counts. The upstream hunk is not in it.
+    expect(hunkLines(snapshot?.patch)).toEqual(["+session line"]);
+    expect(snapshot?.complete).toBe(true);
+  });
+
+  it("takes a path the session committed against the baseline, as its row counts it", async () => {
+    const r = rig();
+    const startedAt = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const baseline = r.git(r.work, ["rev-parse", "HEAD"]).trim();
+    writeFileSync(join(r.work, "mine.txt"), "one\n");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "session work"], datedNow());
+    // More on the same file, uncommitted, and a new untracked file.
+    writeFileSync(join(r.work, "mine.txt"), "one\ntwo\n");
+    writeFileSync(join(r.work, "new.txt"), "new\n");
+
+    const reading = await readSessionChanges(r.exec, r.work, {
+      baseline,
+      firstReadAt: startedAt,
+    });
+    expect(reading?.changes).toMatchObject([
+      { repo_relative_path: "mine.txt", lines_added: 2 },
+      { repo_relative_path: "new.txt", lines_added: 1 },
+    ]);
+    const snapshot = await readWorktreeSnapshot(
+      r.exec,
+      r.work,
+      baseline,
+      reading?.measured,
+    );
+    expect(patched(snapshot?.patch)).toEqual(["mine.txt", "new.txt"]);
+    expect(hunkLines(snapshot?.patch)).toEqual(["+one", "+two", "+new"]);
+  });
+});
 
 it.each([
   [
@@ -89,34 +184,54 @@ describe("worktree snapshots", () => {
         ? { status: 0, stdout: "new.ts\0upstream-new.ts\0", stderr: "" }
         : underlying(command, args),
     );
-    await readWorktreeSnapshot(exec, "/repo", "c".repeat(40), [
-      "mine.ts",
-      "new.ts",
-      "odd*name.ts",
-    ]);
+    const result = await readWorktreeSnapshot(exec, "/repo", "c".repeat(40), {
+      headRef: "a".repeat(40),
+      fromBaseline: ["mine.ts"],
+      fromHead: ["new.ts", "odd*name.ts"],
+    });
     const diffs = exec.mock.calls
       .map(([, args]) => args)
       .filter((args) => args.includes("diff"));
-    expect(diffs[0]?.slice(diffs[0].indexOf("--") + 1)).toEqual([
+    // The committed path against the baseline, the rest against HEAD.
+    expect(diffs[0]?.slice(diffs[0].indexOf("--") - 1)).toEqual([
+      "c".repeat(40),
+      "--",
       ":(literal)mine.ts",
+    ]);
+    expect(diffs[1]?.slice(diffs[1].indexOf("--") - 1)).toEqual([
+      "a".repeat(40),
+      "--",
       ":(literal)new.ts",
       ":(literal)odd*name.ts",
     ]);
     // Of the two untracked files, only the reported one is patched.
-    expect(diffs.slice(1).map((args) => args.at(-1))).toEqual(["new.ts"]);
+    expect(diffs.slice(2).map((args) => args.at(-1))).toEqual(["new.ts"]);
+    expect(result?.bases).toEqual({
+      head_ref: "a".repeat(40),
+      baseline_paths: ["mine.ts"],
+    });
+    expect(result?.complete).toBe(true);
   });
   it("patches no tracked file when the reconciliation reports none", async () => {
     const exec = fake("diff --git a/upstream.ts b/upstream.ts\n");
-    const result = await readWorktreeSnapshot(
-      exec,
-      "/repo",
-      "c".repeat(40),
-      [],
-    );
+    const result = await readWorktreeSnapshot(exec, "/repo", "c".repeat(40), {
+      headRef: "a".repeat(40),
+      fromBaseline: [],
+      fromHead: [],
+    });
     expect(result?.patch).toBe("");
     expect(exec.mock.calls.some(([, args]) => args.includes("diff"))).toBe(
       false,
     );
+  });
+  it("marks the patch partial when HEAD moved after the reconciliation read it", async () => {
+    const result = await readWorktreeSnapshot(
+      fake("diff --git a/a b/a\n"),
+      "/repo",
+      "c".repeat(40),
+      { headRef: "d".repeat(40), fromBaseline: [], fromHead: ["a"] },
+    );
+    expect(result?.limitations).toEqual(["head_changed_during_capture"]);
   });
   it("returns no invented snapshot when git cannot read the directory", async () => {
     const exec = vi.fn().mockRejectedValue(new Error("git unavailable"));

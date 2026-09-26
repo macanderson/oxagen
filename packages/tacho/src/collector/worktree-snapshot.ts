@@ -1,6 +1,7 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExecAsync } from "../host/service";
+import type { MeasuredPaths } from "./session-changes";
 
 export const WORKTREE_PATCH_MAX_BYTES = 256 * 1024;
 export const WORKTREE_UNTRACKED_MAX = 32;
@@ -17,6 +18,13 @@ export interface WorktreeSnapshot {
   patch: string;
   complete: boolean;
   limitations: string[];
+  /**
+   * On the session basis, what the hunks in `patch` were taken against
+   * (ADR-188 decision 5). The paths in `baseline_paths` against `baseline`,
+   * and every other path against `head_ref`, or against nothing when
+   * untracked. Absent on a snapshot of every change since `baseline`.
+   */
+  bases?: { head_ref: string; baseline_paths: string[] };
 }
 
 /** Keep only a forge host and repository path. Never retain remote credentials. */
@@ -93,18 +101,22 @@ async function worktreeFingerprint(
 /**
  * Snapshot bytes describe the observed tree against `baseline`.
  *
- * `paths`, when given, are the repo-relative paths the reconciliation beside
- * this snapshot reports, and the patch covers those and nothing else. Without
- * it the patch held every difference from the baseline, so after a pull it
- * carried every upstream file the reconciliation had left out (ADR-188).
- * Without `paths`, as for a session measured the old way, the patch still
- * includes changes present before the run.
+ * `measured`, when given, is what the reconciliation beside this snapshot
+ * reported and what it measured each path against (`readSessionChanges`).
+ * The patch then covers those paths and no others, and takes each against
+ * the same state its row was counted from: a path the session committed
+ * against the baseline, and any other against the `HEAD` the reconciliation
+ * read. Taking every path against the baseline put a pulled hunk into the
+ * patch of a file the session then edited, beside a row that counted only
+ * the session's edit (#4320). Without `measured`, as for a session measured
+ * the old way, the patch holds every change since the baseline, including
+ * changes present before the run.
  */
 export async function readWorktreeSnapshot(
   exec: ExecAsync,
   cwd: string,
   baseline?: string,
-  paths?: readonly string[],
+  measured?: MeasuredPaths,
 ): Promise<WorktreeSnapshot | undefined> {
   let directory = cwd;
   const read = async (
@@ -164,26 +176,45 @@ export async function readWorktreeSnapshot(
     patch += bytes.subarray(0, remaining).toString("utf8");
     remaining = Math.max(0, remaining - bytes.length);
   };
-  const reported = paths === undefined ? undefined : new Set(paths);
   // Disable external diff programs and textconv from repository configuration.
-  if (!base) limitations.push("baseline_not_recorded");
-  else if (reported === undefined || reported.size > 0)
-    append(
-      await read([
-        "diff",
-        "--no-ext-diff",
-        "--no-textconv",
-        "--no-color",
-        "--src-prefix=a/",
-        "--dst-prefix=b/",
-        base,
-        "--",
-        // `:(literal)`, so a path holding `*` or `?` names itself.
-        ...[...(reported ?? [])].map((path) => `:(literal)${path}`),
-      ]),
-    );
+  const trackedDiff = (ref: string, paths?: readonly string[]) =>
+    read([
+      "diff",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--no-color",
+      "--src-prefix=a/",
+      "--dst-prefix=b/",
+      ref,
+      "--",
+      // `:(literal)`, so a path holding `*` or `?` names itself.
+      ...(paths ?? []).map((path) => `:(literal)${path}`),
+    ]);
+  // The untracked paths the patch covers. All of them without `measured`.
+  let fromNothing: ReadonlySet<string> | undefined;
+  if (measured === undefined) {
+    if (!base) limitations.push("baseline_not_recorded");
+    else append(await trackedDiff(base));
+  } else {
+    if (measured.fromBaseline.length > 0) {
+      if (!baseline || !HASH.test(baseline))
+        limitations.push("baseline_not_recorded");
+      else append(await trackedDiff(baseline, measured.fromBaseline));
+    }
+    // A path measured against HEAD is tracked or untracked. The tracked diff
+    // prints nothing for an untracked one, which the loop below takes.
+    if (measured.fromHead.length > 0) {
+      if (!HASH.test(measured.headRef)) limitations.push("diff_read_failed");
+      else append(await trackedDiff(measured.headRef, measured.fromHead));
+    }
+    // The rows were counted against the HEAD the reconciliation read. A
+    // commit since then moved the tree those counts describe.
+    if (head !== undefined && HASH.test(head) && head !== measured.headRef)
+      limitations.push("head_changed_during_capture");
+    fromNothing = new Set(measured.fromHead);
+  }
   const untrackedPaths = (untracked?.split("\0").filter(Boolean) ?? []).filter(
-    (path) => reported === undefined || reported.has(path),
+    (path) => fromNothing === undefined || fromNothing.has(path),
   );
   if (untracked === undefined) limitations.push("untracked_read_failed");
   if (untrackedPaths.length > WORKTREE_UNTRACKED_MAX)
@@ -229,5 +260,13 @@ export async function readWorktreeSnapshot(
     patch,
     complete: limitations.length === 0,
     limitations: [...new Set(limitations)],
+    ...(measured === undefined
+      ? {}
+      : {
+          bases: {
+            head_ref: measured.headRef,
+            baseline_paths: [...measured.fromBaseline],
+          },
+        }),
   };
 }

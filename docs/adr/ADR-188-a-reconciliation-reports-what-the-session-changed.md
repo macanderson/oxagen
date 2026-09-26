@@ -61,10 +61,19 @@ A path is in a reconciliation when the session changed it. The rule lives in
    `baseline`. `pre_session_changes` is `excluded`, `partly_excluded` (a bound
    cut the record short), or `included` (no record was taken for the
    worktree).
-5. **The captured diff covers the same paths.** The patch sealed beside a
-   reconciliation covers the reported paths and no others. It is taken
-   against the baseline, so its hunks can differ from a row's line counts
-   (see Known limits).
+5. **The captured diff describes the same change as the rows.** The patch
+   sealed beside a reconciliation covers the reported paths and no others,
+   and takes each path against the state its row's line counts came from. A
+   path the session committed is taken against the baseline
+   (`diff_base_sha`). Any other path is taken against the `HEAD` the
+   reconciliation read, or against nothing when it is untracked. The
+   snapshot names that `HEAD` and the committed paths in `bases`, and marks
+   the patch partial (`head_changed_during_capture`) when `HEAD` moved
+   before the capture.
+
+   > Amended 2026-09-25 (#4320). As first decided, the patch took every path
+   > against the baseline, so its hunks could differ from a row's line
+   > counts.
 6. **Older sessions keep the old measure.** A session restored from a state
    file written before `gitFirstReadAt` existed is measured against its
    baseline for the rest of its life, with `changes_basis: baseline`. Setting
@@ -155,13 +164,9 @@ each case as named.
   Those dated after the first read are reported as the session's.
 - **An amendment to a commit written before the session.** The amended
   commit keeps the older author date and is not counted.
-- **A row and its hunk can measure different intervals.** A row for an
-  uncommitted edit carries line counts against `HEAD`. The captured patch
-  takes every path against the baseline, so after a pull that also changed
-  the path, the patch holds the upstream hunk the row's counts leave out.
-  Issue #4320 tracks the fix.
 - **An upstream change to a path the session also committed** is counted with
-  it, because that path is measured against the baseline.
+  it, because that path is measured against the baseline. Its hunk in the
+  captured patch holds the upstream change too, so the two agree.
 - **A commit made before the first read of a worktree**, including the first
   commit of a repository that had none, is not reported. When it is inside
   the baseline, no diff shows it. When the session checks it out later, its
@@ -224,3 +229,20 @@ end-of-turn read and would read as pulled.
   Upstream commits pushed after the first read are not reachable from those
   tips, and a fast-forward pull brings them in with no merge commit to
   exclude. The test has to read the refs as they stand at each read.
+
+## Amendment 2026-09-25: the captured diff takes each path against its row's base (#4320)
+
+A row for an uncommitted edit counts its lines against `HEAD`. The patch
+beside it took every path against the baseline. After a pull that changed a
+file the session then edited, the row counted the session's edit and the
+patch also held the pulled hunk.
+
+`readSessionChanges` now returns what it measured each path against, and
+`readWorktreeSnapshot` takes each path's hunk against the same state:
+committed paths against the baseline, other tracked paths against the
+`HEAD` the reconciliation read, and untracked paths against nothing. The
+frame keeps one `diff_base_sha`, the baseline. The snapshot body gains
+`bases`, which names the `HEAD` it used (`head_ref`) and the committed
+paths (`baseline_paths`), so a reader can tell which base each hunk used
+without the frame changing shape. `run-work.ts` reads only the frame's
+attrs and the Run page shows the patch's metadata, so neither changes.

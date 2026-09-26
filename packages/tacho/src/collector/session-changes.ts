@@ -105,9 +105,28 @@ export interface WorktreeAttribution {
   preexisting?: PreexistingPaths;
 }
 
+/**
+ * What each reported path was measured against, so the patch beside a
+ * reconciliation takes each hunk against the same state its row's line
+ * counts came from (ADR-188 decision 5).
+ */
+export interface MeasuredPaths {
+  /**
+   * The commit `fromHead` was measured against: `HEAD` at the read, or git's
+   * empty tree in a repository with no commit yet.
+   */
+  headRef: string;
+  /** Paths the session's commits touched, measured against the baseline commit. */
+  fromBaseline: string[];
+  /** Paths measured against `headRef`, or against nothing when untracked. */
+  fromHead: string[];
+}
+
 /** One reconciliation's answer, and what the next one starts from. */
 export interface SessionChanges {
   changes: GitWorkingTreeChange[];
+  /** On the `session` basis, what each path in `changes` was measured against. */
+  measured?: MeasuredPaths;
   /**
    * The commits the next read starts from, oldest first: the newest
    * `MAX_SESSION_COMMITS` of those counted as the session's.
@@ -594,9 +613,11 @@ export async function readSessionChanges(
 
   const rows = new Map<string, string>();
   const counts = new Map<string, { added: number; removed: number }>();
+  const baselinePaths = new Set<string>();
   for (const entry of atBaseline?.entries ?? []) {
     if (!touched.paths.has(entry.path)) continue;
     rows.set(entry.path, entry.code);
+    baselinePaths.add(entry.path);
     const count = atBaseline?.counts.get(entry.path);
     if (count !== undefined) counts.set(entry.path, count);
   }
@@ -636,6 +657,15 @@ export async function readSessionChanges(
     await countUntracked(exec, cwd, root, entries, counts);
   return {
     changes: rowsOf(entries, counts, root),
+    measured: {
+      headRef,
+      fromBaseline: entries
+        .map((entry) => entry.path)
+        .filter((path) => baselinePaths.has(path)),
+      fromHead: entries
+        .map((entry) => entry.path)
+        .filter((path) => !baselinePaths.has(path)),
+    },
     ownCommits: own.slice(-MAX_SESSION_COMMITS),
     basis: "session",
     preexisting:
