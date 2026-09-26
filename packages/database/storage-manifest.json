@@ -4146,7 +4146,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e840455e7ac67c2ebfdf995e9ae580f16213f863dbdd192a27ab36f9ca4a6a5c",
+  "contentHash": "7a137fe8e6b355fce4d001ae696ab19ea1301cc07285d73d3c39870a198f6fc3",
   "domains": [
     {
       "name": "agent",
@@ -7688,6 +7688,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_spent_usd_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
         },
         {
           "name": "spec_version",
@@ -23002,6 +23008,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_spent_usd_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
         },
         {
           "name": "harness_title",

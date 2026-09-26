@@ -650,6 +650,14 @@ export const tachoSessions = tachoSchema.table(
     // Why the last automatic account failed, as a short reason code; null
     // once an account is written or the run is no longer due.
     summaryError: text("summary_error"),
+    // What enrichment has spent on this run's accounts across every job, in
+    // micro-dollars. `run.enrich` adds each model call's price and stops at
+    // `ENRICHMENT_RUN_TOTAL_BUDGET_USD` (#4312).
+    summarySpentUsdMicros: bigint("summary_spent_usd_micros", {
+      mode: "number",
+    })
+      .notNull()
+      .default(0),
     // The title the harness gave the session itself (Claude Code's
     // `ai-title`), and the frame time it carried. It outranks `name` and
     // `title` on the Run page, and an older frame never replaces it.

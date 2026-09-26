@@ -28,3 +28,19 @@ ALTER TABLE "tacho"."session_files"
 
 ALTER TABLE "tacho"."sessions"
   ADD COLUMN "harness_reported_cost_micros" bigint NULL;
+
+-- Record what enrichment has spent on each run, across jobs (#4312, audit
+-- finding E-01).
+--
+-- `run.enrich` held each job to a budget, but every job started from zero,
+-- and a live run is summarized again every 30 minutes while it changes, so a
+-- run's total had no cap. The job now adds each model call's price here,
+-- inside the step that made the call, and stops at the run's cap. The sweep
+-- skips a run at its cap. NOT NULL DEFAULT 0 adds the column without
+-- rewriting either table.
+
+ALTER TABLE "agent"."agent_runs"
+  ADD COLUMN "summary_spent_usd_micros" bigint NOT NULL DEFAULT 0;
+
+ALTER TABLE "tacho"."sessions"
+  ADD COLUMN "summary_spent_usd_micros" bigint NOT NULL DEFAULT 0;
