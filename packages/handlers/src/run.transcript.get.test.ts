@@ -3014,4 +3014,48 @@ describe("readWords beside another read of the same run", () => {
       "4",
     ]);
   });
+
+  // `markWords` asks for the model step before a reply after the reply
+  // itself. The bound takes halves in the run's order, so where it falls
+  // between the two, the earlier model step keeps its place (#4334).
+  it("takes the halves in the run's order when the bound falls between a model step and its reply", async () => {
+    const { deps, getBody } = harness([]);
+    const frames = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: 1,
+        ...stored(modelStream(["Shipped it."]), "text/event-stream"),
+      }),
+      tachoRow(2, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Shipped it, and tagged v2."),
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const [prompt, model, reply] = stepFolds(frames);
+    if (!prompt || !model || !reply) throw new Error("no folds");
+    expect([prompt.node, model.node, reply.node]).toEqual([
+      "prompt",
+      "model",
+      "reply",
+    ]);
+    const asked = [prompt, reply, model];
+    const answer = await readWords(deps.bodies, SCOPE, asked, { halfMax: 2 });
+    expect([prompt, model, reply].map((fold) => answer.has(fold))).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
 });

@@ -2994,6 +2994,43 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
     );
   });
 
+  // #3370 finding 11: an allow rule leaves the call to the person's
+  // first-use consent, which wrote no run at all, even under an agent run.
+  it("allow: a person's first-use consent under an agent run records that run when no runIdRef is passed (negative)", async () => {
+    const ctx = {
+      ...CTX,
+      messageId: "msg_allow_norun",
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "allow" }]),
+    };
+    const { tools } = await materializeTools(ctx);
+    await (tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "consent", runId: "run_test_1" }),
+    );
+  });
+
+  it("allow: a person's first-use consent prefers the run on runIdRef, read at call time, over the agent run's (negative)", async () => {
+    const runIdRef: { current: string | null } = { current: null };
+    const ctx = {
+      ...CTX,
+      messageId: "msg_allow_ref",
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "allow" }]),
+    };
+    const { tools } = await materializeTools(ctx, { runIdRef });
+    runIdRef.current = "0192d4a8-7c1e-7a00-8000-0000000000c3";
+    await (tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "consent",
+        runId: "0192d4a8-7c1e-7a00-8000-0000000000c3",
+      }),
+    );
+  });
+
   it("ask: the consent card carries the risk level the engine is told", async () => {
     const ctx = {
       ...CTX,

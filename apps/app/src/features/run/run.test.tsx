@@ -1219,6 +1219,35 @@ describe("controls", () => {
     ).toBeTruthy();
   });
 
+  // #3370 (#3399 finding 4): the header drew Fork enabled for any viewer of a
+  // forkable ledger run, and fork_run refused an organization Viewer.
+  it("offers Fork in the header to an organization Owner on a sealed ledger run graded fork", async () => {
+    const { container } = await renderRun({
+      detail: ok(runDetail({ run: runRow({ source: "ledger" }) })),
+      transcript: ok(runTranscript()),
+    });
+    const actions = within(screen.getByTestId("run-actions"));
+    expect(actions.getByTestId("run-fork")).toBeEnabled();
+    await expectNoAxe(container);
+  });
+
+  it("draws Fork disabled in the header for an organization Viewer on the same run, with the role as the reason (negative)", async () => {
+    const { container } = await renderRun(
+      {
+        detail: ok(runDetail({ run: runRow({ source: "ledger" }) })),
+        transcript: ok(runTranscript()),
+      },
+      { viewer: viewerCtx },
+    );
+    const actions = within(screen.getByTestId("run-actions"));
+    const fork = actions.getByTestId("run-fork");
+    expect(fork).toBeDisabled();
+    expect(fork.getAttribute("title")).toContain(
+      "Forking needs an organization Owner, Admin or Member role.",
+    );
+    await expectNoAxe(container);
+  });
+
   it("offers Summarize on a sealed run that has none", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ name: null, summary: null }) })),

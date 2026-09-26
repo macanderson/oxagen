@@ -25,6 +25,8 @@ const state = vi.hoisted(() => ({
   scratchWritten: [] as string[],
   /** Every scratch key a job deleted, in order. */
   scratchDeleted: [] as string[],
+  /** Every scratch key a job asked to read, in order, found or not. */
+  scratchRead: [] as string[],
 }));
 vi.mock("../inngest", () => ({
   inngest: { createFunction: vi.fn(() => ({})) },
@@ -144,6 +146,7 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
       state.scratchWritten.push(`${input.jobRunId}/${input.name}`);
     },
     getScratch: async (_scope: unknown, jobRunId: string, name: string) => {
+      state.scratchRead.push(`${jobRunId}/${name}`);
       const object = state.scratch.get(`${jobRunId}/${name}`);
       if (object) return object;
       // What the storage driver throws for a key that holds nothing.
@@ -236,6 +239,7 @@ beforeEach(() => {
   state.scratch.clear();
   state.scratchWritten = [];
   state.scratchDeleted = [];
+  state.scratchRead = [];
 });
 describe("automatic run enrichment", () => {
   it("writes a generated account, then avoids charging for the identical input", async () => {
@@ -1113,6 +1117,51 @@ describe("the transcript chunks a job keeps", () => {
   it("deletes nothing from its failure handler when the job kept nothing (negative)", async () => {
     await failed();
     expect(state.scratchDeleted).toEqual([]);
+  });
+
+  it("records a failure whose event names no job run, and deletes nothing it cannot name (negative)", async () => {
+    runOfChunks(2);
+    state.call.mockRejectedValue(new Error("credit gate refused"));
+    await expect(run()).rejects.toThrow("credit gate refused");
+    await state.handlers.get("failure")!({
+      event: {
+        name: "inngest/function.failed",
+        data: {
+          function_id: "oxagen-runner-run.enrich",
+          error: { message: "credit gate refused" },
+          event: { data },
+        },
+      },
+      step: { run: (_name: string, fn: () => unknown) => fn() },
+    });
+    // The failure is still recorded against the run.
+    expect(state.writes.at(-1)).toHaveProperty("summaryError");
+    // Without the run id no chunk can be named, so none is deleted. The
+    // provider sends one on every failure. This pins the guard alone.
+    expect(state.scratchDeleted).toEqual([]);
+    expect(state.scratch.size).toBe(3);
+  });
+
+  it("opens no chunk past the one the account is cut to once the budget runs out", async () => {
+    runOfChunks(4);
+    state.call
+      .mockResolvedValueOnce({
+        text: "The first portion.",
+        model: "fast-test",
+        costUsd: ENRICHMENT_RUN_BUDGET_USD,
+      })
+      .mockResolvedValueOnce(account);
+    expect(await run()).toMatchObject({
+      status: "generated",
+      calls: 2,
+      budgetReached: true,
+    });
+    // One reduction read chunk 0. The account is cut to one chunk, which the
+    // reduced portion and chunk 1 fill, so chunks 2 and 3 are never opened.
+    const opened = state.scratchRead.filter((read) => read.includes("chunk-"));
+    expect(opened).toEqual([key("chunk-0"), key("chunk-1")]);
+    expect(state.scratchWritten).toContain(key("chunk-3"));
+    expect(state.scratch.size).toBe(0);
   });
 
   it("deletes the chunks of a run that stopped being readable after its read step", async () => {
