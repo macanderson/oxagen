@@ -472,6 +472,40 @@ describe("TranscriptTailer", () => {
     ]);
   });
 
+  it("costs an idle cursor one stat a tick and opens no file", async () => {
+    // A subagent whose SubagentStop was lost keeps its cursor for the rest of
+    // the session. Each tick re-read its head to check for a replaced file,
+    // which opened and closed it once a second for nothing.
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "parent-1\n");
+    const agentPath = subagentPath(path, "lost");
+    writeFileSync(agentPath, "lost-1\n");
+    const session = fakeSession("s1", path);
+    const { instance } = tailer([session]);
+    await instance.tick();
+    expect(session.lines).toHaveLength(2);
+
+    const open = vi.spyOn(fs, "open");
+    try {
+      await instance.tick();
+      expect(open).not.toHaveBeenCalled();
+    } finally {
+      open.mockRestore();
+    }
+
+    // A file rewritten in place keeps its inode, and is still read from its
+    // start once it outgrows the cursor.
+    writeFileSync(agentPath, "fresh-1\n");
+    appendFileSync(agentPath, "fresh-2\n");
+    await instance.tick();
+    expect(session.lines.filter((l) => l.subagentId === "lost")).toEqual([
+      { line: "lost-1", subagentId: "lost" },
+      { line: "fresh-1", subagentId: "lost" },
+      { line: "fresh-2", subagentId: "lost" },
+    ]);
+  });
+
   it("reads a subagent transcript past 64 MiB to its last line", async () => {
     // It was read whole on SubagentStop, capped at 64 MiB, and a longer one
     // lost its tail.

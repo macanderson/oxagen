@@ -785,7 +785,14 @@ export class TranscriptTailer {
     let replaced =
       st.size < cursor.offset ||
       (cursor.ino !== undefined && cursor.ino !== st.ino);
-    if (!replaced && cursor.offset > 0 && cursor.head !== undefined) {
+    // A file the cursor has read to its end, on the inode it last saw, has
+    // nothing to read, so its head is compared only once it grows. An idle
+    // cursor then costs one stat a tick. A subagent whose SubagentStop was
+    // lost keeps one for the rest of its session. A file rewritten in place
+    // at exactly the cursor's offset is caught by the head compare on the
+    // tick it grows.
+    const idle = st.size === cursor.offset && cursor.ino === st.ino;
+    if (!replaced && !idle && cursor.offset > 0 && cursor.head !== undefined) {
       const expected = Buffer.from(cursor.head, "base64");
       try {
         const actual = await readAt(cursor.path, 0, expected.length);
