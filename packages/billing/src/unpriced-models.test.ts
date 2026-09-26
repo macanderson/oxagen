@@ -204,9 +204,9 @@ describe("findUnpricedModels", () => {
   });
 
   it("names a model whose provider-side searches nobody priced, and drops it once a rate covers them", () => {
-    // #3281. A wrapped call records the provider-side tool calls it made
-    // (`web_search_requests`, `web_fetch_requests`) and the book prices them
-    // as `server_tool_request` per request. The observation read used to
+    // #3281. A wrapped call records the web searches it made
+    // (`web_search_requests`) and the book prices them as
+    // `server_tool_request` per request. The observation read used to
     // report six token classes and stop, so this usage never reached the
     // comparison: a model billed for every search it ran read as fully
     // priced, and the report the customer opens to find out why a run has no
