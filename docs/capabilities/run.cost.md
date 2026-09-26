@@ -63,6 +63,14 @@ Each `byModel` entry:
 
 These are the recorded figures. A reader shows them as they are and does not reprice the token counts with today's price book, because a later rate change would then disagree with the run's recorded cost (#4069).
 
+The rollup grades each step from what its frame recorded (ADR-192). A step is one model call or one tool call, and it counts under one cause at most:
+
+- `failed`: a tool call whose status is `error` or `rejected`. A ledger call's `failed` and `denied` outcomes read the same way. A cancelled call and one parked on an approval did not fail.
+- `repeated`: a tool call with the same tool, input digest and output digest as an earlier call of the run, when it is a shell command or a call the classifier marked read-only. This is the rule the findings job files `repeated_shell_commands` and `duplicate_tool_calls` by. A repeat of a call that writes is not counted, because the write may change what the next call reads.
+- `retried`: the session's API retries, one model call each, and never more than the run's model calls.
+
+A step whose frame hides its outcome counts as advanced. Waits have no record and are not a cause. A ledger run records no read-only flag, so its repeats are not graded.
+
 The provisional figures come from `tacho.session_models` and the root session's tool-call counter. Ingest adds each counted `llm_call` frame to them as it lands, so they cover the run up to its last recorded event. The rollup replaces them once it rebuilds the run.
 
 | Field | Type | Description |
@@ -73,15 +81,15 @@ The provisional figures come from `tacho.session_models` and the root session's 
 
 Subagent sessions are not included. They are separate sessions until the rollup folds them into the run.
 
-The baseline sets this run beside the agent's sealed runs in the 30 days before it started. This run is not in it.
+The baseline sets this run beside the agent's sealed runs in the 30 days before it started. This run is not in it, and neither is a run that is still open, whose figures are a running estimate. The window ends at this run's start, so a sealed run's baseline does not move as the agent keeps running. A run with no rollup row answers `baseline: null`, because nothing names its agent or its start.
 
 | Field | Type | Description |
 |---|---|---|
 | `windowDays` | integer | always 30 |
 | `before` | string | RFC 3339; this run's `startedAt`, the end of the window |
-| `runs` | integer | the agent's sealed runs in the window, at least 1 |
-| `medianCost` | object or null | the median cost of the priced runs in the window, with the fold of their bases; null when fewer than 5 of them were priced |
-| `productiveRatio` | number or null | `sum(advanced_steps) ÷ sum(steps)` over the graded runs in the window; null when fewer than 5 of them were graded |
+| `runs` | integer | the agent's sealed runs in the window, at least 5 |
+| `medianCost` | object or null | the median cost (`percentile_cont(0.5)`) of the runs in the window priced in this run's currency, rounded half to even to whole micros, with the fold of their bases; null when fewer than 5 of them were priced |
+| `productiveRatio` | number or null | `sum(advanced_steps) ÷ sum(steps)` over the graded runs in the window, so a long run weighs as many steps as it took; null when fewer than 5 of them were graded |
 
 ## Honesty
 
