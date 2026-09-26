@@ -461,6 +461,10 @@ const chainSealColumns = {
   terminalStatus: seals.terminalStatus,
   finalEventDigest: seals.finalEventDigest,
   eventStreamDigest: seals.eventStreamDigest,
+  // The attestation the seal signed when it was written (ADR-195).
+  archiveSegmentDigest: seals.archiveSegmentDigest,
+  attestationKeyId: seals.attestationKeyId,
+  attestationSig: seals.attestationSig,
 };
 
 /**
@@ -768,6 +772,18 @@ export type LedgerSeal = {
   finalEventDigest: string | null;
   /** The fold of every frame digest in sequence; always written. */
   eventStreamDigest: string;
+  /**
+   * sha256 over the archive segment's bytes as stored (ADR-195). Null on a
+   * seal written before the digest was recorded.
+   */
+  archiveSegmentDigest: string | null;
+  /**
+   * The attester's key id and base64 Ed25519 signature over the seal's
+   * figures. Null together on a seal written with no attester key and on
+   * one written before the seal signed.
+   */
+  attestationKeyId: string | null;
+  attestationSig: string | null;
 };
 
 export type LedgerRunRecord = LedgerRunRow & {

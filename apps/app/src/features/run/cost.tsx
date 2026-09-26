@@ -89,6 +89,7 @@ export async function CostTab(props: RunTabProps): Promise<ReactNode> {
 }
 
 function CostSections({
+  ctx,
   run,
   metrics,
   agent,
@@ -117,7 +118,14 @@ function CostSections({
   return (
     <div data-testid="cost-tab" className="flex flex-col gap-3.5">
       {estimate ? <CostEstimate /> : null}
-      <ModelFitPanel run={run} metrics={metrics} agent={agent} />
+      {/* The panel draws the reading get_run stored (ADR-194); a card that
+          argues for a move opens it as the viewer, so it takes their role. */}
+      <ModelFitPanel
+        run={run}
+        agent={agent}
+        place={place}
+        orgRole={ctx.orgRole}
+      />
       <Instruments
         run={run}
         metrics={metrics}

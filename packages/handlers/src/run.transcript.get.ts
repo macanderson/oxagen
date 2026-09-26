@@ -710,11 +710,11 @@ function decisionView(decision: TranscriptDecision) {
     source: decision.source,
     harness: decision.harness,
     at: decision.at.toISOString(),
-    // The fold names the rules once the Effort and tools lane reads them
-    // from the frames (#3971); until then a decision names none, and no
-    // producer assesses taint.
-    rules: decision.rules ?? [],
-    taint: decision.taint ?? null,
+    // The rules the frame names, in evaluation order, and the taint a
+    // producer assessed: null for every decision today, because none does
+    // (#3971, ADR-194).
+    rules: decision.rules,
+    taint: decision.taint,
   };
 }
 

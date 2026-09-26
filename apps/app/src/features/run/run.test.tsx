@@ -927,8 +927,9 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
+    // No kind is recorded, so no role segment: only a person holds one.
     expect(screen.getByTestId("run-operator-name")).toHaveTextContent(
-      /^prn_unknown_kindoperator$/,
+      /^prn_unknown_kindoperator · core-platform$/,
     );
     expect(screen.getByTestId("run-operator")).not.toHaveTextContent(
       "not recorded",
@@ -941,7 +942,10 @@ describe("header", () => {
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator-name");
-    expect(operator).toHaveTextContent(/^Marcus Belloperator$/);
+    // The builder's run predates the role stamp (#3999).
+    expect(operator).toHaveTextContent(
+      /^Marcus Belloperator · role not recorded · core-platform$/,
+    );
     expect(operator.getAttribute("data-operator-id")).toBe("prn_marcusbell");
     // The id is a key, not a label: it is in the hover card, never in the line.
     expect(
@@ -2662,17 +2666,13 @@ describe("the work", () => {
         "src/release/cut.ts",
       ),
     ).toBeTruthy();
-    // The base is the branch the pull request merges into (#3890). No read
-    // carries a release, so that row says so rather than naming one.
+    // The base is the branch the pull request merges into (#3890). The
+    // session created no release, so the panel draws no Release row.
     const rows = changes
       .getAllByRole("term")
       .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
-    expect(rows).toEqual(
-      expect.arrayContaining([
-        ["Base", "main"],
-        ["Release", "not recorded"],
-      ]),
-    );
+    expect(rows).toEqual(expect.arrayContaining([["Base", "main"]]));
+    expect(rows.map(([term]) => term)).not.toContain("Release");
     expect(
       changes.getByRole("link", { name: "main" }).getAttribute("href"),
     ).toBe("https://github.com/acme/platform/tree/main");
@@ -3417,6 +3417,52 @@ describe("what the session recorded", () => {
     const operator = within(screen.getByTestId("run-operator"));
     expect(operator.getByText("enrolled the host")).toBeTruthy();
     expect(operator.queryByText("operator")).toBeNull();
+  });
+
+  // #3999, ADR-197: the role the operator held in this workspace when the run
+  // opened, as pages/run.md draws the Summary.
+  it("prints the operator's stamped workspace role and the workspace beside the operator", async () => {
+    const { container } = await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorRole: "owner" }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-operator-name")).toHaveTextContent(
+      /^Marcus Belloperator · workspace\.owner · core-platform$/,
+    );
+    expect(screen.getByTestId("run-operator-role")).toHaveTextContent(
+      "workspace.owner",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("says a person's role is not recorded on a run from before the stamp, and draws no role for an agent (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorRole: null }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-operator-role")).toHaveTextContent(
+      "role not recorded",
+    );
+    expect(screen.getByTestId("run-operator")).not.toHaveTextContent(
+      "workspace.",
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            operatorKind: "agent",
+            operatorName: null,
+            operatorRole: "owner",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-operator-role")).toBeNull();
+    expect(screen.getByTestId("run-operator")).toHaveTextContent(
+      "core-platform",
+    );
   });
 
   it("lists the subagents the session started under the checkout, and draws no row when it started none", async () => {
