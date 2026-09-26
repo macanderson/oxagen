@@ -1,0 +1,23 @@
+#:schema https://oxagen.sh/schemas/mcp-server/v1.json
+# No [environments] table: the server has one environment, default, and every
+# agent's calls go to it.
+schema = "mcp-server/v1"
+name = "linear"
+label = "Linear"
+description = "Issues and projects in the a-intel Linear workspace."
+
+[source]
+type = "remote"
+url = "https://mcp.linear.app/mcp"
+transport = "http"
+
+[auth]
+mode = "service"
+scheme = "bearer"
+credential = "oxagen:credential/linear"
+
+[exposure]
+mode = "direct"
+
+[sync]
+schedule = "daily"

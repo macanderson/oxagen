@@ -1,0 +1,208 @@
+# OpenAPI 3.0: nullable, $ref, allOf, PUT and DELETE, an operation with no
+# operationId, a deprecated operation, an api_key scheme, a path parameter
+# whose name a body property repeats, and an array response.
+openapi: 3.0.3
+info:
+  title: a-intel pet clinic
+  version: 1.4.0
+servers:
+  - url: https://clinic.a-intel.com/api
+security:
+  - api_key: []
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List pets, twenty to a page.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - name: species
+          in: query
+          schema:
+            type: string
+            enum: [cat, dog, rabbit]
+      responses:
+        "200":
+          description: One page of pets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+    post:
+      operationId: createPet
+      summary: Register a pet.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewPet"
+      responses:
+        "201":
+          description: The pet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+  /pets/{petId}:
+    parameters:
+      - $ref: "#/components/parameters/PetId"
+    get:
+      operationId: getPet
+      summary: Read one pet.
+      responses:
+        "200":
+          description: The pet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: replacePet
+      summary: Replace a pet's record.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewPet"
+      responses:
+        "200":
+          description: The pet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+    delete:
+      summary: Remove a pet.
+      responses:
+        "204":
+          description: The pet is gone.
+  /pets/{petId}/photos:
+    get:
+      operationId: listPetPhotos
+      summary: List a pet's photos.
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: The photos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  photos:
+                    type: array
+                    items:
+                      type: string
+                      format: uri
+  /owners/{name}:
+    put:
+      operationId: renameOwner
+      summary: Rename an owner. The body's name is the new one.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The owner's current name.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                  nullable: true
+      responses:
+        "200":
+          description: The owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Owner"
+components:
+  parameters:
+    PetId:
+      name: petId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    Page:
+      name: page
+      in: query
+      description: The page to read, from 1.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+  responses:
+    Problem:
+      description: Something went wrong.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+              detail:
+                type: string
+  schemas:
+    NewPet:
+      type: object
+      required: [name, species]
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        species:
+          type: string
+          enum: [cat, dog, rabbit]
+        tag:
+          type: string
+          nullable: true
+        owner:
+          $ref: "#/components/schemas/Owner"
+    Pet:
+      allOf:
+        - $ref: "#/components/schemas/NewPet"
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: integer
+              format: int64
+            born_on:
+              type: string
+              format: date
+              nullable: true
+    Owner:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+  securitySchemes:
+    api_key:
+      type: apiKey
+      in: header
+      name: X-API-Key

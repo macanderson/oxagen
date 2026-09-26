@@ -1,0 +1,2 @@
+{"task":"Give the customer back $40 of charge ch_3P9 because it was billed twice.","expect":"billing__create_refund"}
+{"task":"What did customer cus_81 pay us in August?","expect":"billing__list_charges"}

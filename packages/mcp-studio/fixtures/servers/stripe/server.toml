@@ -1,0 +1,28 @@
+#:schema https://oxagen.sh/schemas/mcp-server/v1.json
+schema = "mcp-server/v1"
+name = "stripe"
+label = "Stripe"
+description = "Payments, refunds, and invoices in the a-intel Stripe account."
+
+[source]
+type = "remote"                            # remote, registry, local, or openapi
+url = "https://mcp.stripe.com"
+transport = "http"                         # http or sse
+
+[auth]
+mode = "service"                           # none, service, or operator-oauth
+scheme = "oauth"                           # oauth, bearer, basic, or header
+
+[environments.test]
+sandbox = true
+credential = "oxagen:credential/stripe-test"
+
+[environments.live]
+credential = "oxagen:credential/stripe-live"
+
+[exposure]
+mode = "direct"                            # direct or search
+definition_budget = 8000                   # tokens for every tool definition together
+
+[sync]
+schedule = "daily"                         # on-change, daily, or manual

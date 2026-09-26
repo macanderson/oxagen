@@ -1,0 +1,126 @@
+# Swagger 2.0: host and basePath, a body parameter, formData, offset paging,
+# and apiKey and oauth2 securityDefinitions.
+swagger: "2.0"
+info:
+  title: a-intel directory
+  version: 1.0.0
+host: directory.a-intel.com
+basePath: /v1
+schemes: [https]
+consumes: [application/json]
+produces: [application/json]
+securityDefinitions:
+  api_key:
+    type: apiKey
+    in: header
+    name: X-Directory-Key
+  oauth:
+    type: oauth2
+    flow: accessCode
+    authorizationUrl: https://login.a-intel.com/oauth/authorize
+    tokenUrl: https://login.a-intel.com/oauth/token
+    scopes:
+      directory.read: Read people and teams.
+      directory.write: Change people and teams.
+security:
+  - api_key: []
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      summary: List people, fifty at a time.
+      parameters:
+        - name: offset
+          in: query
+          type: integer
+          minimum: 0
+          default: 0
+        - name: limit
+          in: query
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 50
+      responses:
+        "200":
+          description: One page of people.
+          schema:
+            type: object
+            properties:
+              users:
+                type: array
+                items:
+                  $ref: "#/definitions/User"
+              total:
+                type: integer
+    post:
+      operationId: createUser
+      summary: Add a person.
+      security:
+        - oauth: [directory.write]
+      parameters:
+        - name: user
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/NewUser"
+      responses:
+        "201":
+          description: The person.
+          schema:
+            $ref: "#/definitions/User"
+  /users/{userId}:
+    get:
+      operationId: getUser
+      summary: Read one person.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          type: string
+      responses:
+        "200":
+          description: The person.
+          schema:
+            $ref: "#/definitions/User"
+        "404":
+          description: No person has that id.
+  /users/{userId}/avatar:
+    post:
+      operationId: uploadAvatar
+      summary: Replace a person's photo.
+      consumes: [multipart/form-data]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          type: string
+        - name: file
+          in: formData
+          required: true
+          type: file
+      responses:
+        "204":
+          description: The photo is replaced.
+definitions:
+  NewUser:
+    type: object
+    required: [email, name]
+    properties:
+      email:
+        type: string
+        format: email
+      name:
+        type: string
+      team:
+        type: string
+  User:
+    allOf:
+      - $ref: "#/definitions/NewUser"
+      - type: object
+        required: [id]
+        properties:
+          id:
+            type: string
+          active:
+            type: boolean
