@@ -22,11 +22,13 @@ import type { RunItem } from "@oxagen/oxagen/contracts/run.list";
 import {
   createPostgresRunStore,
   ledgerFrame,
+  listSubagentChains,
   listSubagentSessions,
   type RunChainReads,
   type RunFrame,
   type RunStore,
   subagentChainRead,
+  type SubagentChainRow,
   tachoFrame,
 } from "@oxagen/run-ledger";
 import { deferredEvidenceArchive } from "@oxagen/run-ledger/evidence-store";
@@ -102,6 +104,16 @@ export type RunReadDeps = {
    * and scans every chain in the workspace.
    */
   tachoChildSessions?: (rootSessionUuid: string) => Promise<string[]>;
+  /**
+   * The subagent chains under a root session with their session rows, from
+   * Postgres (`listSubagentChains`). A reader that answers the chains one by
+   * one reads them here: `get_run`'s chain heads and the chain walk. Absent,
+   * such a reader answers no chains.
+   */
+  tachoChains?: (
+    rootSessionUuid: string,
+    options?: { sessionUuids?: readonly string[]; limit?: number },
+  ) => Promise<SubagentChainRow[]>;
   readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
 };
 
@@ -236,6 +248,47 @@ export async function readFrames(
     rows.push(...rest);
   }
   return rows.map(tachoFrame);
+}
+
+/**
+ * The frames of one subagent chain strictly after `afterSeq`, ascending, at
+ * most `limit`: `readFrames` for a chain other than the run's own (#3823).
+ *
+ * The read names the chain and is fenced by the run's root, so it returns
+ * nothing from a chain of another run. It is bounded above the same way, at
+ * `afterSeq + limit`, and reads past the window only when the window came
+ * back short of a chain that is longer than it. A position is compared on an
+ * unsigned seq and nothing lies below seq 0, so the first page reads from
+ * the chain's start.
+ */
+export async function readChainFrames(
+  deps: RunReadDeps,
+  rootSessionUuid: string,
+  chain: Pick<SubagentChainRow, "sessionUuid" | "seqCount">,
+  afterSeq: string,
+  limit: number,
+): Promise<RunFrame[]> {
+  const read = deps.tachoSubagentFrames;
+  if (read === undefined) return [];
+  const page = (after: number, want: number, throughSeq?: number) =>
+    read({
+      rootSessionUuid,
+      sessionUuids: [chain.sessionUuid],
+      after: after < 0 ? null : { sessionUuid: chain.sessionUuid, seq: after },
+      ...(throughSeq === undefined ? {} : { throughSeq }),
+      limit: want,
+    });
+  const after = Number(afterSeq);
+  const through = after + limit;
+  const rows = await page(after, limit, through);
+  const head = chain.seqCount - 1;
+  const last = rows.at(-1)?.seq;
+  if (rows.length < limit && (through < head || last === through)) {
+    rows.push(...(await page(through, limit - rows.length)));
+  }
+  return rows
+    .map(tachoFrame)
+    .filter((frame) => frame.chain?.sessionUuid === chain.sessionUuid);
 }
 
 /**
@@ -379,6 +432,8 @@ export function defaultRunReadDeps(): RunReadDeps {
     tachoFrames: selectTachoEvents,
     tachoSubagentFrames: selectTachoSubagentEvents,
     tachoChildSessions: (root) => listSubagentSessions(requireScope(), root),
+    tachoChains: (root, options) =>
+      listSubagentChains(requireScope(), root, options),
     readEnrichmentEnabled: readRunEnrichmentEnabled,
   };
 }

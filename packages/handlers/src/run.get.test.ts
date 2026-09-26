@@ -5,8 +5,10 @@ import type { AttemptEventReadRecord } from "@oxagen/run-ledger";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { describe, expect, it, vi } from "vitest";
 import {
+  chainsCursor,
   createRunGetHandler,
   decodeFrameCursor,
+  decodeFramePosition,
   encodeFrameCursor,
   type PlaceRepository,
   POLL_INTERVAL_MS,
@@ -17,12 +19,16 @@ import {
   ctx,
   event,
   ledgerRun,
+  memoryChainHeads,
   memoryEvents,
   memoryStores,
+  memorySubagentChains,
+  memorySubagentFrames,
   memoryTachoFrames,
   OTHER_WORKSPACE,
   rollupCostRow,
   seal,
+  subagentChain,
   summary,
   tachoRow,
   tachoSession,
@@ -775,5 +781,364 @@ describe("get_run witnessFor (ADR-064)", () => {
     expect(asked).toEqual([]);
     expect(tacho.run.place?.repository).toBeUndefined();
     expect(ledger.run.place).toBeNull();
+  });
+});
+
+// #3823: a subagent records on a chain of its own, numbered from 0. get_run
+// pages one chain, names a subagent frame's chain, and lists each subagent
+// chain's head, so a reader following the run learns a subagent recorded
+// more even when the run's own chain did not move.
+describe("get_run subagent chains (#3823)", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  const SECOND = "0192d4a8-7c1e-7a00-8000-00000000c1d1";
+  const FOREIGN_ROOT = "0192d4a8-7c1e-7a00-8000-00000000beef";
+  const FOREIGN_CHILD = "0192d4a8-7c1e-7a00-8000-00000000f0e1";
+
+  /** A frame on a subagent chain, as the subagent read answers it. */
+  const onChain = (
+    session: string,
+    seq: number,
+    root = SESSION_UUID,
+    over: Partial<TachoFrameRow> = {},
+  ) =>
+    tachoRow(seq, {
+      sessionUuid: session,
+      rootSessionUuid: root,
+      parentSessionUuid: root,
+      subagentId: "agent-1",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_A",
+      ...over,
+    });
+
+  const chains = [
+    subagentChain({
+      sessionUuid: CHILD,
+      rootSessionUuid: SESSION_UUID,
+      seqCount: 3,
+    }),
+    subagentChain({
+      sessionUuid: SECOND,
+      rootSessionUuid: SESSION_UUID,
+      subagentId: "agent-2",
+      subagentType: null,
+      spawnToolUseId: "toolu_B",
+      startedAt: new Date("2026-09-11T09:03:00.000Z"),
+    }),
+    subagentChain({
+      sessionUuid: FOREIGN_CHILD,
+      rootSessionUuid: FOREIGN_ROOT,
+      seqCount: 1,
+    }),
+  ];
+
+  function chainHarness(
+    over: {
+      root?: TachoFrameRow[];
+      children?: TachoFrameRow[];
+      status?: "running" | "completed";
+      /** Runs after each fake sleep; a test lands a subagent frame here. */
+      onSleep?: (count: number, children: TachoFrameRow[]) => void;
+      headsFail?: boolean;
+    } = {},
+  ) {
+    const stores = memoryStores(
+      [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
+      [
+        tachoSession({
+          publicId: TACHO_ID,
+          session:
+            over.status === "running"
+              ? { outcome: "running", sealedAt: null }
+              : {},
+        }),
+      ],
+    );
+    const children = over.children ?? [];
+    let clock = 1_000_000;
+    const sleeps: number[] = [];
+    const headReads: string[][] = [];
+    const heads = memoryChainHeads(children);
+    const deps: RunGetDeps = {
+      queries: stores.queries,
+      store: {
+        getRunByPublicId: (publicId) =>
+          Promise.resolve(publicId === LEDGER_ID ? summary() : null),
+        readAttemptEventsSince: memoryEvents([]),
+      },
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: async () => null,
+      tachoFrames: memoryTachoFrames(SESSION_UUID, over.root ?? []),
+      tachoSubagentFrames: (args) =>
+        memorySubagentFrames(children)(args),
+      tachoChains: memorySubagentChains(chains),
+      chainHeads: (args) => {
+        headReads.push([...args.sessionUuids]);
+        return over.headsFail === true
+          ? Promise.reject(new Error("Code: 241. Memory limit exceeded"))
+          : heads(args);
+      },
+      sessionTitle: async () => null,
+      sessionConfig: async () => ({ effort: null, thinking: null }),
+      sessionRepository: async () => null,
+      now: () => clock,
+      sleep: (ms) => {
+        sleeps.push(ms);
+        clock += ms;
+        over.onSleep?.(sleeps.length, children);
+        return Promise.resolve();
+      },
+    };
+    return { get: createRunGetHandler(deps), sleeps, headReads };
+  }
+
+  it("pages a subagent chain by its session, from its seq 0, and names the chain on each frame and cursor", async () => {
+    const { get } = chainHarness({
+      root: [tachoRow(0), tachoRow(1)],
+      children: [onChain(CHILD, 0), onChain(CHILD, 1), onChain(CHILD, 2)],
+    });
+    const first = await get(
+      input({ runId: TACHO_ID, sessionUuid: CHILD, frameLimit: 2 }),
+      ctx(),
+    );
+    expect(runGet.output.parse(first)).toEqual(first);
+    expect(
+      first.frames.frames.map((f) => [f.sessionUuid, f.seq]),
+    ).toEqual([
+      [CHILD, "0"],
+      [CHILD, "1"],
+    ]);
+    expect(decodeFramePosition(first.frames.frames[0]?.cursor ?? "")).toEqual(
+      { sessionUuid: CHILD, seq: "0" },
+    );
+    expect(decodeFramePosition(first.frames.cursor ?? "")).toEqual({
+      sessionUuid: CHILD,
+      seq: "1",
+    });
+    // The page cursor resumes the chain with no gap and no repeat.
+    const rest = await get(
+      input({
+        runId: TACHO_ID,
+        sessionUuid: CHILD,
+        framesAfter: first.frames.cursor ?? "",
+      }),
+      ctx(),
+    );
+    expect(rest.frames.frames.map((f) => f.seq)).toEqual(["2"]);
+
+    // The run's own chain still pages by seq alone, and its frames name no
+    // chain; so does a read that names the run's own session.
+    for (const sessionUuid of [undefined, SESSION_UUID.toUpperCase()]) {
+      const own = await get(input({ runId: TACHO_ID, sessionUuid }), ctx());
+      expect(own.frames.frames.map((f) => f.seq)).toEqual(["0", "1"]);
+      expect(own.frames.frames.every((f) => f.sessionUuid === undefined)).toBe(
+        true,
+      );
+      expect(decodeFrameCursor(own.frames.frames[0]?.cursor ?? "")).toBe("0");
+    }
+  });
+
+  it("lists every subagent chain's head from the frame store, with a cursor over the heads that hold a frame", async () => {
+    const { get, headReads } = chainHarness({
+      children: [onChain(CHILD, 0), onChain(CHILD, 1)],
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.chains).toEqual({
+      cursor: chainsCursor([{ sessionUuid: CHILD, lastSeq: "1" }]),
+      heads: [
+        {
+          sessionUuid: CHILD,
+          parentSessionUuid: SESSION_UUID,
+          subagentId: "agent-1",
+          subagentType: "Explore",
+          spawnCallId: "toolu_A",
+          lastSeq: "1",
+          frameCount: 2,
+        },
+        // Registered, with no frame the store can return yet.
+        {
+          sessionUuid: SECOND,
+          parentSessionUuid: SESSION_UUID,
+          subagentId: "agent-2",
+          subagentType: null,
+          spawnCallId: "toolu_B",
+          lastSeq: null,
+          frameCount: 0,
+        },
+      ],
+      complete: true,
+    });
+    // Only the run's own chains are asked for; the other run's never is.
+    expect(headReads).toEqual([[CHILD, SECOND]]);
+    // A chain that is only registered does not move the cursor; its first
+    // readable frame does.
+    expect(out.chains?.cursor).toBe(
+      chainsCursor([
+        { sessionUuid: CHILD, lastSeq: "1" },
+        { sessionUuid: SECOND, lastSeq: null },
+      ]),
+    );
+    expect(out.chains?.cursor).not.toBe(
+      chainsCursor([
+        { sessionUuid: CHILD, lastSeq: "1" },
+        { sessionUuid: SECOND, lastSeq: "0" },
+      ]),
+    );
+    expect(out.chains?.cursor).toMatch(/^h:[0-9a-f]{16}$/);
+  });
+
+  it("wakes a long poll on the run's own chain when only a subagent chain records a frame", async () => {
+    const { get, sleeps } = chainHarness({
+      status: "running",
+      root: [tachoRow(0)],
+      children: [onChain(CHILD, 0)],
+      onSleep: (count, children) => {
+        if (count === 2) children.push(onChain(CHILD, 1));
+      },
+    });
+    const opened = await get(input({ runId: TACHO_ID }), ctx());
+    const waited = await get(
+      input({
+        runId: TACHO_ID,
+        framesAfter: opened.frames.cursor ?? "",
+        chainsAfter: opened.chains?.cursor,
+        waitMs: 20_000,
+      }),
+      ctx(),
+    );
+    // No frame on the run's own chain: the wait ended on the subagent's.
+    expect(waited.frames.frames).toEqual([]);
+    expect(sleeps).toEqual([POLL_INTERVAL_MS, POLL_INTERVAL_MS]);
+    expect(waited.chains?.cursor).not.toBe(opened.chains?.cursor);
+    expect(waited.chains?.heads[0]).toMatchObject({
+      sessionUuid: CHILD,
+      lastSeq: "1",
+    });
+  });
+
+  it("waits out the budget when no chain moves, and never waits on chains without chainsAfter (negative)", async () => {
+    const quiet = chainHarness({
+      status: "running",
+      root: [tachoRow(0)],
+      children: [onChain(CHILD, 0)],
+    });
+    const opened = await quiet.get(input({ runId: TACHO_ID }), ctx());
+    const waited = await quiet.get(
+      input({
+        runId: TACHO_ID,
+        framesAfter: opened.frames.cursor ?? "",
+        chainsAfter: opened.chains?.cursor,
+        waitMs: 1_200,
+      }),
+      ctx(),
+    );
+    expect(waited.frames.frames).toEqual([]);
+    expect(quiet.sleeps).toEqual([500, 500, 200]);
+    expect(waited.chains?.cursor).toBe(opened.chains?.cursor);
+
+    // Without chainsAfter, a subagent's frame does not end the wait.
+    const unwatched = chainHarness({
+      status: "running",
+      root: [tachoRow(0)],
+      children: [onChain(CHILD, 0)],
+      onSleep: (count, children) => {
+        if (count === 1) children.push(onChain(CHILD, 1));
+      },
+    });
+    const first = await unwatched.get(input({ runId: TACHO_ID }), ctx());
+    await unwatched.get(
+      input({
+        runId: TACHO_ID,
+        framesAfter: first.frames.cursor ?? "",
+        waitMs: 1_200,
+      }),
+      ctx(),
+    );
+    expect(unwatched.sleeps).toEqual([500, 500, 200]);
+    // The heads are read once per invoke, beside the frames, not per tick.
+    expect(unwatched.headReads).toHaveLength(2);
+  });
+
+  it("answers not_found for a chain of another run and for any chain on a ledger run (negative)", async () => {
+    const { get } = chainHarness({ children: [onChain(CHILD, 0)] });
+    for (const [runId, sessionUuid] of [
+      [TACHO_ID, FOREIGN_CHILD],
+      [TACHO_ID, FOREIGN_ROOT],
+      [LEDGER_ID, CHILD],
+    ] as const) {
+      const attempt = get(input({ runId, sessionUuid }), ctx());
+      await expect(attempt).rejects.toSatisfy(isHandlerError);
+      await expect(attempt).rejects.toMatchObject({
+        code: "not_found",
+        reason: "chain_not_found",
+      });
+    }
+  });
+
+  it("refuses a cursor minted on another chain than the one read (negative)", async () => {
+    const { get } = chainHarness({
+      root: [tachoRow(0), tachoRow(1)],
+      children: [onChain(CHILD, 0), onChain(CHILD, 1)],
+    });
+    for (const [framesAfter, sessionUuid] of [
+      // A subagent's cursor on the run's own chain.
+      [encodeFrameCursor("0", CHILD), undefined],
+      // The run's own cursor on a subagent's chain.
+      [encodeFrameCursor("0"), CHILD],
+      // Another subagent's cursor.
+      [encodeFrameCursor("0", SECOND), CHILD],
+    ] as const) {
+      const attempt = get(
+        input({ runId: TACHO_ID, framesAfter, sessionUuid }),
+        ctx(),
+      );
+      await expect(attempt).rejects.toBeInstanceOf(CapabilityError);
+      await expect(attempt).rejects.toMatchObject({ code: "invalid_input" });
+    }
+  });
+
+  it("answers no chains on a ledger run, and leaves them out when the heads cannot be read (negative)", async () => {
+    const ledger = await chainHarness().get(input(), ctx());
+    expect("chains" in ledger).toBe(false);
+
+    const failed = await chainHarness({
+      root: [tachoRow(0)],
+      children: [onChain(CHILD, 0)],
+      headsFail: true,
+    }).get(input({ runId: TACHO_ID }), ctx());
+    expect(failed.frames.frames.map((f) => f.seq)).toEqual(["0"]);
+    expect("chains" in failed).toBe(false);
+    expect("framesError" in failed).toBe(false);
+  });
+});
+
+describe("frame cursor on a subagent chain (#3823)", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+
+  it("round-trips a chain and a seq, lowercasing the chain", () => {
+    expect(
+      decodeFramePosition(encodeFrameCursor("4", CHILD.toUpperCase())),
+    ).toEqual({ sessionUuid: CHILD, seq: "4" });
+    expect(decodeFramePosition(encodeFrameCursor("4"))).toEqual({
+      sessionUuid: null,
+      seq: "4",
+    });
+  });
+
+  it("answers no root seq for a chain cursor, and refuses a malformed chain (negative)", () => {
+    // The transcript's frame cursor and the stream resume the run's own chain.
+    expect(decodeFrameCursor(encodeFrameCursor("4", CHILD))).toBeNull();
+    for (const text of [
+      "f:not-a-uuid:4",
+      `f:${CHILD}:`,
+      `f:${CHILD}:-1`,
+      `f:${CHILD}:9223372036854775808`,
+      `f::4`,
+    ]) {
+      expect(
+        decodeFramePosition(Buffer.from(text).toString("base64url")),
+      ).toBeNull();
+    }
   });
 });
