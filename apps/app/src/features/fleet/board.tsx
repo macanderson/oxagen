@@ -796,14 +796,19 @@ function PauseDialog({
     if (run === null || refusal !== null || pending) return;
     setFailure(null);
     startTransition(async () => {
-      try {
-        const result = await dispatchRunCommand(
-          org,
-          ws,
-          run.id,
-          sent,
-          reason,
-        );
+      const result = await dispatchRunCommand(
+        org,
+        ws,
+        run.id,
+        sent,
+        reason,
+      ).catch(() => UNANSWERED);
+      // React leaves a state update made after an await out of the
+      // transition, so it commits while `pending` still reads true: the
+      // answer drew under a disabled "Cancelling" button for one render.
+      // Wrapping the updates puts the answer and the enabled buttons in one
+      // commit.
+      startTransition(() => {
         const open = showingRef.current === run.id;
         if (!result.ok) setFailure(failureText(result));
         else if (result.value.commandIds.length === 0)
@@ -822,9 +827,7 @@ function PauseDialog({
           onClose();
           onQueued(run);
         }
-      } catch {
-        setFailure(failureText(UNANSWERED));
-      }
+      });
     });
   }
 
