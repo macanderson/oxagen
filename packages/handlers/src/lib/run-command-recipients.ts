@@ -1,5 +1,5 @@
-// The per-recipient write of a run command (Mission Control spec §7.6), shared
-// by `dispatch_command` and `pause_workspace_runs`.
+// The per-recipient write of a run command (run-control spec §7.6, ADR-056),
+// shared by `dispatch_command` and `pause_workspace_runs`.
 //
 // One `tacho.control_commands` row is written for each recipient run. A run
 // that can take the command gets a `queued` row, and that row supersedes any
