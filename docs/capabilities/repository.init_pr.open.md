@@ -4,7 +4,7 @@ Add Oxagen to one of the workspace's repositories by opening a pull request that
 
 It is the only write that can run against a repository Oxagen has never written to, and it still writes only to a branch: `oxagen/init`, cut from the production branch, with one pull request back into it. Nothing reaches the production branch until a person merges that pull request on GitHub.
 
-The pull request carries six files: `.oxagen/workspace.toml` and `.oxagen/rules/governance.toml` as the caller reviewed them, `.gitkeep` files that hold `.oxagen/rules/`, `.oxagen/proposals/` and `.oxagen/agents/`, and `.gitignore` with the machine-local `.oxagen/workspace.json` and `.stella/private/` added when missing. `governance.toml` is the one file nothing else in the product writes, so its text is checked before anything is pushed: it must parse and declare exactly the mode the caller chose. Nothing in the tree grants an agent authority.
+The pull request carries five files: `.oxagen/workspace.toml` and `.oxagen/rules/governance.toml` as the caller reviewed them, `.gitkeep` files that hold `.oxagen/rules/` and `.oxagen/proposals/`, and `.gitignore` with the machine-local `.oxagen/workspace.json` and `.stella/private/` added when missing. `governance.toml` is the one file nothing else in the product writes, so its text is checked before anything is pushed: it must parse and declare exactly the mode the caller chose. Nothing in the tree grants an agent authority.
 
 Idempotent: an init pull request already open for the repository is answered as it is (`reused: true`) and nothing is pushed.
 

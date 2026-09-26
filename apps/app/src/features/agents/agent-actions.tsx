@@ -8,10 +8,9 @@
 // what ends (the roles held, read when it opens, the mandates and the host
 // enrollment) and what is kept, and a checkbox the danger button in the footer
 // waits on. A completed deregister leaves a receipt in the dialog, and the list
-// reloads when the person closes it. It
-// says plainly that it opens no pull request: `retire_agent` retires the
-// principal and revokes what it holds, and archiving the definition file is
-// #3855.
+// reloads when the person closes it. `retire_agent` retires the principal and
+// revokes what it holds; an agent carries no definition file to archive
+// (ADR-198).
 import { useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -162,7 +161,7 @@ export function RetireAgent({
   after,
   danger = false,
 }: Target & {
-  /** The definition file's name, which the pull-request line names. */
+  /** The agent's slug, which names the dialog's form. */
   slug: string;
   /** The mandates and host enrollments retirement ends; omitted where the page has no counts. */
   holds?: Holds;
@@ -283,16 +282,6 @@ export function RetireAgent({
             className="flex flex-col gap-3 text-sm"
           >
             <p>{t("body")}</p>
-            <p
-              data-not-backed=""
-              data-gap="#3855"
-              className="text-xs text-muted-foreground"
-            >
-              {t.rich("pullRequest", {
-                slug,
-                mono: (chunks) => <span className={mono}>{chunks}</span>,
-              })}
-            </p>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
               {facts.map(([term, value]) => (
                 <div key={term} className="contents">
@@ -350,7 +339,7 @@ export function AgentActions({
   here,
   list,
 }: Target & {
-  /** The definition file's name, which Deregister's pull-request line names. */
+  /** The agent's slug, which names Deregister's form. */
   slug: string;
   suspended: boolean;
   /** This agent's page, reloaded after a suspend or resume. */

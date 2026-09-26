@@ -6,13 +6,8 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { configurationClonePropose } from "@oxagen/oxagen/contracts/configuration.clone.propose";
-import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
-import {
-  createProposeAgentHandler,
-  readAgentProposalFacts,
-} from "./agent.propose";
 import { createProposeSkillHandler } from "./skill.propose";
 import { createProposeRecordHandler } from "./context.proposal.create";
 import { type SteeringGitHub } from "./context.steering.github";
@@ -73,7 +68,6 @@ export function createConfigurationCloneProposeHandler(deps: {
   source: typeof readConfigurationSource;
   taken: typeof configurationNameTaken;
   github: SteeringGitHub;
-  facts: typeof readAgentProposalFacts;
   store: SteeringStore;
 }): CapabilityHandler<typeof configurationClonePropose> {
   return async (input, ctx) => {
@@ -97,7 +91,7 @@ export function createConfigurationCloneProposeHandler(deps: {
         message:
           "The source changed after this draft opened. Refresh the clone draft.",
       });
-    if (await deps.taken(ctx, original, input.slug, input.name))
+    if (await deps.taken(ctx, original, input.slug))
       throw new HandlerError({
         code: "conflict",
         reason: "clone_name_taken",
@@ -107,36 +101,6 @@ export function createConfigurationCloneProposeHandler(deps: {
     const github = createOnlyCloneGitHub(deps.github);
     const source = applyCloneIdentity(input);
     const rationale = `Clone ${original.slug} from ${input.sourceDigest}. Retiring the source is a separate action.`;
-    if (input.kind === "agent") {
-      const doc = parse(source);
-      if (
-        doc.slug !== input.slug ||
-        doc.name !== input.name ||
-        input.files.length
-      )
-        throw new HandlerError({
-          code: "conflict",
-          reason: "clone_identity_mismatch",
-          message: "The draft name and slug must match the proposed source",
-        });
-      const proposal = await createProposeAgentHandler({
-        github,
-        facts: deps.facts,
-      })(
-        agentPropose.input.parse({
-          slug: input.slug,
-          harness: input.harness,
-          source,
-          rationale,
-        }),
-        ctx,
-      );
-      return {
-        slug: proposal.slug,
-        proposalId: null,
-        pullRequest: proposal.pullRequest,
-      };
-    }
     if (input.kind === "skill") {
       if (input.name !== input.slug)
         throw new HandlerError({
@@ -211,6 +175,5 @@ export const configurationCloneProposeHandler =
     source: readConfigurationSource,
     taken: configurationNameTaken,
     github: createSteeringHost(),
-    facts: readAgentProposalFacts,
     store: postgresSteeringStore,
   });

@@ -20,7 +20,6 @@ The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent pick
 
 | Tool | Description |
 |---|---|
-| `list_agent_defs` / `get_agent_def` | Look up agent definitions and their published config. |
 | `list_agent_roles` / `get_agent_role` | Inspect an agent's IAM role and effective grants. |
 | `list_agent_environments` | List an agent's environment bindings. |
 | `list_executions` / `get_execution_trace` | List past agent runs and read one run as a tree. |
@@ -37,7 +36,7 @@ These reads return the same record the Fleet, Run, Spend and Agents pages show. 
 | `get_run_cost` | Read one run's cost by model and token class. |
 | `get_spend` / `get_spend_drill` | Read the workspace's spend by operator, agent, model, tool, task or cost center, and drill into one operator, agent or tool. |
 | `list_approvals` | List the tool calls that wait on a person. |
-| `list_agents` / `get_agent` | List the workspace's agents, and read one agent's credentials, roles, hosts and definition. |
+| `list_agents` / `get_agent` | List the workspace's agents, and read one agent's runtime, toolbelt, versions, credentials, roles and hosts. |
 | `get_nav_counts` | Read the sidebar's counts: pending approvals, open proposals and open critical incidents. |
 
 The assistant offers seven tools on every turn: `list_runs`, `get_run`, `get_run_cost`, `get_spend`, `list_approvals`, `list_agents` and `search_graph`. It finds any other tool with `search_tools` and loads it with `load_tools`.
@@ -76,7 +75,7 @@ An agent cannot approve or deny a parked tool call, or grant consent to an exter
 | `get_ci_status` | Read CI and check status for a branch, commit, or PR head. |
 | `get_repo_metrics` | Read repository health metrics. |
 
-These repository-status tools read connected repositories. Separate definition-commit capabilities write agent and control definitions to the workspace repository. Oxagen does not provide a general coding runtime.
+These repository-status tools read connected repositories. Separate proposal capabilities write steering records and skills to the workspace repository. Oxagen does not provide a general coding runtime.
 
 ### Billing & budgets
 

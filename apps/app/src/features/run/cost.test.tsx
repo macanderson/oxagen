@@ -106,7 +106,15 @@ function agent(overrides: Partial<AgentDetail> = {}): Read<AgentDetail> {
     credentials: [],
     roles: [],
     hosts: [],
-    definition: null,
+    runtime: null,
+    toolbelt: null,
+    versions: [],
+    limits: {
+      perRun: null,
+      perDay: null,
+      containmentRequired: false,
+      invalid: false,
+    },
     ...overrides,
   });
 }
@@ -317,7 +325,8 @@ describe("CostTab", () => {
     expect(read).toHaveTextContent(
       "2 prompts · 7 turns · 24 steps · 1 tool call failed",
     );
-    expect(read).toHaveTextContent(".oxagen/agents/release-manager.toml");
+    // An agent carries no definition file (ADR-198), so the reading names none.
+    expect(read).not.toHaveTextContent(".oxagen/agents/");
   });
 
   it("argues one rung down for a small first-try run, and draws the move as a stub that says what it would do", async () => {
@@ -359,17 +368,7 @@ describe("CostTab", () => {
       props({
         run,
         transcript: readOk(costTranscript(turns)),
-        agentRead: agent({
-          definition: {
-            path: ".oxagen/agents/release.toml",
-            digest: "sha256:ab",
-            commitSha: "4f1c2d9",
-            branch: "main",
-            pullRequestUrl: "https://github.com/acme/platform/pull/12",
-            source: "",
-            committedAt: "2026-09-10T10:00:00.000Z",
-          },
-        }),
+        agentRead: agent(),
       }),
     );
     const card = screen.getByTestId("fit-model-card");
@@ -383,7 +382,7 @@ describe("CostTab", () => {
     });
     expect(move).toBeDisabled();
     expect(move).toHaveAccessibleDescription(
-      "Opens a Context pull request against .oxagen/agents/release.toml. No contract opens one from this page yet.",
+      "No contract changes an agent's model class from this page yet.",
     );
     // At the harness tier the call never passed through Oxagen.
     expect(screen.getByTestId("fit-effort-card")).toHaveTextContent(
@@ -402,11 +401,11 @@ describe("CostTab", () => {
     expect(card).toHaveTextContent(
       "This run took 2 prompts to land on the haiku class, and 1 tool call failed. The reading argues for the sonnet class, one rung up the same family.",
     );
-    // No agent was read, so the stub names the definition without a path.
+    // The stub says what no contract does yet, agent read or not.
     expect(
       screen.getByRole("button", { name: "Move this agent to sonnet" }),
     ).toHaveAccessibleDescription(
-      "Opens a Context pull request against the agent definition. No contract opens one from this page yet.",
+      "No contract changes an agent's model class from this page yet.",
     );
   });
 

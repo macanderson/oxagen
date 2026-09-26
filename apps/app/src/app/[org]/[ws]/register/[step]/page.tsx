@@ -40,8 +40,10 @@ export default async function RegisterPage({
   const ctx = await requireViewer(org, ws);
   const registerStep = parseRegisterStep(step);
   if (registerStep === null) notFound();
-  const { agent } = await searchParams;
+  const { agent, runtime } = await searchParams;
   const registerAgent = firstParam(agent) ?? null;
+  // The runtime Add a runtime named, chosen on the name step (ADR-198).
+  const registerRuntime = firstParam(runtime) ?? null;
   return (
     <RegisterGate ctx={ctx} step={registerStep} agent={registerAgent}>
       {/* The record here is the agent being registered, not the step: the path
@@ -53,6 +55,7 @@ export default async function RegisterPage({
           source={dataSource()}
           step={registerStep}
           agent={registerAgent}
+          runtime={registerRuntime}
         />
       </Suspense>
     </RegisterGate>

@@ -1,8 +1,9 @@
 // The sentence a refused Tools write shows. The kernel classified the refusal
 // and put the handler's HandlerError reason in `code` (§3.2). Each reason
 // import_tools, set_tool_classification, set_kill_switch, the auto-approval
-// writes, create_connection, get_connection and register_mcp_server throw has
-// its own sentence; any other code is printed as recorded.
+// writes, create_connection, get_connection, register_mcp_server and the
+// toolbelt writes (ADR-198) throw has its own sentence; any other code is
+// printed as recorded.
 //
 // `register_mcp_server` refuses an endpoint only this deployment can reach,
 // and `create_connection` refuses an unregistered connector, with errors the
@@ -66,6 +67,23 @@ export function useActionFailure(
             return t("versionNotFound");
           case "kill_switch_on":
             return t("killSwitchOn");
+          // The toolbelt writes (ADR-198).
+          case "toolbelt_slug_taken":
+            return t("toolbeltSlugTaken");
+          case "toolbelt_slug_empty":
+            return t("toolbeltSlugEmpty");
+          case "toolbelt_not_found":
+            return t("toolbeltNotFound");
+          case "toolbelt_in_use":
+            return t("toolbeltInUse");
+          case "all_tools_is_derived":
+            return t("allToolsIsDerived");
+          case "tool_unavailable":
+            return t("toolUnavailable");
+          case "tool_not_found":
+            return t("toolNotFound");
+          case "tool_server_not_found":
+            return t("toolServerNotFound");
           default:
             return t("refused", { code: failure.code });
         }

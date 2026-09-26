@@ -1,0 +1,123 @@
+{
+  "name": "list_runtimes",
+  "domain": "runtime",
+  "description": "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, and when a host last reported.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "slug": {
+              "type": "string",
+              "minLength": 1
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "slug": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "harness": {
+                    "type": "string",
+                    "enum": [
+                      "stella",
+                      "claude-code",
+                      "codex",
+                      "cursor",
+                      "claude-agent-sdk",
+                      "custom"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug",
+                  "harness"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 16
+            },
+            "liveHosts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "lastSeenAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "slug",
+            "createdAt",
+            "agents",
+            "liveHosts",
+            "lastSeenAt"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 500
+      }
+    },
+    "required": [
+      "items"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -9,8 +9,9 @@
 //      workspace come with it);
 //   3. one ledger run with two events, through @oxagen/run-ledger's RunStore,
 //      so /{org}/{ws}/runs/{run} has a title to load. The run's identity is
-//      resolved the way admission resolves it: an agent definition created
-//      through the kernel (its delegated principal comes with it), the
+//      resolved the way admission resolves it: an agent registered on a
+//      runtime through the kernel (ADR-198; its delegated principal and its
+//      first version come with it), the
 //      owner's human principal, a pinned authorization snapshot from
 //      @oxagen/iam, and a retention policy version.
 //
@@ -33,8 +34,9 @@ import { auth } from "@oxagen/auth/server";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { createAgentRunAuthorizationSnapshot } from "@oxagen/iam";
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { agentDefinitionCreate } from "@oxagen/oxagen/contracts/agent.definition.create";
+import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
+import { runtimeCreate } from "@oxagen/oxagen/contracts/runtime.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import {
   createPostgresRunStore,
@@ -47,8 +49,11 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq } from "drizzle-orm";
 import { AUTH_DIR, SEED, SEED_RECORD } from "../index";
 
-/** The agent the seeded run is attributed to; created through the kernel. */
+/** The agent the seeded run is attributed to; registered through the kernel. */
 const AGENT = { slug: "e2e-agent", name: "E2E agent" } as const;
+
+/** The runtime the seeded agent runs on (ADR-198). */
+const RUNTIME = { slug: "e2e-runtime", name: "E2E runtime" } as const;
 
 /** The goal on the seeded run; what the Run header prints. */
 const RUN_GOAL = "Seeded run for the e2e suite";
@@ -248,8 +253,8 @@ async function seedAgent(
         agentId: agent.id,
         agentPrincipalId: agent.principalId,
         agentVersionId: version.id,
-        // create_agent_def leaves the v1 checksum null until publish; the run
-        // pins a digest over the config it was admitted against.
+        // register_agent leaves the v1 checksum null; the run pins a digest
+        // over the config it was admitted against.
         agentVersionChecksum: digestOfCanonicalJson(version.config),
       };
     });
@@ -259,28 +264,57 @@ async function seedAgent(
     log("agent already exists", { slug: AGENT.slug });
     return existing;
   }
+  const runtimeId = await seedRuntime(scope, userId);
   await invoke(
-    agentDefinitionCreate.name,
+    agentRegister.name,
     {
-      slug: AGENT.slug,
       name: AGENT.name,
-      config: {
-        graph: {
-          ontologyId: scope.workspaceId,
-          mode: "read",
-          retrieval: { strategy: "hybrid" },
-          budget: { maxHops: 1, maxNodes: 10 },
-        },
-        agentTools: [],
-      },
+      slug: AGENT.slug,
+      harness: "claude-code",
+      runtimeId,
     },
     tenantCtx(scope, userId),
   );
-  log("agent created", { slug: AGENT.slug });
+  log("agent registered", { slug: AGENT.slug, runtime: RUNTIME.slug });
   const created = await read();
   if (!created) {
     throw new SeedError(
-      `create_agent_def returned but ${AGENT.slug} is not readable`,
+      `register_agent returned but ${AGENT.slug} is not readable`,
+    );
+  }
+  return created;
+}
+
+/**
+ * The runtime the agent is registered on, by its public id. Read first, so a
+ * seed that stopped after naming it does not trip `runtime_slug_taken`.
+ */
+async function seedRuntime(scope: Scope, userId: string): Promise<string> {
+  const read = () =>
+    withTenantDb(async (tx) => {
+      const [row] = await tx
+        .select({ publicId: schema.runtimes.publicId })
+        .from(schema.runtimes)
+        .where(
+          and(
+            eq(schema.runtimes.workspaceId, scope.workspaceId),
+            eq(schema.runtimes.slug, RUNTIME.slug),
+          ),
+        )
+        .limit(1);
+      return row?.publicId ?? null;
+    });
+  const existing = await read();
+  if (existing !== null) return existing;
+  await invoke(
+    runtimeCreate.name,
+    { name: RUNTIME.name, slug: RUNTIME.slug },
+    tenantCtx(scope, userId),
+  );
+  const created = await read();
+  if (created === null) {
+    throw new SeedError(
+      `create_runtime returned but ${RUNTIME.slug} is not readable`,
     );
   }
   return created;

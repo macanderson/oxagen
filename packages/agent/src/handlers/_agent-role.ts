@@ -107,7 +107,7 @@ export class AgentRoleCeilingExceededError extends Error {
 /**
  * The agent exists but carries no delegated principal — pre-Phase-1 data that
  * cannot anchor role assignments. Fail closed rather than inventing one here:
- * principal provisioning belongs to agent.definition.create only.
+ * principal provisioning belongs to register_agent only (ADR-198).
  */
 export class AgentPrincipalMissingError extends Error {
   readonly code = "agent_principal_missing";

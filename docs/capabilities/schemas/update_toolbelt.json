@@ -1,0 +1,197 @@
+{
+  "name": "update_toolbelt",
+  "domain": "toolbelt",
+  "description": "Rename a custom toolbelt and edit its tools: remove or add a server, or turn a server or a single tool on or off in the belt. The All tools belt cannot be edited.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "tools"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "toolbeltId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 1024
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "changes": {
+        "type": "array",
+        "items": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "op": {
+                  "const": "remove_server"
+                },
+                "serverId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "op",
+                "serverId"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "op": {
+                  "const": "add_server"
+                },
+                "serverId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "active": {
+                  "type": "boolean",
+                  "default": true
+                }
+              },
+              "required": [
+                "op",
+                "serverId"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "op": {
+                  "const": "set_server_active"
+                },
+                "serverId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "active": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "op",
+                "serverId",
+                "active"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "op": {
+                  "const": "set_tool_active"
+                },
+                "toolId": {
+                  "type": "string"
+                },
+                "active": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "op",
+                "toolId",
+                "active"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "maxItems": 200,
+        "default": []
+      }
+    },
+    "required": [
+      "toolbeltId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "toolbelt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "all_tools",
+              "custom"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "kind"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "toolbelt"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -101,7 +101,9 @@ vi.mock("@oxagen/tenancy", () => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return {
+  // Bound once and aliased, so withOrgDb and withTenantDb are one function
+  // and neither falls through to the real, scope-checking seam (ADR-086).
+  const __dbMock = {
     ...real,
     withSystemDb: (fn: (tx: unknown) => unknown) =>
       fn({
@@ -124,6 +126,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         }),
       }),
   };
+  return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
 });
 
 vi.mock("@oxagen/ai", () => ({

@@ -11,6 +11,11 @@ describe("toSlug", () => {
     expect(toSlug("  Ünïcode & Co.  ")).toBe("unicode-co");
     expect(toSlug(`${"a".repeat(39)} b`)).toBe("a".repeat(39));
   });
+
+  it("drops apostrophes and other special characters rather than hyphenating them (ADR-198)", () => {
+    expect(toSlug("Mac's Robotics")).toBe("macs-robotics");
+    expect(toSlug("R&D Labs")).toBe("rd-labs");
+  });
 });
 
 describe("toNamespace", () => {
@@ -111,8 +116,12 @@ describe("OrganizationForm", () => {
       "agentSlugInvalid",
       "agentNameRequired",
       "agentNameTooLong",
-      "agentDescriptionTooLong",
       "agentHarnessInvalid",
+      // ADR-198: the runtime the agent runs on, and the two refusals the
+      // register form names on a field rather than in the alert.
+      "agentRuntimeRequired",
+      "agentSlugTaken",
+      "agentRuntimeHarnessTaken",
       "failed",
     ];
     expect(Object.keys(onboardingMessages.onboarding.errors).sort()).toEqual(

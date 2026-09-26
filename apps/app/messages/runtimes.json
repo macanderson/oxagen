@@ -3,8 +3,45 @@
     "page": {
       "eyebrow": "{workspace}",
       "description": "The hosts agents run on, and what each host’s seam earns.",
-      "enroll": "Enroll a runtime",
+      "add": "Add a runtime",
       "loading": "Reading the runtimes of this workspace"
+    },
+    "add": {
+      "title": "Add a runtime",
+      "lead": "Name the laptop, VM or cloud workspace your agents run on.",
+      "name": "Name",
+      "nameHint": "What your team calls it, such as Mac's laptop.",
+      "slug": "Slug",
+      "slugHint": "Made from the name. Lowercase letters and digits joined by hyphens.",
+      "next": "Next you register the agent that runs here: one agent for each harness on this runtime.",
+      "submit": "Add and register an agent",
+      "pending": "Adding",
+      "errors": {
+        "nameRequired": "Name the runtime.",
+        "slugInvalid": "Use lowercase letters and digits joined by single hyphens.",
+        "slugTaken": "Another runtime in this workspace has this slug. Choose another."
+      },
+      "failure": {
+        "denied": "Your roles do not let you add a runtime. An organization Owner or Admin can. Nothing was changed.",
+        "invalid": "This name or slug is not one the write accepts. Nothing was changed.",
+        "refused": "This write was refused: {code}. Nothing was changed.",
+        "pendingApproval": "This write is waiting for approval. Access request {accessRequestId}.",
+        "unavailable": "This write could not be answered: {code}. Nothing was changed."
+      }
+    },
+    "named": {
+      "title": "Runtimes",
+      "columns": {
+        "runtime": "Runtime",
+        "agents": "Agents",
+        "hosts": "Live hosts",
+        "lastSeen": "Last seen"
+      },
+      "none": "No runtime is named yet. Add one to register the agent that runs on it.",
+      "noAgent": "No agent yet",
+      "register": "Register an agent",
+      "registerOn": "Register an agent on {runtime}",
+      "never": "never"
     },
     "notRecorded": "not recorded",
     "notReported": "not reported yet",

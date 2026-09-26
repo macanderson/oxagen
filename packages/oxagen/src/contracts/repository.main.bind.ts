@@ -14,7 +14,7 @@
  * installation cannot see is `not_found: repository_not_installed`), and
  * writes, in one transaction, the version-1 repository binding and its head
  * (`ingestion.repository_bindings` / `repository_binding_heads`, the rows
- * the run ledger pins and `commit_agent_definition` commits to), marks the
+ * the run ledger pins), marks the
  * connection connected (the row `resolveGitHubToken` mints from), and closes
  * the onboarding gate's provisional window when the workspace is the gate's.
  * Binding the same repository again is idempotent **while nothing it recorded

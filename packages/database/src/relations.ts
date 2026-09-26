@@ -440,8 +440,8 @@ export const operatorUserJoin = and(
  * off it.
  *
  * This asks who an agent belongs to. An agent's own principal is `kind =
- * 'agent'` by construction (`agent.definition.create` provisions it that way
- * and its test says so), and its `parent_user_id` is the creating user — which
+ * 'agent'` by construction (`register_agent` provisions it that way), and its
+ * `parent_user_id` is the registering user — which
  * is exactly the person the contract's `operatorId` names. Reusing the run
  * join here matched nothing at all, so every agent reported no operator.
  *

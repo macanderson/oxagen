@@ -23,14 +23,6 @@ const draft = {
   name: "review-cloned",
   source: "source text",
   files: [],
-  harness: null,
-};
-const agentDraft = {
-  ...draft,
-  kind: "agent",
-  sourceId: "triage",
-  slug: "triage-cloned",
-  name: "Triage cloned",
 };
 const recordDraft = {
   ...draft,
@@ -39,10 +31,7 @@ const recordDraft = {
   slug: "ctx.core.review-cloned",
   name: "Review-cloned",
 };
-const mount = (
-  kind: "skill" | "agent" | "record" = "skill",
-  onClose = vi.fn(),
-) =>
+const mount = (kind: "skill" | "record" = "skill", onClose = vi.fn()) =>
   render(
     <IntlProvider>
       <CloneEditor
@@ -140,31 +129,6 @@ describe("configuration clone editor", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "checking the repository binding",
     );
-  });
-  it("edits an agent clone's display name apart from its identifier", async () => {
-    actions.readCloneDraft.mockResolvedValue({ ok: true, value: agentDraft });
-    actions.proposeClone.mockResolvedValue({
-      ok: true,
-      value: { slug: "triage-fork", proposalId: "prop_1", pullRequest: null },
-    });
-    mount("agent");
-    const name = await screen.findByLabelText("Display name");
-    // An agent keeps the two apart: the identifier is the record's slug and the
-    // name is what a person reads. A skill has one field, and editing its
-    // identifier carries the name with it.
-    fireEvent.change(screen.getByLabelText("Source identifier"), {
-      target: { value: "triage-fork" },
-    });
-    fireEvent.change(name, { target: { value: "Triage fork" } });
-    submit();
-    expect(
-      await screen.findByRole("link", { name: "Review proposal" }),
-    ).toBeInTheDocument();
-    expect(actions.proposeClone).toHaveBeenCalledWith("acme", "core", {
-      ...agentDraft,
-      slug: "triage-fork",
-      name: "Triage fork",
-    });
   });
   it("names a record clone by its label and caps it at 36 characters (ADR-178)", async () => {
     actions.readCloneDraft.mockResolvedValue({ ok: true, value: recordDraft });

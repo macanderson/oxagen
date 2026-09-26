@@ -118,6 +118,16 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "assign_agent_toolbelt",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repository",
       "name": "attach_github_installation",
       "reads": [],
@@ -264,11 +274,12 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "commit_agent_definition",
+      "domain": "toolbelt",
+      "name": "clone_toolbelt",
       "reads": [],
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -303,17 +314,6 @@
         "agent",
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "create_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
         "mcp"
       ],
       "writes": []
@@ -419,6 +419,16 @@
       "writes": []
     },
     {
+      "domain": "runtime",
+      "name": "create_runtime",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "create_schema_version",
       "reads": [],
@@ -491,17 +501,6 @@
     {
       "domain": "org",
       "name": "decline_member_invite",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "delete_agent_def",
       "reads": [],
       "surfaces": [
         "agent",
@@ -682,11 +681,10 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "demote_memory",
+      "domain": "toolbelt",
+      "name": "delete_toolbelt",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -694,7 +692,7 @@
     },
     {
       "domain": "agent",
-      "name": "deploy_agent",
+      "name": "demote_memory",
       "reads": [],
       "surfaces": [
         "agent",
@@ -912,17 +910,6 @@
         "agent",
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "get_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
         "mcp"
       ],
       "writes": []
@@ -1742,6 +1729,16 @@
       "writes": []
     },
     {
+      "domain": "toolbelt",
+      "name": "get_toolbelt",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_usage_breakdown",
       "reads": [],
@@ -1896,17 +1893,6 @@
       "surfaces": [
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "list_agent_defs",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
         "mcp"
       ],
       "writes": []
@@ -2461,6 +2447,16 @@
       "writes": []
     },
     {
+      "domain": "runtime",
+      "name": "list_runtimes",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "list_schema_versions",
       "reads": [],
@@ -2555,6 +2551,16 @@
       "writes": []
     },
     {
+      "domain": "toolbelt",
+      "name": "list_toolbelts",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "cost",
       "name": "list_unpriced_models",
       "reads": [],
@@ -2623,6 +2629,16 @@
       "reads": [],
       "surfaces": [
         "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "move_agent",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -2776,15 +2792,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "propose_agent",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
       "domain": "configuration",
       "name": "propose_configuration_clone",
       "reads": [],
@@ -2811,17 +2818,6 @@
       "reads": [],
       "surfaces": [
         "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "publish_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
       ],
       "writes": []
     },
@@ -3124,17 +3120,6 @@
       "name": "reveal_secret",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "revise_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3664,6 +3649,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "set_tool_state",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "setup_schema",
       "reads": [],
@@ -3706,17 +3701,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "suggest_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "command",
       "name": "suggest_commands",
       "reads": [],
@@ -3740,17 +3724,6 @@
     {
       "domain": "agent",
       "name": "suggest_promotion_rationales",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "summarize_agent_def",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3867,17 +3840,6 @@
     {
       "domain": "secret",
       "name": "unset_secret_value",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "update_agent_def",
       "reads": [],
       "surfaces": [
         "agent",
@@ -4020,6 +3982,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "toolbelt",
+      "name": "update_toolbelt",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -4181,7 +4153,7 @@
       "writes": []
     }
   ],
-  "contentHash": "15d95af863f96c8f1a137fee75e8f3d12fa3461e83a5ecee90e0b1a1abe0095c",
+  "contentHash": "cf4c3a2afcf14888f3b7181e848bbe49f79af100c59b23693b45fca3de9b3be3",
   "domains": [
     {
       "name": "agent",
@@ -4226,6 +4198,7 @@
         "postgres:agent.context_records",
         "postgres:agent.context_sync_state",
         "postgres:agent.interjections",
+        "postgres:agent.runtimes",
         "postgres:agent.tool_versions",
         "postgres:agent.tools"
       ]
@@ -4585,7 +4558,9 @@
       ],
       "tables": [
         "postgres:tools.mandate_ledger",
-        "postgres:tools.mandates"
+        "postgres:tools.mandates",
+        "postgres:tools.toolbelt_tools",
+        "postgres:tools.toolbelts"
       ]
     },
     {
@@ -4646,7 +4621,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 153
+      "tableCount": 156
     },
     {
       "domains": [
@@ -8049,38 +8024,21 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "definition_path",
+          "name": "runtime_id",
           "nullable": true,
           "primaryKey": false,
-          "type": "text"
+          "references": "postgres:agent.runtimes",
+          "type": "uuid"
         },
         {
-          "name": "definition_digest",
+          "name": "toolbelt_id",
           "nullable": true,
           "primaryKey": false,
-          "type": "text"
+          "type": "uuid"
         },
         {
-          "name": "definition_source",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "commit_sha",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "branch",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "pull_request_url",
-          "nullable": true,
+          "name": "change_kind",
+          "nullable": false,
           "primaryKey": false,
           "type": "text"
         }
@@ -8242,6 +8200,19 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "runtime_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:agent.runtimes",
+          "type": "uuid"
+        },
+        {
+          "name": "toolbelt_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
         }
       ],
       "domain": "agent",
@@ -9475,6 +9446,88 @@
           "type": "uuid"
         },
         {
+          "name": "deleted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "deleted_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "slug",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.runtimes",
+      "name": "runtimes",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
           "name": "version_number",
           "nullable": false,
           "primaryKey": false,
@@ -9690,6 +9743,12 @@
         },
         {
           "name": "enabled",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "default_active",
           "nullable": false,
           "primaryKey": false,
           "type": "boolean"
@@ -21207,6 +21266,12 @@
           "type": "uuid"
         },
         {
+          "name": "runtime_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
           "name": "hostname",
           "nullable": false,
           "primaryKey": false,
@@ -23541,6 +23606,178 @@
       "domain": "tools",
       "id": "postgres:tools.mandates",
       "name": "mandates",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "toolbelt_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:tools.toolbelts",
+          "type": "uuid"
+        },
+        {
+          "name": "tool_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "active",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        }
+      ],
+      "domain": "tools",
+      "id": "postgres:tools.toolbelt_tools",
+      "name": "toolbelt_tools",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "deleted_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "slug",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "description",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cloned_from_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:tools.toolbelts",
+          "type": "uuid"
+        }
+      ],
+      "domain": "tools",
+      "id": "postgres:tools.toolbelts",
+      "name": "toolbelts",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

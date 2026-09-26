@@ -127,7 +127,6 @@ vi.mock("./attachments", () => ({
   resolveAttachmentImages: vi.fn(),
   resolveAttachmentMediaDetailed: vi.fn(),
 }));
-vi.mock("./apply-agent-binding", () => ({ applyAgentBinding: vi.fn() }));
 vi.mock("./translate-stream", () => ({
   translateAgentStream: mocks.translateAgentStream,
   createTurnTranslator: mocks.createTurnTranslator,
