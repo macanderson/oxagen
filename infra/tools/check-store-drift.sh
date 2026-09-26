@@ -138,6 +138,35 @@ neo4j_declared_names() {
     sort -u
 }
 
+# neo4j_declared_vector_sizes SCHEMA_CYPHER
+#
+# Every vector index the schema file declares, with its size, one per line as
+# `<name> <dimensions>`.
+#
+# A name check cannot see a resize. `CREATE VECTOR INDEX ... IF NOT EXISTS`
+# leaves an index of the old size in place, and SHOW INDEXES still returns its
+# name, so a schema.cypher that moved every index from 1,536 to 1,024
+# dimensions (#4148) read as current and the gate never applied it. Comparing
+# `<name> <size>` pairs makes an index of the wrong size read as missing.
+#
+# Statements span lines, so the file is joined and split on `;` first.
+# Commented lines are dropped, as in neo4j_declared_names.
+neo4j_declared_vector_sizes() {
+  local file=$1
+
+  if [[ ! -f $file ]]; then
+    echo "neo4j_declared_vector_sizes: no such file: $file" >&2
+    return 2
+  fi
+
+  sed -e 's|//.*||' "$file" |
+    tr '\n' ' ' |
+    tr ';' '\n' |
+    grep -Eo 'CREATE[[:space:]]+VECTOR[[:space:]]+INDEX[[:space:]]+[A-Za-z_][A-Za-z0-9_]*.*vector\.dimensions`?[[:space:]]*:[[:space:]]*[0-9]+' |
+    sed -E 's/^CREATE[[:space:]]+VECTOR[[:space:]]+INDEX[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*[^0-9]([0-9]+)$/\1 \2/' |
+    sort -u
+}
+
 # clickhouse_declared_tables SCHEMA_SQL
 #
 # Every table name `schema.sql` creates, one per line.
@@ -549,6 +578,29 @@ neo_cypher() {
     --format plain --non-interactive "$1"
 }
 
+# Vector index sizes, compared as `<name> <dimensions>` pairs. See
+# neo4j_declared_vector_sizes for why the name check alone passed a resize.
+# The size is returned under the column name `name` so neo_result_names reads
+# it the way it reads every other result here.
+check_neo4j_vector_sizes() {
+  echo
+  echo "== Neo4j vector sizes =="
+  neo4j_declared_vector_sizes "$REPO/packages/ontology/src/schema.cypher" \
+    > "$WORK/neo-vec-declared.txt" || { bump_status 2; return; }
+  require_declarations "Neo4j vector sizes" "$WORK/neo-vec-declared.txt" || return
+  if neo_cypher "SHOW INDEXES YIELD name, type, options WHERE type = 'VECTOR' RETURN name + ' ' + toString(options.indexConfig['vector.dimensions']) AS name" \
+       > "$WORK/neo-vec.txt" 2>"$WORK/neo-vec-err.txt" &&
+     neo_result_names "$WORK/neo-vec.txt" > "$WORK/neo-vec-present.txt"; then
+    report_drift "Neo4j vector sizes" "$WORK/neo-vec-declared.txt" "$WORK/neo-vec-present.txt"
+    bump_status $?
+  else
+    echo "::error::Neo4j vector index sizes could not be read. Their state is unknown, which is not the same as current."
+    cat "$WORK/neo-vec.txt" "$WORK/neo-vec-err.txt" 2>/dev/null |
+      sed '/^$/d' | sed 's/^/::error::  /' | head -5
+    bump_status 2
+  fi
+}
+
 if ! command -v cypher-shell >/dev/null 2>&1; then
   echo "::error::cypher-shell is not installed, so Neo4j was not checked."
   echo "::error::A skipped store must not read as a passing one — see #1370."
@@ -566,6 +618,7 @@ elif require_declarations "Neo4j" "$WORK/neo-declared.txt"; then
       sort -u "$WORK/neo-c-names.txt" "$WORK/neo-i-names.txt" > "$WORK/neo-present.txt"
       report_drift "Neo4j" "$WORK/neo-declared.txt" "$WORK/neo-present.txt"
       bump_status $?
+      check_neo4j_vector_sizes
     else
       echo "::error::Neo4j answered without a result header, so the query did not run. The store's state is unknown, which is not the same as current."
       cat "$WORK/neo-c.txt" "$WORK/neo-i.txt" "$WORK/neo-err.txt" 2>/dev/null |

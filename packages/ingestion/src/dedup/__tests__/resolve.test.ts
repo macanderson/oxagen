@@ -277,6 +277,43 @@ describe("resolveEntity — Pass B: alias path", () => {
     expect(mocks.createAliasEdge).toHaveBeenCalledOnce();
   });
 
+  it("writes a flagged principal when the vector index refuses the query (#4148)", async () => {
+    // A vector index of the old size refuses a query vector of the new size.
+    // Ingestion must still store the entity, flagged for a later re-resolve.
+    const passASession = {
+      run: vi.fn().mockResolvedValue({ records: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    const passBSession = {
+      run: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            "Index query vector has 1024 dimensions, but indexed vectors have 1536.",
+          ),
+        ),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    let sessionCallCount = 0;
+    mocks.scopedSession.mockImplementation(() => {
+      sessionCallCount++;
+      return sessionCallCount === 1 ? passASession : passBSession;
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await resolveEntity(makeMutation(), "org-1");
+
+    expect(result.action).toBe("created_principal");
+    expect(result.similarityDeferred).toBe(true);
+    expect(mocks.upsertEntityNode).toHaveBeenCalledOnce();
+    expect(passBSession.close).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      "[ingestion] dedup: similarity search failed, deferring similarity match",
+      expect.objectContaining({ orgId: "org-1" }),
+    );
+    warn.mockRestore();
+  });
+
   it("creates a new principal when combined score is below ALIAS_THRESHOLD", async () => {
     // cosine=0.5 with no email/url/name match → 0.5 * 0.4 = 0.2 < ALIAS_THRESHOLD (0.70)
     const passASession = {

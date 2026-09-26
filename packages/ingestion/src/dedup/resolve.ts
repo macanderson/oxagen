@@ -293,6 +293,7 @@ export async function resolveEntity(
     url?: string;
     score: number;
   } | null = null;
+  let similaritySearchFailed = false;
   try {
     // The index returns the GLOBAL top-K by similarity, but we only keep nodes
     // matching this org + entityType. Over-fetch (K = limit x factor) so the
@@ -363,6 +364,22 @@ export async function resolveEntity(
         }
       }
     }
+  } catch (err) {
+    // An index the store cannot answer must not fail ingestion. A vector index
+    // of another size than the embedding model's refuses every query until the
+    // migration resizes it (#4148), and an index still populating can refuse
+    // too. The entity is written as its own principal and flagged, the same
+    // way a failed embedding degrades above.
+    console.warn(
+      "[ingestion] dedup: similarity search failed, deferring similarity match",
+      {
+        err: err instanceof Error ? err.message : String(err),
+        orgId,
+        entityType: mutation.entityType,
+        naturalKey: mutation.naturalKey,
+      },
+    );
+    similaritySearchFailed = true;
   } finally {
     await searchSession.close();
   }
@@ -405,6 +422,7 @@ export async function resolveEntity(
     action: "created_principal",
     confidence: 1.0,
     conformanceScore: created.conformanceScore,
+    ...(similaritySearchFailed ? { similarityDeferred: true } : {}),
   };
 }
 
