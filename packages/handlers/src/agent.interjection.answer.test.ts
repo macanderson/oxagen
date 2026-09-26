@@ -238,7 +238,7 @@ class MemoryStore implements InterjectionAnswerStore {
     this.queued.push(row);
     return { publicId: `tcm_${this.queued.length}` };
   }
-  async userPublicId(userId: string) {
+  async userPublicId(userId: string): Promise<string | null> {
     return userId === USER ? USER_PUBLIC_ID : null;
   }
   async linkedBinding(_scope: unknown, fullName: string) {
