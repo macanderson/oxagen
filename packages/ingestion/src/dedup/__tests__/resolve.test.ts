@@ -119,7 +119,7 @@ describe("resolveEntity — Pass B: no natural key match → new principal", () 
     vi.clearAllMocks();
     mocks.createAliasEdge.mockResolvedValue(undefined);
     mocks.upsertEntityNode.mockResolvedValue({ nodeId: "new-node-id" });
-    mocks.embedText.mockResolvedValue(new Array(1536).fill(0.1));
+    mocks.embedText.mockResolvedValue(new Array(1024).fill(0.1));
   });
 
   it("creates a new principal when no similar nodes found", async () => {
@@ -221,7 +221,7 @@ describe("resolveEntity — Pass B: alias path", () => {
     vi.clearAllMocks();
     mocks.createAliasEdge.mockResolvedValue(undefined);
     mocks.upsertEntityNode.mockResolvedValue({ nodeId: "alias-node-id" });
-    mocks.embedText.mockResolvedValue(new Array(1536).fill(0.1));
+    mocks.embedText.mockResolvedValue(new Array(1024).fill(0.1));
   });
 
   it("creates alias when a candidate is above ALIAS_THRESHOLD", async () => {

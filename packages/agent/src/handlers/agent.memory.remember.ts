@@ -202,6 +202,7 @@ export async function agentMemoryRememberHandler(
       surface: ctx.surface,
       executionStepId: ctx.executionStepId ?? null,
     },
+    inputType: "document",
   });
 
   const { memoryId } = await writeMemory({
