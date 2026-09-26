@@ -1,11 +1,11 @@
 //! The Oxagen desktop shell. It owns no state of its own: every panel reads
 //! the files the CLIs write (`~/.config/oxagen/config.json` from
-//! `oxagen login`, `~/.config/oxagen/tacho/host.json` from `tacho enroll`)
-//! and every action shells out to the bundled sidecars, so a user who works
-//! from the terminal and a user who works from the app end up in identical
-//! files. The commands here are the reads the UI polls, the two control-plane
-//! calls the pickers need, and the PATH install that a sidecar cannot do for
-//! itself.
+//! `oxagen login`, `~/.config/oxagen/tacho/agents/<id>/host.json` from
+//! `tacho enroll`) and every action shells out to the bundled sidecars, so a
+//! user who works from the terminal and a user who works from the app end up
+//! in identical files. The commands here are the reads the UI polls, the two
+//! control-plane calls the pickers need, and the PATH install that a sidecar
+//! cannot do for itself.
 mod activity;
 mod cli_install;
 // Symlinks and shell profiles: the rig runs where they exist.
@@ -164,10 +164,13 @@ struct DesktopState {
     arch: &'static str,
     app_version: String,
     config: CliConfigView,
+    /// The enrollment this panel shows: see `machine::default_agent`.
     host: Option<Value>,
-    /// Why `host.json` is there and cannot be read, when it is. `host` is
-    /// then None, which alone reads as "not enrolled".
+    /// Why that agent's `host.json` is there and cannot be read, when it is.
+    /// `host` is then None, which alone reads as "not enrolled".
     host_error: Option<String>,
+    /// That agent's `host.json`. With no agent it is the `agents` directory
+    /// a first enrollment goes into.
     host_path: String,
     daemon: Option<Value>,
     log_path: String,
@@ -204,10 +207,14 @@ struct DesktopState {
 fn desktop_state(app: tauri::AppHandle, install_state: tauri::State<CliInstallState>) -> DesktopState {
     let (config, _) = cli_config();
     let root = tacho_root();
-    let host_path = root.join("host.json");
-    let (host, host_error) = match machine::read_host(&host_path) {
-        Ok(host) => (host, None),
-        Err(e) => (None, Some(e)),
+    // The panel shows one enrollment, and `machine::default_agent` says which.
+    let (host_path, host, host_error) = match machine::default_agent(&machine::Roots::real()) {
+        Some(agent) => match agent.host {
+            Ok(host) => (agent.host_path, Some(host), None),
+            Err(e) => (agent.host_path, None, Some(e)),
+        },
+        // Nothing is enrolled. A first enrollment goes under `agents/`.
+        None => (root.join("agents"), None, None),
     };
     let daemon = host.as_ref().and_then(daemon_status);
     let log_path = root.join("tachod.log");

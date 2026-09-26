@@ -1775,20 +1775,22 @@ pub struct RemovalReport {
     pub removed: Vec<String>,
     /// Still on the machine, each with why.
     pub left: Vec<String>,
-    /// The revoke a retired `host.json` still owed when Uninstall removed it.
-    /// Nothing on the machine can finish it after that, so the report names
-    /// the agent key for the person to revoke on the fleet page (audit D-06).
+    /// The revoke a retired agent's `host.json` still owed when Uninstall
+    /// removed it. Nothing on the machine can finish it after that, so the
+    /// report names the agent key for the person to revoke on the fleet page
+    /// (audit D-06). With more than one retired agent this names the first:
+    /// see `machine::pending_revoke`.
     pub pending_revoke: Option<crate::machine::PendingRevoke>,
 }
 
 /// Everything the app itself put on this machine, after `tacho unenroll` has
 /// taken out the hooks and the service: the PATH links and the profile block,
 /// the durable copy of the sidecars, and `~/.config/oxagen`. Refused while
-/// the machine is still enrolled. A host `tacho unenroll` has retired (the
-/// revoke could not reach the control plane) is not enrolled: refusing it
-/// made an offline uninstall impossible, forever. What `desktop_state`
-/// reports afterward goes into `state` before the lock is released: see
-/// `CliInstallState::set`.
+/// any agent on the machine is still enrolled. A host `tacho unenroll` has
+/// retired (the revoke could not reach the control plane) is not enrolled:
+/// refusing it made an offline uninstall impossible, forever. What
+/// `desktop_state` reports afterward goes into `state` before the lock is
+/// released: see `CliInstallState::set`.
 pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) -> Result<RemovalReport, String> {
     use crate::machine::Enrollment;
     let _guard = install_guard();
@@ -1797,7 +1799,7 @@ pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) ->
         return Err("this machine is still enrolled; unenroll first".into());
     }
     let mut report = RemovalReport {
-        // Read now: `host.json` goes with the Tacho root below.
+        // Read now: every agent's `host.json` goes with the Tacho root below.
         pending_revoke: crate::machine::pending_revoke(roots),
         ..RemovalReport::default()
     };

@@ -42,7 +42,9 @@ run its scripts with `node`.
 - A checked-in template carries no digest for a build nobody has made.
 - `stamp.mjs` fails on a token with no matching `.sha256` rather than writing
   a file that installs nothing.
-- Every package runs `tacho unenroll` before it removes the binaries.
+- Every package runs `tacho unenroll --all` before it removes the binaries.
+  Bare `tacho unenroll` refuses a machine that holds more than one agent
+  (ADR-202).
 
 ## Tests
 
@@ -132,10 +134,14 @@ stamped copies.
 
 ## Uninstall order, everywhere
 
-All three carry the order the app enforces: `tacho unenroll` first (strips
-the hooks it wrote into every enrolled harness, stops the service, revokes on the control plane,
+All three carry the order the app enforces: `tacho unenroll --all` first
+(for every agent on the machine, it strips the hooks it wrote into each
+enrolled harness, stops the service, revokes on the control plane and
 deletes the host credentials), then the package. The cask runs it in
-`uninstall script:` and also unloads `sh.oxagen.tachod`; the manifest runs it
-in `pre_uninstall` when `host.json` exists; the formula says so in its
+`uninstall script:` and also unloads `sh.oxagen.tachod`. The manifest runs it
+in `pre_uninstall` when the Tacho directory exists and the command is
+`scoop uninstall`. Scoop runs the same hook when `scoop update` removes the
+old version, with `$cmd` set to `update`, so an update keeps every
+enrollment. The formula says so in its
 caveats because a formula has no uninstall hook. `~/.config/oxagen` is only
 removed by the cask's `zap`.
