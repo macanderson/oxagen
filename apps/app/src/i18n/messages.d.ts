@@ -2826,7 +2826,6 @@ type Messages = {
       reason: string;
       note: string;
       footer: string;
-      ledgerFooter: string;
       confirm: string;
       pending: string;
       cancel: string;
@@ -2834,7 +2833,6 @@ type Messages = {
       ledgerCancelConfirm: string;
       ledgerCancelBack: string;
       queued: string;
-      ledgerApplied: string;
     };
     empty: {
       title: string;
