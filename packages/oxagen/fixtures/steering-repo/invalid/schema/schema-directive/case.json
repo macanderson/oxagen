@@ -1,0 +1,17 @@
+{
+  "check": "schema",
+  "rule": "schema-directive",
+  "severity": "error",
+  "description": "The TOML file's first line is not its #:schema directive.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/governance.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/governance.toml",
+      "line": 1
+    }
+  ]
+}

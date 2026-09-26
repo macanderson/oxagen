@@ -1,0 +1,18 @@
+{
+  "check": "references",
+  "rule": "tool-exists",
+  "severity": "error",
+  "description": "tools names a tool no server in the workspace imports. Did you mean billing__create_refund?",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/billing/a-intel.billing.refund-typo.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/billing/a-intel.billing.refund-typo.md",
+      "line": 10,
+      "field": "tools.0"
+    }
+  ]
+}

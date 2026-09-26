@@ -1,0 +1,16 @@
+{
+  "check": "owned",
+  "rule": "oxagen-writes",
+  "severity": "error",
+  "description": "A person edited a tools.lock.json, which only Oxagen writes.",
+  "refused_by_reader": false,
+  "changed": [
+    "tools/servers/stripe/tools.lock.json"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "tools/servers/stripe/tools.lock.json"
+    }
+  ]
+}

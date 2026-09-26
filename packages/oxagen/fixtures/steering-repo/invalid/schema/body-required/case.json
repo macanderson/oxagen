@@ -1,0 +1,17 @@
+{
+  "check": "schema",
+  "rule": "body-required",
+  "severity": "error",
+  "description": "The body holds no text.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/platform/a-intel.platform.empty-body.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.empty-body.md",
+      "line": 15
+    }
+  ]
+}

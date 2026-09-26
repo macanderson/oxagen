@@ -1,0 +1,342 @@
+{
+  "schema": "bundle/v1",
+  "repository": "github.com/a-intel/oxagen-core-platform",
+  "scope": "workspace",
+  "organization": "a-intel",
+  "workspace": "core-platform",
+  "version": 20,
+  "commit": "78054f71905114b4bb66a30dfdbb922f98a5cd4d",
+  "ledger": {
+    "path": "steering/promotions/2026-09.jsonl",
+    "seq": 19,
+    "hash": "sha256:40e5bf95410dd3f5dfcbedf5e8e5a3a09ded8233065b13dc2f7fad05bba9005d"
+  },
+  "published_at": "2026-09-22T13:45:30Z",
+  "records": [
+    {
+      "lineage": "a-intel.billing.refunds-over-100",
+      "path": "steering/billing/a-intel.billing.refunds-over-100.md",
+      "blob": "aa9c09ea552df939045ae9c2af96c1700131dfff",
+      "id": "rec_a_intel_billing_refunds_over_100_51b0dbd761ba",
+      "hash": "sha256:af47e0091c4ed9610c2ba20eae9e8871608a5ed031fc7cb0685fa766a336689e",
+      "label": "Refunds over $100",
+      "description": "Refunds above $100 wait for a person's approval in the run.",
+      "kind": "business-rule",
+      "force": "must",
+      "scope": "repository",
+      "load": "always",
+      "repos": [
+        "github.com/a-intel/billing-service"
+      ],
+      "tools": [
+        "billing__create_refund"
+      ],
+      "tokens": 51,
+      "index_tokens": 29
+    },
+    {
+      "lineage": "a-intel.brand.plain-words",
+      "path": "steering/brand/a-intel.brand.plain-words.md",
+      "blob": "5eb3cc85258252283732a5a96a94e25a8df7d9ab",
+      "id": "rec_a_intel_brand_plain_words_c3a131ae6283",
+      "hash": "sha256:04529cb8844b216132dd9d8f41fd8633460e24961497098d13bc51628630256a",
+      "label": "Plain words in product copy",
+      "description": "Product copy uses short sentences and plain words.",
+      "kind": "preference",
+      "force": "should",
+      "scope": "workspace",
+      "load": "always",
+      "tokens": 66,
+      "index_tokens": 28
+    },
+    {
+      "lineage": "a-intel.brand.voice",
+      "path": "steering/skills/a-intel.brand.voice/SKILL.md",
+      "blob": "a5a7fd7cdc5e9e097338404cd5b8a45cfa79cbc8",
+      "id": "rec_a_intel_brand_voice_8aa460fe9fec",
+      "hash": "sha256:de7cc260c64c820d86e8de6f6051acbf15fcdd108b3528d730c0b8393ea31fe7",
+      "label": "Brand voice",
+      "description": "Write customer-facing copy in the a-intel voice, with the words it uses and the ones it avoids.",
+      "kind": "skill",
+      "name": "voice",
+      "force": "may",
+      "scope": "workspace",
+      "load": "relevant",
+      "tokens": 58,
+      "index_tokens": 33,
+      "files": [
+        {
+          "path": "steering/skills/a-intel.brand.voice/assets/logo.svg",
+          "blob": "1e4f0c3d873622cc1c1e2983d36cb9746036d54d"
+        },
+        {
+          "path": "steering/skills/a-intel.brand.voice/words.md",
+          "blob": "7fa662ec4054123bd5de5ec224956865bde689d9"
+        }
+      ]
+    },
+    {
+      "lineage": "a-intel.design.house-ui",
+      "path": "steering/skills/a-intel.design.house-ui/SKILL.md",
+      "blob": "b08a483d59cf7cddfa6ee58e0944b2b50f0b9726",
+      "id": "rec_a_intel_design_house_ui_45e0c7924c0e",
+      "hash": "sha256:7be29eef7410637aefe64c290f12f289ea346e7de08cd9cb709ac46c0ffb88cf",
+      "label": "House UI",
+      "description": "Build or change UI in a-intel apps with the house tokens and components.",
+      "kind": "skill",
+      "name": "house-ui",
+      "force": "may",
+      "scope": "workspace",
+      "load": "relevant",
+      "tokens": 62,
+      "index_tokens": 28,
+      "files": [
+        {
+          "path": "steering/skills/a-intel.design.house-ui/components/button.md",
+          "blob": "831b0c0af58bf43ddf9c766e41acdeac4bca7e26"
+        },
+        {
+          "path": "steering/skills/a-intel.design.house-ui/tokens.json",
+          "blob": "7687d759ed3468a307a6d6f92d5da87b7349e1ea"
+        }
+      ]
+    },
+    {
+      "lineage": "a-intel.domain.refund",
+      "path": "steering/domain/a-intel.domain.refund.md",
+      "blob": "4b4fe2e519330e2c863848548d71a3f8ddead948",
+      "id": "rec_a_intel_domain_refund_8b4bb2132013",
+      "hash": "sha256:1d9081c58113ac48c47605f4ce0bf9bc7a59cb417bffa3e6494c5e76ef7d9e64",
+      "label": "Refund",
+      "description": "What a refund is at a-intel, its states, and the tools that change it.",
+      "kind": "fact",
+      "force": "info",
+      "scope": "workspace",
+      "load": "relevant",
+      "tools": [
+        "billing__*"
+      ],
+      "tokens": 73,
+      "index_tokens": 26
+    },
+    {
+      "lineage": "a-intel.platform.ci-cache-key",
+      "path": "steering/memory/platform/a-intel.platform.ci-cache-key.md",
+      "blob": "8c287f1063569d2d59d0a6140087fa32eba61a53",
+      "id": "rec_a_intel_platform_ci_cache_key_6a3ca3b476bf",
+      "hash": "sha256:1b03ba4276a68736bf4c47f0a83a39b414f2effd27760d977ba99e9ecaccf243",
+      "label": "CI cache key includes the lockfile",
+      "description": "A dependency change without a lockfile update breaks CI.",
+      "kind": "memory",
+      "force": "info",
+      "scope": "repository",
+      "load": "match",
+      "repos": [
+        "github.com/a-intel/platform"
+      ],
+      "applies_to": [
+        "pnpm-lock.yaml",
+        ".github/workflows/**"
+      ],
+      "tokens": 47,
+      "index_tokens": 32
+    },
+    {
+      "lineage": "a-intel.platform.headings-sentence-case",
+      "path": "steering/platform/a-intel.platform.headings-sentence-case.md",
+      "blob": "a3ed403c70d6d8a82cbd875ba7013e565f05352b",
+      "id": "rec_a_intel_platform_headings_sentence_case_a4d479bd6b70",
+      "hash": "sha256:8a346be4c65fd3494b97ec060d6d2318ee6f3d5acebb4db2e2a91ee902d1c0bf",
+      "label": "Sentence case headings",
+      "description": "Headings, buttons, and labels use sentence case.",
+      "kind": "preference",
+      "force": "should",
+      "scope": "workspace",
+      "load": "always",
+      "tokens": 44,
+      "index_tokens": 29
+    },
+    {
+      "lineage": "a-intel.platform.migration-names",
+      "path": "steering/platform/a-intel.platform.migration-names.md",
+      "blob": "52a797f1b39bf320e6db2a8685c2fe9357a0529a",
+      "id": "rec_a_intel_platform_migration_names_cb6943d5cacf",
+      "hash": "sha256:405b369c0ae0f9a4fb57f40047b775aaeb4fc4a709cc753ea82e183e6ba3c12c",
+      "label": "Name a migration for its table",
+      "description": "A migration's name says which table it changes.",
+      "kind": "code-rule",
+      "force": "should",
+      "scope": "repository",
+      "load": "always",
+      "repos": [
+        "github.com/a-intel/platform"
+      ],
+      "skills": [
+        "a-intel.platform.write-migration"
+      ],
+      "tokens": 43,
+      "index_tokens": 29
+    },
+    {
+      "lineage": "a-intel.platform.no-push-to-main",
+      "path": "steering/platform/a-intel.platform.no-push-to-main.md",
+      "blob": "5564b4b7212ecb6ec3d15b978ccfd8a8dfb28fd4",
+      "id": "rec_a_intel_platform_no_push_to_main_a897828bd1ba",
+      "hash": "sha256:b48e18ed2a9acd10853dad32bd1286166424a806de783cba9115649ffcd7ecc0",
+      "label": "Never push to main",
+      "description": "Work reaches main only through a pull request.",
+      "kind": "constraint",
+      "effect": "forbid",
+      "force": "must",
+      "scope": "workspace",
+      "load": "always",
+      "tokens": 33,
+      "index_tokens": 26
+    },
+    {
+      "lineage": "a-intel.platform.production-branch",
+      "path": "steering/platform/a-intel.platform.production-branch.md",
+      "blob": "b8b78833d4a3f61101882bfeb32847b60a04a3b9",
+      "id": "rec_a_intel_platform_production_branch_abc5fd6cbed2",
+      "hash": "sha256:65674887710b3a03b16fc591502b2ff1d5f33fa009fff848c56ce0ddd3462216",
+      "label": "Production deploys from main",
+      "description": "Which branch deploys to production, and when.",
+      "kind": "fact",
+      "force": "info",
+      "scope": "repository",
+      "load": "relevant",
+      "repos": [
+        "github.com/a-intel/platform"
+      ],
+      "tokens": 41,
+      "index_tokens": 29
+    },
+    {
+      "lineage": "a-intel.platform.release-steps",
+      "path": "steering/platform/a-intel.platform.release-steps.md",
+      "blob": "d2637be04a90c1426aa68d73c2b9297ad7f1de69",
+      "id": "rec_a_intel_platform_release_steps_926430fc76d1",
+      "hash": "sha256:bc5515587f38f4800c8cd55546933c34df5ac6575571836c0d87a339327d7fd0",
+      "label": "Release steps",
+      "description": "How to cut a release of the platform service.",
+      "kind": "procedure",
+      "force": "should",
+      "scope": "repository",
+      "load": "relevant",
+      "repos": [
+        "github.com/a-intel/platform"
+      ],
+      "tokens": 62,
+      "index_tokens": 24
+    },
+    {
+      "lineage": "a-intel.platform.tenant-queries",
+      "path": "steering/platform/a-intel.platform.tenant-queries.md",
+      "blob": "ca6b41a3d45467495ec90c93b88b5d9221e8df11",
+      "id": "rec_a_intel_platform_tenant_queries_3ddd68163052",
+      "hash": "sha256:79d6c8139f4ad5cec29df5f0684d0bca92eef3beecbcd93793d9b2b56273c030",
+      "label": "Tenant queries use withTenantDb",
+      "description": "Every tenant table query goes through withTenantDb.",
+      "kind": "code-rule",
+      "force": "must",
+      "scope": "repository",
+      "load": "match",
+      "repos": [
+        "github.com/a-intel/platform"
+      ],
+      "applies_to": [
+        "packages/handlers/**/*.ts",
+        "packages/database/src/**"
+      ],
+      "tokens": 64,
+      "index_tokens": 30
+    },
+    {
+      "lineage": "a-intel.platform.write-migration",
+      "path": "steering/skills/a-intel.platform.write-migration/SKILL.md",
+      "blob": "4ce3f42b0235f9de53eb7b57a2b5a1a4b32ee8a1",
+      "id": "rec_a_intel_platform_write_migration_b0e5e977b582",
+      "hash": "sha256:77f1dfe68c9257c6cb44642c7b0b80a5ae127662807818d600f7e4353017ef96",
+      "label": "Write a database migration",
+      "description": "Write and check an Atlas migration for a schema change in packages/database.",
+      "kind": "skill",
+      "name": "write-migration",
+      "force": "may",
+      "scope": "repository",
+      "load": "relevant",
+      "repos": [
+        "github.com/a-intel/platform"
+      ],
+      "tokens": 78,
+      "index_tokens": 36,
+      "files": [
+        {
+          "path": "steering/skills/a-intel.platform.write-migration/template.sql",
+          "blob": "1620fbceb7e3780c301690e134d062703a1e0f87"
+        }
+      ]
+    }
+  ],
+  "always_on": [
+    {
+      "repository": "github.com/a-intel/platform",
+      "text": "## Workspace rules\n\n### Plain words in product copy\nWrite product copy in short sentences and plain words, with numbers over\nadjectives. For anything longer than a sentence, follow\n`@skill:a-intel.brand.voice`. Name refund states the way\n`@record:a-intel.domain.refund` defines them.\n\n### Sentence case headings\nWrite every heading, button, label, and table header in sentence case.\nCapitalize only the first word and proper nouns: \"Run cost\", not \"Run Cost\".\n\n### Never push to main\nDo not push to `main` or force-push any shared branch. Open a pull request\nfrom a branch named for the work.\n",
+      "tokens": 149,
+      "lineages": [
+        "a-intel.brand.plain-words",
+        "a-intel.platform.headings-sentence-case",
+        "a-intel.platform.no-push-to-main"
+      ]
+    },
+    {
+      "repository": "github.com/a-intel/billing-service",
+      "text": "## Workspace rules\n\n### Refunds over $100\nRefunds over $100 need a person's approval before you call\n`billing__create_refund`. Ask in the run and wait. Do not split one refund\ninto smaller refunds to stay under the limit.\n\n### Plain words in product copy\nWrite product copy in short sentences and plain words, with numbers over\nadjectives. For anything longer than a sentence, follow\n`@skill:a-intel.brand.voice`. Name refund states the way\n`@record:a-intel.domain.refund` defines them.\n\n### Sentence case headings\nWrite every heading, button, label, and table header in sentence case.\nCapitalize only the first word and proper nouns: \"Run cost\", not \"Run Cost\".\n\n### Never push to main\nDo not push to `main` or force-push any shared branch. Open a pull request\nfrom a branch named for the work.\n",
+      "tokens": 199,
+      "lineages": [
+        "a-intel.billing.refunds-over-100",
+        "a-intel.brand.plain-words",
+        "a-intel.platform.headings-sentence-case",
+        "a-intel.platform.no-push-to-main"
+      ]
+    },
+    {
+      "repository": null,
+      "text": "## Workspace rules\n\n### Plain words in product copy\nWrite product copy in short sentences and plain words, with numbers over\nadjectives. For anything longer than a sentence, follow\n`@skill:a-intel.brand.voice`. Name refund states the way\n`@record:a-intel.domain.refund` defines them.\n\n### Sentence case headings\nWrite every heading, button, label, and table header in sentence case.\nCapitalize only the first word and proper nouns: \"Run cost\", not \"Run Cost\".\n\n### Never push to main\nDo not push to `main` or force-push any shared branch. Open a pull request\nfrom a branch named for the work.\n",
+      "tokens": 149,
+      "lineages": [
+        "a-intel.brand.plain-words",
+        "a-intel.platform.headings-sentence-case",
+        "a-intel.platform.no-push-to-main"
+      ]
+    }
+  ],
+  "policies": {
+    "schema": "// Written by Oxagen on publish, from the workspace's imported tools, the\n// built-in tool vocabulary, and the files in agents/. Do not edit.\n\nentity Workspace;\n\n// An agent is an operator, a runtime, and a harness, in one workspace.\nentity Agent in [Workspace] {\n  operator: String,\n  runtime: String,\n  harness: String\n};\n\n// What a call acts on: a repository, a connection, a cluster.\nentity Target;\n\n// The tool version, as tools.toml classifies it.\ntype Tool = {\n  name: String,\n  version: Long,\n  risk: String,\n  side_effect: String,\n  egress: String,\n  impacts: Set<String>\n};\n\n// The call's own arguments. Each is optional, so a rule tests it with has first.\ntype Args = {\n  amount?: Long,\n  charge_id?: String,\n  customer_id?: String,\n  refund_id?: String\n};\n\ntype Call = {\n  tool: Tool,\n  args: Args,\n  approval: { granted: Bool, approvers: Long },\n  harness_tool?: String,\n  skill?: String\n};\n\n// One action per imported tool, and one per built-in tool.\naction \"billing__list_charges\",\n       \"billing__get_charge\",\n       \"billing__create_refund\",\n       \"billing__get_refund\",\n       \"billing__list_refunds\",\n       \"billing__cancel_refund\",\n       \"stripe__list_charges\",\n       \"stripe__create_refund\",\n       \"builtin__shell\",\n       \"builtin__read_file\",\n       \"builtin__search_files\",\n       \"builtin__write_file\",\n       \"builtin__web_fetch\",\n       \"builtin__web_search\",\n       \"builtin__start_subagent\"\n  appliesTo {\n    principal: Agent,\n    resource: Target,\n    context: Call\n  };\n",
+    "policies": [
+      {
+        "path": "policy/money.cedar",
+        "blob": "8dec4be7d7fd869da1412aeec968124173e0f7d5",
+        "text": "// Refunds above $100 park for a person's approval.\n// The record a-intel.billing.refunds-over-100 tells the agent why.\n@id(\"refund.over-100\")\n@decision(\"require_approval\")\nforbid (principal, action == Action::\"billing__create_refund\", resource)\nwhen { context.args has amount && context.args.amount > 10000 }\nunless { context.approval.granted };\n"
+      }
+    ]
+  },
+  "agents": [
+    {
+      "schema": "agent/v1",
+      "name": "a-intel.core.ci-reviewer",
+      "label": "CI reviewer",
+      "operator": "platform-team",
+      "runtime": "ci-linux-01",
+      "harness": "codex"
+    },
+    {
+      "schema": "agent/v1",
+      "name": "a-intel.core.release-bot",
+      "label": "Release bot",
+      "operator": "priya",
+      "runtime": "ci-linux-01",
+      "harness": "claude-code"
+    }
+  ],
+  "tools": null
+}
