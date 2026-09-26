@@ -9,9 +9,8 @@
 // button on every page counts every call parked for a person, and every
 // question an agent paused to ask (#3839), in every workspace.
 // `list_approvals` and `list_interjections` answer one workspace, so the
-// chrome reads each
-// workspace the viewer belongs to, a few at a time and at most
-// WORKSPACE_BOUND of them, and says so when it stopped short (#3848).
+// chrome reads each workspace the viewer belongs to, a few at a time and at
+// most WORKSPACE_BOUND of them, and says so when it stopped short (#3848).
 // The reads run when the layout renders: on a full load, and on the refresh
 // every governed write ends with. Nothing polls (#3805).
 import "server-only";
