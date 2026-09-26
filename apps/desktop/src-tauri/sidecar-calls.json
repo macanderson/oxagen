@@ -103,6 +103,10 @@
   },
   {
     "sidecar": "tacho",
+    "args": ["enroll"]
+  },
+  {
+    "sidecar": "tacho",
     "args": ["unenroll"]
   },
   {

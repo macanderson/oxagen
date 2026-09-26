@@ -81,6 +81,7 @@ import {
   logoutArgs,
   needsWorkspacePick,
   pendingChange,
+  reapplyArgs,
   reassignArgs,
   registrable,
   isConnected,
@@ -1928,7 +1929,7 @@ export function App() {
             <button
               type="button"
               onClick={() =>
-                act("reapply", "tacho", ["enroll"], () =>
+                act("reapply", "tacho", reapplyArgs(), () =>
                   setNotice(
                     "Hooks and the collector re-applied from this app.",
                   ),

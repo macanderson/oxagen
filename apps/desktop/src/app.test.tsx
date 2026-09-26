@@ -12,6 +12,7 @@ import type {
   DetectReport,
   HostView,
 } from "./bridge";
+import sidecarCalls from "../src-tauri/sidecar-calls.json";
 
 // React warns unless the test environment says it drives updates in act().
 (
@@ -76,6 +77,7 @@ const bridge = vi.hoisted(() => ({
   reportBusy: vi.fn(),
   readState: vi.fn(),
   detectHarnesses: vi.fn(),
+  runSidecar: vi.fn(),
 }));
 
 vi.mock("./bridge", async (importOriginal) => {
@@ -92,7 +94,7 @@ vi.mock("./bridge", async (importOriginal) => {
     logTail: vi.fn(async () => ""),
     reportBusy: bridge.reportBusy,
     connectRun: bridge.connectRun,
-    runSidecar: vi.fn(async () => ({ code: 0, stdout: "", stderr: "" })),
+    runSidecar: bridge.runSidecar,
   };
 });
 vi.mock("@tauri-apps/plugin-opener", () => ({
@@ -127,6 +129,8 @@ beforeEach(() => {
   bridge.readState.mockReset();
   bridge.readState.mockResolvedValue(machine);
   bridge.detectHarnesses.mockReset();
+  bridge.runSidecar.mockReset();
+  bridge.runSidecar.mockResolvedValue({ code: 0, stdout: "", stderr: "" });
 });
 
 afterEach(() => {
@@ -186,6 +190,29 @@ describe("the window", () => {
       finish({ ok: true, seq: 6, detail: "chained" });
     });
     expect(bridge.reportBusy).toHaveBeenLastCalledWith(false);
+  });
+
+  // #4318 item 6: Re-apply wrote its argv inline, a bare `tacho enroll`
+  // that no builder made, so the fixture the Rust allowlist is tested
+  // against never held it, and the allowlist refused the button's call.
+  it("re-applies the tools with a call the Rust allowlist's fixture holds", async () => {
+    bridge.readState.mockResolvedValue({
+      ...machine,
+      // Set up by an older copy of this app, so the window offers Re-apply.
+      host: {
+        ...host,
+        wrapper_version: "2.1.0",
+        hook_command: `${machine.bin_dir}/tacho hook`,
+      },
+    });
+    render(<App />);
+    const button = await screen.findByRole("button", { name: "Re-apply" });
+    await act(async () => {
+      button.click();
+    });
+    expect(bridge.runSidecar).toHaveBeenCalledTimes(1);
+    const [sidecar, args] = bridge.runSidecar.mock.calls[0] ?? [];
+    expect(sidecarCalls).toContainEqual({ sidecar, args });
   });
 
   // #4318 item 5: "connected" is the Connected tier's word (ADR-078).

@@ -127,12 +127,14 @@ const ALLOWED: &[Allowed] = &[
         required: &["--harness", "--json"],
         writes: true,
     },
-    // `tacho enroll`, the wizard's register step.
+    // `tacho enroll`: the wizard's register step, which names the harnesses,
+    // and Re-apply, which sends it bare. On an enrolled host a bare enroll
+    // keeps the enrolled list and writes the hooks and the collector again.
     Allowed {
         sidecar: Sidecar::Tacho,
         command: &["enroll"],
         flags: &TARGET_FLAGS,
-        required: &["--harness"],
+        required: &[],
         writes: true,
     },
     // `tacho reassign`: a workspace change, adding or removing a harness.
@@ -370,7 +372,6 @@ mod tests {
             // A required flag missing.
             (Tacho, vec!["status"]),
             (Tacho, vec!["verify", "--json"]),
-            (Tacho, vec!["enroll", "--org", "acme", "--workspace", "core"]),
             (Oxagen, vec!["login"]),
             (Oxagen, vec!["tacho", "reassign", "--workspace", "core"]),
             // A value that could be read as a flag or smuggle one in.
@@ -391,6 +392,14 @@ mod tests {
         ] {
             assert!(call(sidecar, &args).is_err(), "{sidecar:?} {args:?} was allowed");
         }
+    }
+
+    /// Re-apply sends `tacho enroll` with no flags. The allowlist once
+    /// required `--harness`, so the button failed with "--harness is
+    /// missing".
+    #[test]
+    fn re_apply_runs_a_bare_enroll() {
+        assert_eq!(call(Sidecar::Tacho, &["enroll"]), Ok(true));
     }
 
     #[test]

@@ -255,6 +255,15 @@ export function reassignArgs(
     : { sidecar: "tacho", args };
 }
 
+/**
+ * `tacho enroll` with no flags: Re-apply, on a machine that is already
+ * enrolled. With no `--harness`, tacho keeps the enrolled list and writes
+ * the hooks and the collector again from this app's copy.
+ */
+export function reapplyArgs(): string[] {
+  return ["enroll"];
+}
+
 /** `tacho unenroll`, with `--purge` when the operator also drops the WAL. */
 export function unenrollArgs(purge: boolean): string[] {
   return ["unenroll", ...(purge ? ["--purge"] : [])];

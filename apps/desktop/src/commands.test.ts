@@ -25,6 +25,7 @@ import {
   needsWorkspacePick,
   pendingChange,
   primaryAction,
+  reapplyArgs,
   reassignArgs,
   sessionLanded,
   type SidecarCall,
@@ -561,6 +562,7 @@ function everyCall(): SidecarCall[] {
     deregisterArgs(["claude-code", "codex"], "codex"),
     deregisterArgs(["claude-code"], "claude-code"),
     addHarnessArgs(["claude-code"], "claude-desktop"),
+    tacho(reapplyArgs()),
     tacho(unenrollArgs(false)),
     tacho(unenrollArgs(true)),
   ];
@@ -574,6 +576,27 @@ describe("the sidecar allowlist's fixture", () => {
     if (process.env.UPDATE_SIDECAR_CALLS === "1")
       writeFileSync(fixture, `${JSON.stringify(everyCall(), null, 2)}\n`);
     expect(JSON.parse(readFileSync(fixture, "utf8"))).toEqual(everyCall());
+  });
+
+  // The fixture covers only what the builders make, so an argv written
+  // inline at a call site reaches the allowlist untested. Re-apply sent a
+  // bare `tacho enroll` that way, and the allowlist refused it.
+  it("takes every argv a panel sends from a builder", () => {
+    const inline = [
+      // act("name", sidecar, [ ... ]
+      /\bact\(\s*"[^"]*"\s*,\s*[^,()]+,\s*\[/g,
+      // runSidecar(sidecar, [ ... ]
+      /\brunSidecar\(\s*[^,()]+,\s*\[/g,
+    ];
+    for (const file of ["app.tsx", "bridge.ts"]) {
+      const source = readFileSync(new URL(file, import.meta.url), "utf8");
+      for (const pattern of inline)
+        expect(source.match(pattern) ?? [], file).toEqual([]);
+    }
+  });
+
+  it("re-applies with a bare enroll, which keeps the enrolled list", () => {
+    expect(reapplyArgs()).toEqual(["enroll"]);
   });
 
   it("builds the argv the Rust allowlist names", () => {
