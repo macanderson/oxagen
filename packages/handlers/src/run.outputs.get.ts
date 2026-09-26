@@ -7,8 +7,11 @@
 //          path the session or one of its subagents touched, already carrying
 //          its counters, its diff stat, git's word for what happened to it,
 //          and the frames that touched it. The row names a path, so the node
-//          names a file. Each `oxagen:pr_link` frame the harness wrote adds a
-//          pull-request node, one per URL, at the frame that linked it.
+//          names a file. Each `oxagen:pr_link` frame the harness wrote, on the
+//          run's chain or a subagent's, adds a pull-request node, one per
+//          URL, at the frame that linked it. A subagent's node carries its
+//          chain beside the seq, because each chain numbers its frames from 0
+//          (#3823).
 //   arun_… an evidence-ledger run, read from its `change.recorded` and
 //          `provider_publish.*` receipts. Those carry a payload, and a
 //          `RunFrame` does not, so they are read through the store's own
@@ -41,7 +44,7 @@ import {
   sessionFileNode,
   tally,
 } from "./lib/run-outputs";
-import { prLinkOf, readWorkPrLinks, WORK_PR_LINK_CAP } from "./lib/run-work";
+import { prLinkOf, readRunPrLinks, WORK_PR_LINK_CAP } from "./lib/run-work";
 import { logger } from "./logger";
 import { runScope } from "./run.list";
 import {
@@ -64,13 +67,49 @@ const GATE_MAX = 50;
 
 export type RunOutputsGetDeps = RunReadDeps & {
   outputs: RunOutputQueries;
-  prLinks: typeof readWorkPrLinks;
+  prLinks: typeof readRunPrLinks;
 };
 
 /** ClickHouse's `2026-09-23 10:00:00.000` in UTC, as RFC 3339; null when unreadable. */
 function chInstant(ts: string): string | null {
   const parsed = new Date(`${ts.replace(" ", "T")}Z`);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+/** Two nodes by their frame; a node with none sorts last. */
+function bySeq(a: RunOutputNode, b: RunOutputNode): number {
+  if (a.seq === null || b.seq === null)
+    return a.seq === b.seq ? 0 : a.seq === null ? 1 : -1;
+  const x = BigInt(a.seq);
+  const y = BigInt(b.seq);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
+/**
+ * The spine's order across a run's chains: the run's own chain first, then
+ * each subagent chain whole, each by its frames. Frame numbers count one
+ * chain, so two chains' seqs are never compared. A subagent chain takes its
+ * place from the first node that names it: the files arrive with each chain
+ * in the order it started, and a chain that only linked a PR follows those.
+ */
+function inChainOrder(nodes: readonly RunOutputNode[]): RunOutputNode[] {
+  const rank = new Map<string, number>([["", 0]]);
+  for (const node of nodes) {
+    const chain = node.sessionUuid ?? "";
+    if (!rank.has(chain)) rank.set(chain, rank.size);
+  }
+  const rankOf = (node: RunOutputNode) => rank.get(node.sessionUuid ?? "") ?? 0;
+  return [...nodes].sort((a, b) => rankOf(a) - rankOf(b) || bySeq(a, b));
+}
+
+/** The subagent chains under a wrapped run, or none when the reader is not wired. */
+function subagentChains(
+  deps: RunOutputsGetDeps,
+  sessionUuid: string,
+): Promise<string[]> {
+  return deps.tachoChildSessions === undefined
+    ? Promise.resolve([])
+    : deps.tachoChildSessions(sessionUuid);
 }
 
 /** A wrapped session's paths, in the order the frames touched them. */
@@ -80,25 +119,34 @@ async function wrappedNodes(
   sessionUuid: string,
 ): Promise<{ nodes: RunOutputNode[]; complete: boolean }> {
   // One over the cap, so a full page is told apart from a cut read.
-  // The PR receipts come from ClickHouse. A failed read must not hide the
-  // files the Postgres read found, so the spine is drawn without them and
-  // marked incomplete.
+  // The PR receipts come from ClickHouse, on every chain Postgres lists
+  // under the run. A failed read must not hide the files the Postgres read
+  // found, so the spine is drawn without them and marked incomplete.
   const [rows, links] = await Promise.all([
     deps.outputs.sessionFiles(scope, sessionUuid, RUN_OUTPUT_NODE_MAX + 1),
-    deps.prLinks(sessionUuid).catch((err: unknown) => {
-      logger.warn(
-        { err, sessionUuid },
-        "get_run_outputs: the PR links could not be read; the spine is drawn without them",
-      );
-      return null;
-    }),
+    subagentChains(deps, sessionUuid)
+      .then((chains) => deps.prLinks(sessionUuid, chains))
+      .catch((err: unknown) => {
+        logger.warn(
+          { err, sessionUuid },
+          "get_run_outputs: the PR links could not be read; the spine is drawn without them",
+        );
+        return null;
+      }),
   ]);
   const pulls: RunOutputNode[] = [];
+  const linked = new Set<string>();
   for (const row of (links ?? []).slice(0, WORK_PR_LINK_CAP)) {
     const link = prLinkOf(row);
-    if (link === null) continue;
+    // The run's own chain reads first, so a PR the run and a subagent both
+    // linked is one node, at the run's frame.
+    if (link === null || linked.has(link.url)) continue;
+    linked.add(link.url);
     pulls.push({
       seq: String(row.first_seq),
+      ...(row.session_uuid === sessionUuid
+        ? {}
+        : { sessionUuid: row.session_uuid }),
       kind: "pr",
       name: `#${link.number}`,
       nameIsLocator: false,
@@ -112,17 +160,9 @@ async function wrappedNodes(
     });
   }
   // Both lists arrive in frame order, and the spine promises that order, so
-  // the PR nodes are merged in by their frame rather than appended. A
-  // subagent's path carries no frame of the run's and arrives after the run's
-  // own, chain by chain; the sort is stable, so those keep their place at the
-  // tail.
-  const nodes = [...rows.map(sessionFileNode), ...pulls].sort((a, b) => {
-    if (a.seq === null || b.seq === null)
-      return a.seq === b.seq ? 0 : a.seq === null ? 1 : -1;
-    const x = BigInt(a.seq);
-    const y = BigInt(b.seq);
-    return x < y ? -1 : x > y ? 1 : 0;
-  });
+  // the PR nodes are merged in by their frame rather than appended, within
+  // the chain that recorded them.
+  const nodes = inChainOrder([...rows.map(sessionFileNode), ...pulls]);
   return {
     nodes: nodes.slice(0, RUN_OUTPUT_NODE_MAX),
     complete:
@@ -199,5 +239,5 @@ export function createRunOutputsGetHandler(
 export const runOutputsGetHandler = createRunOutputsGetHandler({
   ...defaultRunReadDeps(),
   outputs: postgresRunOutputQueries,
-  prLinks: readWorkPrLinks,
+  prLinks: readRunPrLinks,
 });

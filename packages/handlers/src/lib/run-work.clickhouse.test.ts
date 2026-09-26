@@ -5,6 +5,7 @@ import {
   readSessionConfig,
   readSessionTitle,
   readWorkContexts,
+  readRunPrLinks,
   readWorkDiffs,
   readWorkPrLinks,
   readWorkSubagents,
@@ -109,6 +110,48 @@ const FRAMES = [
   }),
 ];
 
+// A subagent chain under the run, and one under another run in the same
+// workspace (#3823). Each numbers its frames from 0.
+const child = randomUUID();
+const otherRoot = randomUUID();
+const foreign = randomUUID();
+const CHILD_PR = "https://github.com/acme/app/pull/43";
+const FOREIGN_PR = "https://github.com/acme/app/pull/99";
+
+/** A `pr_link` frame on a subagent chain, under `root`. */
+function chainLink(
+  sessionUuid: string,
+  root: string,
+  seq: number,
+  pr: string,
+) {
+  const ts = `2026-09-24 10:01:${String(seq).padStart(2, "0")}.000`;
+  return {
+    org_id: scope.orgId,
+    workspace_id: scope.workspaceId,
+    session_uuid: sessionUuid,
+    root_session_uuid: root,
+    parent_session_uuid: root,
+    seq,
+    ts,
+    received_at: ts,
+    chain_verified: true,
+    kind: "oxagen:pr_link",
+    attrs: {
+      "pr.url": pr,
+      "pr.number": pr.split("/").at(-1),
+      "pr.repository": "acme/app",
+    },
+  };
+}
+
+const CHAIN_FRAMES = [
+  chainLink(child, session, 2, CHILD_PR),
+  // The subagent linked the run's own PR as well.
+  chainLink(child, session, 3, PR),
+  chainLink(foreign, otherRoot, 0, FOREIGN_PR),
+];
+
 const read = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
 
 describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
@@ -121,7 +164,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     await clickhouse().insert({
       table: "tacho_events",
       format: "JSONEachRow",
-      values: FRAMES,
+      values: [...FRAMES, ...CHAIN_FRAMES],
     });
   });
   afterAll(async () => {
@@ -194,5 +237,17 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
       effort: "max",
       thinking: true,
     });
+  });
+
+  it("reads the PR links of the run's own chain, then each subagent chain under it, and none of another run's", async () => {
+    const links = await read(() => readRunPrLinks(session, [child, foreign]));
+    expect(
+      links.map((row) => [row.session_uuid, row.url, String(row.first_seq)]),
+    ).toEqual([
+      [session, PR, "10"],
+      [session, DOTTED_PR, "16"],
+      [child, CHILD_PR, "2"],
+      [child, PR, "3"],
+    ]);
   });
 });

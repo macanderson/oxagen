@@ -47,6 +47,11 @@ export interface WorkPrLinkRow {
   first_seq: number | string;
   first_ts: string;
 }
+/** A PR link on one chain of a run: the run's own, or a subagent's. */
+export interface RunPrLinkRow extends WorkPrLinkRow {
+  /** The chain that linked it. `first_seq` counts this chain's frames. */
+  session_uuid: string;
+}
 export const WORK_CONTEXT_CAP = 200;
 export const WORK_PR_LINK_CAP = 50;
 export const WORK_SUBAGENT_CAP = 200;
@@ -185,6 +190,40 @@ export async function readWorkPrLinks(
         AND kind = 'oxagen:pr_link' AND ${prAttr("url")} != ''
       GROUP BY url ORDER BY first_seq ASC LIMIT {limit:UInt32}`,
     params: { sessionUuid, limit: WORK_PR_LINK_CAP + 1 },
+  });
+  return result.data;
+}
+/**
+ * The pull requests a run's chains linked, one row per chain and URL: the
+ * run's own chain, and each listed subagent chain under it, with the run's
+ * own rows first. A subagent chain is read only under `root_session_uuid`,
+ * so a chain of another run reads nothing. Each row's `first_seq` counts
+ * its own chain's frames (#3823). The list names the chains, which puts
+ * `session_uuid` in the primary key's range.
+ */
+export async function readRunPrLinks(
+  rootSessionUuid: string,
+  subagentChains: readonly string[],
+): Promise<RunPrLinkRow[]> {
+  const result = await chSelect<RunPrLinkRow>({
+    query: `SELECT session_uuid, ${prAttr("url")} AS url,
+      argMin(${prAttr("number")}, seq) AS number,
+      argMaxIf(${prAttr("repository")}, seq, ${prAttr("repository")} != '') AS repository,
+      min(seq) AS first_seq, toString(argMin(ts, seq)) AS first_ts
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
+        AND session_uuid IN {sessionUuids:Array(UUID)}
+        AND (session_uuid = {rootSessionUuid:UUID}
+          OR root_session_uuid = {rootSessionUuid:UUID})
+        AND kind = 'oxagen:pr_link' AND ${prAttr("url")} != ''
+      GROUP BY session_uuid, url
+      ORDER BY session_uuid != {rootSessionUuid:UUID}, session_uuid, first_seq
+      LIMIT {limit:UInt32}`,
+    params: {
+      rootSessionUuid,
+      sessionUuids: [rootSessionUuid, ...subagentChains],
+      limit: WORK_PR_LINK_CAP + 1,
+    },
   });
   return result.data;
 }

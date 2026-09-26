@@ -33,10 +33,11 @@ export type SessionFileRow = {
   digestBefore: string | null;
   digestAfter: string | null;
   /**
-   * Whether the row is the run's own chain's. False for a subagent's chain,
-   * whose frame numbers count that chain and not the run's.
+   * The subagent chain the row was recorded on, as its session uuid; null on
+   * the run's own chain. A subagent's frame numbers count its own chain, so
+   * `firstSeq` and `lastSeq` name a frame only together with this.
    */
-  ownChain: boolean;
+  subagentChain: string | null;
 };
 
 /** One `agent.approval_requests` row on this run, as the spine reads it. */
@@ -124,7 +125,7 @@ export const postgresRunOutputQueries: RunOutputQueries = {
     ).then((rows) =>
       rows.map(({ chain, ...row }) => ({
         ...row,
-        ownChain: chain === sessionUuid,
+        subagentChain: chain === sessionUuid ? null : chain,
       })),
     ),
   runApprovals: (scope, runPublicId, limit) =>
@@ -212,9 +213,9 @@ export function sessionFileNode(row: SessionFileRow): RunOutputNode {
   return {
     // The frame that produced it is the last one that touched it; a read's
     // tick points at the last look. A subagent's frame is numbered on its
-    // own chain, which the run's frame reads do not open, so its node
-    // carries none rather than a number that opens a different frame.
-    seq: row.ownChain ? String(row.lastSeq) : null,
+    // own chain, so its node names that chain beside the seq (#3823).
+    seq: String(row.lastSeq),
+    ...(row.subagentChain === null ? {} : { sessionUuid: row.subagentChain }),
     kind: wrote ? (MEDIA.test(name) ? "media" : "file") : "read",
     name,
     nameIsLocator: false,
