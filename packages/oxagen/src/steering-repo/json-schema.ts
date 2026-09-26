@@ -297,13 +297,22 @@ function arrayJson(schema: z.ZodArray<z.ZodTypeAny>): JsonSchema {
   return out;
 }
 
+// `instanceof` narrows a zod class to its `any` type parameters, so each
+// branch states the parameters it reads.
 function typeJson(schema: z.ZodTypeAny): JsonSchema {
-  if (schema instanceof z.ZodOptional) return convert(schema.unwrap());
-  if (schema instanceof z.ZodEffects) return convert(schema.innerType());
-  if (schema instanceof z.ZodNullable) {
-    return { anyOf: [convert(schema.unwrap()), { type: "null" }] };
+  if (schema instanceof z.ZodOptional) {
+    return convert((schema as z.ZodOptional<z.ZodTypeAny>).unwrap());
   }
-  if (schema instanceof z.ZodObject) return objectJson(schema);
+  if (schema instanceof z.ZodEffects) {
+    return convert((schema as z.ZodEffects<z.ZodTypeAny>).innerType());
+  }
+  if (schema instanceof z.ZodNullable) {
+    const inner = (schema as z.ZodNullable<z.ZodTypeAny>).unwrap();
+    return { anyOf: [convert(inner), { type: "null" }] };
+  }
+  if (schema instanceof z.ZodObject) {
+    return objectJson(schema as z.AnyZodObject);
+  }
   if (schema instanceof z.ZodString) return stringJson(schema);
   if (schema instanceof z.ZodNumber) return numberJson(schema);
   if (schema instanceof z.ZodBoolean) return { type: "boolean" };
@@ -311,7 +320,9 @@ function typeJson(schema: z.ZodTypeAny): JsonSchema {
     return { type: "string", enum: [...(schema.options as string[])] };
   }
   if (schema instanceof z.ZodLiteral) return { const: schema.value as unknown };
-  if (schema instanceof z.ZodArray) return arrayJson(schema);
+  if (schema instanceof z.ZodArray) {
+    return arrayJson(schema as z.ZodArray<z.ZodTypeAny>);
+  }
   if (schema instanceof z.ZodUnion) {
     return {
       anyOf: (schema.options as z.ZodTypeAny[]).map((option) =>
