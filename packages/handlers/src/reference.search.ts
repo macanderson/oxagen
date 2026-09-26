@@ -32,7 +32,7 @@ import type {
 import { capabilitiesForSurface } from "@oxagen/oxagen/kernel";
 import { listCapabilities } from "@oxagen/oxagen/registry";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, eq, ilike, isNull, ne, or } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -372,6 +372,9 @@ async function searchAgents(
           eq(schema.agents.orgId, orgId),
           eq(schema.agents.workspaceId, workspaceId),
           isNull(schema.agents.deletedAt),
+          // Treat a retired agent as a deleted record. Neither query mode nor
+          // `slug` resolve mode returns it.
+          ne(schema.agents.status, "archived"),
           args.slug
             ? eq(schema.agents.publicId, args.slug)
             : args.query.trim()

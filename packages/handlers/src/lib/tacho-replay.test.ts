@@ -1,6 +1,8 @@
 import {
   GENESIS_CURSOR,
   type ChainCursor,
+  LLM_CALL_DUPLICATE_OF_ATTR,
+  RESPONSE_BODY_OMITTED_ATTR,
   type TachoEvent,
   type UnsealedTachoEvent,
   digestBytes,
@@ -9,6 +11,7 @@ import {
 } from "@oxagen/tacho";
 import { describe, expect, it } from "vitest";
 import {
+  countBodyFrames,
   countContentFrames,
   sealTachoSession,
   verifyBatchBodies,
@@ -19,16 +22,21 @@ const SESSION = sessionUuid("tch_host", "sess-1");
 const OUTPUT = "hello";
 
 function events(): TachoEvent[] {
-  let cursor: ChainCursor = GENESIS_CURSOR;
-  const out: TachoEvent[] = [];
-  for (const draft of [
+  return chain([
     { kind: "agent_start", body: { session_start_source: "startup" } },
     {
       kind: "tool_call",
       body: { tool_name: "Bash", tool_use_id: "t1", tool_status: "ok" },
       content: { digest: digestBytes(OUTPUT), redactions: [] },
     },
-  ]) {
+  ]);
+}
+
+/** Seal drafts onto one chain, in order. */
+function chain(drafts: readonly Record<string, unknown>[]): TachoEvent[] {
+  let cursor: ChainCursor = GENESIS_CURSOR;
+  const out: TachoEvent[] = [];
+  for (const draft of drafts) {
     const sealed = sealEvent(
       {
         v: "tacho/1.0",
@@ -137,7 +145,128 @@ describe("verifyBatchBodies", () => {
   });
 });
 
+describe("a half-captured model call", () => {
+  // The proxy keeps the request half when the response is past the size cap,
+  // and says so on the frame. The body counted as a whole capture, so the
+  // session sealed `view` while the reader could not see the answer (#3372,
+  // finding 5).
+  const REQUEST_ONLY = '{"request":"{\\"model\\":\\"claude-sonnet-5\\"}"}';
+
+  function halfCaptured(): TachoEvent[] {
+    return chain([
+      { kind: "agent_start", body: { session_start_source: "startup" } },
+      {
+        kind: "llm_call",
+        source: "collector",
+        body: { provider: "anthropic", model: "claude-sonnet-5" },
+        content: { digest: digestBytes(REQUEST_ONLY), redactions: [] },
+        attrs: { [RESPONSE_BODY_OMITTED_ATTR]: "too_large" },
+      },
+    ]);
+  }
+
+  it("accepts the half body and marks it partial", () => {
+    const [start, call] = halfCaptured() as [TachoEvent, TachoEvent];
+    const { accepted, rejected } = verifyBatchBodies(
+      [start, call],
+      [
+        {
+          event_id_idem: call.event_id_idem,
+          content_type: "application/json",
+          bytes_base64: b64(REQUEST_ONLY),
+        },
+      ],
+    );
+    expect(rejected).toEqual([]);
+    expect(accepted).toHaveLength(1);
+    expect(accepted[0]!.partial).toBe(true);
+    expect(countBodyFrames(accepted)).toEqual({
+      bodyFrames: 0,
+      toolBodyFrames: 0,
+    });
+  });
+
+  it("seals body_missing and grades inspect, the way ingest counts it", () => {
+    const batch = halfCaptured();
+    const call = batch[1]!;
+    const { accepted } = verifyBatchBodies(batch, [
+      {
+        event_id_idem: call.event_id_idem,
+        content_type: "application/json",
+        bytes_base64: b64(REQUEST_ONLY),
+      },
+    ]);
+    const seal = sealTachoSession({
+      hostGaps: [],
+      chainVerified: true,
+      unobservedTail: false,
+      telemetryGapCount: 0,
+      retentionMode: "content_exact",
+      contentFrames: countContentFrames(batch),
+      ...countBodyFrames(accepted),
+      toolCalls: 0,
+      enforcementTier: "gateway",
+    });
+    expect(seal).toEqual({
+      completenessGaps: ["body_missing"],
+      replayGrade: "inspect",
+    });
+  });
+
+  it("counts a whole body, and a tool result body, as before", () => {
+    const [start, call] = events() as [TachoEvent, TachoEvent];
+    const { accepted } = verifyBatchBodies(
+      [start, call],
+      [
+        {
+          event_id_idem: call.event_id_idem,
+          content_type: "text/plain",
+          bytes_base64: b64(OUTPUT),
+        },
+      ],
+    );
+    expect(accepted[0]!.partial).toBe(false);
+    expect(countBodyFrames(accepted)).toEqual({
+      bodyFrames: 1,
+      toolBodyFrames: 1,
+    });
+  });
+});
+
 describe("countContentFrames", () => {
+  it("counts a model call once when the OTel exporter reports it after the proxy", () => {
+    // The proxy seals the call with its body. The OTel exporter's copy is
+    // sealed later, stamped as a duplicate, with no bytes. Counting the copy
+    // left every proxied session one body short per call, so it sealed
+    // `body_missing` and graded `inspect` however much the proxy captured.
+    const EXCHANGE = '{"request":"{}","response":"{}"}';
+    const batch = chain([
+      { kind: "agent_start", body: { session_start_source: "startup" } },
+      {
+        kind: "llm_call",
+        source: "collector",
+        body: { provider: "anthropic", model: "claude-sonnet-5" },
+        content: { digest: digestBytes(EXCHANGE), redactions: [] },
+      },
+      {
+        kind: "llm_call",
+        source: "otel_log",
+        body: { provider: "anthropic", model: "claude-sonnet-5" },
+        attrs: { [LLM_CALL_DUPLICATE_OF_ATTR]: "collector" },
+      },
+    ]);
+    expect(countContentFrames(batch)).toBe(1);
+    // A first sighting with no bytes still owes its body.
+    const otelOnly = chain([
+      {
+        kind: "llm_call",
+        source: "otel_log",
+        body: { provider: "anthropic", model: "claude-sonnet-5" },
+      },
+    ]);
+    expect(countContentFrames(otelOnly)).toBe(1);
+  });
+
   it("counts a content-bearing kind with no digest as a content frame, and a digest on any kind", () => {
     const [start, call] = events() as [TachoEvent, TachoEvent];
     const bare = { ...call, content: undefined } as TachoEvent;

@@ -78,9 +78,12 @@ export const AgentPage = z.object({
   nextCursor: z.string().nullable(),
   /** Over the whole workspace, not the page. */
   totals: z.object({
+    /** Live agents. A retired agent is in no total but `retired`. */
     identities: Count,
+    /** Retired (deregistered) agents, which the page hides until asked. */
+    retired: Count,
     enrolled: Count,
-    /** Agents waiting to enroll: not retired, not suspended, no credential and no host. */
+    /** Agents waiting to enroll: not suspended, no credential and no host. */
     unenrolled: Count,
     /** Agents in the workspace holding at least one active mandate. */
     holdingMandate: Count.nullable(),

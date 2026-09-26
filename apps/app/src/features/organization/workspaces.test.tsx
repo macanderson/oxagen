@@ -38,6 +38,8 @@ vi.mock("./actions", () => ({
   archiveWorkspace: vi.fn(),
   createWorkspace: vi.fn(),
   editWorkspace: vi.fn(),
+  setOrgAvatar: vi.fn(),
+  setWorkspaceAvatar: vi.fn(),
 }));
 vi.mock("./workspace-reads", () => ({
   readRepositoryChoices: vi.fn(),
@@ -97,6 +99,7 @@ const ORG_ID = "org_7k2m9q4x8r1t5v3w6y0z2a";
 
 const list: WorkspaceList = {
   orgId: ORG_ID,
+  orgAvatarUrl: null,
   workspaces: [
     workspaceRow(),
     workspaceRow({
@@ -304,6 +307,9 @@ describe("Workspaces", () => {
     );
     expect(within(mine).getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(within(mine).getByRole("button", { name: "Archive" })).toBeTruthy();
+    expect(
+      within(mine).getByTestId("edit-workspace-avatar-wrk_0a1b2c3d4e5f6g7h8j9k0m"),
+    ).toHaveTextContent("Edit avatar");
     const other = row("wrk_1b2c3d4e5f6g7h8j9k0m1n");
     expect(within(other).queryByRole("link", { name: "Open" })).toBeNull();
     expect(within(other).getByRole("button", { name: "Edit" })).toBeTruthy();
@@ -320,7 +326,7 @@ describe("Workspaces", () => {
   });
 
   it("says the organization has no workspaces when the list is empty, and still prints its id", async () => {
-    await renderTab({ orgId: ORG_ID, workspaces: [] });
+    await renderTab({ orgId: ORG_ID, orgAvatarUrl: null, workspaces: [] });
     expect(
       screen.getByText("This organization has no workspaces."),
     ).toBeInTheDocument();

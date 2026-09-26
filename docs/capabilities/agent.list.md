@@ -16,12 +16,15 @@ Every figure is counted from a store that exists or is `null` with the reason on
 
 `status` is derived on the read: `retired` when the agent row is archived (`retire_agent`), `suspended` when its principal is suspended (`suspend_agent`), `enrolled` when it holds an active credential or a live host, `unenrolled` otherwise.
 
+A retired agent is a deleted record. The read leaves it out of `items` unless `includeRetired` is true, and leaves it out of every total except `totals.retired` either way. A caller choosing an agent for new work therefore never sees one. The Agents page passes `includeRetired` only when a person chooses Show deregistered agents (#4332).
+
 ## Input
 
 | Field | Type | Notes |
 |---|---|---|
 | `limit` | `number` | 1 to 100; default 50. |
 | `cursor` | `string?` | The `nextCursor` of the previous page. A cursor this capability did not mint starts over at the first page. |
+| `includeRetired` | `boolean` | Default `false`. When true, retired agents are listed in slug order beside the live ones. Pass the same value on every page of one walk. The totals ignore it. |
 
 ## Output
 
@@ -53,9 +56,10 @@ Every figure is counted from a store that exists or is `null` with the reason on
 | `items[].host` | `string \| null` | The hostname of the live host seen most recently; null when none is live. |
 | `items[].registeredAt` | `string` | ISO-8601. |
 | `nextCursor` | `string \| null` | |
-| `totals.identities` | `number` | Live agents in the workspace. |
+| `totals.identities` | `number` | Live agents in the workspace: registered and not retired. |
+| `totals.retired` | `number` | Retired agents in the workspace. No other total counts them. |
 | `totals.enrolled` | `number` | Of those, `enrolled`. |
-| `totals.unenrolled` | `number` | Of those, `unenrolled`: neither retired nor suspended, with no credential and no host. Retired and suspended agents are in `identities` and in neither count. |
+| `totals.unenrolled` | `number` | Of those, `unenrolled`: not suspended, with no credential and no host. A suspended agent is in `identities` and in neither count. |
 | `totals.holdingMandate` | `number` | Live agents in the workspace whose principal holds at least one active mandate. |
 | `totals.mandateHolders` | `string[]` | The agent keys of the agents `holdingMandate` counts, in slug order, at most 100. |
 | `totals.tamperIncidents` | `number` | Open incidents of a tamper kind (`hooks_removed`, `config_change`, `chain_break`, `checkpoint_lapse`, `token_replay`, `spoofed_event`), summed over the workspace's agents through the hosts enrolled under each agent key. An incident on a host no listed agent holds is not in it. |

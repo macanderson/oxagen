@@ -1,7 +1,7 @@
 {
   "name": "list_agents",
   "domain": "agent",
-  "description": "List the agents registered in this workspace with their purpose, principal, harness, operator, status, enrollment and credential counts, live host, latest enforcement tier, active mandates, and the 30-day run, spend, token and incident figures the stores record.",
+  "description": "List the agents registered in this workspace with their purpose, principal, harness, operator, status, enrollment and credential counts, live host, latest enforcement tier, active mandates, and the 30-day run, spend, token and incident figures the stores record. Retired (deregistered) agents are left out unless includeRetired is true.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -33,6 +33,10 @@
       "cursor": {
         "type": "string",
         "maxLength": 256
+      },
+      "includeRetired": {
+        "type": "boolean",
+        "default": false
       }
     },
     "additionalProperties": false
@@ -353,6 +357,10 @@
             "type": "integer",
             "minimum": 0
           },
+          "retired": {
+            "type": "integer",
+            "minimum": 0
+          },
           "enrolled": {
             "type": "integer",
             "minimum": 0
@@ -435,6 +443,7 @@
         },
         "required": [
           "identities",
+          "retired",
           "enrolled",
           "unenrolled",
           "holdingMandate",

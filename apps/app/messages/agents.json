@@ -86,7 +86,8 @@
         "cacheNotRecorded": "cache rate not recorded",
         "tokensBasis": "{count, plural, one {# wrapped session} other {# wrapped sessions}}, as the harness reported them. Ledger runs' tokens are not in this total.",
         "wrappedOnly": "wrapped sessions",
-        "spendBasis": "Priced wrapped sessions in the last 30 days. Ledger runs and unpriced sessions are not in this figure."
+        "spendBasis": "Priced wrapped sessions in the last 30 days. Ledger runs and unpriced sessions are not in this figure.",
+        "deregistered": "deregistered"
       },
       "health": {
         "tamper": "tamper",
@@ -113,7 +114,9 @@
         "page": "Page {page}",
         "sortBy": "Sort by {column}",
         "noMatch": "No rows match.",
-        "cursor": "Agents beyond this page"
+        "cursor": "Agents beyond this page",
+        "showDeregistered": "Show deregistered agents ({count})",
+        "hideDeregistered": "Hide deregistered agents"
       },
       "basisNotRecorded": "basis not recorded",
       "edit": "Edit",

@@ -5,7 +5,9 @@
 //      refuses a context with no user, and the token records who it was
 //      issued to.
 //   2. The agent: a live `agent.agents` row in this workspace, with the org
-//      and workspace namespaces that make its key (ADR-024).
+//      and workspace namespaces that make its key (ADR-024). The handler
+//      refuses a retired agent with `agent_retired`, so no machine can
+//      enroll as it.
 //   3. The token: 26 Crockford characters behind the `oxe_1time_` prefix,
 //      stored as its SHA-256, returned once with the command that uses it.
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -15,6 +17,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { cryptoRandom } from "@oxagen/database/schema";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
+import { assertNotRetired } from "./lib/agent-identity";
 import { enrollCommandFor, hashEnrollmentToken } from "./lib/onboarding";
 import { logger } from "./logger";
 
@@ -43,6 +46,7 @@ export const tachoEnrollmentTokenCreateHandler: CapabilityHandler<
         id: schema.agents.id,
         publicId: schema.agents.publicId,
         slug: schema.agents.slug,
+        status: schema.agents.status,
         harness: schema.agents.harness,
         orgNamespace: schema.organizations.namespace,
         workspaceNamespace: schema.workspaces.namespace,
@@ -72,6 +76,7 @@ export const tachoEnrollmentTokenCreateHandler: CapabilityHandler<
         message: `No agent "${input.agentId}" in this workspace`,
       });
     }
+    assertNotRetired(agent);
     const [row] = await tx
       .insert(schema.tachoEnrollmentTokens)
       .values({

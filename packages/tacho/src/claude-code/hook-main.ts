@@ -1,7 +1,7 @@
 /**
  * `tacho-hook` entry: the command hook Claude Code and Codex run for
- * enforcement events. The body lives in `hook-process.ts` so the compiled
- * single binary can expose it as `tacho hook`.
+ * enforcement events and `SessionEnd`. The body lives in `hook-process.ts`
+ * so the compiled single binary can expose it as `tacho hook`.
  */
 import { runHookProcess } from "./hook-process";
 

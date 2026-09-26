@@ -40,6 +40,8 @@ vi.mock("./model-funding-actions", () => ({
 vi.mock("./actions", () => ({
   sendInvitation: vi.fn(),
   createWorkspace: vi.fn(),
+  setOrgAvatar: vi.fn(),
+  setWorkspaceAvatar: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession }));
 vi.mock("@/server/tenancy-lookups", () => ({
@@ -104,6 +106,7 @@ async function renderTab(read: Read<ModelCredential>, role: OrgRole = "owner") {
     roles: readOk(roleCatalog({ roles: [roleRow()] })),
     workspaces: readOk({
       orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+      orgAvatarUrl: null,
       workspaces: [workspaceRow()],
     }),
     modelCredential: read,

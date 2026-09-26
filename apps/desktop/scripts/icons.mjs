@@ -131,6 +131,10 @@ function maskableSvg(sourceSvgPath, scale) {
 // committed, so a rebuild never leaves a 1024px source or a wrapper SVG behind
 // to be reviewed as if it were an asset.
 const scratch = mkdtempSync(join(tmpdir(), "oxagen-icons-"));
+// `run` exits on the first command that fails, and `maskableSvg` throws on a
+// source it cannot cut. Both leave through the exit event, so neither strands
+// the scratch directory.
+process.on("exit", () => rmSync(scratch, { recursive: true, force: true }));
 
 if (!maskableOnly) {
   const png = join(scratch, "source-1024.png");
@@ -160,6 +164,4 @@ for (const size of MASKABLE_SIZES) {
     maskSvg,
   ]);
 }
-rmSync(scratch, { recursive: true, force: true });
-
 console.log(`✔ ${requested} icons in ${work}`);

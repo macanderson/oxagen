@@ -125,7 +125,12 @@ export interface GitLabClient {
   /** Throws GitLabApiError, including a 404 for a branch that does not exist. */
   deleteBranch(a: { project: GitLabProjectRef; branch: string }): Promise<void>;
   /** Every blob path under the ref, recursively, across all pages. */
-  listTree(a: { project: GitLabProjectRef; ref: string }): Promise<string[]>;
+  /** With `path`, only the blobs under that directory (GitLab's `path` filter). */
+  listTree(a: {
+    project: GitLabProjectRef;
+    ref: string;
+    path?: string;
+  }): Promise<string[]>;
   /** POST /projects/:id/repository/commits */
   commitFiles(a: {
     project: GitLabProjectRef;

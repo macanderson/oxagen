@@ -242,6 +242,104 @@ describe("GitLab webhook: project moves", () => {
   });
 });
 
+describe("GitLab webhook: the repository sync (ADR-184)", () => {
+  const SCOPE = {
+    orgId: CONNECTION.orgId,
+    workspaceId: CONNECTION.workspaceId,
+  };
+  const PUSH = {
+    object_kind: "push",
+    project: { id: 4242, path_with_namespace: "acme/platform/rules" },
+  };
+
+  it("asks for a sync on a push, in the connection's workspace", async () => {
+    const { deps, state } = world({});
+    const requestSync = vi.fn(async () => {});
+    deps.requestSync = requestSync;
+    await expect(deliver(deps, PUSH)).resolves.toEqual({
+      status: 202,
+      outcome: "sync_requested",
+    });
+    expect(requestSync).toHaveBeenCalledTimes(1);
+    expect(requestSync).toHaveBeenCalledWith(SCOPE, "push");
+    // A push touches no proposal: the sync reads the branch and decides.
+    expect(state.rejected).toEqual([]);
+    expect(state.mrReads).toBe(0);
+  });
+
+  // Only the default branch can move steering. A feature-branch push would
+  // put the page into "pending" for nothing.
+  it("asks only for a push to the project's default branch", async () => {
+    const { deps } = world({});
+    const requestSync = vi.fn(async () => {});
+    deps.requestSync = requestSync;
+    const project = { ...PUSH.project, default_branch: "main" };
+    await expect(
+      deliver(deps, { ...PUSH, ref: "refs/heads/feature/x", project }),
+    ).resolves.toMatchObject({ outcome: "ignored_event" });
+    await expect(
+      deliver(deps, { ...PUSH, ref: "refs/heads/main", project }),
+    ).resolves.toMatchObject({ outcome: "sync_requested" });
+    expect(requestSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a push when no sync can be requested", async () => {
+    const { deps } = world({});
+    await expect(deliver(deps, PUSH)).resolves.toEqual({
+      status: 202,
+      outcome: "ignored_event",
+    });
+  });
+
+  it("does not ask for a sync on a push that fails authentication or names another project", async () => {
+    // The scope comes from the connection, so an unauthenticated delivery or
+    // a hook copied onto another project must not get to spend a sync on it.
+    const { deps } = world({});
+    const requestSync = vi.fn(async () => {});
+    deps.requestSync = requestSync;
+    await deliver(deps, PUSH, "whsec-wrong-wrong-wrong");
+    await deliver(deps, { ...PUSH, project: { id: 9999 } });
+    expect(requestSync).not.toHaveBeenCalled();
+  });
+
+  it("asks for a sync on a merge even when no open proposal holds the merge request", async () => {
+    // Most merges onto the production branch are not Context PRs. The sync
+    // still has to read them, because a person can edit .oxagen/rules/ in any
+    // merge request.
+    const { deps, state } = world({ mrState: "merged" });
+    const requestSync = vi.fn(async () => {});
+    deps.requestSync = requestSync;
+    await expect(
+      deliver(deps, mrEvent({ state: "merged", iid: 99 })),
+    ).resolves.toEqual({ status: 202, outcome: "no_proposal" });
+    expect(requestSync).toHaveBeenCalledTimes(1);
+    expect(requestSync).toHaveBeenCalledWith(SCOPE, "merge_request");
+    expect(state.mrReads).toBe(0);
+  });
+
+  it("asks for a sync on a merge that an open proposal holds, and leaves the proposal for it", async () => {
+    const { deps, state } = world({ mrState: "merged" });
+    const requestSync = vi.fn(async () => {});
+    deps.requestSync = requestSync;
+    await expect(deliver(deps, mrEvent({ state: "merged" }))).resolves.toEqual({
+      status: 202,
+      outcome: "merged_awaiting_publication",
+    });
+    expect(requestSync).toHaveBeenCalledWith(SCOPE, "merge_request");
+    expect(state.rejected).toEqual([]);
+  });
+
+  it("does not ask for a sync on a merge request that did not merge", async () => {
+    // A close, an open or an update changes nothing on the production branch.
+    const { deps } = world({ mrState: "closed" });
+    const requestSync = vi.fn(async () => {});
+    deps.requestSync = requestSync;
+    await deliver(deps, mrEvent({ state: "closed" }));
+    await deliver(deps, mrEvent({ state: "opened", iid: 99 }));
+    expect(requestSync).not.toHaveBeenCalled();
+  });
+});
+
 describe("GitLab webhook: revoked credentials", () => {
   it("marks the connection errored and touches no proposal", async () => {
     const { deps, state } = world({ mrState: "closed", apiStatus: 401 });

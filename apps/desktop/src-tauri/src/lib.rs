@@ -100,8 +100,6 @@ fn host_view(host: &Value) -> Value {
         "cursor_execpath",
         "stella_version",
         "stella_execpath",
-        "cursor_version",
-        "cursor_execpath",
         "wrapper_version",
         "hook_command",
         "daemon_command",

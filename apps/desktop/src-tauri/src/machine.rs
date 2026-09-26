@@ -11,7 +11,7 @@
 
 use serde_json::Value;
 use std::fs;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -111,10 +111,13 @@ fn real_target(path: &Path) -> PathBuf {
 }
 
 /// Replace a file's content without ever leaving it half written: a sibling
-/// temp file, then a rename. The write goes through a symlink to the file it
-/// names (a profile kept in a dotfiles checkout stays a link) and an existing
-/// file keeps its mode. `fs::write` truncates first, so a crash or a full disk
-/// between the truncate and the write left an empty `.zprofile`.
+/// temp file, flushed to disk, then a rename. The write goes through a
+/// symlink to the file it names (a profile kept in a dotfiles checkout stays
+/// a link) and an existing file keeps its mode. `fs::write` truncates first,
+/// so a crash or a full disk between the truncate and the write left an empty
+/// `.zprofile`. The flush matters for the same reason: a rename can reach the
+/// disk before the data it names, and a power cut then leaves the new name on
+/// an empty file.
 pub fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
     let target = real_target(path);
     let dir = target
@@ -128,7 +131,10 @@ pub fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
         .unwrap_or_else(|| "file".to_string());
     let staging = dir.join(format!(".{name}.oxagen-{}.tmp", std::process::id()));
     let written = (|| -> std::io::Result<()> {
-        fs::write(&staging, text)?;
+        let mut file = fs::File::create(&staging)?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
         if let Ok(meta) = fs::metadata(&target) {
             fs::set_permissions(&staging, meta.permissions())?;
         }

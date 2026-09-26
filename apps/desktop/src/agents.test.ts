@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeAgentRows, HEALTH_LABEL, summarizeAgents } from "./agents";
+import {
+  computeAgentRows,
+  HEALTH_LABEL,
+  summarizeAgents,
+  UNROUTED_BROKERED,
+} from "./agents";
 import type { DaemonAgentSummary, DesktopState, HostView } from "./bridge";
 import type { TachoStatus } from "./tacho-status";
 
@@ -205,6 +210,10 @@ describe("computeAgentRows: hook presence", () => {
       enrolled: true,
       hooks: { complete: true, present: ["Stop"], missing: [] },
       codexHooks: { complete: true, present: ["Stop"], missing: [] },
+      modelBaseUrls: [
+        { harness: "claude-code", ours: true, shadowed: false },
+        { harness: "codex", ours: true, shadowed: false },
+      ],
       modelCredentials: [
         { harness: "claude-code", brokered: true },
         { harness: "codex", brokered: false, reason: "subscription_login" },
@@ -232,6 +241,84 @@ describe("computeAgentRows: hook presence", () => {
         .find((r) => r.key === "claude-code")!
         .details.some((d) => d.includes("credential")),
     ).toBe(false);
+  });
+
+  it("claims no proxy for a harness whose model calls are not routed (ADR-095)", () => {
+    // The model proxy was not listening at enroll, so no base URL was
+    // written, or a managed settings file overrides ours. Either way the
+    // harness talks to its vendor directly, and a line saying its credential
+    // crosses the proxy describes a route it does not take.
+    const credentials: TachoStatus["modelCredentials"] = [
+      { harness: "claude-code", brokered: false },
+      { harness: "codex", brokered: false, reason: "subscription_login" },
+    ];
+    const cases: Array<TachoStatus["modelBaseUrls"]> = [
+      [
+        { harness: "claude-code", ours: false, shadowed: false },
+        { harness: "codex", ours: false, shadowed: false },
+      ],
+      [
+        { harness: "claude-code", ours: true, shadowed: true },
+        { harness: "codex", ours: true, shadowed: true },
+      ],
+      undefined,
+    ];
+    for (const modelBaseUrls of cases) {
+      const rows = computeAgentRows(
+        state({ host: host({ harnesses: ["claude-code", "codex"] }) }),
+        {
+          enrolled: true,
+          modelCredentials: credentials,
+          ...(modelBaseUrls !== undefined ? { modelBaseUrls } : {}),
+        },
+        NOW,
+      );
+      for (const key of ["claude-code", "codex"])
+        expect(
+          rows
+            .find((r) => r.key === key)!
+            .details.filter((d) => /proxy|gateway/.test(d)),
+        ).toEqual([]);
+    }
+  });
+
+  it("flags a brokered credential whose model calls are not routed", () => {
+    // Enroll brokered the credential, then the base URL was not ours or a
+    // managed file overrode it. The harness holds a run token and sends it
+    // to the vendor, so every model call fails. The row says so rather than
+    // saying nothing. With no base URL report the route is unknown, and the
+    // row claims neither way.
+    const credentials: TachoStatus["modelCredentials"] = [
+      { harness: "claude-code", brokered: true },
+      { harness: "codex", brokered: true },
+    ];
+    const cases: Array<[TachoStatus["modelBaseUrls"], string[]]> = [
+      [
+        [
+          { harness: "claude-code", ours: true, shadowed: true },
+          { harness: "codex", ours: false, shadowed: false },
+        ],
+        [UNROUTED_BROKERED],
+      ],
+      [undefined, []],
+    ];
+    for (const [modelBaseUrls, expected] of cases) {
+      const rows = computeAgentRows(
+        state({ host: host({ harnesses: ["claude-code", "codex"] }) }),
+        {
+          enrolled: true,
+          modelCredentials: credentials,
+          ...(modelBaseUrls !== undefined ? { modelBaseUrls } : {}),
+        },
+        NOW,
+      );
+      for (const key of ["claude-code", "codex"])
+        expect(
+          rows
+            .find((r) => r.key === key)!
+            .details.filter((d) => /proxy|gateway/.test(d)),
+        ).toEqual(expected);
+    }
   });
 
   it("reads cursor's hook presence and version from its own fields", () => {

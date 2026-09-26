@@ -1,7 +1,7 @@
 "use client";
 // The sidebar (mockup `sidebar()`): brand, the organization and workspace
 // tiles, the Workspace and Organization sections, and the foot: the assistant
-// launcher, the organization line and the connection badge.
+// launcher and the connection badge.
 import { OxagenWordmark } from "@oxagen/ui";
 import { useTranslations } from "next-intl";
 import { useId, useSyncExternalStore } from "react";
@@ -17,9 +17,6 @@ import { Badge } from "@/ui/badge";
 import { SafeLink } from "@/ui/navigation";
 
 export { useSidebarSections } from "./sidebar-sections";
-
-/** The issue that owns the foot's missing organization read, as a data attribute only. */
-const FOOT_GAP = "#3851";
 
 /**
  * `.navitem .ct`: a count appears only where something waits on a person
@@ -182,25 +179,17 @@ function ConnectionBadge() {
 }
 
 /**
- * `.side-foot`: the assistant launcher, then the organization's agent count
- * and data plane beside the connection badge. Both are recorded, but no read
- * an organization member can make answers them for the whole organization
- * (`list_agents` is per workspace, `get_data_plane` is Owner and Admin), so
- * the line says they are not read here rather than printing a figure (#3851).
+ * `.side-foot`: the assistant launcher, then the connection badge. The mockup
+ * puts the organization's agent count and data plane beside the badge, but no
+ * read an organization member can make answers them for the whole
+ * organization (`list_agents` is per workspace, `get_data_plane` is Owner and
+ * Admin), so the foot draws nothing there until that read exists (#3851).
  */
 export function SidebarFoot({ onNavigate }: { onNavigate?: () => void }) {
-  const t = useTranslations("shell.sidebar.foot");
   return (
     <div className="mt-auto border-t border-sidebar-border px-2.5 pb-3 pt-2.5">
       <AssistantLauncher {...(onNavigate ? { onNavigate } : {})} />
-      <div className="flex items-center justify-between gap-2 px-1">
-        <span
-          data-testid="sidebar-foot-not-backed"
-          data-gap={FOOT_GAP}
-          className="min-w-0 font-mono text-[10.5px] text-sidebar-nav-label-fg"
-        >
-          {t("notBacked")}
-        </span>
+      <div className="flex items-center justify-end gap-2 px-1">
         <ConnectionBadge />
       </div>
     </div>

@@ -17,6 +17,11 @@
 // until an organization rollup exists (#3854). "Listed below" is the number
 // of rows this read returned, not the workspace total.
 //
+// **A deregistered agent is a deleted record.** The read leaves retired
+// agents out of the rows and every tile (#4332). A small link under the table
+// lists them again, and the empty state carries the same link when retired
+// agents are all the workspace has.
+//
 // **Two controls the design asks for have no capability yet.** *Request
 // access* (denied, #3820) and *Open an incident* (error, #3847) open dialogs
 // that say what they would do (./state-actions.tsx). The trace id, region and
@@ -28,7 +33,7 @@ import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
-import { routes } from "@/shared/safe-path";
+import { routes, type SafePath } from "@/shared/safe-path";
 import {
   buttonSecondary,
   mono,
@@ -150,7 +155,42 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
   );
 }
 
-function Empty({ workspace, org, ws }: { workspace: string } & Place) {
+/**
+ * The small link that lists retired agents again, or hides them. Nothing
+ * when the workspace has none and none are shown, so a workspace that never
+ * deregistered an agent never sees it.
+ */
+function DeregisteredToggle({
+  count,
+  shown,
+  to,
+}: {
+  count: number;
+  shown: boolean;
+  to: SafePath;
+}) {
+  const t = useTranslations("agents.list.controls");
+  const locale = useLocale();
+  if (!shown && count === 0) return null;
+  return (
+    <SafeLink
+      to={to}
+      data-testid="agents-deregistered-toggle"
+      className="self-start rounded-sm text-[11px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      {shown
+        ? t("hideDeregistered")
+        : t("showDeregistered", { count: formatCount(count, locale) })}
+    </SafeLink>
+  );
+}
+
+function Empty({
+  workspace,
+  org,
+  ws,
+  retired,
+}: { workspace: string; retired: ReactNode } & Place) {
   const t = useTranslations("agents.list.empty");
   return (
     <OutcomePanel
@@ -164,9 +204,14 @@ function Empty({ workspace, org, ws }: { workspace: string } & Place) {
         </>
       }
     >
-      {t.rich("body", {
-        mono: (chunks) => <span className={mono}>{chunks}</span>,
-      })}
+      <span className="flex flex-col gap-3">
+        <span>
+          {t.rich("body", {
+            mono: (chunks) => <span className={mono}>{chunks}</span>,
+          })}
+        </span>
+        {retired}
+      </span>
     </OutcomePanel>
   );
 }
@@ -337,6 +382,7 @@ export async function Agents({
   ctx,
   source,
   cursor,
+  showRetired = false,
   header,
   viewerName,
 }: {
@@ -346,10 +392,15 @@ export async function Agents({
   viewerName: string;
   /** The agents page the URL asked for; null is the first. */
   cursor: string | null;
+  /** List retired (deregistered) agents beside the live ones; the URL's `deregistered=show`. */
+  showRetired?: boolean;
   /** The page header, drawn only when the page has agents to show. */
   header: ReactNode;
 }) {
-  const read = await source.agents.list(ctx, { cursor });
+  const read = await source.agents.list(ctx, {
+    cursor,
+    includeRetired: showRetired,
+  });
   const readAt = instantAfterRead();
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug };
   if (!read.ok) {
@@ -363,8 +414,15 @@ export async function Agents({
     }
   }
   const page = read.value;
+  const retired = (
+    <DeregisteredToggle
+      count={page.totals.retired}
+      shown={showRetired}
+      to={routes.agents(place.org, place.ws, { deregistered: !showRetired })}
+    />
+  );
   if (page.agents.length === 0 && cursor === null)
-    return <Empty workspace={ctx.wsName} {...place} />;
+    return <Empty workspace={ctx.wsName} {...place} retired={retired} />;
   return (
     <AgentKeyPrefix value={keyPrefixOf(page.agents.map((a) => a.agentKey))}>
       {header}
@@ -378,9 +436,19 @@ export async function Agents({
           more={
             page.nextCursor === null
               ? null
-              : routes.agents(place.org, place.ws, { cursor: page.nextCursor })
+              : routes.agents(place.org, place.ws, {
+                  cursor: page.nextCursor,
+                  deregistered: showRetired,
+                })
           }
-          first={cursor === null ? null : routes.agents(place.org, place.ws)}
+          first={
+            cursor === null
+              ? null
+              : routes.agents(place.org, place.ws, {
+                  deregistered: showRetired,
+                })
+          }
+          retired={retired}
         />
       </div>
     </AgentKeyPrefix>

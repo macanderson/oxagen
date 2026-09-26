@@ -9,7 +9,7 @@
  * and the hook handler matches rules with the host's home and honours the
  * harness's read-only claim.
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +34,7 @@ import type {
   DeliveredCommand,
   PolicyBundle,
 } from "../wire";
-import { type DaemonHandle, startDaemon } from "./daemon";
+import { type DaemonHandle, type DaemonTimers, startDaemon } from "./daemon";
 import { handleHookEvent, type PolicyView } from "./hook-handler";
 import { applyCommands, HandledCommands, type InboxDeps } from "./inbox";
 import {
@@ -103,6 +103,11 @@ function fakePlane(etag: string) {
   const queue: DeliveredCommand[] = [];
   const acks: CommandAcknowledgement[] = [];
   let bundle: PolicyBundle | undefined;
+  // Once set, every request (or every request to the named endpoints) is
+  // refused the way the API refuses the key a revoke retired: 403 with the
+  // reason `host_revoked`.
+  let revoked: readonly string[] | "all" | undefined;
+  const requests: string[] = [];
   const control = (): ControlEnvelope => ({
     host_status: "active",
     deny_generation: { org: 1, workspace: 1 },
@@ -111,6 +116,25 @@ function fakePlane(etag: string) {
   });
   const fetch: FetchLike = async (url, init) => {
     const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
+    requests.push(url);
+    if (
+      revoked === "all" ||
+      (revoked !== undefined && revoked.some((path) => url.endsWith(path)))
+    ) {
+      return {
+        ok: false,
+        status: 403,
+        text: async () =>
+          JSON.stringify({
+            error: {
+              code: "forbidden",
+              reason: "host_revoked",
+              message: "Forbidden: Tacho host enrollment revoked",
+            },
+            requestId: "req_revoked",
+          }),
+      };
+    }
     if (url.endsWith("/events")) {
       const events = body["events"] as TachoEvent[];
       return {
@@ -152,9 +176,17 @@ function fakePlane(etag: string) {
   return {
     fetch,
     acks,
+    requests,
     queue: (delivered: DeliveredCommand) => queue.push(delivered),
     offerBundle: (next: PolicyBundle) => {
       bundle = next;
+    },
+    /** Answer `not_modified` again, as a poll after the change does. */
+    withdrawOffer: () => {
+      bundle = undefined;
+    },
+    revoke: (only?: readonly string[]) => {
+      revoked = only ?? "all";
     },
   };
 }
@@ -181,6 +213,7 @@ describe("the daemon's audit wiring", () => {
       git?: () => Record<string, string>;
       paths?: ReturnType<typeof scratchPaths>;
       log?: string[];
+      timers?: Partial<DaemonTimers>;
     } = {},
   ) {
     const paths = options.paths ?? scratchPaths();
@@ -219,6 +252,7 @@ describe("the daemon's audit wiring", () => {
         sweepMs: 0,
         checkpointMs: 0,
         commandsPollMs: 0,
+        ...options.timers,
       },
     });
     handles.push(handle);
@@ -491,6 +525,173 @@ describe("the daemon's audit wiring", () => {
     expect(chain.some((event) => event.source === "otel_log")).toBe(false);
   });
 
+  it("withdraws a queued steer from daemon.json when the mandate stops keeping prompts", async () => {
+    // A queued steer is prompt content waiting for a boundary, persisted in
+    // daemon.json. A narrowing erased prompt bodies from the WAL and left
+    // the steer's text on disk until it was delivered or its session ended.
+    const text = "Rewrite the migration before you touch the handler.";
+    const log: string[] = [];
+    const retention = {
+      retention: { mode: "content_exact" as const, classes: ["model_call"] },
+    };
+    const first = await boot({ bundle: retention });
+    await first.handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    first.plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: first.handle.registry.get(SESSION)!.recorder.sessionUuid,
+        payload: { text },
+      }),
+    );
+    await first.handle.tick();
+    // A restart writes the queue to disk and reads it back.
+    await first.handle.stop();
+    const paths = first.paths;
+    expect(readFileSync(paths.daemonState, "utf8")).toContain(text);
+    const { handle, plane, signer } = await boot({
+      bundle: retention,
+      paths,
+      log,
+    });
+    const record = handle.registry.get(SESSION)!;
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_steer"]);
+
+    plane.offerBundle(
+      signer.sign(
+        unsignedBundle({
+          version: 4,
+          etag: "etag-4",
+          retention: { mode: "digest_only", classes: [] },
+        }),
+      ),
+    );
+    expect(await handle.refreshBundle()).toBe(true);
+    expect(readFileSync(paths.daemonState, "utf8")).not.toContain(text);
+    expect(record.control.messages).toEqual([]);
+    expect(
+      log.some((line) => line.startsWith("mandate narrowed: withdrew 1 ")),
+    ).toBe(true);
+
+    // The operator hears that it was not delivered, and why.
+    await handle.tick();
+    expect(plane.acks.filter((a) => a.command_id === "cmd_steer")).toEqual([
+      expect.objectContaining({
+        status: "failed",
+        detail: expect.stringContaining("retention mandate"),
+      }),
+    ]);
+  });
+
+  it("rewrites daemon.json on the owed retry when the narrowing's own write failed", async () => {
+    // The narrowing withdrew the steer from memory and then failed to write
+    // daemon.json. The retry found nothing left to withdraw, skipped the
+    // write, and cleared the debt with the text still on disk.
+    const text = "Drop the index before the backfill.";
+    const log: string[] = [];
+    const { handle, plane, signer, paths } = await boot({
+      bundle: {
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      },
+      log,
+    });
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: handle.registry.get(SESSION)!.recorder.sessionUuid,
+        payload: { text },
+      }),
+    );
+    await handle.tick();
+    const onDisk = readFileSync(paths.daemonState, "utf8");
+    expect(onDisk).toContain(text);
+
+    // A directory where the file was makes the state write throw.
+    rmSync(paths.daemonState);
+    mkdirSync(join(paths.daemonState, "blocked"), { recursive: true });
+    plane.offerBundle(
+      signer.sign(
+        unsignedBundle({
+          version: 4,
+          etag: "etag-4",
+          retention: { mode: "digest_only", classes: [] },
+        }),
+      ),
+    );
+    await handle.refreshBundle();
+    expect(log.some((line) => line.startsWith("failed to erase bodies"))).toBe(
+      true,
+    );
+
+    // The disk comes back holding the file the failed write left.
+    rmSync(paths.daemonState, { recursive: true, force: true });
+    writeFileSync(paths.daemonState, onDisk);
+    plane.withdrawOffer();
+    await handle.refreshBundle();
+    expect(
+      log.some((line) => line.startsWith("completed an owed body purge")),
+    ).toBe(true);
+    expect(readFileSync(paths.daemonState, "utf8")).not.toContain(text);
+  });
+
+  it("writes a queued steer to disk before it acknowledges it", async () => {
+    // A steer seals no frame when it arrives, so nothing marked the state
+    // dirty. The operator read `received` while the steer lived only in
+    // memory, and a crash before the next frame lost it.
+    const { handle, plane, paths } = await boot();
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: handle.registry.get(SESSION)!.recorder.sessionUuid,
+        payload: { text: "Keep the old column until the backfill runs." },
+      }),
+    );
+    await handle.tick();
+    expect(readFileSync(paths.daemonState, "utf8")).toContain(
+      "Keep the old column until the backfill runs.",
+    );
+  });
+
+  it("keeps a queued steer when the mandate narrows but still keeps prompts", async () => {
+    const text = "Stop after this file.";
+    const { handle, plane, signer, paths } = await boot({
+      bundle: {
+        retention: {
+          mode: "content_exact",
+          classes: ["model_call", "tool_call"],
+        },
+      },
+    });
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    const record = handle.registry.get(SESSION)!;
+    plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: record.recorder.sessionUuid,
+        payload: { text },
+      }),
+    );
+    await handle.tick();
+    plane.offerBundle(
+      signer.sign(
+        unsignedBundle({
+          version: 4,
+          etag: "etag-4",
+          retention: { mode: "content_exact", classes: ["model_call"] },
+        }),
+      ),
+    );
+    expect(await handle.refreshBundle()).toBe(true);
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_steer"]);
+    await handle.stop();
+    expect(readFileSync(paths.daemonState, "utf8")).toContain(text);
+  });
+
   it("does not verify a bundle signed for another host", async () => {
     const log: string[] = [];
     const { handle, plane, signer } = await boot({ log });
@@ -535,6 +736,110 @@ describe("the daemon's audit wiring", () => {
         permissionDecisionReason: expect.stringContaining("suspended"),
       },
     });
+  });
+
+  it("marks the host revoked, stops shipping and refuses tools once the control plane answers host_revoked", async () => {
+    // A revoke retires the host's key, so no control envelope can carry the
+    // revoked status. The refusal is the only word the host gets (#3944).
+    // A bundle refresh on every tick, so the test sees it stop too.
+    const { handle, plane, paths } = await boot({
+      timers: { bundleRefreshMs: 0 },
+    });
+    await handle.api.handleHook(hook("SessionStart"));
+    plane.revoke();
+    const before = plane.requests.length;
+    await handle.tick();
+    expect(handle.shipper.hostRevoked).toBe(true);
+    expect(handle.host().host_status).toBe("revoked");
+    expect(
+      (
+        JSON.parse(readFileSync(paths.hostFile, "utf8")) as Record<
+          string,
+          unknown
+        >
+      )["host_status"],
+    ).toBe("revoked");
+    expect(handle.api.status()).toMatchObject({
+      host_status: "revoked",
+      last_error: expect.stringContaining("revoked this host's enrollment"),
+    });
+    // One refused bundle refresh and one refused ingest, and then nothing
+    // more goes to the control plane: no refresh, no ingest, no command poll.
+    await handle.tick();
+    await handle.tick();
+    expect(plane.requests.slice(before)).toEqual([
+      expect.stringMatching(/\/bundle$/),
+      expect.stringMatching(/\/events$/),
+    ]);
+    const response = await handle.api.handleHook(
+      hook("PreToolUse", {
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/README.md" },
+        tool_use_id: "toolu_revoked",
+      }),
+    );
+    expect(response).toMatchObject({
+      hookSpecificOutput: {
+        permissionDecision: "deny",
+        permissionDecisionReason: expect.stringContaining("revoked"),
+      },
+    });
+  });
+
+  it("stops shipping but keeps serving live sessions when this machine started the revoke", async () => {
+    // `tacho reassign`, `unenroll` and a harness add revoke first and mark
+    // host.json `revoked_at`, then replace or remove this daemon. Until then
+    // the harnesses still call through it, and a harness-only reassign keeps
+    // their sessions (ADR-179), so the old key's refusal must not refuse
+    // their tools and model calls.
+    const log: string[] = [];
+    const { handle, plane, paths } = await boot({ log });
+    await handle.api.handleHook(hook("SessionStart"));
+    writeHostFile(paths.hostFile, {
+      ...handle.host(),
+      revoked_at: "2026-09-25T20:00:00.000Z",
+    });
+    plane.revoke();
+    await handle.tick();
+    expect(handle.shipper.hostRevoked).toBe(true);
+    // The status the hooks and the model proxy read is unchanged, in memory
+    // and on disk.
+    expect(handle.host().host_status).toBe("active");
+    expect(
+      (
+        JSON.parse(readFileSync(paths.hostFile, "utf8")) as Record<
+          string,
+          unknown
+        >
+      )["host_status"],
+    ).toBe("active");
+    expect(log.some((line) => line.includes("revoked from this machine"))).toBe(
+      true,
+    );
+    const response = await handle.api.handleHook(
+      hook("PreToolUse", {
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/README.md" },
+        tool_use_id: "toolu_local_revoke",
+      }),
+    );
+    expect(response).not.toMatchObject({
+      hookSpecificOutput: { permissionDecision: "deny" },
+    });
+  });
+
+  it("learns the revocation from a refused command poll too, and stops shipping", async () => {
+    // A host with nothing to ship still polls for commands, so it hears the
+    // refusal there instead of waiting for its next ingest.
+    const { handle, plane } = await boot();
+    plane.revoke(["/commands"]);
+    await handle.tick();
+    expect(handle.shipper.hostRevoked).toBe(true);
+    expect(handle.host().host_status).toBe("revoked");
+    const sent = plane.requests.length;
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.tick();
+    expect(plane.requests).toHaveLength(sent);
   });
 
   it("reads the host status from host.json alone when the bundle does not verify", async () => {

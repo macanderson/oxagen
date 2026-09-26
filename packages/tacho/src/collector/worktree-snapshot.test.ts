@@ -80,6 +80,44 @@ describe("worktree snapshots", () => {
       ]),
     );
   });
+  it("patches only the paths the reconciliation reports", async () => {
+    // After a pull, the whole diff from the baseline carries every upstream
+    // file. The patch beside a reconciliation describes the rows in it.
+    const underlying = fake("diff --git a/mine.ts b/mine.ts\n+mine\n");
+    const exec = vi.fn(async (command: string, args: string[]) =>
+      args.includes("ls-files")
+        ? { status: 0, stdout: "new.ts\0upstream-new.ts\0", stderr: "" }
+        : underlying(command, args),
+    );
+    await readWorktreeSnapshot(exec, "/repo", "c".repeat(40), [
+      "mine.ts",
+      "new.ts",
+      "odd*name.ts",
+    ]);
+    const diffs = exec.mock.calls
+      .map(([, args]) => args)
+      .filter((args) => args.includes("diff"));
+    expect(diffs[0]?.slice(diffs[0].indexOf("--") + 1)).toEqual([
+      ":(literal)mine.ts",
+      ":(literal)new.ts",
+      ":(literal)odd*name.ts",
+    ]);
+    // Of the two untracked files, only the reported one is patched.
+    expect(diffs.slice(1).map((args) => args.at(-1))).toEqual(["new.ts"]);
+  });
+  it("patches no tracked file when the reconciliation reports none", async () => {
+    const exec = fake("diff --git a/upstream.ts b/upstream.ts\n");
+    const result = await readWorktreeSnapshot(
+      exec,
+      "/repo",
+      "c".repeat(40),
+      [],
+    );
+    expect(result?.patch).toBe("");
+    expect(exec.mock.calls.some(([, args]) => args.includes("diff"))).toBe(
+      false,
+    );
+  });
   it("returns no invented snapshot when git cannot read the directory", async () => {
     const exec = vi.fn().mockRejectedValue(new Error("git unavailable"));
     expect(await readWorktreeSnapshot(exec, "/missing")).toBeUndefined();

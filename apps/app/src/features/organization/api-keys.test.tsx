@@ -65,6 +65,7 @@ const ORG_FIELDS = {
 /** `list_workspaces` answers the organization's whole set, in one object. */
 const list = (...workspaces: Workspace[]): WorkspaceList => ({
   orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+  orgAvatarUrl: null,
   workspaces,
 });
 

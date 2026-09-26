@@ -827,6 +827,214 @@ describe("restart safety", () => {
   });
 });
 
+describe("orphan bodies", () => {
+  // #3372 finding 2: `append` wrote bodies before it checked or wrote the
+  // events. A batch whose events did not land left its body behind under an
+  // `event_id_idem` the next event at that seq reuses, and the index served
+  // the first line for an id, so the next event shipped the orphan and ingest
+  // refused it as a digest mismatch.
+  const bodyFor = (
+    event: { event_id_idem: string; session_uuid: string; seq: number },
+    text: string,
+  ): FrameBody => ({
+    event_id_idem: event.event_id_idem,
+    session_uuid: event.session_uuid,
+    seq: event.seq,
+    content_type: "text/plain; charset=utf-8",
+    bytes: new TextEncoder().encode(text),
+    content_class: "model_call",
+  });
+  const served = (wal: Wal, event: Parameters<Wal["bodiesFor"]>[0][number]) =>
+    wal
+      .bodiesFor([event])
+      .map((body) => Buffer.from(body.bytes_base64, "base64").toString("utf8"));
+
+  it("writes no body for a batch refused for a stale seq", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const first = events[0]!;
+    wal.append(events, [bodyFor(first, "the prompt that was sent")]);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    const sizeBefore = statSync(bodyPath).size;
+    expect(() =>
+      wal.append([first], [bodyFor(first, "a stale reseal's prompt")]),
+    ).toThrow(/not after the last written seq/);
+    expect(statSync(bodyPath).size).toBe(sizeBefore);
+    expect(served(wal, first)).toEqual(["the prompt that was sent"]);
+  });
+
+  it("takes a batch's bodies back out when its events fail to write", async () => {
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const [first, second] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    wal.append([first]);
+    // The body write lands and the event write after it fails.
+    vi.mocked(appendFileSync)
+      .mockImplementationOnce(actual.appendFileSync)
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("ENOSPC"), { code: "ENOSPC" });
+      });
+    expect(() =>
+      wal.append([second], [bodyFor(second, "the call that never landed")]),
+    ).toThrow(/ENOSPC/);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    expect(existsSync(bodyPath)).toBe(false);
+    // The recorder rolled its seal back, so the next event takes the same seq
+    // and the same event id. It ships its own body.
+    wal.append([second], [bodyFor(second, "the call that did land")]);
+    expect(served(wal, second)).toEqual(["the call that did land"]);
+  });
+
+  it("serves the later body when a crash left an orphan under the same event id", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const [first, second] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    new Wal(paths.wal).append([first]);
+    // The process died between the body write and the event write.
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    appendFileSync(
+      bodyPath,
+      `${JSON.stringify({
+        event_id_idem: second.event_id_idem,
+        seq: second.seq,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: Buffer.from("the orphan").toString("base64"),
+      })}\n`,
+    );
+    const restarted = new Wal(paths.wal);
+    restarted.append([second], [bodyFor(second, "the resealed call")]);
+    expect(served(restarted, second)).toEqual(["the resealed call"]);
+    // The persisted index answers the same way after another restart.
+    expect(served(new Wal(paths.wal), second)).toEqual(["the resealed call"]);
+  });
+
+  it("rebuilds a sidecar an earlier build wrote, which kept the orphan's line", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const [first, second] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    const wal = new Wal(paths.wal);
+    wal.append([first]);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    const stored = (text: string) =>
+      JSON.stringify({
+        event_id_idem: second.event_id_idem,
+        seq: second.seq,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: Buffer.from(text).toString("base64"),
+      });
+    // An orphan, then the body of the event that took its seq.
+    writeFileSync(
+      bodyPath,
+      `${stored("the orphan")}\n${stored("the resealed call")}\n`,
+    );
+    wal.append([second]);
+    // Version 1 kept the first line for an event id, and its `through`
+    // covered both, so a load that trusted it served the orphan.
+    writeFileSync(
+      join(paths.wal, `${first.session_uuid}.bodies.index`),
+      [
+        JSON.stringify(["tacho/bodies-index", 1]),
+        JSON.stringify([
+          second.event_id_idem,
+          0,
+          Buffer.byteLength(stored("the orphan")),
+        ]),
+        JSON.stringify(["through", statSync(bodyPath).size]),
+        "",
+      ].join("\n"),
+    );
+    expect(served(new Wal(paths.wal), second)).toEqual(["the resealed call"]);
+  });
+
+  // A crash between the body write and the event write left the body behind.
+  // The restarted recorder seals its next event at the same seq, and when
+  // that event wrote no body, the orphan was served for it. Retention kept
+  // it too, because its event id is then on the chain.
+  const crashOrphan = (
+    walDir: string,
+    event: { event_id_idem: string; session_uuid: string; seq: number },
+    text: string,
+    { torn = false } = {},
+  ) => {
+    const line = JSON.stringify({
+      event_id_idem: event.event_id_idem,
+      seq: event.seq,
+      content_type: "text/plain; charset=utf-8",
+      bytes_base64: Buffer.from(text).toString("base64"),
+    });
+    appendFileSync(
+      join(walDir, `${event.session_uuid}.bodies.jsonl`),
+      torn ? `\n${line.slice(0, 40)}` : `\n${line}\n`,
+    );
+  };
+
+  it("cuts a crash orphan at startup, so the event that takes its seq serves no body", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const [first, second, third] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    new Wal(paths.wal).append([first], [bodyFor(first, "the first prompt")]);
+    crashOrphan(paths.wal, second, "the orphan");
+    crashOrphan(paths.wal, third, "a torn write", { torn: true });
+    const restarted = new Wal(paths.wal);
+    expect(restarted.repairOrphanBodies()).toBe(2);
+    restarted.append([second]);
+    expect(served(restarted, second)).toEqual([]);
+    expect(served(restarted, first)).toEqual(["the first prompt"]);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    expect(readFileSync(bodyPath, "utf8")).not.toContain(
+      Buffer.from("the orphan").toString("base64"),
+    );
+  });
+
+  it("keeps every body whose event is on disk, including a retried batch's", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const [first, second] = events as [
+      (typeof events)[number],
+      (typeof events)[number],
+    ];
+    const wal = new Wal(paths.wal);
+    wal.append([first, second], [bodyFor(second, "the second call")]);
+    // A journal retry writes a body for an event already on disk, after the
+    // bodies of later batches.
+    wal.appendRecovered([first], [bodyFor(first, "the first prompt")]);
+    const bodyPath = join(paths.wal, `${first.session_uuid}.bodies.jsonl`);
+    const before = readFileSync(bodyPath, "utf8");
+    expect(new Wal(paths.wal).repairOrphanBodies()).toBe(0);
+    expect(readFileSync(bodyPath, "utf8")).toBe(before);
+  });
+
+  it("removes a body file whose session has no event on disk", () => {
+    const paths = scratchPaths();
+    const [first] = minimalSession() as [ReturnType<typeof minimalSession>[0]];
+    new Wal(paths.wal);
+    crashOrphan(paths.wal, first, "the only body");
+    const wal = new Wal(paths.wal);
+    expect(wal.repairOrphanBodies()).toBe(1);
+    expect(
+      existsSync(join(paths.wal, `${first.session_uuid}.bodies.jsonl`)),
+    ).toBe(false);
+    wal.append([first]);
+    expect(served(wal, first)).toEqual([]);
+  });
+});
+
 describe("group commit", () => {
   // Tacho collector P1-6/P1-7: a body write failure was swallowed, so a
   // sealed event persisted with content the store never received, and WAL

@@ -193,7 +193,7 @@ export function RunTimeline({
             const parked = isParked(
               frame.type,
               decisionOf(entries.get(frame.seq)),
-              frame.summary,
+              frame.toolStatus,
             );
             const height =
               kind === "op" || parked

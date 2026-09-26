@@ -41,7 +41,11 @@ const SCAN_CHUNK_BYTES = 256 * 1024;
 
 const SIDECAR_SUFFIX = ".bodies.index";
 const SIDECAR_HEADER = "tacho/bodies-index";
-const SIDECAR_VERSION = 1;
+/**
+ * Version 2 keeps the last line for an event id (see `collect`). A version 1
+ * sidecar recorded only the first, so it is rebuilt rather than trusted.
+ */
+const SIDECAR_VERSION = 2;
 
 /** How many sessions keep their entries in memory. */
 const DEFAULT_CACHED_SESSIONS = 8;
@@ -181,9 +185,14 @@ class LineSplitter {
  * not itself a line: the line it closes is what this answers, marked
  * `terminated: true`. A file with no other newline is entirely one line,
  * terminated or not depending on whether that trailing byte was there.
+ *
+ * `size` reads the file as if it ended there, so a caller can walk back one
+ * line at a time (`Wal.repairOrphanBodies`).
  */
-export function readTailLine(path: string): IndexedLine | undefined {
-  const size = statSync(path).size;
+export function readTailLine(
+  path: string,
+  size: number = statSync(path).size,
+): IndexedLine | undefined {
   if (size === 0) return undefined;
   const fd = openSync(path, "r");
   try {
@@ -307,8 +316,12 @@ function collect(
     result.invalid = true;
     return;
   }
-  // First line wins, the way a top-to-bottom read answered a duplicate.
-  if (index.entries.has(stored.event_id_idem)) return;
+  // Last line wins. `Wal.append` writes a body only for an event it is about
+  // to write, and takes it back out when that event does not land, so a
+  // second line for one event id is a crash orphan followed by the body of
+  // the event that later took the orphan's seq. The later line is the body
+  // that event's digest names. First-wins served the orphan, and ingest
+  // refused it as a digest mismatch (#3372).
   const at = {
     offset: line.offset,
     length: line.end - line.offset - (line.terminated ? 1 : 0),
@@ -422,11 +435,12 @@ export class BodyIndexStore {
         continue;
       }
       const [idem, offset, length] = row as [unknown, unknown, unknown];
+      // Entries are appended in file order, so the last one for an event id
+      // is the line `collect` chose.
       if (
         typeof idem === "string" &&
         Number.isSafeInteger(offset) &&
-        Number.isSafeInteger(length) &&
-        !entries.has(idem)
+        Number.isSafeInteger(length)
       )
         entries.set(idem, {
           offset: offset as number,

@@ -205,13 +205,20 @@ export const routes = {
       prs: q?.prs === "any" ? undefined : q?.prs,
       cursor: q?.cursor,
     }),
-  /** Agent IAM; `cursor` opens a later page of the identities table. */
+  /**
+   * Agent IAM; `cursor` opens a later page of the identities table, and
+   * `deregistered` lists retired agents beside the live ones.
+   */
   agents: (
     org: string,
     ws: string,
-    q?: { cursor?: string; view?: string },
+    q?: { cursor?: string; view?: string; deregistered?: boolean },
   ): SafePath =>
-    withQuery(pathOf(org, ws, "agents"), { cursor: q?.cursor, view: q?.view }),
+    withQuery(pathOf(org, ws, "agents"), {
+      deregistered: q?.deregistered === true ? "show" : undefined,
+      cursor: q?.cursor,
+      view: q?.view,
+    }),
   /** One agent; `tab` picks the section, `cursor` a later page of its incidents. */
   agent: (
     org: string,

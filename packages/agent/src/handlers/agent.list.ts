@@ -118,6 +118,7 @@ export async function agentListHandler(
     const rows = await listAgentIdentities(tx, scope, {
       limit: input.limit + 1,
       afterSlug: decodeCursor(input.cursor),
+      includeRetired: input.includeRetired,
     });
     const page = rows.slice(0, input.limit);
     const keys = await agentKeysFor(tx, scope, page);
@@ -148,10 +149,15 @@ export async function agentListHandler(
     // the tamper incidents on the hosts enrolled under their agent keys. The
     // tamper figures are sums over the same per-agent set the rows read, so
     // the tile is the rollup of the Incidents column, never a second count.
-    const all = await listAgentIdentities(tx, scope, {
+    // A retired agent is a deleted record, so the tiles leave it out whether
+    // or not the page shows it. It is only counted, so the page can offer it.
+    const everyone = await listAgentIdentities(tx, scope, {
       limit: 10_000,
       afterSlug: undefined,
+      includeRetired: true,
     });
+    const all = everyone.filter((r) => r.status !== "archived");
+    const retired = everyone.length - all.length;
     const allKeys = await agentKeysFor(tx, scope, all);
     const allAgentKeys = [...allKeys.values()].filter(
       (k): k is string => k !== null,
@@ -187,8 +193,8 @@ export async function agentListHandler(
       .slice(0, 100)
       .map((r) => allKeys.get(r.id) ?? r.slug);
 
-    // Each agent's status, derived once. Retired and suspended agents are
-    // neither enrolled nor waiting to enroll, so both tiles count by status.
+    // Each live agent's status, derived once. A suspended agent is neither
+    // enrolled nor waiting to enroll, so both tiles count by status.
     const statuses = all.map((r) =>
       identityStatus(r, {
         credentials: allCredentials.get(r.publicId) ?? 0,
@@ -226,6 +232,7 @@ export async function agentListHandler(
         rows.length > input.limit && last ? encodeCursor(last.slug) : null,
       totals: {
         identities: all.length,
+        retired,
         enrolled,
         unenrolled,
         holdingMandate,

@@ -1,8 +1,9 @@
 #!/usr/bin/env tsx
 /**
  * Backfill Claude Code session telemetry into internal.claude_sessions.
- * Omit the retired email field. Existing stores supply its empty-string default
- * until the forward erasure migration removes it (#3072, ADR-084).
+ * Omit the retired email field. The store gives new rows its empty-string
+ * default. Rows written before #3624 keep their address until the table's
+ * two-year TTL expires them or a privacy erasure deletes them (ADR-183).
  *
  * Scans (project dir derived from this repo's absolute path):
  *   ~/.claude/projects/<project-slug>/*.jsonl       → parent sessions

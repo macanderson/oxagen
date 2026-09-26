@@ -107,6 +107,7 @@ export function agentPage(
     nextCursor,
     totals: {
       identities: agents.length,
+      retired: 0,
       enrolled: agents.filter((agent) => agent.status === "enrolled").length,
       unenrolled: agents.filter((agent) => agent.status === "unenrolled")
         .length,

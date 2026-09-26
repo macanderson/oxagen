@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { avatarUrlSchema } from "../avatar";
 import { registerCapability } from "../registry";
 import { ORG_EMPLOYEE_SIZES } from "./org.settings.read";
 
@@ -13,7 +14,7 @@ export const orgSettingsWrite = registerCapability({
     "Update the active organization's profile settings (partial): name, slug, avatar, website, industry, and employee size. Routes the settings page edit through the kernel so the same fields are reachable from the agent, MCP, and CLI with metering + audit.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: {
     requiresApproval: false,
@@ -38,7 +39,9 @@ export const orgSettingsWrite = registerCapability({
         "Slug must be lowercase letters, numbers, and single hyphens",
       )
       .optional(),
-    avatarUrl: z.string().url().max(2048).nullable().optional(),
+    // An https image link or a designed-avatar string ("avatar:v1:<json>"),
+    // the form every avatar-carrying contract accepts; null clears it.
+    avatarUrl: avatarUrlSchema.nullable().optional(),
     website: z.string().url().max(2048).nullable().optional(),
     industry: z.string().max(120).nullable().optional(),
     employeeSize: z.enum(ORG_EMPLOYEE_SIZES).nullable().optional(),

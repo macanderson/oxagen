@@ -3,6 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-09-24
 - **Owners:** steering
+- **Amended by:** ADR-184 (decision 4: a slug follows the `lineage_id` in its
+  file, so it can change).
 - **Related:** ADR-093 (the steering assembler), ADR-101 (four harnesses),
   #4137, #3590.
 

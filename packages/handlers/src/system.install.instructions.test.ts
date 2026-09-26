@@ -29,6 +29,39 @@ describe("systemInstallInstructionsHandler", () => {
     }
   });
 
+  // The capability takes no platform, so a step's command has to run on
+  // macOS, Linux, and Windows alike. `open` exists only on macOS: Linux
+  // answers `open: command not found`, and Windows has no such command.
+  it("never hands a reader the macOS-only open command", async () => {
+    for (const client of CLIENTS) {
+      const result = await systemInstallInstructionsHandler({ client }, CTX);
+      for (const step of result.steps) {
+        expect(step.command ?? "").not.toMatch(/^\s*open\s/);
+      }
+    }
+  });
+
+  it("names the config file for every platform where the command used to open it", async () => {
+    const cursor = await systemInstallInstructionsHandler(
+      { client: "cursor" },
+      CTX,
+    );
+    const cursorText = cursor.steps.map((s) => s.label).join("\n");
+    expect(cursorText).toContain("~/.cursor/mcp.json");
+    expect(cursorText).toContain("%USERPROFILE%\\.cursor\\mcp.json");
+    const desktop = await systemInstallInstructionsHandler(
+      { client: "claude-desktop" },
+      CTX,
+    );
+    const desktopText = desktop.steps.map((s) => s.label).join("\n");
+    expect(desktopText).toContain(
+      "~/Library/Application Support/Claude/claude_desktop_config.json",
+    );
+    expect(desktopText).toContain(
+      "%APPDATA%\\Claude\\claude_desktop_config.json",
+    );
+  });
+
   it("every step has a non-empty label", async () => {
     for (const client of CLIENTS) {
       const result = await systemInstallInstructionsHandler({ client }, CTX);

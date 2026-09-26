@@ -270,6 +270,7 @@ export function agentPage(
     nextCursor: null,
     totals: {
       identities: agents.length,
+      retired: 0,
       enrolled: agents.filter((a) => a.status === "enrolled").length,
       unenrolled: agents.filter((a) => a.status === "unenrolled").length,
       holdingMandate: null,
@@ -291,6 +292,7 @@ export function steeringFreshness(
     repository: "acme/platform",
     defaultBranch: "main",
     gates: { autoSync: false, blockStaleRuns: false },
+    sync: null,
     ...overrides,
   };
 }

@@ -52,8 +52,11 @@ source_uri = "oxagen:proposal/prp_…"
 force = "should"
 ```
 
-- The file stem is the lineage id; the path is `.oxagen/rules/<lineage>.toml`;
-  the branch is `context/<lineage>`.
+- The `lineage_id` inside the file is the record's identity, not the file's
+  name (ADR-184). Oxagen writes a new record to `.oxagen/rules/<lineage>.toml`
+  and a revision to the record's current path. A person can rename or move the
+  file anywhere under `.oxagen/rules/`, and the repository sync follows it.
+  The branch is `context/<lineage>`.
 - `set_id` is the repository's full name with `/` as `.`, taken from the
   **binding** (`repository_bindings.provider_full_name`) and never from live
   GitHub. A repository rename therefore does not re-stamp later records: the
@@ -66,9 +69,11 @@ force = "should"
   whoever opens the PR.
 - `label` is the record's name, at most 36 characters, and every surface shows
   it first (ADR-178). It need not be unique and it can change. The lineage id
-  is derived from it when the record is created, is unique in the workspace,
-  and never changes. A file written before ADR-178 has no `label`, and readers
-  derive one from the lineage.
+  is derived from it when the record is created and is unique in the
+  workspace. It changes only when someone edits `lineage_id` in the file, and
+  then the record keeps its id and takes the new lineage (ADR-184). A file
+  written before ADR-178 has no `label`, and readers derive one from the
+  lineage.
 - Apart from `label`, only members Stella's `Record` struct carries enter the
   file. Stella re-serializes the typed struct before it recomputes the hash,
   so it drops any other member from its preimage.
@@ -118,6 +123,21 @@ record up on its next poll. `dismiss_proposal` closes an open PR (one found on t
 whose body names the proposal, when the row never recorded its number) and
 deletes its branch, and writes `rejected` only to a proposal that is not
 merged.
+
+The repository sync (ADR-184, `packages/handlers/src/context.steering.sync.ts`)
+covers every change that does not go through `merge_context_pr`. A `push` or
+`pull_request` delivery, a merged GitLab merge request, and a sweep every five
+minutes each request `steering/sync.requested`. The sync reads every file under
+`.oxagen/rules/` at the production branch's head and makes the registry match:
+it publishes new and changed records (`policy_version = repository:sync`, no
+approver), follows a renamed file, retires a record whose file is gone, links a
+Context PR merged on the host to its record, rejects one closed without
+merging, and resets the checks of one whose branch moved. For 90 seconds after
+a Context PR merges at its checked commit, the sync leaves it to
+`merge_context_pr`, which records the reviewer. A file that fails validation
+publishes nothing. Its problem is stored in `agent.context_sync_state`, shown
+on the Steering page, and posted as the `Oxagen steering sync` check on the
+commit.
 
 `open_context_pr`, `merge_context_pr` and `dismiss_proposal` gate on the
 caller's role and so need a signed-in user; they declare the `api` surface

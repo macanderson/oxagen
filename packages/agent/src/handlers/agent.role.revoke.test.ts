@@ -119,6 +119,19 @@ describe("agent.role.revoke handler", () => {
     expect(args.target).toEqual({ kind: "agent", id: "agt_1" });
   });
 
+  it("still removes a role from a retired (archived) agent", async () => {
+    // assign_agent_role refuses a retired agent. Removing a role it still
+    // holds only narrows what the suspended principal could do.
+    fake.enqueue(
+      [{ ...AGENT_ROW, status: "archived" }],
+      [ROLE_ROW],
+      [{ id: "pra-1" }],
+    );
+    const out = await agentRoleRevokeHandler(INPUT, CTX);
+    expect(out.revoked).toBe(true);
+    expect(fake.mutations.update).toBe(1);
+  });
+
   it("is idempotent: revoking an unheld role returns revoked=false and does not audit", async () => {
     fake.enqueue(
       [AGENT_ROW],

@@ -1,10 +1,13 @@
 // Class recipes the Account and Avatar dialogs share (mockup `.field`, `.kv`,
-// `.note`, `.lst`), so the two read as one surface.
+// `.note`, `.lst`), so the two read as one surface. The field label, its hint
+// and the small button live in @/ui/control-styles, because the avatar editor
+// in @/ui draws them too.
 
-export const fieldLabel =
-  "mb-1 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground";
-
-export const hint = "mt-1.5 text-xs leading-relaxed text-muted-foreground";
+export {
+  buttonSmall,
+  fieldHint as hint,
+  fieldLabel,
+} from "@/ui/control-styles";
 
 /** A `dl` of label → value pairs, the mockup's `.kv`. */
 export const kv =
@@ -24,6 +27,3 @@ export const listTitle =
 export const listText = "text-xs leading-snug text-muted-foreground";
 export const listTime =
   "mt-1 flex-none whitespace-nowrap font-mono text-[10px] text-muted-foreground";
-
-export const buttonSmall =
-  "inline-flex min-h-8 flex-none items-center justify-center gap-1.5 rounded-md border border-button-default-border bg-button-default-bg px-2.5 text-xs font-medium text-button-default-fg hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:bg-button-disabled-bg disabled:text-muted-foreground";

@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   closeExemptFromDod,
@@ -8,8 +11,11 @@ import {
   linkedIssues,
   referencedIssues,
   referencesIssue,
+  restatesCiStatus,
   verdict,
 } from "./scr-dod-check.mjs";
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 /** The DoD block the task issue template ships, all items still open. */
 const TASK_TEMPLATE_BODY = `### Context
@@ -20,9 +26,8 @@ Why this exists.
 
 - [ ] Implementation complete
 - [ ] Scoped tests added/updated and passing
-- [ ] Full CI green
 - [ ] Code comments and docs updated
-- [ ] Residue filed as new issues (triage label only)`;
+- [ ] Residue fixed in the same PR, or filed with the \`triage\` label only`;
 
 const allChecked = TASK_TEMPLATE_BODY.replace(/- \[ \]/g, "- [x]");
 
@@ -147,14 +152,14 @@ describe("dodStatus", () => {
     const status = dodStatus(TASK_TEMPLATE_BODY);
     expect(status.present).toBe(true);
     expect(status.checked).toBe(0);
-    expect(status.unchecked).toHaveLength(5);
+    expect(status.unchecked).toHaveLength(4);
     expect(status.unchecked[0]).toBe("Implementation complete");
   });
 
   it("reports a fully ticked DoD as having nothing outstanding", () => {
     const status = dodStatus(allChecked);
     expect(status.present).toBe(true);
-    expect(status.checked).toBe(5);
+    expect(status.checked).toBe(4);
     expect(status.unchecked).toEqual([]);
   });
 
@@ -461,9 +466,9 @@ describe("verdict", () => {
       issue(TASK_TEMPLATE_BODY),
     );
     expect(result.ok).toBe(false);
-    expect(result.reasons[0]).toContain("5 unchecked DoD item(s)");
+    expect(result.reasons[0]).toContain("4 unchecked DoD item(s)");
     // The reviewer should see *which* items, not just a count.
-    expect(result.reasons[0]).toContain("Residue filed as new issues");
+    expect(result.reasons[0]).toContain("Residue fixed in the same PR");
   });
 
   it("passes when every linked issue's DoD is fully checked", () => {
@@ -588,17 +593,20 @@ describe("formatVerdict", () => {
     expect(text).toContain("#1321");
   });
 
-  // oxagen#2638: the prescribed remedy ("tick the boxes") does nothing on its
-  // own, because ticking a box on the linked issue fires no pull-request
-  // event and this check only reacts to the PR. The message must say so.
-  it("tells a failing PR that ticking the issue alone will not re-run this check", () => {
+  // oxagen#2638 added `dod-recheck.yml` so that ticking a box re-runs this
+  // check. The message used to predate it and prescribe an empty commit, which
+  // an agent session is not allowed to push (#4200).
+  it("tells a failing PR how a ticked box re-runs this check, without an empty commit", () => {
     const text = formatVerdict({
       ok: false,
       waived: false,
       refsOnly: false,
       reasons: ["#1321 has 1 unchecked DoD item(s)"],
     });
-    expect(text).toContain("does not by itself re-run this check");
+    expect(text).toContain("dod-recheck");
+    expect(text).toContain("re-run the failed `dod` job");
+    expect(text).not.toContain("allow-empty");
+    expect(text).not.toContain("empty commit");
   });
 
   // oxagen#2640: a Refs-only pass is a distinct state from an ordinary pass
@@ -613,6 +621,125 @@ describe("formatVerdict", () => {
     expect(text).toContain("passed");
     expect(text).not.toContain(ESCAPE_HATCH_LABEL);
   });
+});
+
+// oxagen#4200. `dod` is a CI check, so a DoD box saying CI is green can never
+// be ticked while `dod` reads it. It was the only open item behind 13 red `dod`
+// runs on 2026-09-25, and `dod-close-guard` reopened #4194 over it.
+describe("a DoD item that only says CI passes (oxagen#4200)", () => {
+  const ciOnlyOpen = [
+    "### Definition of done",
+    "",
+    "- [x] Defect fixed at the named path; the repro no longer reproduces",
+    "- [x] Scoped tests added/updated and passing",
+    "- [ ] Full CI green",
+    "- [x] Code comments and docs updated",
+  ].join("\n");
+
+  // The witness. Before the change this verdict failed with
+  // "1 unchecked DoD item(s): Full CI green".
+  it("does not fail a PR whose issue's only open item is `Full CI green`", () => {
+    const result = verdict({ body: "Closes #4194", labels: [] }, [
+      { ref: "#4194", body: ciOnlyOpen },
+    ]);
+    expect(result.ok).toBe(true);
+    expect(result.reasons).toEqual([]);
+  });
+
+  // The close guard reads `dodStatus` directly, so this is the #4194 reopen.
+  it("counts the item as neither ticked nor open", () => {
+    const status = dodStatus(ciOnlyOpen);
+    expect(status.present).toBe(true);
+    expect(status.checked).toBe(3);
+    expect(status.unchecked).toEqual([]);
+  });
+
+  it("still fails on every other open item beside it", () => {
+    const body = ciOnlyOpen.replace("- [x] Scoped tests", "- [ ] Scoped tests");
+    expect(dodStatus(body).unchecked).toEqual([
+      "Scoped tests added/updated and passing",
+    ]);
+  });
+
+  it("does not let a CI-only checklist pass as a definition of done", () => {
+    // Skipping the item must not turn a section with nothing else in it into a
+    // pass, or an issue could close having verified nothing.
+    const body = "### Definition of done\n\n- [ ] Full CI green";
+    expect(dodStatus(body).present).toBe(false);
+    const result = verdict({ body: "Closes #7", labels: [] }, [
+      { ref: "#7", body },
+    ]);
+    expect(result.ok).toBe(false);
+    expect(result.reasons[0]).toContain("CI is already the merge gate");
+  });
+
+  // Every spelling below was found as a whole DoD item on an open issue in
+  // oxagen, stella, or context-graph-protocol on 2026-09-25.
+  it.each([
+    "Full CI green",
+    "Full CI green.",
+    "`Full CI green`",
+    "CI green.",
+    "CI is green.",
+    "CI passes.",
+    "Full CI passes",
+    "Full CI is green.",
+    "CI (lint, typecheck, tests) passes.",
+    "Relevant CI checks pass.",
+    "CI green on the PR",
+    "CI is green on the pull request",
+    "Full CI green on the PR that fixes this",
+    "CI green on the PR that closes this.",
+    "CI is green on the PR that adds this check.",
+  ])("recognises %j", (item) => {
+    expect(restatesCiStatus(item)).toBe(true);
+  });
+
+  // Each of these names work besides CI, so it stays a gated item.
+  it.each([
+    "`pnpm gate` green; CI green on the PR.",
+    "`make gate` is green in CI.",
+    "Full CI green, and one main run observed through staging and the deploy jobs after merge",
+    "Scoped tests added and passing (`cargo test -p stella-records`), full CI green.",
+    "`cargo test -p stella-store` green in CI.",
+    "50 consecutive CI runs of `daemon.test.ts` pass.",
+    "CI passes and capability documentation names the verified activation path.",
+    "Circuit breaker is green",
+  ])("does not recognise %j", (item) => {
+    expect(restatesCiStatus(item)).toBe(false);
+  });
+});
+
+// oxagen#4200: an issue created from any template must not carry the item.
+describe("issue templates (oxagen#4200)", () => {
+  const dir = resolve(repoRoot, ".github", "ISSUE_TEMPLATE");
+  const templates = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f));
+  const checklists = templates
+    .map((file) => ({
+      file,
+      items: readFileSync(resolve(dir, file), "utf8")
+        .split("\n")
+        .map((line) => line.match(/^\s*- \[ \]\s*(.*)$/)?.[1])
+        .filter((item): item is string => item !== undefined),
+    }))
+    .filter(({ items }) => items.length > 0);
+
+  it("finds the templates that seed a definition of done", () => {
+    expect(checklists.map(({ file }) => file).sort()).toEqual(
+      expect.arrayContaining([
+        "bug_report.yml",
+        "feature_request.yml",
+        "task.yml",
+      ]),
+    );
+  });
+
+  it.each(checklists)(
+    "$file seeds no item that only says CI passes",
+    ({ items }) => {
+      expect(items.filter((item) => restatesCiStatus(item))).toEqual([]);
+    },
+  );
 });
 
 describe("closeExemptFromDod", () => {

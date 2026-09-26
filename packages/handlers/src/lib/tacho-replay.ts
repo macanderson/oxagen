@@ -9,8 +9,10 @@
 // recorded without one; the response names the refusal so the host can
 // correct its collector, and the session seals with a `body_missing` gap.
 import {
+  bodyIsPartial,
   digestBytes,
-  isContentBearingFrame,
+  frameOwesBody,
+  isLaterSighting,
   redactBytes,
   type TachoBody,
   type TachoEvent,
@@ -24,6 +26,12 @@ export interface VerifiedBody {
   sessionUuid: string;
   /** The event's kind: the seal counts tool result bodies from it. */
   kind: string;
+  /**
+   * The host marked this body as holding part of its frame's content
+   * (`bodyIsPartial`). It is stored and served, and the seal does not count
+   * it as the frame's body.
+   */
+  partial: boolean;
   digest: string;
   contentType: string;
   bytes: Uint8Array;
@@ -88,6 +96,7 @@ export function verifyBatchBodies(
       eventIdIdem: body.event_id_idem,
       sessionUuid: event.session_uuid,
       kind: event.kind,
+      partial: bodyIsPartial(event.attrs),
       digest,
       contentType: body.content_type,
       bytes,
@@ -97,17 +106,39 @@ export function verifyBatchBodies(
 }
 
 /**
- * How many events in a batch carried content: a content-bearing kind
- * (`isContentBearingFrame`: `llm_call`, `tool_call`), whether or not the
- * host chained a digest for it, or any other kind that did. A body is only
- * accepted for an event that chained a digest, so a session's body count
- * never exceeds this one.
+ * How many events in a batch owe the reader a body (`frameOwesBody`): a
+ * content-bearing kind (`llm_call`, `tool_call`) whether or not the host
+ * chained a digest for it, or any other kind that did. The OTel copy of a
+ * model call the proxy already sealed owes nothing, because the proxy's
+ * frame holds the call's content. A body is only accepted for an event that
+ * chained a digest, so a session's body count never exceeds this one.
  */
 export function countContentFrames(events: readonly TachoEvent[]): number {
-  return events.filter(
-    (event) =>
-      event.content?.digest !== undefined || isContentBearingFrame(event.kind),
+  return events.filter((event) =>
+    frameOwesBody({
+      type: event.kind,
+      digest: event.content?.digest ?? null,
+      laterSighting: isLaterSighting(event.attrs),
+    }),
   ).length;
+}
+
+/**
+ * The accepted bodies a session counts toward its seal: every body that
+ * holds its frame's whole content. A partial body is stored and served, and
+ * its frame still counts as missing its body, so a half-captured model call
+ * seals `body_missing`. Tool result bodies are counted from the same set,
+ * which keeps `tool_body_frames <= body_frames`.
+ */
+export function countBodyFrames(bodies: readonly VerifiedBody[]): {
+  bodyFrames: number;
+  toolBodyFrames: number;
+} {
+  const whole = bodies.filter((body) => !body.partial);
+  return {
+    bodyFrames: whole.length,
+    toolBodyFrames: whole.filter((body) => body.kind === "tool_call").length,
+  };
 }
 
 /**

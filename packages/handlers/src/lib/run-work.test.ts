@@ -138,6 +138,21 @@ describe("run work reads", () => {
       expect(aliases.filter((alias) => columns.has(alias))).toEqual([]);
     },
   );
+  // #3944: an `oxagen:pr_link` frame writes the dotted names the `pr_open`
+  // effect frame writes, and one stored before the change carries the
+  // underscore names. The read takes both, keyed on the frame's `pr.url`.
+  it("reads a PR link under the dotted names, and under the old ones", async () => {
+    const query = await queryOf(readWorkPrLinks);
+    expect(query).toContain(
+      "if(attrs['pr.url'] != '', attrs['pr.url'], attrs['pr_url']) AS url",
+    );
+    expect(query).toContain(
+      "argMin(if(attrs['pr.url'] != '', attrs['pr.number'], attrs['pr_number']), seq) AS number",
+    );
+    expect(query).toContain(
+      "AND if(attrs['pr.url'] != '', attrs['pr.url'], attrs['pr_url']) != ''",
+    );
+  });
   // ADR-171: a chain break is reported beside the facts, never by hiding the
   // frames past it.
   it.each(Object.entries(READS))(

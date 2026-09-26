@@ -1,0 +1,258 @@
+{
+  "name": "author_graph_rule",
+  "domain": "graph",
+  "description": "Ask the in-app agent to author a relationship rule between nodes from two sources, as one assistant turn judged against a goal built from the rule: a query_ontology traversal over the relationship type, from a node of the first source, returns a node of the second. Returns the turn, the goal, and whether the verifier ruled it met.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "graph"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "rule": {
+        "type": "object",
+        "properties": {
+          "relationshipType": {
+            "type": "string"
+          },
+          "start": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "source"
+            ],
+            "additionalProperties": false
+          },
+          "end": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "relationshipType",
+          "start",
+          "end"
+        ],
+        "additionalProperties": false,
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "note": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "conversationId": {
+        "anyOf": [
+          {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "turnId": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "rule"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "goal": {
+        "type": "object",
+        "properties": {
+          "statement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "maxRounds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4,
+            "default": 3
+          }
+        },
+        "required": [
+          "statement"
+        ],
+        "additionalProperties": false
+      },
+      "goalMet": {
+        "type": "boolean"
+      },
+      "turn": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "conversationPublicId": {
+            "type": "string"
+          },
+          "userMessageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "assistantMessageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "reply": {
+            "type": "string"
+          },
+          "parkedCards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "approvalId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capability": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "expiresAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "approvalId",
+                "capability",
+                "expiresAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "toolCalls": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "toolName": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "outcome": {
+                  "type": "string",
+                  "enum": [
+                    "completed",
+                    "failed",
+                    "denied",
+                    "cancelled",
+                    "parked"
+                  ]
+                },
+                "durationMs": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "approvalId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "toolCallId",
+                "toolName",
+                "outcome",
+                "durationMs",
+                "approvalId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "stopped": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "conversationId",
+          "conversationPublicId",
+          "userMessageId",
+          "assistantMessageId",
+          "runId",
+          "reply",
+          "parkedCards",
+          "toolCalls"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "goal",
+      "goalMet",
+      "turn"
+    ],
+    "additionalProperties": false
+  }
+}

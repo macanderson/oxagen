@@ -45,5 +45,6 @@ Org Owner, Org Admin, Workspace Owner, Workspace Member.
 | code | meaning |
 |---|---|
 | `not_found` | No agent matches `agentId` in this workspace. |
+| `conflict` | The agent is retired (`agent_retired`). The handler refuses before it writes a version. |
 | `validation_error` | Input failed Zod parse (e.g. invalid config). |
 | `unauthorized` | Caller lacks the required org/workspace role. |

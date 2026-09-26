@@ -92,6 +92,7 @@ describe("toAgentPage", () => {
       nextCursor: "c2",
       totals: {
         identities: 7,
+        retired: 2,
         enrolled: 5,
         unenrolled: 1,
         holdingMandate: 1,
@@ -156,6 +157,7 @@ describe("toAgentPage", () => {
       nextCursor: "c2",
       totals: {
         identities: 7,
+        retired: 2,
         enrolled: 5,
         unenrolled: 1,
         holdingMandate: 1,

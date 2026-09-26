@@ -176,7 +176,8 @@ You cannot edit it.
 
    For attribution, save the body to a file, delete the attribution lines, show the diff, and
    write it back with `gh issue edit <n> --body-file <file>`. Edit a comment with
-   `gh api -X PATCH repos/macanderson/oxagen/issues/comments/<id> -f body=@<file>`.
+   `gh api -X PATCH repos/macanderson/oxagen/issues/comments/<id> -F body=@<file>` (`-F`
+   reads the file; `-f` would send the literal text `@<file>`).
 5. Read each issue back. Its title must match `^P[0-4] (Bug|Gap|Feature|Debt) (XS|S|M|L|XL) \([A-Za-z ]+\): `,
    and it must carry one priority, one kind, one size, one area, and no `triage`. Report
    any issue that failed and the reason.

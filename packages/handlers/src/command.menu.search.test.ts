@@ -55,6 +55,7 @@ vi.mock("drizzle-orm", () => ({
   eq: (a: unknown, b: unknown) => ({ eq: [a, b] }),
   ilike: (a: unknown, b: unknown) => ({ ilike: [a, b] }),
   isNull: (a: unknown) => ({ isNull: a }),
+  ne: (a: unknown, b: unknown) => ({ ne: [a, b] }),
   or: (...args: unknown[]) => ({ or: args }),
 }));
 
@@ -133,6 +134,38 @@ describe("commandMenuSearchHandler", () => {
     expect(row?.contextLine).toBe("Status: active");
     expect(row?.scope).toBe("Workspace: prod");
   });
+
+  it.each(["churn", ""])(
+    "leaves retired (archived) agents out of the agent query (query %j)",
+    async (query) => {
+      const wheres: unknown[] = [];
+      mockWithTenantDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          const tx = {
+            select: () => tx,
+            from: () => tx,
+            where: (cond: unknown) => {
+              wheres.push(cond);
+              return tx;
+            },
+            orderBy: () => tx,
+            limit: () => Promise.resolve([]),
+          };
+          return fn(tx);
+        },
+      );
+
+      await commandMenuSearchHandler(
+        { kind: "agent", query, orgSlug: "acme", workspaceSlug: "prod" },
+        ctx,
+      );
+
+      expect(wheres).toHaveLength(1);
+      const where = wheres[0] as { and: unknown[] };
+      expect(where.and).toContainEqual({ isNull: "deletedAt" });
+      expect(where.and).toContainEqual({ ne: ["status", "archived"] });
+    },
+  );
 
   it("merges graph + Postgres results, deduplicates by href", async () => {
     // Graph returns a node for the same entity, under a different route.

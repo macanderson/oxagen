@@ -51,10 +51,14 @@ describe("list_agents contract", () => {
   });
 
   it("defaults the page size, accepts a cursor, and refuses the rest", () => {
-    expect(agentList.input.parse({})).toEqual({ limit: 50 });
+    expect(agentList.input.parse({})).toEqual({
+      limit: 50,
+      includeRetired: false,
+    });
     expect(agentList.input.parse({ limit: 5, cursor: "c" })).toEqual({
       limit: 5,
       cursor: "c",
+      includeRetired: false,
     });
     expect(agentList.input.safeParse({ limit: 0 }).success).toBe(false);
     expect(agentList.input.safeParse({ limit: 101 }).success).toBe(false);
@@ -148,6 +152,7 @@ describe("list_agents contract", () => {
       nextCursor: null,
       totals: {
         identities: 3,
+        retired: 0,
         enrolled: 1,
         unenrolled: 2,
         holdingMandate: null,
@@ -168,6 +173,7 @@ describe("list_agents contract", () => {
         nextCursor: null,
         totals: {
           identities: 3,
+          retired: 0,
           enrolled: 1,
           unenrolled: 2,
           holdingMandate: 1,
@@ -194,6 +200,7 @@ describe("list_agents contract", () => {
   it("refuses more than 100 mandate holders, a blank holder key, and totals without unenrolled (negative)", () => {
     const totals = {
       identities: 101,
+      retired: 0,
       enrolled: 0,
       unenrolled: 101,
       holdingMandate: 101,
@@ -220,5 +227,40 @@ describe("list_agents contract", () => {
       Object.entries(totals).filter(([key]) => key !== "unenrolled"),
     );
     expect(parse(withoutUnenrolled)).toBe(false);
+  });
+});
+
+describe("list_agents retired agents", () => {
+  it("leaves retired agents out unless the caller asks, and says so in the description", () => {
+    expect(agentList.input.parse({}).includeRetired).toBe(false);
+    expect(agentList.input.parse({ includeRetired: true }).includeRetired).toBe(
+      true,
+    );
+    expect(agentList.input.safeParse({ includeRetired: "yes" }).success).toBe(
+      false,
+    );
+    expect(agentList.description).toContain("includeRetired");
+  });
+
+  it("requires the retired count beside the live totals", () => {
+    const totals = {
+      identities: 2,
+      retired: 3,
+      enrolled: 1,
+      unenrolled: 1,
+      holdingMandate: 0,
+      mandateHolders: [],
+      tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
+    };
+    const parse = (t: Record<string, unknown>) =>
+      agentList.output.safeParse({ items: [], nextCursor: null, totals: t })
+        .success;
+    expect(parse(totals)).toBe(true);
+    const withoutRetired = Object.fromEntries(
+      Object.entries(totals).filter(([key]) => key !== "retired"),
+    );
+    expect(parse(withoutRetired)).toBe(false);
+    expect(parse({ ...totals, retired: -1 })).toBe(false);
   });
 });

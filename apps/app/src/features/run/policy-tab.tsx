@@ -22,8 +22,8 @@ import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { Note, NoValue, Panel, PanelBody } from "./parts";
 import { entriesOf } from "./recorded-entries";
-import type { Place, RunTabProps } from "./tab-props";
-import { decisionSubject, entryKey } from "./transcript-model";
+import type { FrameTabProps, Place } from "./tab-props";
+import { entryKey } from "./transcript-rows";
 import { isWhole } from "./whole-transcript";
 
 /** A frame's seq, linked to the frame player when it is on the run's own chain. */
@@ -66,16 +66,6 @@ function outcomeTone(decision: string): BadgeTone {
   return "quiet";
 }
 
-/**
- * The `policy_source` words that name the agent's own harness checking itself
- * rather than Oxagen policy or an operator deciding. The table folds these
- * away (#4023, #4034).
- */
-const HARNESS_SOURCES: ReadonlySet<string> = new Set([
-  "harness",
-  "managed_settings",
-]);
-
 /** The key under `run.policy.by` each recorded source reads as. */
 const SOURCE_COPY = {
   bundle: "oxagen",
@@ -92,13 +82,14 @@ function sourceCopy(
 }
 
 /**
- * Whether a decision is the harness checking itself.
+ * Whether a decision is the harness checking itself, which the table folds
+ * away (#4023, #4034). The server decides which sources those are and says so
+ * on the decision (ADR-182).
  *
  * @internal Exported for its unit test.
  */
 export function isHarnessCheck(entry: TranscriptEntry): boolean {
-  const source = entry.decision?.source ?? null;
-  return source !== null && HARNESS_SOURCES.has(source);
+  return entry.decision?.harness === true;
 }
 
 /** Who decided, under the outcome: a recorded source by name, else that it is not recorded. */
@@ -131,10 +122,11 @@ function Unrecorded() {
 
 function row(entry: TranscriptEntry, place: Place): ListRow {
   const decision = entry.decision;
-  // A gate frame that names no call (`policy deny`) says what was decided and
-  // not about what, so the cell says the call is not recorded rather than
-  // printing the frame's label as if it were one.
-  const call = decisionSubject(entry);
+  // The call the decision was made on, as the server states it. A gate frame
+  // that names no call (`policy deny`) says what was decided and not about
+  // what, so the cell says the call is not recorded rather than printing the
+  // frame's label as if it were one.
+  const call = entry.subject;
   return {
     key: entryKey(entry),
     data: { "data-testid": "run-policy-decision" },
@@ -267,6 +259,6 @@ function DecisionTable({
 }
 
 /** The Policy tab: the whole-run transcript narrowed to its decisions. It makes no read of its own. */
-export function PolicyTab({ everything, place }: RunTabProps) {
+export function PolicyTab({ everything, place }: FrameTabProps) {
   return <PolicyDecisions read={everything} place={place} />;
 }

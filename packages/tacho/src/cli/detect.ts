@@ -113,7 +113,7 @@ export const CURSOR_COVERAGE_NOTE =
  * the same because both read `~/.cursor/hooks.json`. Neither answering is not
  * evidence of absence, so the entry says the harness is still coverable.
  */
-function wrappedCursor(
+export function wrappedCursor(
   facts: CursorFacts,
   enrolledList: readonly string[],
 ): DetectedHarness {

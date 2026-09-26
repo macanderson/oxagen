@@ -20,6 +20,7 @@ afterEach(cleanup);
 
 const workspaces = {
   orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+  orgAvatarUrl: null,
   workspaces: [
     workspaceRow(),
     workspaceRow({ id: "wrk_2", slug: "finops", namespace: "finops" }),

@@ -16,11 +16,11 @@ export const MAX_HOOK_STDIN_BYTES = 8 * 1024 * 1024;
  * The longest this process waits for the harness to finish writing and
  * close stdin. Well under the shortest command-hook timeout Claude Code
  * enforces on the events this binary answers (10s for `SessionStart`,
- * `UserPromptSubmit` and `Stop`; 15s for `PreToolUse`; 600s for
- * `PermissionRequest` — `COMMAND_HOOK_TIMEOUTS_S` in
- * `host/settings-writer.ts`), so a stdin that never closes still gets an
- * answer from this process instead of the harness timing the whole command
- * out itself with no output at all.
+ * `UserPromptSubmit`, `Stop` and `SessionEnd`; 15s for `PreToolUse`; 600s
+ * for `PermissionRequest`: `COMMAND_HOOK_TIMEOUTS_S` and
+ * `SESSION_END_TIMEOUT_S` in `host/settings-writer.ts`), so a stdin that
+ * never closes still gets an answer from this process instead of the
+ * harness timing the whole command out itself with no output at all.
  */
 export const STDIN_READ_DEADLINE_MS = 5_000;
 

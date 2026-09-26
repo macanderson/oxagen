@@ -1,0 +1,18 @@
+-- 0031_drop_tacho_events_anthropic_user_email.sql
+--
+-- Remove the Claude Code user's readable email address from tacho_events
+-- (#3072, ADR-084). #3173 stopped every writer: the collector sends no
+-- address, ingest stores nothing derived from one, and the column left the
+-- producer column sets. The rows written before that change still hold the
+-- address in plain text, and ClickHouse has no row policy, so any query of
+-- the organization's events could read it back. Dropping the column removes
+-- those stored values.
+--
+-- 0027 still creates the column, so the committed file keeps matching what
+-- every cluster applied. This file then drops it everywhere: on a cluster
+-- bootstrapped before the drop, and on one bootstrapped after it.
+-- tacho-events-ddl.ts lists the column in DROPPED_COLUMNS for that reason.
+--
+-- Irreversible. There is no backfill and no rollback: the addresses are the
+-- data this migration exists to delete.
+ALTER TABLE tacho_events DROP COLUMN IF EXISTS anthropic_user_email;

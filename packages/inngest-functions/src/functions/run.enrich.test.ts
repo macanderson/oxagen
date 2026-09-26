@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
   writes: [] as Record<string, unknown>[],
   call: vi.fn(),
   bodies: new Map<string, Uint8Array>(),
+  /** The run's frames; the one-prompt run below when unset. */
+  frames: null as unknown[] | null,
   configs: new Map<string, import("@oxagen/functions").DurableFunctionConfig>(),
   handlers: new Map<string, (ctx: unknown) => Promise<unknown>>(),
 }));
@@ -127,30 +129,36 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
 }));
 vi.mock("../lib/run-record", () => ({
   resolveRunRecord: async () => ({ source: "tacho", sessionUuid: "session" }),
-  readRunFrames: async () => [
-    tachoFrame({
-      seq: 1,
-      ts: "2026-09-22 00:00:00.000",
-      kind: "turn_start",
-      hash: `sha256:${"a".repeat(64)}`,
-      contentDigest: digestBytes(
-        new TextEncoder().encode(
-          "Please repair authentication. Fixed the redirect.",
+  readRunFrames: async () =>
+    state.frames ?? [
+      tachoFrame({
+        seq: 1,
+        ts: "2026-09-22 00:00:00.000",
+        kind: "turn_start",
+        hash: `sha256:${"a".repeat(64)}`,
+        contentDigest: digestBytes(
+          new TextEncoder().encode(
+            "Please repair authentication. Fixed the redirect.",
+          ),
         ),
-      ),
-      bytesRef: "body",
-      redactions: "",
-      toolName: "",
-      toolStatus: "",
-      toolUseId: "",
-      model: "",
-      provider: "",
-      policyDecision: "",
-      costUsdMicros: null,
-      turnSeq: 1,
-    }),
-  ],
+        bytesRef: "body",
+        redactions: "",
+        toolName: "",
+        toolStatus: "",
+        toolUseId: "",
+        model: "",
+        provider: "",
+        policyDecision: "",
+        costUsdMicros: null,
+        turnSeq: 1,
+      }),
+    ],
 }));
+const {
+  ENRICHMENT_BUDGET_NOTE,
+  ENRICHMENT_CHUNK_CHARS,
+  ENRICHMENT_RUN_BUDGET_USD,
+} = await import("../lib/run-enrichment");
 await import("./run.enrich");
 const data = {
   orgId: "00000000-0000-4000-8000-000000000001",
@@ -176,6 +184,7 @@ beforeEach(() => {
   state.branch = "fix/auth-redirect";
   state.writes = [];
   state.bodies.clear();
+  state.frames = null;
   state.call.mockReset();
   state.call.mockResolvedValue({
     text: JSON.stringify({
@@ -235,6 +244,85 @@ describe("automatic run enrichment", () => {
     state.call.mockRejectedValue(new Error("credit gate refused"));
     await expect(run()).rejects.toThrow("credit gate refused");
     expect(state.writes).toHaveLength(0);
+  });
+});
+
+// #3944, E-01: every call reports its tokens, priced, and one job spends at
+// most ENRICHMENT_RUN_BUDGET_USD on reductions before it writes the account.
+describe("the enrichment budget", () => {
+  /** One retained prompt long enough to take four chunks. */
+  function longRun() {
+    const text = "Work on the parser. ".repeat(
+      Math.ceil((3 * ENRICHMENT_CHUNK_CHARS) / 20),
+    );
+    const bytes = new TextEncoder().encode(text);
+    state.bodies.set("long-body", bytes);
+    state.frames = [
+      tachoFrame({
+        seq: 1,
+        ts: "2026-09-22 00:00:00.000",
+        kind: "turn_start",
+        hash: `sha256:${"b".repeat(64)}`,
+        contentDigest: digestBytes(bytes),
+        bytesRef: "long-body",
+        redactions: "",
+        toolName: "",
+        toolStatus: "",
+        toolUseId: "",
+        model: "",
+        provider: "",
+        policyDecision: "",
+        costUsdMicros: null,
+        turnSeq: 1,
+      }),
+    ];
+  }
+  const account = {
+    text: JSON.stringify({ name: "Parser work", summary: "Worked on it." }),
+    model: "fast-test",
+    costUsd: 0.01,
+  };
+
+  it("stops reducing once the budget is spent, and the account says it covers only the start", async () => {
+    longRun();
+    state.call
+      .mockResolvedValueOnce({
+        text: "The first portion: parser work began.",
+        model: "fast-test",
+        costUsd: ENRICHMENT_RUN_BUDGET_USD,
+      })
+      .mockResolvedValueOnce(account);
+    expect(await run()).toMatchObject({
+      status: "generated",
+      calls: 2,
+      spentUsd: ENRICHMENT_RUN_BUDGET_USD + 0.01,
+      budgetReached: true,
+    });
+    // One reduction, then the account: the three chunks left were not sent.
+    expect(state.call).toHaveBeenCalledTimes(2);
+    const instruction = state.call.mock.calls[1]![1] as string;
+    expect(instruction).toContain("budget ran out");
+    expect(instruction).toContain("The first portion: parser work began.");
+    expect(instruction.length).toBeLessThan(2 * ENRICHMENT_CHUNK_CHARS);
+    expect(String(state.writes.at(-1)?.summary)).toBe(
+      `Worked on it.${ENRICHMENT_BUDGET_NOTE}`,
+    );
+  });
+
+  it("reduces every chunk and adds no note while the run is under budget (negative)", async () => {
+    longRun();
+    state.call.mockImplementation(async (_scope: unknown, text: string) =>
+      text.startsWith("Return only JSON")
+        ? account
+        : { text: "A portion.", model: "fast-test", costUsd: 0.01 },
+    );
+    expect(await run()).toMatchObject({
+      status: "generated",
+      budgetReached: false,
+    });
+    // Four reductions and the account.
+    expect(state.call).toHaveBeenCalledTimes(5);
+    expect(String(state.writes.at(-1)?.summary)).toBe("Worked on it.");
   });
 });
 

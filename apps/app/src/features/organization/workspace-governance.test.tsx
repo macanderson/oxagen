@@ -29,6 +29,8 @@ vi.mock("./actions", () => ({
   archiveWorkspace: vi.fn(),
   createWorkspace: vi.fn(),
   editWorkspace: vi.fn(),
+  setOrgAvatar: vi.fn(),
+  setWorkspaceAvatar: vi.fn(),
 }));
 
 const { editWorkspace } = await import("./actions");
@@ -39,6 +41,7 @@ const workspace: Workspace = {
   name: "Platform",
   slug: "platform",
   namespace: "platform",
+  avatarUrl: null,
   role: "Admin",
   archivedAt: null,
   costCenter: null,

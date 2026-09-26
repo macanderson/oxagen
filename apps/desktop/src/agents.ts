@@ -270,6 +270,13 @@ function tierFields(
 }
 
 /**
+ * The line for a harness that holds a run token while its model calls go
+ * somewhere other than the gateway, so every model call fails.
+ */
+export const UNROUTED_BROKERED =
+  "credential brokered, but model calls are not routed to the gateway, so they fail";
+
+/**
  * One line on how the harness gets its model credential (ADR-143). Brokered
  * means the harness holds a run token and the gateway supplies the key from
  * its custody; otherwise the harness's own credential crosses the proxy, and
@@ -310,8 +317,19 @@ function harnessRow(
         : `hooks missing: ${presence.missing.join(", ")}`,
     );
   }
+  // Both credential lines say where the credential goes on a model call,
+  // and a call only reaches the proxy when the harness's base URL names it
+  // and no managed file overrides it. Anything else (not ours, shadowed, or
+  // not reported) is a route the harness does not take, and ADR-095 claims
+  // no model proxy until traffic is routed. A brokered credential on a
+  // harness that is reported and not routed is broken: the harness sends
+  // its run token to the vendor, which refuses it.
+  const baseUrl = tacho?.modelBaseUrls?.find((b) => b.harness === h);
+  const routed = baseUrl?.ours === true && !baseUrl.shadowed;
   const credential = tacho?.modelCredentials?.find((c) => c.harness === h);
-  if (credential) details.push(credentialDetail(credential));
+  if (credential && routed) details.push(credentialDetail(credential));
+  else if (credential?.brokered === true && baseUrl !== undefined)
+    details.push(UNROUTED_BROKERED);
 
   if (!wrapped) {
     return {

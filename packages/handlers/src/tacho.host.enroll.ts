@@ -10,7 +10,8 @@
 //      presentation that waited on the row lock and found the token used.
 //   2. Inside the token's tenant scope, one transaction: lock the token row
 //      (a second presenter waits here and then reads it as used), resolve the
-//      agent and its key (one live host per key; a revoked host gives its key
+//      agent and its key (it refuses a deleted or retired agent with
+//      `agent_retired`; one live host per key; a revoked host gives its key
 //      up), mint the host bound to the agent and its principal,
 //      mark the token used by that host, and record the git remote the host
 //      reported while the gate is still open.
@@ -22,6 +23,7 @@ import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { assertNotRetired } from "./lib/agent-identity";
 import { hashEnrollmentToken, parseRepositoryRemote } from "./lib/onboarding";
 import {
   enrollmentDocument,
@@ -137,6 +139,7 @@ export const tachoHostEnrollHandler: CapabilityHandler<
             id: schema.agents.id,
             publicId: schema.agents.publicId,
             slug: schema.agents.slug,
+            status: schema.agents.status,
             principalId: schema.agents.principalId,
             orgNamespace: schema.organizations.namespace,
             orgSlug: schema.organizations.slug,
@@ -166,6 +169,10 @@ export const tachoHostEnrollHandler: CapabilityHandler<
             message: "The agent this token was issued for no longer exists",
           });
         }
+        // `retire_agent` archives the row and leaves `deleted_at` unset, so a
+        // token issued before the retirement still finds it. The refusal
+        // rolls back the transaction, which leaves the token unused.
+        assertNotRetired(agent);
         const agentKey = `${agent.orgNamespace}.${agent.workspaceNamespace}.${agent.slug}`;
 
         const [existingHost] = await tx

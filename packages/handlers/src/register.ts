@@ -1,4 +1,5 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
   registerHandler,
   registerHandlersOnce,
@@ -21,6 +22,34 @@ registerHandlersOnce("@oxagen/handlers", () => {
   setRunSealedSender(async (event) => {
     const { eventClient } = await import("./event-client");
     await eventClient.send(event);
+  });
+  // The durable repository sync (ADR-184) lives in @oxagen/inngest-functions,
+  // which cannot import this package. The sync itself is installed here, and
+  // loaded on the first run, not at boot.
+  setSteeringSyncRunner(async (scope, options) => {
+    const [{ runInTenantScope }, sync, { HandlerError }] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./context.steering.sync"),
+      import("@oxagen/oxagen"),
+    ]);
+    let out;
+    try {
+      out = await runInTenantScope(scope, () =>
+        sync.syncWorkspaceSteering(sync.syncDeps(), scope, options),
+      );
+    } catch (err) {
+      // A refusal (the production branch is gone, the rules directory is too
+      // large) reads the same on every retry. The sync state already says
+      // why, so the durable function stops instead of retrying it.
+      if (err instanceof HandlerError && err.code === "conflict")
+        Object.assign(err, { isNonRetriable: true });
+      throw err;
+    }
+    return {
+      outcome: out.outcome,
+      headSha: out.headSha,
+      retryAfterSeconds: out.retryAfterSeconds,
+    };
   });
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(

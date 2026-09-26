@@ -57,7 +57,7 @@ describe("agent.definition.publish handler", () => {
       [AGENT_ROW], // resolveAgent
       [{ id: "ver-uuid", isPublished: false, config: CONFIG }], // version lookup
       [], // update version
-      [], // update agent
+      [{ id: "uuid-1" }], // update agent returning
     );
     const out = await agentDefinitionPublishHandler(
       { agentId: "agt_1", version: 1 },
@@ -127,7 +127,7 @@ describe("agent.definition.publish handler", () => {
       [{ version: 4 }], // latest version
       [{ id: "ver-4", isPublished: false, config: CONFIG }], // version lookup
       [],
-      [],
+      [{ id: "uuid-1" }], // update agent returning
     );
     const out = await agentDefinitionPublishHandler({ agentId: "agt_1" }, CTX);
     expect(out.version).toBe(4);
@@ -169,6 +169,30 @@ describe("agent.definition.publish handler", () => {
     );
     // The guard fires before any write — no insert/update/delete was issued.
     expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+  });
+
+  it("refuses a retired (archived) agent before any write, so publish cannot un-retire it", async () => {
+    fake.enqueue([{ ...AGENT_ROW, status: "archived" }]); // resolveAgent
+    await expect(
+      agentDefinitionPublishHandler({ agentId: "agt_1", version: 1 }, CTX),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "agent_retired",
+      message: 'Agent "my-agent" is retired',
+    });
+    expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+  });
+
+  it("refuses when retire_agent archives the row between the guard and the agent write", async () => {
+    fake.enqueue(
+      [AGENT_ROW], // resolveAgent reads the row before the retirement commits
+      [{ id: "ver-uuid", isPublished: false, config: CONFIG }], // version lookup
+      [], // update version
+      [], // update agent: the `status <> 'archived'` predicate matches nothing
+    );
+    await expect(
+      agentDefinitionPublishHandler({ agentId: "agt_1", version: 1 }, CTX),
+    ).rejects.toMatchObject({ code: "conflict", reason: "agent_retired" });
   });
 
   it("throws without an authenticated user", async () => {

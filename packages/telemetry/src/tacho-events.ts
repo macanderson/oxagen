@@ -15,6 +15,7 @@ import {
   TACHO_METERING_OBSERVED,
   type TachoEvent,
 } from "@oxagen/tacho";
+import type { ClickHouseSettings } from "@clickhouse/client";
 import { TACHO_EVENTS_TABLE, tachoEventsColumns } from "./tacho-events-ddl";
 import { chInsert, chSelect } from "./tenant";
 
@@ -58,6 +59,33 @@ export function tachoEventRow(
   return row;
 }
 
+/** The most memory one `tacho_events` insert may take: 512 MiB. */
+export const TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES = 512 * 1024 * 1024;
+
+/**
+ * The memory terms of every `tacho_events` insert (#3662).
+ *
+ * The app node's ClickHouse stops queries once the whole server passes its
+ * 1.5 GiB cap. It picks the query with the highest overcommit ratio (bytes
+ * held over the query's ratio denominator) and stops it. On 2026-09-21 it
+ * picked the ingest insert while a heavy read held the memory, and the batch
+ * failed. A denominator of 0 takes a query out of that choice, so a heavy read
+ * elsewhere on the node is stopped instead of the write. ClickHouse's docs
+ * disagree about which of the two denominators the server-wide choice reads,
+ * so both are 0.
+ *
+ * In exchange, the insert is bounded by `max_memory_usage`, so a write the
+ * node will not stop cannot grow without limit. One request is at most 4 MiB
+ * of JSON (`TACHO_MAX_REQUEST_BYTES`), and 512 MiB is a third of the cap. An
+ * insert that passes the bound fails with code 241, which ingest answers 503
+ * with Retry-After.
+ */
+export const TACHO_EVENTS_INSERT_SETTINGS: ClickHouseSettings = {
+  max_memory_usage: String(TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES),
+  memory_overcommit_ratio_denominator: "0",
+  memory_overcommit_ratio_denominator_for_user: "0",
+};
+
 /**
  * Append events. No-ops on an empty array, so an empty batch costs neither a
  * tenant-scope assertion nor a round-trip.
@@ -70,6 +98,7 @@ export async function insertTachoEvents(
   await chInsert(
     TACHO_EVENTS_TABLE,
     inserts.map((insert) => tachoEventRow(insert, receivedAt)),
+    TACHO_EVENTS_INSERT_SETTINGS,
   );
 }
 

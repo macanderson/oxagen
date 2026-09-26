@@ -1,0 +1,17 @@
+-- Drop the Claude Code user's readable email address from tacho.sessions
+-- (#3072, ADR-084).
+--
+-- 20260908120000_tacho_control_plane created the column. #3173 stopped every
+-- reader and writer: the Drizzle schema no longer declares it, ingest stores
+-- nothing derived from the address, and the person on a session is
+-- `initiating_principal_id`, an identity Oxagen issues. Sessions recorded
+-- before that change still hold the address. Dropping the column removes it.
+--
+-- ADR-084 held this drop until the #3173 rollback window closed. The window
+-- no longer applies: the maintainer authorized the drop on 2026-09-25, while
+-- the product has no customers. The ClickHouse half is
+-- packages/telemetry/src/migrations/0031_drop_tacho_events_anthropic_user_email.sql.
+--
+-- No index, constraint, view, or policy names the column. Dropping it is a
+-- catalog change and does not rewrite the table.
+ALTER TABLE "tacho"."sessions" DROP COLUMN IF EXISTS "anthropic_user_email";

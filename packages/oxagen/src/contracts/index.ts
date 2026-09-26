@@ -331,6 +331,7 @@ import { integrationMetrics } from "./integration.metrics";
 import { integrationDelete } from "./integration.delete";
 import { graphNodeList } from "./graph.node.list";
 import { graphStats } from "./graph.stats";
+import { graphRuleAuthor } from "./graph.rule.author";
 import { ontologyQuery } from "./ontology.query";
 import { ontologyNeighbors } from "./ontology.neighbors";
 import { apiKeyRotate } from "./api.key.rotate";
@@ -952,6 +953,7 @@ export {
   integrationDelete,
   graphNodeList,
   graphStats,
+  graphRuleAuthor,
   ontologyQuery,
   ontologyNeighbors,
   apiKeyRotate,
@@ -1360,6 +1362,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   integrationDelete,
   graphNodeList,
   graphStats,
+  graphRuleAuthor,
   ontologyQuery,
   ontologyNeighbors,
   apiKeyRotate,

@@ -381,6 +381,7 @@ export class Detector {
         complete: false,
         present: [],
         missing: [],
+        stale: [],
         envOk: false,
         disabledByFlag: false,
       };

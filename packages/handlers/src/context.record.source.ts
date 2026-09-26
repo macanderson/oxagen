@@ -1,7 +1,7 @@
 // context.record.source.ts — where a published record is read back from
 // (ADR-061; MC spec §10.2).
 //
-// The record is the file. `.oxagen/rules/<lineage>.toml` on the workspace's
+// The record is the file. Its file under `.oxagen/rules/` on the workspace's
 // production branch is what Stella loads and what steers a run; the Postgres
 // registry is a mirror kept for listing, filtering and the promotions ledger.
 // So a read resolves the file through the repository binding and answers from
@@ -23,11 +23,12 @@ import {
   recordFilePath,
 } from "./context.steering.file";
 import { logger } from "./logger";
+import { isRepositoryRecord } from "./context.steering.sync.plan";
 
 export interface RecordFileRead {
   /** The record as its file spells it. */
   file: ParsedRecordFile;
-  /** `.oxagen/rules/<lineage>.toml`. */
+  /** The file under `.oxagen/rules/`: the registry's path, else `<lineage>.toml`. */
   path: string;
   /** `owner/name` as the binding approved it. */
   repository: string;
@@ -54,8 +55,14 @@ export async function readRecordFromRepo(
   github: SteeringGitHub,
   scope: { orgId: string; workspaceId: string },
   lineageId: string,
+  /**
+   * Where the registry last saw the file. A person can rename or move a
+   * record file (ADR-184), so the stored path wins over the one the lineage
+   * would derive; the derived one is for a record the registry has not seen.
+   */
+  knownPath?: string | null,
 ): Promise<RecordFileRead | null> {
-  const path = recordFilePath(lineageId);
+  const path = knownPath ?? recordFilePath(lineageId);
   try {
     const repo = await github.resolveRepository(scope);
     const text = await github.readFile(repo, path, repo.defaultBranch);
@@ -130,8 +137,8 @@ function isLineageId(id: string): boolean {
 /**
  * The record an id names, from the mirror and from the file.
  *
- * The lineage is the file's name, so a `ctr_` id can only reach a file
- * through the mirror that knows which lineage it is. Anything that is a valid
+ * A `ctr_` id can only reach a file through the mirror, which knows the
+ * record's lineage and where its file was last seen. Anything that is a valid
  * lineage reaches the file directly, which is what lets a record whose mirror
  * row is gone still be read back. An id that is neither reaches nothing: the
  * lineage is spliced into the file path, and only the proposal contract's
@@ -153,7 +160,14 @@ export async function resolveRecordById(
   const lineageId =
     mirrored?.record.slug ?? (isLineageId(recordId) ? recordId : null);
   const fileRead = lineageId
-    ? await readRecordFromRepo(deps.github, scope, lineageId)
+    ? await readRecordFromRepo(
+        deps.github,
+        scope,
+        lineageId,
+        isRepositoryRecord(mirrored?.record.path ?? null)
+          ? mirrored!.record.path
+          : null,
+      )
     : null;
   if (!mirrored && !fileRead) throw recordNotFound(recordId);
   return { mirrored, lineageId, fileRead };

@@ -9,6 +9,7 @@ import type { CapabilityContext } from "../types";
 import {
   resolveAgent,
   assertAgentMutable,
+  assertAgentNotRetired,
   isManagedAgentType,
 } from "./_agent-definition";
 
@@ -37,6 +38,7 @@ export async function agentDefinitionUpdateHandler(
       throw new Error(`Agent "${input.agentId}" not found in this workspace`);
     }
     assertAgentMutable(agent);
+    assertAgentNotRetired(agent);
 
     // A caller may not promote a user agent into a managed/built-in type — that
     // reserved space is owned by the platform, not the Workbench editor. Guard

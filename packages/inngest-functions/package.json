@@ -11,7 +11,8 @@
     "./adapter": "./src/adapter.ts",
     "./events": "./src/events.ts",
     "./tacho-idle-close": "./src/lib/tacho-idle-close.ts",
-    "./client": "./src/inngest.ts"
+    "./client": "./src/inngest.ts",
+    "./steering-sync-runner": "./src/lib/steering-sync-runner.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

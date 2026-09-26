@@ -23,7 +23,17 @@ import {
   type ToolsSearchInput,
   type ToolsSearchOutput,
 } from "@oxagen/oxagen/contracts/tools.search";
-import { and, desc, eq, ilike, isNull, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  ilike,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   resolveActingUserId,
   resolveActorOrgRoles,
@@ -257,6 +267,8 @@ async function searchAgents(
         eq(agents.orgId, scope.orgId),
         eq(agents.workspaceId, scope.workspaceId),
         isNull(agents.deletedAt),
+        // Treat a retired agent as a deleted record, so the menu never offers it.
+        ne(agents.status, "archived"),
         query
           ? or(ilike(agents.slug, pattern), ilike(agents.name, pattern))
           : undefined,

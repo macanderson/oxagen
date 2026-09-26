@@ -46,6 +46,29 @@ describe("clickhouse tenant seam", () => {
     });
   });
 
+  it("passes one insert's settings through, and sends none when the caller gives none", async () => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      chInsert("events", [{ event_type: "x" }], { max_memory_usage: "1024" }),
+    );
+    expect(insert).toHaveBeenCalledWith({
+      table: "events",
+      values: [{ event_type: "x", org_id: ORG, workspace_id: WS }],
+      format: "JSONEachRow",
+      clickhouse_settings: { max_memory_usage: "1024" },
+    });
+    insert.mockClear();
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      chInsert("events", [{ event_type: "x" }]),
+    );
+    expect(insert.mock.calls[0]).toEqual([
+      {
+        table: "events",
+        values: [{ event_type: "x", org_id: ORG, workspace_id: WS }],
+        format: "JSONEachRow",
+      },
+    ]);
+  });
+
   it("overwrites hostile caller-supplied tenant columns", async () => {
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
       chInsert("events", [

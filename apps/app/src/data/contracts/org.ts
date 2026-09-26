@@ -88,6 +88,8 @@ const Workspace = z.object({
   /** The immutable namespace every agent key in the workspace carries. */
   namespace: z.string().min(1),
   name: z.string().min(1),
+  /** The stored avatar the editor opens on; null when it has none. */
+  avatarUrl: z.string().min(1).nullable(),
   /** The viewer's role in this workspace; null for an org admin with no membership of it. */
   role: z.string().nullable(),
   /** When the workspace was archived; null while it is live. */
@@ -103,6 +105,11 @@ export const WorkspaceList = z.object({
    * for copying, next to each workspace's own public id.
    */
   orgId: PublicId,
+  /**
+   * The organization's stored avatar, read from the `organization` block of
+   * `list_workspaces` for the avatar editor to open on. Null when it has none.
+   */
+  orgAvatarUrl: z.string().min(1).nullable(),
   workspaces: z.array(Workspace),
 });
 export type WorkspaceList = z.infer<typeof WorkspaceList>;

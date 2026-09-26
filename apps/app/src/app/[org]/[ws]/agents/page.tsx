@@ -15,9 +15,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // The column set (Composition or Operations) is the table's own session
 // state, not a query parameter, so a link here always lands on Composition
-// (mockups/pages/agents.md, Functionality). While the read is in flight the
-// body is the skeleton and the shell stays; a state with nothing to list
-// replaces the body, header included, as the design draws it.
+// (mockups/pages/agents.md, Functionality). `deregistered=show` is a query
+// parameter because the server read changes with it: retired agents are left
+// out of the list unless a person asks to see them. While the read is in
+// flight the body is the skeleton and the shell stays; a state with nothing to
+// list replaces the body, header included, as the design draws it.
 export default async function AgentsPage({
   params,
   searchParams,
@@ -27,7 +29,7 @@ export default async function AgentsPage({
 }) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
-  const { cursor } = await searchParams;
+  const { cursor, deregistered } = await searchParams;
   const t = await getTranslations();
   // The denied state names who is signed in; the session requireViewer read.
   const user = await getAuthUser();
@@ -42,6 +44,7 @@ export default async function AgentsPage({
           ctx={ctx}
           source={dataSource()}
           cursor={firstParam(cursor) ?? null}
+          showRetired={firstParam(deregistered) === "show"}
           viewerName={viewerName}
           header={
             <PageHeader

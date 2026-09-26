@@ -116,7 +116,14 @@ export function tachoDenied(
   return new CapabilityError(capability, "authz_denied", message);
 }
 
-/** The refusal reason a revoked host's requests carry. */
+/**
+ * The refusal reason a revoked host's requests carry. `resolveEnrolledHost`
+ * answers it for a live key on a revoked host. Revoking a host also retires
+ * its keys, so most of its requests never get this far: the API's auth
+ * middleware answers the same 403 and reason for a retired key
+ * (`resolveApiKey`, @oxagen/auth), and the host's shipper stops on it
+ * (`spool.ts`, @oxagen/tacho).
+ */
 export const TACHO_HOST_REVOKED = "host_revoked";
 
 /**

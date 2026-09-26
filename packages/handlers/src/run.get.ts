@@ -77,6 +77,9 @@ export function toFrame(frame: RunFrame): RunFrameOut {
     observedAt: frame.observedAt.toISOString(),
     digest: frame.digest,
     summary: frame.summary,
+    tool: frame.identity.tool,
+    toolStatus: frame.identity.toolStatus,
+    approvalId: frame.identity.approvalId ?? null,
     body: {
       digest: frame.body.bodyDigest,
       bytesRef: frame.body.bodyRef,

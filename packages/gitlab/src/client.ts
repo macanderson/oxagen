@@ -544,6 +544,7 @@ export function createGitLabClient(options: GitLabClientOptions): GitLabClient {
           recursive: true,
           per_page: MAX_PER_PAGE,
           pagination: "keyset",
+          ...(a.path ? { path: a.path } : {}),
         },
       );
       return items.filter((i) => i.type === "blob").map((i) => i.path);

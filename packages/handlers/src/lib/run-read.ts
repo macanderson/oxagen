@@ -22,9 +22,11 @@ import type { RunItem } from "@oxagen/oxagen/contracts/run.list";
 import {
   createPostgresRunStore,
   ledgerFrame,
+  listSubagentSessions,
+  type RunChainReads,
   type RunFrame,
   type RunStore,
-  spliceSubagentChains,
+  subagentChainRead,
   tachoFrame,
 } from "@oxagen/run-ledger";
 import { deferredEvidenceArchive } from "@oxagen/run-ledger/evidence-store";
@@ -38,7 +40,6 @@ import {
   type LedgerRunRow,
   postgresReadRunRollups,
   postgresRunQueries,
-  postgresTachoChildSessions,
   type ReadRunRollups,
   type RunQueries,
   runScope,
@@ -90,7 +91,7 @@ export type RunReadDeps = {
   /**
    * Every subagent chain under a wrapped run's root session. Optional so a
    * reader that only walks the run's own chain (the chain verifier, the frame
-   * body read) is built without it; `readRunFrames` reads no subagent frames
+   * body read) is built without it; `runChainReads` reads no subagent frames
    * when it is absent.
    */
   tachoSubagentFrames?: TachoSubagentFrameReader;
@@ -267,88 +268,27 @@ export async function readAllFrames(
 }
 
 /**
- * Every frame of the run up to `cap`, its subagents' included: for a wrapped
- * run, the root session's chain with each subagent chain spliced in where it
- * was spawned (`spliceSubagentChains`). A subagent records on a chain of its
- * own, and the run's cost already counts those chains; a transcript that read
- * only the root showed none of the work they did. A ledger run has no
- * subagent chains and reads as `readAllFrames` does.
- *
- * The cap is over the frames of every chain together, and `complete` is
- * false when it cut either read short.
+ * How `deps` reads the run's chains (`RunChainReads` in `@oxagen/run-ledger`):
+ * its own chain page by page, and for a wrapped run every subagent chain
+ * under it. What the reads are composed into, and which frames a transcript
+ * folds, is decided in `@oxagen/run-ledger` (`readRunChains`,
+ * `readTranscriptFrames`), so the summary job composes the same frames.
  */
-export async function readRunFrames(
+export function runChainReads(
   deps: RunReadDeps,
   run: ResolvedRun,
-  cap: number,
-): Promise<{ frames: RunFrame[]; complete: boolean }> {
-  if (run.source !== "tacho" || deps.tachoSubagentFrames === undefined) {
-    return readAllFrames(deps, run, cap);
-  }
-  const [own, children] = await Promise.all([
-    readAllFrames(deps, run, cap),
-    readSubagentFrames(deps, deps.tachoSubagentFrames, run.sessionUuid, cap),
-  ]);
-  // The run's own chain comes first; subagent frames fill what is left.
-  const kept = children.frames.slice(0, Math.max(0, cap - own.frames.length));
+): RunChainReads {
   return {
-    frames: spliceSubagentChains(own.frames, kept),
-    complete:
-      own.complete &&
-      children.complete &&
-      kept.length === children.frames.length,
+    own: (cap) => readAllFrames(deps, run, cap),
+    subagents:
+      run.source === "tacho" && deps.tachoSubagentFrames !== undefined
+        ? subagentChainRead(
+            deps.tachoSubagentFrames,
+            run.sessionUuid,
+            deps.tachoChildSessions,
+          )
+        : null,
   };
-}
-
-/**
- * The frames of every subagent chain under a root, up to `cap`, in one read
- * of `cap + 1` rows so a full read can be told from a cut one.
- */
-async function readSubagentFrames(
-  deps: RunReadDeps,
-  read: TachoSubagentFrameReader,
-  rootSessionUuid: string,
-  cap: number,
-): Promise<{ frames: RunFrame[]; complete: boolean }> {
-  let sessionUuids: string[] | undefined;
-  if (deps.tachoChildSessions !== undefined) {
-    sessionUuids = await deps.tachoChildSessions(rootSessionUuid);
-    if (sessionUuids.length === 0) return { frames: [], complete: true };
-  }
-  const rows = await read({
-    rootSessionUuid,
-    after: null,
-    limit: cap + 1,
-    ...(sessionUuids === undefined ? {} : { sessionUuids }),
-  });
-  const frames = rows.map(tachoFrame);
-  return frames.length > cap
-    ? { frames: frames.slice(0, cap), complete: false }
-    : { frames, complete: true };
-}
-
-/**
- * A wrapped run's frames with the harness's reports of model calls the proxy
- * had already begun observing stripped of their cost and usage.
- *
- * Once the loopback proxy observes a chain's model calls, it meters them. The
- * harness's own report of a later call on the same chain is a second account
- * of a call already counted. Chains are metered one by one, so the rule holds
- * per chain, in the order each chain recorded its frames. The intake folds
- * session totals by the same rule (`usageCountedEvents`). `get_run_transcript`
- * and `get_run_turns` both apply it. Mutates and returns `frames`.
- */
-export function withoutLateReports<T extends RunFrame[]>(frames: T): T {
-  const observed = new Set<string>();
-  for (const frame of frames) {
-    const chain = frame.chain?.sessionUuid ?? "";
-    if (frame.usageObserved) observed.add(chain);
-    else if (observed.has(chain) && frame.type === "llm_call") {
-      frame.usage = null;
-      frame.costMicros = null;
-    }
-  }
-  return frames;
 }
 
 /** The one frame at `seq`, or null. */
@@ -397,8 +337,7 @@ export function defaultRunReadDeps(): RunReadDeps {
     readWitnessFor,
     tachoFrames: selectTachoEvents,
     tachoSubagentFrames: selectTachoSubagentEvents,
-    tachoChildSessions: (root) =>
-      postgresTachoChildSessions(requireScope(), root),
+    tachoChildSessions: (root) => listSubagentSessions(requireScope(), root),
     readEnrichmentEnabled: readRunEnrichmentEnabled,
   };
 }

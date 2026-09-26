@@ -48,11 +48,12 @@ describe("messages/shell.json", () => {
     // (update_profile, ask_assistant); the rev1 design put the approvals
     // drawer and the bell back in the top bar (fleet.md "Shell"). `choices`
     // is the words a record picker's tool rows carry (choice-actions.ts).
+    // The avatar editor's words live in `ui.avatarEditor`, because one editor
+    // serves people, agents, workspaces, and organizations (@/ui/avatar-editor).
     expect(Object.keys(messages).sort()).toEqual([
       "account",
       "approvals",
       "assistant",
-      "avatar",
       "choices",
       "commands",
       "denied",

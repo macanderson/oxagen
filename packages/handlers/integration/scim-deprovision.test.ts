@@ -252,18 +252,20 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
     expect(types.filter((t) => t === "api_key.revoked")).toHaveLength(4);
     expect(types).toContain("tacho.host_revoked");
     // The host is revoked through revokeHostEnrollment: both of its keys are
-    // retired and the collector is told to stop.
+    // retired and the collector is told to stop. Each retired key answers
+    // `host_revoked`, which the API serves as 403 with that reason, so the
+    // collector stops shipping instead of retrying a 401 (#3944, S-04).
     const [host] = await q(
       sql`SELECT status FROM tacho.hosts WHERE id = ${hostId}`,
     );
     expect(host?.status).toBe("revoked");
     await expect(resolveApiKey(hostKey.raw)).resolves.toEqual({
       ok: false,
-      kind: "invalid",
+      kind: "host_revoked",
     });
     await expect(resolveApiKey(gatewayKey.raw)).resolves.toEqual({
       ok: false,
-      kind: "invalid",
+      kind: "host_revoked",
     });
     const commands = await q(sql`
       SELECT command FROM tacho.control_commands WHERE host_id = ${hostId}

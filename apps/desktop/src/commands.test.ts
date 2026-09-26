@@ -17,6 +17,7 @@ import {
   HARNESSES,
   workspaceUrl,
   wizardStep,
+  enforcementText,
   enrollArgs,
   loginArgs,
   needsWorkspacePick,
@@ -47,8 +48,31 @@ describe("sidecar argv", () => {
     ]);
   });
 
+  it("says how enforcement works for what was registered (ADR-095)", () => {
+    expect(enforcementText(["claude-code", "stella"])).toBe(
+      "enforcement is client-attested (the hooks the agents honour)",
+    );
+    // A connected app has no hook to honour.
+    expect(enforcementText(["claude-desktop"])).toBe(
+      "connected apps are checked on the server for the Oxagen tools they call",
+    );
+    expect(enforcementText(["cursor", "claude-desktop"])).toBe(
+      "wrapped agents are client-attested (the hooks the agents honour), and connected apps are checked on the server for the Oxagen tools they call",
+    );
+  });
+
   it("enrolls with the picked org, workspace, and harness list", () => {
-    expect(enrollArgs(NONE)).toEqual(["enroll", "--harness", "claude-code"]);
+    expect(enrollArgs({ ...NONE, harnesses: ["cursor", "stella"] })).toEqual([
+      "enroll",
+      "--harness",
+      "cursor,stella",
+    ]);
+    // No agent is registered on the operator's behalf (ADR-101), and an
+    // empty pick never reaches tacho as `--harness ""`.
+    expect(() => enrollArgs(NONE)).toThrow(/pick at least one agent/);
+    expect(() => enrollArgs({ ...NONE, harnesses: [] })).toThrow(
+      /pick at least one agent/,
+    );
     // An org without a workspace never reaches tacho: it would fill the
     // workspace from config.json, the previous org's.
     expect(() =>

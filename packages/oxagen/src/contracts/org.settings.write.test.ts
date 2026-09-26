@@ -27,10 +27,25 @@ describe("org.settings.write capability", () => {
     expect(() => orgSettingsWrite.input.parse({ employeeSize: "3" })).toThrow();
   });
 
-  it("rejects a non-URL avatarUrl", () => {
-    expect(() =>
-      orgSettingsWrite.input.parse({ avatarUrl: "not-a-url" }),
-    ).toThrow();
+  it("rejects an avatarUrl that is neither an https link nor a designed avatar", () => {
+    for (const avatarUrl of [
+      "not-a-url",
+      "http://cdn.example/a.png",
+      "data:image/png;base64,AAAA",
+      `https://cdn.example/${"a".repeat(512)}`,
+    ])
+      expect(() => orgSettingsWrite.input.parse({ avatarUrl })).toThrow();
+  });
+
+  it("accepts the avatar forms the app's editor writes", () => {
+    for (const avatarUrl of [
+      "https://cdn.example/acme.png",
+      'avatar:v1:{"kind":"icon","icon":"rocket","tone":"gold"}',
+      'avatar:v1:{"kind":"initials","text":"AC","font":"sans","tone":"gold-deep"}',
+    ])
+      expect(orgSettingsWrite.input.parse({ avatarUrl }).avatarUrl).toBe(
+        avatarUrl,
+      );
   });
 
   it("is registered in the capability registry", () => {

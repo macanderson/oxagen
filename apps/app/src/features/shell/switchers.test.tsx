@@ -91,12 +91,11 @@ describe("organization switcher", () => {
     renderSwitchers(listed, "core-platform");
     const tile = screen.getByRole("button", { name: /^Switch organization/ });
     expect(tile).toHaveTextContent("Acme Robotics");
-    // The mock's `a-intel · Team`: the slug, then the plan, which is not
-    // recorded, marked on the tile itself (#3861).
-    expect(tile).toHaveTextContent("acme · ?plan not recorded");
-    expect(
-      within(tile).getByTestId("switcher-tile-not-backed"),
-    ).toHaveAttribute("data-gap", "#3861");
+    // The mock's `a-intel · Team`: the slug alone, since list_orgs returns no
+    // plan, and no placeholder where the plan would go (#3861).
+    expect(within(tile).getByText("acme")).toBeInTheDocument();
+    expect(tile).not.toHaveTextContent("?");
+    expect(tile).not.toHaveTextContent("·");
     const dialog = await openDialog("Switch organization");
     const links = within(dialog).getAllByRole("link");
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
@@ -144,12 +143,12 @@ describe("workspace switcher", () => {
     renderSwitchers(listed, "finops");
     const tile = screen.getByRole("button", { name: /^Switch workspace/ });
     expect(tile).toHaveTextContent("FinOps");
-    // The mock's `a-intel/platform · main`: the path, then the branch, which
-    // is not recorded, marked on the tile itself (#3861).
-    expect(tile).toHaveTextContent("acme/finops · ?branch not recorded");
-    expect(
-      within(tile).getByTestId("switcher-tile-not-backed"),
-    ).toHaveAttribute("data-gap", "#3861");
+    // The mock's `a-intel/platform · main`: the path alone, since
+    // list_workspaces returns no branch, and no placeholder where the branch
+    // would go (#3861).
+    expect(within(tile).getByText("acme/finops")).toBeInTheDocument();
+    expect(tile).not.toHaveTextContent("?");
+    expect(tile).not.toHaveTextContent("·");
     const dialog = await openDialog("Switch workspace");
     const links = within(dialog)
       .getAllByRole("link")

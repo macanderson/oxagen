@@ -1014,6 +1014,84 @@ describe("getTree", () => {
     expect(result).toEqual(["src/index.ts", "src/lib/util.ts", "README.md"]);
   });
 
+  // The steering sync lists `.oxagen/rules/` on every change to it. On a
+  // large repository a whole-tree listing is thousands of entries; descending
+  // to the directory is one request per level.
+  it("lists only the blobs under a path, descending to it level by level", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({ sha: "c1", commit: { tree: { sha: "root" } } }),
+      )
+      .mockResolvedValueOnce(
+        makeResponse({
+          tree: [
+            { path: ".oxagen", type: "tree", sha: "ox" },
+            { path: "src", type: "tree", sha: "src" },
+          ],
+          truncated: false,
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeResponse({
+          tree: [{ path: "rules", type: "tree", sha: "rules" }],
+          truncated: false,
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeResponse({
+          tree: [
+            { path: "a.toml", type: "blob", sha: "b1" },
+            { path: "team", type: "tree", sha: "t1" },
+            { path: "team/b.toml", type: "blob", sha: "b2" },
+          ],
+          truncated: false,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    const result = await client.getTree({
+      owner: "acme",
+      repo: "r",
+      ref: "main",
+      path: ".oxagen/rules",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const [lastUrl] = fetchMock.mock.calls[3] as [string, RequestInit];
+    expect(lastUrl).toBe(
+      "https://api.github.com/repos/acme/r/git/trees/rules?recursive=1",
+    );
+    expect(result).toEqual([
+      ".oxagen/rules/a.toml",
+      ".oxagen/rules/team/b.toml",
+    ]);
+  });
+
+  it("answers no blobs for a path the tree does not hold", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({ sha: "c1", commit: { tree: { sha: "root" } } }),
+      )
+      .mockResolvedValueOnce(
+        makeResponse({
+          tree: [{ path: "src", type: "tree", sha: "src" }],
+          truncated: false,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.getTree({
+        owner: "acme",
+        repo: "r",
+        ref: "main",
+        path: ".oxagen/rules",
+      }),
+    ).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("defaults ref to 'main' when not provided", async () => {
     const fetchMock = vi
       .fn()

@@ -65,19 +65,14 @@
 import { createHash } from "node:crypto";
 import {
   chmodSync,
-  chownSync,
-  closeSync,
   existsSync,
-  fsyncSync,
   mkdirSync,
-  openSync,
   readFileSync,
-  renameSync,
   statSync,
   unlinkSync,
-  writeSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { writeFileAtomic } from "./fs";
 import {
   findStellaBaseUrl,
   joinLines,
@@ -368,36 +363,10 @@ function writeAtomicPreserving(path: string, data: string | Buffer): void {
   } catch {
     // A file that does not exist yet has no mode or owner to keep.
   }
-  const tmp = join(
-    dirname(path),
-    `.${basename(path)}.${process.pid}.${Date.now()}.tmp`,
-  );
-  const fd = openSync(tmp, "w", mode);
-  try {
-    writeSync(fd, typeof data === "string" ? Buffer.from(data, "utf8") : data);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  try {
-    // `open` applies the umask. The file must end with the mode it had.
-    chmodSync(tmp, mode);
-    if (owner !== undefined) {
-      try {
-        chownSync(tmp, owner.uid, owner.gid);
-      } catch {
-        // Only root may give a file away. The same owner needs no change.
-      }
-    }
-    renameSync(tmp, path);
-  } catch (error) {
-    try {
-      unlinkSync(tmp);
-    } catch {
-      // The temp file is already gone.
-    }
-    throw error;
-  }
+  writeFileAtomic(path, data, {
+    mode,
+    ...(owner !== undefined ? { owner } : {}),
+  });
 }
 
 function readTextIfExists(path: string): string | undefined {

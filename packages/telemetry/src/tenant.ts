@@ -1,4 +1,8 @@
-import type { ClickHouseClient, ResponseJSON } from "@clickhouse/client";
+import type {
+  ClickHouseClient,
+  ClickHouseSettings,
+  ResponseJSON,
+} from "@clickhouse/client";
 import {
   assertDataPlaneUsable,
   requireScope,
@@ -41,10 +45,14 @@ async function planeClient(orgId: string): Promise<ClickHouseClient> {
  * Callers should NOT include `org_id`/`workspace_id` in the row objects —
  * the seam stamps them. Any caller-supplied values are overwritten by the
  * scope to prevent spoofing.
+ *
+ * `settings` apply to this insert only, on top of the client's own. A table
+ * whose writes must hold up under memory pressure passes its bounds here.
  */
 export async function chInsert(
   table: string,
   rows: ReadonlyArray<Record<string, unknown>>,
+  settings?: ClickHouseSettings,
 ): Promise<void> {
   const { orgId, workspaceId } = requireScope();
   const values = rows.map((r) => ({
@@ -53,7 +61,12 @@ export async function chInsert(
     workspace_id: workspaceId,
   }));
   const ch = await planeClient(orgId);
-  await ch.insert({ table, values, format: "JSONEachRow" });
+  await ch.insert({
+    table,
+    values,
+    format: "JSONEachRow",
+    ...(settings === undefined ? {} : { clickhouse_settings: settings }),
+  });
 }
 
 /**

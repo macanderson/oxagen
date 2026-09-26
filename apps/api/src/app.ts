@@ -259,6 +259,7 @@ import {
 } from "./routes/v1/plugin-schema";
 import { graphNodeListRoute } from "./routes/v1/graph.node.list";
 import { graphStatsRoute } from "./routes/v1/graph.stats";
+import { graphRuleAuthorRoute } from "./routes/v1/graph.rule.author";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
@@ -1152,6 +1153,7 @@ orgScoped.route("/plugin-schema", pluginSchemaRoute);
 orgScoped.route("/plugin-versions", pluginVersionRoute);
 orgScoped.route("/graph/nodes", graphNodeListRoute);
 orgScoped.route("/graph/stats", graphStatsRoute);
+orgScoped.route("/graph/rule/author", graphRuleAuthorRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);

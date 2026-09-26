@@ -6,7 +6,14 @@ vi.mock("@oxagen/ai", () => ({
   resolveModelFundingSource: vi.fn(),
   selectModelFromFunding: vi.fn(),
 }));
-vi.mock("@oxagen/billing", () => ({ evaluateTurnCreditGate: vi.fn() }));
+vi.mock("@oxagen/billing", () => ({
+  evaluateTurnCreditGate: vi.fn(),
+  // A flat test price: a cent per thousand tokens either way.
+  turnCostUsd: vi.fn(
+    (_model: string, usage: { inputTokens?: number; outputTokens?: number }) =>
+      ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)) / 100_000,
+  ),
+}));
 import {
   collectRunText,
   enrichmentFailureReason,
@@ -154,7 +161,9 @@ describe("the text ceiling", () => {
     expect(get.mock.calls.length).toBeLessThanOrEqual(
       Math.ceil(ENRICHMENT_TEXT_CEILING_CHARS / bodyChars),
     );
-    expect(text.length).toBeLessThanOrEqual(ENRICHMENT_TEXT_CEILING_CHARS + 200);
+    expect(text.length).toBeLessThanOrEqual(
+      ENRICHMENT_TEXT_CEILING_CHARS + 200,
+    );
     expect(text).toContain("The transcript stops here.");
     expect(text).not.toContain(`body-${count - 1}:`);
     expect(got.truncated).toBeGreaterThan(0);
@@ -180,7 +189,9 @@ it("uses the same resolved funding for the selected model, credit gate and Stell
     "@oxagen/ai"
   );
   const { runGovernedTurn } = await import("@oxagen/agent");
-  const { evaluateTurnCreditGate } = await import("@oxagen/billing");
+  const { evaluateTurnCreditGate, turnCostUsd } = await import(
+    "@oxagen/billing"
+  );
   vi.clearAllMocks();
   const funding = {
     fundedBy: "org" as const,
@@ -200,15 +211,27 @@ it("uses the same resolved funding for the selected model, credit gate and Stell
     fundedBy: "org",
   });
   vi.mocked(evaluateTurnCreditGate).mockResolvedValue({ ok: true } as never);
+  const usage = {
+    inputTokens: 6_000,
+    outputTokens: 400,
+    totalTokens: 6_400,
+    cachedInputTokens: 0,
+  };
   vi.mocked(runGovernedTurn).mockResolvedValue({
     fullStream: (async function* () {})(),
     finalText: Promise.resolve("Recorded work"),
+    usage: Promise.resolve(usage),
     modelId: "test-model",
   } as never);
+  // The call reports the tokens it used and their price (#3944, E-01), so
+  // the job can hold a run to its budget.
   await expect(runNarrativeTurn(scope, "summarize")).resolves.toEqual({
     text: "Recorded work",
     model: "test-model",
+    usage,
+    costUsd: 0.064,
   });
+  expect(turnCostUsd).toHaveBeenCalledWith("test-model", usage);
   expect(resolveModelFundingSource).toHaveBeenCalledOnce();
   expect(resolveModelFundingSource).toHaveBeenCalledWith(scope.orgId);
   expect(selectModelFromFunding).toHaveBeenCalledWith(scope.orgId, funding, {

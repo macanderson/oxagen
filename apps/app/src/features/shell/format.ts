@@ -1,9 +1,4 @@
-// Formatting helpers for the shell.
+// Formatting helpers for the shell. The initials live beside the avatar spec,
+// because the avatar editor draws them for every record that carries one.
 
-/** Two-letter initials for an avatar: first and last word, uppercased. */
-export function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const first = words[0]?.[0] ?? "";
-  const last = words.length > 1 ? (words.at(-1)?.[0] ?? "") : "";
-  return `${first}${last}`.toLocaleUpperCase();
-}
+export { initialsOf as initials } from "@/ui/avatar-spec";

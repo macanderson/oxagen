@@ -138,6 +138,37 @@ describe("a chain reopened over its own WAL", () => {
     });
   });
 
+  it("cuts a body a crash left with no event before the chain continues", async () => {
+    // The previous process wrote a batch's body and died before its event.
+    // The next event takes that seq and event id, so the orphan would be
+    // served as its body (#3372).
+    const paths = scratchPaths();
+    const first = await boot(paths);
+    await first.api.handleHook(hook("SessionStart"));
+    const uuid = first.registry.get(SESSION)!.recorder.sessionUuid;
+    const tail = first.wal.read(uuid).at(-1)!;
+    await first.stop();
+    handles.splice(0);
+    const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
+    const orphan = JSON.stringify({
+      event_id_idem: `orphan-${tail.seq + 1}`,
+      seq: tail.seq + 1,
+      content_type: "text/plain; charset=utf-8",
+      bytes_base64: Buffer.from("the orphan").toString("base64"),
+    });
+    const before = existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "";
+    writeFileSync(bodyPath, `${before}\n${orphan}\n`);
+
+    const log: string[] = [];
+    await boot(paths, () => 1_000, log);
+    expect(log).toContain(
+      "WAL removed 1 body lines a crash left with no event",
+    );
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(orphan);
+  });
+
   it("puts a reopened chain back where the WAL ends when its first write fails", async () => {
     const paths = scratchPaths();
     const first = await boot(paths);

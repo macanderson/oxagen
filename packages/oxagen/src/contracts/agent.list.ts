@@ -142,7 +142,7 @@ export const agentList = registerCapability({
   name: "list_agents",
   domain: "agent",
   description:
-    "List the agents registered in this workspace with their purpose, principal, harness, operator, status, enrollment and credential counts, live host, latest enforcement tier, active mandates, and the 30-day run, spend, token and incident figures the stores record.",
+    "List the agents registered in this workspace with their purpose, principal, harness, operator, status, enrollment and credential counts, live host, latest enforcement tier, active mandates, and the 30-day run, spend, token and incident figures the stores record. Retired (deregistered) agents are left out unless includeRetired is true.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -165,22 +165,35 @@ export const agentList = registerCapability({
       limit: z.number().int().min(1).max(100).default(50),
       /** The `nextCursor` of the previous page. */
       cursor: z.string().max(256).optional(),
+      /**
+       * List retired (deregistered) agents beside the live ones. Off by
+       * default: a retired agent is a deleted record, so a caller choosing an
+       * agent for work never sees one unless it asks. Pass the same value on
+       * every page of one walk. The totals ignore it.
+       */
+      includeRetired: z.boolean().default(false),
     })
     .strict(),
   output: z
     .object({
       items: z.array(agentListItem).max(100),
       nextCursor: z.string().nullable(),
-      /** The stat tiles over the whole workspace, not the page. */
+      /**
+       * The stat tiles over the whole workspace, not the page. Every figure
+       * except `retired` counts live agents only, whatever `includeRetired`
+       * asked for, so the tiles do not move when the list shows retired rows.
+       */
       totals: z
         .object({
+          /** Live agents: registered and not retired. */
           identities: z.number().int().nonnegative(),
+          /** Retired (deregistered) agents, which no other total counts. */
+          retired: z.number().int().nonnegative(),
           enrolled: z.number().int().nonnegative(),
           /**
-           * Live agents whose status is `unenrolled`: neither retired nor
-           * suspended, and holding no credential and no host. Not
-           * `identities - enrolled`, which would count retired and
-           * suspended agents as waiting to enroll.
+           * Live agents whose status is `unenrolled`: not suspended, and
+           * holding no credential and no host. Not `identities - enrolled`,
+           * which would count suspended agents as waiting to enroll.
            */
           unenrolled: z.number().int().nonnegative(),
           /** Agents in the workspace whose principal holds at least one active mandate. */

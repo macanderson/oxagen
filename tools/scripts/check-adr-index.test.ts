@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   deadIndexLinks,
+  duplicateNumbers,
   indexedFiles,
   missingFromIndex,
 } from "./check-adr-index.mjs";
@@ -72,6 +73,39 @@ describe("deadIndexLinks", () => {
   });
 });
 
+describe("duplicateNumbers", () => {
+  it("returns nothing when every ADR has its own number", () => {
+    expect(
+      duplicateNumbers([
+        "README.md",
+        "ADR-001-drizzle.md",
+        "ADR-002-inngest.md",
+      ]),
+    ).toEqual([]);
+  });
+
+  it("names a number two files claim, with both files", () => {
+    expect(
+      duplicateNumbers([
+        "ADR-182-the-server-folds.md",
+        "ADR-001-drizzle.md",
+        "ADR-182-rule-authoring.md",
+      ]),
+    ).toEqual([
+      {
+        number: "ADR-182",
+        files: ["ADR-182-rule-authoring.md", "ADR-182-the-server-folds.md"],
+      },
+    ]);
+  });
+
+  it("keeps ADR-18 apart from ADR-182", () => {
+    expect(duplicateNumbers(["ADR-18-short.md", "ADR-182-long.md"])).toEqual(
+      [],
+    );
+  });
+});
+
 describe("the repository's ADR index", () => {
   it("links every ADR in docs/adr and no missing file", () => {
     const adrDir = join(
@@ -85,5 +119,6 @@ describe("the repository's ADR index", () => {
     const readme = readFileSync(join(adrDir, "README.md"), "utf8");
     expect(missingFromIndex(files, readme)).toEqual([]);
     expect(deadIndexLinks(files, readme)).toEqual([]);
+    expect(duplicateNumbers(files)).toEqual([]);
   });
 });

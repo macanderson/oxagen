@@ -56,6 +56,7 @@ import type {
   RunTranscript,
   RunTurns,
   TranscriptKind,
+  TranscriptText,
   TranscriptZoom,
 } from "./contracts/run";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
@@ -237,13 +238,21 @@ export interface DataSource {
      * and paged on the cursor the last page carried. An empty `kinds` keeps
      * every frame: no chip pressed is not the same as every chip pressed off.
      * `limit` is the entries a page carries, the contract's default when
-     * omitted.
+     * omitted. `text` is how much of each body a page carries, the zoom's cap
+     * when omitted, and `query` narrows the entries to those that hold it,
+     * searched on the server.
      */
     transcript(
       ctx: WsCtx,
       runId: string,
       zoom: TranscriptZoom,
-      q?: { kinds?: TranscriptKind[]; after?: string | null; limit?: number },
+      q?: {
+        kinds?: TranscriptKind[];
+        after?: string | null;
+        limit?: number;
+        text?: TranscriptText;
+        query?: string;
+      },
     ): Promise<Read<RunTranscript>>;
     chain(ctx: WsCtx, runId: string): Promise<Read<RunChain>>;
     /**
@@ -300,7 +309,14 @@ export interface DataSource {
    * features/agents/agent.tsx.
    */
   agents: {
-    list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<AgentPage>>;
+    /**
+     * One page of the workspace's agents. A retired (deregistered) agent is
+     * left out unless `includeRetired` is true; the totals never count one.
+     */
+    list(
+      ctx: WsCtx,
+      q: { cursor: string | null; includeRetired?: boolean },
+    ): Promise<Read<AgentPage>>;
     get(ctx: WsCtx, agent: string): Promise<Read<AgentDetail>>;
     toolbelt(ctx: WsCtx, agent: string): Promise<Read<Toolbelt>>;
     incidents(

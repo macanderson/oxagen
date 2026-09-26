@@ -2,7 +2,7 @@
 
 The Run page's run waterfall (Mission Control spec §12.9; #4067): one run's per-turn ledger over every frame it recorded. Each row is one turn with its model and tool steps, its frames, its cost and the run's cost so far, and the input tokens its model calls reported. The Cost tab draws its per-turn bars, its cost-so-far line, the ledger table under them, and the Shape of the run and Cost so far instruments from these rows.
 
-A wrapped run is counted in ClickHouse in two reads, whatever its length: one finds where each chain's turns open and where the proxy began observing it, and one groups every frame by chain and turn. A 250,000-frame run answers in about 0.3 seconds, where the Cost tab's former read of the whole transcript took 19 seconds and stopped at the transcript's 10,000-frame fold. A ledger run is read from the ledger and counted frame by frame.
+A wrapped run is counted in ClickHouse in two reads, whatever its length: one finds where each chain's turns open and where the proxy began observing it, and one groups every frame by chain and turn. A 250,000-frame run answers in about 0.3 seconds, where the Cost tab's former read of the whole transcript took 19 seconds and stopped at the transcript's 10,000-frame fold. A ledger run is read from the ledger, and its steps are the entries `get_run_transcript` folds at the `steps` zoom (ADR-182). The wrapped path's SQL counts steps by its own rule, and an integration test holds the two to the same rows.
 
 **Surfaces:** api, mcp, cli
 
@@ -49,7 +49,7 @@ Each turn:
 
 ## What a turn counts
 
-- **Turns.** A recording with `turn_start` frames opens a turn at each one on the run's own chain, and the frames before the first are in no turn. A recording without them opens turn 1 at its first frame and a new turn wherever the recorded turn index changes. A subagent's own `turn_start` is the prompt its parent handed it, so it opens no turn of the run.
+- **Turns.** A recording with `turn_start` frames opens a turn at each one on the run's own chain, and the frames before the first are in no turn. A recording without them opens turn 1 at its first frame and a new turn wherever the recorded turn index changes. The ledger writes the index only on `model.call_completed`, so a new turn also takes the context and model frames recorded just before that call, and the tool frames after the previous call stay in the previous turn. A subagent's own `turn_start` is the prompt its parent handed it, so it opens no turn of the run.
 - **Subagents.** A subagent's chain counts toward the turn that spawned it: the `subagent_start` naming its spawning tool call, or else its agent id. A chain no spawn names counts toward the turn in progress when it began, and a chain spawned by another subagent counts toward its parent's turn. The chains are the ones Postgres lists under the root, the same list `get_run_transcript` reads.
 - **Model calls.** A later sighting of a call (`oxagen.llm_call_duplicate_of`, which the host stamps on the second and later source to report one call, and on a transcript message's further content blocks) is not another call, carries no cost, and reports no tokens.
 - **Late reports.** Once the proxy has observed one of a chain's model calls, the harness's own report of a later call on that chain carries no cost and reports no tokens. `get_run_transcript` applies the same rule.

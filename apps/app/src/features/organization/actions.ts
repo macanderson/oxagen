@@ -31,6 +31,7 @@ import { iamRoleDelete } from "@oxagen/oxagen/contracts/iam.role.delete";
 import { iamRoleGrantsSet } from "@oxagen/oxagen/contracts/iam.role.grants.set";
 import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
+import { orgSettingsWrite } from "@oxagen/oxagen/contracts/org.settings.write";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
@@ -247,6 +248,47 @@ export type WorkspaceEdited = {
  * so the control offers "leave unchanged" as its default rather than
  * pre-selecting a value it cannot verify.
  */
+/** What an avatar write stored: the value, or null once it was cleared. */
+type AvatarWritten = { avatarUrl: string | null };
+
+/**
+ * The avatar editor's write for one workspace (Workspaces, Edit avatar). It
+ * sends the avatar alone, so a rename saved since the dialog opened is not
+ * reverted. An empty string clears the avatar. `update_workspace_settings`
+ * validates the value with the shared avatar schema and refuses an archived
+ * workspace.
+ */
+export async function setWorkspaceAvatar(
+  org: string,
+  workspaceId: string,
+  avatarUrl: string,
+): Promise<ActionResult<AvatarWritten>> {
+  const ctx = await requireViewer(org);
+  const written = await kernelWrite(ctx, workspaceSettingsWrite, {
+    workspaceId,
+    avatarUrl: avatarUrl === "" ? null : avatarUrl,
+  });
+  if (!written.ok) return written;
+  return { ok: true, value: { avatarUrl: written.value.avatarUrl } };
+}
+
+/**
+ * The avatar editor's write for the organization itself (the Organization
+ * header's Edit avatar), through `update_org_settings`, avatar alone. An empty
+ * string clears the avatar.
+ */
+export async function setOrgAvatar(
+  org: string,
+  avatarUrl: string,
+): Promise<ActionResult<AvatarWritten>> {
+  const ctx = await requireViewer(org);
+  const written = await kernelWrite(ctx, orgSettingsWrite, {
+    avatarUrl: avatarUrl === "" ? null : avatarUrl,
+  });
+  if (!written.ok) return written;
+  return { ok: true, value: { avatarUrl: written.value.avatarUrl } };
+}
+
 export async function editWorkspace(
   org: string,
   workspaceId: string,

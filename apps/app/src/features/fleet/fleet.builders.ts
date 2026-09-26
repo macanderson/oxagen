@@ -126,6 +126,7 @@ export function agentPage(
     nextCursor: null,
     totals: {
       identities,
+      retired: 0,
       enrolled: identities,
       unenrolled: 0,
       holdingMandate: null,

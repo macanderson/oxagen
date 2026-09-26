@@ -458,12 +458,10 @@ describe("the sidebar's counts and foot", () => {
     ).toHaveAccessibleName("Fleet, 1 waiting");
   });
 
-  it("says what the foot cannot show, and carries the connection badge", () => {
+  it("carries the connection badge and no caption for the missing organization read", () => {
     renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
-    expect(
-      within(sidebar).getByTestId("sidebar-foot-not-backed"),
-    ).toHaveAttribute("data-gap");
+    expect(within(sidebar).queryByTestId("sidebar-foot-not-backed")).toBeNull();
     expect(within(sidebar).getByTestId("connection")).toHaveTextContent(
       "connected",
     );

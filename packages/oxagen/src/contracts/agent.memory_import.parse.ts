@@ -9,7 +9,7 @@ import { memoryImportDraftSchema } from "./agent.memory_import.shared";
  * playbooks) and uses the AI gateway to extract atomic, self-contained memories
  * from each, classifying every one into a kind + weight per the AgentMemory
  * taxonomy. It writes NOTHING — it returns a flat array of editable drafts the
- * caller (the app's review grid, the CLI, an agent) confirms or edits before
+ * caller (a review grid, the CLI, an agent) confirms or edits before
  * handing them to agent.memory.import.commit.
  *
  * Mode is sync + batch: one generateObject call per document, run concurrently.

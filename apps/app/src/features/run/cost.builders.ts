@@ -6,6 +6,11 @@
 // on the response; a batch is the tool calls one model reply asked for, all
 // requested at once and each closed by its own `tool_call` under a shared
 // `callKey`, the way a harness records calls it runs together.
+//
+// The transcript's `figures` are the server's own (ADR-182): the script's
+// frames are recorded as a wrapped session's rows and counted by
+// `transcriptFigures` over `stepFolds`, the code `get_run_transcript` runs,
+// so no figure here is counted by a second rule.
 import type { Cost } from "@/data/contracts/money";
 import type {
   CostByClass,
@@ -16,6 +21,7 @@ import type {
   TranscriptEntry,
   TranscriptKind,
 } from "@/data/contracts/run";
+import { stepFolds, tachoFrame, transcriptFigures } from "@oxagen/run-ledger";
 import { NOW, runCost, transcriptBody, transcriptEntry } from "./run.builders";
 
 type ToolCallSpec = {
@@ -59,6 +65,9 @@ type Event = {
   callKey: string | null;
   micros: string | null;
   usage: TranscriptEntry["usage"];
+  /** The tool a call's frames name, and the status its close records. */
+  tool?: string;
+  status?: string;
 };
 
 const usd = (micros: string): Cost => ({
@@ -151,6 +160,7 @@ export function costTranscript(
             kind: "tool_call",
             label: call.name,
             kinds: ["tools"],
+            tool: call.name,
           },
           start,
         );
@@ -164,6 +174,7 @@ export function costTranscript(
               kind: "policy",
               label: `approve ${call.name}`,
               kinds: ["policy"],
+              tool: call.name,
             },
             start + 1,
           );
@@ -176,6 +187,8 @@ export function costTranscript(
             kind: "tool_call",
             label: `${call.name} ${call.fails === true ? "error" : "ok"}`,
             kinds: call.fails === true ? ["tools", "errors"] : ["tools"],
+            tool: call.name,
+            status: call.fails === true ? "error" : "ok",
           },
           closed,
         );
@@ -227,12 +240,35 @@ export function costTranscript(
       cumulativeCost: running === null ? null : usd(String(running)),
     });
   });
+  // The same frames as a wrapped session's rows, counted by the server.
+  const frames = ordered.map((event, index) =>
+    tachoFrame({
+      seq: index,
+      ts: new Date(NOW - startSecondsAgo * 1000 + event.t).toISOString(),
+      kind: event.type,
+      hash: "",
+      contentDigest: "",
+      bytesRef: "",
+      redactions: "",
+      toolName: event.tool ?? "",
+      toolStatus: event.status ?? "",
+      toolUseId: event.callKey ?? "",
+      model: "",
+      provider: "",
+      policyDecision: event.type === "approval_request" ? "ask" : "",
+      costUsdMicros: event.micros === null ? null : Number(event.micros),
+      turnSeq: event.turn,
+    }),
+  );
   return {
     zoom: "everything",
     kinds: [],
     entries,
     cursor: null,
     complete: true,
+    counts: null,
+    figures: transcriptFigures(frames, stepFolds(frames)),
+    search: null,
   };
 }
 

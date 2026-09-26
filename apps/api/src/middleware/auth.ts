@@ -6,6 +6,7 @@ import {
   resolveApiKey,
 } from "@oxagen/auth";
 import type { ApiKeyResolutionError } from "@oxagen/auth";
+import { HandlerError } from "@oxagen/oxagen";
 import type { AppEnv } from "../app";
 
 /** The 403 body for a key its organization's Require SSO policy refuses. */
@@ -41,6 +42,18 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
       // organization will not accept it until its creator signs in through SSO.
       if (kind === "sso_required") {
         throw new HTTPException(403, { message: API_KEY_SSO_REQUIRED_MESSAGE });
+      }
+      // A revoked Tacho host's retired key (#3944). A HandlerError, so the
+      // 403 carries the reason `host_revoked` in its envelope, the same
+      // refusal a live key on a revoked host gets from `resolveEnrolledHost`
+      // (@oxagen/handlers). The host's shipper stops on that reason instead
+      // of backing off for ever.
+      if (kind === "host_revoked") {
+        throw new HandlerError({
+          code: "forbidden",
+          reason: "host_revoked",
+          message: "Forbidden: Tacho host enrollment revoked",
+        });
       }
       throw new HTTPException(401, {
         message: messages[kind] ?? "Unauthorized",

@@ -80,7 +80,7 @@ export function runFit(run: RunRow, metrics: RunMetrics): RunFit {
         : "not_proxied",
   };
   const turns = run.turns;
-  const failed = metrics.toolCalls?.filter((call) => call.failed).length;
+  const failed = metrics.toolCalls?.failed;
   if (
     metrics.prompts === null ||
     turns === null ||

@@ -198,7 +198,9 @@ async function gitlabCreationTarget(
           url: deps.webhookUrl(connection.publicId),
           token: webhookSecret,
           mergeRequestsEvents: true,
-          pushEvents: false,
+          // A push to the production branch changes the records in force.
+          // The repository sync (ADR-184) reads it.
+          pushEvents: true,
         });
         await tx
           .update(schema.sourceConnections)

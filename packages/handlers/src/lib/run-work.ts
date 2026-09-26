@@ -154,6 +154,18 @@ export async function readWorkSubagents(
   return result.data;
 }
 /**
+ * One pull-request attr of a frame, as a ClickHouse expression, under either
+ * name it was written with. `oxagen:pr_link` frames and `pr_open` effect
+ * frames write `pr.url`, `pr.number` and `pr.repository`. An `oxagen:pr_link`
+ * frame stored before #3944 carries `pr_url`, `pr_number` and
+ * `pr_repository`. The frame's `pr.url` decides which set is read, so a
+ * number is never paired with a URL from the other set.
+ */
+export function prAttr(name: "url" | "number" | "repository"): string {
+  return `if(attrs['pr.url'] != '', attrs['pr.${name}'], attrs['pr_${name}'])`;
+}
+
+/**
  * The pull requests the harness said this session opened or linked, one row
  * per URL, from `oxagen:pr_link` frames. Claude Code writes one each time a
  * session creates or links a PR, so the link is certain and needs no branch
@@ -163,21 +175,21 @@ export async function readWorkPrLinks(
   sessionUuid: string,
 ): Promise<WorkPrLinkRow[]> {
   const result = await chSelect<WorkPrLinkRow>({
-    query: `SELECT attrs['pr_url'] AS url,
-      argMin(attrs['pr_number'], seq) AS number,
-      argMaxIf(attrs['pr_repository'], seq, attrs['pr_repository'] != '') AS repository,
+    query: `SELECT ${prAttr("url")} AS url,
+      argMin(${prAttr("number")}, seq) AS number,
+      argMaxIf(${prAttr("repository")}, seq, ${prAttr("repository")} != '') AS repository,
       min(seq) AS first_seq, toString(argMin(ts, seq)) AS first_ts
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
         AND session_uuid = {sessionUuid:UUID}
-        AND kind = 'oxagen:pr_link' AND attrs['pr_url'] != ''
+        AND kind = 'oxagen:pr_link' AND ${prAttr("url")} != ''
       GROUP BY url ORDER BY first_seq ASC LIMIT {limit:UInt32}`,
     params: { sessionUuid, limit: WORK_PR_LINK_CAP + 1 },
   });
   return result.data;
 }
 /**
- * A linked PR as `owner`, `name` and `number`. The frame's `pr_repository`
+ * A linked PR as `owner`, `name` and `number`. The frame's repository attr
  * wins, and the URL's `/owner/name/pull/N` path fills what it leaves out.
  * Null when neither names a repository and a positive number.
  */

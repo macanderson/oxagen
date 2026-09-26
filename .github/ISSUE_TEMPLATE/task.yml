@@ -35,10 +35,13 @@ body:
     attributes:
       label: Definition of done
       description: Checklist the closer must verify line-by-line (SCR-003). Every part of the change — backend, surface, UI, tests, docs — is an item here.
+      # No "CI green" item (#4200). Branch protection already blocks a merge
+      # while CI is red. The `dod` check is part of CI, so a box about CI can
+      # never be ticked while `dod` reads it. `scr-dod-check.mjs` skips one if
+      # an issue still carries it.
       value: |
         - [ ] Implementation complete
         - [ ] Scoped tests added/updated and passing
-        - [ ] Full CI green
         - [ ] Code comments and docs updated
         - [ ] Residue fixed in the same PR, or filed with the `triage` label only
     validations:

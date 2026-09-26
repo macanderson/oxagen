@@ -4,11 +4,14 @@
 // rows the record reads as, the search, the transport, paging past the
 // cursor and following a live run's head.
 //
-// The chips, the search and the transport are the viewer's own state over
-// the whole-run transcript the page read, so what they prove is which rows
-// are on screen. The paging is proved by what survives it: an appended page
-// leaves every row already on screen where it was, and a refused cursor says
-// so rather than emptying the view.
+// The page reads the run at `steps`, folded on the server (ADR-182), and the
+// fixtures are written in the contract's shape and read through the port's
+// mapper (`transcript.builders.ts`). The chips and the transport are the
+// viewer's own state over the rows drawn, so what they prove is which rows
+// are on screen; each chip's count is the server's. The search goes to the
+// server. The paging is proved by what survives it: an appended page leaves
+// every row already on screen where it was, and a refused cursor says so
+// rather than emptying the view.
 import {
   act,
   cleanup,
@@ -20,11 +23,7 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  TRANSCRIPT_ENTRY_DEFAULT,
-  RunTranscript,
-  type TranscriptEntry,
-} from "@/data/contracts/run";
+import { TRANSCRIPT_ENTRY_DEFAULT, RunTranscript } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
@@ -41,10 +40,11 @@ import {
 } from "./run.builders";
 import type { KindFilter } from "./tab-props";
 import {
-  type FrameSpec,
-  releaseSpecs,
+  releaseCounts,
+  releaseSteps,
   releaseTranscript,
-  transcriptOf,
+  type StepSpec,
+  stepsOf,
 } from "./transcript.builders";
 
 /** A page-action refusal the player shows under the feed. */
@@ -149,7 +149,7 @@ describe("the header line", () => {
     const bar = screen.getByTestId("tx-runbar");
     expect(bar).toHaveTextContent("a-intel/platform#482");
     expect(bar).toHaveTextContent(
-      "a-intel.core.release-manager · claude-opus-5 · 7 turns · 41 steps · 20 entries",
+      "a-intel.core.release-manager · claude-opus-5 · 7 turns · 41 steps · 13 entries",
     );
     expect(within(bar).getByText("sealed")).toBeInTheDocument();
   });
@@ -166,8 +166,8 @@ describe("the header line", () => {
   it("says the burn was not recorded when no frame carried a cost (negative)", () => {
     renderSection({
       read: readOk(
-        transcriptOf(
-          releaseSpecs().map((spec) => {
+        stepsOf(
+          releaseSteps().map((spec) => {
             const { costMicros: _cost, ...rest } = spec;
             return rest;
           }),
@@ -184,7 +184,7 @@ describe("the header line", () => {
 });
 
 describe("the kind chips", () => {
-  it("draws the design's seven chips with each one's count, all pressed", () => {
+  it("draws the design's seven chips with the server's count for each, all pressed", () => {
     renderSection();
     const chips = within(
       screen.getByRole("group", { name: "Filter the transcript" }),
@@ -201,6 +201,8 @@ describe("the kind chips", () => {
       "recall1",
       "seal0",
     ]);
+    // The counts are the server's over the whole run, not the rows drawn.
+    expect(rows()).toHaveLength(20);
     expect(screen.getByTestId("chip-all")).toHaveTextContent("none");
     expect(screen.getByTestId("chip-errors")).toHaveTextContent("✗ errors1");
     expect(screen.getByTestId("chip-errors")).toHaveAttribute(
@@ -252,10 +254,13 @@ describe("the kind chips", () => {
   it("says a run with no failed call has none to show (negative)", () => {
     renderSection({
       read: readOk(
-        transcriptOf(
-          releaseSpecs().map((spec) =>
-            spec.seq === 12 ? { ...spec, kinds: [], label: "Bash ok" } : spec,
+        stepsOf(
+          releaseSteps().map((spec) =>
+            spec.seq === 12
+              ? { ...spec, kinds: ["tools"], outcome: "ok", label: "Bash ok" }
+              : spec,
           ),
+          { counts: { ...releaseCounts(), errors: 0 } },
         ),
       ),
     });
@@ -268,20 +273,26 @@ describe("the kind chips", () => {
     );
   });
 
-  it("counts the run's stop frames under seal", () => {
+  it("counts the run's stop under seal, and draws it as the seal", () => {
+    const counts = releaseCounts();
     renderSection({
       read: readOk(
-        transcriptOf([
-          ...releaseSpecs(),
-          {
-            seq: 18,
-            t: 120,
-            type: "agent_stop",
-            kind: "frame",
-            label: "agent_stop completed",
-            turn: null,
-          },
-        ]),
+        stepsOf(
+          [
+            ...releaseSteps(),
+            {
+              seq: 18,
+              t: 120,
+              type: "agent_stop",
+              kind: "frame",
+              node: "seal",
+              label: "agent_stop completed",
+              turn: null,
+              kinds: ["seal"],
+            },
+          ],
+          { counts: { ...counts, kinds: { ...counts.kinds, seal: 1 } } },
+        ),
       ),
     });
     expect(screen.getByTestId("chip-seal")).toHaveTextContent("seal1");
@@ -333,7 +344,7 @@ describe("the rows", () => {
     const [first] = rows();
     expect(first).toHaveAttribute("data-kind", "prompt");
     const you = screen.getByTestId("transcript-you");
-    expect(you).toHaveTextContent(/^YOU⏵Cut the 4\.11\.0 release notes/);
+    expect(you).toHaveTextContent(/^You⏵Cut the 4\.11\.0 release notes/);
     expect(you).not.toHaveTextContent("first prompt");
     fireEvent.click(within(you).getByRole("button", { name: "Show in full" }));
     expect(you).toHaveTextContent(
@@ -505,32 +516,73 @@ describe("the rows", () => {
     );
   });
 
+  it("lists only the items that reached the model when the server says a manifest cut some (negative)", () => {
+    const base = releaseTranscript();
+    const entries = base.entries.map((entry) => {
+      const recall = entry.recall;
+      if (recall === null) return entry;
+      const [first, second] = recall.items;
+      if (first === undefined || second === undefined) return entry;
+      return {
+        ...entry,
+        recall: {
+          ...recall,
+          unit: "items" as const,
+          count: 1,
+          cut: 1,
+          items: [
+            first,
+            { ...second, outcome: "cut" as const, reason: "budget" },
+          ],
+        },
+      };
+    });
+    renderSection({ read: readOk({ ...base, entries }) });
+    const recall = screen.getByTestId("tx-recall");
+    expect(recall).toHaveTextContent("1 cut");
+    fireEvent.click(
+      within(recall).getByRole("button", { name: "Show what was recalled" }),
+    );
+    const items = within(recall).getByTestId("tx-recall-items");
+    expect(items).toHaveTextContent("Repository a-intel/platform @ a4c91e2");
+    expect(items).not.toHaveTextContent("CHANGELOG.md");
+  });
+
   it("reads the agent's last words as the answer once the run has stopped, and not while it runs", () => {
     renderSection();
     const agents = screen.getAllByTestId("transcript-agent");
-    expect(agents.at(-1)).toHaveTextContent(/^ANSWER/);
-    expect(agents[0]).toHaveTextContent(/^AGENT/);
+    // The catalogue says the role in sentence case; the tag's style sets it
+    // in capitals (#3375).
+    expect(agents.at(-1)?.querySelector("span")?.className).toContain(
+      "uppercase",
+    );
+    expect(agents.at(-1)).toHaveTextContent(/^Answer/);
+    expect(agents[0]).toHaveTextContent(/^Agent/);
     cleanup();
     renderSection({ status: "live" });
     expect(screen.getAllByTestId("transcript-agent").at(-1)).toHaveTextContent(
-      /^AGENT/,
+      /^Agent/,
     );
   });
 
   it("draws the model's words on one line until asked, then as they were written", () => {
     renderSection({
       read: readOk(
-        transcriptOf(
-          releaseSpecs().map((spec) =>
+        stepsOf(
+          releaseSteps().map((spec) =>
             spec.seq === 8
               ? {
                   ...spec,
-                  blocks: [
-                    {
-                      kind: "text" as const,
-                      text: "31 merged in range.\n\nReading CHANGELOG.md for the heading order.",
-                    },
-                  ],
+                  response: {
+                    seq: 8,
+                    type: "model.response",
+                    blocks: [
+                      {
+                        kind: "text" as const,
+                        text: "31 merged in range.\n\nReading CHANGELOG.md for the heading order.",
+                      },
+                    ],
+                  },
                 }
               : spec,
           ),
@@ -553,20 +605,61 @@ describe("the rows", () => {
     ).toHaveAttribute("aria-expanded", "true");
   });
 
+  it("draws a model step that only called tools as the agent's line naming them, under the responses chip", () => {
+    renderSection({
+      read: readOk(
+        stepsOf(
+          releaseSteps().map((spec) =>
+            spec.seq === 8
+              ? {
+                  ...spec,
+                  kinds: ["responses" as const, "usage" as const],
+                  response: {
+                    seq: 8,
+                    type: "model.response",
+                    blocks: [
+                      {
+                        kind: "tool_use" as const,
+                        name: "Read",
+                        input: { file_path: "CHANGELOG.md" },
+                        callKey: "k8",
+                        stepKey: "9",
+                        family: "read" as const,
+                      },
+                    ],
+                  },
+                }
+              : spec,
+          ),
+        ),
+      ),
+    });
+    const calls = screen.getByTestId("transcript-calls");
+    expect(calls).toHaveTextContent("Called Read");
+    expect(calls.closest("[data-testid='tx-row']")).toHaveAttribute(
+      "data-kind",
+      "calls",
+    );
+  });
+
   it("opens every thought with expand thinking, and closes them again", () => {
     renderSection({
       read: readOk(
-        transcriptOf(
-          releaseSpecs().map((spec) =>
-            spec.seq === 4
+        stepsOf(
+          releaseSteps().map((spec) =>
+            spec.seq === 3
               ? {
                   ...spec,
-                  blocks: [
-                    {
-                      kind: "thinking" as const,
-                      text: "First thought.\nSecond thought.",
-                    },
-                  ],
+                  response: {
+                    seq: 4,
+                    type: "model.response",
+                    blocks: [
+                      {
+                        kind: "thinking" as const,
+                        text: "First thought.\nSecond thought.",
+                      },
+                    ],
+                  },
                 }
               : spec,
           ),
@@ -590,36 +683,42 @@ describe("the rows", () => {
 
   it("reads each row's clock in the viewer's zone and names its place in the run", () => {
     renderSection();
-    const time = rows()[2]?.querySelector("time");
-    expect(time?.textContent).toBe("08:00:07.7");
-    expect(time?.getAttribute("dateTime")).toBe("2026-09-15T08:00:07.700Z");
-    expect(time?.getAttribute("title")).toBe("+7.7 s from the run's start");
+    // The first call's row, at the step's opening frame.
+    const time = rows()[5]?.querySelector("time");
+    expect(time?.textContent).toBe("08:00:07.8");
+    expect(time?.getAttribute("dateTime")).toBe("2026-09-15T08:00:07.800Z");
+    expect(time?.getAttribute("title")).toBe("+7.8 s from the run's start");
   });
 
   it("marks a subagent's row and links no frame of its chain (negative: the run's own frame still links)", () => {
     const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c1";
-    const specs: FrameSpec[] = [
+    const grep = (seq: number, t: number, body: string): StepSpec => ({
+      seq,
+      t,
+      type: "tool_call",
+      kind: "tool_call",
+      node: "tool",
+      label: "Grep ok",
+      turn: 1,
+      subject: "Grep",
+      family: "search",
+      outcome: "ok",
+      response: { seq, type: "tool_call", text: body },
+    });
+    const specs: StepSpec[] = [
       {
-        seq: 3,
-        t: 1,
-        type: "tool_call",
-        kind: "tool_call",
-        label: "Grep ok",
-        turn: 1,
-        subagent: { chainRef: CHAIN, type: "Explore" },
-        response: '{"input":{"pattern":"flaky"},"output":"a.test.ts"}',
+        ...grep(3, 1, '{"input":{"pattern":"flaky"},"output":"a.test.ts"}'),
+        subagent: { sessionUuid: CHAIN, type: "Explore" },
+        response: {
+          seq: 3,
+          type: "tool_call",
+          sessionUuid: CHAIN,
+          text: '{"input":{"pattern":"flaky"},"output":"a.test.ts"}',
+        },
       },
-      {
-        seq: 4,
-        t: 2,
-        type: "tool_call",
-        kind: "tool_call",
-        label: "Grep ok",
-        turn: 1,
-        response: '{"input":{"pattern":"retry"},"output":"b.test.ts"}',
-      },
+      grep(4, 2, '{"input":{"pattern":"retry"},"output":"b.test.ts"}'),
     ];
-    renderSection({ read: readOk(transcriptOf(specs)) });
+    renderSection({ read: readOk(stepsOf(specs)) });
     const [sub, own] = rows();
     if (sub === undefined || own === undefined)
       throw new Error("both rows are drawn");
@@ -634,12 +733,86 @@ describe("the rows", () => {
     ).toBeTruthy();
   });
 
+  it("shows a step's result as its output and its request as the call, never one for the other (#3375)", () => {
+    renderSection({
+      read: readOk(
+        stepsOf([
+          {
+            seq: 1,
+            endSeq: 2,
+            t: 0,
+            type: "tool.engine_call_started",
+            kind: "tool_call",
+            node: "tool",
+            turn: 1,
+            subject: "run_lint",
+            family: "shell",
+            outcome: "ok",
+            request: {
+              seq: 1,
+              type: "tool.engine_call_started",
+              text: JSON.stringify({ command: "pnpm lint" }),
+            },
+            response: {
+              seq: 2,
+              type: "tool.engine_call_completed",
+              text: JSON.stringify({ output: "0 problems" }),
+            },
+          },
+        ]),
+      ),
+    });
+    const lint = toolRow("run_lint");
+    expect(within(lint).getByTestId("tx-tool-arg")).toHaveTextContent(
+      "pnpm lint",
+    );
+    fireEvent.click(
+      within(lint).getByRole("button", { name: "Show the call" }),
+    );
+    expect(within(lint).getByTestId("tx-args")).toHaveTextContent("pnpm lint");
+    expect(within(lint).getByTestId("tx-args")).not.toHaveTextContent(
+      "0 problems",
+    );
+    expect(within(lint).getByTestId("tx-out")).toHaveTextContent("0 problems");
+    expect(within(lint).getByTestId("tx-out")).not.toHaveTextContent(
+      "pnpm lint",
+    );
+  });
+
+  it("reads a call with no result as running only while the run is live, never on a halted run (#3375)", () => {
+    const open: StepSpec = {
+      seq: 1,
+      t: 0,
+      type: "tool.engine_call_started",
+      kind: "tool_call",
+      node: "tool",
+      turn: 1,
+      subject: "run_lint",
+      family: "shell",
+      outcome: "pending",
+      request: {
+        seq: 1,
+        type: "tool.engine_call_started",
+        text: JSON.stringify({ command: "pnpm lint" }),
+      },
+    };
+    renderSection({ read: readOk(stepsOf([open])), status: "live" });
+    expect(toolRow("run_lint")).toHaveTextContent("running…");
+    cleanup();
+    renderSection({ read: readOk(stepsOf([open])), status: "halted" });
+    const lint = toolRow("run_lint");
+    expect(lint).toHaveTextContent("no result recorded");
+    expect(lint).not.toHaveTextContent("running");
+  });
+
   it("says a body was cut at the ceiling inside the call's fold", () => {
     renderSection({
       read: readOk(
-        transcriptOf(
-          releaseSpecs().map((spec) =>
-            spec.seq === 9 ? { ...spec, truncated: true } : spec,
+        stepsOf(
+          releaseSteps().map((spec) =>
+            spec.seq === 9 && spec.response !== undefined
+              ? { ...spec, response: { ...spec.response, truncated: true } }
+              : spec,
           ),
         ),
       ),
@@ -676,26 +849,31 @@ describe("the rows", () => {
 
 describe("event rows", () => {
   /**
-   * One turn holding three frames that are neither a call nor a reply: a
-   * decision recorded on no call frame, a notice with two lines of text, and
-   * a hook the recorder filed under errors with nothing to read.
+   * One turn holding three entries that are neither a call nor a reply, as
+   * the server states them: a decision recorded on no call, a notice with
+   * two lines of text, and a hook the recorder filed under errors with
+   * nothing to read.
    */
-  const EVENTS: FrameSpec[] = [
+  const EVENTS: StepSpec[] = [
     {
       seq: 1,
       t: 0,
       type: "turn_start",
       kind: "frame",
+      node: "prompt",
       turn: 1,
-      response: "Cut the release.",
+      request: { seq: 1, type: "turn_start", text: "Cut the release." },
     },
     {
       seq: 2,
       t: 1,
       type: "policy_decision",
-      kind: "frame",
+      kind: "policy",
+      node: "policy",
       label: "deny Bash",
-      decision: "deny",
+      subject: "Bash",
+      outcome: "denied",
+      gates: [{ seq: 2, decision: "deny", type: "policy_decision" }],
       turn: 1,
     },
     {
@@ -703,23 +881,30 @@ describe("event rows", () => {
       t: 2,
       type: "notification",
       kind: "frame",
+      node: "event",
       turn: 1,
-      response: "Build finished\nall 42 tests passed",
+      response: {
+        seq: 3,
+        type: "notification",
+        text: "Build finished\nall 42 tests passed",
+      },
     },
     {
       seq: 4,
       t: 3,
       type: "hook_error",
       kind: "frame",
+      node: "event",
       turn: 1,
       kinds: ["errors"],
+      outcome: "failed",
     },
   ];
   const events = () =>
     rows().filter((row) => row.getAttribute("data-kind") === "event");
 
-  it("names a decision on no recorded call by the call its label names, marks a denial failed, and links the decision, not the frame", () => {
-    renderSection({ read: readOk(transcriptOf(EVENTS)) });
+  it("names a decision on no recorded call by the call the server names, marks a denial failed, and links the decision, not the frame", () => {
+    renderSection({ read: readOk(stepsOf(EVENTS)) });
     expect(events()).toHaveLength(3);
     const [decision] = events();
     if (decision === undefined) throw new Error("a decision row");
@@ -732,7 +917,7 @@ describe("event rows", () => {
   });
 
   it("shows an event's text on one line, opens it as written, then folds it again", () => {
-    renderSection({ read: readOk(transcriptOf(EVENTS)) });
+    renderSection({ read: readOk(stepsOf(EVENTS)) });
     const [, notice] = events();
     if (notice === undefined) throw new Error("a notice row");
     expect(notice).toHaveTextContent("●");
@@ -756,7 +941,7 @@ describe("event rows", () => {
   });
 
   it("draws an event filed under errors as failed even with no text, and offers nothing to fold (negative)", () => {
-    renderSection({ read: readOk(transcriptOf(EVENTS)) });
+    renderSection({ read: readOk(stepsOf(EVENTS)) });
     const [, , hook] = events();
     if (hook === undefined) throw new Error("a hook row");
     expect(hook).toHaveTextContent("✗");
@@ -768,17 +953,67 @@ describe("event rows", () => {
   });
 });
 
+/** Types `value` into the search field. */
+function search(value: string) {
+  fireEvent.change(
+    screen.getByRole("searchbox", { name: "Search the transcript" }),
+    { target: { value } },
+  );
+}
+
+/**
+ * The server's answer to a search: the release run's entries that hold the
+ * query, each naming where, and what it found across the run.
+ */
+function found(
+  query: string,
+  seqs: readonly number[],
+  unsearched = 0,
+): ActionResult<RunTranscript> {
+  return pageOk(
+    stepsOf(
+      releaseSteps()
+        .filter((spec) => seqs.includes(spec.seq))
+        .map((spec) => ({ ...spec, matches: ["response" as const] })),
+      {
+        counts: releaseCounts(),
+        search: { query, matched: seqs.length, unsearched },
+      },
+    ),
+  );
+}
+
 describe("the search", () => {
-  it("shows every match at once, counts them and marks them", () => {
+  it("sends the query to the server once the reader stops typing, and reads the whole bodies", async () => {
+    readTranscriptPage.mockResolvedValue(found("changelog", [8, 9]));
     renderSection();
-    fireEvent.change(
-      screen.getByRole("searchbox", { name: "Search the transcript" }),
-      { target: { value: "changelog" } },
+    search("change");
+    search("changelog");
+    await waitFor(() => {
+      expect(screen.getByTestId("tx-matches")).toHaveTextContent(
+        "2 of 13 entries",
+      );
+    });
+    // One read for the words the reader stopped on, not one per keystroke.
+    expect(readTranscriptPage).toHaveBeenCalledTimes(1);
+    expect(readTranscriptPage).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      "steps",
+      { text: "full", query: "changelog" },
     );
-    expect(screen.getByTestId("tx-matches")).toHaveTextContent(
-      "5 of 20 entries",
-    );
-    expect(rows()).toHaveLength(5);
+  });
+
+  it("draws only the entries the server matched, opens each, and marks the words", async () => {
+    readTranscriptPage.mockResolvedValue(found("changelog", [8, 9]));
+    renderSection();
+    search("changelog");
+    await waitFor(() => {
+      expect(rows()).toHaveLength(3);
+    });
+    // The Read call's row opens, so the match inside its output shows.
+    expect(within(toolRow("Read")).getByTestId("tx-call-fold")).toBeTruthy();
     expect(
       screen.getAllByText(/changelog/i, { selector: "mark" }).length,
     ).toBeGreaterThan(0);
@@ -786,15 +1021,52 @@ describe("the search", () => {
     expect(screen.getByText("Search shows every match at once.")).toBeTruthy();
   });
 
-  it("says nothing matches rather than showing an empty feed (negative)", () => {
+  it("says how many bodies the search could not look inside", async () => {
+    readTranscriptPage.mockResolvedValue(found("changelog", [9], 3));
     renderSection();
-    fireEvent.change(
-      screen.getByRole("searchbox", { name: "Search the transcript" }),
-      { target: { value: "no such words" } },
-    );
-    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
-      "Nothing matches this search.",
-    );
+    search("changelog");
+    await waitFor(() => {
+      expect(screen.getByTestId("tx-unsearched")).toHaveTextContent(
+        "3 bodies were not searched",
+      );
+    });
+  });
+
+  it("says nothing matches rather than showing an empty feed (negative)", async () => {
+    readTranscriptPage.mockResolvedValue(found("no such words", []));
+    renderSection();
+    search("no such words");
+    await waitFor(() => {
+      expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+        "Nothing matches this search.",
+      );
+    });
+  });
+
+  it("says a search that did not run failed, and keeps the run's rows (negative)", async () => {
+    readTranscriptPage.mockResolvedValue(pageFailed("frame_store_unreachable"));
+    renderSection();
+    search("changelog");
+    await waitFor(() => {
+      expect(screen.getByTestId("tx-matches")).toHaveTextContent(
+        "The search did not run.",
+      );
+    });
+    expect(rows()).toHaveLength(20);
+  });
+
+  it("reads nothing for a field of nothing but space, and draws the run again when it is cleared (negative)", async () => {
+    readTranscriptPage.mockResolvedValue(found("changelog", [9]));
+    renderSection();
+    search("   ");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(readTranscriptPage).not.toHaveBeenCalled();
+    search("changelog");
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1);
+    });
+    search("");
+    expect(rows()).toHaveLength(20);
   });
 });
 
@@ -852,9 +1124,9 @@ describe("the transport", () => {
         "aria-pressed",
         "true",
       );
-      // 7.4 s to the thought, held at 1.4 s and divided by six.
+      // 0.1 s to the first model step's thought, divided by six.
       act(() => {
-        vi.advanceTimersByTime(234);
+        vi.advanceTimersByTime(17);
       });
       expect(readout()).toHaveTextContent("3 / 20");
       fireEvent.click(screen.getByTestId("tx-play"));
@@ -879,31 +1151,30 @@ describe("the transport", () => {
 
 describe("paging past the cursor", () => {
   const paged = readOk(releaseTranscript({ cursor: "ZjoxMQ", complete: true }));
-  /** The run's tail: the approval answered, the release made, the agent stopped. */
-  const tail = transcriptOf([
-    ...releaseSpecs(),
+  /**
+   * The run's tail: the approval answered and the release made. The server
+   * sends the release call's step again, grown by its answer and its result.
+   */
+  const release = releaseSteps().at(-1);
+  if (release === undefined) throw new Error("the release call");
+  const tailPage = stepsOf([
     {
-      seq: 18,
-      t: 110,
-      type: "approval_decision",
-      kind: "policy",
-      label: "approve mcp__github__create_release",
-      turn: 1,
-      callKey: "toolu_6",
-      decision: "approve",
-    },
-    {
-      seq: 19,
-      t: 111,
-      type: "tool_call",
-      kind: "tool_call",
-      label: "mcp__github__create_release ok",
-      turn: 1,
-      callKey: "toolu_6",
-      response: '{"input":{"tag_name":"v4.11.0"},"output":"draft created"}',
+      ...release,
+      endSeq: 19,
+      frames: 4,
+      outcome: "ok",
+      durationMs: 13_900,
+      gates: [
+        ...(release.gates ?? []),
+        { seq: 18, decision: "approve", type: "approval_decision" },
+      ],
+      response: {
+        seq: 19,
+        type: "tool_call",
+        text: '{"input":{"tag_name":"v4.11.0"},"output":"draft created"}',
+      },
     },
   ]);
-  const tailPage = { ...tail, entries: tail.entries.slice(-2) };
 
   it("offers to read more only when the read carried a cursor", () => {
     renderSection({ read: paged });
@@ -931,14 +1202,14 @@ describe("paging past the cursor", () => {
         ),
       ).toBeNull();
     });
-    // The chips filter in the browser, so the page is read whole.
+    // The chips show and hide rows already read, so the page is read whole,
+    // at the zoom and with the bodies the page read.
     expect(readTranscriptPage).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       "tse_7k2m9q",
-      "everything",
-      [],
-      "ZjoxMQ",
+      "steps",
+      { after: "ZjoxMQ", text: "full" },
     );
     // The release call is now one row carrying the answer that landed with the
     // appended page.
@@ -1171,11 +1442,9 @@ describe("following a live run", () => {
         await vi.advanceTimersByTimeAsync(750);
         for (let i = 0; i < 20; i += 1) await Promise.resolve();
       });
-      expect(readTranscriptPage.mock.calls.map((call) => call[5])).toEqual([
-        "page1",
-        "page2",
-        "page3",
-      ]);
+      expect(
+        readTranscriptPage.mock.calls.map((call) => call[4].after),
+      ).toEqual(["page1", "page2", "page3"]);
     } finally {
       vi.useRealTimers();
       vi.unstubAllGlobals();
@@ -1231,57 +1500,44 @@ describe("live access changes", () => {
 });
 
 describe("a call the in-app assistant parked", () => {
-  /** An assistant turn's one tool call, its receipt labelled `label`. */
-  const assistantCall = (label: string, kinds: TranscriptEntry["kinds"]) =>
-    runTranscript({
-      zoom: "everything",
-      entries: [
-        transcriptEntry({
-          seq: "3",
-          endSeq: "3",
-          kind: "tool_call",
+  /**
+   * An assistant turn's one tool call, as the server folds it: the request
+   * and its receipt in one step, with the outcome and the approval the
+   * receipt named stated on the entry.
+   */
+  const assistantCall = (outcome: "parked" | "denied", approvalId?: string) =>
+    stepsOf([
+      {
+        seq: 3,
+        endSeq: 4,
+        t: 1,
+        type: "tool.engine_call_started",
+        kind: "tool_call",
+        node: "tool",
+        label: "create_workspace",
+        turn: 1,
+        callId: "tool-1-0",
+        subject: "create_workspace",
+        family: "tool",
+        outcome,
+        ...(approvalId === undefined ? {} : { approvalId }),
+        kinds: outcome === "denied" ? ["tools", "errors"] : ["tools"],
+        request: {
+          seq: 3,
           type: "tool.engine_call_started",
-          label: "create_workspace",
-          callKey: "tool-1-0",
-          kinds: ["tools"],
-          request: transcriptBody({
-            seq: "3",
-            type: "tool.engine_call_started",
-            text: '{"name":"ops"}',
-          }),
-          response: null,
-          frames: 1,
-          cost: null,
-          cumulativeCost: null,
-        }),
-        transcriptEntry({
-          seq: "4",
-          endSeq: "4",
-          kind: "tool_call",
+          text: '{"name":"ops"}',
+        },
+        response: {
+          seq: 4,
           type: "tool.engine_call_completed",
-          label,
-          callKey: "tool-1-0",
-          kinds,
-          request: null,
-          response: transcriptBody({
-            seq: "4",
-            type: "tool.engine_call_completed",
-            text: '"refused: create_workspace is waiting for approval"',
-          }),
-          frames: 1,
-          cost: null,
-          cumulativeCost: null,
-        }),
-      ],
-    });
+          text: '"refused: create_workspace is waiting for approval"',
+        },
+      },
+    ]);
 
   it("shows the call as parked, links its receipt, and names the approval it waits on", async () => {
     const { container } = renderSection({
-      read: readOk(
-        assistantCall("create_workspace parked apr_0a1b2c3d4e5f6g7h8j9k0m", [
-          "tools",
-        ]),
-      ),
+      read: readOk(assistantCall("parked", "apr_0a1b2c3d4e5f6g7h8j9k0m")),
     });
     const call = toolRow("create_workspace");
     // Waiting on a person is not a failure.
@@ -1304,11 +1560,7 @@ describe("a call the in-app assistant parked", () => {
   });
 
   it("still shows a denied call as refused, with no approval (negative)", () => {
-    renderSection({
-      read: readOk(
-        assistantCall("create_workspace denied", ["tools", "errors"]),
-      ),
-    });
+    renderSection({ read: readOk(assistantCall("denied")) });
     const call = toolRow("create_workspace");
     expect(call).toHaveTextContent("✗");
     expect(within(call).queryByRole("link", { name: /parked/ })).toBeNull();
@@ -1340,7 +1592,15 @@ describe("a run with no frames", () => {
       read: readOk(
         runTranscript({
           entries: [
-            transcriptEntry({ request: null, response: null, cost: null }),
+            // What the server sends for a model step that kept no reply and
+            // no figures: it answers no chip and draws nothing.
+            transcriptEntry({
+              request: null,
+              response: null,
+              cost: null,
+              kinds: [],
+              quiet: true,
+            }),
           ],
         }),
       ),
@@ -1449,102 +1709,95 @@ describe("a body the recorder kept whole", () => {
 // nested row, the transport's count, or the chip's own pressed state.
 
 describe("a subagent's steps under its Task call", () => {
-  // The shape of a wrapped Claude Code run: the gate, the harness check and
-  // the receipt of one call share its tool_use_id, and the subagent's own
-  // calls land on its chain, numbered from 0, between the Task call's frames.
+  // The shape of a wrapped Claude Code run as the server folds it: the gate,
+  // the harness check and the receipt of one call are one step, and the
+  // subagent's own calls, on its chain and numbered from 0, name the Task
+  // call's step as their parent.
   const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c3";
-  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_C" };
-  const frame = (over: Partial<TranscriptEntry>): TranscriptEntry =>
-    transcriptEntry({
-      kind: "frame",
-      type: "oxagen:note",
-      label: "oxagen:note",
-      callKey: null,
-      request: null,
-      response: null,
-      decision: null,
-      turn: 1,
-      frames: 1,
-      cost: null,
-      cumulativeCost: null,
-      kinds: [],
-      ...over,
-    });
-  const gate = (
-    seq: string,
-    key: string,
-    tool: string,
-    target: string | null,
-    over: Partial<TranscriptEntry> = {},
-  ) =>
-    frame({
-      seq,
-      kind: "policy",
-      type: "policy_decision",
-      label: `allow ${tool}`,
-      callKey: key,
-      target,
-      decision: {
-        seq,
-        decision: "allow",
-        type: "policy_decision",
-        at: transcriptEntry().at,
-      },
-      ...over,
-    });
-  const harness = (seq: string, key: string) =>
-    frame({
-      seq,
-      type: "harness_permission",
-      label: "allow Bash",
-      callKey: key,
-    });
+  const onChain = { sessionUuid: CHAIN, type: "Explore" };
   const call = (
-    seq: string,
-    key: string,
-    label: string,
-    over: Partial<TranscriptEntry> = {},
-  ) =>
-    frame({
-      seq,
-      kind: "tool_call",
+    seq: number,
+    endSeq: number,
+    subject: string,
+    family: StepSpec["family"],
+    target: string | undefined,
+    over: Partial<StepSpec> = {},
+  ): StepSpec => ({
+    seq,
+    endSeq,
+    t: seq,
+    type: "policy_decision",
+    kind: "tool_call",
+    node: "tool",
+    label: `allow ${subject}`,
+    turn: 1,
+    subject,
+    family,
+    outcome: "ok",
+    ...(target === undefined ? {} : { target }),
+    gates: [{ seq, decision: "allow", type: "policy_decision" }],
+    kinds: ["tools", "policy"],
+    response: {
+      seq: endSeq,
       type: "tool_call",
-      label,
-      callKey: key,
-      response: transcriptBody({
-        seq,
+      fidelity: "digest_only",
+    },
+    ...over,
+  });
+  const prompt = (text: string): StepSpec => ({
+    seq: 1,
+    t: 0,
+    type: "turn_start",
+    kind: "frame",
+    node: "prompt",
+    turn: 1,
+    request: { seq: 1, type: "turn_start", text },
+  });
+  const steps: StepSpec[] = [
+    prompt("Find the flaky test."),
+    call(2, 4, "Bash", "shell", "git status"),
+    call(5, 8, "Task", "agent", undefined),
+    call(0, 1, "Grep", "search", "flaky", {
+      subagent: onChain,
+      parentKey: "5",
+      gates: [
+        {
+          seq: 0,
+          decision: "allow",
+          type: "policy_decision",
+          sessionUuid: CHAIN,
+        },
+      ],
+      response: {
+        seq: 1,
+        type: "tool_call",
         fidelity: "digest_only",
-        bytesRef: null,
-        text: null,
-      }),
-      ...over,
-    });
-  const entries = [
-    frame({
-      seq: "1",
-      type: "turn_start",
-      request: transcriptBody({ seq: "1", text: "Find the flaky test." }),
+        sessionUuid: CHAIN,
+      },
     }),
-    gate("2", "toolu_A", "Bash", "git status"),
-    harness("3", "toolu_A"),
-    call("4", "toolu_A", "Bash ok"),
-    gate("5", "toolu_C", "Task", null),
-    harness("6", "toolu_C"),
-    frame({ seq: "7", type: "subagent_start", callKey: "toolu_C" }),
-    gate("0", "toolu_X1", "Grep", "flaky", { subagent: sub }),
-    call("1", "toolu_X1", "Grep ok", { subagent: sub }),
-    gate("2", "toolu_X2", "Read", "apps/app/src/flaky.test.ts", {
-      subagent: sub,
+    call(2, 3, "Read", "read", "apps/app/src/flaky.test.ts", {
+      subagent: onChain,
+      parentKey: "5",
+      gates: [
+        {
+          seq: 2,
+          decision: "allow",
+          type: "policy_decision",
+          sessionUuid: CHAIN,
+        },
+      ],
+      response: {
+        seq: 3,
+        type: "tool_call",
+        fidelity: "digest_only",
+        sessionUuid: CHAIN,
+      },
     }),
-    call("3", "toolu_X2", "Read ok", { subagent: sub }),
-    call("8", "toolu_C", "Task ok"),
-    gate("9", "toolu_B", "Bash", "git diff"),
-    harness("10", "toolu_B"),
-    call("11", "toolu_B", "Bash ok"),
+    call(9, 11, "Bash", "shell", "git diff"),
   ];
 
   it("draws the subagent's calls inside the Task row, with no gap in the run's count", () => {
-    renderSection({ read: readOk(runTranscript({ entries })) });
+    renderSection({ read: readOk(stepsOf(steps)) });
     const nested = screen.getByTestId("transcript-subagent-steps");
     const task = nested.closest('[data-testid="tx-row"]');
     if (!(task instanceof HTMLElement))
@@ -1558,10 +1811,10 @@ describe("a subagent's steps under its Task call", () => {
       expect.stringContaining("Read"),
     ]);
     expect(inner[0]).toHaveTextContent("flaky");
-    // One row per call. The harness's allow draws no row of its own, so the
-    // transport counts the rows drawn with no gap: the prompt, the two Bash
-    // calls, the Task call and the subagent's two calls under it. (#4026
-    // numbered steps 1, 2, 2.1, 2.2, 3; the feed has no step numbers.)
+    // One row per call, as the server folded it. The transport counts the
+    // rows drawn with no gap: the prompt, the two Bash calls, the Task call
+    // and the subagent's two calls under it. (#4026 numbered steps 1, 2,
+    // 2.1, 2.2, 3; the feed has no step numbers.)
     expect(rows()).toHaveLength(6);
     expect(readout()).toHaveTextContent("6 / 6");
     expect(
@@ -1576,36 +1829,17 @@ describe("a subagent's steps under its Task call", () => {
     const instances = fakeEventSource(1);
     // The view holds the run through the subagent's first call. The next read
     // sends the turn's opening entry again, as it stands now, with what came
-    // after. A call's frames share a call key and fold into one row whatever
-    // happens, so the prompt, which has none, is the entry that would show a
-    // second copy.
-    const held = entries.slice(0, 9);
-    const again = frame({
-      seq: "1",
-      type: "turn_start",
-      request: transcriptBody({
-        seq: "1",
-        text: "Find the flaky test and quarantine nothing.",
-      }),
-    });
+    // after.
+    const held = stepsOf(steps.slice(0, 4), { cursor: "c1", complete: false });
+    const again = prompt("Find the flaky test and quarantine nothing.");
     readTranscriptPage.mockResolvedValueOnce(
       pageOk(
-        runTranscript({
-          zoom: "everything",
-          entries: [again, ...entries.slice(9)],
-          cursor: "c2",
-          complete: false,
-        }),
+        stepsOf([again, ...steps.slice(4)], { cursor: "c2", complete: false }),
       ),
     );
     vi.useFakeTimers();
     try {
-      renderSection({
-        read: readOk(
-          runTranscript({ entries: held, cursor: "c1", complete: false }),
-        ),
-        status: "live",
-      });
+      renderSection({ read: readOk(held), status: "live" });
       const [source] = instances;
       if (source === undefined) throw new Error("no EventSource opened");
       source.onmessage?.(new MessageEvent("message", { data: "{}" }));
@@ -1613,7 +1847,9 @@ describe("a subagent's steps under its Task call", () => {
         await vi.advanceTimersByTimeAsync(750);
         for (let i = 0; i < 20; i += 1) await Promise.resolve();
       });
-      expect(readTranscriptPage.mock.calls.map((c) => c[5])).toEqual(["c1"]);
+      expect(readTranscriptPage.mock.calls.map((c) => c[4].after)).toEqual([
+        "c1",
+      ]);
       // The same six rows as the whole run read at once, the prompt once and
       // as the later read has it.
       expect(rows()).toHaveLength(6);
@@ -1647,7 +1883,10 @@ describe("the effort a model call ran at", () => {
     });
     const mapped = RunTranscript.parse(
       toRunTranscript({
-        ...runTranscript(),
+        zoom: "steps",
+        kinds: [],
+        cursor: null,
+        complete: true,
         entries: [wire("5", "high"), wire("6", null), wire("7")],
       }),
     );
@@ -1698,6 +1937,9 @@ describe("thinking and effort on a model step", () => {
             type: "tool_call",
             label: "create_tag ok",
             callKey: "call_1",
+            node: "tool",
+            subject: "create_tag",
+            family: "tool",
             kinds: ["tools"],
             response: transcriptBody({
               seq: "2",
@@ -1742,7 +1984,17 @@ describe("thinking and effort on a model step", () => {
   });
 
   it("draws no effort or thinking chip on a step that recorded neither (negative)", () => {
-    renderSection();
+    renderSection({
+      read: readOk(
+        stepsOf(
+          releaseSteps().map((spec) =>
+            spec.usage === undefined
+              ? spec
+              : { ...spec, usage: { ...spec.usage, reasoning: null } },
+          ),
+        ),
+      ),
+    });
     expect(screen.queryByTestId("step-effort")).toBeNull();
     expect(screen.queryByTestId("step-thinking-tokens")).toBeNull();
     expect(screen.queryByTestId("step-thinking-unkept")).toBeNull();
@@ -1750,57 +2002,21 @@ describe("thinking and effort on a model step", () => {
 });
 
 describe("searching the transcript", () => {
-  const search = (text: string) => {
-    fireEvent.change(
-      screen.getByRole("searchbox", { name: "Search the transcript" }),
-      { target: { value: text } },
-    );
-  };
-
-  it("draws only the rows that match, and counts what it found", () => {
-    renderSection();
-    expect(screen.queryByTestId("tx-matches")).toBeNull();
-    search("changelog");
-    expect(screen.getByTestId("tx-matches")).toHaveTextContent(
-      "5 of 20 entries",
-    );
-    expect(rows()).toHaveLength(5);
-    // A folded thought can hold its match below the fold, so the marks are
-    // counted rather than every row's visible text.
-    expect(
-      screen.getAllByText(/changelog/i, { selector: "mark" }).length,
-    ).toBeGreaterThan(0);
-  });
-
-  it("keeps a found row's place in the run", () => {
+  it("keeps a found row's place in the run", async () => {
+    readTranscriptPage.mockResolvedValue(found("changelog", [9]));
     renderSection();
     const clockOf = () =>
       rows()
-        .find((row) => /changelog/i.test(row.textContent))
+        .find((row) => within(row).queryByText("Read") !== null)
         ?.querySelector("time")
         ?.getAttribute("dateTime");
     const before = clockOf();
     expect(before).toBeDefined();
     search("changelog");
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1);
+    });
     expect(clockOf()).toBe(before);
-  });
-
-  it("says nothing matches rather than drawing an empty transcript (negative)", () => {
-    renderSection();
-    search("no-such-words");
-    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
-      "Nothing matches this search.",
-    );
-    expect(rows()).toHaveLength(0);
-  });
-
-  it("draws the whole transcript again when the search is cleared", () => {
-    renderSection();
-    const all = rows().length;
-    search("changelog");
-    search("   ");
-    expect(rows()).toHaveLength(all);
-    expect(screen.queryByTestId("tx-matches")).toBeNull();
   });
 });
 
@@ -1911,7 +2127,7 @@ describe("the filter chips, as #4026 drew them", () => {
     expect(rows()).toHaveLength(20);
   });
 
-  it("counts each chip's rows from the whole-run read", () => {
+  it("shows the server's count of the whole run on each chip", () => {
     renderSection();
     expect(screen.getByTestId("chip-tools-count")).toHaveTextContent(
       String(kinds().filter((kind) => kind === "tool").length),
@@ -1935,8 +2151,9 @@ describe("the filter chips, as #4026 drew them", () => {
 
   it("names its own failure when the read was refused, since no chip can have caused it (negative)", () => {
     // #4026 kept the chips on a refused read so a filter that narrowed the
-    // read could be undone. The feed reads the whole run once and filters in
-    // the browser, so no chip narrows the read and a refusal is the read's own.
+    // read could be undone. The page reads the whole run once and the chips
+    // show and hide its rows, so no chip narrows the read and a refusal is
+    // the read's own.
     renderSection({
       read: readError("frame_store_unreachable", 502),
       kinds: ["policy"],
@@ -1948,64 +2165,73 @@ describe("the filter chips, as #4026 drew them", () => {
 
 describe("a read the page makes again", () => {
   const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000d4";
-  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_A" };
+  const tool = (
+    seq: number,
+    t: number,
+    subject: string,
+    family: StepSpec["family"],
+    body: string,
+    over: Partial<StepSpec> = {},
+  ): StepSpec => ({
+    seq,
+    t,
+    type: "tool_call",
+    kind: "tool_call",
+    node: "tool",
+    label: `${subject} ok`,
+    turn: 1,
+    subject,
+    family,
+    outcome: "ok",
+    response: { seq, type: "tool_call", text: body },
+    ...over,
+  });
+  /** A step on the subagent's chain, which the Task call at 2 spawned. */
+  const onChain: Partial<StepSpec> = {
+    subagent: { sessionUuid: CHAIN, type: "Explore" },
+    parentKey: "2",
+  };
   /** A run whose subagent, spawned by the Task call at 2, calls Grep. */
-  const specs = (late: boolean): FrameSpec[] => [
+  const specs = (late: boolean): StepSpec[] => [
     {
       seq: 1,
       t: 0,
       type: "turn_start",
       kind: "frame",
+      node: "prompt",
       turn: 1,
-      request: "Find the flaky test.",
+      request: { seq: 1, type: "turn_start", text: "Find the flaky test." },
     },
-    {
-      seq: 2,
-      t: 1,
-      type: "tool_call",
-      kind: "tool_call",
-      label: "Task ok",
-      turn: 1,
-      callKey: "toolu_A",
-      response: '{"input":{"description":"Search the tests"},"output":"done"}',
-    },
-    {
-      seq: 0,
-      t: 2,
-      type: "tool_call",
-      kind: "tool_call",
-      label: "Grep ok",
-      turn: 1,
-      callKey: "toolu_X1",
-      subagent: sub,
-      response: '{"input":{"pattern":"flaky"},"output":"a.test.ts"}',
-    },
-    // Recorded late: the tail read's cursor had already passed it.
+    tool(
+      2,
+      1,
+      "Task",
+      "agent",
+      '{"input":{"description":"Search the tests"},"output":"done"}',
+    ),
+    tool(
+      0,
+      2,
+      "Grep",
+      "search",
+      '{"input":{"pattern":"flaky"},"output":"a.test.ts"}',
+      onChain,
+    ),
+    // Recorded late: the tail read's cursor had already passed it. The
+    // server places it after its call, before entries the reader holds.
     ...(late
       ? [
-          {
-            seq: 1,
-            t: 5,
-            type: "tool_call",
-            kind: "tool_call" as const,
-            label: "Read ok",
-            turn: 1,
-            callKey: "toolu_X2",
-            subagent: sub,
-            response: '{"input":{"file_path":"a.test.ts"},"output":"it()"}',
-          },
+          tool(
+            1,
+            5,
+            "Read",
+            "read",
+            '{"input":{"file_path":"a.test.ts"},"output":"it()"}',
+            onChain,
+          ),
         ]
       : []),
-    {
-      seq: 3,
-      t: 3,
-      type: "tool_call",
-      kind: "tool_call",
-      label: "Bash ok",
-      turn: 1,
-      callKey: "toolu_B",
-      response: '{"input":{"command":"git diff"},"output":""}',
-    },
+    tool(3, 3, "Bash", "shell", '{"input":{"command":"git diff"},"output":""}'),
   ];
   const view = (read: Read<RunTranscript>, status: RunRow["status"]) => (
     <IntlProvider>
@@ -2030,13 +2256,13 @@ describe("a read the page makes again", () => {
   it("takes the page's new read, so a subagent frame recorded behind the cursor shows under its call once the run seals (#4083)", () => {
     const { rerender } = render(
       view(
-        readOk(transcriptOf(specs(false), { cursor: "c1", complete: true })),
+        readOk(stepsOf(specs(false), { cursor: "c1", complete: true })),
         "live",
       ),
     );
     expect(names()).toEqual(["Task", "Grep", "Bash"]);
     // The seal refreshes the page, which reads the whole run again.
-    rerender(view(readOk(transcriptOf(specs(true))), "sealed"));
+    rerender(view(readOk(stepsOf(specs(true))), "sealed"));
     expect(names()).toEqual(["Task", "Grep", "Read", "Bash"]);
     const nested = screen.getByTestId("transcript-subagent-steps");
     expect(
@@ -2049,7 +2275,7 @@ describe("a read the page makes again", () => {
   });
 
   it("keeps the rows it holds when the page renders again with the same read (negative)", () => {
-    const read = readOk(transcriptOf(specs(false)));
+    const read = readOk(stepsOf(specs(false)));
     const { rerender } = render(view(read, "sealed"));
     rerender(view(read, "sealed"));
     expect(names()).toEqual(["Task", "Grep", "Bash"]);

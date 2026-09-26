@@ -11,9 +11,13 @@
 // decision's frame on the Governed actions tab, and a frame chip opens a
 // reply's or a call's.
 //
-// The kind chips, the search and the errors toggle filter the rows in the
-// browser, over the whole-run transcript the page already read, so a count on
-// a chip is the count of rows it shows.
+// The page reads the run at `steps`, which the server folds (ADR-182), and
+// this view draws each entry's rows (`rowsOf`). A subagent's rows sit under
+// the call that spawned it, by the entry's `parentKey`. Each chip's count and
+// the errors count are the server's (`counts`), counted over the whole run.
+// The chips and the errors toggle show and hide rows already read. The
+// search is the server's: the query goes out once the reader stops typing,
+// the entries that hold it come back, and a row whose entry matched opens.
 //
 // The transport moves the viewer, never the run. Its position is a count of
 // rows shown; playback reveals the next row after the recorded gap to it,
@@ -41,7 +45,9 @@ import { type Cost, ratioOfMicros } from "@/data/contracts/money";
 import {
   type RunTranscript,
   TRANSCRIPT_ENTRY_DEFAULT,
-  type TranscriptKind,
+  TRANSCRIPT_QUERY_MAX,
+  type TranscriptCounts,
+  type TranscriptSearch,
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DiffLine } from "@/shared/line-diff";
@@ -56,18 +62,18 @@ import type { KindFilter } from "./tab-props";
 import { Note } from "./parts";
 import type { ToolDiff, ToolGroup } from "./tool-detail";
 import {
-  buildFeed,
   closedLine,
   FEED_GROUPS,
   type FeedCall,
   type FeedGate,
   type FeedGroup,
+  feedOf,
   type FeedRow,
   type Frames,
   type FrameRef,
   mergeEntries,
   rebaseEntries,
-} from "./transcript-model";
+} from "./transcript-rows";
 import { useRunStream } from "./use-run-stream";
 
 type Place = { org: string; ws: string; runId: string };
@@ -88,6 +94,27 @@ export type TranscriptRun = Pick<
 
 /** Why a later page did not arrive, in the shape the action answers with. */
 type PageFailure = Exclude<ActionResult<unknown>, { ok: true }>;
+
+/** What the server's search answered for one query. */
+type Found = {
+  /** The query as it was sent. */
+  query: string;
+  entries: RunTranscript["entries"];
+  /** Where the next page of matches starts; null when none lies past these. */
+  cursor: string | null;
+  search: TranscriptSearch | null;
+};
+
+/** How long the reader stops typing before the search goes to the server. */
+const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * The field's words as a query the contract takes: trimmed, and cut at its
+ * longest. Nothing but space is no query.
+ */
+function searchText(raw: string): string {
+  return raw.trim().slice(0, TRANSCRIPT_QUERY_MAX).trim();
+}
 
 /** `TX_SPEEDS=[1,2,3,6]`. */
 const SPEEDS = [1, 2, 3, 6] as const;
@@ -273,10 +300,11 @@ const txRoleGut = "pr-3.5 text-right max-md:p-0 max-md:text-left";
 /**
  * `.tx-roletag { font-size:10px; font-weight:700; letter-spacing:.14em;
  * padding:1px 7px; border-radius:4px; color:var(--ink) }`, on `--tx-you`
- * (the muted ink) for YOU and `--tx-agent` (the ink) for the agent.
+ * (the muted ink) for YOU and `--tx-agent` (the ink) for the agent. The
+ * words are sentence case in the catalogue, and the capitals are the style's.
  */
 const txRoleTag =
-  "rounded px-[7px] py-px text-[10px] font-bold tracking-[0.14em] text-background";
+  "rounded px-[7px] py-px text-[10px] font-bold uppercase tracking-[0.14em] text-background";
 /**
  * `.tx-prose { max-width:72ch; white-space:pre-wrap; color:var(--body) }`,
  * open. Closed, the same column holds one line, cut with an ellipsis. The ink
@@ -723,6 +751,32 @@ function TextRow({
   );
 }
 
+/**
+ * A model step whose kept reply said nothing in words: what it called, on
+ * one dim line under the agent's tag. It is the step's row under the
+ * responses chip, so that chip shows every step it counts.
+ */
+function CallsRow({ row }: { row: Extract<FeedRow, { kind: "calls" }> }) {
+  const t = useTranslations("run.transcript");
+  const line =
+    row.tools.length === 0
+      ? t("saidNothing")
+      : t("calledTools", { tools: row.tools.join(", ") });
+  return (
+    <div data-testid="transcript-calls" className={txRole}>
+      <div className={txRoleGut}>
+        <span className={`${txRoleTag} bg-foreground`}>{t("agent")}</span>
+      </div>
+      <div className="flex min-w-0 items-baseline gap-2">
+        <span className="min-w-0 truncate italic text-dim" title={line}>
+          {line}
+        </span>
+        <SubagentChip row={row} />
+      </div>
+    </div>
+  );
+}
+
 function ThinkingRow({
   row,
   q,
@@ -1029,8 +1083,11 @@ function RecallRow({
     .filter((part): part is string => part !== null)
     .join(" · ");
   // `color:var(--st-proven); font-weight:600; font-size:12.5px` on the heading.
-  // Closed, the heading is the whole row; the manifest opens under it.
-  const foldable = recall.items.length > 0;
+  // Closed, the heading is the whole row; what reached the model opens under
+  // it. The server states each item's outcome; the cuts are counted in the
+  // heading and listed on the Context tab.
+  const reached = recall.items.filter((item) => item.outcome === "included");
+  const foldable = reached.length > 0;
   const toggle = () => {
     onToggle(row.key);
   };
@@ -1069,7 +1126,7 @@ function RecallRow({
       </div>
       {open && foldable ? (
         <div data-testid="tx-recall-items" className={txRecall}>
-          {recall.items.map((item, index) => (
+          {reached.map((item, index) => (
             <RecallItem
               // A manifest names each item once; the index keeps two
               // unnamed items apart.
@@ -1248,14 +1305,17 @@ function KindChips({
   onAll,
   onErrors,
 }: {
-  counts: Record<FeedGroup, number>;
+  /** The server's count per chip over the whole run; null when the read carried none. */
+  counts: TranscriptCounts["kinds"] | null;
   /**
-   * More of the run lies past the rows read, so each count is how many at
-   * least, and reads `12+` rather than a total the record has not shown.
+   * The run has more frames than the read could fold, so each count is how
+   * many at least, and reads `12+` rather than a total the record has not
+   * shown.
    */
   floor: boolean;
   on: Record<FeedGroup, boolean>;
-  errors: number;
+  /** The server's count of failed or refused entries; null when the read carried none. */
+  errors: number | null;
   errorsOnly: boolean;
   onGroup: (group: FeedGroup) => void;
   onAll: (value: boolean) => void;
@@ -1292,9 +1352,11 @@ function KindChips({
             className={`size-2 flex-none rounded-[2px] ${on[group] ? DOT[group].on : DOT[group].off}`}
           />
           <span>{t(`chip.${group}`)}</span>
-          <span data-testid={`chip-${group}-count`} className={txKindCount}>
-            {count(counts[group])}
-          </span>
+          {counts === null ? null : (
+            <span data-testid={`chip-${group}-count`} className={txKindCount}>
+              {count(counts[group])}
+            </span>
+          )}
         </button>
       ))}
       <button
@@ -1311,12 +1373,12 @@ function KindChips({
         type="button"
         data-testid="chip-errors"
         aria-pressed={errorsOnly}
-        title={errors > 0 ? t("errorsHint") : t("errorsNone")}
+        title={errors === 0 ? t("errorsNone") : t("errorsHint")}
         onClick={onErrors}
         className={txKindErrors}
       >
         <span>{t("errors")}</span>
-        {errors > 0 ? (
+        {errors !== null && errors > 0 ? (
           <span data-testid="chip-errors-count" className={txKindCount}>
             {count(errors)}
           </span>
@@ -1368,46 +1430,40 @@ function Burn({ spent, total }: { spent: Cost | null; total: Cost | null }) {
 type Drawn = { row: FeedRow; index: number; children: Drawn[] };
 
 /**
- * The rows shown, with each subagent's rows moved under the Task or Agent
- * call row that spawned it (`FeedRow.parent`), so the subagent's work reads
- * as that call's and not as the run's own. `buildFeed` puts a subagent's rows
- * right after their call's, so the order on screen is the order of the list.
- * A row whose call is not shown (a filter hid it, or the transport has not
- * reached it) draws at the top level rather than disappearing.
+ * The rows shown, with each subagent's rows moved under the row of the entry
+ * that spawned it (the entry's `parentKey`, which the server resolves), so
+ * the subagent's work reads as that call's and not as the run's own. The
+ * server places a subagent's entries after the call that spawned them, so
+ * the order on screen is the order of the list. A subagent's own subagent
+ * nests under its call the same way. A row whose parent is not shown (a chip
+ * hid it, or the transport has not reached it) draws at the top level rather
+ * than disappearing.
  */
 function nest(rows: readonly FeedRow[]): Drawn[] {
   const top: Drawn[] = [];
-  const byKey = new Map<string, Drawn>();
+  // The first row drawn for each entry, which that entry's children go under.
+  const byEntry = new Map<string, Drawn>();
   rows.forEach((row, index) => {
     const drawn: Drawn = { row, index, children: [] };
-    const parent = row.parent === null ? undefined : byKey.get(row.parent);
-    if (parent === undefined) {
-      top.push(drawn);
-      byKey.set(row.key, drawn);
-    } else parent.children.push(drawn);
+    const parent = row.parent === null ? undefined : byEntry.get(row.parent);
+    if (parent === undefined) top.push(drawn);
+    else parent.children.push(drawn);
+    if (!byEntry.has(row.entry)) byEntry.set(row.entry, drawn);
   });
   return top;
 }
 
 /**
  * Every chip on, except where the URL's `?kinds=` named the ones it wanted,
- * or said `none`.
+ * or said `none`. `policy` and `errors` name no chip here (a decision is the
+ * ⚖ chip on its call, and errors is the toggle), so a link carrying only
+ * those opens every chip.
  */
 function initialGroups(kinds: KindFilter): Record<FeedGroup, boolean> {
   if (kinds === "none") return eachGroup(() => false);
-  // The contract's filter words that name one of these chips. `prompt` there
-  // is the request sent to a model and `policy` a decision, neither of which
-  // is a row here, so a link carrying only those opens every chip.
-  const named: Partial<Record<TranscriptKind, FeedGroup>> = {
-    responses: "responses",
-    thinking: "thinking",
-    tools: "tools",
-    recall: "recall",
-    usage: "usage",
-    seal: "seal",
-  };
-  const asked = new Set(kinds.flatMap((kind) => named[kind] ?? []));
-  return eachGroup((group) => asked.size === 0 || asked.has(group));
+  const asked = new Set<string>(kinds);
+  const named = FEED_GROUPS.filter((group) => asked.has(group));
+  return eachGroup((group) => named.length === 0 || named.includes(group));
 }
 
 /** One value per chip, in the chips' order. */
@@ -1432,9 +1488,12 @@ export function TranscriptView({
   ws,
   runId,
 }: {
-  /** `cursor` is set when entries lie past this read: more can be paged in. */
-  transcript: Pick<RunTranscript, "complete" | "cursor">;
-  /** The whole-run transcript's entries, at least one. */
+  /**
+   * `cursor` is set when entries lie past this read: more can be paged in.
+   * `counts` is the whole run's, counted by the server.
+   */
+  transcript: Pick<RunTranscript, "complete" | "cursor" | "counts">;
+  /** The whole-run transcript's entries at `steps`, at least one. */
   entries: Frames;
   run: TranscriptRun;
   /** The URL's `?kinds=`, which sets the chips a link opens with. */
@@ -1445,6 +1504,11 @@ export function TranscriptView({
   const navigate = useNavigate();
   const place = useMemo(() => ({ org, ws, runId }), [org, ws, runId]);
   const live = run.status === "live";
+  // The run's counts as the latest read left them: every page carries the
+  // whole run's, so the chips follow a live run as its tail is read.
+  const [counts, setCounts] = useState<TranscriptCounts | null>(
+    transcript.counts,
+  );
 
   // The entries and the cursor as the last read left them. A ref as well as
   // state, because an append needs the new length before React has committed
@@ -1477,6 +1541,7 @@ export function TranscriptView({
     setReadFrom(first);
     const rebased = rebaseEntries(first, entries);
     setEntries(rebased);
+    setCounts(transcript.counts);
     if (rebased.length === first.length) {
       setCursor(transcript.cursor);
       setComplete(transcript.complete);
@@ -1491,8 +1556,6 @@ export function TranscriptView({
     cursorRef.current = cursor;
   }, [cursor]);
 
-  const rows = useMemo(() => buildFeed(entries), [entries]);
-
   const [on, setOn] = useState(() => initialGroups(kinds));
   const [errorsOnly, setErrorsOnly] = useState(
     () => kinds !== "none" && kinds.includes("errors"),
@@ -1500,24 +1563,64 @@ export function TranscriptView({
   const [query, setQuery] = useState("");
   const [thinking, setThinking] = useState(false);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
-  const q = query.trim().toLowerCase();
-  const paced = q === "";
+  // The search the server answered: the entries that hold the query, and
+  // what it found across the run. Null while no search is in force.
+  const [found, setFound] = useState<Found | null>(null);
+  const [searchFailed, setSearchFailed] = useState(false);
+  const wanted = searchText(query);
+  // A search is in force once its answer is in; until then the rows are the
+  // run's, so a reader never sees a stale search's rows under a new query.
+  const searching = found !== null && found.query === wanted;
+  const q = searching ? wanted.toLowerCase() : "";
+  const paced = !searching;
 
-  const counts = useMemo(() => {
-    return eachGroup(
-      (group) => rows.filter((row) => row.group === group).length,
-    );
-  }, [rows]);
-  const errors = useMemo(() => rows.filter((row) => row.failed).length, [rows]);
+  const rows = useMemo(
+    () => feedOf(searching ? found.entries : entries),
+    [searching, found, entries],
+  );
+
+  // The query goes to the server once the reader stops typing (ADR-182): a
+  // search can read every body a run kept, so a keystroke is not a read.
+  // An empty query ends the search.
+  useEffect(() => {
+    if (wanted === "") return;
+    let current = true;
+    const timer = setTimeout(() => {
+      void readTranscriptPage(org, ws, runId, "steps", {
+        text: "full",
+        query: wanted,
+      })
+        .then((read) => {
+          if (!current) return;
+          if (!read.ok) {
+            setSearchFailed(true);
+            return;
+          }
+          setSearchFailed(false);
+          setFound({
+            query: wanted,
+            entries: read.value.entries,
+            cursor: read.value.cursor,
+            search: read.value.search,
+          });
+        })
+        .catch(() => {
+          if (current) setSearchFailed(true);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [wanted, org, ws, runId]);
 
   const visible = useMemo(
     () =>
       rows.filter((row) => {
         if (errorsOnly) return row.failed;
-        if (row.group !== null && !on[row.group]) return false;
-        return q === "" || row.haystack.includes(q);
+        return row.group === null || on[row.group];
       }),
-    [rows, errorsOnly, on, q],
+    [rows, errorsOnly, on],
   );
   const total = visible.length;
 
@@ -1569,15 +1672,12 @@ export function TranscriptView({
         // must keep a resume cursor from the handler so SSE can ask for
         // the next page.
         if (cursorRef.current === null) return;
-        // The chips filter in the browser, so every page is read whole.
-        const read = await readTranscriptPage(
-          org,
-          ws,
-          runId,
-          "everything",
-          [],
-          cursorRef.current,
-        );
+        // The chips show and hide rows already read, so every page is read
+        // whole, at the zoom and text the page read.
+        const read = await readTranscriptPage(org, ws, runId, "steps", {
+          after: cursorRef.current,
+          text: "full",
+        });
         if (!read.ok) {
           setPageFailure(read);
           return;
@@ -1587,6 +1687,7 @@ export function TranscriptView({
         cursorRef.current = read.value.cursor;
         setCursor(read.value.cursor);
         setComplete(read.value.complete);
+        if (read.value.counts !== null) setCounts(read.value.counts);
         if (pageEntries.length === 0) {
           // Nothing new: stop draining. A mid-read signal still schedules
           // one follow-up via pendingReadRef / the finally block.
@@ -1625,6 +1726,41 @@ export function TranscriptView({
   useEffect(() => {
     loadMoreRef.current = loadMore;
   }, [loadMore]);
+
+  /**
+   * The next page of a search's matches. The server pages matches on the
+   * same cursor as any other read, so the page carries on from the last
+   * match read.
+   */
+  const moreMatches = async (): Promise<void> => {
+    if (!searching || found.cursor === null || reading) return;
+    setReading(true);
+    try {
+      const read = await readTranscriptPage(org, ws, runId, "steps", {
+        after: found.cursor,
+        text: "full",
+        query: found.query,
+      });
+      if (!read.ok) {
+        setPageFailure(read);
+        return;
+      }
+      setPageFailure(null);
+      setFound((prev) =>
+        prev === null || prev.query !== found.query
+          ? prev
+          : {
+              ...prev,
+              entries: mergeEntries(prev.entries, read.value.entries),
+              cursor: read.value.cursor,
+            },
+      );
+    } catch {
+      setPageFailure({ ok: false, reason: "unavailable", code: "unanswered" });
+    } finally {
+      setReading(false);
+    }
+  };
 
   // A live run reads its tail when the stream says a frame landed. The
   // stream stays open while the viewer is paused: the run keeps recording,
@@ -1728,16 +1864,20 @@ export function TranscriptView({
     run.model?.slug ?? null,
     run.turns === null ? null : t("turns", { count: run.turns }),
     t("steps", { count: run.steps }),
-    t("entries", { count: rows.length }),
+    // The server's count, which the Transcript tab's own count reads too.
+    t("entries", { count: counts?.entries ?? rows.length }),
   ].filter((part): part is string => part !== null);
 
   const empty = errorsOnly
     ? t("emptyErrors")
-    : q !== ""
+    : searching
       ? t("emptySearch")
       : rows.length === 0
         ? t("emptyRows")
         : t("emptyFiltered");
+  // The resume point of what is drawn: the search's matches while a search
+  // is in force, else the run's.
+  const drawnCursor = searching ? found.cursor : cursor;
 
   const footer =
     stream === "denied"
@@ -1746,10 +1886,15 @@ export function TranscriptView({
         ? t("followLost")
         : stream === "sealed"
           ? t("followSealed")
-          : live && stream !== "off"
+          : live && stream !== "off" && !searching
             ? null
-            : cursor !== null
-              ? t("loadedMore", { count: formatCount(entries.length, locale) })
+            : drawnCursor !== null
+              ? t("loadedMore", {
+                  count: formatCount(
+                    searching ? found.entries.length : entries.length,
+                    locale,
+                  ),
+                })
               : !complete
                 ? t("cut", { count: formatCount(entries.length, locale) })
                 : null;
@@ -1770,7 +1915,12 @@ export function TranscriptView({
         <FeedRowView
           row={row}
           q={q}
-          open={open.has(row.key) || (row.kind === "thinking" && thinking)}
+          // A row whose entry the search matched opens, so the match shows;
+          // its fold still closes it.
+          open={
+            open.has(row.key) !== (searching && row.matched) ||
+            (row.kind === "thinking" && thinking)
+          }
           onToggle={toggle}
           place={place}
           run={run}
@@ -1800,22 +1950,42 @@ export function TranscriptView({
           }}
           className={txSearch}
         />
-        {q === "" ? null : (
+        {wanted === "" ? null : (
           <span
             data-testid="tx-matches"
             className="font-mono text-[10.5px] text-dim"
           >
-            {t("matches", {
-              shown: formatCount(visible.length, locale),
-              total: formatCount(rows.length, locale),
-            })}
+            {searchFailed
+              ? t("searchFailed")
+              : !searching
+                ? t("searching")
+                : t("matches", {
+                    shown: formatCount(
+                      found.search?.matched ?? found.entries.length,
+                      locale,
+                    ),
+                    total: formatCount(
+                      counts?.entries ?? entries.length,
+                      locale,
+                    ),
+                  })}
           </span>
         )}
+        {searching && (found.search?.unsearched ?? 0) > 0 ? (
+          <span
+            data-testid="tx-unsearched"
+            className="font-mono text-[10.5px] text-dim"
+          >
+            {t("unsearched", {
+              count: found.search?.unsearched ?? 0,
+            })}
+          </span>
+        ) : null}
         <KindChips
-          counts={counts}
-          floor={cursor !== null || !complete}
+          counts={counts?.kinds ?? null}
+          floor={!complete}
           on={on}
-          errors={errors}
+          errors={counts?.errors ?? null}
           errorsOnly={errorsOnly}
           onGroup={(group) => {
             setOn((prev) => ({ ...prev, [group]: !prev[group] }));
@@ -1970,13 +2140,13 @@ export function TranscriptView({
             {footer === null ? null : (
               <span data-testid="transcript-count">{footer}</span>
             )}
-            {cursor === null ? null : (
+            {drawnCursor === null ? null : (
               <button
                 type="button"
                 data-testid="transcript-more"
                 disabled={reading || stream === "denied"}
                 onClick={() => {
-                  void loadMore();
+                  void (searching ? moreMatches() : loadMore());
                 }}
                 className={txButton}
               >
@@ -2031,6 +2201,8 @@ function FeedRowView({
           answer={answer}
         />
       );
+    case "calls":
+      return <CallsRow row={row} />;
     case "thinking":
       return <ThinkingRow row={row} q={q} open={open} onToggle={onToggle} />;
     case "tool":

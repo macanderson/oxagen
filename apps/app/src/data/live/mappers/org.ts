@@ -88,16 +88,22 @@ export function toRoleCatalog(
   };
 }
 
+/**
+ * An empty avatar string is read as none: the column is free text, and the
+ * view model refuses an empty avatar.
+ */
 export function toWorkspaceList(
   out: ContractOutput<typeof workspaceList>,
 ): z.input<typeof WorkspaceList> {
   return {
     orgId: out.organization.publicId,
+    orgAvatarUrl: out.organization.avatarUrl || null,
     workspaces: out.workspaces.map((workspace) => ({
       id: workspace.publicId,
       slug: workspace.slug,
       namespace: workspace.namespace,
       name: workspace.name,
+      avatarUrl: workspace.avatarUrl || null,
       role: workspace.role,
       archivedAt: workspace.archivedAt,
       costCenter: workspace.costCenter,

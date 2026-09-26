@@ -109,6 +109,10 @@ import {
   type FrameBody,
   jsonContent,
 } from "../evidence/frame-body";
+import {
+  REQUEST_BODY_OMITTED_ATTR,
+  RESPONSE_BODY_OMITTED_ATTR,
+} from "../evidence/replay-grade";
 import type { HeldCredential } from "../host/credential-store";
 import {
   looksLikeRunToken,
@@ -439,7 +443,10 @@ class BodyCapture {
  * JSON. A reader who wants structure parses the member; one who wants to check
  * the body against what crossed the wire can, which re-serialising would cost
  * them. JCS drops an absent member, so a call whose response was too large to
- * hold ships `{"request":...}` alone.
+ * hold ships `{"request":...}` alone. That half still replays, so it ships.
+ * The frame names the missing half (`RESPONSE_BODY_OMITTED_ATTR`,
+ * `REQUEST_BODY_OMITTED_ATTR`), and the seal counts it as a frame missing its
+ * body, so the replay grade stays below `view`.
  */
 function exchangeContent(
   request: string | undefined,
@@ -449,20 +456,33 @@ function exchangeContent(
   return jsonContent(jcs({ request, response }));
 }
 
-/** The request body decoded for reading only; the forwarded bytes are the caller's. */
+/**
+ * The request body decoded for reading only; the forwarded bytes are the caller's.
+ *
+ * Decoding stops at `maxOutputLength` bytes, the same ceiling the proxy holds
+ * for a raw body. Gzip and deflate inflate up to about a thousandfold, and
+ * brotli and zstd further, so a request under the raw ceiling could decode to
+ * more memory than the daemon has. A body that inflates past the ceiling
+ * reads as one nobody here can decode: a workspace with a `models` clause
+ * refuses it, and without one it is forwarded as it came, for the vendor to
+ * refuse.
+ */
 function readableBody(
   body: Buffer,
   encoding: string | undefined,
+  maxOutputLength: number,
 ): Buffer | undefined {
   const name = (encoding ?? "").trim().toLowerCase();
+  const limit = { maxOutputLength };
   try {
     if (name === "" || name === "identity") return body;
-    if (name === "zstd") return zstdDecompressSync(body);
-    if (name === "gzip" || name === "x-gzip") return gunzipSync(body);
-    if (name === "br") return brotliDecompressSync(body);
-    if (name === "deflate") return inflateSync(body);
+    if (name === "zstd") return zstdDecompressSync(body, limit);
+    if (name === "gzip" || name === "x-gzip") return gunzipSync(body, limit);
+    if (name === "br") return brotliDecompressSync(body, limit);
+    if (name === "deflate") return inflateSync(body, limit);
   } catch {
-    // A body nobody here can decode is still forwarded as it came.
+    // A body nobody here can decode, or one that inflates past the ceiling,
+    // is still forwarded as it came.
   }
   return undefined;
 }
@@ -1143,7 +1163,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const encoding = header(req, "content-encoding");
     let decoded: Buffer | undefined | null = null;
     const readable = (): Buffer | undefined => {
-      if (decoded === null) decoded = readableBody(body, encoding);
+      if (decoded === null)
+        decoded = readableBody(body, encoding, maxRequestBytes);
       return decoded;
     };
     let parsed: Record<string, unknown> | undefined | null = null;
@@ -1581,10 +1602,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                 // refused it, so `model` above may be a duplicate the vendor
                 // never ran. The frame says so rather than reading as pinned.
                 ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
+                // A half left out of the body. The seal reads these two attrs
+                // (`bodyIsPartial`), so a call with half a body grades as one
+                // missing its body rather than as a whole capture.
                 ...(fold !== undefined && requestContentText === undefined
-                  ? { "oxagen.request_body_omitted": "too_large" }
+                  ? { [REQUEST_BODY_OMITTED_ATTR]: "too_large" }
                   : fold === undefined && sent === undefined && body.length > 0
-                    ? { "oxagen.request_body_omitted": "not_decoded" }
+                    ? { [REQUEST_BODY_OMITTED_ATTR]: "not_decoded" }
                     : {}),
                 ...(fold !== undefined
                   ? {
@@ -1604,7 +1628,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                     }
                   : {}),
                 ...(responseOmitted !== undefined
-                  ? { "oxagen.response_body_omitted": responseOmitted }
+                  ? { [RESPONSE_BODY_OMITTED_ATTR]: responseOmitted }
                   : {}),
                 ...(abortReason !== undefined
                   ? { "oxagen.interrupted": "1" }

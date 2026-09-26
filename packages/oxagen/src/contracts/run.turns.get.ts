@@ -24,6 +24,8 @@
  *   further content blocks of one transcript message, add none.
  * - `toolSteps` is the tool calls made in the turn: one per call id on each
  *   chain, however many frames record the call.
+ * - For a ledger run, both step counts are the entries `get_run_transcript`
+ *   folds at its `steps` zoom (ADR-182).
  * - `cost` is the turn's cost records summed, counted by the rule the
  *   transcript's `cost` uses: a later sighting of a model call carries none,
  *   and once the proxy observes a chain's model calls, the harness's own

@@ -33,7 +33,7 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
       lead: null,
     },
     modelCalls: null,
-    toolCalls: [],
+    toolCalls: { count: 0, failed: 0, tools: [] },
     families: null,
     batches: null,
     errors: null,
@@ -44,9 +44,12 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
   };
 }
 
-/** One tool call; `failed` is the only field the reading reads. */
-function call(failed: boolean): NonNullable<RunMetrics["toolCalls"]>[number] {
-  return { name: "Bash", group: "shell", ms: 10, failed, seq: "5", batch: 0 };
+/**
+ * The run's tool calls as the server counted them; `failed` is the only
+ * figure the reading reads.
+ */
+function calls(count: number, failed: number): RunMetrics["toolCalls"] {
+  return { count, failed, tools: [{ name: "Bash", calls: count }] };
 }
 
 /** A sealed run on the middle class of the Anthropic ladder, too long to be small. */
@@ -62,7 +65,7 @@ function run(overrides: Partial<RunRow> = {}): RunRow {
 
 describe("runFit", () => {
   it("reads a long first-try run on the middle class as a fit, and names what it read", () => {
-    const fit = runFit(run(), metrics({ toolCalls: [call(false)] }));
+    const fit = runFit(run(), metrics({ toolCalls: calls(1, 0) }));
     expect(fit.read).toEqual({ prompts: 1, turns: 8, steps: 40, failed: 0 });
     expect(fit.model).toEqual({ verdict: "fit", tier: "sonnet" });
   });
@@ -101,10 +104,7 @@ describe("runFit", () => {
       tier: "sonnet",
       suggest: "opus",
     });
-    const failed = runFit(
-      run(),
-      metrics({ toolCalls: [call(false), call(true), call(true)] }),
-    );
+    const failed = runFit(run(), metrics({ toolCalls: calls(3, 2) }));
     expect(failed.read?.failed).toBe(2);
     expect(failed.model).toMatchObject({ verdict: "under", suggest: "opus" });
   });
@@ -112,7 +112,7 @@ describe("runFit", () => {
   it("reads a redone run as under even when it was small: a retry outweighs a short run", () => {
     const fit = runFit(
       run({ turns: 2, steps: 5 }),
-      metrics({ toolCalls: [call(true)] }),
+      metrics({ toolCalls: calls(1, 1) }),
     );
     expect(fit.model).toMatchObject({ verdict: "under", suggest: "opus" });
   });

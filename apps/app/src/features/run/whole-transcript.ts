@@ -1,7 +1,8 @@
-// A transcript read to its end. The Run page reads it once, at `everything`,
-// and everything that lists or counts across the whole run reads that one
-// read: the stat row, the Transcript feed, Policy, Context, and the Cost tab's
-// figures other than its per-turn ledger, which `get_run_turns` answers.
+// A transcript read to its end. The Run page reads it at `steps` with whole
+// bodies for the Transcript tab, and at `everything` for the tabs that list
+// frames (Governed actions, Policy, Context). Every page carries the whole
+// run's counts and figures, counted on the server (ADR-182), so the read
+// answers the last page's, which are the most recent.
 //
 // `get_run_transcript` answers one page of entries and a cursor. The tabs
 // used to take the first page and call it the run, and they said the list
@@ -14,12 +15,13 @@ import {
   type RunTranscript,
   TRANSCRIPT_ENTRY_MAX,
   type TranscriptKind,
+  type TranscriptText,
   type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
-import { mergeEntries } from "./transcript-model";
+import { mergeEntries } from "./transcript-rows";
 
 /**
  * The most pages one read makes. At the largest page the contract allows,
@@ -44,15 +46,16 @@ export function isWhole(transcript: RunTranscript): boolean {
 }
 
 /**
- * `get_run_transcript` at `zoom`, narrowed to `kinds`, read page by page until
- * the run is read or `WHOLE_TRANSCRIPT_PAGES` pages have been. The entries
- * are every page's, in order, each once: a page that sends again an entry an
- * earlier page held (one that grew between the two reads of a live run)
- * replaces it where it stands (`mergeEntries`). The cursor is the last page's:
- * null when the run was read to its end, and otherwise the point the list
- * stops at, so `isWhole` says it is a prefix. A page that fails after the
- * first keeps what was read and its cursor, so the tab says the list stops
- * short rather than failing a list it mostly holds.
+ * `get_run_transcript` at `zoom`, narrowed to `kinds` and carrying `text` of
+ * each body, read page by page until the run is read or
+ * `WHOLE_TRANSCRIPT_PAGES` pages have been. The entries are every page's, in
+ * order, each once: a page that sends again an entry an earlier page held
+ * (one that grew between the two reads of a live run) replaces it where it
+ * stands (`mergeEntries`). The cursor is the last page's: null when the run
+ * was read to its end, and otherwise the point the list stops at, so
+ * `isWhole` says it is a prefix. A page that fails after the first keeps what
+ * was read and its cursor, so the tab says the list stops short rather than
+ * failing a list it mostly holds.
  */
 export async function readWholeTranscript(
   // Only the transcript read: a caller hands in its whole source, and a test
@@ -61,13 +64,14 @@ export async function readWholeTranscript(
   ctx: WsCtx,
   runId: string,
   zoom: TranscriptZoom,
-  kinds: TranscriptKind[] = [],
+  {
+    kinds = [],
+    text,
+  }: { kinds?: TranscriptKind[]; text?: TranscriptText } = {},
 ): Promise<Read<RunTranscript>> {
   const limit = TRANSCRIPT_ENTRY_MAX;
-  const first = await source.runs.transcript(ctx, runId, zoom, {
-    kinds,
-    limit,
-  });
+  const asked = { kinds, limit, ...(text === undefined ? {} : { text }) };
+  const first = await source.runs.transcript(ctx, runId, zoom, asked);
   if (!first.ok) return first;
   let entries = [...first.value.entries];
   let last = first.value;
@@ -81,9 +85,8 @@ export async function readWholeTranscript(
     pages += 1
   ) {
     const next = await source.runs.transcript(ctx, runId, zoom, {
-      kinds,
+      ...asked,
       after: last.cursor,
-      limit,
     });
     if (!next.ok) break;
     entries = mergeEntries(entries, next.value.entries);

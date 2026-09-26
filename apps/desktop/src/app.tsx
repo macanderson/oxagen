@@ -1,10 +1,11 @@
 /**
  * The Oxagen app, one pane on paper.
  *
- * First run (no enrollment on this machine): a five-step wizard — sign in,
+ * First run (no enrollment on this machine): a five-step wizard. Sign in,
  * pick the org and workspace the operator can see, register the agents the
- * machine has (Claude Code, Codex, Cursor; detected, all ticked by default), the
- * outcome, then a recorded first run and the door to the workspace in Oxagen.
+ * machine has (Claude Code, Codex, Cursor, Stella and Claude Desktop; detected,
+ * all ticked by default), the outcome, then a recorded first run and the door
+ * to the workspace in Oxagen.
  *
  * Every later run (the machine is enrolled): the management pane — what the
  * host reports to, one de-register per wrapped agent, change of workspace,
@@ -68,6 +69,7 @@ import {
   deregisterArgs,
   deregisterNeedsSession,
   describeCliInstall,
+  enforcementText,
   enrollArgs,
   HARNESS_LABEL,
   HARNESSES,
@@ -84,6 +86,12 @@ import {
   wizardStep,
   workspaceUrl,
 } from "./commands";
+import {
+  promptVisible,
+  startUpdateWatch,
+  type UpdateOffer,
+  type UpdateWatch,
+} from "./update-watch";
 import { checkForUpdate, describeCheck, installUpdate } from "./updater";
 
 const WRAP_AGENT_URL = "https://docs.oxagen.sh/docs/cli/wrap-an-agent";
@@ -173,6 +181,55 @@ export function App() {
   // machine, so it has its own flag rather than `busy`: holding `busy` froze
   // every control for as long as the feed took to answer.
   const [checking, setChecking] = useState(false);
+  // What the update watch found on its own. The prompt asks, and only the
+  // Install click downloads and relaunches.
+  const [updatePrompt, setUpdatePrompt] = useState<UpdateOffer | null>(null);
+  // The watch reads these between renders: it holds off the feed while an
+  // install runs or a check the person started is out. doCheckUpdate and
+  // doInstallUpdate set and clear them where they start and end, because
+  // this effect runs one commit later, and a background check that resolved
+  // in between would replace the install's caption. The effect keeps them in
+  // step with the state.
+  const updateGateRef = useRef({ installing: false, checking: false });
+  useEffect(() => {
+    updateGateRef.current = { installing: busy === "update", checking };
+  }, [busy, checking]);
+  const watchRef = useRef<UpdateWatch | null>(null);
+  // The watch starts once the running version is known: at launch, then
+  // hourly, and on a focus 15 minutes or more after the last check.
+  const appVersion = state?.app_version ?? null;
+  useEffect(() => {
+    if (appVersion === null) return;
+    const watch = startUpdateWatch({
+      currentVersion: appVersion,
+      check: checkForUpdate,
+      paused: () =>
+        updateGateRef.current.installing || updateGateRef.current.checking,
+      offer: (offer) => {
+        setUpdate({
+          caption: describeCheck({
+            available: true,
+            version: offer.version,
+            currentVersion: offer.currentVersion,
+          }),
+          offered: offer.update,
+        });
+        setUpdatePrompt(offer);
+      },
+      now: Date.now,
+      setInterval: (run, ms) => window.setInterval(run, ms),
+      clearInterval: (id) => window.clearInterval(id),
+      addEventListener: (type, listener) =>
+        window.addEventListener(type, listener),
+      removeEventListener: (type, listener) =>
+        window.removeEventListener(type, listener),
+    });
+    watchRef.current = watch;
+    return () => {
+      watch.stop();
+      watchRef.current = null;
+    };
+  }, [appVersion]);
   const pollRef = useRef<number | null>(null);
   // The last `tacho status` failure shown, so a failure that repeats on
   // every poll is reported once rather than re-raised every 20 s.
@@ -831,10 +888,13 @@ export function App() {
 
   async function doCheckUpdate() {
     if (!state || checking) return;
+    updateGateRef.current.checking = true;
     setChecking(true);
     setUpdate({ caption: "checking…", offered: null });
     try {
       const r = await checkForUpdate(state.app_version);
+      // The masthead now offers this version, so the watch need not.
+      if (r.update) watchRef.current?.handled(r.update.version);
       setUpdate({ caption: describeCheck(r.result), offered: r.update });
     } catch (e) {
       setUpdate({ caption: null, offered: null });
@@ -842,12 +902,15 @@ export function App() {
         `Update check failed: ${e instanceof Error ? e.message : String(e)}`,
       );
     } finally {
+      updateGateRef.current.checking = false;
       setChecking(false);
     }
   }
   async function doInstallUpdate() {
     const offered = update.offered;
     if (!offered) return;
+    updateGateRef.current.installing = true;
+    setUpdatePrompt(null);
     setBusy("update");
     setError(null);
     setNotice(null);
@@ -857,6 +920,10 @@ export function App() {
       const { relaunched } = await installUpdate(offered, (line) =>
         setLog((prev) => [...prev, { text: line, err: false }]),
       );
+      // The version is on disk now. If the relaunch failed, the running
+      // binary is still the old one and the feed still offers this version,
+      // so the watch must not prompt to install it again.
+      watchRef.current?.handled(offered.version);
       if (!relaunched) {
         setUpdate({
           caption: `v${offered.version} installed; quit and reopen Oxagen`,
@@ -865,6 +932,7 @@ export function App() {
         setNotice(
           `Version ${offered.version} is installed. Quit Oxagen and open it again to use it.`,
         );
+        updateGateRef.current.installing = false;
         setBusy(null);
       }
     } catch (e) {
@@ -879,6 +947,7 @@ export function App() {
         }),
         offered,
       });
+      updateGateRef.current.installing = false;
       setBusy(null);
     }
   }
@@ -1053,9 +1122,9 @@ export function App() {
                   {sessionExpired
                     ? `The saved session for ${state?.config.org_slug ?? "your organization"} has expired. `
                     : ""}
-                  Sign in opens your browser; come back here when it says you
-                  are done. New to Oxagen? Create an account — you will name
-                  your organization and first workspace, then land back here.
+                  Sign in opens your browser. Come back here when it says you
+                  are done. New to Oxagen? Create an account. You name your
+                  organization and first workspace, then land back here.
                 </p>
                 <div className="row">
                   <button
@@ -1212,8 +1281,8 @@ export function App() {
                   !detecting &&
                   detected.harnesses.every((d) => !d.installed) && (
                     <div className="notice">
-                      None of Claude Code, Codex, Cursor, or stella was found on
-                      your PATH. Install one, then rescan:{" "}
+                      None of the agents above was found on this machine.
+                      Install one, then rescan:{" "}
                       {HARNESSES.map((h, i) => (
                         <span key={h}>
                           {i > 0 && " · "}
@@ -1312,9 +1381,8 @@ export function App() {
                       <code>
                         {host.org_slug}/{host.workspace_slug}
                       </code>
-                      ; collector {collectorText(daemonUp, host.port)};
-                      enforcement is client-attested (the hooks the agents
-                      honour).
+                      ; collector {collectorText(daemonUp, host.port)};{" "}
+                      {enforcementText(host.harnesses)}.
                     </p>
                   </div>
                 </div>
@@ -1346,7 +1414,7 @@ export function App() {
                 <p className="sub">
                   {runList.length > 0
                     ? `Oxagen sends each wrapped agent one small prompt ("reply OK") and confirms the run was recorded and sealed. That is your first data in the workspace.`
-                    : `Nothing here to drive: every app you registered is a connected app, which Oxagen governs through its own MCP gateway rather than through a hook. There is no headless prompt to send one. It reports the first time you use it — open the workspace and watch it arrive.`}
+                    : `Nothing here to drive: every app you registered is a connected app, which Oxagen governs through its own MCP gateway rather than through a hook. There is no headless prompt to send one. It reports the first time you use it. Open the workspace and watch it arrive.`}
                 </p>
                 <div className="agents">
                   {hostHarnesses.map((h) => (
@@ -1542,7 +1610,7 @@ export function App() {
             {loggedIn
               ? `${state?.config.org_slug ?? "—"} · CLI default workspace ${state?.config.workspace_slug ?? "—"}`
               : sessionExpired
-                ? "session expired — sign in to change the workspace"
+                ? "session expired (sign in to change the workspace)"
                 : "not signed in"}
           </dd>
         </dl>
@@ -1579,8 +1647,8 @@ export function App() {
         <p className="sub">
           Every app Oxagen covers here, and what each one records. A{" "}
           <strong>wrapped</strong> agent runs an Oxagen hook, so every action it
-          takes is recorded and can be refused — but Oxagen does not run it, so
-          the record is what the agent reported. A <strong>connected</strong>{" "}
+          takes is recorded and can be refused. Oxagen does not run the agent,
+          so the record is what the agent reported. A <strong>connected</strong>{" "}
           app has no hook: Oxagen serves it a toolbelt and refuses the calls its
           mandate does not allow, and sees nothing else the app does. Neither
           covers what the other covers.
@@ -1952,6 +2020,43 @@ export function App() {
             {notice}
           </div>
         )}
+        {updatePrompt &&
+          promptVisible(
+            updatePrompt,
+            update.offered?.version ?? null,
+            busy === "update",
+          ) && (
+            <section
+              className="panel"
+              aria-label="Update available"
+              role="status"
+            >
+              <p className="eyebrow">Update</p>
+              <p className="headline">
+                Oxagen {updatePrompt.version} is available
+              </p>
+              <p className="sub">
+                You are on {updatePrompt.currentVersion}. Install downloads the
+                new version, checks its signature, and relaunches Oxagen.
+              </p>
+              <div className="row">
+                <button
+                  type="button"
+                  onClick={doInstallUpdate}
+                  disabled={busy !== null || checking}
+                >
+                  Install and relaunch
+                </button>
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => setUpdatePrompt(null)}
+                >
+                  Later
+                </button>
+              </div>
+            </section>
+          )}
         {state === null ? (
           <p className="sub">Reading this machine…</p>
         ) : state.host_error ? (

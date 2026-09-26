@@ -237,7 +237,7 @@ export function ToolCalls({ metrics }: { metrics: RunMetrics }) {
         toolCalls === null || families === null ? undefined : (
           <span className="font-mono text-[11px] text-dim">
             {t("tally", {
-              calls: toolCalls.length,
+              calls: toolCalls.count,
               // `batches` is null only for a run with no tool call, which ran
               // no batch: the zero is the count, not a stand-in for one.
               batches: batches === null ? 0 : batches.count,
@@ -272,7 +272,7 @@ export function ToolCalls({ metrics }: { metrics: RunMetrics }) {
               {toolCalls === null ? t("notRead") : t("noCalls")}
             </p>
           ) : (
-            <PerBatch batches={batches} calls={toolCalls.length} />
+            <PerBatch batches={batches} calls={toolCalls.count} />
           )}
         </div>
         <div className={column}>

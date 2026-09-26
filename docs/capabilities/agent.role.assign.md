@@ -58,3 +58,4 @@ Org Owner, Org Admin — checked by the handler (`assertOrgRole`, INV-29), the g
 | `agent_role_not_assignable` | The role is a non-agent system role (e.g. Owner). |
 | `agent_role_ceiling_exceeded` | The role's grants exceed the assigner's own effective grants. |
 | `agent_principal_missing` | The agent predates Agent RBAC principal provisioning. |
+| `conflict` | The agent is retired (`agent_retired`). The handler checks this first, before it reads the role. `revoke_agent_role` still removes a role the agent holds. |

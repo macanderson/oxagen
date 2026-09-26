@@ -3,7 +3,8 @@ import { registerCapability } from "../registry";
 
 /**
  * Upper bound for a single user chat message, shared by EVERY chat ingress
- * (this contract → MCP, the app chat route, the REST API chat route). An
+ * (this contract and its MCP tool, `ask_assistant`, the API's chat stream
+ * route, and apps/app_deprecated's chat route). An
  * unbounded `content` lets a single authed request forward an arbitrarily
  * large prompt to the LLM, driving unbounded metering cost and blowing the
  * per-turn token budget. 32 KiB is generous for a chat turn while capping

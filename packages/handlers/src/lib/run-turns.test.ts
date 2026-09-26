@@ -2,7 +2,12 @@
 // reference the ClickHouse path is checked against) and from ClickHouse's
 // per-chain tallies (a wrapped run). The SQL that produces the tallies is
 // checked against a real ClickHouse in run.turns.get.integration.test.ts.
-import { ledgerFrame, type RunFrame, tachoFrame } from "@oxagen/run-ledger";
+import {
+  ledgerFrame,
+  type RunFrame,
+  tachoFrame,
+  withoutLateReports,
+} from "@oxagen/run-ledger";
 import type { TachoTurnGroup } from "@oxagen/telemetry";
 import { describe, expect, it } from "vitest";
 import { event, tachoRow } from "../run.test-support";
@@ -12,7 +17,6 @@ import {
   tachoTurns,
   tachoTurnStarts,
 } from "./run-turns";
-import { withoutLateReports } from "./run-read";
 
 const ROOT = "0192d4a8-7c1e-7a00-8000-00000000c0de";
 const CHILD_A = "0192d4a8-7c1e-7a00-8000-0000000000c1";
@@ -232,6 +236,21 @@ describe("framesTurns", () => {
       [1, "3", "2026-09-11T09:00:03.000Z", 2],
       [2, "4", "2026-09-11T09:00:04.000Z", 1],
     ]);
+  });
+
+  it("counts the steps the transcript draws: one call however often its key was sealed, and no event as a step (#3994)", () => {
+    const frames = [
+      turnStart(0),
+      // A PreToolUse hook delivered twice writes the request twice.
+      requested(1, "K"),
+      requested(2, "K"),
+      called(3, "K"),
+      called(4, "K"),
+      frame(5, { kind: "oxagen:hook_health", toolName: "", toolUseId: "" }),
+      frame(6, { kind: "turn_end", toolName: "", toolUseId: "" }),
+    ];
+    const [only] = framesTurns(frames, 10).turns;
+    expect(only).toMatchObject({ frames: 7, modelSteps: 0, toolSteps: 1 });
   });
 
   it("stops at the cap and says the list is short", () => {

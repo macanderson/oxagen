@@ -223,6 +223,17 @@ describe("search_tools", () => {
     expect(approvals.where).toMatch(/"expires_at" > now\(\)/);
   });
 
+  it("leaves retired (archived) agents out of the agent rows, on a query and on the empty query", async () => {
+    for (const query of ["rev", ""]) {
+      captured = [];
+      await toolsSearchHandler({ query, kinds: ["agent"] }, CTX);
+      const read = captured.find((c) => c.table === schema.agents)!;
+      expect(read.where).toMatch(/"deleted_at" is null/);
+      expect(read.where).toMatch(/"status" <> \$\d+/);
+      expect(read.params).toContain("archived");
+    }
+  });
+
   it("deals the eight slots across the kinds on the menu's empty query, so a large belt leaves room for records", async () => {
     const extra = Array.from({ length: 10 }, (_, i) => ({
       name: `tool_${i}`,

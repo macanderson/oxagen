@@ -18,7 +18,7 @@ export const conversationAssetAccessPolicy = z.enum(["user", "org", "public"]);
 
 // A single generated asset visible to the requesting user in a conversation.
 // This is the canonical exported type — replaces the bespoke ConversationAssetItem
-// declared in the apps/app Next.js route handler.
+// declared in the apps/app_deprecated Next.js route handler.
 export const conversationAssetItem = z.object({
   publicId: z.string(),
   kind: conversationAssetKind,

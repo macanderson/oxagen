@@ -319,11 +319,17 @@ describe("pull requests the session opened", () => {
       ts: "2026-09-24T02:15:13.067Z",
       body: {},
       attrs: {
-        pr_number: "3998",
-        pr_url: "https://github.com/macanderson/oxagen/pull/3998",
-        pr_repository: "macanderson/oxagen",
+        "pr.number": "3998",
+        "pr.url": "https://github.com/macanderson/oxagen/pull/3998",
+        "pr.repository": "macanderson/oxagen",
       },
     });
+    // One scheme with the `pr_open` effect frame: no underscore names.
+    expect(Object.keys(drafts[0]!.attrs).sort()).toEqual([
+      "pr.number",
+      "pr.repository",
+      "pr.url",
+    ]);
   });
 
   it("seals nothing for a pr-link line without a number or a URL", () => {

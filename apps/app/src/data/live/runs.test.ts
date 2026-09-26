@@ -253,6 +253,9 @@ describe("runs.get", () => {
     observedAt: "2026-09-15T08:56:00.000Z",
     digest: "sha256:5f2d",
     summary: "anthropic · claude-opus-5 · ok",
+    tool: null,
+    toolStatus: null,
+    approvalId: null,
     body: {
       digest: "sha256:9a1b",
       bytesRef: "blob://x",
@@ -284,6 +287,35 @@ describe("runs.get", () => {
       contract: runGet,
       input: { runId: "tse_4f0a", frameLimit: 200, waitMs: 0 },
       page: "run",
+    });
+  });
+
+  it("carries a parked receipt's tool, outcome and approval as fields, not as words of its label", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        run,
+        frames: {
+          frames: [
+            {
+              ...frame,
+              type: "tool.engine_call_completed",
+              summary: "create_tag parked",
+              tool: "create_tag",
+              toolStatus: "parked",
+              approvalId: "apr_0a1b",
+            },
+          ],
+          cursor: "ZjoyMA",
+        },
+        witnessFor: null,
+      }),
+    );
+    const read = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(read.ok && read.value.frames.frames[0]).toMatchObject({
+      summary: "create_tag parked",
+      tool: "create_tag",
+      toolStatus: "parked",
+      approvalId: "apr_0a1b",
     });
   });
 
@@ -864,6 +896,272 @@ describe("runs.transcript", () => {
       input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
       page: "run",
     });
+  });
+
+  it("asks for whole bodies and a search when the caller does", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "steps",
+        kinds: [],
+        entries: [],
+        cursor: null,
+        complete: true,
+      }),
+    );
+    await runs.transcript(ctx, "tse_4f0a", "steps", {
+      text: "full",
+      query: "retry",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTranscriptGet,
+      input: {
+        runId: "tse_4f0a",
+        zoom: "steps",
+        kinds: [],
+        limit: 200,
+        text: "full",
+        query: "retry",
+      },
+      page: "run",
+    });
+  });
+
+  // ADR-182: every fact the page draws is the server's, carried across as
+  // the fold stated it, with the tool_use block's claim and family.
+  it("carries what the fold states about each entry, and the run's counts, figures and search", async () => {
+    const decision = {
+      seq: "3",
+      sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0",
+      decision: "allow",
+      type: "policy_decision",
+      source: "bundle",
+      harness: false,
+      at: "2026-09-15T08:56:01.000Z",
+    };
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "steps",
+        kinds: [],
+        entries: [
+          {
+            seq: "2",
+            endSeq: "5",
+            subagent: {
+              sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0",
+              id: null,
+              type: "Explore",
+              spawnCallId: "toolu_task",
+              parentSessionUuid: null,
+            },
+            at: "2026-09-15T08:56:00.000Z",
+            elapsedMs: 4000,
+            kind: "tool_call",
+            type: "tool_requested",
+            label: "Bash",
+            callId: "toolu_1",
+            kinds: ["tools", "policy"],
+            request: null,
+            response: {
+              seq: "5",
+              type: "llm_call",
+              digest: null,
+              bytesRef: null,
+              redactions: [],
+              fidelity: "full",
+              text: null,
+              truncated: false,
+              assembly: {
+                blocks: [
+                  {
+                    id: "b0",
+                    chars: 4,
+                    tokens: 1,
+                    partial: false,
+                    cost: null,
+                    kind: "tool_use",
+                    name: "claude_code__Read",
+                    input: { file_path: "a.ts" },
+                    inputRaw: false,
+                    inputFolded: false,
+                    callKey: "toolu_2",
+                    verdict: null,
+                    stepKey: "9",
+                    result: { ok: true, summary: "12 lines" },
+                    family: "read",
+                    tool: "Read",
+                  },
+                ],
+                precis: "",
+                stopReason: null,
+                ttftMs: null,
+                durationMs: null,
+                tokensPerSecond: null,
+                usage: {
+                  inputTokens: null,
+                  cacheReadTokens: null,
+                  cacheWriteTokens: null,
+                  outputTokens: null,
+                },
+                partial: false,
+                wire: { events: 1, bytes: 10 },
+              },
+            },
+            decision,
+            frames: 4,
+            turn: 1,
+            cost: null,
+            cumulativeCost: null,
+            key: "0192d4a8-7c1e-7a00-8000-00000000c1d0:2",
+            parentKey: "1",
+            node: "tool",
+            quiet: false,
+            outcome: "parked",
+            approvalId: "apr_7Kq2",
+            gates: [decision],
+            subject: "claude_code__Bash",
+            tool: "Bash",
+            family: "shell",
+            model: null,
+            durationMs: 1200,
+            echoOf: null,
+            recall: null,
+            matches: ["response"],
+          },
+        ],
+        cursor: null,
+        complete: true,
+        counts: {
+          kinds: {
+            prompt: 1,
+            responses: 0,
+            thinking: 0,
+            tools: 1,
+            policy: 1,
+            usage: 0,
+            recall: 0,
+            seal: 0,
+            errors: 0,
+          },
+          entries: 2,
+          errors: 0,
+          policy: 1,
+          frames: { kinds: { policy: 3, recall: 1 }, policy: 2 },
+        },
+        figures: {
+          steps: { model: 0, tool: 1 },
+          prompts: 1,
+          calls: {
+            count: 1,
+            failed: 0,
+            tools: [{ name: "Bash", calls: 1 }],
+            families: [
+              {
+                family: "shell",
+                calls: 1,
+                share: 1,
+                ms: 1200,
+                failed: 0,
+                tools: 1,
+              },
+            ],
+            batches: null,
+          },
+          wall: { modelMs: 0, toolMs: 1200, waitingMs: 0 },
+        },
+        search: { query: "lines", matched: 1, unsearched: 0 },
+      }),
+    );
+    const read = await runs.transcript(ctx, "tse_4f0a", "steps");
+    if (!read.ok) throw new Error("the read failed");
+    const [entry] = read.value.entries;
+    expect(entry).toMatchObject({
+      key: "0192d4a8-7c1e-7a00-8000-00000000c1d0:2",
+      parentKey: "1",
+      node: "tool",
+      outcome: "parked",
+      approvalId: "apr_7Kq2",
+      subject: "claude_code__Bash",
+      tool: "Bash",
+      family: "shell",
+      durationMs: 1200,
+      matches: ["response"],
+      gates: [
+        {
+          seq: "3",
+          chainRef: "0192d4a8-7c1e-7a00-8000-00000000c1d0",
+          decision: "allow",
+          source: "bundle",
+          harness: false,
+        },
+      ],
+    });
+    expect(entry?.response?.blocks?.[0]).toEqual({
+      kind: "tool_use",
+      name: "claude_code__Read",
+      input: { file_path: "a.ts" },
+      callKey: "toolu_2",
+      stepKey: "9",
+      result: { ok: true, summary: "12 lines" },
+      family: "read",
+      tool: "Read",
+    });
+    expect(read.value.counts?.policy).toBe(1);
+    // The frames' counts at `everything`, carried on a read at `steps`.
+    expect(read.value.counts?.frames).toEqual({
+      kinds: { policy: 3, recall: 1 },
+      policy: 2,
+    });
+    expect(read.value.figures?.calls.families[0]?.family).toBe("shell");
+    expect(read.value.search).toEqual({
+      query: "lines",
+      matched: 1,
+      unsearched: 0,
+    });
+  });
+
+  it("reads an answer that carried none of the fold's facts as saying nothing (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "everything",
+        kinds: [],
+        entries: [
+          {
+            seq: "4",
+            endSeq: "4",
+            at: "2026-09-15T08:56:00.000Z",
+            elapsedMs: 0,
+            kind: "frame",
+            type: "turn_start",
+            label: "turn_start",
+            callId: null,
+            kinds: [],
+            request: null,
+            response: null,
+            decision: null,
+            frames: 1,
+            turn: 1,
+            cost: null,
+            cumulativeCost: null,
+          },
+        ],
+        cursor: null,
+        complete: true,
+      }),
+    );
+    const read = await runs.transcript(ctx, "tse_4f0a", "everything");
+    if (!read.ok) throw new Error("the read failed");
+    expect(read.value.entries[0]).toMatchObject({
+      key: "4",
+      parentKey: null,
+      node: null,
+      quiet: false,
+      outcome: null,
+      gates: [],
+      matches: [],
+    });
+    expect(read.value.counts).toBeNull();
+    expect(read.value.figures).toBeNull();
+    expect(read.value.search).toBeNull();
   });
 });
 

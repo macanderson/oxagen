@@ -67,6 +67,7 @@ const listOut = {
   nextCursor: null,
   totals: {
     identities: 1,
+    retired: 0,
     enrolled: 0,
     unenrolled: 1,
     holdingMandate: null,
@@ -124,16 +125,39 @@ describe("agents.list", () => {
     ]);
     await agents.list(ctx, { cursor: "c2" });
     expect(kernelRead.mock.calls).toEqual([
-      [ctx, { contract: agentList, input: { limit: 100 }, page: "agents" }],
       [
         ctx,
         {
           contract: agentList,
-          input: { limit: 100, cursor: "c2" },
+          input: { limit: 100, includeRetired: false },
+          page: "agents",
+        },
+      ],
+      [
+        ctx,
+        {
+          contract: agentList,
+          input: { limit: 100, includeRetired: false, cursor: "c2" },
           page: "agents",
         },
       ],
     ]);
+  });
+
+  it("asks for retired agents only when the caller does", async () => {
+    kernelRead.mockResolvedValue(readOk(listOut));
+    await agents.list(ctx, { cursor: null, includeRetired: true });
+    await agents.list(ctx, { cursor: "c2", includeRetired: false });
+    expect(kernelRead).toHaveBeenNthCalledWith(1, ctx, {
+      contract: agentList,
+      input: { limit: 100, includeRetired: true },
+      page: "agents",
+    });
+    expect(kernelRead).toHaveBeenNthCalledWith(2, ctx, {
+      contract: agentList,
+      input: { limit: 100, includeRetired: false, cursor: "c2" },
+      page: "agents",
+    });
   });
 
   it("passes a refused read through (negative)", async () => {

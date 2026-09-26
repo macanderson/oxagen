@@ -3,8 +3,6 @@ import { NO_BODY } from "./frame-body";
 import {
   bisectFrames,
   bisectKey,
-  filterFramesByKind,
-  foldTranscript,
   frameKey,
   frameKinds,
   ledgerFrame,
@@ -17,6 +15,12 @@ import {
   turnOrdinals,
 } from "./run-frames";
 import { tachoStage } from "./tacho-kinds";
+import {
+  filterFoldsByKind,
+  foldTranscript,
+  frameFolds,
+  stepFolds,
+} from "./transcript-steps";
 import type { AttemptEventReadRecord } from "./run-store";
 
 function event(
@@ -264,7 +268,7 @@ describe("bisect", () => {
   });
 });
 
-describe("transcript fold", () => {
+describe("turnOrdinals", () => {
   const frames = [
     tachoFrame(tachoRow(0, "agent_start")),
     tachoFrame(tachoRow(1, "turn_start", { turnSeq: 1 })),
@@ -282,294 +286,6 @@ describe("transcript fold", () => {
     tachoFrame(tachoRow(7, "agent_stop")),
   ];
 
-  it("everything is one entry per frame", () => {
-    const folded = foldTranscript(frames, "everything");
-    expect(folded).toHaveLength(8);
-    expect(folded.map((f) => f.kind)).toEqual([
-      "frame",
-      "frame",
-      "model_call",
-      "tool_call",
-      // A decision frame is its own entry at this zoom, and says so.
-      "policy",
-      "frame",
-      "model_call",
-      "frame",
-    ]);
-  });
-
-  it("leaves non-step openings out of request and response slots", () => {
-    // turn_start, policy_decision and agent_start open an entry but are not
-    // halves of a call. Putting them in response by default labelled a turn
-    // prompt as something that came back, and at turns zoom blocked the
-    // real model response from absorbing into the same entry.
-    const folded = foldTranscript(frames, "everything");
-    const agentStart = folded[0]!;
-    const turnStart = folded[1]!;
-    const policy = folded[4]!;
-    const llm = folded[2]!;
-    expect(stepKind(agentStart.opening)).toBeNull();
-    expect(stepKind(turnStart.opening)).toBeNull();
-    expect(stepKind(policy.opening)).toBeNull();
-    expect([agentStart.request, agentStart.response]).toEqual([null, null]);
-    expect([turnStart.request, turnStart.response]).toEqual([null, null]);
-    expect([policy.request, policy.response]).toEqual([null, null]);
-    // A step half still fills its own slot when it opens the entry.
-    expect(llm.response?.seq).toBe("2");
-    expect(llm.request).toBeNull();
-  });
-
-  it("at turns zoom, absorbs the model response after an opening turn_start", () => {
-    const folded = foldTranscript(frames, "turns");
-    const turn = folded[1]!;
-    expect(turn.opening.type).toBe("turn_start");
-    expect(turn.request).toBeNull();
-    expect(turn.response?.type).toBe("llm_call");
-    expect(turn.response?.seq).toBe("2");
-  });
-
-  // #3370: the chips of a fold are collected from every frame it absorbs, so
-  // a failed tool call behind a model response still marks the turn.
-  it("collects the chips of every frame a fold absorbs, beyond its opening and halves", () => {
-    const folded = foldTranscript(
-      [
-        tachoFrame(tachoRow(0, "turn_start", { turnSeq: 1 })),
-        tachoFrame(tachoRow(1, "llm_call", { model: "m", turnSeq: 1 })),
-        tachoFrame(
-          tachoRow(2, "tool_call", {
-            toolName: "Read",
-            toolStatus: "failed",
-            turnSeq: 1,
-          }),
-        ),
-      ],
-      "turns",
-    );
-    expect(folded).toHaveLength(1);
-    const turn = folded[0]!;
-    expect(turn.response?.seq).toBe("1");
-    expect([...turn.kinds].sort()).toEqual([
-      "errors",
-      "prompt",
-      "responses",
-      "tools",
-    ]);
-  });
-
-  it("steps opens at model and tool calls, folding the rest into the step before except a policy decision, which holds for the step after", () => {
-    const folded = foldTranscript(frames, "steps");
-    expect(
-      folded.map((f) => [f.opening.seq, f.endSeq, f.kind, f.frames]),
-    ).toEqual([
-      ["0", "1", "frame", 2],
-      ["2", "2", "model_call", 1],
-      // policy_decision (seq 4) holds out of this step and attaches to the
-      // model_call that opens next, so this entry's frame count drops by one.
-      ["3", "5", "tool_call", 2],
-      ["6", "7", "model_call", 3],
-    ]);
-    expect(folded[1]?.costMicros).toBe(5);
-    expect(folded[0]?.costMicros).toBeNull();
-  });
-
-  it("attaches a pre-call policy decision to the step it governs, not the step before it", () => {
-    // hook-handler.ts emits `policy_decision` immediately before
-    // `tool_requested` on PreToolUse: the decision names the call about to
-    // run, not the one that just finished.
-    const wrapped = [
-      tachoFrame(tachoRow(0, "llm_call", { model: "m" })),
-      tachoFrame(tachoRow(1, "policy_decision", { policyDecision: "allow" })),
-      tachoFrame(tachoRow(2, "tool_requested", { toolName: "Read" })),
-      tachoFrame(
-        tachoRow(3, "tool_call", { toolName: "Read", toolStatus: "ok" }),
-      ),
-    ];
-    const folded = foldTranscript(wrapped, "steps");
-    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
-      ["0", "model_call"],
-      ["2", "tool_call"],
-    ]);
-    expect(folded[0]?.decision).toBeNull();
-    expect(folded[1]?.decision?.decision).toBe("allow");
-    expect(folded[1]?.request?.seq).toBe("2");
-    expect(folded[1]?.response?.seq).toBe("3");
-  });
-
-  it("falls back to the last step when a run ends on a pending policy decision", () => {
-    const wrapped = [
-      tachoFrame(tachoRow(0, "tool_requested", { toolName: "Read" })),
-      tachoFrame(
-        tachoRow(1, "tool_call", { toolName: "Read", toolStatus: "ok" }),
-      ),
-      tachoFrame(tachoRow(2, "policy_decision", { policyDecision: "deny" })),
-    ];
-    const folded = foldTranscript(wrapped, "steps");
-    expect(folded).toHaveLength(1);
-    expect(folded[0]?.decision?.decision).toBe("deny");
-    expect(folded[0]?.endSeq).toBe("1");
-  });
-
-  it("buffers a filtered pre-call policy for the next tool step (finding 4052307523)", () => {
-    // kinds=policy,tools drops the model response that normally closes the
-    // preceding step, so the decision meets a null current (or a model fold
-    // with response null) and must still attach to the tool it gates.
-    const unfiltered = [
-      tachoFrame(tachoRow(0, "llm_call", { model: "m" })),
-      tachoFrame(tachoRow(1, "policy_decision", { policyDecision: "allow" })),
-      tachoFrame(tachoRow(2, "tool_requested", { toolName: "Read" })),
-      tachoFrame(
-        tachoRow(3, "tool_call", { toolName: "Read", toolStatus: "ok" }),
-      ),
-    ];
-    const filtered = filterFramesByKind(unfiltered, ["policy", "tools"]);
-    expect(filtered.map((f) => f.type)).toEqual([
-      "policy_decision",
-      "tool_requested",
-      "tool_call",
-    ]);
-    const folded = foldTranscript(filtered, "steps");
-    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
-      ["2", "tool_call"],
-    ]);
-    expect(folded[0]?.decision?.decision).toBe("allow");
-    expect(folded[0]?.request?.seq).toBe("2");
-    expect(folded[0]?.response?.seq).toBe("3");
-  });
-
-  it("buffers a pre-call policy when the model response was filtered but the request remains", () => {
-    const frames = [
-      tachoFrame(tachoRow(0, "model.request", { model: "m" })),
-      tachoFrame(tachoRow(1, "model.response", { model: "m" })),
-      tachoFrame(tachoRow(2, "policy_decision", { policyDecision: "deny" })),
-      tachoFrame(tachoRow(3, "tool_requested", { toolName: "Bash" })),
-      tachoFrame(
-        tachoRow(4, "tool_call", { toolName: "Bash", toolStatus: "ok" }),
-      ),
-    ];
-    // Keep prompt so the model request survives, drop responses so the fold
-    // still looks open when the policy arrives.
-    const filtered = filterFramesByKind(frames, ["prompt", "policy", "tools"]);
-    expect(filtered.map((f) => f.type)).toEqual([
-      "model.request",
-      "policy_decision",
-      "tool_requested",
-      "tool_call",
-    ]);
-    const folded = foldTranscript(filtered, "steps");
-    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
-      ["0", "model_call"],
-      ["3", "tool_call"],
-    ]);
-    expect(folded[0]?.decision).toBeNull();
-    expect(folded[1]?.decision?.decision).toBe("deny");
-  });
-
-  // An operator's pause, resume, cancel or steer is a decision the Policies
-  // tab lists, with the command as its word and the operator as its source
-  // (#4023). It is about the run, so it never becomes the decision of the
-  // call a step fold holds.
-  describe("an operator command", () => {
-    const applied = (seq: number, command: string) =>
-      tachoFrame(
-        tachoRow(seq, "oxagen:command_applied", {
-          policyDecision: command === "resume" ? "allow" : "deny",
-          attrs: { "command.id": `tcm_${seq}`, "command.name": command },
-          body: JSON.stringify({
-            policy_decision: command === "resume" ? "allow" : "deny",
-            policy_source: "human",
-            policy_reason_code: `${command}_applied`,
-          }),
-        }),
-      );
-
-    it("reads as a policy frame whose decision is the command, by the operator", () => {
-      const frame = applied(3, "pause");
-      expect(frame.stage).toBe("policy");
-      expect(frame.summary).toBe("operator pause");
-      expect(frame.identity.policy).toBe("pause");
-      expect(frame.identity.policySource).toBe("human");
-      expect(frameKinds(frame)).toContain("policy");
-      const [entry] = foldTranscript([frame], "everything");
-      expect(entry?.kind).toBe("policy");
-      expect(entry?.decision).toMatchObject({
-        seq: "3",
-        decision: "pause",
-        type: "oxagen:command_applied",
-        source: "human",
-      });
-    });
-
-    it("records who decided a policy frame from its body", () => {
-      const frame = tachoFrame(
-        tachoRow(1, "policy_decision", {
-          policyDecision: "allow",
-          body: JSON.stringify({
-            policy_decision: "allow",
-            policy_source: "harness",
-          }),
-        }),
-      );
-      expect(foldTranscript([frame], "everything")[0]?.decision?.source).toBe(
-        "harness",
-      );
-    });
-
-    it("does not become the decision of the step it folds into", () => {
-      const folded = foldTranscript(
-        [
-          tachoFrame(tachoRow(0, "tool_requested", { toolName: "Read" })),
-          applied(1, "steer"),
-          tachoFrame(
-            tachoRow(2, "tool_call", { toolName: "Read", toolStatus: "ok" }),
-          ),
-        ],
-        "steps",
-      );
-      expect(folded).toHaveLength(1);
-      expect(folded[0]?.decision).toBeNull();
-      expect(folded[0]?.frames).toBe(3);
-    });
-  });
-
-  it("turns opens at turn_start and sums the turn's cost records", () => {
-    const folded = foldTranscript(frames, "turns");
-    expect(
-      folded.map((f) => [f.opening.seq, f.endSeq, f.frames, f.costMicros]),
-    ).toEqual([
-      ["0", "0", 1, null],
-      ["1", "4", 4, 5],
-      ["5", "7", 3, 7],
-    ]);
-  });
-
-  it("turns falls back to the turn index when the recording has no boundaries, and one turn when it has neither", () => {
-    const ledger = [
-      ledgerFrame(
-        event(1, "admission.run_admitted", {
-          engine_name: "stella",
-          engine_version: "1",
-        }),
-      ),
-      ledgerFrame(event(2, "model.call_completed", { turn_index: 0 })),
-      ledgerFrame(
-        event(3, "tool.call_completed", {
-          capability_name: "read_file",
-          outcome: "completed",
-        }),
-      ),
-      ledgerFrame(event(4, "model.call_completed", { turn_index: 1 })),
-    ];
-    expect(
-      foldTranscript(ledger, "turns").map((f) => [f.opening.seq, f.endSeq]),
-    ).toEqual([
-      ["1", "3"],
-      ["4", "4"],
-    ]);
-    const oneTurn = ledger.map((f) => ({ ...f, turnIndex: null }));
-    expect(foldTranscript(oneTurn, "turns")).toHaveLength(1);
-    expect(foldTranscript([], "turns")).toEqual([]);
-  });
-
   it("turnOrdinals counts turn_start frames and leaves the frames before the first in no turn", () => {
     expect(turnOrdinals(frames)).toEqual([null, 1, 1, 1, 1, 2, 2, 2]);
   });
@@ -586,6 +302,85 @@ describe("transcript fold", () => {
       turnOrdinals(ledger.map((f) => ({ ...f, turnIndex: null }))),
     ).toEqual([1, 1, 1, 1]);
     expect(turnOrdinals([])).toEqual([]);
+  });
+
+  const staged = (
+    runSeq: number,
+    eventType: string,
+    payload: Record<string, unknown> | null = null,
+  ) => ledgerFrame(event(runSeq, eventType, payload));
+
+  it("puts the frames that lead up to an indexed model call in that call's turn, and the tools the previous call asked for in the previous one (#3375)", () => {
+    const run = [
+      staged(1, "admission.run_admitted"),
+      staged(2, "model.engine_call_started"),
+      staged(3, "model.engine_call_completed"),
+      staged(4, "model.call_completed", { turn_index: 0 }),
+      staged(5, "tool.engine_call_started"),
+      staged(6, "tool.approval_recorded"),
+      staged(7, "tool.engine_call_completed"),
+      staged(8, "change.recorded"),
+      staged(9, "context.history_summarized"),
+      staged(10, "steering.manifest"),
+      staged(11, "model.engine_call_started"),
+      staged(12, "model.engine_call_completed"),
+      staged(13, "model.call_completed", { turn_index: 1 }),
+      staged(14, "tool.call_completed"),
+      staged(15, "terminal.attempt_terminated"),
+    ];
+    expect(turnOrdinals(run)).toEqual([
+      1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2,
+    ]);
+    // The steps fold reads the same numbering: the second model call's
+    // exchange is one step in turn 2, and the tool call before it is in 1.
+    const steps = stepFolds(run);
+    const at = (seq: string) =>
+      steps.find((fold) => fold.opening.seq === seq)?.turn;
+    expect(at("5")).toBe(1);
+    expect(at("11")).toBe(2);
+    // And the turns zoom opens turn 2 on the context the call was handed.
+    expect(
+      foldTranscript(run, "turns").map((fold) => [fold.key, fold.endSeq]),
+    ).toEqual([
+      ["1", "8"],
+      ["9", "15"],
+    ]);
+  });
+
+  it("carries a model call's lead-in back only as far as the previous call's last tool frame (#3375)", () => {
+    const run = [
+      staged(1, "model.call_completed", { turn_index: 0 }),
+      staged(2, "context.frames_selected"),
+      staged(3, "tool.call_completed"),
+      staged(4, "context.frames_selected"),
+      staged(5, "model.call_completed", { turn_index: 1 }),
+    ];
+    expect(turnOrdinals(run)).toEqual([1, 1, 1, 2, 2]);
+    // An indexed call straight after another carries nothing back.
+    expect(
+      turnOrdinals([
+        staged(1, "model.call_completed", { turn_index: 0 }),
+        staged(2, "model.call_completed", { turn_index: 1 }),
+      ]),
+    ).toEqual([1, 2]);
+    // Frames before the first indexed call stay in the first turn.
+    expect(
+      turnOrdinals([
+        staged(1, "context.frames_selected"),
+        staged(2, "model.engine_call_started"),
+        staged(3, "model.call_completed", { turn_index: 4 }),
+      ]),
+    ).toEqual([1, 1, 1]);
+  });
+
+  it("leaves a wrapped run's unindexed model frame in the turn before it, where ClickHouse counts it", () => {
+    const wrapped = [
+      tachoFrame(tachoRow(0, "llm_call", { turnSeq: 1 })),
+      tachoFrame(tachoRow(1, "context.assembled")),
+      tachoFrame(tachoRow(2, "llm_call")),
+      tachoFrame(tachoRow(3, "llm_call", { turnSeq: 2 })),
+    ];
+    expect(turnOrdinals(wrapped)).toEqual([1, 1, 1, 2]);
   });
 });
 
@@ -632,10 +427,11 @@ describe("the engine's own call halves", () => {
         duration_ms: 4,
       }),
     );
-    // The third word is the approval the Run page pairs the card on.
-    expect(parked.summary).toBe(
-      "create_workspace parked apr_0a1b2c3d4e5f6g7h8j9k0m",
-    );
+    // The approval is a field of the frame, never a word of its label: a
+    // client pairs on the field and has nothing to parse (ADR-182 rule 3).
+    expect(parked.summary).toBe("create_workspace parked");
+    expect(parked.summary).not.toContain("apr_");
+    expect(parked.identity.approvalId).toBe("apr_0a1b2c3d4e5f6g7h8j9k0m");
     expect(parked.identity.toolStatus).toBe("parked");
     // Waiting on a person is not a failure: the errors chip leaves it out.
     expect(frameKinds(parked)).toContain("tools");
@@ -651,6 +447,7 @@ describe("the engine's own call halves", () => {
       }),
     );
     expect(unnamed.summary).toBe("create_workspace parked");
+    expect(unnamed.identity.approvalId).toBeUndefined();
     // A denied call is still an error, and names no approval.
     const denied = ledgerFrame(
       event(4, "tool.engine_call_completed", {
@@ -664,168 +461,9 @@ describe("the engine's own call halves", () => {
     expect(denied.summary).toBe("create_workspace denied");
     expect(frameKinds(denied)).toContain("errors");
   });
-
-  it("folds an engine tool exchange into ONE step carrying both halves", () => {
-    const frames = [
-      ledgerFrame(
-        event(1, "tool.engine_call_started", {
-          tool_call_id: "tc_1",
-          tool_name: "read_file",
-          input_digest: `sha256:${"b".repeat(64)}`,
-        }),
-      ),
-      ledgerFrame(
-        event(2, "tool.engine_call_completed", {
-          tool_call_id: "tc_1",
-          tool_name: "read_file",
-          outcome: "completed",
-          input_digest: `sha256:${"b".repeat(64)}`,
-          duration_ms: 12,
-        }),
-      ),
-    ];
-    const folded = foldTranscript(frames, "steps");
-    expect(folded).toHaveLength(1);
-    expect(folded[0]?.kind).toBe("tool_call");
-    expect(folded[0]?.request?.seq).toBe("1");
-    expect(folded[0]?.response?.seq).toBe("2");
-  });
-
-  it("does not pair two halves of different calls", () => {
-    const frames = [
-      ledgerFrame(
-        event(1, "tool.engine_call_started", {
-          tool_call_id: "tc_1",
-          tool_name: "a",
-          input_digest: `sha256:${"b".repeat(64)}`,
-        }),
-      ),
-      ledgerFrame(
-        event(2, "tool.engine_call_completed", {
-          tool_call_id: "tc_2",
-          tool_name: "b",
-          outcome: "completed",
-          input_digest: `sha256:${"c".repeat(64)}`,
-          duration_ms: 1,
-        }),
-      ),
-    ];
-    const folded = foldTranscript(frames, "steps");
-    expect(folded).toHaveLength(2);
-    expect(folded[0]?.response).toBeNull();
-    expect(folded[1]?.request).toBeNull();
-  });
-
-  it("matches an overlapping call's completion to its own request, not to whichever call opened most recently (finding 5, negative)", () => {
-    // start A, start B, complete A, complete B: parallel tool calls are the
-    // ordinary case. Comparing a response only against the most recently
-    // opened step matched neither completion, splitting two calls into four
-    // entries with every response detached from its request.
-    const frames = [
-      ledgerFrame(
-        event(1, "tool.engine_call_started", {
-          tool_call_id: "tc_a",
-          tool_name: "a",
-          input_digest: `sha256:${"a".repeat(64)}`,
-        }),
-      ),
-      ledgerFrame(
-        event(2, "tool.engine_call_started", {
-          tool_call_id: "tc_b",
-          tool_name: "b",
-          input_digest: `sha256:${"b".repeat(64)}`,
-        }),
-      ),
-      ledgerFrame(
-        event(3, "tool.engine_call_completed", {
-          tool_call_id: "tc_a",
-          tool_name: "a",
-          outcome: "completed",
-          input_digest: `sha256:${"a".repeat(64)}`,
-          duration_ms: 1,
-        }),
-      ),
-      ledgerFrame(
-        event(4, "tool.engine_call_completed", {
-          tool_call_id: "tc_b",
-          tool_name: "b",
-          outcome: "completed",
-          input_digest: `sha256:${"b".repeat(64)}`,
-          duration_ms: 1,
-        }),
-      ),
-    ];
-    const folded = foldTranscript(frames, "steps");
-    expect(folded).toHaveLength(2);
-    expect(folded[0]?.request?.seq).toBe("1");
-    expect(folded[0]?.response?.seq).toBe("3");
-    expect(folded[1]?.request?.seq).toBe("2");
-    expect(folded[1]?.response?.seq).toBe("4");
-  });
-
-  it("pairs overlapping wrapped tool calls on toolUseId the same way (negative)", () => {
-    // Without callId, adjacency attaches A's result to B and leaves B's
-    // result detached. TachoFrameRow already carries toolUseId.
-    const frames = [
-      tachoFrame(
-        tachoRow(1, "tool_requested", { toolName: "a", toolUseId: "tu_a" }),
-      ),
-      tachoFrame(
-        tachoRow(2, "tool_requested", { toolName: "b", toolUseId: "tu_b" }),
-      ),
-      tachoFrame(
-        tachoRow(3, "tool_call", {
-          toolName: "a",
-          toolUseId: "tu_a",
-          toolStatus: "ok",
-        }),
-      ),
-      tachoFrame(
-        tachoRow(4, "tool_call", {
-          toolName: "b",
-          toolUseId: "tu_b",
-          toolStatus: "ok",
-        }),
-      ),
-    ];
-    expect(frames.map((f) => f.identity.callId)).toEqual([
-      "tu_a",
-      "tu_b",
-      "tu_a",
-      "tu_b",
-    ]);
-    const folded = foldTranscript(frames, "steps");
-    expect(folded).toHaveLength(2);
-    expect(folded[0]?.request?.seq).toBe("1");
-    expect(folded[0]?.response?.seq).toBe("3");
-    expect(folded[1]?.request?.seq).toBe("2");
-    expect(folded[1]?.response?.seq).toBe("4");
-  });
-
-  it("a model engine call opens a step: it used to fold into whatever came before it", () => {
-    const frames = [
-      ledgerFrame(event(1, "admission.run_admitted", { engine_name: "s" })),
-      ledgerFrame(
-        event(2, "model.engine_call_completed", {
-          engine_seq: 1,
-          model_call_id: "mc_1",
-          role: "assistant",
-          provider: "anthropic",
-          model: "haiku",
-          outcome: "completed",
-        }),
-      ),
-    ];
-    const folded = foldTranscript(frames, "steps");
-    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
-      ["1", "frame"],
-      ["2", "model_call"],
-    ]);
-    expect(folded[1]?.opening.summary).toBe("anthropic/haiku");
-  });
 });
 
-describe("frameKinds and filterFramesByKind", () => {
+describe("frameKinds and the chips an entry answers", () => {
   const model = ledgerFrame(
     event(1, "model.engine_call_started", {
       engine_seq: 1,
@@ -839,7 +477,12 @@ describe("frameKinds and filterFramesByKind", () => {
     tachoRow(2, "tool_call", { toolName: "Read", toolStatus: "failed" }),
   );
   const usage = tachoFrame(
-    tachoRow(3, "llm_call", { model: "m", costUsdMicros: 9 }),
+    tachoRow(3, "llm_call", {
+      model: "m",
+      costUsdMicros: 9,
+      contentDigest: `sha256:${"d".repeat(64)}`,
+      bytesRef: "evidence://stream",
+    }),
   );
   const policy = tachoFrame(
     tachoRow(4, "policy_decision", { policyDecision: "deny" }),
@@ -849,7 +492,9 @@ describe("frameKinds and filterFramesByKind", () => {
   );
 
   it("derives every chip a frame answers to", () => {
-    expect(frameKinds(model)).toEqual(["prompt"]);
+    // The request half of a model call is the context the model was sent,
+    // not a prompt a person typed, so it answers no chip (ADR-182).
+    expect(frameKinds(model)).toEqual([]);
     expect(frameKinds(tool).sort()).toEqual(["errors", "tools"]);
     expect(frameKinds(usage).sort()).toEqual(["responses", "usage"]);
     expect(frameKinds(policy)).toEqual(["policy"]);
@@ -869,7 +514,9 @@ describe("frameKinds and filterFramesByKind", () => {
     expect(frameKinds(rejected).sort()).toEqual(["errors", "tools"]);
     expect(frameKinds(ok)).toEqual(["tools"]);
     expect(
-      filterFramesByKind([ok, rejected], ["errors"]).map((f) => f.seq),
+      filterFoldsByKind(frameFolds([ok, rejected]), ["errors"]).map(
+        (f) => f.opening.seq,
+      ),
     ).toEqual(["12"]);
   });
 
@@ -905,9 +552,9 @@ describe("frameKinds and filterFramesByKind", () => {
     expect(frameKinds(handed)).toEqual([]);
     expect(frameKinds(copy)).toEqual([]);
     expect(
-      filterFramesByKind([typed, handed, copy, tool], ["prompt"]).map(
-        (f) => f.seq,
-      ),
+      filterFoldsByKind(frameFolds([typed, handed, copy, tool]), [
+        "prompt",
+      ]).map((f) => f.opening.seq),
     ).toEqual(["6"]);
   });
 
@@ -935,91 +582,79 @@ describe("frameKinds and filterFramesByKind", () => {
       "usage",
     ]);
     expect(frameKinds(plain)).not.toContain("thinking");
-    expect(frameKinds(checkpoint)).toEqual(["seal"]);
-    expect(frameKinds(gap)).toEqual(["seal"]);
+    // The seal chip is the run's own stop, which the Transcript tab draws.
+    // A checkpoint and a gap are the chain's, and read on the Chain tab.
+    const stopped = tachoFrame(tachoRow(14, "agent_stop"));
+    const subagentStopped = tachoFrame(
+      tachoRow(15, "agent_stop", {
+        sessionUuid: "sub",
+        rootSessionUuid: "root",
+      }),
+    );
+    expect(frameKinds(checkpoint)).toEqual([]);
+    expect(frameKinds(gap)).toEqual([]);
     expect(frameKinds(terminated)).toEqual(["seal"]);
+    expect(frameKinds(stopped)).toEqual(["seal"]);
+    expect(frameKinds(subagentStopped)).toEqual([]);
     expect(frameKinds(tool)).not.toContain("seal");
   });
 
+  it("answers responses for a reply whose words were kept, and usage for tokens without a cost", () => {
+    const kept = {
+      contentDigest: `sha256:${"c".repeat(64)}`,
+      bytesRef: "evidence://reply",
+    };
+    const reply = tachoFrame(tachoRow(16, "turn_end", kept));
+    const unkept = tachoFrame(tachoRow(17, "turn_end"));
+    expect(frameKinds(reply)).toEqual(["responses"]);
+    expect(frameKinds(unkept)).toEqual([]);
+    const counted = {
+      ...model,
+      usage: {
+        inputUncached: 10,
+        cacheRead: null,
+        cacheWrite: null,
+        output: 4,
+        reasoning: null,
+      },
+    };
+    expect(frameKinds(counted)).toEqual(["usage"]);
+  });
+
+  // Finding P2 of the ADR-182 re-review: every model response answered
+  // `responses`, so a response kept as a digest alone counted under a chip
+  // that draws nothing for it. What it carried still answers `usage`, which
+  // draws its usage row, and the effort a call ran at is on that row too.
+  it("answers responses only for a model response whose body was kept (negative)", () => {
+    const digestOnly = tachoFrame(
+      tachoRow(18, "llm_call", {
+        model: "m",
+        costUsdMicros: 9,
+        contentDigest: `sha256:${"e".repeat(64)}`,
+      }),
+    );
+    const bare = tachoFrame(tachoRow(19, "llm_call", { model: "m" }));
+    const effort = tachoFrame(
+      tachoRow(20, "llm_call", { model: "m", effort: "high" }),
+    );
+    expect(frameKinds(digestOnly)).toEqual(["usage"]);
+    expect(frameKinds(bare)).toEqual([]);
+    expect(frameKinds(effort)).toEqual(["usage"]);
+    // Effort is a model call's; a tool frame that named one answers no usage.
+    const toolEffort = tachoFrame(
+      tachoRow(21, "tool_call", { toolName: "Read", effort: "high" }),
+    );
+    expect(frameKinds(toolEffort)).toEqual(["tools"]);
+  });
+
   it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {
-    const frames = [model, tool, usage, policy, recall];
-    expect(filterFramesByKind(frames, [])).toHaveLength(5);
-    expect(filterFramesByKind(frames, ["errors"]).map((f) => f.seq)).toEqual([
-      "2",
-    ]);
-    expect(
-      filterFramesByKind(frames, ["prompt", "recall"]).map((f) => f.seq),
-    ).toEqual(["1", "5"]);
-  });
-});
-
-describe("the steps zoom on a run the in-app assistant recorded", () => {
-  // The assistant writes `model.engine_call_completed` and
-  // `tool.engine_call_completed`, and it is the only ledger producer in the
-  // tree. This list named neither, so every one of its runs folded into a
-  // single `frame` entry however many calls it made.
-  const assistant = [
-    ledgerFrame(
-      event(1, "admission.run_admitted", {
-        engine_name: "stella",
-        engine_version: "1",
-      }),
-    ),
-    ledgerFrame(
-      event(2, "model.engine_call_started", { model_call_id: "prov-1-0" }),
-    ),
-    ledgerFrame(
-      event(3, "model.engine_call_completed", {
-        model_call_id: "prov-1-0",
-        turn_index: 0,
-      }),
-    ),
-    ledgerFrame(
-      event(4, "tool.engine_call_started", { tool_call_id: "tool-1-0" }),
-    ),
-    ledgerFrame(
-      event(5, "tool.engine_call_completed", {
-        tool_call_id: "tool-1-0",
-        outcome: "completed",
-      }),
-    ),
-  ];
-
-  it("opens a step at its intention and closes it at the completion, so both halves are one entry", () => {
-    expect(
-      foldTranscript(assistant, "steps").map((f) => [
-        f.opening.seq,
-        f.endSeq,
-        f.kind,
-        f.frames,
-      ]),
-    ).toEqual([
-      ["1", "1", "frame", 1],
-      ["2", "3", "model_call", 2],
-      ["4", "5", "tool_call", 2],
-    ]);
-  });
-
-  it("puts each call's request on the same entry as its result", () => {
-    // Why the intention opens the step rather than folding into what came
-    // before it: the entry carries `request` and `response`, and the request
-    // is on the intention. Folding intentions into the preceding entry put
-    // the model call's prompt in the entry before it and the tool call's
-    // input inside the MODEL step — each call's request stranded away from
-    // the call it belongs to. An intention is still not a step of its own;
-    // it is the frame its step opens on.
-    const [, model, tool] = foldTranscript(assistant, "steps");
-    expect([model?.request?.seq, model?.response?.seq]).toEqual(["2", "3"]);
-    expect([tool?.request?.seq, tool?.response?.seq]).toEqual(["4", "5"]);
-  });
-
-  it("names the step kind of both halves of each call", () => {
-    expect(assistant.map((f) => stepKind(f))).toEqual([
-      null,
-      "model_call",
-      "model_call",
-      "tool_call",
-      "tool_call",
+    const folds = frameFolds([model, tool, usage, policy, recall]);
+    const seqs = (kept: typeof folds) => kept.map((f) => f.opening.seq);
+    expect(filterFoldsByKind(folds, [])).toHaveLength(5);
+    expect(seqs(filterFoldsByKind(folds, ["errors"]))).toEqual(["2"]);
+    expect(seqs(filterFoldsByKind(folds, ["responses", "recall"]))).toEqual([
+      "3",
+      "5",
     ]);
   });
 });
@@ -1370,9 +1005,21 @@ describe("one model call reported by several sources", () => {
       duplicateOf: null,
       keys: ["request:req_1"],
       source: "otel_log",
+      partial: false,
     });
     expect(copy.costMicros).toBeNull();
     expect(copy.llmCall?.duplicateOf).toBe("otel_log");
+  });
+
+  it("marks a body the proxy kept one half of", () => {
+    const half = tachoFrame(
+      tachoRow(1, "llm_call", {
+        body,
+        source: "collector",
+        attrs: { "oxagen.response_body_omitted": "too_large" },
+      }),
+    );
+    expect(half.llmCall?.partial).toBe(true);
   });
 
   it("hides a copy with no body, keeps the richer body, and moves the counted spend onto the frame kept", () => {

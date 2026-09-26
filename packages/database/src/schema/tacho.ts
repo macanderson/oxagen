@@ -377,7 +377,7 @@ export const tachoSessions = tachoSchema.table(
     fastModeDisabledReason: text("fast_mode_disabled_reason"),
     permissionModeInitial: text("permission_mode_initial"),
     permissionModeFinal: text("permission_mode_final"),
-    permissionModeChanges: integer("permission_mode_changes")
+    permissionModeChanges: bigint("permission_mode_changes", { mode: "number" })
       .notNull()
       .default(0),
     analyticsDisabled: boolean("analytics_disabled"),
@@ -434,20 +434,44 @@ export const tachoSessions = tachoSchema.table(
     promptCacheTtl: text("prompt_cache_ttl"),
     defaultPermissionModeSetting: text("default_permission_mode_setting"),
     // Totals
-    numTurns: integer("num_turns").notNull().default(0),
-    numPrompts: integer("num_prompts").notNull().default(0),
-    numModelCalls: integer("num_model_calls").notNull().default(0),
-    numApiErrors: integer("num_api_errors").notNull().default(0),
-    numApiRetries: integer("num_api_retries").notNull().default(0),
-    numToolCalls: integer("num_tool_calls").notNull().default(0),
-    numToolErrors: integer("num_tool_errors").notNull().default(0),
-    numToolRejections: integer("num_tool_rejections").notNull().default(0),
-    numToolAsks: integer("num_tool_asks").notNull().default(0),
-    numSubagents: integer("num_subagents").notNull().default(0),
-    numCompactions: integer("num_compactions").notNull().default(0),
-    numModelSwitches: integer("num_model_switches").notNull().default(0),
-    numNotifications: integer("num_notifications").notNull().default(0),
-    numElicitations: integer("num_elicitations").notNull().default(0),
+    numTurns: bigint("num_turns", { mode: "number" }).notNull().default(0),
+    numPrompts: bigint("num_prompts", { mode: "number" }).notNull().default(0),
+    numModelCalls: bigint("num_model_calls", { mode: "number" })
+      .notNull()
+      .default(0),
+    numApiErrors: bigint("num_api_errors", { mode: "number" })
+      .notNull()
+      .default(0),
+    numApiRetries: bigint("num_api_retries", { mode: "number" })
+      .notNull()
+      .default(0),
+    numToolCalls: bigint("num_tool_calls", { mode: "number" })
+      .notNull()
+      .default(0),
+    numToolErrors: bigint("num_tool_errors", { mode: "number" })
+      .notNull()
+      .default(0),
+    numToolRejections: bigint("num_tool_rejections", { mode: "number" })
+      .notNull()
+      .default(0),
+    numToolAsks: bigint("num_tool_asks", { mode: "number" })
+      .notNull()
+      .default(0),
+    numSubagents: bigint("num_subagents", { mode: "number" })
+      .notNull()
+      .default(0),
+    numCompactions: bigint("num_compactions", { mode: "number" })
+      .notNull()
+      .default(0),
+    numModelSwitches: bigint("num_model_switches", { mode: "number" })
+      .notNull()
+      .default(0),
+    numNotifications: bigint("num_notifications", { mode: "number" })
+      .notNull()
+      .default(0),
+    numElicitations: bigint("num_elicitations", { mode: "number" })
+      .notNull()
+      .default(0),
     inputTokens: bigint("input_tokens", { mode: "number" })
       .notNull()
       .default(0),
@@ -473,29 +497,47 @@ export const tachoSessions = tachoSchema.table(
     thinkingTokens: bigint("thinking_tokens", { mode: "number" })
       .notNull()
       .default(0),
-    webSearchRequests: integer("web_search_requests").notNull().default(0),
-    webFetchRequests: integer("web_fetch_requests").notNull().default(0),
+    webSearchRequests: bigint("web_search_requests", { mode: "number" })
+      .notNull()
+      .default(0),
+    webFetchRequests: bigint("web_fetch_requests", { mode: "number" })
+      .notNull()
+      .default(0),
     totalCostMicros: bigint("total_cost_micros", { mode: "number" })
       .notNull()
       .default(0),
     costBasis: text("cost_basis"),
     hasUnknownModelCost: boolean("has_unknown_model_cost"),
-    durationMs: integer("duration_ms"),
-    apiDurationMs: integer("api_duration_ms"),
-    apiDurationWithoutRetriesMs: integer("api_duration_without_retries_ms"),
-    toolDurationMs: integer("tool_duration_ms"),
-    activeTimeS: integer("active_time_s"),
-    ttftFirstMs: integer("ttft_first_ms"),
-    linesAdded: integer("lines_added").notNull().default(0),
-    linesRemoved: integer("lines_removed").notNull().default(0),
-    filesRead: integer("files_read").notNull().default(0),
-    filesWritten: integer("files_written").notNull().default(0),
-    filesDeleted: integer("files_deleted").notNull().default(0),
-    commandsRun: integer("commands_run").notNull().default(0),
-    networkCalls: integer("network_calls").notNull().default(0),
-    commits: integer("commits").notNull().default(0),
-    pushes: integer("pushes").notNull().default(0),
-    pullRequests: integer("pull_requests").notNull().default(0),
+    durationMs: bigint("duration_ms", { mode: "number" }),
+    apiDurationMs: bigint("api_duration_ms", { mode: "number" }),
+    apiDurationWithoutRetriesMs: bigint("api_duration_without_retries_ms", {
+      mode: "number",
+    }),
+    toolDurationMs: bigint("tool_duration_ms", { mode: "number" }),
+    activeTimeS: bigint("active_time_s", { mode: "number" }),
+    ttftFirstMs: bigint("ttft_first_ms", { mode: "number" }),
+    linesAdded: bigint("lines_added", { mode: "number" }).notNull().default(0),
+    linesRemoved: bigint("lines_removed", { mode: "number" })
+      .notNull()
+      .default(0),
+    filesRead: bigint("files_read", { mode: "number" }).notNull().default(0),
+    filesWritten: bigint("files_written", { mode: "number" })
+      .notNull()
+      .default(0),
+    filesDeleted: bigint("files_deleted", { mode: "number" })
+      .notNull()
+      .default(0),
+    commandsRun: bigint("commands_run", { mode: "number" })
+      .notNull()
+      .default(0),
+    networkCalls: bigint("network_calls", { mode: "number" })
+      .notNull()
+      .default(0),
+    commits: bigint("commits", { mode: "number" }).notNull().default(0),
+    pushes: bigint("pushes", { mode: "number" }).notNull().default(0),
+    pullRequests: bigint("pull_requests", { mode: "number" })
+      .notNull()
+      .default(0),
     subagentStats: jsonb("subagent_stats"),
     permissionDenials: jsonb("permission_denials"),
     modelsUsed: jsonb("models_used"),
@@ -521,24 +563,42 @@ export const tachoSessions = tachoSchema.table(
     gatewayObservedAt: ts("gateway_observed_at"),
     bundleMode: text("bundle_mode"),
     bundleVersion: integer("bundle_version"),
-    policyDecisions: integer("policy_decisions").notNull().default(0),
-    policyDenies: integer("policy_denies").notNull().default(0),
-    elevationsRequested: integer("elevations_requested").notNull().default(0),
-    elevationsApproved: integer("elevations_approved").notNull().default(0),
-    elevationsDenied: integer("elevations_denied").notNull().default(0),
-    elevationsExpired: integer("elevations_expired").notNull().default(0),
-    tokensIssued: integer("tokens_issued").notNull().default(0),
-    tokensUsed: integer("tokens_used").notNull().default(0),
+    policyDecisions: bigint("policy_decisions", { mode: "number" })
+      .notNull()
+      .default(0),
+    policyDenies: bigint("policy_denies", { mode: "number" })
+      .notNull()
+      .default(0),
+    elevationsRequested: bigint("elevations_requested", { mode: "number" })
+      .notNull()
+      .default(0),
+    elevationsApproved: bigint("elevations_approved", { mode: "number" })
+      .notNull()
+      .default(0),
+    elevationsDenied: bigint("elevations_denied", { mode: "number" })
+      .notNull()
+      .default(0),
+    elevationsExpired: bigint("elevations_expired", { mode: "number" })
+      .notNull()
+      .default(0),
+    tokensIssued: bigint("tokens_issued", { mode: "number" })
+      .notNull()
+      .default(0),
+    tokensUsed: bigint("tokens_used", { mode: "number" }).notNull().default(0),
     // Chain
     seqCount: bigint("seq_count", { mode: "number" }).notNull().default(0),
     genesisHash: text("genesis_hash"),
     lastHash: text("last_hash"),
     finalHash: text("final_hash"),
-    checkpointCount: integer("checkpoint_count").notNull().default(0),
+    checkpointCount: bigint("checkpoint_count", { mode: "number" })
+      .notNull()
+      .default(0),
     lastCheckpointId: uuid("last_checkpoint_id"),
     chainVerified: boolean("chain_verified").notNull().default(true),
     chainBreakAtSeq: bigint("chain_break_at_seq", { mode: "number" }),
-    telemetryGapCount: integer("telemetry_gap_count").notNull().default(0),
+    telemetryGapCount: bigint("telemetry_gap_count", { mode: "number" })
+      .notNull()
+      .default(0),
     unobservedTail: boolean("unobserved_tail").notNull().default(false),
     completenessGaps: jsonb("completeness_gaps")
       .notNull()
@@ -551,9 +611,13 @@ export const tachoSessions = tachoSchema.table(
     // The seal grades `body_missing` when the second falls short of the
     // first and `tool_bodies` when tool calls happened and the third is zero
     // (ADR-058).
-    contentFrames: integer("content_frames").notNull().default(0),
-    bodyFrames: integer("body_frames").notNull().default(0),
-    toolBodyFrames: integer("tool_body_frames").notNull().default(0),
+    contentFrames: bigint("content_frames", { mode: "number" })
+      .notNull()
+      .default(0),
+    bodyFrames: bigint("body_frames", { mode: "number" }).notNull().default(0),
+    toolBodyFrames: bigint("tool_body_frames", { mode: "number" })
+      .notNull()
+      .default(0),
     // Presentation
     title: text("title"),
     lastPromptDigest: text("last_prompt_digest"),
@@ -651,7 +715,7 @@ export const tachoSessionModels = tachoSchema.table(
     costBasis: text("cost_basis"),
     contextWindow: integer("context_window"),
     maxOutputTokens: integer("max_output_tokens"),
-    requests: integer("requests").notNull().default(0),
+    requests: bigint("requests", { mode: "number" }).notNull().default(0),
     inputTokens: bigint("input_tokens", { mode: "number" })
       .notNull()
       .default(0),
@@ -667,9 +731,13 @@ export const tachoSessionModels = tachoSchema.table(
     thinkingTokens: bigint("thinking_tokens", { mode: "number" })
       .notNull()
       .default(0),
-    webSearchRequests: integer("web_search_requests").notNull().default(0),
+    webSearchRequests: bigint("web_search_requests", { mode: "number" })
+      .notNull()
+      .default(0),
     costMicros: bigint("cost_micros", { mode: "number" }).notNull().default(0),
-    apiDurationMs: integer("api_duration_ms").notNull().default(0),
+    apiDurationMs: bigint("api_duration_ms", { mode: "number" })
+      .notNull()
+      .default(0),
   },
   (t) => ({
     sessionModelUniq: uniqueIndex("tacho_session_models_uniq").on(
@@ -738,7 +806,7 @@ export const tachoSessionCommands = tachoSchema.table(
     commandHead: text("command_head").notNull(),
     bashCommand: text("bash_command"),
     exitStatus: integer("exit_status"),
-    durationMs: integer("duration_ms"),
+    durationMs: bigint("duration_ms", { mode: "number" }),
     status: text("status"),
     cwd: text("cwd"),
     decision: text("decision"),

@@ -18,7 +18,7 @@ import type {
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 
 export const RECORD_SCHEMA_TAG = "context-record/v0.1";
-const RULES_DIR = ".oxagen/rules";
+export const RULES_DIR = ".oxagen/rules";
 
 interface RecordFileInput {
   lineageId: string;

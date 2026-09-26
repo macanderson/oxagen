@@ -5,6 +5,7 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
 import {
   isManagedAgentType,
   MANAGED_AGENT_READONLY_CODE,
@@ -39,6 +40,32 @@ export function assertAgentMutable(
 
 // Re-export so callers can import everything from one place.
 export { isManagedAgentType };
+
+// ─── Retired-agent guard ─────────────────────────────────────────────────────
+
+/**
+ * Refuse a write that would put a retired agent back to work. `retire_agent`
+ * archives the row (`status: "archived"`), and Oxagen treats a retired agent
+ * as a deleted record: it takes no new version, publish, deploy, or role.
+ * The refusal matches `assertNotRetired` in `@oxagen/handlers`, which this
+ * package cannot import. `resolveAgent` still returns an archived row, so a
+ * read such as `get_agent_def` keeps working. Call this on write paths only.
+ */
+export function assertAgentNotRetired(agent: {
+  slug: string;
+  status: string;
+}): void {
+  if (agent.status === "archived") throw agentRetiredError(agent.slug);
+}
+
+/** The `agent_retired` refusal, for a write that finds the row archived. */
+export function agentRetiredError(slug: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "agent_retired",
+    message: `Agent "${slug}" is retired`,
+  });
+}
 
 // ─── Agent key (org_ns.workspace_ns.agent_slug) ──────────────────────────────
 

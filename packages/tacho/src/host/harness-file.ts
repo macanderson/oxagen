@@ -31,24 +31,20 @@
  */
 import {
   chmodSync,
-  closeSync,
   existsSync,
-  fsyncSync,
   lstatSync,
   mkdirSync,
-  openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
-  renameSync,
   rmdirSync,
   statSync,
   unlinkSync,
-  writeSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { writeFileAtomic } from "./fs";
 
 /** A harness file could not be read or written; `path` names it for the operator. */
 export class HarnessFileError extends Error {
@@ -129,30 +125,9 @@ function realTarget(path: string): string {
   throw new HarnessFileError(path, "too many levels of symbolic links");
 }
 
+/** Atomic, with the receipt's exact mode, and no temp file left on a failure. */
 function writeAtomic(path: string, data: string | Buffer, mode: number): void {
-  const tmp = join(
-    dirname(path),
-    `.${basename(path)}.${process.pid}.${Date.now()}.tmp`,
-  );
-  const fd = openSync(tmp, "w", mode);
-  try {
-    writeSync(fd, data as never);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  try {
-    // openSync's mode is masked by the umask; the receipt's mode is exact.
-    chmodSync(tmp, mode);
-    renameSync(tmp, path);
-  } catch (error) {
-    try {
-      unlinkSync(tmp);
-    } catch {
-      // The temp file is already gone.
-    }
-    throw error;
-  }
+  writeFileAtomic(path, data, { mode });
 }
 
 /** Blank: nothing, whitespace, or a JSON document with nothing in it. */
@@ -170,17 +145,54 @@ function isBlank(text: string): boolean {
   }
 }
 
-/** Two texts say the same thing: equal bytes, or equal JSON whatever the layout. */
+/**
+ * Two texts say the same thing: equal bytes, or equal JSON whatever the
+ * layout, once the empty containers a strip drops are set aside.
+ *
+ * The strips (`stripTachoSettings`, `stripHookGroups`, `stripCursorHooks`,
+ * `stripOxagenMcpServer`) drop an `env`, `hooks` or `mcpServers` they
+ * emptied, and an event list under `hooks` they emptied, so one the merge
+ * created does not outlive it. By the time of the strip they cannot tell it
+ * from one the user already had empty, because the merge filled both. A
+ * user whose settings held `"env": {}` then read as having edited the file
+ * while enrolled, and got it back re-serialized instead of byte-identical
+ * (#3301). Only those containers are set aside. An empty list anywhere else
+ * can mean something a missing key does not, so it still counts.
+ */
 function sameDocument(a: string, b: string): boolean {
   if (a === b) return true;
   try {
     return isDeepStrictEqual(
-      sortKeys(JSON.parse(withoutBom(a))),
-      sortKeys(JSON.parse(withoutBom(b))),
+      sortKeys(withoutStrippedEmpties(JSON.parse(withoutBom(a)))),
+      sortKeys(withoutStrippedEmpties(JSON.parse(withoutBom(b)))),
     );
   } catch {
     return false;
   }
+}
+
+function isEmptyContainer(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length === 0;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.keys(value).length === 0
+  );
+}
+
+/** The document without the empty containers the strips drop. */
+function withoutStrippedEmpties(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return value;
+  const document = { ...(value as Record<string, unknown>) };
+  const hooks = document["hooks"];
+  if (typeof hooks === "object" && hooks !== null && !Array.isArray(hooks))
+    document["hooks"] = Object.fromEntries(
+      Object.entries(hooks).filter(([, list]) => !isEmptyContainer(list)),
+    );
+  for (const key of ["env", "hooks", "mcpServers"])
+    if (isEmptyContainer(document[key])) delete document[key];
+  return document;
 }
 
 function sortKeys(value: unknown): unknown {
@@ -255,8 +267,8 @@ export class HarnessFiles {
    * Write `text`, taking a receipt the first time this path is touched.
    *
    * `vestigial` is the writer saying that what it is about to write holds
-   * nothing but the scaffolding it had to add itself — Cursor's `version`
-   * is the one instance — so `settle` may take the whole file back. It
+   * nothing but the scaffolding it had to add itself (Cursor's `version`
+   * is the one instance), so `settle` may take the whole file back. It
    * defaults to false, and every ordinary write leaves it false, because a
    * teardown writes through here too: the stripped document is the bytes
    * Tacho last wrote, and a hook the user added while enrolled survives
@@ -347,7 +359,7 @@ export class HarnessFiles {
       // A file Tacho created. Blank is the obvious case, but not the only
       // one: a strip leaves behind whatever scaffolding the merge had to add
       // to make the file valid in the first place, and Cursor's `version` is
-      // exactly that — `mergeCursorHooks` writes it because the schema
+      // exactly that: `mergeCursorHooks` writes it because the schema
       // requires a positive integer, and `stripCursorHooks` cannot drop it
       // without also emptying a file the user may have had. So a document of
       // nothing but our own scaffolding read as a user edit, and `.cursor`
@@ -357,8 +369,8 @@ export class HarnessFiles {
       // else, which is the one thing it knows and this seam does not, and
       // the digest then confirms nobody has touched the file since. Both are
       // needed. The digest alone is not enough because a teardown writes
-      // through here too, so the stripped document — a hook the user added
-      // while enrolled included — is by definition the bytes Tacho last
+      // through here too, so the stripped document (a hook the user added
+      // while enrolled included) is by definition the bytes Tacho last
       // wrote. The flag alone is not enough because the file can still be
       // edited between the strip and the settle.
       const oursAlone =

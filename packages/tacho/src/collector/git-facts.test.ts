@@ -635,6 +635,47 @@ describe("readWorkingTreeChanges", () => {
     const exec = fakeGit({ "status --porcelain=v1 -z": "" });
     expect(await readWorkingTreeChanges(exec, "/repo")).toEqual([]);
   });
+
+  // Without a baseline the status comes from the porcelain letters, and the
+  // two letters are one state against HEAD: the index against HEAD, then
+  // the worktree against the index. Read left to right, `MD` said modified
+  // beside counts that described a deletion.
+  it.each([
+    ["MD", "deleted"],
+    ["AM", "added"],
+    ["MM", "modified"],
+    ["RM", "renamed"],
+    ["RD", "deleted"],
+    [" D", "deleted"],
+    ["D ", "deleted"],
+    ["UU", "modified"],
+    ["AA", "modified"],
+    ["DD", "modified"],
+  ])("reads porcelain %s as %s against HEAD", async (code, expected) => {
+    const extra = code.startsWith("R") ? "old.ts\x00" : "";
+    const exec = fakeGit({
+      "status --porcelain=v1 -z": `${code} src/a.ts\x00${extra}`,
+      "diff --numstat HEAD": "",
+      "rev-parse --show-toplevel": "/repo\n",
+    });
+    const rows = (await readWorkingTreeChanges(exec, "/repo")) ?? [];
+    expect(rows.map((row) => row.status)).toEqual([expected]);
+  });
+
+  it("reports nothing for a path added to the index and then deleted", async () => {
+    // `AD`: HEAD never held the file and the worktree does not hold it now,
+    // so against HEAD nothing changed.
+    const exec = fakeGit({
+      "status --porcelain=v1 -z": "AD src/a.ts\x00 M src/b.ts\x00",
+      "diff --numstat HEAD": "1\t1\tsrc/b.ts\x00",
+      "rev-parse --show-toplevel": "/repo\n",
+    });
+    expect(
+      ((await readWorkingTreeChanges(exec, "/repo")) ?? []).map(
+        (row) => row.repo_relative_path,
+      ),
+    ).toEqual(["src/b.ts"]);
+  });
 });
 
 describe("worktreeReconciledBody", () => {
@@ -716,5 +757,20 @@ describe("canonicalRemote", () => {
     for (const secret of ["ghp_secret", "ghs_other", "user", "x-access-token"])
       for (const form of forms)
         expect(canonicalRemote(form)).not.toContain(secret);
+  });
+
+  it("drops a token carried in the query or the fragment", () => {
+    // Userinfo is one place a token rides. The query is the other, and a
+    // query left on also kept `.git` from being the suffix, so the same
+    // repository digested differently with and without it.
+    for (const form of [
+      "https://github.com/acme/repo.git?access_token=ghp_rotated",
+      "https://github.com/acme/repo?access_token=ghp_rotated#main",
+      "https://github.com/acme/repo.git#ghp_rotated",
+      "https://user:ghp_secret@github.com/acme/repo.git/?token=ghp_rotated",
+    ]) {
+      expect(canonicalRemote(form)).toBe("github.com/acme/repo");
+      expect(canonicalRemote(form)).not.toContain("ghp_");
+    }
   });
 });

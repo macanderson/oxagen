@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   wheres: [] as unknown[],
   rows: [] as unknown[],
   updateProposal: vi.fn(),
+  requestSteeringSync: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -33,6 +34,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 vi.mock("./context.steering.store", () => ({
   postgresSteeringStore: { updateProposal: mocks.updateProposal },
+}));
+vi.mock("./context.steering.sync.request", () => ({
+  requestSteeringSync: mocks.requestSteeringSync,
 }));
 
 import { HandlerError } from "@oxagen/oxagen";
@@ -128,5 +132,16 @@ describe("gitlabWebhookDeps", () => {
     await expect(
       deps.rejectProposal("p-7", "closed", new Date(0)),
     ).rejects.toThrow("db down");
+  });
+
+  // GitLab retries a 5xx and disables a hook that keeps failing, which would
+  // also stop the merge request events that reject closed proposals. A sync
+  // request that cannot be sent is logged, and the sweep syncs anyway.
+  it("never fails the delivery when the sync request cannot be sent", async () => {
+    mocks.requestSteeringSync.mockRejectedValueOnce(new Error("inngest down"));
+    await expect(
+      gitlabWebhookDeps().requestSync!(SCOPE, "push"),
+    ).resolves.toBeUndefined();
+    expect(mocks.requestSteeringSync).toHaveBeenCalledWith([SCOPE], "push");
   });
 });

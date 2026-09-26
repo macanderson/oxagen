@@ -1052,6 +1052,9 @@
       "workspaceArchived": "{name} was archived. Recorded in the audit record.",
       "modelKeySaved": "Your key was saved. The next assistant turn uses it. Recorded in the audit record.",
       "modelKeyRemoved": "Your key was removed. Turns run on Oxagen's key from the next call. Recorded in the audit record."
+    },
+    "avatar": {
+      "open": "Edit avatar"
     }
   }
 }

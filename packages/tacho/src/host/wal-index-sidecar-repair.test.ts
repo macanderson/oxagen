@@ -97,7 +97,7 @@ describe("BodyIndexStore sidecar durability", () => {
     writeFileSync(
       sidecarPath,
       [
-        JSON.stringify(["tacho/bodies-index", 1]),
+        JSON.stringify(["tacho/bodies-index", 2]),
         JSON.stringify(["evt_a", 0, storedLine("evt_a", 0, "body a").length]),
         '["evt_b",{"offset":999', // torn mid-object: not valid JSON
         JSON.stringify(["through", size]),

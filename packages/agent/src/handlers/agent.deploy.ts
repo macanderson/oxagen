@@ -5,7 +5,11 @@ import type {
   AgentDeployOutput,
 } from "@oxagen/oxagen/contracts/agent.deploy";
 import type { CapabilityContext } from "../types";
-import { resolveAgent, assertAgentMutable } from "./_agent-definition";
+import {
+  resolveAgent,
+  assertAgentMutable,
+  assertAgentNotRetired,
+} from "./_agent-definition";
 
 export type { AgentDeployInput, AgentDeployOutput };
 
@@ -22,7 +26,9 @@ export class AgentDeployRequiresPublishedVersionError extends Error {
 
 /**
  * Toggle an agent's deployment posture. Activating requires a published active
- * version (its triggers go live); deactivating is always allowed.
+ * version (its triggers go live); deactivating is always allowed for a live
+ * agent. The handler refuses a retired agent in both directions. `retire_agent`
+ * already set it inactive, and it takes no further write.
  */
 export async function agentDeployHandler(
   input: AgentDeployInput,
@@ -39,6 +45,7 @@ export async function agentDeployHandler(
       throw new Error(`Agent "${input.agentId}" not found in this workspace`);
     }
     assertAgentMutable(agent);
+    assertAgentNotRetired(agent);
 
     if (input.deploymentStatus === "active") {
       if (!agent.activeVersionId) {

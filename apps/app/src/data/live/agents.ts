@@ -52,11 +52,13 @@ export const agents: DataSource["agents"] = {
       contract: agentList,
       // The contract's largest page: the list controls search, sort and page
       // over the rows in hand, so the more of the workspace they hold the
-      // fewer agents sit behind the cursor.
-      input:
-        q.cursor === null
-          ? { limit: LIST_PAGE }
-          : { limit: LIST_PAGE, cursor: q.cursor },
+      // fewer agents sit behind the cursor. Retired agents come back only
+      // when the caller asks for them.
+      input: {
+        limit: LIST_PAGE,
+        includeRetired: q.includeRetired === true,
+        ...(q.cursor === null ? {} : { cursor: q.cursor }),
+      },
       page: "agents",
     });
     if (!read.ok) return read;

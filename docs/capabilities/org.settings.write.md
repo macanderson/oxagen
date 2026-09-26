@@ -22,7 +22,7 @@ profile fields only).
 | --- | --- | --- |
 | name | string? | 1–120 chars |
 | slug | string? | lowercase letters, numbers, single hyphens |
-| avatarUrl | string \| null? | URL, ≤2048 chars |
+| avatarUrl | string \| null? | An `https://` image link or an `avatar:v1:<json>` designed-avatar string, ≤512 chars (`avatarUrlSchema`, the shape every avatar-carrying contract takes) |
 | website | string \| null? | URL, ≤2048 chars |
 | industry | string \| null? | ≤120 chars |
 | employeeSize | enum \| null? | Closed size range (`1`…`10000+`) |

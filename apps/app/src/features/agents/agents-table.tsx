@@ -24,6 +24,10 @@
 // **The controls work over the rows in hand.** The read asks for the
 // contract's largest page; a workspace with more agents than that pages the
 // rest through the cursor link under the pager.
+//
+// **A retired row is a deleted record.** It is listed only when a person
+// chose to show deregistered agents. It is dimmed, and its actions cell holds
+// a Deregistered badge and no action: nothing can be assigned to it.
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useMemo, useState } from "react";
@@ -483,14 +487,18 @@ function RowActions({
         event.stopPropagation();
       }}
     >
-      <SafeLink
-        to={routes.agent(org, ws, row.slug, { tab: "definition" })}
-        className={buttonSecondary}
-      >
-        {t("edit")}
-      </SafeLink>
-      {row.status === "retired" ? null : (
+      {row.status === "retired" ? (
+        <Badge tone="quiet" data-status="retired">
+          {t("cells.deregistered")}
+        </Badge>
+      ) : (
         <>
+          <SafeLink
+            to={routes.agent(org, ws, row.slug, { tab: "definition" })}
+            className={buttonSecondary}
+          >
+            {t("edit")}
+          </SafeLink>
           <AssignRole
             org={org}
             ws={ws}
@@ -571,6 +579,7 @@ export function AgentsTable({
   workspace,
   more,
   first,
+  retired = null,
 }: {
   rows: readonly AgentRow[];
   org: string;
@@ -581,6 +590,8 @@ export function AgentsTable({
   more: SafePath | null;
   /** The first page, when this is a later one. */
   first: SafePath | null;
+  /** The link that shows or hides deregistered agents, beside the row range. */
+  retired?: ReactNode;
 }) {
   const t = useTranslations("agents");
   const locale = useLocale();
@@ -819,7 +830,12 @@ export function AgentsTable({
                 key={row.id}
                 data-testid="agent-row"
                 data-agent={row.slug}
-                className="cursor-pointer"
+                data-retired={row.status === "retired" ? "" : undefined}
+                className={
+                  row.status === "retired"
+                    ? "cursor-pointer text-muted-foreground opacity-70"
+                    : "cursor-pointer"
+                }
                 onClick={() => {
                   navigate.push(routes.agent(org, ws, row.slug));
                 }}
@@ -849,12 +865,15 @@ export function AgentsTable({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-        <span className={`${mono} text-[11px] text-muted-foreground`}>
-          {t("list.controls.range", {
-            from: formatCount(from, locale),
-            to: formatCount(to, locale),
-            total: formatCount(visible.length, locale),
-          })}
+        <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className={`${mono} text-[11px] text-muted-foreground`}>
+            {t("list.controls.range", {
+              from: formatCount(from, locale),
+              to: formatCount(to, locale),
+              total: formatCount(visible.length, locale),
+            })}
+          </span>
+          {retired}
         </span>
         {pages > 1 ? (
           <nav aria-label={t("list.controls.pager")} className="flex gap-1">

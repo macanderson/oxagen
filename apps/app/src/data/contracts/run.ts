@@ -12,6 +12,7 @@
 // build them: the Proof tab and the witness run's own tab set (`witnessFor`,
 // spec §8.5), which #2955 owns.
 import { z } from "zod";
+import { PublicId } from "./common";
 import { Cost } from "./money";
 import { EnforcementTier, ReplayGrade, RunRow } from "./runs";
 
@@ -57,8 +58,18 @@ export const RunFrame = z.object({
   observedAt: z.iso.datetime({ offset: true }),
   /** The event's own digest. */
   digest: z.string(),
-  /** A short label the contract built from the event's receipt, never prose. */
+  /**
+   * A short label the contract built from the event's receipt, never prose.
+   * It is for a person to read. A fact the page needs is a field of its own
+   * below, never a word to parse out of this (ADR-182 rule 3).
+   */
   summary: z.string(),
+  /** The tool the frame is about, as its producer named it; null when it names none. */
+  tool: z.string().nullable(),
+  /** How the tool call ended, as its producer recorded it; null when it recorded none. */
+  toolStatus: z.string().nullable(),
+  /** The approval a parked tool call waits on (`apr_…`); null on every other frame. */
+  approvalId: z.string().nullable(),
   body: FrameBody,
   cost: Cost.nullable(),
 });
@@ -269,6 +280,93 @@ export const TranscriptKind = z.enum(TRANSCRIPT_KINDS);
 export type TranscriptKind = z.infer<typeof TranscriptKind>;
 
 /**
+ * What kind of row a folded entry is, as `get_run_transcript` states it
+ * (ADR-182): the operator's prompt, a reply, a model call, a tool call, a
+ * decision on no recorded call, a recall, the run's stop, a frame that frames
+ * the run, or any other event.
+ *
+ * @internal Exported for the contract's test.
+ */
+export const TRANSCRIPT_NODES = [
+  "prompt",
+  "reply",
+  "model",
+  "tool",
+  "policy",
+  "recall",
+  "seal",
+  "control",
+  "event",
+] as const;
+/** @internal Exported for the transcript builders. */
+export const TranscriptNode = z.enum(TRANSCRIPT_NODES);
+export type TranscriptNode = z.infer<typeof TranscriptNode>;
+
+/**
+ * How an entry's call ended, as the fold states it.
+ *
+ * @internal Exported for the contract's test.
+ */
+export const TRANSCRIPT_OUTCOMES = [
+  "ok",
+  "failed",
+  "denied",
+  "parked",
+  "pending",
+] as const;
+/** @internal Exported for the transcript builders. */
+export const TranscriptOutcome = z.enum(TRANSCRIPT_OUTCOMES);
+export type TranscriptOutcome = z.infer<typeof TranscriptOutcome>;
+
+/**
+ * The family a tool belongs to, as the fold reads it from the tool's name.
+ * It decides the colour of a call's row and the icon beside it, and which
+ * reading of its body the row uses.
+ *
+ * @internal Exported for the contract's test.
+ */
+export const TOOL_FAMILIES = [
+  "shell",
+  "read",
+  "edit",
+  "create",
+  "delete",
+  "search",
+  "web",
+  "skill",
+  "agent",
+  "plan",
+  "notebook",
+  "mcp",
+  "tool",
+] as const;
+export const ToolFamily = z.enum(TOOL_FAMILIES);
+export type ToolFamily = z.infer<typeof ToolFamily>;
+
+/**
+ * Where a search found its query in an entry.
+ *
+ * @internal Exported for the contract's test.
+ */
+export const TRANSCRIPT_MATCHES = [
+  "label",
+  "subject",
+  "target",
+  "request",
+  "response",
+] as const;
+/** @internal Exported for the transcript builders. */
+export const TranscriptMatch = z.enum(TRANSCRIPT_MATCHES);
+export type TranscriptMatch = z.infer<typeof TranscriptMatch>;
+
+/** How much of each half's body a read carries (the contract's `text`). */
+export const TranscriptText = z.enum(["excerpt", "full"]);
+export type TranscriptText = z.infer<typeof TranscriptText>;
+
+/** The longest search the contract takes, mirrored like the page sizes. */
+export const TRANSCRIPT_QUERY_MAX = 200;
+
+/**
  * How many transcript entries one `get_run_transcript` page carries by
  * default, mirrored from that contract's `limit` default so the client can
  * tell a full page from the last one without importing the kernel's contract
@@ -300,6 +398,21 @@ const TranscriptBlock = z.discriminatedUnion("kind", [
     name: z.string().min(1),
     input: z.unknown(),
     callKey: z.string().nullable(),
+    /**
+     * The `key` of the tool entry that recorded this call, so the call is
+     * drawn once, as that entry's row; null for a call no tool step recorded.
+     */
+    stepKey: z.string().nullable(),
+    /** What came back for the call, from the reply's own result block; null when none was kept. */
+    result: z.object({ ok: z.boolean(), summary: z.string() }).nullable(),
+    /** The called tool's family; null when the answer did not say. */
+    family: ToolFamily.nullable(),
+    /**
+     * `name` as the harness knows the tool, without a gateway's prefix or a
+     * version, as the server read it. Null or absent when the answer did not
+     * say, and the page then shows `name` as recorded.
+     */
+    tool: z.string().nullable().optional(),
   }),
   z.object({
     kind: z.literal("tool_result"),
@@ -358,8 +471,56 @@ const TranscriptDecision = z.object({
    * Null or absent when the frame names none.
    */
   source: z.string().nullable().optional(),
+  /**
+   * Whether the server read `source` as the agent's harness checking itself.
+   * The server owns which sources those are (ADR-182); the page sorts on
+   * this and keeps no list of its own.
+   */
+  harness: z.boolean().default(false),
   at: z.iso.datetime({ offset: true }),
 });
+
+/**
+ * One item a recall listed, and what the server read became of it: whether it
+ * reached the model, and for a cut the reason and the item that replaced it.
+ */
+export const TranscriptRecallItem = z.object({
+  kind: z.string(),
+  label: z.string(),
+  tokens: Count.nullable(),
+  outcome: z.enum(["included", "cut"]),
+  /** The reason recorded for a cut (`budget`, `tier`, or a later word); null when none. */
+  reason: z.string().nullable(),
+  /** The item that replaced a cut one; null when none was recorded. */
+  supersededBy: z.string().nullable(),
+  /** The force the item carried; null when not recorded. */
+  force: z.string().nullable(),
+});
+export type TranscriptRecallItem = z.infer<typeof TranscriptRecallItem>;
+
+/**
+ * What a recall entry put in front of the model, read on the server from the
+ * body it kept (ADR-182). The page never parses the body itself.
+ */
+export const TranscriptRecall = z.object({
+  /** What `count` counts: context frames, or the items a manifest included. */
+  unit: z.enum(["frames", "items"]),
+  count: Count.nullable(),
+  tokens: Count.nullable(),
+  cut: Count.nullable(),
+  /** Every item listed, included and cut, in the order listed. */
+  items: z.array(TranscriptRecallItem),
+  /** The policy bundle a manifest was assembled on; null when it names none. */
+  bundleVersion: Count.nullable(),
+  /**
+   * What the server made of the body: `listed`, or why it lists nothing:
+   * `unretained` (no body kept), `unreadable` (the read failed or the body
+   * no longer hashes to its digest), `unlisted` (it lists neither items nor
+   * frames).
+   */
+  body: z.enum(["listed", "unretained", "unreadable", "unlisted"]),
+});
+export type TranscriptRecall = z.infer<typeof TranscriptRecall>;
 
 export const TranscriptUsage = z.object({
   inputUncached: Count.nullable(),
@@ -424,8 +585,125 @@ export const TranscriptEntry = z.object({
   cost: Cost.nullable(),
   /** Every cost record of the run up to and including this entry. */
   cumulativeCost: Cost.nullable(),
+  // What the server's fold states about the entry (ADR-182). The page draws
+  // these and derives none of them from the frames.
+  /** The entry's name within the run, stable across reads: keys a row and merges a page. */
+  key: z.string().min(1),
+  /** The entry that spawned this subagent entry; null on the run's own chain. */
+  parentKey: z.string().nullable(),
+  /** What kind of row the entry is; null for a turn. */
+  node: TranscriptNode.nullable(),
+  /** The entry has nothing to show beyond its frames, which includes a reply that repeats one (`echoOf`); it draws no row. */
+  quiet: z.boolean(),
+  /** How the entry's call ended; null for an entry that records no call. */
+  outcome: TranscriptOutcome.nullable(),
+  /** The approval a parked call waits on (`apr_…`); null otherwise. */
+  approvalId: PublicId.nullable(),
+  /** Every decision folded into the entry, in the order recorded. */
+  gates: z.array(TranscriptDecision),
+  /** The tool the entry is about, as the record names it; null when none. */
+  subject: z.string().nullable(),
+  /**
+   * `subject` as the harness knows the tool, without a gateway's prefix or a
+   * version, as the server read it (ADR-182). Null or absent when the answer
+   * did not say, and the page then shows `subject` as recorded.
+   */
+  tool: z.string().nullable().optional(),
+  /** The family of the entry's tool; null for an entry that is no tool call. */
+  family: ToolFamily.nullable(),
+  /** `provider/model` of a model call; null elsewhere. */
+  model: z.string().nullable(),
+  /** First frame to last, in ms; null for one frame or a call with no result yet. */
+  durationMs: z.number().int().nonnegative().nullable(),
+  /** The earlier entry whose words this reply says again; null otherwise. */
+  echoOf: z.string().nullable(),
+  /** What a recall entry put in front of the model; null on other entries. */
+  recall: TranscriptRecall.nullable(),
+  /** Where the read's search found its query in this entry; empty on a read with no query. */
+  matches: z.array(TranscriptMatch),
 });
 export type TranscriptEntry = z.infer<typeof TranscriptEntry>;
+
+/** The run's entries counted at the zoom read, whatever the chips or the search. */
+export const TranscriptCounts = z.object({
+  /** Entries per chip that are not `quiet`; an entry that answers two chips counts under both. */
+  kinds: z.record(TranscriptKind, Count),
+  /** Entries that are not `quiet`: the entries that draw rows. */
+  entries: Count,
+  /** Entries that failed or were refused. */
+  errors: Count,
+  /** Decisions a rule or a person made; the harness checking itself is not one. */
+  policy: Count,
+  /**
+   * The same counts at `everything`, one entry per frame, whatever zoom was
+   * read: the frames the policy and recall chips keep, and the decisions
+   * among them a rule or a person made. The tabs that list frames count
+   * these. Null when the answer carried none.
+   */
+  frames: z
+    .object({
+      kinds: z.object({ policy: Count, recall: Count }),
+      policy: Count,
+    })
+    .nullable(),
+});
+export type TranscriptCounts = z.infer<typeof TranscriptCounts>;
+
+/**
+ * The run's figures, counted on the server over its steps (ADR-182), whatever
+ * the zoom, chips or search. The wall clock is not here: it runs to an instant
+ * only the reader knows.
+ */
+export const TranscriptFigures = z.object({
+  steps: z.object({ model: Count, tool: Count }),
+  /** The times the operator prompted the run, the first prompt included. */
+  prompts: Count,
+  calls: z.object({
+    count: Count,
+    /** Calls that failed, or that a rule, a person or the harness refused. */
+    failed: Count,
+    /** Calls per tool name, most called first; `name` null for an unnamed call. */
+    tools: z.array(z.object({ name: z.string().nullable(), calls: Count })),
+    /** Most called first. */
+    families: z.array(
+      z.object({
+        family: ToolFamily,
+        calls: Count,
+        share: Ratio,
+        ms: Count,
+        failed: Count,
+        tools: Count,
+      }),
+    ),
+    /** Null for a run that called no tool. */
+    batches: z
+      .object({
+        count: Count,
+        parallel: Count,
+        widest: Count,
+        fanOut: z.number().nonnegative(),
+        serialMs: Count,
+        togetherMs: Count,
+        histogram: z.array(
+          z.object({ width: z.number().int().positive(), batches: Count }),
+        ),
+      })
+      .nullable(),
+  }),
+  /** Where the recorded time went, in ms: model steps, tool calls, approval waits. */
+  wall: z.object({ modelMs: Count, toolMs: Count, waitingMs: Count }),
+});
+export type TranscriptFigures = z.infer<typeof TranscriptFigures>;
+
+/** What a search found, over the whole run and not only the page. */
+export const TranscriptSearch = z.object({
+  query: z.string(),
+  /** Entries that matched. */
+  matched: Count,
+  /** Halves that held content the search could not look inside. */
+  unsearched: Count,
+});
+export type TranscriptSearch = z.infer<typeof TranscriptSearch>;
 
 /** `get_run_transcript` at one zoom level. */
 export const RunTranscript = z.object({
@@ -436,6 +714,12 @@ export const RunTranscript = z.object({
   cursor: z.string().nullable(),
   /** False when the run has more frames than one transcript could carry. */
   complete: z.boolean(),
+  /** The run's entries counted at this zoom; null when the answer carried none. */
+  counts: TranscriptCounts.nullable(),
+  /** The run's figures; null when the answer carried none. */
+  figures: TranscriptFigures.nullable(),
+  /** What the read's search found; null on a read with no search. */
+  search: TranscriptSearch.nullable(),
 });
 export type RunTranscript = z.infer<typeof RunTranscript>;
 

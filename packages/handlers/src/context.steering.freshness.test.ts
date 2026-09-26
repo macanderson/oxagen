@@ -25,6 +25,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 import {
   createGetSteeringFreshnessHandler,
   readGatePolicy,
+  syncView,
 } from "./context.steering.freshness";
 import { postgresSteeringStore } from "./context.steering.store";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
@@ -79,6 +80,39 @@ describe("readGatePolicy", () => {
   });
 });
 
+describe("syncView", () => {
+  const state = {
+    provider: "github",
+    repository: "acme/platform",
+    branch: "main",
+    headSha: "feed123",
+    rulesSha: "feed123",
+    status: "synced" as const,
+    findings: [],
+    error: null,
+    requestedAt: new Date("2026-09-25T10:00:00Z"),
+    syncedAt: new Date("2026-09-25T10:00:04Z"),
+  };
+
+  it("is null before the workspace's first sync", () => {
+    expect(syncView(null)).toBeNull();
+  });
+
+  it("keeps the last sync's status once it finished after the request", () => {
+    expect(syncView(state)?.status).toBe("synced");
+  });
+
+  // A push arrived after the last sync finished: the page says a sync is on
+  // its way, whatever the last one decided, and refreshes until it lands.
+  it("reads pending while a request is newer than the last finished sync", () => {
+    expect(
+      syncView({ ...state, requestedAt: new Date("2026-09-25T10:05:00Z") })
+        ?.status,
+    ).toBe("pending");
+    expect(syncView({ ...state, syncedAt: null })?.status).toBe("pending");
+  });
+});
+
 /** The predicate each `where` received, in call order, so a test can read it. */
 const wheres: unknown[] = [];
 
@@ -130,6 +164,7 @@ describe("get_steering_freshness handler", () => {
     const handler = createGetSteeringFreshnessHandler({
       store: store as never,
       readConnection: bound as never,
+      readSyncState: async () => null,
     });
     const out = await handler({}, CTX);
     expect(out).toEqual({
@@ -142,7 +177,60 @@ describe("get_steering_freshness handler", () => {
       provider: "github",
       defaultBranch: "main",
       policy: { autoSync: false, blockStaleRuns: true },
+      sync: null,
     });
+  });
+
+  it("carries the repository sync's state and its findings (ADR-184)", async () => {
+    stubReads(null);
+    const finding = {
+      level: "error" as const,
+      path: ".oxagen/rules/team.toml",
+      lineageId: "ctx.team.review",
+      code: "secret" as const,
+      message: "carries a credential token",
+    };
+    const handler = createGetSteeringFreshnessHandler({
+      store: store as never,
+      readConnection: bound as never,
+      readSyncState: async () => ({
+        provider: "github",
+        repository: "acme/platform",
+        branch: "main",
+        headSha: "feed123",
+        rulesSha: "feed123",
+        status: "problems",
+        findings: [finding],
+        error: null,
+        requestedAt: new Date("2026-09-25T10:00:00Z"),
+        syncedAt: new Date("2026-09-25T10:00:04Z"),
+      }),
+    });
+    const out = await handler({}, CTX);
+    expect(out.sync).toEqual({
+      status: "problems",
+      headSha: "feed123",
+      requestedAt: "2026-09-25T10:00:00.000Z",
+      syncedAt: "2026-09-25T10:00:04.000Z",
+      error: null,
+      findings: [finding],
+    });
+  });
+
+  // The read sits in front of a developer's prompt. A sync table it cannot
+  // read is a missing line on a page, never a failed prompt.
+  it("answers without the sync when its state cannot be read", async () => {
+    stubReads(null);
+    const handler = createGetSteeringFreshnessHandler({
+      store: store as never,
+      readConnection: bound as never,
+      readSyncState: async () => {
+        throw new Error("relation does not exist");
+      },
+    });
+    const out = await handler({}, CTX);
+    expect(out.sync).toBeNull();
+    expect(out.steeringVersion).toBe(12);
   });
 
   // Steering is off for a workspace until a repository is bound, and the

@@ -48,6 +48,8 @@ vi.mock("./actions", () => ({
   sendInvitation: vi.fn(),
   resendInvitation: vi.fn(),
   revokeInvitation: vi.fn(),
+  setOrgAvatar: vi.fn(),
+  setWorkspaceAvatar: vi.fn(),
 }));
 vi.mock("./api-key-actions", () => ({
   createApiKey: vi.fn(),
@@ -124,6 +126,7 @@ const coreCtx = unsafeMint(WsCtx, {
 /** core-platform the viewer belongs to, finops they do not, legacy archived. */
 const WORKSPACES = {
   orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+  orgAvatarUrl: null,
   workspaces: [
     workspaceRow(),
     workspaceRow({

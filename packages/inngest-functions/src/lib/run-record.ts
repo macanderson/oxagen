@@ -10,10 +10,15 @@ import { schema, withTenantDb } from "@oxagen/database";
 import {
   type AttemptRecord,
   createPostgresRunStore,
+  type FrameRead,
   ledgerFrame,
+  listSubagentSessions,
+  readTranscriptFrames,
   type RunFrame,
   type RunStore,
+  subagentChainRead,
   tachoFrame,
+  TRANSCRIPT_FRAME_CAP,
 } from "@oxagen/run-ledger";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import {
@@ -26,6 +31,7 @@ import {
 import {
   selectTachoEventRecords,
   selectTachoEvents,
+  selectTachoSubagentEvents,
   type TachoEventRecord,
   type TachoFrameRow,
 } from "@oxagen/telemetry";
@@ -140,8 +146,14 @@ const PAGE = 500;
  * recorded break. One read past the window, unbounded, tells the two apart.
  * It returns nothing at the end of the chain, and the rows after the break
  * otherwise.
+ *
+ * The read stops once it holds more than `upTo` rows, so a capped reader
+ * can tell a chain that fits from one that does not.
  */
-async function allTachoRows(sessionUuid: string): Promise<TachoFrameRow[]> {
+async function allTachoRows(
+  sessionUuid: string,
+  upTo = Number.POSITIVE_INFINITY,
+): Promise<TachoFrameRow[]> {
   const rows: TachoFrameRow[] = [];
   let after = -1;
   for (;;) {
@@ -153,6 +165,7 @@ async function allTachoRows(sessionUuid: string): Promise<TachoFrameRow[]> {
       limit: PAGE,
     });
     rows.push(...page);
+    if (rows.length > upTo) return rows;
     if (page.length === PAGE) {
       after = through;
       continue;
@@ -164,7 +177,7 @@ async function allTachoRows(sessionUuid: string): Promise<TachoFrameRow[]> {
     });
     rows.push(...rest);
     const last = rest.at(-1);
-    if (!last || rest.length < PAGE) return rows;
+    if (!last || rest.length < PAGE || rows.length > upTo) return rows;
     after = last.seq;
   }
 }
@@ -305,28 +318,71 @@ export async function readSealedSegments(
   });
 }
 
-/** Every frame of the run as the projection reads it, in sequence order. */
+/**
+ * The run's own chain up to `upTo` frames and past it by at most a page:
+ * a wrapped session's `tacho_events` rows, or a ledger run's events.
+ */
+async function ownFrames(
+  record: RunRecord,
+  upTo = Number.POSITIVE_INFINITY,
+): Promise<RunFrame[]> {
+  if (record.source === "tacho") {
+    return (await allTachoRows(record.sessionUuid, upTo)).map(tachoFrame);
+  }
+  const store = ledgerStore();
+  const frames: RunFrame[] = [];
+  let after = "0";
+  for (;;) {
+    const page = await store.readAttemptEventsSince(record.runId, after, PAGE);
+    frames.push(...page.map(ledgerFrame));
+    const last = page.at(-1);
+    if (!last || page.length < PAGE || frames.length > upTo) return frames;
+    after = last.runSeq;
+  }
+}
+
+/**
+ * Every frame of the run's own chain as the projection reads it, in sequence
+ * order. The enrichment job reads the record this way; a reader that folds
+ * the run's steps reads `readTranscriptFramesOf`.
+ */
 export async function readRunFrames(
   scope: RunScope,
   record: RunRecord,
 ): Promise<RunFrame[]> {
-  return runInTenantScope(scope, async () => {
-    if (record.source === "tacho") {
-      return (await allTachoRows(record.sessionUuid)).map(tachoFrame);
-    }
-    const store = ledgerStore();
-    const frames: RunFrame[] = [];
-    let after = "0";
-    for (;;) {
-      const page = await store.readAttemptEventsSince(
-        record.runId,
-        after,
-        PAGE,
-      );
-      frames.push(...page.map(ledgerFrame));
-      const last = page.at(-1);
-      if (!last || page.length < PAGE) return frames;
-      after = last.runSeq;
-    }
-  });
+  return runInTenantScope(scope, () => ownFrames(record));
+}
+
+/**
+ * The frames the Run page folds for this run, read the same way
+ * (`readTranscriptFrames` in `@oxagen/run-ledger`): every subagent chain
+ * spliced in where it was spawned, late harness reports uncounted, each model
+ * call once, to `TRANSCRIPT_FRAME_CAP` frames. `run.summarize` folds these,
+ * so the account it writes covers the steps the page draws.
+ */
+export async function readTranscriptFramesOf(
+  scope: RunScope,
+  record: RunRecord,
+): Promise<FrameRead> {
+  return runInTenantScope(scope, () =>
+    readTranscriptFrames(
+      {
+        own: async (cap) => {
+          const frames = await ownFrames(record, cap);
+          return frames.length > cap
+            ? { frames: frames.slice(0, cap), complete: false }
+            : { frames, complete: true };
+        },
+        subagents:
+          record.source === "tacho"
+            ? subagentChainRead(
+                selectTachoSubagentEvents,
+                record.sessionUuid,
+                (root) => listSubagentSessions(scope, root),
+              )
+            : null,
+      },
+      TRANSCRIPT_FRAME_CAP,
+    ),
+  );
 }

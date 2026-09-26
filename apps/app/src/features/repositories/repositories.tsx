@@ -240,6 +240,28 @@ export function Repositories({
     "code" in reachable.failure &&
     UNCONNECTED.has(reachable.failure.code);
   const openCount = changes.kind === "ready" ? changes.value.open : 0;
+  // A Context PR can merge or close on the repository host at any moment, and
+  // the repository sync moves its change within seconds (ADR-184). While one
+  // is open, re-read the list so the new state shows up without a reload.
+  useEffect(() => {
+    if (openCount === 0) return;
+    let live = true;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      readRepositoryChanges(org, ws)
+        .then((result) => {
+          if (live && result.ok)
+            setChanges({ kind: "ready", value: result.value });
+        })
+        .catch(() => {
+          // The next tick reads again; a failed poll leaves the list shown.
+        });
+    }, 10_000);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [openCount, org, ws]);
   const onChange = view.tab === "changes" && view.change !== null;
   const headerGold = view.tab !== "working-copies" && !(onChange && mergeable);
 

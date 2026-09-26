@@ -40,5 +40,6 @@ Org Owner, Org Admin, Workspace Owner, Workspace Member.
 | code | meaning |
 |---|---|
 | `not_found` | No agent or version matches the input in this workspace. |
+| `conflict` | The agent is retired (`agent_retired`). Publishing sets the agent's `status` to `active`, so the handler refuses a retired agent before any write. The version is Git-backed and publishes when its pull request merges (`git_definition_requires_merge`), or its budget is invalid (`invalid_definition_budget`). |
 | `validation_error` | Input failed Zod parse. |
 | `unauthorized` | Caller lacks the required org/workspace role. |

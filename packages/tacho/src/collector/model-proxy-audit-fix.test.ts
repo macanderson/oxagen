@@ -12,6 +12,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { AddressInfo } from "node:net";
+import { gzipSync, zstdCompressSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import type { TachoEvent } from "../envelope";
 import { TEST_ENROLLMENT, unsignedBundle } from "../host/test-support";
@@ -95,7 +96,11 @@ interface Answer {
 
 function call(
   port: number,
-  options: { path?: string; headers?: Record<string, string>; body?: string },
+  options: {
+    path?: string;
+    headers?: Record<string, string>;
+    body?: string | Buffer;
+  },
 ): Promise<Answer> {
   return new Promise((resolve) => {
     const body = options.body ?? "{}";
@@ -657,6 +662,67 @@ describe("the model proxy after the gateway audit", () => {
       ]);
       expect(field(frames(uuid)[0]!, "output_tokens")).toBe(20);
       expect(frames(uuid)[0]!.attrs["oxagen.usage_partial"]).toBeUndefined();
+    });
+  });
+
+  describe("a compressed request that inflates past the ceiling", () => {
+    // Small enough that the test's padding crosses it, large enough that
+    // every compressed body here is far under it.
+    const CEILING = 4096;
+    const padded = (length: number) =>
+      Buffer.from(
+        JSON.stringify({ model: "claude-sonnet-5", pad: "x".repeat(length) }),
+      );
+
+    it.each([
+      ["gzip", gzipSync],
+      ["zstd", zstdCompressSync],
+    ] as const)(
+      "is not decoded past the ceiling, so an armed model clause refuses it (%s)",
+      async (encoding, compress) => {
+        const fake = await vendor((_req, res) => res.end("{}"));
+        const { port, session, frames } = await proxyFor(() => fake.url, {
+          bundle: { models: { allow: ["claude-*"], deny: [] } },
+          deps: { maxRequestBytes: CEILING },
+        });
+        const uuid = session("sess-bomb");
+        const body = compress(padded(CEILING * 4));
+        expect(body.length).toBeLessThan(CEILING);
+        const answer = await call(port, {
+          headers: {
+            "X-Claude-Code-Session-Id": "sess-bomb",
+            "Content-Encoding": encoding,
+          },
+          body,
+        });
+        expect(answer.status).toBe(403);
+        expect(answer.headers["x-oxagen-refusal"]).toBe("model_ambiguous");
+        expect(fake.requests).toHaveLength(0);
+        expect(frames(uuid, "policy_decision")).toHaveLength(1);
+      },
+    );
+
+    it("still decodes a compressed body under the ceiling (negative)", async () => {
+      const fake = await vendor((_req, res) => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            id: "msg_small",
+            model: "claude-sonnet-5",
+            usage: { input_tokens: 1, output_tokens: 1 },
+          }),
+        );
+      });
+      const { port } = await proxyFor(() => fake.url, {
+        bundle: { models: { allow: ["claude-*"], deny: [] } },
+        deps: { maxRequestBytes: CEILING },
+      });
+      const answer = await call(port, {
+        headers: { "Content-Encoding": "gzip" },
+        body: gzipSync(padded(CEILING / 2)),
+      });
+      expect(answer.status).toBe(200);
+      expect(fake.requests).toHaveLength(1);
     });
   });
 

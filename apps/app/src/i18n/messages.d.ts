@@ -146,6 +146,7 @@ type Messages = {
         tokensBasis: string;
         wrappedOnly: string;
         spendBasis: string;
+        deregistered: string;
       };
       health: {
         tamper: string;
@@ -173,6 +174,8 @@ type Messages = {
         sortBy: string;
         noMatch: string;
         cursor: string;
+        showDeregistered: string;
+        hideDeregistered: string;
       };
       basisNotRecorded: string;
       edit: string;
@@ -4893,6 +4896,9 @@ type Messages = {
       modelKeySaved: string;
       modelKeyRemoved: string;
     };
+    avatar: {
+      open: string;
+    };
   };
   record: {
     loading: string;
@@ -5884,6 +5890,9 @@ type Messages = {
       searchLabel: string;
       searchPlaceholder: string;
       matches: string;
+      searching: string;
+      searchFailed: string;
+      unsearched: string;
       chipsLabel: string;
       chip: {
         prompt: string;
@@ -5937,6 +5946,8 @@ type Messages = {
       you: string;
       agent: string;
       answer: string;
+      calledTools: string;
+      saidNothing: string;
       operator: string;
       task: string;
       firstPrompt: string;
@@ -6243,6 +6254,7 @@ type Messages = {
         byCalls: string;
         noTools: string;
         toolsNotRead: string;
+        unnamedTool: string;
         note: string;
         noteNotRolledUp: string;
       };
@@ -7330,7 +7342,6 @@ type Messages = {
         connected: string;
         offline: string;
         reachable: string;
-        notBacked: string;
       };
       countNotRecorded: string;
       countNotRecordedShort: string;
@@ -7363,8 +7374,6 @@ type Messages = {
       orgMetaNotBacked: string;
       wsMetaNotBacked: string;
       createWorkspace: string;
-      orgTileNotBacked: string;
-      wsTileNotBacked: string;
     };
     topbar: {
       label: string;
@@ -7770,50 +7779,6 @@ type Messages = {
         recordedWrong: string;
         failed: string;
       };
-    };
-    avatar: {
-      title: string;
-      cancel: string;
-      save: string;
-      remove: string;
-      removeHint: string;
-      saving: string;
-      kind: string;
-      kinds: {
-        icon: string;
-        initials: string;
-        photo: string;
-      };
-      icon: string;
-      iconHint: string;
-      letters: string;
-      lettersHint: string;
-      typeface: string;
-      fonts: {
-        sans: string;
-        serif: string;
-        mono: string;
-      };
-      photo: string;
-      photoHint: string;
-      tone: string;
-      tones: {
-        solid: string;
-        soft: string;
-        line: string;
-      };
-      toneHint: string;
-      describeIcon: string;
-      describeInitials: string;
-      describePhoto: string;
-      describePhotoNone: string;
-      note: string;
-      noPhoto: string;
-      noLetters: string;
-      invalid: string;
-      denied: string;
-      failed: string;
-      photoPlaceholder: string;
     };
     approvals: {
       title: string;
@@ -9070,6 +9035,14 @@ type Messages = {
       autoSyncHint: string;
       blockStaleRuns: string;
       blockStaleRunsHint: string;
+      sync: string;
+      syncSynced: string;
+      syncPending: string;
+      syncProblems: string;
+      syncFailed: string;
+      syncFindingsTitle: string;
+      findingError: string;
+      findingWarning: string;
     };
     status: {
       proposed: string;
@@ -10628,6 +10601,72 @@ type Messages = {
       useTyped: string;
       remove: string;
       failedFreeform: string;
+    };
+    avatarEditor: {
+      titles: {
+        user: string;
+        agent: string;
+        workspace: string;
+        organization: string;
+      };
+      cancel: string;
+      save: string;
+      remove: string;
+      removeHints: {
+        user: string;
+        agent: string;
+        workspace: string;
+        organization: string;
+      };
+      saving: string;
+      kind: string;
+      kinds: {
+        icon: string;
+        initials: string;
+        photo: string;
+      };
+      icon: string;
+      iconHint: string;
+      letters: string;
+      lettersHint: string;
+      typeface: string;
+      fonts: {
+        sans: string;
+        serif: string;
+        mono: string;
+      };
+      photo: string;
+      photoHint: string;
+      tone: string;
+      tones: {
+        solid: string;
+        soft: string;
+        line: string;
+        gold: string;
+        "gold-deep": string;
+      };
+      toneHint: string;
+      describeIcon: string;
+      describeInitials: string;
+      describePhoto: string;
+      describePhotoNone: string;
+      notes: {
+        user: string;
+        agent: string;
+        workspace: string;
+        organization: string;
+      };
+      noPhoto: string;
+      noLetters: string;
+      invalid: string;
+      denied: {
+        user: string;
+        agent: string;
+        workspace: string;
+        organization: string;
+      };
+      failed: string;
+      photoPlaceholder: string;
     };
   };
 };

@@ -4,7 +4,7 @@ The belt search meta-tool and the ⌘K search over the workspace's own records (
 
 - `tool`: capabilities the in-app agent may call — the contracts exposed on the `agent` surface — ranked by name and description. Inside a turn the engine-facing twin reads the materialised set, so what the model cannot call it cannot find.
 - `run`: the workspace's ledger runs by public id or goal and its wrapped-agent sessions by public id, the in-app agent's own turns excluded as in `list_runs`.
-- `agent`: the workspace's agents by slug or name.
+- `agent`: the workspace's agents by slug or name. A retired (`archived`) agent does not appear.
 - `approval`: pending, unexpired approvals by id or the capability they parked.
 
 Rows carry ids and no hrefs: the app builds every navigation target from a typed route builder (`apps/app/ARCHITECTURE.md` INV-13). Ontology is out of scope; nothing here reads the graph.

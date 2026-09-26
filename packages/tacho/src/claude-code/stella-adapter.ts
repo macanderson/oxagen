@@ -45,7 +45,10 @@ export interface ProcessInfo {
   comm: string;
 }
 
-export type PsLookup = (pid: number) => ProcessInfo | undefined;
+export type PsLookup = (
+  pid: number,
+  timeoutMs?: number,
+) => ProcessInfo | undefined;
 
 /** Parse `ps -o ppid=,comm=` output: `  812 /bin/zsh`. */
 export function parsePsLine(stdout: string): ProcessInfo | undefined {
@@ -55,11 +58,14 @@ export function parsePsLine(stdout: string): ProcessInfo | undefined {
 }
 
 /** The real lookup: one `ps` call with a short timeout, stdin closed. */
-export function psLookup(pid: number): ProcessInfo | undefined {
+export function psLookup(
+  pid: number,
+  timeoutMs = 2_000,
+): ProcessInfo | undefined {
   const result = spawnSync("ps", ["-o", "ppid=,comm=", "-p", String(pid)], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
-    timeout: 2_000,
+    timeout: timeoutMs,
   });
   if (result.status !== 0 || typeof result.stdout !== "string")
     return undefined;

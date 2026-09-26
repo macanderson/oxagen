@@ -19,6 +19,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import type { SteeringFreshness } from "@/data/contracts/steering";
 import { FormAlert } from "@/ui/form-feedback";
+import { LiveRefresh } from "@/ui/live-refresh";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { setSteeringGate } from "./actions";
 import { Fact, Facts, Section, useDate } from "./section";
@@ -91,7 +92,16 @@ export function Freshness({
             {read.publishedAt === null ? null : ` · ${date(read.publishedAt)}`}
           </Fact>
         )}
+        {read.sync === null ? null : (
+          <Fact name="sync" term={t("sync")}>
+            <SyncLine sync={read.sync} date={date} />
+          </Fact>
+        )}
       </Facts>
+      <LiveRefresh active={read.sync?.status === "pending"} />
+      {read.sync === null || read.sync.findings.length === 0 ? null : (
+        <SyncFindings findings={read.sync.findings} />
+      )}
 
       <fieldset
         className="flex flex-col gap-3"
@@ -124,6 +134,77 @@ export function Freshness({
 
       {failure === null ? null : <FormAlert>{failure}</FormAlert>}
     </Section>
+  );
+}
+
+type Sync = NonNullable<SteeringFreshness["sync"]>;
+
+/** Where the repository sync stands, in one line. */
+function SyncLine({
+  sync,
+  date,
+}: {
+  sync: Sync;
+  date: (at: string) => string;
+}) {
+  const t = useTranslations("steering.freshness");
+  const commit = sync.headSha?.slice(0, 7) ?? "";
+  const when = sync.syncedAt === null ? "" : ` · ${date(sync.syncedAt)}`;
+  switch (sync.status) {
+    case "pending":
+      return <span data-sync="pending">{t("syncPending")}</span>;
+    case "failed":
+      return (
+        <span data-sync="failed" className="text-destructive">
+          {t("syncFailed", { error: sync.error ?? "" })}
+        </span>
+      );
+    case "problems":
+      return (
+        <span data-sync="problems">
+          {t("syncProblems", { count: sync.findings.length, commit })}
+          {when}
+        </span>
+      );
+    case "synced":
+      return (
+        <span data-sync="synced">
+          {t("syncSynced", { commit })}
+          {when}
+        </span>
+      );
+  }
+}
+
+/** Every problem the last sync found, one row per file. */
+function SyncFindings({ findings }: { findings: Sync["findings"] }) {
+  const t = useTranslations("steering.freshness");
+  return (
+    <div className="flex flex-col gap-2" data-testid="sync-findings">
+      <h3 className="text-sm font-medium text-foreground">
+        {t("syncFindingsTitle")}
+      </h3>
+      <ul className="flex flex-col gap-2">
+        {findings.map((f) => (
+          <li
+            key={`${f.path}:${f.lineage ?? ""}:${f.message}`}
+            data-level={f.level}
+            className="flex flex-col gap-0.5 text-sm"
+          >
+            <span
+              className={
+                f.level === "error"
+                  ? "text-destructive"
+                  : "text-muted-foreground"
+              }
+            >
+              {f.level === "error" ? t("findingError") : t("findingWarning")}
+            </span>
+            <span className="max-w-prose text-foreground">{f.message}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

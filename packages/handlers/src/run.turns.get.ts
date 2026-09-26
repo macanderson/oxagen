@@ -7,8 +7,8 @@
 // every frame grouped by chain and turn. The chains are the root and the
 // subagent chains Postgres lists under it (`tacho_sessions_root_idx`), the
 // same list the transcript reads, so a subagent the transcript shows is a
-// subagent this counts. A ledger run is read from the ledger and counted
-// frame by frame.
+// subagent this counts. A ledger run is read from the ledger, and its steps
+// are the ones the transcript's `steps` zoom folds (ADR-182).
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   RUN_TURNS_MAX,

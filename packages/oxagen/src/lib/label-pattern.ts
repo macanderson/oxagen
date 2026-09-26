@@ -11,9 +11,11 @@
  * whitespace, backticks, colons, parens, brackets. Identifier rules: starts
  * with a letter, then letters / digits / underscore, max 63 chars.
  *
- * SCOPE — read before relying on this. Nothing currently calls it: this module
- * has no importers, and it is not listed in this package's `exports` map, so it
- * cannot be reached from another package either. The guard that Cypher label
+ * SCOPE — read before relying on this. No Cypher seam calls it. Its one
+ * importer is the `author_graph_rule` contract, which validates the labels a
+ * caller names with `LABEL_PATTERN` before they reach a turn's goal. The module
+ * is not listed in this package's `exports` map, so it cannot be reached from
+ * another package. The guard that Cypher label
  * seams actually run is `assertValidLabel` in `packages/ontology/src/labels.ts`,
  * and that copy allows a LONGER label (99 chars) than this one. Treat the two as
  * unreconciled until one is deleted in favour of the other; do not cite this

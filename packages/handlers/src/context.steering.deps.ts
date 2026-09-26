@@ -29,6 +29,16 @@ export interface SteeringDeps {
   roles: RoleReader;
   now: () => Date;
   emit: (event: SecurityEventInput) => void;
+  /**
+   * Ask for the repository sync now (ADR-184). A Context PR the host merged
+   * at a commit Oxagen never checked is published from the production branch
+   * by the sync, and a person pressing Merge on it should not wait for the
+   * sweep. Absent in tests that do not exercise it.
+   */
+  requestSync?: (scope: {
+    orgId: string;
+    workspaceId: string;
+  }) => Promise<unknown>;
 }
 
 export function steeringDeps(): SteeringDeps {
@@ -41,5 +51,12 @@ export function steeringDeps(): SteeringDeps {
     },
     now: () => new Date(),
     emit: emitSecurityEvent,
+    // Loaded on first use: the request module pulls in the event client.
+    requestSync: async (scope) => {
+      const { requestSteeringSync } = await import(
+        "./context.steering.sync.request"
+      );
+      return requestSteeringSync([scope], "merge_on_host");
+    },
   };
 }

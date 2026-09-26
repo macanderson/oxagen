@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-// The avatar editor (mockup `avatarBody`) over a fake save: three kinds, the
-// twenty-four Lucide glyphs, a monogram of up to six letters in three
-// typefaces, three tones as live swatches, a preview at every size the shell
-// draws, and a save that writes the spec string through update_profile and
-// returns to the Account dialog. Nothing here is an emoji or a free colour.
+// The person's avatar editor (mockup `avatarBody`, @/ui/avatar-editor) over a
+// fake save: three kinds, the twenty-four Lucide glyphs, a monogram of up to
+// six letters in three typefaces, five tones as live swatches (solid, soft,
+// line, and the two golds), a preview at every size the shell draws, and a
+// save that writes the spec string through update_profile and returns to the
+// Account dialog. Nothing here is an emoji or a free colour.
 import {
   cleanup,
   render,
@@ -200,7 +201,7 @@ describe("Initials", () => {
 });
 
 describe("Tone", () => {
-  it("offers solid, soft and line as the draft itself in each tone", async () => {
+  it("offers solid, soft, line, gold and dark gold as the draft itself in each tone", async () => {
     const { user, dialog, preview } = await openEditor();
     const tones = within(dialog).getByRole("group", { name: "Tone" });
     const swatches = within(tones).getAllByRole("button");
@@ -208,12 +209,14 @@ describe("Tone", () => {
       "Solid",
       "Soft",
       "Line",
+      "Gold",
+      "Dark gold",
     ]);
     expect(
       swatches.map(
         (s) => s.querySelector<HTMLElement>("[data-avatar]")?.dataset.tone,
       ),
-    ).toEqual(["solid", "soft", "line"]);
+    ).toEqual(["solid", "soft", "line", "gold", "gold-deep"]);
     for (const s of swatches)
       expect(s.querySelector<HTMLElement>("[data-avatar]")?.textContent).toBe(
         "MB",

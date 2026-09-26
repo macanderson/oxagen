@@ -407,6 +407,7 @@ describe("the GitHub seam", () => {
       .mockResolvedValueOnce({
         baseRef: "main",
         headSha: "head2",
+        state: "closed",
         merged: true,
         mergeCommitSha: "m2",
         mergedAt: "2026-09-15T09:16:40.000Z",
@@ -417,6 +418,9 @@ describe("the GitHub seam", () => {
     expect(await gh.getPullRequest(repo, 519)).toEqual({
       baseRef: "main",
       headSha: "head2",
+      // A merged pull request is closed; the repository sync reads `open`
+      // to tell a PR still under review from one the host settled.
+      open: false,
       merged: true,
       mergeCommitSha: "m2",
       mergedAt: new Date("2026-09-15T09:16:40.000Z"),

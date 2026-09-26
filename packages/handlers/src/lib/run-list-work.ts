@@ -4,11 +4,12 @@
 // two reads and not two hundred.
 //
 //   Pull requests  ClickHouse `tacho_events`: the `oxagen:pr_link` frames the
-//                  harness wrote (attrs `pr_url`, `pr_number`,
-//                  `pr_repository`) and the `pr_open` effect frames whose
-//                  call printed a URL (attrs `pr.url`, `pr.number`,
-//                  `pr.repository`). One row per session and URL, earliest
-//                  frame first. Only chain-verified frames count.
+//                  harness wrote and the `pr_open` effect frames whose call
+//                  printed a URL. Both carry attrs `pr.url`, `pr.number` and
+//                  `pr.repository`. A pr_link frame stored before #3944
+//                  carries `pr_url`, `pr_number` and `pr_repository`, which
+//                  `prAttr` still reads. One row per session and URL,
+//                  earliest frame first. Only chain-verified frames count.
 //   Lines          `tacho.sessions.lines_added/removed`, the harness's own
 //                  totals from the session's end, and while those are absent
 //                  the uncommitted change git reported per path
@@ -27,6 +28,7 @@ import { RUN_PULL_REQUEST_MAX } from "@oxagen/oxagen/contracts/run.list";
 import { chSelect } from "@oxagen/telemetry";
 import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { RunScope } from "../run.list";
+import { prAttr } from "./run-work";
 
 /** One session's pull request as the ClickHouse read returns it. */
 export type PullRequestLinkRow = {
@@ -68,24 +70,24 @@ export function pullRequestOf(row: PullRequestLinkRow): RunPullRequest | null {
 /**
  * The ClickHouse read. `chSelect` fences it to the caller's org and workspace
  * before any predicate here, and admits a single-table SELECT only, so the two
- * frame shapes are folded with `if()` rather than a UNION. `LIMIT n BY`
- * keeps one session's links from crowding the others out of the page.
+ * attr spellings are folded with `if()` (`prAttr`) rather than a UNION.
+ * `LIMIT n BY` keeps one session's links from crowding the others out of the
+ * page.
  */
 export const readRunPullRequests: ReadRunPullRequests = async (
   sessionUuids,
 ) => {
   const out = new Map<string, RunPullRequest[]>();
   if (sessionUuids.length === 0) return out;
-  const linked = "kind = 'oxagen:pr_link'";
   const result = await chSelect<PullRequestLinkRow>({
     query: `SELECT toString(session_uuid) AS session,
-      if(${linked}, attrs['pr_url'], attrs['pr.url']) AS url,
-      argMin(if(${linked}, attrs['pr_number'], attrs['pr.number']), seq) AS number,
-      argMin(if(${linked}, attrs['pr_repository'], attrs['pr.repository']), seq) AS repository,
+      ${prAttr("url")} AS url,
+      argMin(${prAttr("number")}, seq) AS number,
+      argMin(${prAttr("repository")}, seq) AS repository,
       toString(min(seq)) AS first_seq
       FROM tacho_events FINAL
       WHERE session_uuid IN {sessions:Array(UUID)} AND chain_verified = true
-        AND (${linked} OR attrs['pr.url'] != '')
+        AND (kind = 'oxagen:pr_link' OR attrs['pr.url'] != '')
       GROUP BY session, url
       HAVING url != ''
       ORDER BY session ASC, min(seq) ASC

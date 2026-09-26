@@ -20,6 +20,12 @@ export const workspaceListItemSchema = z.object({
   // Immutable namespace, unique within the org (the middle agentKey segment).
   namespace: z.string(),
   name: z.string(),
+  avatarUrl: z
+    .string()
+    .nullable()
+    .describe(
+      'The workspace\'s avatar: an https image link or a designed-avatar string ("avatar:v1:<json>"); null when it has none',
+    ),
   role: z
     .string()
     .nullable()
@@ -95,6 +101,12 @@ export const workspaceList = registerCapability({
       slug: z.string(),
       namespace: z.string(),
       name: z.string(),
+      avatarUrl: z
+        .string()
+        .nullable()
+        .describe(
+          'The organization\'s avatar: an https image link or a designed-avatar string ("avatar:v1:<json>"); null when it has none',
+        ),
     }),
     workspaces: z.array(workspaceListItemSchema),
   }),

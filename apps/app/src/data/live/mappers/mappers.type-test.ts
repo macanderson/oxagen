@@ -100,8 +100,8 @@ const _incidentsHold: NullableOnlyWhenSourceIs<IncidentView, IncidentOut> =
   incidentView;
 const _mandatesHold: NullableOnlyWhenSourceIs<MandateView, MandateOut> =
   mandateView;
-// A role's description and author are nullable on both sides; a workspace's
-// role and archival date are the two the store may not have recorded.
+// A role's description and author are nullable on both sides. So are a
+// workspace's role, archival date, cost center, and avatar.
 const _rolesHold: NullableOnlyWhenSourceIs<RoleView, RoleOut> = roleView;
 const _workspacesHold: NullableOnlyWhenSourceIs<WorkspaceView, WorkspaceOut> =
   workspaceView;

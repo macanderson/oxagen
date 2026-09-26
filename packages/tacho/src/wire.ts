@@ -1068,8 +1068,12 @@ export const base64Size = (bytes: number): number => Math.ceil(bytes / 3) * 4;
  * never written, which is the content a workspace pays to keep.
  *
  * A cap above the budget produces a request nobody can ship, and a cap far
- * below it discards recordings for nothing. Deriving both from the budget
- * is the only way neither happens again when one of them moves.
+ * below it discards recordings for nothing. This cap is a literal, not
+ * derived from `TACHO_MAX_REQUEST_BYTES`. What holds the two together is the
+ * test "keeps the body caps inside the request budget they are spent
+ * against" in `collector/collector-units.test.ts`: a body at this cap, base64
+ * encoded, fills more than a fifth and less than four fifths of the batch
+ * budget. A change to either number that breaks that range fails it.
  */
 export const TACHO_MAX_BODY_BYTES = 1_048_576;
 

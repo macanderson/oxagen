@@ -297,12 +297,14 @@ beforeEach(() => {
   workspaces.mockResolvedValue(
     readOk<WorkspaceList>({
       orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+      orgAvatarUrl: null,
       workspaces: [
         {
           id: "ws_01K5ARCHIVED",
           slug: "old",
           namespace: "old",
           name: "Old",
+          avatarUrl: null,
           role: "owner",
           archivedAt: "2026-01-01T00:00:00.000Z",
           costCenter: null,
@@ -312,6 +314,7 @@ beforeEach(() => {
           slug: "core-platform",
           namespace: "core-platform",
           name: "Core platform",
+          avatarUrl: null,
           role: "owner",
           archivedAt: null,
           costCenter: null,

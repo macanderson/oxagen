@@ -282,7 +282,7 @@ describe("the body index sidecar", () => {
     writeFileSync(sidecar, '["tacho/bodies-index",99]\n["through",0]\n');
     const wal = new Wal(paths.wal);
     expect(wal.bodiesFor(events)).toHaveLength(10);
-    expect(readFileSync(sidecar, "utf8")).toContain('["tacho/bodies-index",1]');
+    expect(readFileSync(sidecar, "utf8")).toContain('["tacho/bodies-index",2]');
   });
 
   it("rescans the region a torn final line covered", async () => {
@@ -299,7 +299,7 @@ describe("the body index sidecar", () => {
     writeFileSync(
       sidecar,
       [
-        '["tacho/bodies-index",1]',
+        '["tacho/bodies-index",2]',
         JSON.stringify([events[0]?.event_id_idem, 3, 40]),
         JSON.stringify(["through", size]),
         "",

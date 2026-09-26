@@ -88,6 +88,20 @@ type Events = {
     };
   };
 
+  // The repository sync (ADR-184): make one workspace's context registry
+  // match its main repository's production branch. Sent by the GitHub and
+  // GitLab webhooks on a push or a merge, and by the five-minute sweep.
+  "steering/sync.requested": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      /** push, pull_request, merge_request, or sweep. */
+      reason: string;
+      /** Read the branch even when its head has not moved. */
+      force?: boolean;
+    };
+  };
+
   // Manual or polling sync request dispatched by the integration.sync handler.
   // The worker resolves the connector type and dispatches the appropriate sync event.
   "ingestion/sync.requested": {

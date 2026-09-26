@@ -209,6 +209,72 @@
       "useTyped": "Use “{value}”",
       "remove": "Remove {label}",
       "failedFreeform": "The list could not be loaded. You can still type a value."
+    },
+    "avatarEditor": {
+      "titles": {
+        "user": "Your avatar",
+        "agent": "Avatar for {name}",
+        "workspace": "Avatar for {name}",
+        "organization": "Avatar for {name}"
+      },
+      "cancel": "Cancel",
+      "save": "Save avatar",
+      "remove": "Remove avatar",
+      "removeHints": {
+        "user": "Use your default initials instead.",
+        "agent": "Use the agent's default initials instead.",
+        "workspace": "Use the workspace's default initials instead.",
+        "organization": "Use the organization's default initials instead."
+      },
+      "saving": "Saving",
+      "kind": "Kind",
+      "kinds": {
+        "icon": "Icon",
+        "initials": "Initials",
+        "photo": "Photo"
+      },
+      "icon": "Icon",
+      "iconHint": "Lucide glyphs, the set the product ships. One line weight, drawn in the tone's ink.",
+      "letters": "Letters",
+      "lettersHint": "Up to {max}.",
+      "typeface": "Typeface",
+      "fonts": {
+        "sans": "Sans",
+        "serif": "Serif",
+        "mono": "Mono"
+      },
+      "photo": "Photo",
+      "photoHint": "An https link to a hosted image: PNG, JPEG, WebP, or SVG.",
+      "tone": "Tone",
+      "tones": {
+        "solid": "Solid",
+        "soft": "Soft",
+        "line": "Line",
+        "gold": "Gold",
+        "gold-deep": "Dark gold"
+      },
+      "toneHint": "Solid, soft, and line follow the theme. Gold and dark gold are the brand gold in two shades. Each tone fixes its own glyph colour, so there is no combination that fails.",
+      "describeIcon": "icon · {icon} · {tone} tone",
+      "describeInitials": "initials · {font} · {tone} tone",
+      "describePhoto": "photo · by link",
+      "describePhotoNone": "photo · none chosen yet",
+      "notes": {
+        "user": "Saved with <code>update_profile</code>, like any change to your account.",
+        "agent": "Part of the agent's definition, so a change rides a pull request.",
+        "workspace": "Saved with <code>update_workspace_settings</code> on the workspace's record.",
+        "organization": "Saved with <code>update_org_settings</code> on the organization's record."
+      },
+      "noPhoto": "Paste an https link to a photo first, or switch to an icon or initials.",
+      "noLetters": "Type at least one letter.",
+      "invalid": "That avatar was refused. A photo link must be an https address under 512 characters.",
+      "denied": {
+        "user": "You do not have permission to change this profile.",
+        "agent": "You do not have permission to change this agent.",
+        "workspace": "You do not have permission to change this workspace.",
+        "organization": "You do not have permission to change this organization."
+      },
+      "failed": "That could not be saved. Try again.",
+      "photoPlaceholder": "https://"
     }
   }
 }

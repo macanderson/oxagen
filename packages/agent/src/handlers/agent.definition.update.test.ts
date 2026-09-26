@@ -135,6 +135,18 @@ describe("agent.definition.update handler", () => {
     expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
   });
 
+  it("refuses a retired (archived) agent before snapshotting a version", async () => {
+    fake.enqueue([{ ...AGENT_ROW, status: "archived" }]); // resolveAgent
+    await expect(
+      agentDefinitionUpdateHandler({ agentId: "agt_1", config: CONFIG }, CTX),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "agent_retired",
+      message: 'Agent "my-agent" is retired',
+    });
+    expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+  });
+
   it("throws when the agent is not found", async () => {
     fake.enqueue([]); // resolveAgent → none
     await expect(

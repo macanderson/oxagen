@@ -47,7 +47,9 @@ Import Convention).
 - `./components/*` → `src/components/*.tsx`: one component file, for the
   re-export layers only.
 - `./styles/globals.css`, `./styles/house-tokens.css`,
-  `./styles/fonts/space-grotesk.css` → the token and font stylesheets.
+  `./styles/house-fonts.css`, `./styles/fonts/space-grotesk.css` → the token
+  and font stylesheets. `house-fonts.css` declares all three house faces. An
+  app that does not import `globals.css` imports it beside `house-tokens.css`.
 - `./lib/motion` → `src/lib/motion.ts`: motion helpers.
 
 ## Rules

@@ -223,13 +223,16 @@ describe("WAL body failure isolation", () => {
   });
 
   it("keeps prior and later bodies readable around a partial append that throws, once retried", () => {
-    const { paths, session, uuid, report, wal, bodyPath, body } = setup();
+    const { session, uuid, report, wal, bodyPath, body } = setup();
     wal.append(session.slice(0, 1), [body(0)]);
+    const before = readFileSync(bodyPath, "utf8");
     fault.partialBodyWrite = true;
     expect(() => wal.append(session.slice(1, 2), [body(1)])).toThrow(
       /disk failed during body append/,
     );
-    expect(readFileSync(bodyPath, "utf8").endsWith("\n")).toBe(false);
+    // The failed call takes its torn line back out, so no body is left under
+    // an event id the retry reuses (#3372).
+    expect(readFileSync(bodyPath, "utf8")).toBe(before);
     expect(report).toHaveBeenCalledWith({
       session_uuid: uuid,
       operation: "append",
@@ -237,8 +240,6 @@ describe("WAL body failure isolation", () => {
     });
     // Nothing landed for the event this call was sealing.
     expect(wal.read(uuid)).toEqual(session.slice(0, 1));
-    // A retry succeeds: `writeBodies` always leads with a "\n", which
-    // separates this attempt's lines from the torn tail the failed one left.
     wal.append(session.slice(1, 2), [body(1)]);
     wal.append(session.slice(2), [body(2)]);
     expect(wal.read(uuid)).toEqual(session);
@@ -247,15 +248,12 @@ describe("WAL body failure isolation", () => {
       body(1).event_id_idem,
       body(2).event_id_idem,
     ]);
-    expect(report).toHaveBeenCalledWith({
+    expect(report).not.toHaveBeenCalledWith({
       session_uuid: uuid,
       operation: "read",
       code: "invalid_body_record",
     });
-    // Dropping body(0) also cuts the torn line beside it: `rewriteBodies`
-    // drops anything that does not parse as a kept record, not only what is
-    // named.
-    expect(wal.dropBodies([session[0] as (typeof session)[number]])).toBe(2);
+    expect(wal.dropBodies([session[0] as (typeof session)[number]])).toBe(1);
     expect(wal.bodiesFor(session)).toHaveLength(2);
   });
 

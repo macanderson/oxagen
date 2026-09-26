@@ -26,6 +26,6 @@ The read limits checkout groups and recorded diffs to 200 each, PRs and discover
 
 Checkouts, captured diffs, subagents and pull request receipts come from every frame the control plane accepted from the run's host, including frames past a chain break. When the session's hash chain broke, the read returns `complete: false` with the `chain_break` warning rather than dropping those frames (ADR-171). A sealed run also names the break in its completeness gaps.
 
-A wrapped run's `oxagen:pr_link` frames are its recorded receipts: each names `pr_number`, `pr_url`, and `pr_repository`. Frames with the same URL count once. A receipt resolves only against a repository connected to this workspace that carries its provider repository id.
+A wrapped run's `oxagen:pr_link` frames are its recorded receipts: each names `pr.number`, `pr.url`, and `pr.repository`, the attributes a `pr_open` call's effect frame carries. A frame sealed before #3944 names them `pr_number`, `pr_url`, and `pr_repository`, and the read accepts either spelling. Frames with the same URL count once. A receipt resolves only against a repository connected to this workspace that carries its provider repository id.
 
 Ledger runs reuse recorded PR receipts. Their receipts do not record a host checkout, so location remains absent. The existing Outputs view retains file observations and ledger change locators.

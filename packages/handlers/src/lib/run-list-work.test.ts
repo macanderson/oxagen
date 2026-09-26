@@ -123,6 +123,12 @@ describe("readRunPullRequests", () => {
     // Both frame shapes, chain-verified only, capped per session.
     expect(call.query).toContain("kind = 'oxagen:pr_link'");
     expect(call.query).toContain("attrs['pr.url'] != ''");
+    // A pr_link frame is read under the dotted names it now writes, and one
+    // stored before #3944 under its underscore names.
+    expect(call.query).toContain(
+      "if(attrs['pr.url'] != '', attrs['pr.url'], attrs['pr_url']) AS url",
+    );
+    expect(call.query).not.toContain("if(kind = 'oxagen:pr_link'");
     expect(call.query).toContain("chain_verified = true");
     expect(call.query).toContain("LIMIT {perSession:UInt32} BY session");
   });

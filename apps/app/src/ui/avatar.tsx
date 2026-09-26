@@ -19,10 +19,10 @@
 // rather than a boolean, so editing the field to a different URL tries again
 // with no effect and no stale flag to reset.
 //
-// People are round; agents are squircles. The tone lives on the record and is
-// one of three relations to the theme (solid, soft, line) from the house
-// scale, each fixing its own glyph colour, so there is no combination that
-// fails on ink or on paper.
+// People are round; agents, workspaces and organizations are squircles. The
+// tone lives on the record: one of three relations to the theme (solid, soft,
+// line) or the brand gold in its bright or deep shade. Each tone fixes its own
+// glyph colour, so there is no combination that fails on ink or on paper.
 import {
   Bird,
   Bot,
@@ -89,6 +89,8 @@ const TONE_CLASS: Record<AvatarTone, string> = {
   solid: "bg-foreground text-background border-foreground",
   soft: "bg-secondary text-foreground border-border",
   line: "bg-transparent text-foreground border-input-border",
+  gold: "bg-gold text-on-gold border-gold",
+  "gold-deep": "bg-gold-deep text-on-gold-deep border-gold-deep",
 };
 
 const FONT_CLASS: Record<AvatarFont, string> = {

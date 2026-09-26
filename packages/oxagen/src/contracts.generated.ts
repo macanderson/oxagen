@@ -180,6 +180,7 @@ import "./contracts/graph.node.get";
 import "./contracts/graph.node.list";
 import "./contracts/graph.node.search";
 import "./contracts/graph.node_label.get";
+import "./contracts/graph.rule.author";
 import "./contracts/graph.search";
 import "./contracts/graph.stats";
 import "./contracts/iam.role.create";

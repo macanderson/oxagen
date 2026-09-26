@@ -357,6 +357,41 @@ const DOD_HEADING = new RegExp(
 const HEADING_PREFIX = /^\s*(?:#{1,6}\s*|\*\*)\s*/;
 
 /**
+ * A DoD item that says only that CI passes (oxagen#4200).
+ *
+ * `dod` is itself a required CI check, so a box reading "Full CI green" asks
+ * about a result that includes this check's own answer. It cannot be true while
+ * this check reads it. On 2026-09-25 it was the only unticked item behind 13 red
+ * `dod` runs, and `dod-close-guard` reopened #4194 over it after its PR merged.
+ * Branch protection already refuses a merge while CI is red, so the box costs a
+ * manual tick and verifies nothing.
+ *
+ * The issue templates stopped seeding the item in the same change. This covers
+ * the issues filed before that: `dodStatus` skips a matching item, so it counts
+ * as neither ticked nor open.
+ *
+ * The pattern must match the whole item. An item that pairs CI with other work,
+ * such as "`pnpm gate` green; CI green on the PR", still gates, because the
+ * other half is a real condition.
+ */
+const CI_STATUS_ONLY = new RegExp(
+  String.raw`^(?:(?:full|all|relevant)\s+)?ci(?:\s+checks?)?(?:\s*\([^)]*\))?` +
+    String.raw`\s+(?:is\s+|are\s+)?(?:green|pass(?:es|ing)?)` +
+    String.raw`(?:\s+on\s+(?:the\s+)?(?:pr|pull request|branch)` +
+    String.raw`(?:\s+that\s+(?:closes|fixes|lands|adds)\s+this(?:\s+check)?)?)?$`,
+  "i",
+);
+
+/** Whether a DoD item's text says nothing except that CI passes. */
+export function restatesCiStatus(item) {
+  const text = item
+    .replace(/`/g, "")
+    .replace(/[.\s]+$/, "")
+    .trim();
+  return CI_STATUS_ONLY.test(text);
+}
+
+/**
  * Read the DoD checklist state out of an issue body.
  *
  * Only the section under one of `DOD_HEADING`'s spellings counts. Scanning the
@@ -371,6 +406,9 @@ const HEADING_PREFIX = /^\s*(?:#{1,6}\s*|\*\*)\s*/;
  * `## Definition of done` followed by plain bullets already passed verifying
  * nothing — and widening the headings without closing it would have opened it
  * to the whole `Done when` cohort at once.
+ *
+ * An item that only says CI passes is skipped, per `CI_STATUS_ONLY`. A section
+ * whose only box is such an item is therefore not `present`.
  *
  * `heading` reports the matched heading text, or `null` when no recognised
  * heading was found at all. The two absences need different remedies, so the
@@ -428,6 +466,7 @@ export function dodStatus(issueBody) {
       const item = line.match(/^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/);
       if (!item || counted.has(at)) continue;
       counted.add(at);
+      if (restatesCiStatus(item[2])) continue;
       if (checklistHeading === null) checklistHeading = label;
       if (item[1] === " ") unchecked.push(item[2].trim());
       else checked += 1;
@@ -462,8 +501,9 @@ export function dodStatus(issueBody) {
 function missingDodReason(ref, heading) {
   if (heading) {
     return (
-      `${ref} has a "${heading}" section, but nothing in it is a checkbox — ` +
-      "so there is no state for this gate to read.\n" +
+      `${ref} has a "${heading}" section, but nothing in it is a checkbox ` +
+      "this gate reads, so there is no state to check. A box that says only " +
+      "that CI is green does not count, because CI is already the merge gate.\n" +
       "  Edit the ISSUE (not this PR) and rewrite that section's bullets as " +
       "`- [ ]` items stating the conditions this close must satisfy, then tick " +
       "the ones that are genuinely done. Keep the prose around them.\n" +
@@ -613,13 +653,14 @@ export function formatVerdict(result) {
     "boxes once each item is genuinely done, or split the remainder into a new issue",
     "(`triage` label only, SCR-004).",
     "",
-    // oxagen#2638: ticking a box on the linked issue fires no pull-request
-    // event, so nothing here re-runs on its own — this check only reacts to
-    // the PR. Said plainly so the prescribed remedy above is actually
-    // complete, rather than leaving a genuinely-done PR stuck on a stale run.
-    "Ticking those boxes does not by itself re-run this check — it only reacts to",
-    "the pull request. Push any change to the PR afterward (even an empty commit,",
-    "`git commit --allow-empty -m 'chore: re-run dod-check'`) to get a fresh run.",
+    // oxagen#2638: ticking a box edits the issue, not the PR, so this check
+    // cannot hear it. `dod-recheck.yml` listens for the issue edit and re-runs
+    // the failed run instead. This text used to tell the author to push an
+    // empty commit, which predates the recheck and which an agent session is
+    // not allowed to do (#4200).
+    "Ticking a box on the issue re-runs this check through `dod-recheck`. If it",
+    "is still red a few minutes after the edit, re-run the failed `dod` job from",
+    "the pull request's Checks tab.",
   ].join("\n");
 }
 

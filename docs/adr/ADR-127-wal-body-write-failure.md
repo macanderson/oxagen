@@ -1,6 +1,6 @@
 # ADR-127: Keep sealed events when body storage fails
 
-Status: Accepted
+Status: Accepted; "The WAL still attempts the sealed event append" and "Event reads remain strict" superseded by [ADR-185](ADR-185-a-failed-wal-body-write-rolls-back-the-seal.md) (2026-09-25)
 Date: 2026-09-19
 Related: #3365, ADR-126
 
