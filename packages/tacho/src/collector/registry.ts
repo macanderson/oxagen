@@ -137,8 +137,8 @@ export interface SessionFacts {
   cwd?: string;
   pid?: number;
   /**
-   * When the process behind `pid` started, as `ps` printed it the first time
-   * a live hook named that pid. A pid alone is not the harness: once the
+   * When the process behind `pid` started, as `ps` printed it in UTC the
+   * first time a live hook named that pid. A pid alone is not the harness: once the
    * harness exits, the OS hands its pid to the next process it starts. The
    * kill path and the sweep compare this with the pid's start time now and
    * treat a different one as a different process. Absent where no start

@@ -4,7 +4,8 @@
  * and the sweep check the process's start time against the one recorded when
  * a live hook first named the pid (#4314).
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { readHostFile, writeHostFile } from "../host/host-file";
 import { readProcessStarts } from "../host/process-scan";
@@ -20,6 +21,11 @@ import type { DeliveredCommand } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
 import { applyCommands, type InboxDeps } from "./inbox";
 import { SessionRegistry } from "./registry";
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawnSync: vi.fn(actual.spawnSync) };
+});
 
 const CONTEXT: ClaudeCodeContext = {
   agent: {
@@ -263,6 +269,21 @@ describe("readProcessStarts", () => {
       ),
     ).toBeUndefined();
   });
+
+  it.skipIf(process.platform === "win32")(
+    "reads this process's start time from a real ps, in UTC",
+    () => {
+      const started = readProcessStarts([process.pid])?.get(process.pid);
+      expect(started).toBeDefined();
+      const call = vi
+        .mocked(spawnSync)
+        .mock.calls.find(([command]) => command === "ps");
+      expect(call?.[2]?.env?.["TZ"]).toBe("UTC");
+      const at = Date.parse(`${started} UTC`);
+      const expected = Date.now() - process.uptime() * 1_000;
+      expect(Math.abs(at - expected)).toBeLessThan(5_000);
+    },
+  );
 
   it("answers nothing on Windows without running anything", () => {
     let ran = false;

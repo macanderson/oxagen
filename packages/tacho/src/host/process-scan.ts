@@ -50,9 +50,16 @@ export function listClaudeProcesses(exec: Exec): ClaudeProcess[] {
 /** How long one `ps` read of start times may take. */
 const PROCESS_START_TIMEOUT_MS = 2_000;
 
+/**
+ * `ps` prints `lstart` in its own time zone. A laptop that changes zone
+ * while the daemon runs would print a different string for the same
+ * process, and every session would read as a new process, so the zone is
+ * pinned to UTC.
+ */
 function psExec(command: string, args: string[]): ReturnType<Exec> {
   const result = spawnSync(command, args, {
     encoding: "utf8",
+    env: { ...process.env, TZ: "UTC" },
     stdio: ["ignore", "pipe", "ignore"],
     timeout: PROCESS_START_TIMEOUT_MS,
   });
@@ -64,8 +71,8 @@ function psExec(command: string, args: string[]): ReturnType<Exec> {
 }
 
 /**
- * When each of these processes started, as `ps -o lstart=` prints it, by
- * pid: one `ps` call for the whole list (BSD and GNU `ps` both take a comma
+ * When each of these processes started, as `ps -o lstart=` prints it in
+ * UTC, by pid: one `ps` call for the whole list (BSD and GNU `ps` both take a comma
  * list after `-p`). A pid is identified by its number and its start time
  * together, because the OS hands a freed pid to the next process it starts.
  *
