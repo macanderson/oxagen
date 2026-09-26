@@ -3920,7 +3920,8 @@ async function initializeDaemon(
           // the tick starts that read at its end. On a first start the tick
           // spent minutes shipping the backlog, so `tacho verify` gave up at
           // fifteen seconds and said SessionEnd never arrived. Starting the
-          // read here seals the chain within a second of the hook instead.
+          // read here stops it waiting on the tick. It can still wait on a
+          // lane already running, and on the hook queue to apply its result.
           if (pendingSessionEnds.size > 0) void startGitReads();
           return;
         }

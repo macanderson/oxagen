@@ -938,7 +938,22 @@ describe("the daemon's git seam", () => {
     )
       await new Promise((resolve) => setTimeout(resolve, 5));
     expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    expect(reconciliations(handle)).toHaveLength(1);
     expect(frames(handle).map((event) => event.kind)).toContain("agent_stop");
+  });
+
+  it("lists a parked SessionEnd as ending until its final read seals the chain", async () => {
+    // `tacho verify` waits longer only when `/sessions` says the chain is
+    // ending, so this field is the contract between the two.
+    const handle = await boot(fakeGit(() => REPO_ANSWERS, []), () => 1_000);
+    const listed = () =>
+      handle.api.sessions().find((entry) => entry["session_id"] === SESSION);
+    await handle.api.handleHook(hook("SessionStart"));
+    expect(listed()).toMatchObject({ sealed: false, ending: false });
+    await handle.api.handleHook(hook("SessionEnd"));
+    expect(listed()).toMatchObject({ sealed: false, ending: true });
+    await handle.tick();
+    expect(listed()).toMatchObject({ sealed: true, ending: false });
   });
 
   it("seals the host chain and returns inside its budget while a worktree read is stuck", async () => {

@@ -2811,6 +2811,12 @@ describe("export and verify", () => {
     expect(result.detail).toContain("final worktree read");
     expect(result.detail).not.toContain("never arrived");
     expect(neverSeals.polls()).toBe(4);
+
+    // Without `ending` there is no grace: one poll, then the old message.
+    const notEnding = sessionsThen([{ ...ending, ending: false }]);
+    const plain = await verify({ timeoutMs: 10_000 }, notEnding.d);
+    expect(plain.detail).toContain("never arrived");
+    expect(notEnding.polls()).toBe(1);
   });
 });
 
