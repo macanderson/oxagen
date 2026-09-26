@@ -1183,7 +1183,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   VOYAGE_API_KEY: {
     group: "AI providers",
     description:
-      "Voyage AI key for every embedding (voyage-3-large, 1,024 dimensions). One " +
+      "Voyage AI key for every embedding (voyage-4-large, 1,024 dimensions). One " +
       "platform key serves every organisation, and every embedding is billed. " +
       "Without it, embedding calls answer 503 and ingestion stores records " +
       "without vectors.",

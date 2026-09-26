@@ -113,7 +113,7 @@ CREATE INDEX entity_node_connection IF NOT EXISTS FOR (n:EntityNode) ON (n.conne
 CREATE INDEX ingestion_org_source IF NOT EXISTS FOR (n:SourceConnection) ON (n.orgId);
 
 // --- Vector indexes (spec §8.1) ---
-// 1024 dims = voyage-3-large (#4148). migrate.ts drops an index of any other
+// 1024 dims = voyage-4-large (#4148). migrate.ts drops an index of any other
 // size before these statements run, since IF NOT EXISTS never resizes one.
 CREATE VECTOR INDEX document_embedding_index IF NOT EXISTS
 FOR (n:Document) ON (n.embedding)
@@ -189,7 +189,7 @@ CREATE INDEX graph_node_label IF NOT EXISTS FOR (n:GraphNode) ON (n.label);
 // db.index.vector.queryNodes('graph_node_embedding_index', ...) call performs
 // natural-language semantic search across customer data, agent
 // memories, executions, messages and documents at once, post-filtered by
-// orgId/workspaceId + optional is_system/label. 1024 dims = voyage-3-large.
+// orgId/workspaceId + optional is_system/label. 1024 dims = voyage-4-large.
 CREATE VECTOR INDEX graph_node_embedding_index IF NOT EXISTS
 FOR (n:GraphNode) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };

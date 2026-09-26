@@ -533,14 +533,15 @@ export const PROVIDER_RATE_CARD: RateCard = {
     cachedInputPer1M: 0.13,
     cacheWritePer1M: 0.13,
   },
-  // Oxagen's embedding model since #4148. Voyage's list price on 2026-09-26,
-  // with no free allowance: it is on Voyage's older-models list.
-  "voyage-3-large": {
+  // Oxagen's embedding model since #4148, at Voyage's list price on
+  // 2026-09-26. Voyage does not charge the account's first 200 million tokens.
+  // The rate card prices every token.
+  "voyage-4-large": {
     provider: "voyage",
-    inputPer1M: 0.18,
+    inputPer1M: 0.12,
     outputPer1M: 0.0,
-    cachedInputPer1M: 0.18,
-    cacheWritePer1M: 0.18,
+    cachedInputPer1M: 0.12,
+    cacheWritePer1M: 0.12,
   },
 };
 

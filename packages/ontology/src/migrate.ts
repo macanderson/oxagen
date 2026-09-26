@@ -200,7 +200,7 @@ export async function pascalCaseDomainLabels(s: Session): Promise<void> {
 }
 
 /**
- * The vector length every embedding index holds: voyage-3-large at 1,024
+ * The vector length every embedding index holds: voyage-4-large at 1,024
  * dimensions (#4148). It must equal `EMBEDDING_DIMENSIONS` in
  * packages/ai/src/embed.ts and every `vector.dimensions` in schema.cypher.
  */

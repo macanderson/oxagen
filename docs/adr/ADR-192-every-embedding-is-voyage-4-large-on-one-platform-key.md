@@ -1,4 +1,4 @@
-# ADR-192: Every embedding is voyage-3-large on one platform key
+# ADR-192: Every embedding is voyage-4-large on one platform key
 
 - **Status:** Accepted
 - **Date:** 2026-09-26
@@ -28,11 +28,11 @@ Mac decided on 2026-09-26:
    `VOYAGE_API_KEY`, held in Parameter Store at
    `/oxagen/production/VOYAGE_API_KEY`. An organisation's own key never serves
    an embedding, so every embedding is metered and billed.
-3. **The model is `voyage-3-large` at 1,024 dimensions.** Mac asked for
-   "voyage-large-3". Voyage has no model by that name and refuses it with a
-   400. `voyage-3-large` is the same words in Voyage's order and accepts the
-   key. `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` in
-   `packages/ai/src/embed.ts` pin both.
+3. **The model is `voyage-4-large` at 1,024 dimensions.** Mac first asked for
+   "voyage-large-3", a name Voyage refuses with a 400. The nearest real model,
+   `voyage-3-large`, is on Voyage's older-models list, and Mac then chose
+   `voyage-4-large`, Voyage's current large model. `EMBEDDING_MODEL` and
+   `EMBEDDING_DIMENSIONS` in `packages/ai/src/embed.ts` pin both.
 
 What follows from the decision:
 
@@ -57,19 +57,18 @@ What follows from the decision:
 
 ## Consequences
 
-- Voyage bills `voyage-3-large` at $0.18 per million tokens, with no free
-  allowance, on its list of older models (2026-09-26). The rate card carries
-  that price, so Oxagen's charge follows Voyage's bill.
+- Voyage bills `voyage-4-large` at $0.12 per million tokens and does not
+  charge the account's first 200 million (2026-09-26). The rate card carries
+  $0.12 for every token, so Oxagen's charge follows Voyage's list price.
 - An organisation with a gateway key used to embed on its own key at no
   charge. It is now charged for embeddings like every other organisation.
 - Until the backfill finishes, recall and similarity dedup miss every node
   whose vector was cleared. Ingestion writes such a record as its own
   principal (`similarityDeferred`) rather than failing.
-- `voyage-4-large` is Voyage's current large model, at $0.12 per million
-  tokens with 200 million free, and also returns 1,024 dimensions. Moving to
-  it changes `EMBEDDING_MODEL` and the rate card entry. The index size stays
-  the same, but every stored vector must be embedded again, because vectors
-  from two models do not compare.
+- Moving to another model changes `EMBEDDING_MODEL` and the rate card entry.
+  If it returns 1,024 dimensions the index size stays the same, but every
+  stored vector must still be embedded again, because vectors from two models
+  do not compare.
 - Staging reads `/oxagen/staging` and has no Voyage key. The key is required
   in production only, so a staging build warns, and embeddings there answer
   503 until a key is set.

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/ai", () => ({
   embedText: mocks.embedText,
-  EMBEDDING_MODEL: "voyage-3-large",
+  EMBEDDING_MODEL: "voyage-4-large",
 }));
 vi.mock("../mutations/upsert-entity", () => ({
   upsertEmbedding: mocks.upsertEmbedding,
@@ -63,7 +63,7 @@ describe("embedEntity telemetry (no synthesized execution_step_id)", () => {
     expect(mocks.upsertEmbedding).toHaveBeenCalledWith(
       "node-abc",
       expect.any(Array),
-      "voyage-3-large",
+      "voyage-4-large",
       "11111111-1111-1111-1111-111111111111",
     );
   });

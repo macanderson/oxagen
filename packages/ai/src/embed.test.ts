@@ -119,12 +119,12 @@ describe("embedText (@oxagen/ai)", () => {
     }));
   });
 
-  it("embeds with voyage-3-large at 1,024 dimensions on the platform key", async () => {
+  it("embeds with voyage-4-large at 1,024 dimensions on the platform key", async () => {
     const v = await embedText("hello", { telemetry: BASE_TELEMETRY });
     expect(v).toHaveLength(1024);
     expect(mocks.createVoyageEmbeddingModel).toHaveBeenCalledWith({
       apiKey: "pa-test",
-      modelId: "voyage-3-large",
+      modelId: "voyage-4-large",
       outputDimension: 1024,
       inputType: undefined,
     });
@@ -159,7 +159,7 @@ describe("embedText (@oxagen/ai)", () => {
     expect(row.workspace_id).toBe("00000000-0000-4000-8000-000000000002");
     expect(row.surface).toBe("runner");
     expect(row.execution_step_id).toBe("req_abc");
-    expect(row.model).toBe("voyage-3-large");
+    expect(row.model).toBe("voyage-4-large");
     expect(row.provider).toBe("voyage");
     expect(row.input_tokens).toBe(7);
     expect(row.output_tokens).toBe(0);
@@ -206,7 +206,7 @@ describe("embedText (@oxagen/ai)", () => {
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
       orgId: "00000000-0000-4000-8000-000000000001",
-      model: "voyage-3-large",
+      model: "voyage-4-large",
       referenceId: "req_abc",
       inputTokens: 7,
       outputTokens: 0,
@@ -329,7 +329,7 @@ describe("embedText (@oxagen/ai)", () => {
     ];
     expect(msg).toContain("usage field absent");
     expect(meta).toMatchObject({
-      model: "voyage-3-large",
+      model: "voyage-4-large",
       executionStepId: "req_abc",
     });
     // token_usage row and credit charge still recorded, with zero input tokens.

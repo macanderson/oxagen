@@ -38,7 +38,7 @@ vi.mock("@oxagen/ontology/tenant", () => ({
 vi.mock("@oxagen/ai", () => ({
   embedText: mocks.embedText,
   generateObjectFor: mocks.generateObjectFor,
-  EMBEDDING_MODEL: "voyage-3-large",
+  EMBEDDING_MODEL: "voyage-4-large",
 }));
 
 // Register built-in connectors before importing pipeline

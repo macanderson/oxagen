@@ -16,7 +16,7 @@ import {
  *     usage on every call.
  *   - Retrieval quality depends on `input_type`: `document` for text Oxagen
  *     stores, `query` for text it searches with.
- *   - A request is capped at 1,000 texts and, for voyage-3-large, 120,000
+ *   - A request is capped at 1,000 texts and, for voyage-4-large, 120,000
  *     tokens. The AI SDK splits by count through `maxEmbeddingsPerCall`; the
  *     token budget is split here, so one `embedMany` call stays one metered call.
  */
@@ -30,12 +30,12 @@ export type VoyageInputType = "query" | "document";
 const MAX_TEXTS_PER_REQUEST = 1000;
 
 /**
- * Token budget per request, below voyage-3-large's 120,000 so an estimate that
+ * Token budget per request, below voyage-4-large's 120,000 so an estimate that
  * runs low still fits.
  */
 const MAX_TOKENS_PER_REQUEST = 100_000;
 
-/** voyage-3-large's context length. Voyage truncates longer inputs to it. */
+/** voyage-4-large's context length. Voyage truncates longer inputs to it. */
 const MAX_TOKENS_PER_TEXT = 32_000;
 
 /**

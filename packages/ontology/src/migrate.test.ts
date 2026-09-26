@@ -302,7 +302,7 @@ describe("resizeEmbeddingIndexes (via migrate behaviour, #4148)", () => {
     staleVectors = 0;
   });
 
-  it("targets 1,024 dimensions, the size voyage-3-large returns", () => {
+  it("targets 1,024 dimensions, the size voyage-4-large returns", () => {
     expect(EMBEDDING_DIMENSIONS).toBe(1024);
   });
 

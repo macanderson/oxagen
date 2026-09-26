@@ -78,7 +78,7 @@ ADR-043 removed image and video generation, so text is the only tier family.
 
 - `src/stream.ts`: `streamAgentReply()` wraps `streamText`, admits and meters tokens, and emits telemetry. It does no IAM check.
 - `src/generate-object.ts`: `generateObjectFor()`, structured output via a Zod schema, with the same metering as stream.
-- `src/embed.ts`: `embedText()` and `embedMany()`, text embedding with Voyage `voyage-3-large` at 1,024 dimensions on the platform key `VOYAGE_API_KEY`. Every embedding is metered and billed. A failure throws `EmbeddingUnavailableError` (code `embedding_unavailable`), which the API answers with 503.
+- `src/embed.ts`: `embedText()` and `embedMany()`, text embedding with Voyage `voyage-4-large` at 1,024 dimensions on the platform key `VOYAGE_API_KEY`. Every embedding is metered and billed. A failure throws `EmbeddingUnavailableError` (code `embedding_unavailable`), which the API answers with 503.
 - `src/voyage.ts`: the Voyage REST client as an AI SDK embedding model. It sends `input_type`, reports `usage.total_tokens` as usage, and splits a batch under Voyage's 1,000-text and token limits.
 - `src/record-token-usage.ts`: the admission and settlement calls into `@oxagen/billing`.
 - `src/models.ts`: `selectModel()`, the gateway model factory. Reads the tier env vars.

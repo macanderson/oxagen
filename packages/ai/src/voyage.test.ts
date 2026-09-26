@@ -27,7 +27,7 @@ function okFetch(tokensPerText = 5) {
       JSON.stringify({
         object: "list",
         data,
-        model: "voyage-3-large",
+        model: "voyage-4-large",
         usage: { total_tokens: tokensPerText * body.input.length },
       }),
       { status: 200 },
@@ -38,7 +38,7 @@ function okFetch(tokensPerText = 5) {
 function model(fetchImpl: typeof fetch, inputType?: "query" | "document") {
   return createVoyageEmbeddingModel({
     apiKey: "pa-test",
-    modelId: "voyage-3-large",
+    modelId: "voyage-4-large",
     outputDimension: DIMS,
     inputType,
     fetch: fetchImpl,
@@ -72,7 +72,7 @@ describe("createVoyageEmbeddingModel", () => {
     );
     expect(JSON.parse(String(init.body))).toEqual({
       input: ["a", "b"],
-      model: "voyage-3-large",
+      model: "voyage-4-large",
       input_type: "document",
       output_dimension: DIMS,
       truncation: true,
