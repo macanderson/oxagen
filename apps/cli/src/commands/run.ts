@@ -1,9 +1,11 @@
 /**
- * `oxagen run export <run-id>`, `oxagen run export-status <export-id>`,
- * `oxagen run download <export-id>`, `oxagen run chain <run-id>` and
- * `oxagen run turns <run-id>`: the CLI parity surfaces for `export_run`,
- * `get_run_export`, `get_run_chain` and `get_run_turns` (Mission Control spec
- * §12.9, §13.4, §14.1; ADR-058).
+ * `oxagen run list`, `oxagen run export <run-id>`,
+ * `oxagen run export-status <export-id>`, `oxagen run download <export-id>`,
+ * `oxagen run chain <run-id>` and `oxagen run turns <run-id>`: the CLI parity
+ * surfaces for `list_runs`, `export_run`, `get_run_export`, `get_run_chain`
+ * and `get_run_turns` (Mission Control spec §12.9, §13.4, §14.1; ADR-058).
+ *
+ * `list` prints the workspace's runs, newest first, one page at a time.
  *
  * `export` queues the signed, offline-verifiable evidence bundle for one
  * sealed run and prints the export id. The bundle is built off the request
@@ -19,7 +21,7 @@ import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { formatUsd } from "@oxagen/billing/rate-card";
-import { apiPostOrThrow } from "../lib/api.js";
+import { apiPostOrThrow, printTable } from "../lib/api.js";
 import { getApiUrl } from "../lib/config.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
@@ -434,6 +436,97 @@ export async function runTurns(
     writer.write("");
     writer.write(
       `The run is longer than one read carries. These are its first ${result.turns.length} turns.`,
+    );
+  }
+}
+
+/**
+ * One row of the `list_runs` output, as far as `oxagen run list` prints it.
+ * The CLI talks to the API over HTTP and does not depend on @oxagen/oxagen,
+ * so the shape is declared here (kept in sync with
+ * packages/oxagen/src/contracts/run.list.ts).
+ */
+export interface RunListItem {
+  id: string;
+  agentKey: string | null;
+  status: "live" | "sealed" | "halted";
+  enforcementTier: string;
+  cost: { micros: string; currency: string; basis: string } | null;
+  startedAt: string;
+}
+
+/** The `list_runs` output, less the fields the table does not print. */
+export interface RunListResult {
+  runs: RunListItem[];
+  nextCursor: string | null;
+}
+
+export interface RunListOptions {
+  limit?: number;
+  cursor?: string;
+  json?: boolean;
+}
+
+/**
+ * A run's cost as the table prints it: dollars for USD, the amount and its
+ * currency otherwise, and "not recorded" when the run carries no cost. A
+ * missing cost never prints as a zero.
+ */
+export function runCostOf(cost: RunListItem["cost"]): string {
+  if (cost === null) return NOT_RECORDED;
+  if (cost.currency.toUpperCase() === "USD") return usdOf(cost);
+  return `${(Number(cost.micros) / 1e6).toFixed(2)} ${cost.currency}`;
+}
+
+/**
+ * `oxagen run list`: the workspace's runs, newest first, one page at a time.
+ * It posts to `/v1/{org}/{ws}/runs`, the route that serves `list_runs`, and
+ * prints each run's id, agent, status, enforcement tier, cost, and start.
+ * Pass `--cursor` with the value the last page printed to read the next one.
+ */
+export async function runList(
+  opts: RunListOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  let result: RunListResult;
+  try {
+    result = await apiPostOrThrow<RunListResult>("runs", {
+      ...(opts.limit === undefined ? {} : { limit: opts.limit }),
+      ...(opts.cursor === undefined ? {} : { cursor: opts.cursor }),
+    });
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  if (result.runs.length === 0) {
+    writer.write(
+      opts.cursor === undefined
+        ? "No runs in this workspace yet. A run appears when an enrolled agent makes its first model call. Enroll one with `oxagen agent enroll`."
+        : "No more runs.",
+    );
+    return;
+  }
+  printTable(
+    ["ID", "AGENT", "STATUS", "TIER", "COST", "STARTED"],
+    result.runs.map((run) => [
+      run.id,
+      run.agentKey ?? NOT_RECORDED,
+      run.status,
+      run.enforcementTier,
+      runCostOf(run.cost),
+      run.startedAt,
+    ]),
+    writer,
+  );
+  if (result.nextCursor) {
+    writer.write("");
+    writer.write(
+      `More runs: pass --cursor ${result.nextCursor} for the next page.`,
     );
   }
 }
