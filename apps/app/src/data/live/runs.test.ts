@@ -680,6 +680,61 @@ describe("runs.cost", () => {
     expect(rollup?.tokens).not.toHaveProperty("serverToolRequest");
   });
 
+  it("leaves an unpriced search cost as null, never an exact zero (negative)", async () => {
+    const cost = (micros: string) => ({
+      micros,
+      currency: "USD",
+      basis: "client_attested" as const,
+    });
+    const searched = { ...tokens, server_tool_request: 3 };
+    // A model with no search rate: the rollup marks it unpriced and writes a
+    // zero figure for the class it could not price.
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        rollup: {
+          cost: cost("1000"),
+          tokens: searched,
+          cacheHitRate: 0.9,
+          turns: 2,
+          steps: 7,
+          modelCalls: 4,
+          toolCalls: 3,
+          retries: 0,
+          productiveRatio: 1,
+          byModel: [
+            {
+              model: "gpt-5",
+              provider: "openai",
+              calls: 4,
+              cost: cost("1000"),
+              tokens: searched,
+              costByClass: {
+                input_uncached: cost("100"),
+                cache_read: cost("90"),
+                cache_write_5m: cost("10"),
+                cache_write_1h: cost("0"),
+                output: cost("600"),
+                reasoning: cost("200"),
+                server_tool_request: cost("0"),
+              },
+              cacheSaving: cost("0"),
+              hasUnpriced: true,
+            },
+          ],
+          byTool: [],
+          priceEntryIds: ["prc_1"],
+          rolledUpAt: "2026-09-15T08:59:00.000Z",
+          isEstimate: true,
+        },
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    const rollup = read.ok ? read.value.rollup : null;
+    expect(rollup?.byModel[0]?.searchRequests).toBe(3);
+    expect(rollup?.byModel[0]?.searchCost).toBeNull();
+  });
+
   it("keeps a row's unrecorded cache saving as null, never a zero, beside its recorded split (negative)", async () => {
     const cost = (micros: string) => ({
       micros,

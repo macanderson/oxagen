@@ -46,6 +46,26 @@ function toCost(cost: ContractCost | null): z.input<typeof Cost> | null {
   return cost === null ? null : costOf(cost);
 }
 
+/**
+ * A model's search cost, or null when its searches went unpriced. The rollup
+ * writes a zero figure for a class no entry priced, so a model that searched,
+ * carries unpriced usage, and shows a zero search cost had no search rate.
+ * The page then shows no value, never an exact $0 (#3721).
+ */
+function searchCostOf(row: {
+  tokens: { server_tool_request: number };
+  costByClass: { server_tool_request: ContractCost } | null;
+  hasUnpriced: boolean;
+}): z.input<typeof Cost> | null {
+  if (row.costByClass === null) return null;
+  const search = row.costByClass.server_tool_request;
+  const unpriced =
+    row.tokens.server_tool_request > 0 &&
+    row.hasUnpriced &&
+    Number(search.micros) === 0;
+  return unpriced ? null : costOf(search);
+}
+
 type ContractTokens = {
   input_uncached: number;
   cache_read: number;
@@ -196,10 +216,7 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
               tokens: toTokens(row.tokens),
               costByClass: toCostByClass(row.costByClass),
               searchRequests: row.tokens.server_tool_request,
-              searchCost:
-                row.costByClass === null
-                  ? null
-                  : costOf(row.costByClass.server_tool_request),
+              searchCost: searchCostOf(row),
               // A row rolled up before savings were recorded answers null,
               // and the page says "not recorded" for it, never a zero.
               cacheSaving: toCost(row.cacheSaving),

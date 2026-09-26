@@ -964,15 +964,38 @@ describe("readObservedModels", () => {
     // split, and searches. The family key joins them and still keeps one
     // run's ids apart from another run's.
     expect(classCall.query).toContain(
-      "GROUP BY call_key, root_session_uuid",
+      "GROUP BY call_key, workspace_id, root_session_uuid",
     );
     expect(classCall.query).toContain(
-      "t.call_key = c.request_id AND t.root_session_uuid = c.root_session_uuid",
+      "t.call_key = c.request_id AND t.workspace_id = c.workspace_id AND t.root_session_uuid = c.root_session_uuid",
     );
     expect(classCall.query).toContain(
-      "m.call_key = c.message_id AND m.root_session_uuid = c.root_session_uuid",
+      "m.call_key = c.message_id AND m.workspace_id = c.workspace_id AND m.root_session_uuid = c.root_session_uuid",
     );
     expect(classCall.query).not.toContain("session_uuid = c.session_uuid");
+  });
+
+  it("fences a workspace-scoped read's transcript joins to that workspace", async () => {
+    answerBoth([
+      {
+        model: "claude-sonnet-5",
+        provider: "",
+        calls: "1",
+        tokens: "10",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+    ]);
+    await readObservedModels({ orgId: ORG, workspaceId: WS, since: SINCE });
+    const classCall = queryMock.mock.calls[1]![0];
+    // A host in another workspace can name the same root, so each transcript
+    // subquery carries the workspace predicate the priced rows carry.
+    const joins = classCall.query.split("LEFT JOIN (").slice(1);
+    expect(joins).toHaveLength(2);
+    for (const join of joins) {
+      expect(join).toContain("AND workspace_id = {workspaceId:UUID}");
+    }
+    expect(classCall.query_params.workspaceId).toBe(WS);
   });
 
   // #3281. The unpriced-model report compares the class-bucket read against

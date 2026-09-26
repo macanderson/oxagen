@@ -972,8 +972,9 @@ export async function readObservedModels(args: {
   // subagents (ADR-168), and it seals a subagent's call on the root chain
   // when the proxy saw it first while the transcript row sits on the child
   // chain. A `session_uuid` key would miss that pair and drop the call's
-  // thinking, one-hour cache split, and searches. The family key still keeps
-  // one run's ids apart from every other run's in the organization.
+  // thinking, one-hour cache split, and searches. The key also names the
+  // workspace, and a workspace-scoped read fences the joins to it, because a
+  // host in another workspace can name the same root.
   const tachoClassCte = `,
       tc AS (
         SELECT
@@ -994,7 +995,7 @@ export async function readObservedModels(args: {
             toDateTime64(ts, 3, 'UTC') AS ts, input_tokens, output_tokens,
             cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
             thinking_tokens, web_search_requests,
-            request_id, message_id, root_session_uuid
+            request_id, message_id, workspace_id, root_session_uuid
           FROM tacho_events FINAL
           WHERE ${tachoWhere}
             AND model IN {models:Array(String)}
@@ -1002,6 +1003,7 @@ export async function readObservedModels(args: {
         LEFT JOIN (
           SELECT
             request_id AS call_key,
+            workspace_id AS workspace_id,
             root_session_uuid AS root_session_uuid,
             toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
             toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
@@ -1013,12 +1015,14 @@ export async function readObservedModels(args: {
             AND ${TACHO_RECEIVED_SINCE}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
-          GROUP BY call_key, root_session_uuid
+            ${workspace}
+          GROUP BY call_key, workspace_id, root_session_uuid
           HAVING call_key != ''
-        ) AS t ON t.call_key = c.request_id AND t.root_session_uuid = c.root_session_uuid
+        ) AS t ON t.call_key = c.request_id AND t.workspace_id = c.workspace_id AND t.root_session_uuid = c.root_session_uuid
         LEFT JOIN (
           SELECT
             message_id AS call_key,
+            workspace_id AS workspace_id,
             root_session_uuid AS root_session_uuid,
             toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
             toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
@@ -1030,9 +1034,10 @@ export async function readObservedModels(args: {
             AND ${TACHO_RECEIVED_SINCE}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
-          GROUP BY call_key, root_session_uuid
+            ${workspace}
+          GROUP BY call_key, workspace_id, root_session_uuid
           HAVING call_key != ''
-        ) AS m ON m.call_key = c.message_id AND m.root_session_uuid = c.root_session_uuid
+        ) AS m ON m.call_key = c.message_id AND m.workspace_id = c.workspace_id AND m.root_session_uuid = c.root_session_uuid
       )`;
 
   const classResult = await ch.query({
