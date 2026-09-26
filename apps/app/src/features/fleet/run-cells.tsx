@@ -317,9 +317,9 @@ export type RowWord = RowState | "paused" | "compacted";
 
 /**
  * A row's status word. Parked, paused and compacted are facts beside the
- * run's lifecycle status (ADR-190), so each draws its own word here and
- * keeps the lifecycle word on hover. Every other state is the lifecycle word
- * `StatusBadge` draws.
+ * run's lifecycle status (ADR-190), so each draws its own word here, and
+ * paused and compacted say on hover what the word means. Every other state
+ * is the lifecycle word `StatusBadge` draws.
  */
 export function RowStatusBadge({
   run,
