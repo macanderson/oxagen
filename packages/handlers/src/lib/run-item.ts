@@ -60,6 +60,8 @@ export type LedgerRunIdentity = {
   operatorKind: string | null;
   /** `auth.users.display_name` for a human principal; null for any other. */
   operatorUserName: string | null;
+  /** `auth.users.avatar_url` from the same user row; null for any other. */
+  operatorUserAvatarUrl: string | null;
   /** `agent_runs.spec->>'goal'`: the task a run was admitted for. */
   goal: string | null;
 };
@@ -231,6 +233,8 @@ export type TachoSessionRow = {
   operatorKind: string | null;
   /** `auth.users.display_name` for a human principal; null for any other. */
   operatorUserName: string | null;
+  /** `auth.users.avatar_url` from the same user row; null for any other. */
+  operatorUserAvatarUrl: string | null;
   /** The enrolled host the session ran on, as its left join read it. */
   host: TachoHostColumns | null;
 };
@@ -484,6 +488,8 @@ export function toLedgerRunItem(
     operatorId: identity.operatorPublicId,
     operatorKind: principalKind(identity.operatorKind),
     operatorName: blankToNull(identity.operatorUserName),
+    // A blank avatar would fail the contract's `min(1)` and refuse the list.
+    operatorAvatarUrl: blankToNull(identity.operatorUserAvatarUrl),
     operatorAttribution: identity.operatorPublicId ? "initiator" : null,
     status,
     outcome,
@@ -705,6 +711,7 @@ export function toTachoRunItem(
     operatorId: row.operatorPublicId,
     operatorKind: principalKind(row.operatorKind),
     operatorName: blankToNull(row.operatorUserName),
+    operatorAvatarUrl: blankToNull(row.operatorUserAvatarUrl),
     // Ingest attributes a wrapped session to the host's enroller
     // (`enrollingPrincipalId`), not to whoever ran it.
     operatorAttribution: row.operatorPublicId ? "host_enroller" : null,

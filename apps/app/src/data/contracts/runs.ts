@@ -487,6 +487,11 @@ export const RunRow = z.object({
     .enum(["initiator", "host_enroller"])
     .nullable()
     .optional(),
+  /**
+   * The person's avatar value, from the same user row as `operatorName`; null
+   * for an agent or service principal and for a person who set none.
+   */
+  operatorAvatarUrl: z.string().min(1).nullable().optional(),
 });
 export type RunRow = z.infer<typeof RunRow>;
 

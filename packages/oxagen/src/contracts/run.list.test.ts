@@ -14,6 +14,7 @@ const item = {
   operatorId: null,
   operatorKind: null,
   operatorName: null,
+  operatorAvatarUrl: null,
   operatorAttribution: null,
   status: "sealed",
   outcome: "completed",
@@ -43,6 +44,7 @@ describe("list_runs run row: who ran it, on what, with which model", () => {
       operatorId: "prn_0123456789abcdefghjkmn",
       operatorKind: "human",
       operatorName: "Marcus Bell",
+      operatorAvatarUrl: "https://avatars.example.com/marcus.png",
       model: {
         id: "claude-sonnet-5",
         provider: "anthropic",
@@ -57,6 +59,13 @@ describe("list_runs run row: who ran it, on what, with which model", () => {
       },
     };
     expect(runItemSchema.parse(full)).toEqual(full);
+  });
+
+  it("refuses a blank avatar and a row without the avatar key (negative)", () => {
+    expect(runItemSchema.safeParse({ ...item, operatorAvatarUrl: "" }).success)
+      .toBe(false);
+    const { operatorAvatarUrl: _dropped, ...rest } = item;
+    expect(runItemSchema.safeParse(rest).success).toBe(false);
   });
 
   it("lets a model name a vendor without naming a class, and a machine omit what enrolment did not record", () => {

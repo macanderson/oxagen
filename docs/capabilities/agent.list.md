@@ -42,6 +42,7 @@ A retired agent is a deleted record. The read leaves it out of `items` unless `i
 | `items[].principalId` | `string \| null` | `prn_…`; null on a row that predates Agent RBAC. |
 | `items[].operatorId` | `string \| null` | `usr_…` of the person the agent acts for. |
 | `items[].operatorName` | `string \| null` | That person's display name (`auth.users.display_name`); null when there is no operator or they set none. |
+| `items[].operatorAvatarUrl` | `string \| null` | That person's avatar (`auth.users.avatar_url`): an https URL or a designed `avatar:v1:` value. Null when there is no operator or they set none. A blank stored value reads as null. |
 | `items[].status` | `"unenrolled" \| "enrolled" \| "suspended" \| "retired"` | Derived as above. |
 | `items[].tier` | `null` | Not recorded on the identity. |
 | `items[].enforcementTier` | `"contained" \| "gateway" \| "harness" \| "observe" \| null` | The tier the latest root wrapped session recorded; null when none was recorded. |

@@ -24,6 +24,7 @@ const item = {
   principalId: "prn_0123456789abcdefghjkmn",
   operatorId: "usr_0123456789abcdefghjkmn",
   operatorName: "Marcus Bell",
+  operatorAvatarUrl: "https://avatars.example.com/marcus.png",
   status: "enrolled",
   tier: null,
   enforcementTier: null,

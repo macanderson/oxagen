@@ -148,6 +148,7 @@ export function agentPage(
       toolbelt: null,
       operatorId: null,
       operatorName: null,
+      operatorAvatarUrl: null,
       principalId: null,
       credentials: 0,
       hosts: 0,

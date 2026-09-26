@@ -177,6 +177,7 @@ export function ledgerRun(
       operatorPublicId: "prn_0123456789abcdefghjkmn",
       operatorKind: "human",
       operatorUserName: "Marcus Bell",
+      operatorUserAvatarUrl: null,
       goal: "review the PR",
     },
     ...rest,
@@ -222,6 +223,7 @@ export function tachoSession(
     operatorPublicId: "prn_0123456789abcdefghjkmn",
     operatorKind: "human",
     operatorUserName: "Marcus Bell",
+    operatorUserAvatarUrl: null,
     host: {
       hostname: "mac-studio.local",
       platform: "darwin",
@@ -240,6 +242,7 @@ function tachoRowOf(row: TachoFixture): TachoSessionRow {
     operatorPublicId: row.operatorPublicId,
     operatorKind: row.operatorKind,
     operatorUserName: row.operatorUserName,
+    operatorUserAvatarUrl: row.operatorUserAvatarUrl,
     host: row.host,
   };
 }

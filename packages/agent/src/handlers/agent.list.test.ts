@@ -33,6 +33,7 @@ const row = {
   principalUpdatedAt: new Date("2026-09-13T10:00:00.000Z"),
   operatorPublicId: "usr_0123456789abcdefghjkmn",
   operatorName: "Marcus Bell",
+  operatorAvatarUrl: "https://avatars.example.com/marcus.png",
   costCenter: null,
   runtimeId: null,
   toolbeltId: null,
@@ -183,6 +184,9 @@ describe("list_agents row", () => {
     });
     expect(item.description).toBeNull();
     expect(item.operatorName).toBe("Marcus Bell");
+    expect(item.operatorAvatarUrl).toBe(
+      "https://avatars.example.com/marcus.png",
+    );
     expect(item.enforcementTier).toBe("gateway");
     expect(item.mandates).toBe(2);
     expect(item.incidents).toBe(3);
@@ -210,6 +214,25 @@ describe("list_agents row", () => {
     );
     expect(item.enforcementTier).toBeNull();
     expect(item.operatorName).toBeNull();
+    expect(item.operatorAvatarUrl).toBeNull();
+  });
+
+  it("reads a blank operator avatar as none, so the row still passes the contract (negative)", () => {
+    const item = toAgentListItem(
+      { ...row, operatorAvatarUrl: "  " },
+      {
+        agentKey: null,
+        credentials: 0,
+        hosts: 0,
+        incidents: 0,
+        ...none,
+        figures: undefined,
+      },
+    );
+    expect(item.operatorAvatarUrl).toBeNull();
+    expect(agentList.output.shape.items.element.safeParse(item).success).toBe(
+      true,
+    );
   });
 });
 

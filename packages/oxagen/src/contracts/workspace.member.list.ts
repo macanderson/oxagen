@@ -29,6 +29,13 @@ const memberSchema = z.object({
     .string()
     .nullable()
     .describe("Display name, or null when the user never set one"),
+  avatarUrl: z
+    .string()
+    .min(1)
+    .nullable()
+    .describe(
+      "An https URL or a designed avatar:v1: value, or null when the user set none",
+    ),
   email: z.string(),
   // Free-form on the wire: the membership tables CHECK the role set
   // case-insensitively and rows exist in both casings, so a read returns the

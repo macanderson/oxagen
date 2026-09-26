@@ -203,6 +203,17 @@
                 }
               ]
             },
+            "operatorAvatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "operatorAttribution": {
               "anyOf": [
                 {
@@ -1001,6 +1012,7 @@
             "operatorId",
             "operatorKind",
             "operatorName",
+            "operatorAvatarUrl",
             "operatorAttribution",
             "status",
             "outcome",

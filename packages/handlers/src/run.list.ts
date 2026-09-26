@@ -263,6 +263,7 @@ const ledgerColumns = {
     operatorPublicId: schema.principals.publicId,
     operatorKind: schema.principals.kind,
     operatorUserName: schema.users.displayName,
+    operatorUserAvatarUrl: schema.users.avatarUrl,
     goal: sql<string | null>`${runs.spec}->>'goal'`,
   },
 };
@@ -650,6 +651,7 @@ const tachoColumns = {
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,
   operatorUserName: schema.users.displayName,
+  operatorUserAvatarUrl: schema.users.avatarUrl,
   host: {
     hostname: hosts.hostname,
     platform: hosts.platform,

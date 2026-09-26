@@ -19,6 +19,7 @@ const ledgerRun: Run = {
   operatorKind: "human",
   operatorName: "Marcus Bell",
   operatorAttribution: "initiator",
+  operatorAvatarUrl: "https://avatars.example.com/marcus.png",
   status: "sealed",
   outcome: "completed",
   turns: 12,
@@ -52,6 +53,7 @@ const unpricedSession: Run = {
   operatorKind: null,
   operatorName: null,
   operatorAttribution: null,
+  operatorAvatarUrl: null,
   status: "live",
   outcome: "running",
   turns: null,
@@ -98,6 +100,7 @@ describe("toRunPage", () => {
           operatorKind: "human",
           operatorName: "Marcus Bell",
           operatorAttribution: "initiator",
+          operatorAvatarUrl: "https://avatars.example.com/marcus.png",
           status: "sealed",
           outcome: "completed",
           turns: 12,
@@ -156,6 +159,7 @@ describe("toRunPage", () => {
       operatorKind: null,
       operatorName: null,
       operatorAttribution: null,
+      operatorAvatarUrl: null,
       // The session recorded both, so neither is dropped on the way to the view.
       model: {
         slug: "claude-haiku-4-5-20251001",

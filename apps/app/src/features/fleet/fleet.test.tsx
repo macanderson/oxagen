@@ -593,6 +593,28 @@ describe("the Runs panel", () => {
     expect(row("arun_halted")).toHaveTextContent("not recorded");
   });
 
+  it("draws the operator's avatar when they set one, and their initials when they did not", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          id: "tse_pictured",
+          operatorAvatarUrl: "https://avatars.example.com/marcus.png",
+        }),
+        runRow({ id: "tse_plain", operatorAvatarUrl: null }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const image = within(row("tse_pictured")).getByTestId("operator-avatar");
+    expect(image).toHaveAttribute("data-avatar", "image");
+    expect(image).toHaveAttribute(
+      "src",
+      "https://avatars.example.com/marcus.png",
+    );
+    const initials = within(row("tse_plain")).getByTestId("operator-avatar");
+    expect(initials).toHaveAttribute("data-avatar", "initials");
+    expect(initials).toHaveTextContent("MB");
+  });
+
   // A workspace that turned enrichment off shows no generated name anywhere
   // (the Run page's header reads the same fallback), so a row falls back to
   // its task reference, and a run with neither shows only its id.

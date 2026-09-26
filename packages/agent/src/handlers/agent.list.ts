@@ -80,6 +80,11 @@ export function toAgentListItem(
     principalId: row.principalPublicId,
     operatorId: row.operatorPublicId,
     operatorName: row.operatorPublicId === null ? null : row.operatorName,
+    // A blank avatar would fail the contract's `min(1)` and refuse the list.
+    operatorAvatarUrl:
+      row.operatorPublicId === null
+        ? null
+        : row.operatorAvatarUrl?.trim() || null,
     status: identityStatus(row, facts),
     tier: null,
     enforcementTier: enforcementTierOf(facts.figures?.latestTier ?? null),

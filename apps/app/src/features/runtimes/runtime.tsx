@@ -215,6 +215,7 @@ function operatorOf(
     name: member.name,
     kind: "human",
     email: member.email,
+    avatarUrl: member.avatarUrl,
   };
 }
 

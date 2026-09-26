@@ -326,6 +326,7 @@ describe("list_runs", () => {
             operatorPublicId: null,
             operatorKind: null,
             operatorUserName: null,
+            operatorUserAvatarUrl: null,
             goal: null,
           },
         }),
@@ -1376,6 +1377,15 @@ describe("a run row names who ran it, on what, with which model", () => {
     expect(query.sql).toContain('left join "auth"."users"');
   });
 
+  it("reads the operator's avatar from the same joined user row as the name", () => {
+    for (const query of [
+      tachoPageQuery(db, SCOPE, page).toSQL(),
+      ledgerPageQuery(db, SCOPE, page).toSQL(),
+    ]) {
+      expect(query.sql).toContain('"auth"."users"."avatar_url"');
+    }
+  });
+
   it("names the person only through a human principal", () => {
     // A delegated agent principal carries its creator's parent_user_id, so
     // the kind is part of the join and not a filter applied afterwards.
@@ -1807,6 +1817,46 @@ describe("a run row names who ran it, on what, with which model", () => {
       [tachoSession({ publicId: "tse_bad", operatorKind: "robot" })],
     );
     expect((await list({ limit: 50 }, ctx())).runs[0]?.operatorKind).toBeNull();
+  });
+
+  it("carries the person's avatar on a ledger run and on a wrapped session", async () => {
+    const avatar = "https://avatars.example.com/marcus.png";
+    const { list } = handlerOver(
+      [
+        ledgerRun({
+          publicId: "arun_face",
+          runId: RUN_A,
+          identity: {
+            orgNamespace: "acme",
+            workspaceNamespace: "core",
+            agentSlug: "reviewer",
+            operatorPublicId: "prn_0123456789abcdefghjkmn",
+            operatorKind: "human",
+            operatorUserName: "Marcus Bell",
+            operatorUserAvatarUrl: avatar,
+            goal: null,
+          },
+        }),
+      ],
+      [tachoSession({ publicId: "tse_face", operatorUserAvatarUrl: avatar })],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    const byId = Object.fromEntries(out.runs.map((r) => [r.id, r]));
+    expect(byId["arun_face"]?.operatorAvatarUrl).toBe(avatar);
+    expect(byId["tse_face"]?.operatorAvatarUrl).toBe(avatar);
+  });
+
+  it("reads a blank avatar as none, so the page still passes the contract (negative)", async () => {
+    // `users.avatar_url` has no CHECK, and the contract's `min(1)` would
+    // refuse the whole page over one blank value.
+    const { list } = handlerOver(
+      [],
+      [tachoSession({ publicId: "tse_blank", operatorUserAvatarUrl: "  " })],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(out.runs[0]?.operatorAvatarUrl).toBeNull();
+    expect(runList.output.safeParse(out).success).toBe(true);
   });
 
   it("names no model and no machine on a ledger run", async () => {

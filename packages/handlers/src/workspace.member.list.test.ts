@@ -53,6 +53,7 @@ const memberRow = (overrides: Record<string, unknown> = {}) => ({
   id: "usr_alice",
   name: "Alice",
   email: "alice@example.com",
+  avatarUrl: "https://avatars.example.com/alice.png",
   role: "Member",
   joinedAt: new Date("2024-01-15T00:00:00.000Z"),
   ...overrides,
@@ -85,6 +86,7 @@ describe("listMembersHandler", () => {
           id: "usr_alice",
           name: "Alice",
           email: "alice@example.com",
+          avatarUrl: "https://avatars.example.com/alice.png",
           role: "Member",
           joinedAt: "2024-01-15T00:00:00.000Z",
         },
@@ -104,6 +106,7 @@ describe("listMembersHandler", () => {
           id: "usr_alice",
           name: null,
           email: "alice@example.com",
+          avatarUrl: "https://avatars.example.com/alice.png",
           role: "Member",
           joinedAt: "2024-01-15T00:00:00.000Z",
         },
@@ -118,6 +121,16 @@ describe("listMembersHandler", () => {
         },
       ],
     });
+  });
+
+  it("reads a blank or missing avatar as none, so the roster still passes the contract (negative)", async () => {
+    mocks.results.push([
+      memberRow({ id: "usr_blank", avatarUrl: "   " }),
+      memberRow({ id: "usr_none", avatarUrl: null }),
+    ]);
+    const out = await listMembersHandler({ scope: "workspace" }, CTX);
+    expect(listMembers.output.safeParse(out).success).toBe(true);
+    expect(out.members.map((m) => m.avatarUrl)).toEqual([null, null]);
   });
 
   it("an invitation with no expiry is returned with expiresAt null", async () => {

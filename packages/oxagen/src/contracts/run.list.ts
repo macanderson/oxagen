@@ -336,6 +336,12 @@ export const runItemSchema = z
      */
     operatorName: z.string().nullable(),
     /**
+     * The person's avatar, from the same user row as `operatorName`: an https
+     * URL or a designed `avatar:v1:` value. Null for every principal that is
+     * not a person and for a person who set none, and never blank.
+     */
+    operatorAvatarUrl: z.string().min(1).nullable(),
+    /**
      * How the record came to name `operatorId`. `initiator` is the principal
      * the run itself was admitted for. `host_enroller` is the person who
      * enrolled the machine a wrapped session ran on: a wrapped session carries

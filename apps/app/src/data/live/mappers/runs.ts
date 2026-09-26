@@ -40,6 +40,7 @@ export function toRunRow(
     operatorKind: run.operatorKind,
     operatorName: run.operatorName,
     operatorAttribution: run.operatorAttribution,
+    operatorAvatarUrl: run.operatorAvatarUrl,
     status: run.status,
     reportedCost: run.reportedCost ?? null,
     outcome: run.outcome,

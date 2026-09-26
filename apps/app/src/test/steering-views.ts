@@ -247,6 +247,7 @@ export function enrolledAgent(
     toolbelt: null,
     operatorId: null,
     operatorName: null,
+    operatorAvatarUrl: null,
     principalId: null,
     credentials: 1,
     hosts: 1,

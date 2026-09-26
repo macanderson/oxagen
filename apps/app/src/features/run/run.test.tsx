@@ -922,6 +922,31 @@ describe("header", () => {
     );
   });
 
+  it("draws the operator's avatar in the line and in the hover card, and their initials when they set none", async () => {
+    const url = "https://avatars.example.com/marcus.png";
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorAvatarUrl: url }) })),
+      transcript: ok(runTranscript()),
+    });
+    const avatar = screen.getByTestId("run-operator-avatar");
+    expect(avatar).toHaveAttribute("data-avatar", "image");
+    expect(avatar).toHaveAttribute("src", url);
+    await userEvent.hover(screen.getByTestId("run-operator-name"));
+    const card = screen.getByTestId("operator-card");
+    expect(card.querySelector('[data-avatar="image"]')).toHaveAttribute(
+      "src",
+      url,
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorAvatarUrl: null }) })),
+      transcript: ok(runTranscript()),
+    });
+    const initials = screen.getByTestId("run-operator-avatar");
+    expect(initials).toHaveAttribute("data-avatar", "initials");
+    expect(initials).toHaveTextContent("MB");
+  });
+
   it("omits witness details from the operator view", async () => {
     await renderRun({
       detail: ok(runDetail({ witnessed: true })),
