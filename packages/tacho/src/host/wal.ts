@@ -327,14 +327,19 @@ export class Wal {
    * rather than leaving a recorder cursor ahead of a chain the WAL never
    * durably held.
    *
-   * A batch whose events do not land takes its bodies back out: each body
-   * file is cut back to its size before this call. The rolled-back seal hands
-   * the same seq, and so the same `event_id_idem`, to the next event, and a
-   * body left behind under that id was served in place of the next event's
-   * own, which ingest then refused as a digest mismatch (#3372). A crash
-   * between the two writes can still leave an orphan, and the daemon cuts it
-   * at its next startup (`repairOrphanBodies`), before any event takes its
-   * seq.
+   * A call is all or nothing across every file it touches. When any write
+   * throws, each event and body file the call wrote is cut back to its size
+   * before the call, and a file the call created is removed. Each session's
+   * `lastSeq` and `cursor.sealed` entry go back to what they held. Every
+   * caller rolls back each chain it marked when `append` throws, so an event
+   * file left holding one session's events stood ahead of that session's
+   * rolled-back recorder, and the seq guard below refused every later write
+   * for it (#4311). A body left behind was served in place of the next
+   * event's own, because the rolled-back seal hands the same seq, and so the
+   * same `event_id_idem`, to that event, and ingest refused it as a digest
+   * mismatch (#3372). A crash between the two writes can still leave an
+   * orphan, and the daemon cuts it at its next startup (`repairOrphanBodies`),
+   * before any event takes its seq.
    *
    * Every event is also checked against this session's last known seq
    * before anything is written. A seq at or behind it is refused rather than
@@ -350,15 +355,12 @@ export class Wal {
   ): void {
     const bySession = new Map<string, string[]>();
     // What each touched session's bookkeeping held before this call, so a
-    // throw — a stale seq caught below, or a write that fails further down —
-    // can put back exactly what it found rather than leaving `lastSeq` (and
-    // a `cursor.sealed` entry) ahead of a file this call never actually
-    // wrote. Without this, a caller that retries the same rejected batch
-    // after fixing the underlying failure has its retry refused in turn: the
-    // seq guard below would see the seq this attempt already claimed.
+    // throw (a stale seq caught below, or a write that fails further down)
+    // puts back exactly what it found. Left advanced, `lastSeq` made the seq
+    // guard refuse the caller's retry of the same batch.
     const priorLastSeq = new Map<string, number | undefined>();
     const priorSealed = new Map<string, string | undefined>();
-    const written = new Set<string>();
+    let eventMarks = new Map<string, number | undefined>();
     let bodyMarks = new Map<string, number | undefined>();
     try {
       for (const event of events) {
@@ -385,8 +387,8 @@ export class Wal {
           this.lastSeq.set(event.session_uuid, event.seq - 1);
         }
         // A session this process has not touched yet, but whose file already
-        // exists, falls back to `lastSeqOf`, which reads the file once and
-        // caches the answer. Without this fallback `known` stayed
+        // exists, falls back to `lastSeqOf`, which reads the file once
+        // and caches the answer. Without this fallback `known` stayed
         // `undefined` for exactly the restart case the seq guard below
         // exists to catch.
         const known =
@@ -413,37 +415,41 @@ export class Wal {
           this.cursor.sealed[event.session_uuid] = event.ts;
         }
       }
-      // After the seq check, so a refused batch writes no body.
-      bodyMarks = this.bodyFileSizes(bodies);
+      // After the seq check, so a refused batch writes nothing.
+      eventMarks = this.fileSizes(bySession.keys(), (session) =>
+        this.fileFor(session),
+      );
+      bodyMarks = this.fileSizes(
+        bodies.map((body) => body.session_uuid),
+        (session) => this.bodyFileFor(session),
+      );
       this.writeBodies(bodies);
       for (const [session, lines] of bySession) {
         const path = this.fileFor(session);
-        const preSize = existsSync(path) ? statSync(path).size : 0;
-        try {
-          appendFileSync(path, `${lines.join("\n")}\n`, {
-            mode: 0o600,
-          });
-          this.dirtyPaths.add(path);
-          written.add(session);
-        } catch (error) {
-          // A partial write (ENOSPC mid-buffer, most often) must not leave a
-          // torn line behind for the next read to trip over: cut the file
-          // back to exactly where it stood before this call.
-          try {
-            if (existsSync(path)) truncateSync(path, preSize);
-          } catch {
-            // The append already failed; a failed rollback leaves at most a
-            // stray tail for the next startup's `repairTail` to clean up.
-          }
-          throw error;
-        }
+        appendFileSync(path, `${lines.join("\n")}\n`, { mode: 0o600 });
+        this.dirtyPaths.add(path);
       }
     } catch (error) {
-      this.cutBodiesBack(bodyMarks, bySession, written);
+      // The failing write can be partial (ENOSPC mid-buffer, most often), so
+      // its own file is cut back with the rest rather than left holding a
+      // torn line for the next read to trip over.
+      this.cutBack(
+        eventMarks,
+        (session) => this.fileFor(session),
+        // A failed cut leaves at most a stray tail, which the next startup's
+        // `repairTail` cleans up.
+        () => undefined,
+      );
+      this.cutBack(
+        bodyMarks,
+        (session) => this.bodyFileFor(session),
+        // An orphan left here is cut at the next startup
+        // (`repairOrphanBodies`). Until then the index keeps the last line
+        // for an event id (`wal-index.ts`), so a later body for the same id
+        // is the one served.
+        (session, error) => this.bodyFailure(session, "cleanup", error),
+      );
       for (const session of bySession.keys()) {
-        // A session whose file this call actually appended to keeps its
-        // advanced bookkeeping, because it matches what is now on disk.
-        if (written.has(session)) continue;
         const prior = priorLastSeq.get(session);
         if (prior === undefined) this.lastSeq.delete(session);
         else this.lastSeq.set(session, prior);
@@ -458,45 +464,41 @@ export class Wal {
     }
   }
 
-  /** Each body file's size before a write, or undefined when it has none. */
-  private bodyFileSizes(
-    bodies: readonly FrameBody[],
+  /** Each session's file size before a write, or undefined when it has none. */
+  private fileSizes(
+    sessions: Iterable<string>,
+    pathOf: (session: string) => string,
   ): Map<string, number | undefined> {
     const sizes = new Map<string, number | undefined>();
-    for (const body of bodies) {
-      if (sizes.has(body.session_uuid)) continue;
-      const path = this.bodyFileFor(body.session_uuid);
-      sizes.set(
-        body.session_uuid,
-        existsSync(path) ? statSync(path).size : undefined,
-      );
+    for (const session of sessions) {
+      if (sizes.has(session)) continue;
+      const path = pathOf(session);
+      sizes.set(session, existsSync(path) ? statSync(path).size : undefined);
     }
     return sizes;
   }
 
   /**
-   * Take a failed `append`'s bodies back out of every session whose events it
-   * did not write. A body for a session with no event in the batch belongs to
-   * an event already on disk (`appendRecovered`) and stays.
+   * Put each file a failed `append` touched back to its size before the call,
+   * and remove one the call created. A session file left empty would still
+   * count as on disk for `sessions()`, which the daemon's rollback reads to
+   * decide whether a chain it never marked is new.
    */
-  private cutBodiesBack(
+  private cutBack(
     marks: ReadonlyMap<string, number | undefined>,
-    bySession: ReadonlyMap<string, unknown>,
-    written: ReadonlySet<string>,
+    pathOf: (session: string) => string,
+    onFailure: (session: string, error: unknown) => void,
   ): void {
     for (const [session, size] of marks) {
-      if (!bySession.has(session) || written.has(session)) continue;
-      const path = this.bodyFileFor(session);
+      const path = pathOf(session);
       try {
         if (!existsSync(path)) continue;
         if (size === undefined) unlinkSync(path);
-        else truncateSync(path, size);
+        else if (statSync(path).size !== size) truncateSync(path, size);
       } catch (error) {
-        // The append already failed. An orphan left here is served for the
-        // event that takes its seq only if that event writes no body of its
-        // own, because the index keeps the last line for an event id
-        // (`wal-index.ts`).
-        this.bodyFailure(session, "cleanup", error);
+        // The append already failed, and its error is the one the caller
+        // gets.
+        onFailure(session, error);
       }
     }
   }

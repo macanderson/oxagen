@@ -1095,3 +1095,132 @@ describe("group commit", () => {
     );
   });
 });
+
+describe("a write across several sessions", () => {
+  // #4311 item 1: `append` kept what it had written for an earlier session
+  // when a later session's file threw, while every caller rolled all of its
+  // chains back. The earlier session's recorder then stood behind its WAL
+  // tail, and the seq guard refused every later write for it until the
+  // daemon restarted. The checkpoint writes one event per live session in a
+  // single call, so it was the common way in.
+  const OTHER_UUID = "0f0e0d0c-0b0a-4908-8706-050403020100";
+  const otherSession = () =>
+    minimalSession().map((event) => ({
+      ...event,
+      session_uuid: OTHER_UUID,
+      event_id_idem: `${event.event_id_idem}-other`,
+    }));
+  const bodyFor = (
+    event: { event_id_idem: string; session_uuid: string; seq: number },
+    text: string,
+  ): FrameBody => ({
+    event_id_idem: event.event_id_idem,
+    session_uuid: event.session_uuid,
+    seq: event.seq,
+    content_type: "text/plain; charset=utf-8",
+    bytes: new TextEncoder().encode(text),
+    content_class: "model_call",
+  });
+  const served = (wal: Wal, event: Parameters<Wal["bodiesFor"]>[0][number]) =>
+    wal
+      .bodiesFor([event])
+      .map((body) => Buffer.from(body.bytes_base64, "base64").toString("utf8"));
+  const enospc = () => {
+    throw Object.assign(new Error("ENOSPC"), { code: "ENOSPC" });
+  };
+
+  it("leaves both sessions' files and next seq as they were when the second session's event write throws", async () => {
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const a = minimalSession();
+    const b = otherSession();
+    wal.append(
+      [a[0]!, b[0]!],
+      [bodyFor(a[0]!, "a's first prompt"), bodyFor(b[0]!, "b's first prompt")],
+    );
+    const files = [
+      join(paths.wal, `${a[0]!.session_uuid}.ndjson`),
+      join(paths.wal, `${a[0]!.session_uuid}.bodies.jsonl`),
+      join(paths.wal, `${OTHER_UUID}.ndjson`),
+      join(paths.wal, `${OTHER_UUID}.bodies.jsonl`),
+    ];
+    const before = files.map((path) => readFileSync(path, "utf8"));
+    // Both body writes and a's event write land. b's event write fails.
+    vi.mocked(appendFileSync)
+      .mockImplementationOnce(actual.appendFileSync)
+      .mockImplementationOnce(actual.appendFileSync)
+      .mockImplementationOnce(actual.appendFileSync)
+      .mockImplementationOnce(enospc);
+    expect(() =>
+      wal.append(
+        [a[1]!, b[1]!],
+        [
+          bodyFor(a[1]!, "a's call that never landed"),
+          bodyFor(b[1]!, "b's call that never landed"),
+        ],
+      ),
+    ).toThrow(/ENOSPC/);
+    expect(files.map((path) => readFileSync(path, "utf8"))).toEqual(before);
+    // Every caller rolls its chains back, so the retry offers the same seqs.
+    // Both land, each with its own body.
+    wal.append(
+      [a[1]!, b[1]!],
+      [bodyFor(a[1]!, "a's call"), bodyFor(b[1]!, "b's call")],
+    );
+    expect(wal.read(a[0]!.session_uuid)).toEqual(a.slice(0, 2));
+    expect(wal.read(OTHER_UUID)).toEqual(b.slice(0, 2));
+    expect(served(wal, a[1]!)).toEqual(["a's call"]);
+    expect(served(wal, b[1]!)).toEqual(["b's call"]);
+    // A fresh process reads the same next seq from disk.
+    const restarted = new Wal(paths.wal);
+    expect(() => restarted.append([a[1]!])).toThrow(
+      /not after the last written seq 1/,
+    );
+  });
+
+  it("removes an event file the failed call created, so the session is not on disk", async () => {
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const a = minimalSession();
+    const b = otherSession();
+    wal.append([b[0]!]);
+    vi.mocked(appendFileSync)
+      .mockImplementationOnce(actual.appendFileSync)
+      .mockImplementationOnce(enospc);
+    expect(() => wal.append([a[0]!, b[1]!])).toThrow(/ENOSPC/);
+    expect(existsSync(join(paths.wal, `${a[0]!.session_uuid}.ndjson`))).toBe(
+      false,
+    );
+    expect(wal.sessions()).toEqual([OTHER_UUID]);
+    wal.append([a[0]!, b[1]!]);
+    expect(wal.read(a[0]!.session_uuid)).toEqual(a.slice(0, 1));
+  });
+
+  it("takes back a body the call wrote for an event already on disk", async () => {
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const a = minimalSession();
+    const b = otherSession();
+    wal.append([a[0]!, b[0]!]);
+    // A journal retry: a's body belongs to an event on disk, and b's next
+    // event is new. The body writes land and b's event write fails.
+    vi.mocked(appendFileSync)
+      .mockImplementationOnce(actual.appendFileSync)
+      .mockImplementationOnce(enospc);
+    expect(() =>
+      wal.append([b[1]!], [bodyFor(a[0]!, "a's prompt, retried")]),
+    ).toThrow(/ENOSPC/);
+    expect(
+      existsSync(join(paths.wal, `${a[0]!.session_uuid}.bodies.jsonl`)),
+    ).toBe(false);
+    wal.appendRecovered(
+      [a[0]!, b[1]!],
+      [bodyFor(a[0]!, "a's prompt, retried")],
+    );
+    expect(served(wal, a[0]!)).toEqual(["a's prompt, retried"]);
+    expect(wal.read(OTHER_UUID)).toEqual(b.slice(0, 2));
+  });
+});
