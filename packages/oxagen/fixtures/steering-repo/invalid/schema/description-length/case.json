@@ -11,7 +11,7 @@
   "expect": [
     {
       "path": "steering/brand/a-intel.brand.long-description.md",
-      "line": 3,
+      "line": 5,
       "field": "description"
     }
   ]

@@ -11,7 +11,7 @@
   "expect": [
     {
       "path": "steering/governance.toml",
-      "line": 16,
+      "line": 12,
       "field": "memory.auto_merge"
     }
   ]
