@@ -154,10 +154,13 @@ export interface DaemonSlot {
 }
 
 /**
- * The slots this process serves (ADR-202): the root whenever it has a
- * `host.json`, as it always has, and each slot after it that has not been
- * retired on this machine. A machine with no enrollment at all still gets
- * the root, so its collector fails with the error that says to enroll.
+ * The slots this process serves (ADR-202): each slot after the root that
+ * has not been retired on this machine, and the root whenever it has a
+ * `host.json` that is not retired. Alone, the root runs as it always has,
+ * retired or not, and a machine with no enrollment at all still gets it, so
+ * its collector fails with the error that says to enroll. Beside another
+ * agent, a retired root waits for its revoke without a collector: it would
+ * otherwise run on a key its unenroll gave up, on ports it no longer holds.
  *
  * One slot watches Claude Code's transcripts: the one that hooks Claude
  * Code, else the root. Two watchers would each report the same unhooked
@@ -168,10 +171,11 @@ export function daemonSlots(root: TachoPaths): DaemonSlot[] {
   const later = rest.filter(
     (slot) => slot.host !== undefined && slot.host.revoked_at === null,
   );
-  const slots =
-    first !== undefined && (existsSync(root.hostFile) || later.length === 0)
-      ? [first, ...later]
-      : later;
+  const rootRuns =
+    later.length === 0 ||
+    (existsSync(root.hostFile) &&
+      (first?.host === undefined || first.host.revoked_at === null));
+  const slots = first !== undefined && rootRuns ? [first, ...later] : later;
   const watcher =
     slots.find(
       (slot) =>
