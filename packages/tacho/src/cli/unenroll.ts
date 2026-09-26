@@ -42,6 +42,7 @@ import {
   type ModelBaseUrlHarness,
 } from "../host/model-base-url";
 import { stripTachoSettings } from "../host/settings-writer";
+import { harnessesHeldElsewhere } from "../host/slots";
 import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import { MODEL_ROUTED_HARNESSES } from "../wire";
@@ -50,6 +51,7 @@ import {
   type CredentialOptions,
   resolveCredentials,
 } from "./deps";
+import { rootPathsOf, slotDeps } from "./slot-deps";
 
 export interface UnenrollOptions extends CredentialOptions {
   purge?: boolean;
@@ -174,7 +176,13 @@ export async function restoreModelBaseUrlsFor(
   const failed: string[] = [];
   if (deps.modelBaseUrls === undefined) return { restored, failed };
   const stellaHome = dirname(deps.paths.stellaToml);
+  const heldElsewhere = harnessesHeldElsewhere(
+    rootPathsOf(deps),
+    deps.paths.root,
+  );
   for (const harness of MODEL_BASE_URL_HARNESSES) {
+    // Another agent on this machine routes this harness's model calls.
+    if (heldElsewhere.has(harness)) continue;
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {
         const dirs = harnessDirsOf(deps);
@@ -318,12 +326,33 @@ export async function stripEnrollmentHooks(
       failed.push(reason.includes(path) ? reason : `${path}: ${reason}`);
     }
   };
+  const heldElsewhere = harnessesHeldElsewhere(
+    rootPathsOf(deps),
+    deps.paths.root,
+  );
+  // With no enrollment id, the strip would take every Tacho entry, and
+  // while another agent on this machine is enrolled some are its (ADR-202).
+  if (host?.host_enrollment_id === undefined && heldElsewhere.size > 0)
+    return {
+      settingsChanged: false,
+      codexChanged: false,
+      codexUntrusted: 0,
+      cursorChanged: [],
+      stellaChanged: [],
+      failed: [
+        `${deps.paths.hostFile}: it names no enrollment and another agent is enrolled on this machine, so no hook entry could be told apart as this one's`,
+      ],
+    };
   let settingsChanged = false;
+  // Claude Code's env keys belong to the enrollment that hooks it, which
+  // may be another agent's on this machine.
+  const claudeHeldElsewhere = heldElsewhere.has("claude-code");
   attempt(deps.paths.claudeSettings, () => {
     const stripped = stripTachoSettings(
       deps.readSettings(),
       host?.host_enrollment_id,
       host?.displaced_env ?? {},
+      claudeHeldElsewhere,
     );
     if (stripped.changed) {
       deps.writeSettings(stripped.settings);

@@ -46,12 +46,14 @@ export {
   staticTokenStillGood,
 } from "../host/model-credential";
 import type { RunTokenPlacement, RunTokenProvider } from "../host/run-token";
+import { harnessesHeldElsewhere } from "../host/slots";
 import {
   BROKERABLE_HARNESSES,
   isBrokerableHarness,
   TACHO_HARNESS_LABELS,
 } from "../wire";
 import type { CliDeps } from "./deps";
+import { rootPathsOf } from "./slot-deps";
 
 /**
  * Claude Code's and Codex's directories as this process's paths resolved
@@ -494,8 +496,14 @@ export async function restoreCredentials(
   if (contract === undefined)
     return { restored, failed, warnings, custodyUnreadable };
   const helperCommand = deps.runtime.credentialHelperCommand;
+  const heldElsewhere = harnessesHeldElsewhere(
+    rootPathsOf(deps),
+    deps.paths.root,
+  );
   for (const harness of MODEL_CREDENTIAL_HARNESSES) {
     if (only !== undefined && !only.includes(harness)) continue;
+    // Another agent on this machine brokers this harness's key (ADR-202).
+    if (heldElsewhere.has(harness)) continue;
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {
         const dirs = harnessDirsOf(deps);

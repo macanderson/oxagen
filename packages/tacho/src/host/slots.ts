@@ -193,3 +193,20 @@ export function portsInUse(root: TachoPaths, except?: string): Set<number> {
   }
   return ports;
 }
+
+/**
+ * The harnesses a live slot other than `self` hooks. A slot's unenroll, and
+ * its re-enroll, must leave these harnesses' config alone: restoring a
+ * harness's key or model URL, or stripping its env, would unhook the agent
+ * that still holds it.
+ */
+export function harnessesHeldElsewhere(
+  root: TachoPaths,
+  self: string,
+): Set<string> {
+  const held = new Set<string>();
+  for (const slot of listSlots(root))
+    if (slotIsLive(slot) && slot.paths.root !== self)
+      for (const harness of slot.host.harnesses) held.add(harness);
+  return held;
+}

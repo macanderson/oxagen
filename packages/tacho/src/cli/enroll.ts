@@ -80,6 +80,7 @@ import {
   restoreCredentials,
 } from "./credential";
 import { restoreGithubRepositories } from "./github";
+import { daemonServiceSpec } from "./daemon-service";
 import { rootPathsOf, slotDeps } from "./slot-deps";
 import { shippingHealth, type ShippingHealth } from "./status";
 import {
@@ -1182,35 +1183,9 @@ async function enrollSteps(
   );
   if (options.service !== false) {
     try {
-      deps.serviceManager.install({
-        command: host.daemon_command,
-        env: {
-          ...(deps.env["TACHO_HOME"] !== undefined
-            ? { TACHO_HOME: deps.env["TACHO_HOME"] }
-            : {}),
-          // The harness homes the enrolling shell moved, so tachod reads
-          // the same files the hooks were written to.
-          ...Object.fromEntries(
-            (
-              [
-                "CLAUDE_CONFIG_DIR",
-                "CODEX_HOME",
-                "STELLA_HOME",
-                "CURSOR_CONFIG_DIR",
-              ] as const
-            ).flatMap((key) => {
-              const value = deps.env[key];
-              return value !== undefined ? [[key, value]] : [];
-            }),
-          ),
-          PATH: deps.env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin",
-          HOME: deps.home,
-        },
-        // One tachod serves every slot, so its log and directory are the
-        // root's whichever slot this enrollment went into (ADR-202).
-        logPath: rootPathsOf(deps).log,
-        workingDirectory: rootPathsOf(deps).root,
-      });
+      deps.serviceManager.install(
+        daemonServiceSpec(host.daemon_command, deps),
+      );
       deps.out(`      ${deps.serviceManager.unitPath}`);
     } catch (error) {
       warnings.push(
