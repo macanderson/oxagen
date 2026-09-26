@@ -100,6 +100,13 @@ export function AgentHeader({
           className="flex flex-wrap items-center gap-2"
         >
           <StatusPill status={identity.status} />
+          {identity.managed ? (
+            <span title={t("managedTitle")}>
+              <Badge tone="quiet" dot={false} data-managed="true">
+                {t("managed")}
+              </Badge>
+            </span>
+          ) : null}
           {lastRun === null ? (
             <Badge tone="quiet" dot={false} mono data-tier="">
               {t("tierNotRecorded")}
@@ -145,7 +152,8 @@ export function AgentHeader({
           gap="agent_avatar"
           testId="edit-avatar"
         />
-        {live ? (
+        {/* The built-in assistant takes no identity write (#4350). */}
+        {live && !identity.managed ? (
           <AgentActions
             org={org}
             ws={ws}

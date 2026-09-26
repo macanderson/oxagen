@@ -140,6 +140,8 @@ export async function seedAgent(
     workspaceId?: string;
     /** A cost-center label as set_cost_center stores it (ADR-142). */
     costCenter?: string | null;
+    /** `interactive_chat` seeds the managed assistant agent; `custom` otherwise. */
+    agentType?: string;
   },
 ): Promise<SeededAgent> {
   const workspaceId = over.workspaceId ?? tenant.workspaceId;
@@ -174,7 +176,7 @@ export async function seedAgent(
         workspaceId,
         slug: over.slug,
         name: over.name ?? over.slug,
-        agentType: "custom",
+        agentType: over.agentType ?? "custom",
         harness: over.harness ?? "custom",
         status: over.status ?? "draft",
         deploymentStatus: "inactive",

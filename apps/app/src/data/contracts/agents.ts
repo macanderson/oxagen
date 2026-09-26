@@ -39,6 +39,11 @@ const AgentRow = z.object({
   /** `org_ns.ws_ns.slug` (ADR-024). */
   agentKey: z.string().min(1).nullable(),
   harness: AgentHarness,
+  /**
+   * The built-in assistant stella acts as (`qa-chat`). Oxagen owns it, so
+   * the page offers no action on it: deregistering it stopped stella (#4350).
+   */
+  managed: z.boolean(),
   operatorId: PublicId.nullable(),
   operatorName: z.string().nullable(),
   principalId: PublicId.nullable(),
@@ -114,6 +119,8 @@ export const AgentDetail = z.object({
     description: z.string().nullable(),
     agentKey: z.string().min(1).nullable(),
     harness: AgentHarness,
+    /** The built-in assistant (`qa-chat`); its page offers no suspend, rotate or deregister. */
+    managed: z.boolean(),
     principalId: PublicId.nullable(),
     operatorId: PublicId.nullable(),
     status: AgentStatus,

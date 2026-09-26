@@ -40,6 +40,7 @@ const AGENT = {
   id: "agent-uuid",
   publicId: "agt_1",
   slug: "reviewer",
+  agentType: "custom",
   status: "active",
   harness: "claude-code",
   orgNamespace: "acme",
@@ -99,6 +100,22 @@ describe("create_enrollment_token", () => {
       code: "conflict",
       reason: "agent_retired",
       message: 'Agent "reviewer" is retired',
+    });
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+
+  // #4350: stella runs inside Oxagen as the built-in assistant, so no host
+  // may enroll as it.
+  it("refuses the built-in assistant and writes no token", async () => {
+    db({ ...AGENT, slug: "qa-chat", agentType: "interactive_chat" });
+    await expect(
+      tachoEnrollmentTokenCreateHandler(
+        { agentId: "agt_1", ttlMinutes: 30 },
+        CONTEXT,
+      ),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "agent_managed_read_only",
     });
     expect(mocks.insert).not.toHaveBeenCalled();
   });

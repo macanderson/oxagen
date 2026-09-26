@@ -2,9 +2,10 @@
 // The agent page's header drawn on its own (header.tsx), for the states the
 // page test in agent.test.tsx does not reach: a newest run made on behalf of
 // someone other than the agent's operator, an identity with no operator or
-// description, a run with no replay grade, and a retired identity, which
-// keeps Clone and loses every write that would act on it. Axe runs after
-// every test (INV-26).
+// description, a run with no replay grade, a retired identity, which keeps
+// Clone and loses every write that would act on it, and the built-in
+// assistant, which keeps only its kill switch. Axe runs after every test
+// (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -124,6 +125,23 @@ describe("AgentHeader", () => {
     expect(badges().querySelector("[data-status]")).toHaveAttribute(
       "data-status",
       "retired",
+    );
+  });
+
+  // #4350: stella acts as the built-in assistant, and deregistering it from
+  // this header stopped stella in the workspace. The kill switch stays.
+  it("offers the built-in assistant no identity write, only its kill switch (negative)", () => {
+    renderHeader({
+      identity: agentDetail({ identity: { managed: true, slug: "qa-chat" } })
+        .identity,
+    });
+    const labels = actions();
+    expect(labels).not.toContain("Suspend");
+    expect(labels).not.toContain("Deregister");
+    expect(labels).not.toContain("Rotate credential");
+    expect(labels).toContain("Kill switch");
+    expect(badges().querySelector("[data-managed]")).toHaveTextContent(
+      "managed by Oxagen",
     );
   });
 

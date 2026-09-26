@@ -66,6 +66,12 @@ export const agentListItem = z
     /** `org_ns.ws_ns.slug` (ADR-024); null until the namespaces are backfilled. */
     agentKey: z.string().nullable(),
     harness: agentHarnessSchema,
+    /**
+     * True for the built-in assistant every workspace carries (`qa-chat`,
+     * `isManagedAgentType`). Oxagen owns it: no identity or definition write
+     * accepts it, and its kill switch is how a person stops it.
+     */
+    managed: z.boolean(),
     /** `prn_…` of the delegated principal; null on a row that predates Agent RBAC. */
     principalId: z.string().nullable(),
     /** `usr_…` of the person the agent acts for (`principals.parent_user_id`); null when none. */
