@@ -11,6 +11,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FindingEvidence as StoredEvidence } from "@oxagen/billing";
 import { schema } from "@oxagen/database";
+import { findingList } from "@oxagen/oxagen/contracts/finding.list";
+import { drizzle } from "drizzle-orm/postgres-js";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
 
@@ -27,7 +29,11 @@ import { createFindingDismissHandler } from "./finding.dismiss";
 import { createFindingEvidenceHandler } from "./finding.evidence.get";
 import { createFindingFixRecordHandler } from "./finding.fix.record";
 import { createFindingListHandler } from "./finding.list";
-import type { FindingDecisionDeps, FindingRow } from "./finding.shared";
+import {
+  type FindingDecisionDeps,
+  type FindingRow,
+  readFindingRows,
+} from "./finding.shared";
 import { makeCTX } from "./test-utils/fixtures";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
@@ -176,8 +182,10 @@ describe("list_findings", () => {
 
     expect(readFindings).toHaveBeenCalledWith(
       { orgId: ORG, workspaceId: WS },
-      "open",
+      { status: "open" },
     );
+    // A read that names no run answers no citation.
+    for (const f of out.findings) expect(f).not.toHaveProperty("citation");
     expect(readPricedSpend).toHaveBeenCalledWith(
       { orgId: ORG, workspaceId: WS },
       { start: START, end: END },
@@ -285,6 +293,129 @@ describe("list_findings", () => {
     expect(out.spend).toBeNull();
     expect(out.share).toBeNull();
     expect(out.saving).not.toBeNull();
+  });
+});
+
+describe("list_findings for one run (#4001)", () => {
+  const RUN = "tse_0000000000000000000001";
+  const SUBAGENT = "0192d4a8-7c1e-7a00-8000-0000000000bb";
+  const spend = async () => ({
+    micros: 900_000n,
+    currency: "USD",
+    basis: "gateway_observed" as const,
+  });
+
+  it("reads only the findings citing the run and answers the frames each cites there", async () => {
+    const readFindings = vi.fn(async () => [
+      findingRow({
+        citedFrames: evidence({
+          frames: {
+            [RUN]: {
+              // Two turns of one run, one call on a subagent's chain.
+              seqs: [
+                { seq: "14" },
+                { seq: "3", sessionUuid: SUBAGENT },
+                { seq: "92" },
+              ],
+              total: 3,
+            },
+          },
+        }),
+      }),
+    ]);
+    const handler = createFindingListHandler({
+      readFindings,
+      readPricedSpend: spend,
+    });
+    const out = await handler({ status: "open", runId: RUN }, ctx());
+    expect(readFindings).toHaveBeenCalledWith(
+      { orgId: ORG, workspaceId: WS },
+      { status: "open", runId: RUN },
+    );
+    expect(out.findings[0]?.citation).toEqual({
+      runId: RUN,
+      runLevel: false,
+      frames: [
+        { seq: "14" },
+        { seq: "3", sessionUuid: SUBAGENT },
+        { seq: "92" },
+      ],
+      framesTotal: 3,
+    });
+    expect(() => findingList.output.parse(out)).not.toThrow();
+  });
+
+  it("answers an empty list, with nulls and zero counts, for a run no finding cites", async () => {
+    const handler = createFindingListHandler({
+      readFindings: async () => [],
+      readPricedSpend: spend,
+    });
+    const out = await handler({ status: "open", runId: RUN }, ctx());
+    expect(out.findings).toEqual([]);
+    expect(out.saving).toBeNull();
+    expect(out.counts).toEqual({
+      findings: 0,
+      high: 0,
+      medium: 0,
+      operators: 0,
+    });
+    expect(() => findingList.output.parse(out)).not.toThrow();
+  });
+
+  it("cites the whole run for a finding about its cache, pinning no frame", async () => {
+    const handler = createFindingListHandler({
+      readFindings: async () => [
+        findingRow({
+          kind: "cache_writes_never_read",
+          level: "operator",
+          subject: "prn_aaaaaaaaaaaaaaaaaaaaaa",
+        }),
+      ],
+      readPricedSpend: spend,
+    });
+    const out = await handler({ status: "open", runId: RUN }, ctx());
+    expect(out.findings[0]?.citation).toEqual({
+      runId: RUN,
+      runLevel: true,
+      frames: [],
+      framesTotal: 0,
+    });
+  });
+
+  it("filters the read on the run's id among the cited runs, and reads every run without one", async () => {
+    const db = drizzle.mock({ schema });
+    const compiled: { sql: string; params: unknown[] }[] = [];
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => { toSQL(): { sql: string; params: unknown[] } }) => {
+        compiled.push(fn(db).toSQL());
+        return Promise.resolve([]);
+      },
+    );
+    await readFindingRows(
+      { orgId: ORG, workspaceId: WS },
+      { status: "open", runId: RUN },
+    );
+    await readFindingRows({ orgId: ORG, workspaceId: WS }, { status: "open" });
+    const [withRun, without] = compiled;
+    expect(withRun?.sql).toMatch(/"findings"\."cited_runs" @> \$\d+/);
+    expect(withRun?.params).toEqual(expect.arrayContaining([ORG, WS, "open"]));
+    expect(JSON.stringify(withRun?.params)).toContain(RUN);
+    expect(without?.sql).not.toContain("cited_runs");
+  });
+
+  it("answers null frames for a finding written before frames were stored, with its calls as the total", async () => {
+    const handler = createFindingListHandler({
+      readFindings: async () => [findingRow()],
+      readPricedSpend: spend,
+    });
+    const out = await handler({ status: "open", runId: RUN }, ctx());
+    expect(out.findings[0]?.citation).toEqual({
+      runId: RUN,
+      runLevel: false,
+      frames: null,
+      framesTotal: 4,
+    });
+    expect(() => findingList.output.parse(out)).not.toThrow();
   });
 });
 

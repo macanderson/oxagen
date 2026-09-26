@@ -32,7 +32,7 @@ A wrapped run is counted in ClickHouse in two reads, whatever its length: one fi
 | `runId` | string | as asked |
 | `turns` | object[] | one per turn, in order; at most 10,000 |
 | `complete` | boolean | false when the list stops short of the run's end: the run has more than 10,000 turns, or a ledger run has more than the 50,000 frames one read counts |
-| `chains` | object[] | `{ sessionUuid, turn }`: the turn each subagent chain's frames count toward (#4001). A chain spawned before the first turn is absent, and a ledger run answers an empty list. A reader places a frame cited on a subagent chain at its chain's turn, and a frame on the run's own chain at the last turn whose `seq` is at or below it |
+| `chains` | object[] | `{ sessionUuid, turn }`: the turn each subagent chain's frames count toward (#4001). A chain spawned before the first turn is absent, and so is a chain whose turn falls past the 10,000 `turns` carries. The list is in turn order, and a ledger run answers an empty list. A reader places a frame cited on a subagent chain at its chain's turn, and a frame on the run's own chain at the last turn whose `seq` is at or below it |
 
 Each turn:
 
