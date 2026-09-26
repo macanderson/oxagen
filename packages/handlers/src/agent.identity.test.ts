@@ -553,7 +553,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         slug: "qa-chat",
         agentType: "interactive_chat",
         status: "active",
-        principalStatus: "active",
+        // Suspended the way suspend_agent left it before this refusal existed.
+        principalStatus: "suspended",
       });
       const managed = (err: unknown) =>
         isHandlerError(err) &&
@@ -575,13 +576,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ),
         ),
       ).rejects.toSatisfy(managed);
+      expect(eventTypes()).toEqual([]);
       // A resume stays open: it is the way back for a principal suspended
-      // before the refusal existed. This one is active, so nothing is written.
+      // before the refusal existed.
       const resumed = await inScope(owner, () =>
         agentSuspendHandler({ agentId: "qa-chat", suspended: false }, ctx()),
       );
       expect(resumed.status).toBe("active");
-      expect(eventTypes()).toEqual([]);
+      expect(eventTypes()).toEqual(["agent.resumed"]);
       const read = await inScope(owner, () =>
         agentGetHandler({ agentId: "qa-chat" }, ctx()),
       );

@@ -79,6 +79,7 @@ export function agentPageRow(
     description: null,
     agentKey: null,
     harness: "custom",
+    managed: false,
     operatorId: null,
     operatorName: null,
     principalId: null,

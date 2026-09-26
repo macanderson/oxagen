@@ -107,6 +107,7 @@ export function agentPage(
       description: null,
       agentKey,
       harness: "claude-code",
+      managed: false,
       operatorId: null,
       operatorName: null,
       principalId: null,

@@ -111,6 +111,7 @@ describe("toAgentPage", () => {
           description: "Cuts releases and opens their pull requests.",
           agentKey: "acme.core.release-bot",
           harness: "claude-code",
+          managed: false,
           operatorId: "usr_marcusbell",
           operatorName: "Marcus Bell",
           principalId: "prn_91",
@@ -138,6 +139,7 @@ describe("toAgentPage", () => {
           description: null,
           agentKey: null,
           harness: "claude-code",
+          managed: false,
           operatorId: null,
           operatorName: null,
           principalId: "prn_91",
@@ -168,6 +170,32 @@ describe("toAgentPage", () => {
       },
     });
     expect(AgentPage.safeParse(page).success).toBe(true);
+  });
+
+  // #4350: the flag is what hides every identity action on stella's agent,
+  // so a mapper that dropped it would offer Deregister again.
+  it("carries the managed flag of the built-in assistant", () => {
+    const page = toAgentPage({
+      items: [{ ...recorded, slug: "qa-chat", managed: true }],
+      nextCursor: null,
+      totals: {
+        identities: 1,
+        retired: 0,
+        enrolled: 0,
+        unenrolled: 1,
+        holdingMandate: null,
+        mandateHolders: [],
+        tamperIncidents: 0,
+        tamper: { recorded: 0, open: 0, newest: null },
+      },
+    });
+    expect(page.agents.map((agent) => agent.managed)).toEqual([true]);
+    expect(
+      toAgentDetail({
+        ...detail,
+        identity: { ...detail.identity, managed: true },
+      }).identity.managed,
+    ).toBe(true);
   });
 });
 
@@ -238,6 +266,7 @@ describe("toAgentDetail", () => {
       description: null,
       agentKey: "acme.core.release-bot",
       harness: "claude-code",
+      managed: false,
       principalId: null,
       operatorId: "usr_marcusbell",
       status: "suspended",

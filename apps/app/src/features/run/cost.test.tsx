@@ -95,6 +95,7 @@ function agent(overrides: Partial<AgentDetail> = {}): Read<AgentDetail> {
       description: null,
       agentKey: "acme.core.release-manager",
       harness: "claude-code",
+      managed: false,
       principalId: null,
       operatorId: null,
       status: "enrolled",

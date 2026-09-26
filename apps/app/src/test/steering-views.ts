@@ -242,6 +242,7 @@ export function enrolledAgent(
     description: null,
     agentKey: "acme.core-platform.release-manager",
     harness: "claude-code",
+    managed: false,
     operatorId: null,
     operatorName: null,
     principalId: null,
