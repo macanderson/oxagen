@@ -439,6 +439,51 @@ describe("Wal", () => {
     expect(wal.stats().sessions).toBe(0);
   });
 
+  it("keeps compacting past a session whose file cannot be removed, and removes it on the next pass", async () => {
+    // W-08: one unlink that failed (an antivirus scan holding the file on
+    // Windows, most often) ended the pass, and the daemon tried again an
+    // hour later.
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    const paths = scratchPaths();
+    const report = vi.fn();
+    const wal = new Wal(paths.wal, report);
+    const held = minimalSession();
+    const free = minimalSession().map((event) => ({
+      ...event,
+      session_uuid: "0f0e0d0c-0b0a-4908-8706-050403020100",
+      event_id_idem: `${event.event_id_idem}-free`,
+    }));
+    const heldUuid = held[0]!.session_uuid;
+    const freeUuid = free[0]!.session_uuid;
+    wal.append(held);
+    wal.append(free);
+    wal.markShipped(heldUuid, held.at(-1)!.seq);
+    wal.markShipped(freeUuid, free.at(-1)!.seq);
+    const heldPath = join(paths.wal, `${heldUuid}.ndjson`);
+    vi.mocked(unlinkSync).mockImplementation((path) => {
+      if (String(path) === heldPath)
+        throw Object.assign(new Error("EBUSY"), { code: "EBUSY" });
+      actual.unlinkSync(path);
+    });
+    const later = Date.now() + 10 * 86_400_000;
+    try {
+      expect(wal.compact(later, 86_400_000)).toEqual([freeUuid]);
+    } finally {
+      vi.mocked(unlinkSync).mockImplementation(actual.unlinkSync);
+    }
+    expect(report).toHaveBeenCalledWith({
+      session_uuid: heldUuid,
+      operation: "cleanup",
+      code: "EBUSY",
+    });
+    expect(existsSync(heldPath)).toBe(true);
+    // The held session keeps its bookkeeping, so the next pass still sees it
+    // as sealed and shipped.
+    expect(wal.shippedThrough(heldUuid)).toBe(held.at(-1)!.seq);
+    expect(wal.compact(later, 86_400_000)).toEqual([heldUuid]);
+    expect(wal.sessions()).toEqual([]);
+  });
+
   it("files bodies beside their events and answers them per batch", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);

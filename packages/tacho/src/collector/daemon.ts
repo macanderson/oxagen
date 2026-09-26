@@ -3473,6 +3473,8 @@ async function initializeDaemon(
   let lastCheckpoint = 0;
   let lastSweep = 0;
   let lastCompact = 0;
+  const COMPACT_EVERY_MS = 60 * 60_000;
+  const COMPACT_RETRY_MS = 60_000;
 
   // A narrowing this host owed when it last exited. Run here rather than left
   // to the first poll: a poll can be a bundle refresh interval away, or an
@@ -3675,11 +3677,22 @@ async function initializeDaemon(
     // and already land a batch or more after the tool frames they belong with.
     void startGitReads();
     await stage("compact", () => {
-      if (now() - lastCompact >= 60 * 60_000) {
-        lastCompact = now();
+      if (now() - lastCompact < COMPACT_EVERY_MS) return;
+      lastCompact = now();
+      // A failed pass is tried again in a minute, not an hour, and does not
+      // take the quarantine sweep down with it (W-08). `Wal.compact` reports
+      // a file it cannot remove and goes on, so what throws here is the
+      // pass as a whole: the WAL directory could not be listed, or the
+      // cursor could not be written.
+      let failure: unknown;
+      try {
         wal.compact(now(), timers.walRetainMs);
-        sweepQuarantine(now(), timers.walRetainMs);
+      } catch (error) {
+        failure = error;
+        lastCompact = now() - COMPACT_EVERY_MS + COMPACT_RETRY_MS;
       }
+      sweepQuarantine(now(), timers.walRetainMs);
+      if (failure !== undefined) throw failure;
     });
     // The WAL is the record; a recorder's in-memory list of what it sealed is
     // only read inside one synchronous ingest (`everySealed`). Kept whole, it

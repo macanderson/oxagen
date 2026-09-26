@@ -187,11 +187,13 @@ class LineSplitter {
  * terminated or not depending on whether that trailing byte was there.
  *
  * `size` reads the file as if it ended there, so a caller can walk back one
- * line at a time (`Wal.repairOrphanBodies`).
+ * line at a time (`Wal.repairOrphanBodies`). `window` is the first read's
+ * size: an event line is a few kilobytes, and a body line can be a megabyte.
  */
 export function readTailLine(
   path: string,
   size: number = statSync(path).size,
+  window: number = SCAN_CHUNK_BYTES,
 ): IndexedLine | undefined {
   if (size === 0) return undefined;
   const fd = openSync(path, "r");
@@ -204,7 +206,7 @@ export function readTailLine(
       end = size - 1;
     }
     if (end === 0) return undefined; // the whole file is one newline
-    let windowSize = SCAN_CHUNK_BYTES;
+    let windowSize = window;
     for (;;) {
       const start = Math.max(0, end - windowSize);
       const length = end - start;
