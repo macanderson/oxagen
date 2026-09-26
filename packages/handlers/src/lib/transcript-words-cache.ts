@@ -55,7 +55,7 @@ export type BodyWords =
 export interface WordsCacheLimits {
   /** The most bodies kept. */
   maxEntries: number;
-  /** How long a body that could not be read is remembered as showing nothing. */
+  /** How long a body that cannot be read is remembered as unreadable. */
   failureTtlMs: number;
 }
 
