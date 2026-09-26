@@ -370,6 +370,19 @@ export type HarnessFacts = ClaudeFacts;
 
 export interface CliDeps {
   paths: TachoPaths;
+  /**
+   * The tacho root's paths when `paths` is a later enrollment's slot
+   * (`host/slots.ts`). The service, its log and its working directory belong
+   * to the root, whichever slot a command acts on. Undefined when `paths` is
+   * the root.
+   */
+  rootPaths?: TachoPaths;
+  /**
+   * The same deps rebound to another slot's paths: its `host.json`, daemon
+   * ports, credential store and install receipts. `slotDeps` in
+   * `cli/slot-deps.ts` is the one caller.
+   */
+  atSlot?: (paths: TachoPaths) => CliDeps;
   env: Record<string, string | undefined>;
   home: string;
   platform: NodeJS.Platform;
@@ -1051,6 +1064,8 @@ export function defaultCliDeps(
     sleep: (ms) =>
       new Promise((resolvePromise) => setTimeout(resolvePromise, ms)),
     wrapperVersion: TACHO_VERSION,
+    atSlot: (slotPaths) =>
+      defaultCliDeps({ ...overrides, paths: slotPaths }, managed),
     ...overrides,
   };
 }

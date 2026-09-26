@@ -147,11 +147,16 @@ const ALLOWED: &[Allowed] = &[
         required: &[],
         writes: true,
     },
-    // `tacho unenroll`, the last de-register and Uninstall.
+    // `tacho unenroll`: the last de-register names its one harness, and
+    // Uninstall passes `--all` for every agent on the machine (ADR-202).
     Allowed {
         sidecar: Sidecar::Tacho,
         command: &["unenroll"],
-        flags: &[Flag::Switch("--purge")],
+        flags: &[
+            Flag::Switch("--purge"),
+            Flag::Switch("--all"),
+            Flag::Value("--harness", is_harness),
+        ],
         required: &[],
         writes: true,
     },
@@ -390,6 +395,9 @@ mod tests {
             // A flag twice, and a positional argument.
             (Tacho, vec!["unenroll", "--purge", "--purge"]),
             (Tacho, vec!["unenroll", "extra"]),
+            // Unenroll names one agent, by one harness.
+            (Tacho, vec!["unenroll", "--harness", "claude-code,codex"]),
+            (Tacho, vec!["unenroll", "--harness", "--purge"]),
             // The wrong sidecar for the command.
             (Oxagen, vec!["status", "--json"]),
             (Tacho, vec!["login", "--browser"]),
@@ -434,6 +442,8 @@ mod tests {
         assert_eq!(call(Sidecar::Tacho, &["enroll"]), Ok(true));
         assert_eq!(call(Sidecar::Tacho, &["reassign", "--workspace", "core"]), Ok(true));
         assert_eq!(call(Sidecar::Tacho, &["unenroll", "--purge"]), Ok(true));
+        assert_eq!(call(Sidecar::Tacho, &["unenroll", "--all", "--purge"]), Ok(true));
+        assert_eq!(call(Sidecar::Tacho, &["unenroll", "--harness", "codex"]), Ok(true));
         assert_eq!(call(Sidecar::Oxagen, &["logout"]), Ok(true));
     }
 

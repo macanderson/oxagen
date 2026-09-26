@@ -391,11 +391,14 @@ export interface StripResult {
 /**
  * Remove Tacho's entries (for one enrollment, or any when omitted) and its
  * env keys, restoring displaced values. Every foreign entry survives.
+ * `keepEnv` leaves the env keys in place, for when another enrollment on the
+ * machine hooks Claude Code and the keys are its (ADR-202).
  */
 export function stripTachoSettings(
   existing: unknown,
   enrollmentId?: string,
   restore: Record<string, string> = {},
+  keepEnv = false,
 ): StripResult {
   // A document that is not a settings object holds nothing of ours to take
   // out, and is handed back untouched rather than "repaired".
@@ -415,6 +418,8 @@ export function stripTachoSettings(
     if (Object.keys(hooks).length > 0) settings.hooks = hooks;
     else delete settings.hooks;
   }
+  if (keepEnv)
+    return { settings, changed: JSON.stringify(settings) !== before };
   const env = { ...(settings.env ?? {}) };
   for (const key of TACHO_ENV_KEYS) {
     const value = env[key];

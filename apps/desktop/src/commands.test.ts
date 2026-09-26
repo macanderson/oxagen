@@ -236,9 +236,9 @@ describe("sidecar argv", () => {
     });
   });
 
-  it("unenroll carries --purge only on request", () => {
-    expect(unenrollArgs(false)).toEqual(["unenroll"]);
-    expect(unenrollArgs(true)).toEqual(["unenroll", "--purge"]);
+  it("unenroll takes every agent, and carries --purge only on request", () => {
+    expect(unenrollArgs(false)).toEqual(["unenroll", "--all"]);
+    expect(unenrollArgs(true)).toEqual(["unenroll", "--all", "--purge"]);
   });
 
   it("never empties the harness list", () => {
@@ -323,9 +323,10 @@ describe("wizard and de-register", () => {
       sidecar: "tacho",
       args: ["reassign", "--harness", "claude-code"],
     });
+    // Named, so another agent enrolled on the machine keeps its enrollment.
     expect(deregisterArgs(["claude-code"], "claude-code")).toEqual({
       sidecar: "tacho",
-      args: ["unenroll"],
+      args: ["unenroll", "--harness", "claude-code"],
     });
   });
 

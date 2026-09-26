@@ -303,9 +303,13 @@ export function reapplyArgs(): string[] {
   return ["enroll"];
 }
 
-/** `tacho unenroll`, with `--purge` when the operator also drops the WAL. */
+/**
+ * `tacho unenroll --all`, with `--purge` when the operator also drops the
+ * WAL. Every agent on the machine goes (ADR-202): a machine that holds two
+ * refuses a bare `unenroll`, which names neither.
+ */
 export function unenrollArgs(purge: boolean): string[] {
-  return ["unenroll", ...(purge ? ["--purge"] : [])];
+  return ["unenroll", "--all", ...(purge ? ["--purge"] : [])];
 }
 
 /** `oxagen logout`: Sign out. */
@@ -369,13 +373,16 @@ export function ago(
  * De-register one harness: re-enroll in place with the rest, or unenroll
  * outright when it was the last one (the hooks, service and credentials go
  * with it). The wizard's install side asked twice; the UI asks twice here.
+ * The unenroll names the harness, so it takes this agent and leaves any
+ * other agent enrolled on the machine (ADR-202).
  */
 export function deregisterArgs(
   enrolled: readonly string[],
   harness: Harness,
 ): SidecarCall {
   const remaining = enrolled.filter((h) => h !== harness);
-  if (remaining.length === 0) return { sidecar: "tacho", args: ["unenroll"] };
+  if (remaining.length === 0)
+    return { sidecar: "tacho", args: ["unenroll", "--harness", harness] };
   return {
     sidecar: "tacho",
     args: ["reassign", "--harness", remaining.join(",")],

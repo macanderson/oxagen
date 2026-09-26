@@ -8,6 +8,8 @@
  */
 import { readHostFile } from "../host/host-file";
 import { acquireInstallLock } from "../host/install-lock";
+import type { TachoPaths } from "../host/paths";
+import { describeSlot, enrolledSlots, type Slot } from "../host/slots";
 import type { TachoHarness } from "../wire";
 import {
   type CliDeps,
@@ -20,7 +22,14 @@ import {
   rootRefusal,
   type RunsAs,
 } from "./enroll";
-import { revokeAndMark, stopGateway, stripEnrollmentHooks } from "./unenroll";
+import { depsForSlot } from "./slot-deps";
+import {
+  restartForRemaining,
+  revokeAndMark,
+  serviceInstalled,
+  stopGateway,
+  stripEnrollmentHooks,
+} from "./unenroll";
 
 export interface ReassignOptions extends CredentialOptions {
   /** Keep the current harness list (default) or replace it. */
@@ -58,10 +67,57 @@ export async function reassign(
     return { ok: false, warnings: [] };
   }
   try {
-    return await reassignLocked(options, deps);
+    const target = reassignTarget(deps.paths, options.harnesses);
+    if ("refused" in target) {
+      deps.err(target.refused);
+      return { ok: false, warnings: [] };
+    }
+    const installed = serviceInstalled(deps);
+    const result = await reassignLocked(options, depsForSlot(deps, target));
+    // A reassign that failed after the revoke removed the one service, and
+    // with it every other agent's collector.
+    const restart = restartForRemaining(installed, deps);
+    return restart === undefined
+      ? result
+      : { ...result, ok: false, warnings: [...result.warnings, restart] };
   } finally {
     lock.release();
   }
+}
+
+/**
+ * The enrollment a reassign moves (ADR-202). The one on the machine when
+ * there is one. With more than one, the one whose harnesses `--harness`
+ * names: the flag replaces the harness list, and naming at least one of the
+ * agent's own harnesses says which agent. Refused when it names none, or
+ * names harnesses of two agents.
+ */
+export function reassignTarget(
+  root: TachoPaths,
+  harnesses: readonly TachoHarness[] | undefined,
+): Slot | { refused: string } {
+  const present = enrolledSlots(root);
+  const [only] = present;
+  if (present.length <= 1)
+    return only ?? { harness: undefined, paths: root, host: undefined };
+  const listed = present.map(describeSlot).join("; ");
+  if (harnesses === undefined)
+    return {
+      refused: `This machine holds ${present.length} enrollments: ${listed}. Pass --harness with the harnesses of the one to reassign.`,
+    };
+  const named: readonly string[] = harnesses;
+  const matching = present.filter(
+    (slot) =>
+      slot.host?.harnesses.some((harness) => named.includes(harness)) === true,
+  );
+  const [match] = matching;
+  if (match !== undefined && matching.length === 1) return match;
+  return {
+    refused:
+      matching.length === 0
+        ? `No enrollment on this machine hooks ${harnesses.join(", ")}. It holds ${listed}. Pass --harness with a harness one of them hooks. To enroll another agent, register it on the Agents page and run the command the page shows.`
+        : `--harness names the harnesses of more than one agent: ${matching.map(describeSlot).join("; ")}. Reassign one agent at a time.`,
+  };
 }
 
 async function reassignLocked(
@@ -161,6 +217,15 @@ async function reassignLocked(
     return { ok: false, from, warnings };
   }
 
+  // Only a one-time token opens a slot beside the root (`enrollTarget`), and
+  // that token linked the enrollment to its agent. The enroll below uses the
+  // CLI's session, which links none, so the agent loses its sessions (#4410).
+  if (deps.rootPaths !== undefined) {
+    const unlinked = `${host.agent_key} was enrolled with a one-time token from the Agents page. A reassign enrolls it again with your CLI session, which links the new enrollment to no agent, so its sessions stop reaching that agent's page (#4410). To keep the link, run \`tacho unenroll --harness ${host.harnesses[0] ?? ""}\`, register the agent in ${org}/${workspace}, and run the command its page shows.`;
+    deps.err(`warning: ${unlinked}`);
+    warnings.push(unlinked);
+  }
+
   // The control plane is always asked, a marked host.json included: the
   // mark means the last revoke did not go through, and the handler answers
   // idempotently when it did. The revoke targets the host's own org and
@@ -235,10 +300,20 @@ async function reassignLocked(
     // host.json now carries the old enrollment marked retired: `tacho
     // status` says so, and `enroll` takes the fresh path rather than
     // re-applying the revoked enrollment's hooks. `--force` is named so the
-    // recovery is the same command whatever state host.json is in.
+    // recovery is the same command whatever state host.json is in, and
+    // `--harness` so it lands in this agent's slot: without it the enroll
+    // takes Claude Code, and on a machine where another agent hooks Claude
+    // Code, `--force` would revoke that agent instead.
+    //
+    // A sub slot has no such command. Only a one-time token opens a slot
+    // beside the root (`enrollTarget`), so an enroll through the CLI session
+    // would go to the root and re-enroll the first agent rather than bring
+    // this one back.
     const apiUrl = options.apiUrl ?? host.api_url;
     deps.err(
-      `Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run \`tacho enroll --force --org ${org} --workspace ${workspace} --api-url ${apiUrl}\` once the cause is fixed.`,
+      deps.rootPaths !== undefined
+        ? `Reassign failed after revoking the old enrollment; ${host.agent_key} is now unenrolled (host.json kept, marked retired). Only a one-time token enrolls a second agent on this machine, so once the cause is fixed, register the agent in ${org}/${workspace} on the Agents page and run the command its page shows.`
+        : `Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run \`tacho enroll --force --org ${org} --workspace ${workspace} --api-url ${apiUrl} --harness ${harnesses.join(",")}\` once the cause is fixed.`,
     );
     return { ok: false, from, warnings };
   }

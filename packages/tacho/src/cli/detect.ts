@@ -16,7 +16,7 @@
  * that app would and would not record, and a list that leaves the tier to be
  * inferred invites the surface to guess.
  */
-import { readHostFileLenient } from "../host/host-file";
+import { listSlots } from "../host/slots";
 import {
   isConnectedHarness,
   TACHO_HARNESS_LABELS,
@@ -25,6 +25,7 @@ import {
   type TachoHarness,
 } from "../wire";
 import type { AppFacts, CliDeps, CursorFacts, HarnessFacts } from "./deps";
+import { rootPathsOf } from "./slot-deps";
 
 export interface DetectedHarness {
   harness: TachoHarness;
@@ -154,10 +155,14 @@ export function detect(
 ): DetectReport {
   // Lenient, as `status` and `unenroll` read it: a host.json from another
   // version or cut short must not stop the first run from listing the apps.
-  const host = readHostFileLenient(deps.paths.hostFile).host;
-  const enrolledList = host?.revoked_at === null ? host.harnesses : [];
+  // Every enrollment on the machine counts (ADR-202): a harness another
+  // agent hooks is covered all the same.
+  const enrolledHosts = listSlots(rootPathsOf(deps)).flatMap((slot) =>
+    slot.host !== undefined && slot.host.revoked_at === null ? [slot.host] : [],
+  );
+  const enrolledList = enrolledHosts.flatMap((host) => host.harnesses);
   const report: DetectReport = {
-    enrolled: host !== undefined && host.revoked_at === null,
+    enrolled: enrolledHosts.length > 0,
     harnesses: [
       wrapped("claude-code", deps.claude(), enrolledList),
       wrapped("codex", deps.codex(), enrolledList),

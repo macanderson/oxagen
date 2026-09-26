@@ -119,6 +119,37 @@ page sees one continuous host. `reassign --harness claude-code,codex` with no
 target re-enrolls in place, which is the one way to drop a wrapper: `enroll`
 may add a harness on a re-apply but never silently removes one.
 
+### More than one agent
+
+A machine holds one enrollment per agent (ADR-202). The first enrollment lives
+in the tacho root, `~/.config/oxagen/tacho` (`TACHO_HOME`). A one-time token
+presented on a machine whose first enrollment is live puts its one harness in
+a slot of its own, `<root>/agents/<harness>/`, and revokes nothing. A slot
+holds the same per-enrollment files as the root under the same names:
+`host.json`, the device key, the credential store, the WAL, the spool, and the
+daemon's state (`SLOT_STATE` in `src/host/slots.ts`). A harness belongs to at
+most one live slot. An operator enroll without a token still adds a harness to
+the root enrollment.
+
+One `tachod` runs a collector per slot, on that slot's ports, and one service
+serves them all. The commands that act on one agent name it by harness:
+
+```
+tacho unenroll --harness codex            # remove the agent that hooks Codex
+tacho unenroll --all                      # remove every agent on the machine
+tacho reassign --harness codex --workspace other
+tacho status --json                       # adds `enrollments`, one report per slot
+```
+
+A bare `unenroll` or `reassign` on a machine with two enrollments refuses and
+lists them. `oxagen tacho unenroll` and `oxagen agent unenroll` without an
+agent take the same `--harness` and `--all`. Unenrolling one agent restarts
+the service for the agents that remain. `reassign` enrolls again through the
+CLI session, so a token-enrolled agent comes back under a hostname-derived
+agent key with no registered agent or mandate. It prints a warning before the
+revoke that says how to keep the link (#4410, ADR-202 known gaps). Spec §5.8
+has the full rules.
+
 ### Codex
 
 Codex CLI exposes a near clone of Claude Code's hook surface, so the adapter

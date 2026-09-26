@@ -46,12 +46,14 @@ export {
   staticTokenStillGood,
 } from "../host/model-credential";
 import type { RunTokenPlacement, RunTokenProvider } from "../host/run-token";
+import { harnessesHeldElsewhere, listSlots, slotIsLive } from "../host/slots";
 import {
   BROKERABLE_HARNESSES,
   isBrokerableHarness,
   TACHO_HARNESS_LABELS,
 } from "../wire";
 import type { CliDeps } from "./deps";
+import { depsForHarness, rootPathsOf, slotDeps } from "./slot-deps";
 
 /**
  * Claude Code's and Codex's directories as this process's paths resolved
@@ -136,12 +138,14 @@ export async function credentialIssue(
       detail: `run tokens are issued for ${MODEL_CREDENTIAL_HARNESSES.join(" and ")}; got "${harness}"`,
     };
   const placement: RunTokenPlacement = options.placement ?? "helper";
-  const answer = await deps.daemonPost?.("/credential/issue", {
+  // The helper names only its harness; the slot that hooks it mints.
+  const slot = depsForHarness(deps, harness);
+  const answer = await slot.daemonPost?.("/credential/issue", {
     harness,
     placement,
   });
   if (answer === undefined) {
-    const host = readHost(deps);
+    const host = readHost(slot);
     return {
       ok: false,
       detail:
@@ -204,16 +208,30 @@ export async function credentialStatus(
   deps: CliDeps,
 ): Promise<CredentialStatusReport> {
   const host = readHost(deps);
-  const custody = (deps.credentialStore?.status() ?? []).map((c) => ({
-    provider: c.provider,
-    kind: c.kind,
-    source: c.source,
-    taken_at: c.taken_at,
-    prefix: c.prefix,
-  }));
-  const harnesses = (host?.harnesses ?? MODEL_CREDENTIAL_HARNESSES).filter(
-    isCredentialHarness,
+  // Each agent on this machine holds its own keys (ADR-202).
+  const later = listSlots(rootPathsOf(deps))
+    .slice(1)
+    .filter(slotIsLive);
+  const custody = [
+    deps,
+    ...later.map((slot) => slotDeps(deps, slot.paths)),
+  ].flatMap((slot) =>
+    (slot.credentialStore?.status() ?? []).map((c) => ({
+      provider: c.provider,
+      kind: c.kind,
+      source: c.source,
+      taken_at: c.taken_at,
+      prefix: c.prefix,
+    })),
   );
+  const enrolled: string[] =
+    host === undefined && later.length === 0
+      ? MODEL_CREDENTIAL_HARNESSES
+      : [
+          ...(host?.harnesses ?? []),
+          ...later.flatMap((slot) => slot.host.harnesses),
+        ];
+  const harnesses = [...new Set(enrolled)].filter(isCredentialHarness);
   const state =
     deps.modelCredentials !== undefined && harnesses.length > 0
       ? (
@@ -494,8 +512,14 @@ export async function restoreCredentials(
   if (contract === undefined)
     return { restored, failed, warnings, custodyUnreadable };
   const helperCommand = deps.runtime.credentialHelperCommand;
+  const heldElsewhere = harnessesHeldElsewhere(
+    rootPathsOf(deps),
+    deps.paths.root,
+  );
   for (const harness of MODEL_CREDENTIAL_HARNESSES) {
     if (only !== undefined && !only.includes(harness)) continue;
+    // Another agent on this machine brokers this harness's key (ADR-202).
+    if (heldElsewhere.has(harness)) continue;
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {
         const dirs = harnessDirsOf(deps);

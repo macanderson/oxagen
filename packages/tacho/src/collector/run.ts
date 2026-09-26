@@ -3,11 +3,18 @@
  * SIGTERM, writing the pid file and refreshing the bundle on SIGHUP. Shared
  * by the `tachod` executable and `tacho daemon` (the compiled single binary
  * is multi-call, so the service unit runs `tacho daemon`).
+ *
+ * One process serves every enrollment on the machine (ADR-202): a collector
+ * per slot, each on its own ports and with its own state, under one service,
+ * one pid file and one log.
  */
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import type { TachoPaths } from "../host/paths";
 import { tachoPaths } from "../host/paths";
 import { formatDaemonPid, parseDaemonPid } from "../host/process-scan";
-import { startDaemon } from "./daemon";
+import { listSlots } from "../host/slots";
+import type { TachoHarness } from "../wire";
+import { type DaemonHandle, type DaemonOptions, startDaemon } from "./daemon";
 
 /**
  * How long the daemon waits for `stop()` after SIGTERM or SIGINT before it
@@ -137,12 +144,110 @@ export function releaseDaemonPid(path: string): void {
   }
 }
 
+/** One slot this process runs a collector for. */
+export interface DaemonSlot {
+  paths: TachoPaths;
+  /** The harness the slot was made for; undefined for the root slot. */
+  harness: TachoHarness | undefined;
+  /** Whether this slot's detector watches Claude Code's transcripts. */
+  watchesTranscripts: boolean;
+}
+
+/**
+ * The slots this process serves (ADR-202): each slot after the root that
+ * has not been retired on this machine, and the root whenever it has a
+ * `host.json` that is not retired. Alone, the root runs as it always has,
+ * retired or not, and a machine with no enrollment at all still gets it, so
+ * its collector fails with the error that says to enroll. Beside another
+ * agent, a retired root waits for its revoke without a collector: it would
+ * otherwise run on a key its unenroll gave up, on ports it no longer holds.
+ *
+ * One slot watches Claude Code's transcripts: the one that hooks Claude
+ * Code, else the root. Two watchers would each report the same unhooked
+ * session, and each would list processes on every tick.
+ */
+export function daemonSlots(root: TachoPaths): DaemonSlot[] {
+  const [first, ...rest] = listSlots(root);
+  const later = rest.filter(
+    (slot) => slot.host !== undefined && slot.host.revoked_at === null,
+  );
+  const rootRuns =
+    later.length === 0 ||
+    (existsSync(root.hostFile) &&
+      (first?.host === undefined || first.host.revoked_at === null));
+  const slots = first !== undefined && rootRuns ? [first, ...later] : later;
+  const watcher =
+    slots.find(
+      (slot) =>
+        slot.host !== undefined &&
+        slot.host.revoked_at === null &&
+        slot.host.harnesses.includes("claude-code"),
+    ) ?? slots.find((slot) => slot.harness === undefined);
+  return slots.map((slot) => ({
+    paths: slot.paths,
+    harness: slot.harness,
+    watchesTranscripts: slot === watcher,
+  }));
+}
+
+/**
+ * Start a collector for each slot, pushing each onto `started` as it comes
+ * up so a stop reaches it. A slot that fails is logged and the rest still
+ * start, because one agent's broken `host.json` must not take the others'
+ * hooks down. Throws the first failure when no slot started.
+ */
+export async function startSlots(
+  slots: readonly DaemonSlot[],
+  started: DaemonHandle[],
+  log: (line: string) => void,
+  start: (options: DaemonOptions) => Promise<DaemonHandle> = startDaemon,
+): Promise<void> {
+  let firstError: unknown;
+  for (const slot of slots) {
+    try {
+      started.push(
+        await start({
+          paths: slot.paths,
+          ...(slot.watchesTranscripts ? {} : { transcriptRoots: [] }),
+          ...(slot.harness !== undefined
+            ? { log: slotLog(slot.harness) }
+            : {}),
+        }),
+      );
+    } catch (error) {
+      firstError ??= error;
+      log(
+        `tachod: the ${slot.harness ?? "first"} enrollment did not start: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    }
+  }
+  if (started.length === 0)
+    throw firstError ?? new Error("no enrollment on this machine");
+}
+
+/** A later slot's log lines name its harness, since the log is shared. */
+function slotLog(harness: TachoHarness): (line: string) => void {
+  return (line) => {
+    process.stderr.write(
+      `${new Date().toISOString()} tachod [${harness}] ${line}\n`,
+    );
+  };
+}
+
+/** Stop every collector, and fail when any stop failed. */
+export async function stopAll(daemons: readonly DaemonHandle[]): Promise<void> {
+  const results = await Promise.allSettled(
+    daemons.map((daemon) => daemon.stop()),
+  );
+  const failed = results.find((result) => result.status === "rejected");
+  if (failed !== undefined) throw failed.reason;
+}
+
 export async function runDaemonProcess(): Promise<void> {
   const paths = tachoPaths(process.env);
-  // Until the daemon has started there is nothing to stop.
-  let stopDaemon = (): Promise<void> => Promise.resolve();
+  const daemons: DaemonHandle[] = [];
   let stopping: Promise<void> | undefined;
-  const stopOnce = () => (stopping ??= stopDaemon());
+  const stopOnce = () => (stopping ??= stopAll(daemons));
   const exit = (code: number) => {
     releaseDaemonPid(paths.pid);
     process.exit(code);
@@ -151,8 +256,7 @@ export async function runDaemonProcess(): Promise<void> {
     process.stderr.write(line);
   };
   guardDaemonProcess({ stop: stopOnce, exit, log });
-  const daemon = await startDaemon({ paths });
-  stopDaemon = () => daemon.stop();
+  await startSlots(daemonSlots(paths), daemons, log);
   writeDaemonPid(paths.pid);
   const stop = (signal: string) => {
     if (stopping !== undefined) return;
@@ -162,7 +266,8 @@ export async function runDaemonProcess(): Promise<void> {
   process.on("SIGTERM", () => stop("SIGTERM"));
   process.on("SIGINT", () => stop("SIGINT"));
   process.on("SIGHUP", () => {
-    daemon.refreshBundle().catch(() => undefined);
+    for (const daemon of daemons)
+      daemon.refreshBundle().catch(() => undefined);
   });
   await new Promise<void>(() => undefined);
 }

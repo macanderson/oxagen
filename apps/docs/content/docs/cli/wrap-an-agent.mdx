@@ -1,6 +1,6 @@
 ---
 title: Wrap an agent
-description: "What wrapping means, how Claude Code, Codex, Cursor, and Stella get wrapped in one enrollment, and how to wrap a custom agent by calling tacho hook around its steps."
+description: "What wrapping means, how to wrap Claude Code, Codex, Cursor, and Stella, how to run two agents on one machine, and how to wrap a custom agent by calling tacho hook around its steps."
 ---
 
 Wrapping an agent puts its runs under a mandate: the access it used, the budget it spent, and a record of every step, all attributed to the workspace it ran for. For the capabilities it hands the agent, Oxagen checks the access and budget clauses on the server. The wrapper this page covers is how a run's steps become that record.
@@ -29,7 +29,7 @@ Name the harness on `enroll` or `reassign`:
 tacho enroll --harness claude-code,codex,cursor,stella
 ```
 
-`enroll` merges the wrapper's hook entries into each harness's own configuration without touching an entry it did not write, and never removes a harness on a re-apply; `reassign --harness <list>` with no `--workspace` is the one way to drop one. See [Account setup](/docs/cli/account-setup) for CLI authentication. You can also use `oxagen agent enroll` with the one-time token issued during agent registration.
+`enroll` merges the wrapper's hook entries into each harness's own configuration without touching an entry it did not write, and never removes a harness on a re-apply; `reassign --harness <list>` with no `--workspace` is the one way to drop one. See [Account setup](/docs/cli/account-setup) for CLI authentication. You can also use `oxagen agent enroll` with the one-time token issued during agent registration. On a machine that holds more than one agent, `--harness` on `reassign` also names the agent to change. See [Two agents on one machine](#two-agents-on-one-machine).
 
 | | Claude Code | Codex CLI | Stella | Cursor |
 | --- | --- | --- | --- | --- |
@@ -57,7 +57,7 @@ Any agent you run yourself, in a script, a CI job, or your own loop, wraps by pi
 tacho hook --agent <name>
 ```
 
-`<name>` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and becomes the session's harness label. It cannot be a built-in harness or runtime name (`claude-code`, `codex`, `cursor`, `stella`, `claude-desktop`, `claude-agent-sdk`, `custom`, `proxy`): `tacho hook` refuses those, so a custom agent is never filed as a built-in one. The machine still has to be enrolled first (`tacho enroll`) so `tacho hook` can read `~/.config/oxagen/tacho/host.json` itself; your agent never sees a credential.
+`<name>` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and becomes the session's harness label. It cannot be a built-in harness or runtime name (`claude-code`, `codex`, `cursor`, `stella`, `claude-desktop`, `claude-agent-sdk`, `custom`, `proxy`): `tacho hook` refuses those, so a custom agent is never filed as a built-in one. The machine still has to be enrolled first (`tacho enroll`) so `tacho hook` can read `~/.config/oxagen/tacho/host.json` itself; your agent never sees a credential. On a machine with more than one agent enrolled, a custom agent reports under that first enrollment, the one in `~/.config/oxagen/tacho`.
 
 For a complete wrapped agent with tests, see [oxagenai/oxagen-wrapped-agents](https://github.com/oxagenai/oxagen-wrapped-agents). Its Stripe refund agent sends every step through `tacho hook --agent stripe-refunds`, fails closed when `tacho` does not answer, and shows an operator pause denying the next refund before it reaches Stripe.
 
@@ -199,7 +199,7 @@ echo '{"session_id":"probe-1","hook_event_name":"SessionStart","cwd":"'"$PWD"'"}
 
 Three places agree, because they all read the same record:
 
-- `tacho status` on the machine: shows the enrollment, each wrapped harness, and whether hooks are present.
+- `tacho status` on the machine: shows each enrollment, each wrapped harness, and whether hooks are present.
 - The app's Wrapped agents panel: lists Claude Code, Codex, Cursor, Stella, and every custom agent the collector has seen, each with a health state:
 
   | State | Means |
@@ -213,8 +213,92 @@ Three places agree, because they all read the same record:
 
 - The operator console: **Open Oxagen** opens this workspace in the browser, where the run lands in the workspace's fleet record once the collector ships it.
 
+## Two agents on one machine
+
+An agent is one operator on one runtime with one harness, so Claude Code and Codex on your laptop are two agents. Each one gets its own enrollment: its own agent key, device key, credentials, collector port, and event log. One `tachod` service runs a collector for every agent on the machine.
+
+### Enroll the second agent
+
+Register the second agent on the Agents page. Then run the command the page shows on the machine that already runs the first agent:
+
+```bash
+oxagen agent enroll --token <oxe_1time_…> --harness codex
+```
+
+The first agent keeps recording, and nothing is revoked. The first enrollment stays in `~/.config/oxagen/tacho`. The second one goes into `~/.config/oxagen/tacho/agents/codex/`, a directory named for its harness. The harness's own hook file, such as `~/.codex/hooks.json`, stays where it is, and each hook entry names the enrollment it belongs to.
+
+Three rules decide what an enroll does on a machine that already has an agent:
+
+- A token enrolls one agent with one harness. Pass one `--harness`. A token with two harnesses is refused.
+- A harness belongs to one agent. A token for a harness that an agent on the machine already hooks is refused. Pass `--force` to replace that agent's enrollment with the agent the token names. The other agents keep theirs.
+- Without a token, `tacho enroll --harness <harness>` adds a harness that no agent hooks to the first enrollment. When that enrollment is live, the command revokes it and enrolls it again under a new id, with the added harness alongside the ones it already hooks. Use a token to add a separate agent.
+
+### Check both agents
+
+```bash
+tacho status
+```
+
+On a machine with more than one enrollment, the output starts with a count. Each agent's report follows a line that names its harnesses, its agent key, and its directory:
+
+```text
+This machine holds 2 enrollments.
+
+Agent       claude-code as acme.core.cc-laptop in /Users/you/.config/oxagen/tacho
+…
+
+Agent       codex as acme.core.codex-laptop in /Users/you/.config/oxagen/tacho/agents/codex
+…
+```
+
+An agent removed on this machine whose revoke has not reached Oxagen yet reads `(retired on this machine)`. An agent revoked from the fleet page reads `(revoked on the fleet page)`.
+
+`tacho status --json` keeps the shape a script already reads. Its top-level fields are the report of the first agent still enrolled on this machine. When the machine holds more than one enrollment, the output adds `enrollments`: one full report per enrollment, each with a `slot` field that names its directory. With one enrollment, `enrollments` is absent. This command lists every agent in both cases:
+
+```bash
+tacho status --json | jq -r '(.enrollments // [.])[] | [.host.agent_key, (.host.harnesses // [] | join(",")), .enrolled, .shipping.healthy] | @tsv'
+```
+
+`tacho status` exits `1` when no agent on the machine is enrolled, or when any agent's events are not reaching Oxagen (`shipping.healthy` is `false`).
+
+### Remove one agent
+
+```bash
+tacho unenroll --harness codex
+```
+
+`--harness` names the agent by the harness it hooks. The command removes that agent's hooks, revokes its enrollment, and deletes its keys. The other agents stay enrolled. To remove every agent on the machine, pass `--all`:
+
+```bash
+tacho unenroll --all
+```
+
+Pass one of the two flags. Passing both is an error. On a machine with more than one enrollment, `tacho unenroll` with neither flag changes nothing. It lists the agents and exits `1`:
+
+```text
+error: this machine holds 2 enrollments: claude-code as acme.core.cc-laptop; codex as acme.core.codex-laptop. Pass --harness to name the one to remove, or --all to remove them all
+```
+
+Removing one agent restarts the `tachod` service, because one service runs every agent's collector. Until the service is back, the other agents have no collector and no model proxy. Their hooks decide from the cached policy bundle and spool their events, and the collector sends the spooled events when it starts. A model call routed through the proxy fails in that window. If the service does not start again, the command names the agents left without a collector and exits `1`. Run `tacho enroll --harness <harness>` with a harness one of those agents hooks to install the service again.
+
+With `--purge`, the collector log is kept while another agent is still enrolled, because every agent writes to the same log.
+
+### Reassign one agent
+
+```bash
+tacho reassign --harness codex --workspace <slug>
+```
+
+On a machine with more than one enrollment, `reassign` needs `--harness`. The list picks the agent that hooks at least one of those harnesses, and it becomes that agent's harness list. A list that names harnesses of two agents is refused. Reassign one agent at a time.
+
+`reassign` enrolls the agent again through your CLI session, the way `tacho enroll` does without a token, so run `oxagen login` first. The new enrollment is not linked to any agent on the Agents page, and its agent key comes from the machine's hostname. An agent you enrolled with a token therefore comes back under a different agent key, without its link to the agent you registered and without that agent's mandate. `reassign` prints a warning before it revokes such an agent. To keep the link, do not reassign it:
+
+1. Run `tacho unenroll --harness <harness>` with a harness the agent hooks.
+2. Register the agent in the target workspace on the Agents page.
+3. Run the command the agent's page shows.
+
 ## Limits
 
 A run's cost comes from the usage its model calls reported. Claude Code reports it itself. Codex and Stella on Anthropic report it through the local model proxy once enrollment points them at it. Cursor never does, because Cursor has no setting that routes its model calls through the proxy. Stella on another provider, or with an Anthropic base URL you set yourself, does not either. Such a run records its tool calls and no usage, so its cost is not in any spend total. The Spend page and the Fleet spend tile say how many runs reported no usage, and on which harness, beside each total that leaves them out.
 
-Wrapping is `client_attested`: the hook call is voluntary, so a custom agent that skips it is not gated and not recorded. Nothing on the collector side can force the call or detect that a step happened without it; a missing event shows up in the fleet record as silence, not as a flagged violation. Enrollment is per machine, not per agent, so every harness and every custom agent on an enrolled machine share one host identity and one key.
+Wrapping is `client_attested`: the hook call is voluntary, so a custom agent that skips it is not gated and not recorded. Nothing on the collector side can force the call or detect that a step happened without it; a missing event shows up in the fleet record as silence, not as a flagged violation. Each agent enrolled with its own one-time token has its own enrollment, host identity, and key. Harnesses enrolled together in one `tacho enroll` share one enrollment. Custom agents report under the first enrollment on the machine, the one in `~/.config/oxagen/tacho`, and stop being recorded when that enrollment is removed.

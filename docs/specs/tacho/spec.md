@@ -148,14 +148,16 @@ Steps, each idempotent, each printed as it runs:
 
 1. **Authenticate** using the CLI's existing flow (`apps/cli/src/commands/auth.ts`: browser PKCE on a TTY, `--token` headless). Validate with `GET /v1/auth/whoami`. Pick org and workspace with the existing pickers.
 2. **Generate the host device key** (Ed25519) into `~/.config/oxagen/tacho/device.key` (0600, `write_sensitive_file_atomic` semantics as in Stella's `identity.rs`). The public key travels in the enrollment; the private key never leaves the host. It signs collector checkpoints (`design/trace-model.md` §2).
-3. **Call `create_tacho_host_enrollment`** (§5.2). The response carries the host enrollment id (`thst_…`), a host-scoped API key shown once, the signed enrollment claims, the initial policy bundle, and the mint public keys. The routine writes them to `~/.config/oxagen/tacho/host.json` (0600).
+3. **Call `create_tacho_enrollment`** (§5.2). The response carries the host enrollment id (`tch_…`), a host-scoped API key shown once, the signed enrollment claims, the initial policy bundle, and the mint public keys. The routine writes them to `~/.config/oxagen/tacho/host.json` (0600).
 4. **Install `tachod`** as a user service: a launchd agent on macOS (`~/Library/LaunchAgents/sh.oxagen.tachod.plist`), a systemd user unit on Linux (`~/.config/systemd/user/tachod.service`). It listens on a Unix socket and on `127.0.0.1:<port>`; the port is chosen at enrollment and pinned in `host.json`. A per-install local bearer token is minted for the loopback listener so another local user cannot post fake events.
 5. **Write the Claude Code hooks** into the **user** settings file `~/.claude/settings.json` (§5.4). The writer merges: it adds its own hook entries tagged with a `"_tacho": "<enrollment id>"` marker, never removes a hook it did not write, never touches `permissions`, and is a no-op when the entries already exist. It also writes the `env` block that turns on Claude Code's OpenTelemetry export toward the collector.
 6. **Verify** by asking `tachod` for its health and by checking that `claude` resolves on `PATH` and its version is within the tested range. `--verify` additionally runs `claude -p --max-turns 1` with a fixed prompt and confirms a `session_start` and `session_end` pair arrived at the control plane.
 
 `oxagen tacho status` prints enrollment identity, daemon health, hook presence per event, bundle version and age, last successful ingest, spool depth, and the count of unobserved sessions since enrollment. `oxagen tacho unenroll` reverses step 5, stops the service, and calls the revoke endpoint; the host key is deleted and the enrollment marked revoked server-side.
 
-### 5.2 `create_tacho_host_enrollment`
+The paths above are the root slot's. A machine can hold one enrollment per agent, and every agent after the first keeps these files in a slot of its own (§5.8).
+
+### 5.2 `create_tacho_enrollment`
 
 Modeled on `create_stella_enrollment` (`packages/oxagen/src/contracts/telemetry.stella.enroll.ts`) because it already has the needed shape: an operator-only, session-authenticated, org-scoped capability that mints a purpose-locked API key and returns a signed claims document.
 
@@ -227,7 +229,7 @@ The register flow (MC spec §7.2, App. E `enroll_host`; #2967) enrols a host wit
 `oxagen agent enroll --token …` drives this path with the §5.1 routine; `oxagen tacho enroll` keeps the operator path. The first frame the new host ingests is what opens the organization's onboarding gate (`org.onboarding_state`; ADR-065).
 ### 5.7 Connected enrollment — an AI app with no hook surface
 
-Enrollment is per host, and **a host carries a tier per harness, not one tier overall**. A machine with Claude Code wrapped and Claude Desktop connected is the normal case; `host.json` carries the harness list with a tier for each (`TACHO_HARNESS_TIERS`, `packages/tacho/src/wire.ts`). An app can in principle be both — a future harness with a hook surface *and* an MCP client — and nothing here assumes the two are exclusive.
+Enrollment is per agent (§5.8), and **an enrollment carries a tier per harness, not one tier overall**. A machine with Claude Code wrapped and Claude Desktop connected is the normal case. Its `host.json` carries the harness list with a tier for each (`TACHO_HARNESS_TIERS`, `packages/tacho/src/wire.ts`). An app can in principle be both — a future harness with a hook surface *and* an MCP client — and nothing here assumes the two are exclusive.
 
 **What enrollment writes.** For a connected harness there are no hooks and no env block. Enrollment writes one MCP server entry into the app's own client config (`claude-desktop-writer.ts`, `mcp-config-writer.ts`), pointing at `http://127.0.0.1:<port>/mcp` on the collector daemon. Every other entry in that file is left intact, exactly as §5.4's hook writer leaves non-Tacho hooks alone, and `unenroll` removes only ours.
 
@@ -246,6 +248,45 @@ Enrollment is per host, and **a host carries a tier per harness, not one tier ov
 **The listener is now worth attacking.** Until the gateway, the collector's loopback listener was reached only by things Tacho installed itself. It is now a port any MCP client on the machine connects to, and the threat that matters is DNS rebinding, not a local process — a local process with the user's privileges can read `host.json` and have the bearer anyway. `loopback-guard.ts` therefore checks, on **every** request rather than only on `/mcp`, that `Host` names a loopback address and that `Origin`, when present, is a loopback origin; a native MCP client sends no `Origin`, which is why absence is permitted rather than required. Both run before the bearer compare, because a request that should never have reached us is not worth a constant-time compare.
 
 **The tier can be routed around, and the size of the gap is reported.** A connected app's config is a file the user owns; nothing stops them adding a second MCP server beside ours, and a tool served by that server never touches Oxagen. Every connected surface therefore reports the count and the names of the other MCP servers configured in that app (`oxagenMcpPresence().otherServers`), because that is a fact the operator is entitled to. Closing the gap is not a change in this repository: it needs the vendor to offer an administrator-controlled policy file constraining which MCP servers a user may add, distributed by MDM — the same shape as §5.5's managed settings. Where a vendor offers one, Oxagen renders it and says so; where a vendor does not, Oxagen says the tier is advisory on that app. Tacho ships no watcher that fights the user for their own config file: a control that can be turned off by the person it constrains is theatre, and claiming it as a control is worse than not having it.
+
+### 5.8 Enrollment slots
+
+A machine holds one enrollment per agent (ADR-202). An agent is one operator on one runtime with one harness (ADR-198), so a machine that runs Claude Code and Codex for one person runs two agents, and each gets its own enrollment.
+
+**Layout.** The first enrollment is the root slot. It keeps the files §5.1 lists, directly under the tacho root (`~/.config/oxagen/tacho`, or `TACHO_HOME`). Each later agent gets a slot directory at `<root>/agents/<harness>/`, named for the harness its token enrolled. `slotPaths` (`packages/tacho/src/host/slots.ts`) builds a slot's `TachoPaths` from the root's by moving each per-enrollment file into the slot under the same name.
+
+| Kind | Files | Where |
+|---|---|---|
+| Per enrollment | `host.json`, `device.key`, `run-token.key`, `credentials.json`, `credentials.key`, `tachod.sock`, `wal/`, `spool/`, `quarantine/`, `daemon.json`, `daemon-sealed.json`, `pending-session-ends.json`, `hook-ids.jsonl`, `transcript-tail.json`, `pre-session/`, `stella-identity/` | the root for the root slot, `<root>/agents/<harness>/` for every other slot |
+| Root only | `tachod.pid`, `tachod.log`, `tachod.cmd` (the Windows launcher), and the one service definition | the root |
+| The person's | Claude Code's `settings.json` and `projects/`, Codex's `hooks.json`, Cursor's `hooks.json`, Stella's `stella.toml` or `settings.json`, Claude Desktop's MCP config | the harness's own config directory |
+
+`SLOT_STATE` in `slots.ts` lists the per-enrollment fields of `TachoPaths`, so a new field fails to compile until someone places it in one of the three kinds. `slotPaths` also moves `tachod.pid`, `tachod.log`, and `tachod.cmd` into a slot's paths, but the daemon and the service use the root's copies. The service is installed with the root's paths (`daemonServiceSpec`, `packages/tacho/src/cli/daemon-service.ts`), `tachod` writes the root's pid file, and a command acting on a slot keeps the root's service manager (`slotDeps`). A command acting on a slot overlays the harness files that slot's enroll recorded in its `host.json` (`withRecordedHarnessFiles`).
+
+**One live slot per harness.** A slot is live when its `host.json` has no `revoked_at` and a host status other than `revoked`. A harness belongs to at most one live slot (`slotHolding`). Every path into an enrollment relies on that:
+
+- A hook entry carries `--enrollment <id>`, and the hook runs against the slot with that id, live or retired (`slotPathsForEnrollment`). An id no sub slot holds goes to the root, whose stale-entry check answers it.
+- A command that names only a harness runs against the live slot that hooks it (`depsForHarness`): the model credential helper, the Git credential helper, `tacho run`, and `tacho verify`.
+- A custom agent's `tacho hook --agent <name>` carries no enrollment id and reports under the root slot (§9).
+
+**Enroll.** `enrollTarget` (`packages/tacho/src/cli/enroll.ts`) picks the slot:
+
+1. Harnesses held by two different live slots are refused, because one enroll cannot cover two agents.
+2. A harness a live slot already hooks stays in that slot: a re-apply, or with `--force` a replacement of that slot's enrollment alone.
+3. With no live root, or with no one-time token, the enroll goes to the root. An operator enroll that adds a harness revokes the root enrollment and enrolls it again with both harnesses, as before this section existed.
+4. With a live root and a one-time token (§5.6), the token's one harness goes into a new slot and nothing is revoked. A token with more than one harness is refused.
+
+A new slot's collector port and model proxy port avoid every port another live slot holds (`portsInUse`).
+
+**Daemon.** One `tachod` process, under the one service, runs a collector per slot (`packages/tacho/src/collector/run.ts`): each sub slot not retired on this machine, and the root unless it was retired while another agent is live. Each collector listens on its slot's ports and ships from its slot's WAL. Exactly one collector watches Claude Code transcripts: the slot that hooks Claude Code, else the root. A slot that fails to start is logged and the others run. A sub slot's log lines begin with `tachod [<harness>]`. SIGHUP refreshes every slot's bundle.
+
+**Status.** With one enrollment, `tacho status` is unchanged. With more than one, the text output opens with `This machine holds N enrollments.` and prints each enrollment's report under a line naming its harnesses, agent key, and slot directory. `--json` keeps its top-level fields as the first enrollment not retired on this machine and adds `enrollments`: one report per enrollment, the root first, each with a `slot` field holding its directory. The count includes a slot retired on this machine whose `host.json` is still there. The command exits 1 when the top-level report is not enrolled or when any enrollment's `shipping.healthy` is false.
+
+**Unenroll and reassign.** `tacho unenroll` on a machine with more than one enrollment refuses and lists them. `--harness <name>` removes the agent that hooks that harness, and `--all` removes every slot, the sub slots first and the root last. `tacho reassign` on such a machine requires `--harness`: the list names the agent whose harnesses it shares and replaces that agent's harness list. A list that touches two agents is refused.
+
+**Service restart.** `unenroll` uninstalls the one service, and a `reassign` that fails after its revoke leaves it uninstalled. Both then run `restartForRemaining` (`packages/tacho/src/cli/unenroll.ts`), which installs the service again when it was installed before the command and a live slot remains. Between the two, the other agents have no collector and no model proxy. Their hooks decide from the cached bundle and write to their own slot's spool, which the collector drains when it starts. A failed reinstall is a warning that names the agents left without a collector and exits 1. `unenroll --purge` keeps `tachod.log` while another agent is live.
+
+**What reads only the root.** The desktop app reads the root `host.json` alone (`apps/desktop/src-tauri/src/machine.rs`), so it shows the first agent. It uninstalls with `tacho unenroll --all --purge`, and de-registers its last harness with `tacho unenroll --harness <harness>`.
 
 ---
 
@@ -490,6 +531,7 @@ Out of scope for v1. The upstream documentation at `developers.openai.com/codex/
 23. A request to the loopback listener whose `Host` header names a non-loopback name, or whose `Origin` is a non-loopback origin, is refused before the bearer is compared — on every path, not only `/mcp` — and a native MCP client that sends no `Origin` is served.
 24. A machine with Claude Code wrapped and Claude Desktop connected reports both harnesses with their own tier from one enrollment, and every connected surface shows the count and names of the other MCP servers configured in that app.
 25. A gateway-forwarded call that reaches an org-admin capability outside the mandate (`set_model_credential`, `delete_model_credential`) is refused by `machineKeyDenial` naming the capability, at every org tier including non-enterprise, and its audit row attributes the call to the `tacho_gateway_v1` credential, never to the Owner or Admin who enrolled the host (ADR-078 amendment 2026-09-19, #3151).
+26. On a machine enrolled for a Claude Code agent, `oxagen agent enroll --token … --harness codex` enrolls a Codex agent in `<root>/agents/codex/` and leaves the Claude Code enrollment live. Both agents' sessions reach the control plane under their own agent keys. `tacho unenroll` with no flag refuses and lists both, and `tacho unenroll --harness codex` removes the Codex agent while the Claude Code agent keeps recording once the service is back (§5.8, ADR-202).
 
 ## 15. Open questions a maintainer owns
 

@@ -56,6 +56,10 @@ export interface TachoUnenrollOptions {
   token?: string;
   purge?: boolean;
   reason?: string;
+  /** The agent to remove, by the one harness it hooks (ADR-202). */
+  harness?: string;
+  /** Remove every agent enrolled on this machine. */
+  all?: boolean;
 }
 
 export interface TachoExportOptions {
@@ -133,14 +137,27 @@ export async function handleTachoStatus(
 ): Promise<boolean> {
   const { status } = await import("@oxagen/tacho/cli");
   const report = await status(opts, await tachoDeps(writer));
-  return report.enrolled;
+  // The same exit rule as `tacho status`: a host whose events are not
+  // reaching Oxagen is not working, and every agent on the machine counts.
+  const reports = [report, ...(report.enrollments ?? [])];
+  return (
+    report.enrolled &&
+    !reports.some((entry) => entry.shipping?.healthy === false)
+  );
 }
 
 export async function handleTachoUnenroll(
   opts: TachoUnenrollOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
-  const { unenroll } = await import("@oxagen/tacho/cli");
+  const { parseHarnesses, unenroll } = await import("@oxagen/tacho/cli");
+  // `--harness` names one agent, so it takes one harness, as `tacho
+  // unenroll` does.
+  const harnesses =
+    opts.harness !== undefined ? parseHarnesses(opts.harness) : undefined;
+  const [harness] = harnesses ?? [];
+  if (harnesses !== undefined && harnesses.length !== 1)
+    throw new Error("--harness names one harness");
   // Only the token is lent: the revoke targets the org and workspace in
   // host.json, and the CLI's default pair may name another org (the app's
   // "also make it the CLI default" is optional, and `oxagen login --org`
@@ -151,6 +168,8 @@ export async function handleTachoUnenroll(
       ...(token !== undefined ? { token } : {}),
       ...(opts.purge !== undefined ? { purge: opts.purge } : {}),
       ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
+      ...(harness !== undefined ? { harness } : {}),
+      ...(opts.all === true ? { all: true } : {}),
     },
     await tachoDeps(writer),
   );

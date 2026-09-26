@@ -22,7 +22,11 @@ const calls: Array<{ name: string; args: unknown[] }> = [];
 const outcomes = {
   enroll: { ok: true, warnings: [] as string[] },
   verify: { ok: true, detail: "chained" },
-  status: { enrolled: true },
+  status: { enrolled: true } as {
+    enrolled: boolean;
+    shipping?: { healthy: boolean };
+    enrollments?: Array<{ shipping?: { healthy: boolean } }>;
+  },
   unenroll: { ok: true },
   reassign: {
     ok: true,
@@ -245,6 +249,49 @@ describe("oxagen tacho", () => {
     outcomes.verify = { ok: false, detail: "daemon down" };
     expect(await handleTachoVerify(writer)).toBe(false);
     expect(output()).toContain("FAILED: daemon down");
+  });
+
+  it("status fails when any agent on the machine is not shipping, as `tacho status` does", async () => {
+    const { writer } = captureWriter();
+    outcomes.status = {
+      enrolled: true,
+      shipping: { healthy: true },
+      enrollments: [
+        { shipping: { healthy: true } },
+        { shipping: { healthy: false } },
+      ],
+    };
+    expect(await handleTachoStatus({}, writer)).toBe(false);
+    outcomes.status = { enrolled: true, shipping: { healthy: false } };
+    expect(await handleTachoStatus({}, writer)).toBe(false);
+    outcomes.status = {
+      enrolled: true,
+      shipping: { healthy: true },
+      enrollments: [{ shipping: { healthy: true } }, {}],
+    };
+    expect(await handleTachoStatus({}, writer)).toBe(true);
+  });
+
+  it("unenroll forwards one agent's harness or --all, and refuses a list", async () => {
+    const { writer } = captureWriter();
+    expect(await handleTachoUnenroll({ harness: "codex" }, writer)).toBe(true);
+    expect(calls.at(-1)?.args[0]).toEqual({
+      token: "session-token",
+      harness: "codex",
+    });
+    expect(await handleTachoUnenroll({ all: true }, writer)).toBe(true);
+    expect(calls.at(-1)?.args[0]).toEqual({
+      token: "session-token",
+      all: true,
+    });
+    calls.length = 0;
+    await expect(
+      handleTachoUnenroll({ harness: "codex,cursor" }, writer),
+    ).rejects.toThrow("--harness names one harness");
+    await expect(
+      handleTachoUnenroll({ harness: "vscode" }, writer),
+    ).rejects.toThrow(/unknown harness "vscode"/);
+    expect(calls).toEqual([]);
   });
 
   it("reassign --default writes the host's new pair into config.json, and only after success", async () => {

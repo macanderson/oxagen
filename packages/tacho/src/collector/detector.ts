@@ -431,6 +431,10 @@ export class Detector {
   }
 
   private async checkTranscripts(record: RecordSink): Promise<TachoEvent[]> {
+    // One daemon process serves every enrollment on the machine (ADR-202),
+    // and only one of them watches the transcripts, so the others skip the
+    // process listing too.
+    if (this.deps.transcriptRoots.length === 0) return [];
     const watched = new Set(
       [...this.sightings.values()].map((sighting) => sighting.path),
     );

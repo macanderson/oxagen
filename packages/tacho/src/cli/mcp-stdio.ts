@@ -23,6 +23,7 @@
 import { createInterface } from "node:readline";
 import { readHostFile } from "../host/host-file";
 import { tachoPaths } from "../host/paths";
+import { slotPathsForEnrollment } from "../host/slots";
 
 export interface McpStdioOptions {
   /** The enrollment this config entry was written for. */
@@ -65,7 +66,12 @@ export function resolveTarget(
   options: McpStdioOptions,
   deps: Pick<McpStdioDeps, "env" | "home">,
 ): { ok: true; url: string; token: string } | { ok: false; message: string } {
-  const paths = tachoPaths(deps.env, deps.home);
+  // The entry names the enrollment it was written for, and a machine can
+  // hold one enrollment per agent (ADR-202).
+  const paths = slotPathsForEnrollment(
+    tachoPaths(deps.env, deps.home),
+    options.enrollment,
+  );
   let host: ReturnType<typeof readHostFile>;
   try {
     host = readHostFile(paths.hostFile);

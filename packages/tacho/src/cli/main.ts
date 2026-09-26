@@ -12,6 +12,7 @@ import {
   withRecordedHarnessFiles,
 } from "../host/host-file";
 import { tachoPaths } from "../host/paths";
+import { isWrappedHarness, type TachoHarness } from "../wire";
 import {
   githubConfigure,
   githubCredential,
@@ -46,6 +47,22 @@ export function parsePort(value: string): number {
       "expected a whole number from 1024 to 65535",
     );
   return port;
+}
+
+/** `--harness` where it names one agent: exactly one known harness. */
+export function parseOneHarness(value: string): TachoHarness {
+  let harnesses: TachoHarness[];
+  try {
+    harnesses = parseHarnesses(value);
+  } catch (error) {
+    throw new InvalidArgumentError(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  const [harness] = harnesses;
+  if (harness === undefined || harnesses.length !== 1)
+    throw new InvalidArgumentError("name one harness");
+  return harness;
 }
 
 /**
@@ -187,7 +204,15 @@ export function buildTachoProgram(): Command {
         return;
       }
       if (opts["verify"] === true) {
-        const verified = await verify({}, deps);
+        // Drive a harness this enrollment hooks, so the turn lands in the
+        // collector just enrolled and not in another agent's (ADR-202).
+        const verifyHarness = (
+          harness !== undefined ? parseHarnesses(harness) : []
+        ).find(isWrappedHarness);
+        const verified = await verify(
+          verifyHarness !== undefined ? { harness: verifyHarness } : {},
+          deps,
+        );
         deps.out(
           verified.ok
             ? `Verified: ${verified.detail}`
@@ -293,7 +318,12 @@ export function buildTachoProgram(): Command {
       );
       // A host whose events are not reaching Oxagen is not working, whatever
       // else is installed, so a script or the installer can gate on this.
-      if (!report.enrolled || report.shipping?.healthy === false)
+      // Every agent on the machine counts, not only the first.
+      const reports = [report, ...(report.enrollments ?? [])];
+      if (
+        !report.enrolled ||
+        reports.some((entry) => entry.shipping?.healthy === false)
+      )
         process.exitCode = 1;
     });
 
@@ -308,7 +338,14 @@ export function buildTachoProgram(): Command {
     .option("--workspace <slug>")
     .option("--purge", "Also delete the local WAL, spool, and quarantine")
     .option("--reason <text>", "Reason recorded with the revoke")
+    .option(
+      "--harness <name>",
+      "The agent to unenroll, by the harness it hooks, when this machine holds more than one enrollment",
+      parseOneHarness,
+    )
+    .option("--all", "Unenroll every agent on this machine")
     .action(async (opts: Record<string, unknown>) => {
+      const harness = opts["harness"] as TachoHarness | undefined;
       const result = await unenroll(
         {
           token: tokenOption(opts, deps.err),
@@ -316,6 +353,8 @@ export function buildTachoProgram(): Command {
           workspace: opts["workspace"] as string | undefined,
           purge: opts["purge"] as boolean | undefined,
           reason: opts["reason"] as string | undefined,
+          ...(harness !== undefined ? { harness } : {}),
+          ...(opts["all"] === true ? { all: true } : {}),
         },
         recordedCliDeps(),
       );
@@ -334,7 +373,7 @@ export function buildTachoProgram(): Command {
     .option("--api-url <url>", "Oxagen API base URL")
     .option(
       "--harness <list>",
-      "Replace the harness list (default: keep the current one)",
+      "Replace the harness list (default: keep the current one). On a machine with more than one agent, it also names the agent to reassign",
     )
     .option("--reason <text>", "Reason recorded with the revoke")
     .option("--allow-root", "Reassign even when running as root")
