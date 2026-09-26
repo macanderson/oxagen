@@ -16,7 +16,7 @@ import { Suspense, use } from "react";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
 import type { RunSubagent, RunWork } from "@/data/contracts/run-work";
-import type { RunRow } from "@/data/contracts/runs";
+import { isStale, type RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
@@ -688,6 +688,10 @@ function AgentLine({
  * is moving when it is waiting on a person. Paused wins over parked: a paused
  * run takes no step whatever its calls are waiting on.
  *
+ * Stale wins over both. A run whose host has gone quiet (`isStale`) may have
+ * stopped, and what the record last said about a pause or a parked call is
+ * no longer news of the run.
+ *
  * The word sits in a polite live region, so when a refresh of the page parks
  * a call or pauses the run, a screen reader hears the new word.
  */
@@ -696,7 +700,9 @@ function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
   const live = run.status === "live";
   return (
     <span role="status" data-testid="run-status" className="inline-flex">
-      {live && run.ingressPaused === true ? (
+      {isStale(run) ? (
+        <StatusBadge status={run.status} outcome={run.outcome} stale />
+      ) : live && run.ingressPaused === true ? (
         <Badge tone="approval" data-status="paused">
           {t("statusPaused")}
         </Badge>

@@ -10433,6 +10433,8 @@ type Messages = {
     };
     runStatus: {
       live: string;
+      stale: string;
+      staleWhy: string;
       sealed: string;
       halted: string;
       running: string;

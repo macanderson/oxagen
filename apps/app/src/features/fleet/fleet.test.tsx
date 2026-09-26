@@ -577,6 +577,36 @@ describe("the Runs panel", () => {
     ]);
   });
 
+  it("says stale, with a still dot, on a live row whose host has not checked in for five minutes (A-02)", async () => {
+    await loaded({
+      runs: runPage([
+        runRow({
+          id: "tse_quiet",
+          source: "tacho",
+          status: "live",
+          commandBlock: "host_offline",
+        }),
+        runRow({ id: "tse_heard", source: "tacho", status: "live" }),
+      ]),
+      approvals: approvalQueue([
+        approvalItem({ id: "apr_quiet", runId: "tse_quiet" }),
+      ]),
+    });
+    const quiet = row("tse_quiet");
+    const badge = quiet.querySelector<HTMLElement>("span[data-status]");
+    expect(badge).toHaveTextContent(/^stale$/);
+    expect(badge).toHaveAttribute("data-stale", "true");
+    expect(quiet.querySelector("[data-pulse]")).toBeNull();
+    // Stale wins over the parked call: the host that holds it went quiet.
+    expect(quiet).not.toHaveTextContent("parked for approval");
+    // Negative: a live run whose host checks in still pulses live.
+    const heard = row("tse_heard");
+    expect(heard.querySelector("span[data-status]")).toHaveTextContent(
+      /^live$/,
+    );
+    expect(heard.querySelector("[data-pulse]")).not.toBeNull();
+  });
+
   it("marks the chips, the pager and the row actions as 44px touch targets on a phone", async () => {
     await loaded();
     for (const chip of ["all", "live", "parked", "sealed"])

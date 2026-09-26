@@ -28,6 +28,7 @@ import type { ApprovalQueue } from "@/data/contracts/approvals";
 import {
   type CommandBlock,
   commandBlockOf,
+  isStale,
   type PullRequestFilter,
   type RunDiff,
   type RunPullRequest,
@@ -1003,7 +1004,9 @@ function RunRowView({
       case "status":
         return (
           <td key={column} className={cell}>
-            {state === "parked" ? (
+            {/* A stale run's host went quiet, so its parked call is no longer
+                news of the run: stale wins, as on the Run page's header. */}
+            {state === "parked" && !isStale(run) ? (
               <Badge tone="approval" data-status="parked">
                 {t("parked")}
               </Badge>
@@ -1012,6 +1015,7 @@ function RunRowView({
                 status={run.status}
                 outcome={run.outcome}
                 vocabulary="lifecycle"
+                stale={isStale(run)}
               />
             )}
           </td>

@@ -38,9 +38,16 @@ export function StatusBadge({
   status,
   outcome,
   vocabulary = "outcome",
+  stale = false,
 }: {
   status: RunStatus;
   outcome: RunOutcome;
+  /**
+   * An open run Oxagen has stopped hearing from (`isStale`). It draws a still
+   * dot and says stale, because a breathing dot on a run whose host went
+   * quiet reads as a run that is moving. Ignored once the run has ended.
+   */
+  stale?: boolean;
   /**
    * Which word the pill prints. `outcome` (the Run page) says how an ended run
    * ended. `lifecycle` (Fleet's Status column and its facet, fleet.md) prints
@@ -51,6 +58,19 @@ export function StatusBadge({
 }) {
   const t = useTranslations("ui.runStatus");
   const lifecycle = vocabulary === "lifecycle";
+  if (status === "live" && stale)
+    return (
+      <Badge
+        tone="quiet"
+        dot
+        data-status={status}
+        data-stale="true"
+        data-outcome={outcome}
+        title={t("staleWhy")}
+      >
+        {t("stale")}
+      </Badge>
+    );
   // `.live { font-size:11px; font-weight:600; color:var(--st-allowed) }` and
   // `.live .p { width:6px; height:6px; animation:pulse }`: an open run is
   // not a pill but a breathing dot and the word, in the allowed hue.

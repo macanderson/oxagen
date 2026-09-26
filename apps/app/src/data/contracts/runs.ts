@@ -196,6 +196,26 @@ export function commandBlockOf(run: {
   return run.commandBlock ?? null;
 }
 
+/**
+ * Whether an open run's light reads stale: its host has not checked in within
+ * the poll window, five minutes (`HOST_POLL_WINDOW_MS`), which the row answers
+ * as `commandBlock: host_offline`. The host polls every few seconds while its
+ * daemon runs, so a laptop that went to sleep or a daemon that was killed
+ * reads stale within minutes rather than live until Oxagen closes the run
+ * after 12 hours with no event.
+ *
+ * A run with no host has no heartbeat to miss. A ledger run, and a wrapped
+ * session no host is recorded for, read live until they seal. The reading is
+ * as of the page's read: the page does not re-read a row to notice the host
+ * going quiet.
+ */
+export function isStale(run: {
+  status: RunStatus;
+  commandBlock?: CommandBlock | null;
+}): boolean {
+  return run.status === "live" && run.commandBlock === "host_offline";
+}
+
 /** Token totals by kind, as the recorder counted them. */
 /**
  * A pull request (or GitLab merge request) the run's frames name. The URL is

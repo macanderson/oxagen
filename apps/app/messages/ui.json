@@ -42,6 +42,8 @@
     },
     "runStatus": {
       "live": "live",
+      "stale": "stale",
+      "staleWhy": "Oxagen has not heard from this run's host in five minutes. The run may have stopped. Oxagen closes a run after 12 hours with no event.",
       "sealed": "sealed",
       "halted": "halted",
       "running": "running",

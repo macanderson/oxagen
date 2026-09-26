@@ -761,6 +761,88 @@ describe("header", () => {
     expect(status).not.toHaveTextContent("parked");
   });
 
+  it("says stale, with a still dot, once a live run's host has not checked in for five minutes (A-02)", async () => {
+    // A lost laptop or a killed daemon stops polling. The run stays open
+    // until Oxagen closes it after 12 hours with no event, and its light
+    // used to pulse live for all of them.
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            commandBlock: "host_offline",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [], more: false }),
+    });
+    const status = screen.getByTestId("run-status");
+    expect(status).toHaveTextContent(/^stale$/);
+    expect(status.querySelector("[data-pulse]")).toBeNull();
+    expect(status.querySelector("[data-stale='true']")).toHaveAttribute(
+      "title",
+      expect.stringContaining("has not heard from this run's host"),
+    );
+    await expectNoAxe(container);
+  });
+
+  it("says stale over parked and paused, since the host that held them went quiet", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            ingressPaused: true,
+            commandBlock: "host_offline",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [approval()], more: false }),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^stale$/);
+  });
+
+  it("pulses live while the host checks in, and on a run with no host to check in (negative)", async () => {
+    for (const commandBlock of [null, "no_host"] as const) {
+      await renderRun({
+        detail: ok(
+          runDetail({
+            run: runRow({
+              status: "live",
+              sealedAt: null,
+              source: "tacho",
+              commandBlock,
+            }),
+          }),
+        ),
+        transcript: ok(runTranscript()),
+        approvals: ok({ items: [], more: false }),
+      });
+      const status = screen.getByTestId("run-status");
+      expect(status).toHaveTextContent(/^live$/);
+      expect(status.querySelector("[data-pulse]")).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("reads an ended run's outcome, not stale, whatever its host last did (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ commandBlock: "host_offline" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^completed$/);
+  });
+
   it("reads live on a live run with nothing parked and ingress open (negative)", async () => {
     await renderRun({
       detail: ok(
