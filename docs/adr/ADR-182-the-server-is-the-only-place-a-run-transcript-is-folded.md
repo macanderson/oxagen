@@ -45,9 +45,10 @@ counting of frames of its own.
 2. Every fact the browser used to derive is a field of the entry or of the
    response. On the entry, that covers its key, the spawning step, the
    outcome, the approval id, the gates, the subject, the tool family, the
-   duration, the entry it repeats, the recall tally, and the `tool_use`
-   blocks a tool entry claims. On the response, it covers the count per
-   kind, the page figures, and the search matches.
+   duration, the entry it repeats, each item a recall listed with whether
+   it reached the model and why it was cut, and the `tool_use` blocks a
+   tool entry claims. On the response, it covers the count per kind, the
+   page figures, and the search matches.
 3. A fact is never written into a label for a client to parse.
 4. `kinds` filters entries after the fold, so a filtered transcript shows the
    same steps as an unfiltered one.
@@ -57,6 +58,11 @@ counting of frames of its own.
 6. The browser keeps presentation only: drawing an entry's rows, cutting a
    line to width, reading a tool's body into display fields, and reconciling
    pages.
+7. The frames the fold reads are composed once, by `readTranscriptFrames`
+   in `@oxagen/run-ledger`: each subagent chain spliced in where it was
+   spawned, a harness's late report of a metered call uncounted, and each
+   model call once, to one frame cap. `get_run_transcript` and
+   `run.summarize` pass it their store reads and fold what it returns.
 
 A rule written in two places drifts, and the copy nobody remembers is the one
 that ships the defect. A rule about how a run reads is a change to
@@ -78,8 +84,40 @@ fold, and the client fold introduced with #3345.
 - The ledger path of `get_run_turns` counts steps from the fold. The wrapped
   path still counts in ClickHouse SQL, a second definition, until each frame
   carries its step key from ingest. That change needs a ClickHouse migration
-  and has its own issue.
+  and has its own issue, #4308.
 - The page's figures and counts share the transcript read's 10,000-frame cap,
   and say so when a run passes it, as they did before.
 - A search can read every retained body of a run, so it is bounded per read
   and says what it left unsearched.
+- At `steps`, which prompts and replies draw nothing, and which reply repeats
+  words just shown, are settled from their words over the whole run, so the
+  counts match the rows. A body never changes, so the server keeps, per
+  process, the digest of each body's trimmed words and whether it has any,
+  never the words, keyed by tenant, reference and digest. A later page or
+  live read reads only the word bodies it has not read, and every half a
+  page shows is read from the evidence store. `everything` and `turns` read
+  only the prompts' words, for the figures, which the cache holds once the
+  run has been read at `steps`. Recording that digest and blank flag at
+  ingest would let the read settle both facts with no body read at all; that
+  needs a ClickHouse column and is issue #4331.
+- A chip selects what the Run page draws under it, so a chip's count in
+  `counts.kinds` is the count of what the chip shows. `prompt` is the
+  operator's prompt and no longer a model call's request, `responses` takes
+  a reply the harness reported with its words kept and leaves out a model
+  response kept as a digest alone, `seal` is the run's own stop rather than
+  the chain's checkpoints and gaps, and `usage` takes token counts reported
+  without a cost and the effort a model call ran at. API and MCP callers
+  that filtered on those chips see the new selection.
+- Which rows a kept model reply draws, its words or only the tools it
+  called, needs its body read, and a count reads no body. So the Run page
+  draws a row under `responses` for every model step that answers it: what
+  the model said, or a line naming what it called when it said nothing in
+  words. A model step with nothing to draw, a call still waiting on its reply
+  or one kept as a digest with no figures, is `quiet`. The `figures.prompts`
+  figure counts a prompt as the `prompt` chip does.
+- The Run page draws a row under a chip only when the entry's `kinds` carry
+  that chip, and marks a row failed only as the errors count does. The server
+  counts `thinking` from the reasoning tokens a provider reported, and
+  `tools` from tool steps, so a kept thought of a step that reported none,
+  and a call only the reply records, are drawn under `responses`. A failed
+  result of such a call shows in its row and makes no error.

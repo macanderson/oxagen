@@ -1,4 +1,4 @@
-# ADR-186: A reconciliation reports what the session changed
+# ADR-188: A reconciliation reports what the session changed
 
 - **Status:** Accepted
 - **Date:** 2026-09-25

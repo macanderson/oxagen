@@ -38,7 +38,7 @@ import {
 } from "./player-model";
 import { ParkedElsewhere, ParkedHere } from "./parked-calls";
 import { DecidedApprovals } from "./resolved-approvals";
-import type { RunTabProps } from "./tab-props";
+import type { FrameTabProps } from "./tab-props";
 import { RunTimeline } from "./timeline";
 
 /**
@@ -94,7 +94,7 @@ async function readBody(
   return retained ? source.runs.frameBody(ctx, runId, open.seq) : null;
 }
 
-export async function GovernedActionsTab(props: RunTabProps) {
+export async function GovernedActionsTab(props: FrameTabProps) {
   const { ctx, source, run, detail, view, now } = props;
   const open = openFrameOf(detail.frames.frames, view.body);
   const [body, approvals] = await Promise.all([
@@ -129,7 +129,7 @@ function GovernedActions({
   mandates,
   now,
 }: {
-  props: RunTabProps;
+  props: FrameTabProps;
   open: OpenFrame | null;
   body: Read<RunFrameBody> | null;
   pending: Read<ApprovalQueue>;
@@ -204,7 +204,8 @@ function GovernedActions({
   const steps = stepsOf(frames, open);
   const target = (seq: string | null) => (seq === null ? null : hrefOf(seq));
   const approvalFrame =
-    open.frame !== null && isApprovalFrame(open.frame.type, open.frame.summary);
+    open.frame !== null &&
+    isApprovalFrame(open.frame.type, open.frame.toolStatus);
 
   return (
     <>
@@ -231,7 +232,11 @@ function GovernedActions({
         }}
         hrefs={frames.map((frame) => hrefOf(frame.seq))}
         marks={frames.map((frame) =>
-          markOf(frame.type, decisionOf(entries.get(frame.seq)), frame.summary),
+          markOf(
+            frame.type,
+            decisionOf(entries.get(frame.seq)),
+            frame.toolStatus,
+          ),
         )}
         spent={entry?.cumulativeCost ?? null}
         total={metrics.cost}

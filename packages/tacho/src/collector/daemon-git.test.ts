@@ -928,7 +928,7 @@ describe("the daemon's git seam", () => {
       calls.some((call) => call.join(" ").includes("rev-parse HEAD")),
     ).toBe(true);
     // One whole-tree status, at the first read, records the edits already in
-    // the worktree (ADR-186). No read after it lists or diffs the tree.
+    // the worktree (ADR-188). No read after it lists or diffs the tree.
     expect(
       calls.filter((call) => call.join(" ").includes("--porcelain=v1 -z")),
     ).toHaveLength(1);

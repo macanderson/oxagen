@@ -484,7 +484,7 @@ export async function provenUnborn(
  * `--no-optional-locks` keeps both off the index lock. The untracked probes
  * come last because they need the root to build an absolute path.
  *
- * With a baseline this is the measure ADR-186 replaced: every change since
+ * With a baseline this is the measure ADR-188 replaced: every change since
  * that commit, which counts a pull's files and edits that predate the
  * session. The daemon reads through `readSessionChanges` in
  * `session-changes.ts`, which keeps this measure only for a session restored

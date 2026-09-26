@@ -19,7 +19,7 @@ import {
   type ArchiveFrame,
   type CompletenessGapKind,
   computeReplayGrade,
-  isContentBearingFrame,
+  frameOwesBody,
   type JsonValue,
   type Redaction,
   type GradeEnforcementTier,
@@ -256,10 +256,13 @@ export function deriveSealRollup(rows: readonly SealedFrameRow[]): SealRollup {
  * terminal status:
  *
  * - `digest_only` when the pinned policy kept digests alone;
- * - `body_missing` when a frame carried content and no body was retained: a
- *   content-bearing frame (`isContentBearingFrame`) with no body reference,
- *   whether or not the producer handed the ledger bytes to digest, or any
- *   other frame whose digest was recorded and whose bytes were not;
+ * - `body_missing` when a frame owes a body and none was retained
+ *   (`frameOwesBody`, the rule the wrapped-session seal applies too): a
+ *   content-bearing frame with no body reference, whether or not the producer
+ *   handed the ledger bytes to digest, or any other frame whose digest was
+ *   recorded and whose bytes were not. The write-ahead `*_call_started`
+ *   frames count, so a prompt dropped for size is a gap. A model call that
+ *   never answered is recorded with a `null` body, so it is not;
  * - `tool_bodies` when tool calls happened and none kept its result body;
  * - `unobserved_tail` when the attempt was abandoned: no producer observed
  *   its end.
@@ -277,9 +280,11 @@ export function deriveCompletenessGaps(input: {
   let toolCalls = 0;
   let toolBodies = 0;
   for (const row of input.rows) {
-    const carriesContent =
-      row.body_digest !== null || isContentBearingFrame(row.event_type);
-    if (carriesContent && row.body_ref === null) {
+    const owesBody = frameOwesBody({
+      type: row.event_type,
+      digest: row.body_digest,
+    });
+    if (owesBody && row.body_ref === null) {
       gaps.add(
         input.policy.mode === "digest_only" ? "digest_only" : "body_missing",
       );

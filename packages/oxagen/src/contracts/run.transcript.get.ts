@@ -126,6 +126,8 @@ export const TRANSCRIPT_SEARCH_HALF_MAX = 2_000;
  * its `target`, or the text of its `request` or `response` half. For a half
  * that carries an assembly, the text is its blocks: what the model said and
  * thought, each tool it called with the input, and each result's summary.
+ * An entry that matched on its label, subject or target has no half read, so
+ * its matches name only those.
  */
 export const TRANSCRIPT_MATCHES = [
   "label",
@@ -236,8 +238,9 @@ export const contentBlockSchema = z.discriminatedUnion("kind", [
       /**
        * The `key` of the tool step that recorded this call, so a reader draws
        * the call once, as that step: by call key, or, where either side kept
-       * none, the next tool step of the same name in the turn. Null for a
-       * call no tool step recorded.
+       * none, the next tool step of the same name on the reply's chain and in
+       * its turn, before that chain's next model call. Null for a call no
+       * tool step recorded.
        */
       stepKey: z.string().nullable().optional(),
       /**
@@ -249,6 +252,18 @@ export const contentBlockSchema = z.discriminatedUnion("kind", [
         .strict()
         .nullable()
         .optional(),
+      /**
+       * The family the called tool belongs to, read from `name` by the same
+       * rule as an entry's `family`, so a reader never keeps a family table
+       * of its own.
+       */
+      family: toolFamilySchema.optional(),
+      /**
+       * `name` as the harness knows the tool: without the prefix a gateway
+       * adds (`claude_code__Bash` is `Bash`) or a trailing `@version`. The
+       * server applies the one rule, so a reader keeps no prefix list.
+       */
+      tool: z.string().optional(),
     })
     .strict(),
   z
@@ -374,6 +389,13 @@ export const transcriptDecisionSchema = z
      * the frame names none.
      */
     source: z.string().nullable().optional(),
+    /**
+     * Whether `source` is the agent's harness checking itself rather than
+     * Oxagen policy or an operator deciding. False when the source is
+     * unrecorded. A reader sorts decisions on this and never on its own list
+     * of source words (ADR-182).
+     */
+    harness: z.boolean(),
     /** RFC 3339. */
     at: z.string().datetime(),
   })
@@ -382,7 +404,8 @@ export const transcriptDecisionSchema = z
 /**
  * What a recall frame put in front of the model, read on the server from the
  * body it kept: a steering manifest's items (ADR-093) or a context frame's
- * frames, or else the frame count the ledger recorded.
+ * frames, each with its outcome, or else the frame count the ledger
+ * recorded. No reader parses the body again (ADR-182).
  */
 export const transcriptRecallSchema = z
   .object({
@@ -392,7 +415,11 @@ export const transcriptRecallSchema = z
     tokens: z.number().int().nonnegative().nullable(),
     /** Items the manifest listed and cut; null when it recorded none. */
     cut: z.number().int().nonnegative().nullable(),
-    /** The items that reached the model, in the order listed, at most 2,000. */
+    /**
+     * Every item listed, included and cut, in the order listed, at most
+     * 2,000. A listing that records no outcome put every item in front of
+     * the model.
+     */
     items: z
       .array(
         z
@@ -400,10 +427,27 @@ export const transcriptRecallSchema = z
             kind: z.string(),
             label: z.string(),
             tokens: z.number().int().nonnegative().nullable(),
+            /** Whether the item reached the model; any recorded outcome but `included` is a cut. */
+            outcome: z.enum(["included", "cut"]),
+            /** The reason recorded for a cut; null when none was. */
+            reason: z.string().nullable(),
+            /** The item that replaced a cut one; null when none was recorded. */
+            supersededBy: z.string().nullable(),
+            /** The force the item carried (`must`, `should`, `may`, `info`); null when not recorded. */
+            force: z.string().nullable(),
           })
           .strict(),
       )
       .max(2_000),
+    /** The policy bundle a manifest was assembled on; null when it names none. */
+    bundleVersion: z.number().int().nonnegative().nullable(),
+    /**
+     * What the server made of the body: `listed` when it read a list from
+     * it, `unretained` when the frame kept none, `unreadable` when the kept
+     * body could not be read or no longer hashes to its digest, `unlisted`
+     * when it lists nothing or is too large to be a listing.
+     */
+    body: z.enum(["listed", "unretained", "unreadable", "unlisted"]),
   })
   .strict();
 
@@ -524,9 +568,21 @@ export const transcriptEntrySchema = z
     parentKey: z.string().nullable().optional(),
     /** What kind of row the entry is; null for a turn, which is a group. */
     node: transcriptNodeSchema.nullable().optional(),
-    /** True when the entry has nothing to show a reader beyond its frames. */
+    /**
+     * True when the entry has nothing to show a reader beyond its frames: a
+     * prompt or reply with no words to show, a reply that repeats words the
+     * reader was just shown (`echoOf`), a model step that kept no reply and
+     * carried no cost, tokens or effort, or an event with no decision and no
+     * failure. `counts` counts no quiet entry. The words are read at `steps`
+     * only: at `everything` a prompt or reply is quiet only when it kept no
+     * half at all, so one whose words are blank or repeat is not quiet there.
+     */
     quiet: z.boolean().optional(),
-    /** How the entry's call ended; null for an entry that records no call. */
+    /**
+     * How the entry's call ended; null for an entry that records no call. At
+     * `everything`, a call's request frame cannot say how the call ended, so
+     * its entry's outcome is null too.
+     */
     outcome: transcriptOutcomeSchema.nullable().optional(),
     /** The approval a parked call waits on (`apr_…`); null otherwise. */
     approvalId: z.string().nullable().optional(),
@@ -537,6 +593,13 @@ export const transcriptEntrySchema = z
     gates: z.array(transcriptDecisionSchema).optional(),
     /** The tool the entry is about, as the record names it; null when none. */
     subject: z.string().nullable().optional(),
+    /**
+     * `subject` as the harness knows the tool: without the prefix a gateway
+     * adds (`claude_code__Bash` is `Bash`) or a trailing `@version`. Null
+     * when `subject` is. The server applies the one rule, so a reader keeps
+     * no prefix list.
+     */
+    tool: z.string().nullable().optional(),
     /** The family of the entry's tool; null for an entry that is no tool call. */
     family: toolFamilySchema.nullable().optional(),
     /** `provider/model` of a model call; null elsewhere. */
@@ -547,9 +610,14 @@ export const transcriptEntrySchema = z
      */
     durationMs: z.number().int().nonnegative().nullable().optional(),
     /**
-     * The `key` of an earlier entry in the same turn whose kept body this one
-     * repeats byte for byte: a message that echoes the operator's prompt, or
-     * a reply that says again what the last one said. Null otherwise.
+     * The `key` of an earlier entry in the same turn whose words this reply
+     * says again, ignoring surrounding whitespace: on the run's own chain, the
+     * operator's prompt; on any chain, the model step or reply said last
+     * before it, such as a turn's closing message that repeats the model's
+     * last text block. The digests of the trimmed words are compared, not
+     * the bodies' digests. Null otherwise, and always null at `everything`,
+     * where the words are not read. An entry that repeats another is
+     * `quiet`.
      */
     echoOf: z.string().nullable().optional(),
     /** What a recall entry put in front of the model; null on other entries. */
@@ -566,20 +634,57 @@ export const transcriptEntrySchema = z
   })
   .strict();
 
+const entryCount = z.number().int().nonnegative();
+
 /**
- * What the whole run holds at the zoom read, counted over every entry
- * whatever the chips pressed, so a chip's count and the page agree.
+ * One count for every chip. The server counts each chip on every read, so
+ * none is optional: a reader never has to guess a missing count as zero.
+ */
+const transcriptKindCountsSchema = z
+  .object(
+    Object.fromEntries(
+      TRANSCRIPT_KINDS.map((kind) => [kind, entryCount]),
+    ) as Record<(typeof TRANSCRIPT_KINDS)[number], typeof entryCount>,
+  )
+  .strict();
+
+/**
+ * What the whole run holds at the zoom read, counted over every entry that is
+ * not `quiet`, whatever the chips pressed, so a chip's count and the entries
+ * the page draws under it agree. The unit is the entry: a model step that
+ * said two things counts once. At `everything` the words are not read, so
+ * there a prompt or reply whose words are blank or repeat still counts.
  */
 export const transcriptCountsSchema = z
   .object({
     /** Entries per chip; an entry that answers two chips counts under both. */
-    kinds: z.record(transcriptKindSchema, z.number().int().nonnegative()),
+    kinds: transcriptKindCountsSchema,
     /** Entries that have something to show (`quiet` false). */
     entries: z.number().int().nonnegative(),
     /** Entries that failed or were refused, or that answer the errors chip. */
     errors: z.number().int().nonnegative(),
     /** Decisions a rule or a person made; the harness checking itself is not one. */
     policy: z.number().int().nonnegative(),
+    /**
+     * The same counts at `everything`, where each frame is its own entry,
+     * for the chips and figures a reader lists frames by: `kinds.policy` and
+     * `kinds.recall` count the frames those chips keep, and `policy` the
+     * decisions among them a rule or a person made. They are carried at
+     * every zoom, so a reader that reads `steps` does not read `everything`
+     * again for them.
+     */
+    frames: z
+      .object({
+        kinds: z
+          .object({
+            policy: z.number().int().nonnegative(),
+            recall: z.number().int().nonnegative(),
+          })
+          .strict(),
+        policy: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -638,7 +743,10 @@ export const transcriptBatchFiguresSchema = z
 export const transcriptFiguresSchema = z
   .object({
     steps: z.object({ model: count, tool: count }).strict(),
-    /** The times the operator prompted the run, the first prompt included. */
+    /**
+     * The times the operator prompted the run, the first prompt included,
+     * counted as `counts.kinds.prompt` counts them at `steps`.
+     */
     prompts: count,
     calls: z
       .object({
@@ -678,13 +786,20 @@ export const transcriptSearchSchema = z
   .object({
     /** The query as searched: trimmed and lowercased. */
     query: z.string(),
-    /** Entries that matched, after the chips; the page holds up to `limit` of them. */
+    /**
+     * Entries that matched, after the chips; the page holds up to `limit` of
+     * them. A read from a cursor searches only the entries it and the pages
+     * after it can still send (those past the cursor, and those before it
+     * that grew), so it counts those: the whole run on a first page.
+     */
     matched: count,
     /**
      * Halves that carried content the search could not look inside: kept as
      * a digest only, unreadable, or past `TRANSCRIPT_SEARCH_HALF_MAX`. An
      * entry whose only match would have been in one of them is not in
-     * `matched`.
+     * `matched`. The halves of an entry that matched on its label, subject
+     * or target are not needed and are not counted. Counted over the same
+     * entries as `matched`.
      */
     unsearched: count,
   })

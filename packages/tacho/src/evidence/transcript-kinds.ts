@@ -10,15 +10,23 @@
  *
  * The order is the mockup's, so a filter's URL lists its chips the way the
  * page draws them. `policy` is not a mockup chip; the Policy tab reads it.
+ *
+ * Each chip selects what the Transcript tab draws under it, so the count the
+ * server gives a chip is the count of what the chip shows (ADR-182).
  */
 
 export const TRANSCRIPT_KINDS = [
   /**
-   * What went out to a model: the request half of a model call, or the
-   * prompt an operator typed to open a turn of a wrapped run.
+   * The prompt an operator typed to open a turn: a `turn_start` on the run's
+   * own chain. The request half of a model call is the context the model was
+   * sent, and answers no chip.
    */
   "prompt",
-  /** What came back from a model: the response half, or a single receipt. */
+  /**
+   * What came back: a model call's response half or single receipt whose
+   * body was kept, and a reply the harness reported with its words kept
+   * (`turn_end`, or a message recorded as a response).
+   */
   "responses",
   /**
    * A model call that spent reasoning tokens (`thinking_tokens`). The text of
@@ -30,14 +38,17 @@ export const TRANSCRIPT_KINDS = [
   "tools",
   /** A decision a rule or a person made about a call: allow, deny, route. */
   "policy",
-  /** A frame that carried a cost record. */
+  /**
+   * A frame that carried a cost record or token counts without one, or a
+   * model call that recorded the reasoning effort it ran at.
+   */
   "usage",
   /** What was pulled into the model's context. */
   "recall",
   /**
-   * The chain's own integrity record: a wrapped session's signed
-   * `checkpoint` and its `telemetry_gap`, or the ledger event that closes an
-   * attempt before its seal.
+   * The run's own stop: the wrapped agent's `agent_stop` on the run's own
+   * chain, or the ledger event that closes an attempt before its seal. The
+   * chain's checkpoints and gaps are read on the Chain tab, not here.
    */
   "seal",
   /** A call that did not do what it was asked to. */

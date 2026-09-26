@@ -727,6 +727,27 @@
                                             "type": "null"
                                           }
                                         ]
+                                      },
+                                      "family": {
+                                        "type": "string",
+                                        "enum": [
+                                          "shell",
+                                          "read",
+                                          "edit",
+                                          "create",
+                                          "delete",
+                                          "search",
+                                          "web",
+                                          "skill",
+                                          "agent",
+                                          "plan",
+                                          "notebook",
+                                          "mcp",
+                                          "tool"
+                                        ]
+                                      },
+                                      "tool": {
+                                        "type": "string"
                                       }
                                     },
                                     "required": [
@@ -1418,6 +1439,27 @@
                                             "type": "null"
                                           }
                                         ]
+                                      },
+                                      "family": {
+                                        "type": "string",
+                                        "enum": [
+                                          "shell",
+                                          "read",
+                                          "edit",
+                                          "create",
+                                          "delete",
+                                          "search",
+                                          "web",
+                                          "skill",
+                                          "agent",
+                                          "plan",
+                                          "notebook",
+                                          "mcp",
+                                          "tool"
+                                        ]
+                                      },
+                                      "tool": {
+                                        "type": "string"
                                       }
                                     },
                                     "required": [
@@ -1730,6 +1772,9 @@
                         }
                       ]
                     },
+                    "harness": {
+                      "type": "boolean"
+                    },
                     "at": {
                       "type": "string"
                     }
@@ -1738,6 +1783,7 @@
                     "seq",
                     "decision",
                     "type",
+                    "harness",
                     "at"
                   ],
                   "additionalProperties": false
@@ -1921,6 +1967,9 @@
                       }
                     ]
                   },
+                  "harness": {
+                    "type": "boolean"
+                  },
                   "at": {
                     "type": "string"
                   }
@@ -1929,12 +1978,23 @@
                   "seq",
                   "decision",
                   "type",
+                  "harness",
                   "at"
                 ],
                 "additionalProperties": false
               }
             },
             "subject": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tool": {
               "anyOf": [
                 {
                   "type": "string"
@@ -2066,16 +2126,77 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "included",
+                              "cut"
+                            ]
+                          },
+                          "reason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "supersededBy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "force": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
                           "kind",
                           "label",
-                          "tokens"
+                          "tokens",
+                          "outcome",
+                          "reason",
+                          "supersededBy",
+                          "force"
                         ],
                         "additionalProperties": false
                       },
                       "maxItems": 2000
+                    },
+                    "bundleVersion": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "body": {
+                      "type": "string",
+                      "enum": [
+                        "listed",
+                        "unretained",
+                        "unreadable",
+                        "unlisted"
+                      ]
                     }
                   },
                   "required": [
@@ -2083,7 +2204,9 @@
                     "count",
                     "tokens",
                     "cut",
-                    "items"
+                    "items",
+                    "bundleVersion",
+                    "body"
                   ],
                   "additionalProperties": false
                 },
@@ -2148,10 +2271,56 @@
         "properties": {
           "kinds": {
             "type": "object",
-            "additionalProperties": {
-              "type": "integer",
-              "minimum": 0
-            }
+            "properties": {
+              "prompt": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "responses": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "thinking": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tools": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "policy": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "usage": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "recall": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "seal": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "errors": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "prompt",
+              "responses",
+              "thinking",
+              "tools",
+              "policy",
+              "usage",
+              "recall",
+              "seal",
+              "errors"
+            ],
+            "additionalProperties": false
           },
           "entries": {
             "type": "integer",
@@ -2164,6 +2333,38 @@
           "policy": {
             "type": "integer",
             "minimum": 0
+          },
+          "frames": {
+            "type": "object",
+            "properties": {
+              "kinds": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "recall": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "policy",
+                  "recall"
+                ],
+                "additionalProperties": false
+              },
+              "policy": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "kinds",
+              "policy"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

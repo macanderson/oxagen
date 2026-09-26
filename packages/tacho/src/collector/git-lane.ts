@@ -491,7 +491,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
             attrs: {
               // What the list measures, so a reader can tell a list that
               // leaves out pulled commits and earlier edits from one that
-              // does not (ADR-186).
+              // does not (ADR-188).
               changes_basis: reading.basis,
               pre_session_changes: PRE_SESSION_CHANGES[reading.preexisting],
               ...(snapshot

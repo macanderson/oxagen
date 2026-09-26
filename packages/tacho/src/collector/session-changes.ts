@@ -2,7 +2,7 @@
  * Which of a worktree's changes one session made.
  *
  * `git-facts.ts` reads what a worktree holds. This module decides which of
- * it belongs to the session reading it, by the rule ADR-186 records: the
+ * it belongs to the session reading it, by the rule ADR-188 records: the
  * files the session's own commits touched, and the uncommitted changes it
  * made, without the commits a pull brought in or the edits a person left
  * there before the session started.
@@ -424,7 +424,7 @@ async function filesOfCommits(
 /**
  * What this session changed in one worktree, with line counts.
  *
- * The rule, recorded in ADR-186. A path is reported when either:
+ * The rule, recorded in ADR-188. A path is reported when either:
  *
  * - a commit the session made touched it. The session's commits are the
  *   non-merge commits in `baseline..HEAD` whose committer email is the one

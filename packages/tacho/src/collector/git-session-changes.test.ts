@@ -3,7 +3,7 @@
  *
  * Every other reader test in this package answers git with canned stdout,
  * which proves the parsing and nothing about what git prints. The rule in
- * `readSessionChanges` (ADR-186) depends on what `git log`, `git diff`, and
+ * `readSessionChanges` (ADR-188) depends on what `git log`, `git diff`, and
  * `git status` actually say after a pull, a rebase, and a squash merge, so
  * these tests run git against repositories made in a temporary directory,
  * never against a checkout.

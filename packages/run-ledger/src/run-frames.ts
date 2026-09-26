@@ -17,8 +17,11 @@
  * names.
  */
 import {
+  type EvidenceStage,
+  isRunEventType,
   MODEL_CALL_EVENT_TYPES,
   type RunStepKind,
+  stageOfEventType,
   stepKindOfEventType,
   TOOL_CALL_EVENT_TYPES,
 } from "./event-payload-registry";
@@ -31,6 +34,7 @@ import {
   tachoStage,
 } from "./tacho-kinds";
 import {
+  bodyIsPartial,
   isTranscriptKind,
   countsLlmCallUsage,
   countsLlmCallSplit,
@@ -212,6 +216,12 @@ export interface FrameLlmCall {
   /** `request:<id>`, `message:<id>`: the keys the host's ledger joins sightings on. */
   keys: string[];
   source: string | null;
+  /**
+   * The body holds one half of the exchange, and the proxy marked the other
+   * missing (`bodyIsPartial`). The seal counts such a frame as missing its
+   * body.
+   */
+  partial: boolean;
 }
 
 /** What a frame's receipt timed. Null where it timed nothing. */
@@ -303,12 +313,9 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
         case "tool_call": {
           const tool = toolNameOf(p);
           const outcome = field(p, "outcome");
-          // A parked call names the approval it waits on as a third word
-          // (`create_workspace parked apr_…`), so the Run page can pair the
-          // receipt with that approval's card by id rather than by instant.
-          const approval = field(p, "approval_public_id");
-          if (tool && outcome && approval && outcome === "parked")
-            return `${tool} ${outcome} ${approval}`;
+          // A parked call's approval is not written here. The label is for a
+          // person to read, and a client that needs the approval reads the
+          // frame's `approvalId` (ADR-182 rule 3).
           if (tool && outcome) return `${tool} ${outcome}`;
           // An intention has no outcome by design — it is the frame that says
           // a call is about to happen — so its tool name is the whole truth
@@ -643,6 +650,7 @@ export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
                 ? llmCallKeys(payload as Record<string, unknown>).ids
                 : [],
             source: blank(row.source ?? ""),
+            partial: bodyIsPartial(row.attrs),
           },
         }
       : {}),
@@ -780,15 +788,10 @@ export const RECALL_TYPES: ReadonlySet<string> = new Set([
   // what it cut (ADR-093).
   "steering.manifest",
 ]);
-/**
- * A wrapped chain's own integrity frames: the signed checkpoint over the
- * chain so far, and the gap it records where frames were lost. A ledger
- * attempt's counterpart is its terminal-stage event, read by stage.
- */
-const SEAL_TYPES: ReadonlySet<string> = new Set([
-  "checkpoint",
-  "telemetry_gap",
-]);
+/** The wrapped agent's own stop frame. */
+const AGENT_STOP = "agent_stop";
+/** The ledger event that closes an attempt before its seal. */
+const ATTEMPT_TERMINATED = "terminal.attempt_terminated";
 /**
  * Tool outcomes that record a call that did not do what it was asked to.
  * `rejected` is tacho's word for a call the harness refused
@@ -806,18 +809,63 @@ export const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Whether `frame` is the run's own stop: the wrapped agent's `agent_stop` on
+ * the run's own chain, or the ledger event that closes an attempt before its
+ * seal. A subagent stopping is the subagent's, not the run's.
+ */
+export function stopsRun(frame: RunFrame): boolean {
+  return (
+    (frame.type === AGENT_STOP && frame.chain === undefined) ||
+    frame.type === ATTEMPT_TERMINATED ||
+    frame.stage === "terminal"
+  );
+}
+
+/**
+ * The half a turn boundary's own body is. The operator's prompt is what went
+ * out; a `turn_end` or a message the harness reported apart from it
+ * (`tachoFramePhase`) is what came back. A boundary whose body was not kept
+ * is no half.
+ */
+export function boundaryHalf(frame: RunFrame): "request" | "response" | null {
+  if (frame.body.bodyRef === null) return null;
+  if (frame.type === "turn_start") return "request";
+  if (frame.type === "turn_end") return "response";
+  if (frame.type === "oxagen:message" && frame.phase === "response")
+    return "response";
+  return null;
+}
+
+/**
  * Every chip a frame answers to. A frame may answer several: a failed tool
  * result is both `tools` and `errors`, and a model response that carried a
  * cost record is both `responses` and `usage`.
+ *
+ * A chip selects what the Run page's Transcript tab draws under it, so a
+ * chip's count is the count of what it shows (ADR-182): the operator's
+ * prompts, the words that came back, the tool calls, the cost and token
+ * counts, what was recalled, and the run's stop.
  */
 export function frameKinds(frame: RunFrame): TranscriptKind[] {
   const kinds = new Set<TranscriptKind>();
-  if (MODEL_TYPES.has(frame.type)) {
-    kinds.add(frame.phase === "request" ? "prompt" : "responses");
-  }
-  // A wrapped run's prompt is the `turn_start` its operator typed, not a model
-  // request: tacho records the harness's hooks and never a `model.request`.
-  // A subagent's own `turn_start` is the prompt its parent wrote, so it is not
+  // What came back from a model with its body kept, and a reply the harness
+  // reported with its words kept. The Run page draws a row under this chip
+  // for every model step that answers it: what the model said, or a line
+  // naming what it called when it said nothing in words. A response kept as
+  // a digest alone has nothing to draw there, so it answers `usage` when it
+  // carried a cost or tokens, and no chip otherwise. Which of those rows a
+  // kept body draws needs the body read, and a count reads no body. The
+  // request half of a model call answers no chip: it is the context the
+  // model was sent, not something a person prompted.
+  if (
+    MODEL_TYPES.has(frame.type) &&
+    frame.phase !== "request" &&
+    frame.body.bodyRef !== null
+  )
+    kinds.add("responses");
+  if (boundaryHalf(frame) === "response") kinds.add("responses");
+  // A wrapped run's prompt is the `turn_start` its operator typed. A
+  // subagent's own `turn_start` is the prompt its parent wrote, so it is not
   // counted. Nor is the transcript's or OTel's `oxagen:message` copy of the
   // same prompt, which would count each prompt two or three times.
   if (opensRunTurn(frame)) kinds.add("prompt");
@@ -827,10 +875,16 @@ export function frameKinds(frame: RunFrame): TranscriptKind[] {
   if (TOOL_TYPES.has(frame.type)) kinds.add("tools");
   if (POLICY_TYPES.has(frame.type)) kinds.add("policy");
   if (RECALL_TYPES.has(frame.type)) kinds.add("recall");
-  if (frame.costMicros !== null) kinds.add("usage");
-  if (SEAL_TYPES.has(frame.type) || frame.stage === "terminal") {
-    kinds.add("seal");
-  }
+  // What the Run page's usage row shows: a cost record, token counts the
+  // provider reported without one, or the reasoning effort a model call ran
+  // at.
+  if (
+    frame.costMicros !== null ||
+    (frame.usage ?? null) !== null ||
+    (MODEL_TYPES.has(frame.type) && (frame.identity.effort ?? "") !== "")
+  )
+    kinds.add("usage");
+  if (stopsRun(frame)) kinds.add("seal");
   const status = frame.identity.toolStatus;
   if (status !== null && FAILED_OUTCOMES.has(status)) kinds.add("errors");
   if (frame.type === "error" || frame.type.endsWith(".error")) {
@@ -894,6 +948,20 @@ export function stepKind(frame: RunFrame): "model_call" | "tool_call" | null {
  * first frame and wherever the recorded turn index changes after that, so
  * every frame is in one. A subagent numbers its own turns, and those are not
  * the run's: its frames stay in the turn they were spawned in.
+ *
+ * Without boundaries, only some frames carry the index: the ledger writes it
+ * on `model.call_completed` and on nothing else. A frame without one is in
+ * the turn of the indexed frame before it, with one exception. The frames
+ * that lead straight up to an indexed model call belong to that call's turn:
+ * its write-ahead intention (`model.engine_call_started`), the engine's own
+ * receipt, and the context it was handed. The walk back from the call stops
+ * at the first frame that is not one of these, so a tool call the previous
+ * model call asked for stays in the previous turn (#3375).
+ *
+ * The exception reads ledger event types only. A wrapped session stamps its
+ * turn index on every frame it records inside a turn, so it has no lead-in to
+ * carry, and the per-turn count ClickHouse keeps for a wrapped run
+ * (`selectTachoTurnFacts`) opens each turn where its index first appears.
  */
 export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
   if (frames.some(opensRunTurn)) {
@@ -905,7 +973,7 @@ export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
   }
   let turn = 0;
   let lastIndex: number | null = null;
-  return frames.map((frame, index) => {
+  const ordinals: number[] = frames.map((frame, index) => {
     if (index === 0) {
       turn = 1;
       lastIndex = frame.turnIndex;
@@ -917,6 +985,43 @@ export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
     lastIndex = frame.turnIndex;
     return turn;
   });
+  ordinals.forEach((opened, index) => {
+    if (index === 0 || opened === ordinals[index - 1]) return;
+    // `index` opened a turn on its recorded index. Carry the frames that lead
+    // up to it into that turn. Every one is unindexed, so the walk never
+    // crosses the previous indexed frame.
+    for (let back = index - 1; back >= 0; back -= 1) {
+      const frame = frames[back] as RunFrame;
+      if (!leadsIntoModelCall(frame)) break;
+      ordinals[back] = opened;
+    }
+  });
+  return ordinals;
+}
+
+/**
+ * The ledger stages of the frames that prepare or make a model call: the
+ * `context` stage (the frames selected, the instructions applied, the
+ * steering manifest) and the `model` stage (the engine's intention and
+ * receipt).
+ */
+const MODEL_APPROACH_STAGES: ReadonlySet<EvidenceStage> = new Set([
+  "context",
+  "model",
+]);
+
+/**
+ * Whether an unindexed ledger frame on the run's own chain leads into the
+ * model call after it, rather than following the one before it. The stage is
+ * the registry's for the frame's type, the stage the store recorded it at.
+ */
+function leadsIntoModelCall(frame: RunFrame): boolean {
+  return (
+    frame.turnIndex === null &&
+    frame.chain === undefined &&
+    isRunEventType(frame.type) &&
+    MODEL_APPROACH_STAGES.has(stageOfEventType(frame.type))
+  );
 }
 
 // ── Subagent chains ─────────────────────────────────────────────────────────

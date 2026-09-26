@@ -442,7 +442,7 @@ export function FrameList({
             const mark = markOf(
               frame.type,
               decisionOf(entries.get(frame.seq)),
-              frame.summary,
+              frame.toolStatus,
             );
             const on = frame.seq === openSeq;
             return (

@@ -137,6 +137,16 @@
       "writes": []
     },
     {
+      "domain": "graph",
+      "name": "author_graph_rule",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "auth",
       "name": "authorize_cli",
       "reads": [],
@@ -4136,7 +4146,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e2f8d216b37ccba4f55bdfbd961c0604c99d6096a7cd465926a24ead19539352",
+  "contentHash": "e3a5bba1519777d4b9b0ce48348048e75466c22b07e03a8270ae4d6d60d04d25",
   "domains": [
     {
       "name": "agent",

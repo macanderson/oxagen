@@ -96,7 +96,7 @@ async function worktreeFingerprint(
  * `paths`, when given, are the repo-relative paths the reconciliation beside
  * this snapshot reports, and the patch covers those and nothing else. Without
  * it the patch held every difference from the baseline, so after a pull it
- * carried every upstream file the reconciliation had left out (ADR-186).
+ * carried every upstream file the reconciliation had left out (ADR-188).
  * Without `paths`, as for a session measured the old way, the patch still
  * includes changes present before the run.
  */
