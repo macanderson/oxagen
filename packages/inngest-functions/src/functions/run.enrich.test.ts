@@ -19,6 +19,12 @@ const state = vi.hoisted(() => ({
   frames: null as unknown[] | null,
   configs: new Map<string, import("@oxagen/functions").DurableFunctionConfig>(),
   handlers: new Map<string, (ctx: unknown) => Promise<unknown>>(),
+  /** Scratch objects by `<job run id>/<name>`, as the evidence store keeps them. */
+  scratch: new Map<string, { bytes: Uint8Array; contentType: string }>(),
+  /** Every scratch key a job wrote, in order. */
+  scratchWritten: [] as string[],
+  /** Every scratch key a job deleted, in order. */
+  scratchDeleted: [] as string[],
 }));
 vi.mock("../inngest", () => ({
   inngest: { createFunction: vi.fn(() => ({})) },
@@ -125,12 +131,42 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
           "Please repair authentication. Fixed the redirect.",
         ),
     }),
+    putScratch: async (input: {
+      jobRunId: string;
+      name: string;
+      contentType: string;
+      bytes: Uint8Array;
+    }) => {
+      state.scratch.set(`${input.jobRunId}/${input.name}`, {
+        bytes: input.bytes,
+        contentType: input.contentType,
+      });
+      state.scratchWritten.push(`${input.jobRunId}/${input.name}`);
+    },
+    getScratch: async (_scope: unknown, jobRunId: string, name: string) => {
+      const object = state.scratch.get(`${jobRunId}/${name}`);
+      if (object) return object;
+      // What the storage driver throws for a key that holds nothing.
+      throw Object.assign(new Error(`no object ${name}`), {
+        name: "StorageNotFoundError",
+      });
+    },
+    deleteScratch: async (
+      _scope: unknown,
+      jobRunId: string,
+      names: readonly string[],
+    ) => {
+      for (const name of names) {
+        state.scratch.delete(`${jobRunId}/${name}`);
+        state.scratchDeleted.push(`${jobRunId}/${name}`);
+      }
+    },
   }),
 }));
 vi.mock("../lib/run-record", () => ({
   resolveRunRecord: async () => ({ source: "tacho", sessionUuid: "session" }),
-  readRunFrames: async () =>
-    state.frames ?? [
+  runFramePages: async function* () {
+    yield state.frames ?? [
       tachoFrame({
         seq: 1,
         ts: "2026-09-22 00:00:00.000",
@@ -152,7 +188,8 @@ vi.mock("../lib/run-record", () => ({
         costUsdMicros: null,
         turnSeq: 1,
       }),
-    ],
+    ];
+  },
 }));
 const {
   ENRICHMENT_BUDGET_NOTE,
@@ -165,11 +202,14 @@ const data = {
   workspaceId: "00000000-0000-4000-8000-000000000002",
   runPublicId: "tse_12345678",
 };
+/** The provider's run id for one job, which keys its scratch chunks. */
+const JOB_RUN_ID = "01K5ZJ3N9Q8R7S6T5V4W3X2Y1Z";
 const run = () =>
   state.handlers.get("run/enrich")!({
     event: { data },
     events: [{ data }],
     step: { run: (_name: string, fn: () => unknown) => fn() },
+    runId: JOB_RUN_ID,
   });
 beforeEach(() => {
   state.enabled = true;
@@ -193,6 +233,9 @@ beforeEach(() => {
     }),
     model: "fast-test",
   });
+  state.scratch.clear();
+  state.scratchWritten = [];
+  state.scratchDeleted = [];
 });
 describe("automatic run enrichment", () => {
   it("writes a generated account, then avoids charging for the identical input", async () => {
@@ -209,10 +252,10 @@ describe("automatic run enrichment", () => {
     expect(await run()).toEqual({ status: "disabled" });
     expect(state.call).not.toHaveBeenCalled();
     expect(state.writes).toHaveLength(1);
-    expect(Object.keys(state.writes[0]!)).toEqual([
-      "summaryObservedAt",
-      "summaryError",
-    ]);
+    // Only the observed time moves. A failed attempt keeps its error, so the
+    // run is due again once enrichment is back on (#3784).
+    expect(Object.keys(state.writes[0]!)).toEqual(["summaryObservedAt"]);
+    expect(state.writes[0]).not.toHaveProperty("summaryError");
   });
   it("does not persist an invented account when Stella or credit admission fails", async () => {
     state.call.mockRejectedValue(new Error("credit gate refused"));
@@ -351,8 +394,9 @@ it("uses root Tacho and V2 ledger predicates for enrichment eligibility", async 
     dialect.sqlToQuery(readableEnrichmentRun(schema.tachoSessions)).sql,
   ).toContain('"parent_session_uuid" is null');
   const ledger = dialect.sqlToQuery(readableEnrichmentRun(schema.agentRuns));
-  expect(ledger.sql).toContain('"spec_version" =');
-  expect(ledger.params).toEqual([2]);
+  // The literal 2 the partial index names, not a bind parameter (#3784).
+  expect(ledger.sql).toBe('"agent"."agent_runs"."spec_version" = 2');
+  expect(ledger.params).toEqual([]);
 });
 
 it("rejects an ineligible queued run before replaying an older durable read step", async () => {
@@ -485,6 +529,7 @@ describe("a queued event that no longer asks for work", () => {
       event: { data: eventData, ts: sentAt },
       events: [{ data: eventData, ts: sentAt }],
       step: { run: (_name: string, fn: () => unknown) => fn() },
+      runId: JOB_RUN_ID,
     });
 
   it("skips a sweep event that waited past its window, and leaves the run due", async () => {
@@ -534,6 +579,7 @@ describe("a failed enrichment", () => {
         name: "inngest/function.failed",
         data: {
           function_id: "oxagen-runner-run.enrich",
+          run_id: JOB_RUN_ID,
           error,
           event: { data: eventData },
         },
@@ -932,3 +978,205 @@ function evaluateDue(
 function escapeRegExp(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
+
+// #3784: a job wrote its transcript chunks and their manifest under the
+// content-addressed bodies/ prefix, shared with frame bodies, and nothing
+// ever deleted them.
+describe("the transcript chunks a job keeps", () => {
+  const key = (name: string) => `${JOB_RUN_ID}/${name}`;
+  const encode = (text: string) => new TextEncoder().encode(text);
+  const account = {
+    text: JSON.stringify({ name: "Parser work", summary: "Worked on it." }),
+    model: "fast-test",
+    costUsd: 0.01,
+  };
+  /** One retained prompt whose text takes `count` chunks. */
+  function runOfChunks(count: number) {
+    const bytes = encode(
+      "Work on the parser. ".repeat(
+        Math.ceil(((count - 0.5) * ENRICHMENT_CHUNK_CHARS) / 20),
+      ),
+    );
+    state.bodies.set("long-body", bytes);
+    state.frames = [
+      tachoFrame({
+        seq: 1,
+        ts: "2026-09-22 00:00:00.000",
+        kind: "turn_start",
+        hash: `sha256:${"c".repeat(64)}`,
+        contentDigest: digestBytes(bytes),
+        bytesRef: "long-body",
+        redactions: "",
+        toolName: "",
+        toolStatus: "",
+        toolUseId: "",
+        model: "",
+        provider: "",
+        policyDecision: "",
+        costUsdMicros: null,
+        turnSeq: 1,
+      }),
+    ];
+  }
+  const failed = () =>
+    state.handlers.get("failure")!({
+      event: {
+        name: "inngest/function.failed",
+        data: {
+          function_id: "oxagen-runner-run.enrich",
+          run_id: JOB_RUN_ID,
+          error: { message: "credit gate refused" },
+          event: { data },
+        },
+      },
+      step: { run: (_name: string, fn: () => unknown) => fn() },
+    });
+
+  it("keeps a run's chunks as scratch while it is summarized, then deletes every one", async () => {
+    runOfChunks(3);
+    state.call.mockImplementation(async (_scope: unknown, text: string) => {
+      // Every step that reads a chunk runs while the chunks are kept.
+      expect(state.scratch.has(key("manifest"))).toBe(true);
+      return text.startsWith("Return only JSON")
+        ? account
+        : { text: "A portion.", model: "fast-test", costUsd: 0.01 };
+    });
+    expect(await run()).toMatchObject({ status: "generated", calls: 4 });
+    // The manifest goes first, so a job that fails part way names each chunk.
+    expect(state.scratchWritten).toEqual([
+      key("manifest"),
+      key("chunk-0"),
+      key("chunk-1"),
+      key("chunk-2"),
+    ]);
+    // The manifest goes last, so a cleanup that fails part way can finish.
+    expect(state.scratchDeleted).toEqual([
+      key("chunk-0"),
+      key("chunk-1"),
+      key("chunk-2"),
+      key("manifest"),
+    ]);
+    expect(state.scratch.size).toBe(0);
+    // Nothing was written to the content-addressed body store.
+    expect([...state.bodies.keys()]).toEqual(["long-body"]);
+  });
+
+  it("keeps no chunks for a run whose input did not change (negative)", async () => {
+    expect(await run()).toMatchObject({ status: "generated" });
+    const written = [...state.scratchWritten];
+    expect(await run()).toEqual({ status: "unchanged" });
+    expect(state.scratchWritten).toEqual(written);
+    expect(state.scratch.size).toBe(0);
+  });
+
+  it("keeps no chunks for a run with no retained text (negative)", async () => {
+    state.frames = [
+      tachoFrame({
+        seq: 1,
+        ts: "2026-09-22 00:00:00.000",
+        kind: "tool_call",
+        hash: `sha256:${"d".repeat(64)}`,
+        contentDigest: "",
+        bytesRef: "",
+        redactions: "",
+        toolName: "Read",
+        toolStatus: "ok",
+        toolUseId: "toolu_1",
+        model: "",
+        provider: "",
+        policyDecision: "",
+        costUsdMicros: null,
+        turnSeq: 1,
+      }),
+    ];
+    expect(await run()).toEqual({ status: "no_retained_text" });
+    expect(state.scratchWritten).toEqual([]);
+    expect(state.call).not.toHaveBeenCalled();
+  });
+
+  it("deletes a failed job's chunks from its failure handler", async () => {
+    runOfChunks(2);
+    state.call.mockRejectedValue(new Error("credit gate refused"));
+    await expect(run()).rejects.toThrow("credit gate refused");
+    expect([...state.scratch.keys()].sort()).toEqual(
+      [key("chunk-0"), key("chunk-1"), key("manifest")].sort(),
+    );
+    await failed();
+    expect(state.scratch.size).toBe(0);
+    expect(state.scratchDeleted).toEqual([
+      key("chunk-0"),
+      key("chunk-1"),
+      key("manifest"),
+    ]);
+  });
+
+  it("deletes nothing from its failure handler when the job kept nothing (negative)", async () => {
+    await failed();
+    expect(state.scratchDeleted).toEqual([]);
+  });
+
+  it("deletes the chunks of a run that stopped being readable after its read step", async () => {
+    // What this job's read step kept before the run left the readable set.
+    state.scratch.set(key("manifest"), {
+      bytes: encode(JSON.stringify({ chunks: 2 })),
+      contentType: "application/json",
+    });
+    state.scratch.set(key("chunk-0"), {
+      bytes: encode("first"),
+      contentType: "text/plain",
+    });
+    state.scratch.set(key("chunk-1"), {
+      bytes: encode("second"),
+      contentType: "text/plain",
+    });
+    state.readable = false;
+    expect(await run()).toEqual({ status: "not_found" });
+    expect(state.scratch.size).toBe(0);
+  });
+
+  it("reads a read step recorded before #3784 through its manifest body, and deletes nothing", async () => {
+    state.bodies.set("legacy-chunk", encode("Frame 1: the legacy transcript"));
+    state.bodies.set(
+      "legacy-manifest",
+      encode(JSON.stringify(["legacy-chunk"])),
+    );
+    const legacy = {
+      retained: 1,
+      missing: 0,
+      unavailable: 0,
+      frames: 1,
+      truncated: 0,
+      digest: "legacy-digest",
+      revision: "2026-09-23 10:00:00.123456+00",
+      manifest: "legacy-manifest",
+      unchanged: false,
+    };
+    const outcome = await state.handlers.get("run/enrich")!({
+      event: { data },
+      events: [{ data }],
+      step: {
+        run: (name: string, fn: () => unknown) =>
+          name === "read-record" ? Promise.resolve(legacy) : fn(),
+      },
+      runId: JOB_RUN_ID,
+    });
+    expect(outcome).toMatchObject({ status: "generated" });
+    expect(String(state.call.mock.calls.at(-1)?.[1])).toContain(
+      "the legacy transcript",
+    );
+    expect(state.scratchDeleted).toEqual([]);
+    expect(state.bodies.has("legacy-chunk")).toBe(true);
+  });
+
+  it("refuses to keep a transcript without the provider's run id (negative)", async () => {
+    await expect(
+      state.handlers.get("run/enrich")!({
+        event: { data },
+        events: [{ data }],
+        step: { run: (_name: string, fn: () => unknown) => fn() },
+      }),
+    ).rejects.toThrow("run id");
+    expect(state.scratchWritten).toEqual([]);
+    expect(state.call).not.toHaveBeenCalled();
+  });
+});

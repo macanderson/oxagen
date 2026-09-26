@@ -859,4 +859,52 @@ describe("the run export bundle", () => {
       "broken",
     );
   });
+
+  // #3814 kept the top-level `body` beside `event.body` in format 3
+  // (docs/capabilities/run.export.md). This pins the reason the bytes allow
+  // it: the second copy sits in the same line, well inside deflate's 32 KiB
+  // window, so the zip stores it as back-references.
+  it("stores a carried frame's second copy of its body for a few bytes once zipped", () => {
+    const session = "0a1b2c3d-0000-4000-8000-000000000000";
+    const frames = (withTopLevelBody: boolean): JsonValue[] =>
+      Array.from({ length: 50 }, (_, seq) => {
+        // About 2 KB of facts per frame that do not compress on their own.
+        const facts = Array.from({ length: 30 }, (_, i) =>
+          digestBytes(`${seq}:${i}`),
+        );
+        const event = {
+          v: "tacho/1.0",
+          event_id: `ev_${seq}`,
+          session_uuid: session,
+          seq,
+          ts: "2026-09-14T12:00:00.000Z",
+          kind: "tool_call",
+          prev_hash: digestBytes(`prev:${seq}`),
+          hash: digestBytes(`hash:${seq}`),
+          body: { tool_name: "Read", tool_status: "ok", facts },
+        };
+        const frame = wrappedFrameOf(event, null);
+        if (withTopLevelBody) return frame;
+        const { body: _shown, ...rest } = frame;
+        return rest;
+      });
+    const bundleOf = (envelopes: JsonValue[]) =>
+      buildRunExportBundle({
+        runId: "tse_0a1b2c",
+        source: "tacho",
+        segments: [{ ...tachoSegment(), frameCount: 50, envelopes }],
+        key,
+        now: OBSERVED,
+      });
+    const kept = bundleOf(frames(true));
+    const dropped = bundleOf(frames(false));
+    const ndjson = (bytes: Uint8Array) =>
+      unpack(bytes)["frames.ndjson"]?.length ?? 0;
+    // Unzipped, the second copy grows the frames by more than a third.
+    expect(ndjson(kept.bytes)).toBeGreaterThan(
+      ndjson(dropped.bytes) * (4 / 3),
+    );
+    // Zipped, it grows the bundle by less than five percent.
+    expect(kept.bytes.length).toBeLessThan(dropped.bytes.length * 1.05);
+  });
 });

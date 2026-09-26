@@ -4,6 +4,8 @@ import {
   ENVELOPE_COLUMNS,
   SERVER_STAMPED_COLUMNS,
   TACHO_EVENT_COLUMNS,
+  type TachoEventRow,
+  type UnflattenReading,
   flattenEvent,
   unflattenEvent,
   unflattenEventReading,
@@ -406,5 +408,84 @@ describe("unflattenEventReading, a reading carried from the row before", () => {
     expect(
       unflattenEventReading({ ...row, hash: undefined }, { first: [] }),
     ).toEqual({ event: null, reading: null, tried: 0 });
+  });
+});
+
+// #3814: the candidates a whole session costs the export, counted by
+// `tried`. A candidate costs one hash check, and a failed check can cost more
+// than one sha256 call, so the unit is candidates and not sha256 calls.
+describe("unflattenEventReading, the cost of a session", () => {
+  /** What rebuilding every row costs, carrying the last matching reading when asked. */
+  function sessionCost(rows: readonly TachoEventRow[], carry: boolean) {
+    let reading: UnflattenReading | null = null;
+    let tried = 0;
+    let rebuilt = 0;
+    for (const row of rows) {
+      const result = unflattenEventReading(row, {
+        first: carry ? reading : null,
+      });
+      tried += result.tried;
+      if (result.event !== null) rebuilt += 1;
+      if (result.reading !== null) reading = result.reading;
+    }
+    return { tried, rebuilt };
+  }
+
+  it("costs every reading of every row for a session of rows that never match, carried or not", () => {
+    // Eight flags open: five empty groups, an empty content, a spawn_depth
+    // that reads 0 and a whole-second ts. The hash is not the event's, so no
+    // reading matches, as for an event sealed with an address member (#3072).
+    const events = sealAll(
+      Array.from({ length: 100 }, () =>
+        unsealed(
+          "agent_start",
+          {},
+          {
+            ts: "2026-09-08T10:06:04Z",
+            turn: {},
+            span: {},
+            context: {},
+            host: {},
+            anthropic: {},
+            content: { redactions: [] },
+            subagent: { subagent_id: "sub_1" },
+          },
+        ),
+      ),
+    );
+    const rows = events.map((event) => ({
+      ...asClickHouseRead(flattenEvent(event)),
+      hash: `sha256:${"e".repeat(64)}`,
+    }));
+    expect(sessionCost(rows, false)).toEqual({ tried: 100 * 256, rebuilt: 0 });
+    expect(sessionCost(rows, true)).toEqual({ tried: 100 * 256, rebuilt: 0 });
+  });
+
+  it("costs one candidate a row after the first once the reading is carried", () => {
+    const shape = {
+      ts: "2026-09-08T10:06:04Z",
+      turn: {},
+      span: {},
+      context: {},
+      host: {},
+      anthropic: {},
+      content: { redactions: [] },
+    };
+    const events = sealAll(
+      Array.from({ length: 100 }, (_, i) =>
+        unsealed(
+          "tool_call",
+          { tool_name: `Tool${i}`, tool_status: "ok" },
+          shape,
+        ),
+      ),
+    );
+    const rows = events.map((event) => asClickHouseRead(flattenEvent(event)));
+    // Seven flags open, and the match flips all seven: the 128th candidate.
+    expect(sessionCost(rows, false)).toEqual({
+      tried: 100 * 128,
+      rebuilt: 100,
+    });
+    expect(sessionCost(rows, true)).toEqual({ tried: 128 + 99, rebuilt: 100 });
   });
 });
