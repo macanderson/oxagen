@@ -41,10 +41,11 @@ A path is in a reconciliation when the session changed it. The rule lives in
 1. **The session's own commits.** The lane stamps the session's first git
    read (`gitFirstReadAt`). A commit is the session's when it is a non-merge
    commit in `baseline..HEAD`, both its committer date and its author date
-   are at or after that first read, floored to the second, and either no
-   remote-tracking ref reaches it or its committer email equals the email the
-   repository stamps (its `user.email`, or the identity git derives when none
-   is set). A commit counted once stays counted for that worktree
+   are at or after that first read, floored to the second, and one of three
+   tests holds: no remote-tracking ref reaches it, the worktree's `HEAD`
+   reflog records it as made there, or its committer email equals the email
+   the repository stamps (its `user.email`, or the identity git derives when
+   none is set). A commit counted once stays counted for that worktree
    (`sessionCommits`).
 
    > Amended 2026-09-25 (#4320). As first decided, the email was the only
@@ -77,7 +78,9 @@ A path is in a reconciliation when the session changed it. The rule lives in
    reconciliation read, or against nothing when it is untracked. The
    snapshot names that `HEAD` and the committed paths in `bases`, and marks
    the patch partial (`head_changed_during_capture`) when `HEAD` moved
-   before the capture.
+   before the capture. A patch with a hunk that differs from what the
+   baseline would give is marked partial too (`mixed_bases`), so a reader
+   does not apply it to `diff_base_sha`.
 
    > Amended 2026-09-25 (#4320). As first decided, the patch took every path
    > against the baseline, so its hunks could differ from a row's line
@@ -143,10 +146,12 @@ is not credited for the amendment.
 - **Re-baseline when `HEAD` moves to a commit a remote-tracking ref already
   held.** Rejected. A session's own commits are reachable from its upstream
   once it pushes, so the test cannot tell its pushed work from a pull.
-- **Read the `HEAD` reflog.** Its `commit:` entries name the commits made in
-  this worktree, and `pull:` and `reset:` entries name the moves. Rejected for
-  now: the reflog is free text, it can be switched off, and it cannot tell a
-  person's commit in the same worktree from the session's either.
+- **Read the `HEAD` reflog as the only test.** Its `commit:` entries name the
+  commits made in this worktree, and `pull:` and `reset:` entries name the
+  moves. Rejected as the only test, because the reflog can be switched off.
+  The 2026-09-25 amendment adds it as one of three tests, so a worktree with
+  no reflog falls back to the other two. It cannot tell a person's commit in
+  the same worktree from the session's, which the known limits name.
 - **Snapshot the whole worktree at the first read.** Rejected. Its cost grows
   with the repository rather than with the dirty paths.
 
@@ -161,12 +166,14 @@ each case as named.
   session's first read. These are reported as the session's when they reach
   this worktree before any remote holds them, or carry the session's email.
   Squash and rebase merges on GitHub carry GitHub's committer email and
-  arrive through a fetch, so they are not.
-- **An agent that commits under another email and pushes in the same turn.**
-  Amended 2026-09-25 (#4320). By the end-of-turn read, the commit is on a
-  remote-tracking ref and its email is not the repository's, so it reads as
-  pulled and is not reported. A commit under another email that is still
-  unpushed at a read is reported, and stays counted after a later push.
+  arrive through a fetch, so they are not. A cherry-pick of an upstream
+  commit authored after the first read is reported, because the session made
+  the new commit.
+- **An agent that commits under another email and pushes in the same turn,
+  in a worktree with no `HEAD` reflog.** Amended 2026-09-25 (#4320). By the
+  end-of-turn read, the commit is on a remote-tracking ref, its email is not
+  the repository's, and no reflog names it, so it reads as pulled and is not
+  reported. Git keeps the reflog by default (`core.logAllRefUpdates`).
 - **A pull that updates no remote-tracking ref**, such as
   `git pull <url> <branch>`, brings in commits no remote-tracking ref holds.
   Those dated after the first read are reported as the session's.
@@ -207,15 +214,18 @@ each case as named.
 - The first read of each worktree costs one whole-tree `git status` and a hash
   of each recorded path. A reconciliation after `HEAD` moved adds a
   `git config` read, a `git log` of the range filtered to the session's email,
-  a `git log` of the range less every remote-tracking ref, and one `git log`
-  of the counted commits.
+  a `git log` of the range less every remote-tracking ref, a walk of up to
+  1,024 `HEAD` reflog entries, and one `git log` of the counted commits. Each
+  commit the reflog names that the other two tests left out costs one more
+  `git log` for all of them and one `git merge-base` each, at most 128.
 - `daemon.json` holds the record and the counted commits with the session,
   within the bounds above. `pre-session/<session uuid>/` under the Tacho
-  state directory holds the copies, and the daemon removes it when it
-  forgets the session.
+  state directory holds the copies. The daemon removes it when it forgets
+  the session, and `tacho unenroll` removes the whole `pre-session/`
+  directory, since no daemon is left to.
 - The captured diff after a pull no longer carries the upstream files.
 
-## Amendment 2026-09-25: a commit no remote holds is the session's (#4320)
+## Amendment 2026-09-25: a commit made in the worktree is the session's (#4320)
 
 The rule as first decided counted a commit only when its committer email
 was the repository's. An agent whose shell exports `GIT_COMMITTER_EMAIL`, or
@@ -229,16 +239,30 @@ remote-tracking ref by the time `HEAD` holds it. A commit made in this
 worktree is on none until it is pushed. The date test still applies, so a
 commit written before the session stays out whatever reaches it.
 
-The email test stays beside the new one. Without it, a commit the session
-made and pushed in the same turn would be on a remote-tracking ref at the
-end-of-turn read and would read as pulled.
+A commit the agent made and pushed in the same turn is on a remote-tracking
+ref by the end-of-turn read, which is the only read a turn gets. So a commit
+also counts when the worktree's `HEAD` reflog records it as made there since
+the first read. Git writes `commit:`, `commit (amend):`, `cherry-pick:`,
+`revert:`, and `rebase (pick):` (or `pull --rebase (pick):`) when it makes a
+commit, and `pull:`, `merge`, `reset:`, and `checkout:` when it moves `HEAD`
+to a commit made elsewhere. Each commit the reflog names must still be an
+ancestor of `HEAD`, so a commit an amend or a reset replaced is not counted.
+This covers `git commit && git push` inside one tool call too.
 
-- **Rejected: forward `GIT_COMMITTER_EMAIL` from the hook.** The hook sees
-  the environment the harness started in. It does not see an identity set
-  for one tool call, `GIT_COMMITTER_EMAIL=... git commit` or
-  `git -c user.email=...`, so it would fix one of the three cases. It would
-  also send an email address in every hook for a case the ref test already
-  covers. The hook's environment allowlist is unchanged.
+The email test stays beside the other two. It counts a commit the session
+pushed in the same turn in a worktree whose reflog is off.
+
+- **Rejected: forward `GIT_COMMITTER_EMAIL` from the hook.** It would fix the
+  same-turn push for an agent whose harness exports the variable, which is
+  the case #4320 names. The hook sees the environment the harness started
+  in, though, and not an identity set for one tool call
+  (`GIT_COMMITTER_EMAIL=... git commit` or `git -c user.email=...`). It
+  would also send an email address in every hook. The reflog covers all
+  three without either, so the hook's environment allowlist is unchanged.
+- **Rejected: read the session's own commits on each Bash `PostToolUse`.**
+  A read after the tool call that made a commit, before a later call pushed
+  it, would find it on no remote-tracking ref. It misses a commit and a push
+  inside one tool call, and adds a git read to every Bash call.
 - **Rejected: the tips of the remote-tracking refs at the first read.**
   Upstream commits pushed after the first read are not reachable from those
   tips, and a fast-forward pull brings them in with no merge commit to
@@ -260,6 +284,13 @@ frame keeps one `diff_base_sha`, the baseline. The snapshot body gains
 paths (`baseline_paths`), so a reader can tell which base each hunk used
 without the frame changing shape. `run-work.ts` reads only the frame's
 attrs and the Run page shows the patch's metadata, so neither changes.
+
+A patch with any hunk that differs from what `diff_base_sha` would give
+lists `mixed_bases` in its limitations, and so reads as partial on the Run
+page. That holds when a pull between the baseline and `HEAD` changed a path
+taken against `HEAD`, and whenever the patch holds a file that already held
+edits (the next amendment). The patch still covers every reported path. The
+limitation tells a reader it does not apply to `diff_base_sha`.
 
 ## Amendment 2026-09-25: a file that already held edits counts the session's lines (#3384)
 
