@@ -42,6 +42,11 @@ describe("get_run_chain contract", () => {
     expect(runChainGet.defaultEffect).toBe("deny");
   });
 
+  it("declares the cli surface and layer that `oxagen run chain` ships", () => {
+    expect(runChainGet.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(runChainGet.layers).toContain("cli");
+  });
+
   it("takes a run id of either store and nothing else (negative)", () => {
     expect(runChainGet.input.safeParse({ runId: RUN }).success).toBe(true);
     expect(runChainGet.input.safeParse({ runId: "arun_0a1b2c" }).success).toBe(
