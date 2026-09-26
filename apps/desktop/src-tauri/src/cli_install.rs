@@ -14,6 +14,11 @@
 //! `decide_path_precedence`, `is_oxagen_managed_path`, `upsert_path_block`,
 //! `remove_path_block`, `profile_path_for`, `fish_file_is_ours`,
 //! `detect_shell_kind`, `path_var_contains`, `auto_link_cli_enabled`.
+//!
+//! The shell profile and symlink helpers are pure and tested on every OS,
+//! and only the Unix build calls them, so a Windows build reads them as
+//! unused.
+#![cfg_attr(windows, allow(dead_code))]
 
 use crate::machine::Roots;
 use serde::Serialize;

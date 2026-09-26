@@ -8,7 +8,8 @@
 //! itself.
 mod activity;
 mod cli_install;
-#[cfg(test)]
+// Symlinks and shell profiles: the rig runs where they exist.
+#[cfg(all(test, unix))]
 mod install_rig_tests;
 mod machine;
 mod sidecar;

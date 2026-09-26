@@ -21,7 +21,8 @@ pub struct Roots {
     /// `~/Library/Application Support` (macOS), `$XDG_DATA_HOME` or
     /// `~/.local/share` (Linux), `%LOCALAPPDATA%` (Windows).
     pub data_local: PathBuf,
-    /// `$SHELL`, empty when unset.
+    /// `$SHELL`, empty when unset. Read only where a login shell exists.
+    #[cfg_attr(windows, allow(dead_code))]
     pub shell: String,
     /// `std::env::consts::OS`: "macos", "linux" or "windows".
     pub os: &'static str,
@@ -285,6 +286,7 @@ pub mod test_support {
 
     /// Every path under `root`: kind, permission bits, and the bytes (a
     /// file) or the target (a link). Two equal maps are a byte-identical tree.
+    #[cfg_attr(windows, allow(dead_code))]
     pub fn snapshot(root: &Path) -> BTreeMap<String, String> {
         fn walk(dir: &Path, root: &Path, out: &mut BTreeMap<String, String>) {
             let mut entries: Vec<_> = fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).collect();
