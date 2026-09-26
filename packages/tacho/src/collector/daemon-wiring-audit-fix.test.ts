@@ -9,7 +9,7 @@
  * and the hook handler matches rules with the host's home and honours the
  * harness's read-only claim.
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -180,6 +180,10 @@ function fakePlane(etag: string) {
     queue: (delivered: DeliveredCommand) => queue.push(delivered),
     offerBundle: (next: PolicyBundle) => {
       bundle = next;
+    },
+    /** Answer `not_modified` again, as a poll after the change does. */
+    withdrawOffer: () => {
+      bundle = undefined;
     },
     revoke: (only?: readonly string[]) => {
       revoked = only ?? "all";
@@ -519,6 +523,173 @@ describe("the daemon's audit wiring", () => {
     expect(chain.map((event) => event.seq)).toEqual(chain.map((_, i) => i));
     expect(chain.at(-1)?.kind).toBe("agent_stop");
     expect(chain.some((event) => event.source === "otel_log")).toBe(false);
+  });
+
+  it("withdraws a queued steer from daemon.json when the mandate stops keeping prompts", async () => {
+    // A queued steer is prompt content waiting for a boundary, persisted in
+    // daemon.json. A narrowing erased prompt bodies from the WAL and left
+    // the steer's text on disk until it was delivered or its session ended.
+    const text = "Rewrite the migration before you touch the handler.";
+    const log: string[] = [];
+    const retention = {
+      retention: { mode: "content_exact" as const, classes: ["model_call"] },
+    };
+    const first = await boot({ bundle: retention });
+    await first.handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    first.plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: first.handle.registry.get(SESSION)!.recorder.sessionUuid,
+        payload: { text },
+      }),
+    );
+    await first.handle.tick();
+    // A restart writes the queue to disk and reads it back.
+    await first.handle.stop();
+    const paths = first.paths;
+    expect(readFileSync(paths.daemonState, "utf8")).toContain(text);
+    const { handle, plane, signer } = await boot({
+      bundle: retention,
+      paths,
+      log,
+    });
+    const record = handle.registry.get(SESSION)!;
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_steer"]);
+
+    plane.offerBundle(
+      signer.sign(
+        unsignedBundle({
+          version: 4,
+          etag: "etag-4",
+          retention: { mode: "digest_only", classes: [] },
+        }),
+      ),
+    );
+    expect(await handle.refreshBundle()).toBe(true);
+    expect(readFileSync(paths.daemonState, "utf8")).not.toContain(text);
+    expect(record.control.messages).toEqual([]);
+    expect(
+      log.some((line) => line.startsWith("mandate narrowed: withdrew 1 ")),
+    ).toBe(true);
+
+    // The operator hears that it was not delivered, and why.
+    await handle.tick();
+    expect(plane.acks.filter((a) => a.command_id === "cmd_steer")).toEqual([
+      expect.objectContaining({
+        status: "failed",
+        detail: expect.stringContaining("retention mandate"),
+      }),
+    ]);
+  });
+
+  it("rewrites daemon.json on the owed retry when the narrowing's own write failed", async () => {
+    // The narrowing withdrew the steer from memory and then failed to write
+    // daemon.json. The retry found nothing left to withdraw, skipped the
+    // write, and cleared the debt with the text still on disk.
+    const text = "Drop the index before the backfill.";
+    const log: string[] = [];
+    const { handle, plane, signer, paths } = await boot({
+      bundle: {
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      },
+      log,
+    });
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: handle.registry.get(SESSION)!.recorder.sessionUuid,
+        payload: { text },
+      }),
+    );
+    await handle.tick();
+    const onDisk = readFileSync(paths.daemonState, "utf8");
+    expect(onDisk).toContain(text);
+
+    // A directory where the file was makes the state write throw.
+    rmSync(paths.daemonState);
+    mkdirSync(join(paths.daemonState, "blocked"), { recursive: true });
+    plane.offerBundle(
+      signer.sign(
+        unsignedBundle({
+          version: 4,
+          etag: "etag-4",
+          retention: { mode: "digest_only", classes: [] },
+        }),
+      ),
+    );
+    await handle.refreshBundle();
+    expect(log.some((line) => line.startsWith("failed to erase bodies"))).toBe(
+      true,
+    );
+
+    // The disk comes back holding the file the failed write left.
+    rmSync(paths.daemonState, { recursive: true, force: true });
+    writeFileSync(paths.daemonState, onDisk);
+    plane.withdrawOffer();
+    await handle.refreshBundle();
+    expect(
+      log.some((line) => line.startsWith("completed an owed body purge")),
+    ).toBe(true);
+    expect(readFileSync(paths.daemonState, "utf8")).not.toContain(text);
+  });
+
+  it("writes a queued steer to disk before it acknowledges it", async () => {
+    // A steer seals no frame when it arrives, so nothing marked the state
+    // dirty. The operator read `received` while the steer lived only in
+    // memory, and a crash before the next frame lost it.
+    const { handle, plane, paths } = await boot();
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: handle.registry.get(SESSION)!.recorder.sessionUuid,
+        payload: { text: "Keep the old column until the backfill runs." },
+      }),
+    );
+    await handle.tick();
+    expect(readFileSync(paths.daemonState, "utf8")).toContain(
+      "Keep the old column until the backfill runs.",
+    );
+  });
+
+  it("keeps a queued steer when the mandate narrows but still keeps prompts", async () => {
+    const text = "Stop after this file.";
+    const { handle, plane, signer, paths } = await boot({
+      bundle: {
+        retention: {
+          mode: "content_exact",
+          classes: ["model_call", "tool_call"],
+        },
+      },
+    });
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    const record = handle.registry.get(SESSION)!;
+    plane.queue(
+      command({
+        id: "cmd_steer",
+        command: "steer",
+        session_uuid: record.recorder.sessionUuid,
+        payload: { text },
+      }),
+    );
+    await handle.tick();
+    plane.offerBundle(
+      signer.sign(
+        unsignedBundle({
+          version: 4,
+          etag: "etag-4",
+          retention: { mode: "content_exact", classes: ["model_call"] },
+        }),
+      ),
+    );
+    expect(await handle.refreshBundle()).toBe(true);
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_steer"]);
+    await handle.stop();
+    expect(readFileSync(paths.daemonState, "utf8")).toContain(text);
   });
 
   it("does not verify a bundle signed for another host", async () => {

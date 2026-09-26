@@ -309,7 +309,14 @@ export interface DataSource {
    * features/agents/agent.tsx.
    */
   agents: {
-    list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<AgentPage>>;
+    /**
+     * One page of the workspace's agents. A retired (deregistered) agent is
+     * left out unless `includeRetired` is true; the totals never count one.
+     */
+    list(
+      ctx: WsCtx,
+      q: { cursor: string | null; includeRetired?: boolean },
+    ): Promise<Read<AgentPage>>;
     get(ctx: WsCtx, agent: string): Promise<Read<AgentDetail>>;
     toolbelt(ctx: WsCtx, agent: string): Promise<Read<Toolbelt>>;
     incidents(

@@ -406,6 +406,72 @@ describe("the daemon's git seam", () => {
     expect(reconciliations(handle)).toHaveLength(2);
   });
 
+  it("reconciles a final turn the interval turned down before the session seals", async () => {
+    // A turn that ends inside the fifteen-second interval is put back, and a
+    // SessionEnd right after it is the last chance to observe what it did.
+    let time = 1_000;
+    let answers = REPO_ANSWERS;
+    const handle = await boot(
+      fakeGit(() => answers, []),
+      () => time,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+    expect(reconciliations(handle)).toHaveLength(1);
+
+    // The second turn writes one more file and ends five seconds later.
+    answers = {
+      ...REPO_ANSWERS,
+      "status --porcelain=v1 -z":
+        " M src/a.ts\x00?? src/new.ts\x00?? src/last.ts\x00",
+    };
+    time += 5_000;
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+    expect(reconciliations(handle)).toHaveLength(1);
+    await handle.api.handleHook(hook("SessionEnd"));
+    await handle.tick();
+
+    const events = frames(handle);
+    const sealed = reconciliations(handle);
+    expect(sealed).toHaveLength(2);
+    const last = sealed[1] as TachoEvent;
+    expect(
+      (
+        last.body as { observed_changes: { repo_relative_path: string }[] }
+      ).observed_changes.map((change) => change.repo_relative_path),
+    ).toContain("src/last.ts");
+    expect(events.indexOf(last)).toBeLessThan(
+      events.findIndex((event) => event.kind === "agent_stop"),
+    );
+  });
+
+  it("discards a read when the session moves to another repository while it runs", async () => {
+    // The probes run off the hook queue, so a hook can move the session to
+    // another repository while they wait on git. What they found describes a
+    // repository the session has left.
+    const sync = fakeGit(() => REPO_ANSWERS, []);
+    const move: { armed: boolean; handle?: DaemonHandle } = { armed: false };
+    const execAsync: ExecAsync = async (command, args) => {
+      if (move.armed && args.join(" ").includes("status --porcelain=v1 -z")) {
+        move.armed = false;
+        move.handle?.registry.ensure(SESSION, { cwd: "/elsewhere" });
+      }
+      return sync(command, args);
+    };
+    const handle = await boot(sync, () => 1_000, execAsync);
+    move.handle = handle;
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.tick();
+    move.armed = true;
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+    expect(move.armed).toBe(false);
+    expect(handle.registry.get(SESSION)?.cwd).toBe("/elsewhere");
+    expect(reconciliations(handle)).toHaveLength(0);
+  });
+
   it("keeps final reads separate when two harnesses reuse a session id", async () => {
     const handle = await boot(
       fakeGit(() => REPO_ANSWERS, []),
@@ -861,8 +927,13 @@ describe("the daemon's git seam", () => {
     expect(
       calls.some((call) => call.join(" ").includes("rev-parse HEAD")),
     ).toBe(true);
+    // One whole-tree status, at the first read, records the edits already in
+    // the worktree (ADR-188). No read after it lists or diffs the tree.
     expect(
-      calls.some((call) => call.join(" ").includes("--porcelain=v1 -z")),
+      calls.filter((call) => call.join(" ").includes("--porcelain=v1 -z")),
+    ).toHaveLength(1);
+    expect(
+      calls.some((call) => /diff --(numstat|name-status)/.test(call.join(" "))),
     ).toBe(false);
   });
 
@@ -926,6 +997,7 @@ describe("the daemon's git seam", () => {
           // that proof. No tracked file exists yet, so it reports nothing;
           // the untracked create below still comes from `status`.
           "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904": "",
+          "diff --name-status -z 4b825dc642cb6eb9a060e54bf8d69288fbee4904": "",
         }),
         [],
       ),

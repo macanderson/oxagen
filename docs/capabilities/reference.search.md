@@ -20,6 +20,9 @@ Two modes: **query** mode does free-text substring search (optionally
 restricted to `types`); **resolve** mode (`slug` set) does an exact
 public-id lookup, used to re-hydrate a previously inserted mention chip.
 
+Neither mode returns a retired (`archived`) or deleted agent. A chip that
+names one resolves to no row.
+
 ## Input
 
 | Field    | Type               | Notes                                                                 |

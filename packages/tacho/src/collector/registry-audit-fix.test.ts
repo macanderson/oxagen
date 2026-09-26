@@ -23,6 +23,7 @@ import {
   MAX_SESSION_BASELINES,
   type RegistryState,
   rememberBaseline,
+  rememberForRoot,
   SessionRegistry,
   STALE_PID_SESSION_MS,
   TOMBSTONE_RETAIN_MS,
@@ -374,6 +375,63 @@ describe("session baselines", () => {
     });
     restored.restore(state);
     expect(restored.get("sess-1")?.baselines).toEqual(record.baselines);
+  });
+
+  it("persists what attributes a worktree's changes to the session", () => {
+    const { registry } = harness();
+    const { record } = registry.ensure("sess-1", { cwd: "/repo" });
+    record.gitFirstReadAt = 1_790_000_000_000;
+    record.preexistingPaths = rememberForRoot(undefined, "/repo", {
+      paths: { "notes.txt": ["ab".repeat(16), 8, 1_789_999_000_000] },
+      complete: true,
+    });
+    record.sessionCommits = rememberForRoot(undefined, "/repo", [
+      "c".repeat(40),
+    ]);
+    const state = JSON.parse(JSON.stringify(registry.state())) as RegistryState;
+    const restored = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: () => Date.now(),
+    });
+    restored.restore(state);
+    const back = restored.get("sess-1");
+    expect(back?.gitFirstReadAt).toBe(record.gitFirstReadAt);
+    expect(back?.preexistingPaths).toEqual(record.preexistingPaths);
+    expect(back?.sessionCommits).toEqual(record.sessionCommits);
+  });
+
+  it("drops a malformed attribution record from an older or edited state file", () => {
+    const { registry } = harness();
+    registry.ensure("sess-1", { cwd: "/repo" });
+    const state = JSON.parse(JSON.stringify(registry.state())) as RegistryState;
+    Object.assign(state.sessions[0] as object, {
+      gitFirstReadAt: "yesterday",
+      preexistingPaths: ["not", "a", "map"],
+      sessionCommits: null,
+    });
+    const restored = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: () => Date.now(),
+    });
+    restored.restore(state);
+    const back = restored.get("sess-1");
+    expect(back?.gitFirstReadAt).toBeUndefined();
+    expect(back?.preexistingPaths).toBeUndefined();
+    expect(back?.sessionCommits).toBeUndefined();
+  });
+
+  it("bounds the per-root records like the baselines", () => {
+    let map: Record<string, number> | undefined;
+    for (let i = 0; i < MAX_SESSION_BASELINES + 3; i += 1)
+      map = rememberForRoot(map, `/r${i}`, i);
+    // Read again, so it is the most recent and survives the bound.
+    map = rememberForRoot(map, "/r3", 3);
+    const roots = Object.keys(map ?? {});
+    expect(roots).toHaveLength(MAX_SESSION_BASELINES);
+    expect(roots.at(-1)).toBe("/r3");
+    expect(roots).not.toContain("/r0");
   });
 
   it("adopts a baseline set before the map existed, and bounds the map", () => {

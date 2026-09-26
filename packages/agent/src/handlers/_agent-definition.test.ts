@@ -20,6 +20,7 @@ import {
   resolveAgent,
   AgentManagedReadOnlyError,
   assertAgentMutable,
+  assertAgentNotRetired,
 } from "./_agent-definition";
 
 beforeEach(() => fake.reset());
@@ -110,5 +111,25 @@ describe("assertAgentMutable", () => {
     const err = caught as AgentManagedReadOnlyError;
     expect(err.code).toBe("agent_managed_read_only");
     expect(err.message).toContain("agt_builtin");
+  });
+});
+
+describe("assertAgentNotRetired", () => {
+  it.each(["draft", "active"])("lets a %s agent through", (status) => {
+    expect(() =>
+      assertAgentNotRetired({ slug: "my-agent", status }),
+    ).not.toThrow();
+  });
+
+  it("refuses a retired (archived) agent with the agent_retired conflict", () => {
+    expect(() =>
+      assertAgentNotRetired({ slug: "my-agent", status: "archived" }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "conflict",
+        reason: "agent_retired",
+        message: 'Agent "my-agent" is retired',
+      }),
+    );
   });
 });

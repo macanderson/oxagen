@@ -148,15 +148,21 @@ The first two are closed on the hook path:
   now, in every retention mode, and `content.redactions` records what was cut.
 - **Nothing read `retention`, and nothing produced bodies.** The collector now
   reads the mandate at the moment a frame is sealed, keeps the redacted bytes
-  when both halves of it allow, and ships them in `bodies[]`. The shipper
-  drops a body once its batch is acknowledged, whether the control plane
-  stored or refused it, and a mandate that narrows drops what is already on
-  disk rather than racing the drain. A mandate that cannot be proven — an
-  unverifiable bundle, or one past its signed window — withholds the body but
-  keeps it, because that condition is usually transient and a purge is not: a
-  control plane outage lapses every cached bundle at once, and purging on that
-  signal would turn an outage into permanent loss of the evidence this host
-  exists to keep.
+  when both halves of it allow, and ships them in `bodies[]`. A shipped body
+  stays in its session's body file after the batch is acknowledged, whether
+  the control plane stored or refused it. `Wal.compact` removes the file once
+  the session is sealed, fully shipped, and older than `walRetainMs`. The
+  shipper does not drop bodies batch by batch: `Wal.dropBodies` rewrites the
+  whole body file and invalidates its offset index, so a drop after every
+  200-event batch would make a drain's cost grow with the square of its
+  backlog, which is the cost #3694 removed. A mandate that narrows drops what
+  is already on disk rather than racing the drain (`docs/specs/tacho/spec.md`
+  §3.1 says what a narrowing reaches). A mandate that cannot be proven, an
+  unverifiable bundle or one past its signed window, withholds the body from
+  the wire but keeps it. That condition is usually transient and a purge is
+  not. A control plane outage lapses every cached bundle at once, and purging
+  on that signal would turn an outage into permanent loss of the evidence
+  this host exists to keep.
 
 What remains under G3:
 
