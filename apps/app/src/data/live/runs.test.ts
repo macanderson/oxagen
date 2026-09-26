@@ -656,6 +656,7 @@ describe("runs.cost", () => {
     kernelRead.mockResolvedValue(
       readOk({
         runId: "tse_4f0a",
+        baseline: null,
         rollup: {
           cost: cost("31000"),
           tokens: searched,
@@ -716,6 +717,7 @@ describe("runs.cost", () => {
     kernelRead.mockResolvedValue(
       readOk({
         runId: "tse_4f0a",
+        baseline: null,
         rollup: {
           cost: cost("1000"),
           tokens: searched,
