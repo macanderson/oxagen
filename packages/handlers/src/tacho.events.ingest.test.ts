@@ -7127,6 +7127,8 @@ describe("the repository question a host raised (#3941)", () => {
       { orgId: CONTEXT.orgId, workspaceId: CONTEXT.workspaceId },
       { publicId: RUN, agentKey: "acme.core.cc-laptop" },
       [events[2]],
+      // The ingest's own clock, which the row's deadline reads.
+      expect.any(Date),
     ]);
     expect(raisedEvents()).toEqual([
       {

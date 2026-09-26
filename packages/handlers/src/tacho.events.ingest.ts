@@ -2567,6 +2567,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
           { publicId: runId, agentKey: host.agentKey },
           frames,
+          now,
         )),
       );
     }

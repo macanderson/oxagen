@@ -27,6 +27,8 @@ const SCOPE = {
 };
 const RUN = { publicId: "tse_0123456789abcdefghjkmn", agentKey: "acme.core.cc" };
 const KEY = "01K6Z000000000000000000000";
+/** The time the ingest received the batch, never the frame's own. */
+const NOW = new Date("2026-09-26T10:05:00.000Z");
 const dialect = new PgDialect();
 
 const QUESTION = {
@@ -101,30 +103,34 @@ function fakeTx(returned: unknown[][] = []) {
   return { tx: tx as unknown as Tx, inserts, conflicts, updates };
 }
 
+/** Record `frames` as a batch the ingest received at `NOW`. */
+function record(tx: Tx, frames: readonly TachoEvent[]) {
+  return recordInterjectionFrames(tx, SCOPE, RUN, frames, NOW);
+}
+
 beforeEach(() => warn.mockClear());
 
 describe("recordInterjectionFrames", () => {
-  it("writes one repo_unknown row per question, keyed on its frame, with the control plane's own deadline", async () => {
+  it("writes one repo_unknown row per question, keyed on its frame, with a deadline read from the server's clock", async () => {
     const expiresAt = new Date("2026-09-26T10:30:00.000Z");
     const { tx, inserts, conflicts } = fakeTx([
       [{ publicId: "inj_abc", expiresAt }],
     ]);
-    const raised = await recordInterjectionFrames(tx, SCOPE, RUN, [
+    const raised = await record(tx, [
       frame(1, "repo.unknown", {}),
       frame(2, "control.interject", QUESTION),
     ]);
     expect(raised).toEqual([{ interjectionId: "inj_abc", expiresAt }]);
     expect(inserts).toHaveLength(1);
     expect(inserts[0]?.table).toBe(schema.interjections);
-    const raisedAt = new Date("2026-09-26T10:00:00.000Z");
     expect(inserts[0]?.values).toEqual({
       orgId: SCOPE.orgId,
       workspaceId: SCOPE.workspaceId,
       runPublicId: RUN.publicId,
       agentKey: RUN.agentKey,
       question: QUESTION.question,
-      raisedAt,
-      expiresAt: new Date(raisedAt.getTime() + SKILL_INTERJECTION_TIMEOUT_MS),
+      raisedAt: NOW,
+      expiresAt: new Date(NOW.getTime() + SKILL_INTERJECTION_TIMEOUT_MS),
       kind: "repo_unknown",
       raisedSeq: 2,
       body: QUESTION,
@@ -133,18 +139,33 @@ describe("recordInterjectionFrames", () => {
     expect(conflicts).toEqual(["any"]);
   });
 
+  it.each([
+    ["40 minutes behind", "2026-09-26T09:25:00.000Z"],
+    ["40 minutes ahead", "2026-09-26T10:45:00.000Z"],
+  ])(
+    "gives a question the full timeout from arrival when the host clock runs %s",
+    async (_label, ts) => {
+      const { tx, inserts } = fakeTx([[]]);
+      await record(tx, [frame(2, "control.interject", QUESTION, ts)]);
+      // A deadline from the frame's time would already have passed, or would
+      // run 70 minutes.
+      expect(inserts[0]?.values).toMatchObject({
+        raisedAt: NOW,
+        expiresAt: new Date(NOW.getTime() + SKILL_INTERJECTION_TIMEOUT_MS),
+      });
+    },
+  );
+
   it("answers no row for a frame already recorded, so nothing is announced twice", async () => {
     const { tx, inserts } = fakeTx([[]]);
-    const raised = await recordInterjectionFrames(tx, SCOPE, RUN, [
-      frame(2, "control.interject", QUESTION),
-    ]);
+    const raised = await record(tx, [frame(2, "control.interject", QUESTION)]);
     expect(inserts).toHaveLength(1);
     expect(raised).toEqual([]);
   });
 
   it("writes no row for a body that fails its schema, and logs it (negative)", async () => {
     const { tx, inserts } = fakeTx();
-    const raised = await recordInterjectionFrames(tx, SCOPE, RUN, [
+    const raised = await record(tx, [
       frame(2, "control.interject", { ...QUESTION, reason: "curious" }),
       frame(3, "control.interject", { question: "free text" }),
     ]);
@@ -155,7 +176,7 @@ describe("recordInterjectionFrames", () => {
 
   it("closes the row when the host answered deny on its own timeout", async () => {
     const { tx, updates } = fakeTx();
-    await recordInterjectionFrames(tx, SCOPE, RUN, [
+    await record(tx, [
       frame(
         9,
         "control.answer",
@@ -166,7 +187,7 @@ describe("recordInterjectionFrames", () => {
     expect(updates).toHaveLength(1);
     expect(updates[0]?.table).toBe(schema.interjections);
     expect(updates[0]?.values).toMatchObject({
-      answeredAt: new Date("2026-09-26T10:30:01.000Z"),
+      answeredAt: NOW,
       answer: HOST_TIMEOUT_ANSWER,
       path: "deny",
       answeredByUserId: null,
@@ -181,7 +202,7 @@ describe("recordInterjectionFrames", () => {
 
   it("leaves a person's answer to answer_interjection, which recorded it first", async () => {
     const { tx, updates, inserts } = fakeTx();
-    await recordInterjectionFrames(tx, SCOPE, RUN, [
+    await record(tx, [
       frame(9, "control.answer", {
         interjection_key: KEY,
         path: "link",

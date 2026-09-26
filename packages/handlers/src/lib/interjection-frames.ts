@@ -8,11 +8,14 @@
  * re-sent batch writes no second row. The row copies the frame's body, which
  * the Run page reads the question, the paths and the timeout from.
  *
- * The deadline is the control plane's own: the frame's time plus
- * `SKILL_INTERJECTION_TIMEOUT_MS`, whatever timeout the body names. The
- * caller sends `AGENT_INTERJECTION_RAISED_EVENT` for each row written, after
- * the transaction commits, and the timeout function answers `deny` at the
- * deadline when nobody has.
+ * The deadline is the control plane's own: the time the ingest received the
+ * frame plus `SKILL_INTERJECTION_TIMEOUT_MS`, whatever timeout the body names.
+ * The row reads the server's clock, never the frame's, because a host clock
+ * that runs ahead would push the deadline past 30 minutes, and one that runs
+ * behind would make the question expire as it lands. The frame keeps the
+ * host's time on the chain. The caller sends `AGENT_INTERJECTION_RAISED_EVENT`
+ * for each row written, after the transaction commits, and the timeout
+ * function answers `deny` at the deadline when nobody has.
  *
  * A host that reached its own deadline first answers `deny` itself and seals
  * `control.answer` with source `timeout`. That frame closes the row, so the
@@ -74,13 +77,16 @@ export function isInterjectionFrame(event: Pick<TachoEvent, "kind">): boolean {
  * Write one `repo_unknown` row per fresh `control.interject` among `frames`,
  * and close the row of each `control.answer` the host sealed on its own
  * timeout. `frames` are the run's own chain's frames past its recorded head,
- * in seq order. Answers the rows written, which a re-sent batch never has.
+ * in seq order. `now` is the time the ingest received the batch, which every
+ * timestamp on the row reads. Answers the rows written, which a re-sent batch
+ * never has.
  */
 export async function recordInterjectionFrames(
   tx: Tx,
   scope: InterjectionScope,
   run: InterjectionRun,
   frames: readonly TachoEvent[],
+  now: Date,
 ): Promise<RaisedInterjection[]> {
   const ij = schema.interjections;
   const raised: RaisedInterjection[] = [];
@@ -91,7 +97,6 @@ export async function recordInterjectionFrames(
         refused(scope, run, frame, body.error.issues[0]?.path.join("."));
         continue;
       }
-      const raisedAt = new Date(frame.ts);
       const rows = await tx
         .insert(ij)
         .values({
@@ -100,10 +105,8 @@ export async function recordInterjectionFrames(
           runPublicId: run.publicId,
           agentKey: run.agentKey,
           question: body.data.question,
-          raisedAt,
-          expiresAt: new Date(
-            raisedAt.getTime() + SKILL_INTERJECTION_TIMEOUT_MS,
-          ),
+          raisedAt: now,
+          expiresAt: new Date(now.getTime() + SKILL_INTERJECTION_TIMEOUT_MS),
           kind: "repo_unknown",
           raisedSeq: frame.seq,
           body: body.data,
@@ -132,11 +135,11 @@ export async function recordInterjectionFrames(
     await tx
       .update(ij)
       .set({
-        answeredAt: new Date(frame.ts),
+        answeredAt: now,
         answer: HOST_TIMEOUT_ANSWER,
         path: "deny",
         answeredByUserId: null,
-        updatedAt: new Date(),
+        updatedAt: now,
       })
       .where(
         and(
