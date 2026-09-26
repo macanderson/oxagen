@@ -820,13 +820,13 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         chunks.push(portionOf(new TextDecoder().decode(body.bytes)));
       }
     } else {
-      // A read step recorded before it returned digests has none, so each of
-      // its chunks fails its read for good and the failure handler deletes
-      // them. The sweep brings the run back.
-      const digests =
-        "chunkDigests" in collected && Array.isArray(collected.chunkDigests)
-          ? collected.chunkDigests
-          : [];
+      // Every read step that keeps scratch chunks returns one digest per
+      // chunk. A step output with a scratch count and no digests came only
+      // from commits on #4382's branch before it merged. Neither staging nor
+      // production ran those commits, so no job can replay one, and nothing
+      // here falls back for it. The older shape a deployment did record, a
+      // manifest of chunk bodies, is read above.
+      const digests = collected.chunkDigests;
       chunks = collected.chunkChars.map((chars, index) => ({
         chars,
         text: () =>

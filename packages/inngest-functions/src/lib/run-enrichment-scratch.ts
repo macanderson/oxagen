@@ -162,10 +162,12 @@ export async function keepEnrichmentChunks(
 /**
  * One chunk a job kept, as text, once its bytes match `digest`, the digest
  * the read step returned for it. A chunk that is gone throws a storage
- * error, which the step retries. A chunk with no digest (a read step
- * recorded before the step returned them), or whose bytes do not match,
- * throws `NonRetriableError`: the same read fails the same way on every
- * retry. The job then fails, and its failure handler deletes its chunks.
+ * error, which the step retries. A chunk with no digest, or whose bytes do
+ * not match, throws `NonRetriableError`: the same read fails the same way on
+ * every retry. The job then fails, and its failure handler deletes its
+ * chunks. The job reads only the chunks its read step returned digests for,
+ * so a missing digest means an index past that list, such as a chunk an
+ * earlier attempt kept that the manifest names only for the cleanup.
  */
 export async function readEnrichmentChunk(
   scope: RunScope,
