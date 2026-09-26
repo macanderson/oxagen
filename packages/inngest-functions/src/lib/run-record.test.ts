@@ -64,7 +64,6 @@ vi.mock("@oxagen/telemetry", () => ({
 }));
 
 import {
-  readRunFrames,
   readSealedSegments,
   readTranscriptFramesOf,
   resolveRunRecord,
@@ -539,52 +538,6 @@ const WRAPPED = {
   replayGrade: null,
 };
 
-describe("readRunFrames", () => {
-  it("reads a wrapped session's frames in sequence inside the tenant scope", async () => {
-    tachoChain([0, 1]);
-    const frames = await readRunFrames(SCOPE, WRAPPED);
-    expect(frames.map((f) => f.seq)).toEqual(["0", "1"]);
-    expect(scopes).toEqual([SCOPE]);
-  });
-
-  // #4202: under FINAL an unbounded page scans the rest of the chain.
-  it("bounds each windowed page of a wrapped session at afterSeq plus the page size", async () => {
-    tachoChain(range(0, 1200));
-    const frames = await readRunFrames(SCOPE, WRAPPED);
-    expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 1200));
-    const calls = mocks.selectTachoEvents.mock.calls.map(
-      ([args]) => args as { afterSeq: number; throughSeq?: number },
-    );
-    const windowed = calls.filter((c) => c.throughSeq !== undefined);
-    expect(windowed.map((c) => c.afterSeq)).toEqual([-1, 499, 999]);
-    for (const call of windowed) {
-      expect(call.throughSeq).toBe(call.afterSeq + 500);
-    }
-    // One unbounded read, past the last window, finds the end of the chain.
-    expect(calls.filter((c) => c.throughSeq === undefined)).toEqual([
-      expect.objectContaining({ afterSeq: 1499 }),
-    ]);
-  });
-
-  it("reads past a recorded break in a wrapped session's chain", async () => {
-    const seqs = [...range(0, 299), ...range(800, 1000)];
-    tachoChain(seqs);
-    const frames = await readRunFrames(SCOPE, WRAPPED);
-    expect(frames.map((f) => Number(f.seq))).toEqual(seqs);
-  });
-
-  it("reads a wrapped session one frame past a full page", async () => {
-    tachoChain(range(0, 500));
-    const frames = await readRunFrames(SCOPE, WRAPPED);
-    expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 500));
-  });
-
-  it("reads an empty wrapped session as no frames (negative)", async () => {
-    tachoChain([]);
-    expect(await readRunFrames(SCOPE, WRAPPED)).toEqual([]);
-  });
-});
-
 // #3784: the enrichment job read every frame of a run into one array before
 // it read any text. It now pulls pages and stops at its ceiling.
 describe("runFramePages", () => {
@@ -619,6 +572,29 @@ describe("runFramePages", () => {
     const seqs = [...range(0, 299), ...range(800, 1000)];
     tachoChain(seqs);
     expect((await pagesOf(WRAPPED)).flat()).toEqual(seqs);
+  });
+
+  // #4202: under FINAL an unbounded page scans the rest of the chain.
+  it("bounds each windowed page of a wrapped session at afterSeq plus the page size", async () => {
+    tachoChain(range(0, 1200));
+    expect((await pagesOf(WRAPPED)).flat()).toEqual(range(0, 1200));
+    const calls = mocks.selectTachoEvents.mock.calls.map(
+      ([args]) => args as { afterSeq: number; throughSeq?: number },
+    );
+    const windowed = calls.filter((c) => c.throughSeq !== undefined);
+    expect(windowed.map((c) => c.afterSeq)).toEqual([-1, 499, 999]);
+    for (const call of windowed) {
+      expect(call.throughSeq).toBe(call.afterSeq + 500);
+    }
+    // One unbounded read, past the last window, finds the end of the chain.
+    expect(calls.filter((c) => c.throughSeq === undefined)).toEqual([
+      expect.objectContaining({ afterSeq: 1499 }),
+    ]);
+  });
+
+  it("reads a wrapped session one frame past a full page", async () => {
+    tachoChain(range(0, 500));
+    expect((await pagesOf(WRAPPED)).flat()).toEqual(range(0, 500));
   });
 
   it("reads a ledger run's events a page at a time from each page's last run_seq", async () => {

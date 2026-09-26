@@ -372,7 +372,7 @@ async function* ownFramePages(record: RunRecord): AsyncGenerator<RunFrame[]> {
  */
 async function ownFrames(
   record: RunRecord,
-  upTo = Number.POSITIVE_INFINITY,
+  upTo: number,
 ): Promise<RunFrame[]> {
   const frames: RunFrame[] = [];
   for await (const page of ownFramePages(record)) {
@@ -380,18 +380,6 @@ async function ownFrames(
     if (frames.length > upTo) return frames;
   }
   return frames;
-}
-
-/**
- * Every frame of the run's own chain as the projection reads it, in sequence
- * order. A reader that folds the run's steps reads `readTranscriptFramesOf`,
- * and one that can stop early reads `runFramePages`.
- */
-export async function readRunFrames(
-  scope: RunScope,
-  record: RunRecord,
-): Promise<RunFrame[]> {
-  return runInTenantScope(scope, () => ownFrames(record));
 }
 
 /**
