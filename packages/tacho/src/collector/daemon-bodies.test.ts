@@ -382,6 +382,59 @@ describe("tachod and frame bodies", () => {
     ]);
   });
 
+  it("answers a hook 500 when its body cannot be written, and lands the replay at the same seq with one body", async () => {
+    // #4311 item 4: the tests behind ADR-185 replaced `wal.append`, so
+    // `writeBodies` never threw inside the daemon. Here the real WAL fails:
+    // the session's body path is a directory.
+    const { fetch, batches } = plane();
+    const { handle, host, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call"],
+    });
+    const port = handle.port as number;
+    expect(
+      await post(port, host.local_token, {
+        session_id: session,
+        hook_event_name: "SessionStart",
+        cwd: "/repo",
+      }),
+    ).toBe(200);
+    const record = handle.registry.get(session)!;
+    const uuid = record.recorder.sessionUuid;
+    const before = { ...record.recorder.chainCursor };
+    const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
+    mkdirSync(bodyPath);
+    const prompt = {
+      session_id: session,
+      hook_event_name: "UserPromptSubmit",
+      prompt: "Read README.md, then stop.",
+    };
+    expect(await post(port, host.local_token, prompt)).toBe(500);
+    expect(record.recorder.chainCursor).toEqual(before);
+    expect(handle.wal.read(uuid).map((event) => event.kind)).not.toContain(
+      "turn_start",
+    );
+
+    // The disk takes writes again, and the client replays the hook it
+    // spooled.
+    rmSync(bodyPath, { recursive: true });
+    expect(await post(port, host.local_token, prompt)).toBe(200);
+    await handle.tick();
+
+    const turnStart = batches
+      .flatMap((batch) => batch.events)
+      .filter((event) => event.kind === "turn_start");
+    expect(turnStart).toHaveLength(1);
+    expect(turnStart[0]!.seq).toBe(before.seq);
+    const bodies = batches
+      .flatMap((batch) => batch.bodies ?? [])
+      .filter((body) => body.event_id_idem === turnStart[0]!.event_id_idem);
+    expect(bodies).toHaveLength(1);
+    expect(
+      Buffer.from(bodies[0]!.bytes_base64, "base64").toString("utf8"),
+    ).toBe("Read README.md, then stop.");
+  });
+
   it("logs a body the control plane refused, the way it logs a chain break", async () => {
     const { fetch } = plane(() => "digest_mismatch");
     const { handle, host, log } = await boot(fetch, {

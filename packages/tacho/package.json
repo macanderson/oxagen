@@ -26,7 +26,6 @@
   },
   "dependencies": {
     "@contextgraphprotocol/typescript-sdk": "0.1.0",
-    "canonicalize": "1.0.8",
     "commander": "12.1.0",
     "zod": "3.25.76"
   },

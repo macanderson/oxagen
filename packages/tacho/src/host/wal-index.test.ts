@@ -36,8 +36,17 @@ import { scratchPaths } from "./test-support";
 import { TACHO_MAX_BATCH } from "../wire";
 import { Wal } from "./wal";
 
-/** Bytes read from any session's body file, by the sync and async paths. */
-const bodyReads = vi.hoisted(() => ({ fds: new Set<number>(), bytes: 0 }));
+/**
+ * Bytes read from any session's body file, by the sync and async paths
+ * together, and by the sync path alone.
+ */
+const bodyReads = vi.hoisted(() => ({
+  fds: new Set<number>(),
+  bytes: 0,
+  syncBytes: 0,
+  /** Run once, after the next awaited read of a body file returns. */
+  afterAsyncRead: undefined as (() => void) | undefined,
+}));
 
 function isBodyFile(path: unknown): boolean {
   return String(path).endsWith(".bodies.jsonl");
@@ -58,7 +67,10 @@ vi.mock("node:fs", async (importOriginal) => {
     }) as typeof fs.closeSync,
     readSync: ((fd, ...rest) => {
       const size = (fs.readSync as (...args: unknown[]) => number)(fd, ...rest);
-      if (bodyReads.fds.has(fd)) bodyReads.bytes += size;
+      if (bodyReads.fds.has(fd)) {
+        bodyReads.bytes += size;
+        bodyReads.syncBytes += size;
+      }
       return size;
     }) as typeof fs.readSync,
   };
@@ -77,6 +89,9 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       (handle as { read: unknown }).read = async (...args: unknown[]) => {
         const result = await read(...args);
         bodyReads.bytes += result.bytesRead;
+        const after = bodyReads.afterAsyncRead;
+        bodyReads.afterAsyncRead = undefined;
+        after?.();
         return result;
       };
       return handle;
@@ -382,6 +397,112 @@ describe("the body index sidecar", () => {
     await expect(wal.bodiesForAsync(events.slice(0, 1))).rejects.toThrow();
     expect(report).toHaveBeenCalledWith(
       expect.objectContaining({ session_uuid: SESSION, operation: "read" }),
+    );
+  });
+});
+
+describe("an index that goes stale while the shipper reads", () => {
+  // #4299: `bodiesForAsync` built the index off the synchronous path once,
+  // then read each slice through the synchronous `bodiesFor`. An index a
+  // sweep dropped during the yield between two slices, or one whose entries
+  // stopped matching the file, was rebuilt by the next slice with a
+  // synchronous read of the whole body file, on the daemon's only thread.
+  const BATCH = 64;
+
+  /** Run `change` once, at the first turn of the loop `bodiesForAsync` yields. */
+  function atFirstYield(change: () => void): { ran: () => boolean } {
+    const real = globalThis.setImmediate;
+    let ran = false;
+    vi.spyOn(globalThis, "setImmediate").mockImplementation(((
+      callback: (...args: unknown[]) => void,
+      ...args: unknown[]
+    ) => {
+      if (!ran) {
+        ran = true;
+        change();
+      }
+      return real(callback, ...args);
+    }) as unknown as typeof setImmediate);
+    return { ran: () => ran };
+  }
+
+  it("builds an index a sweep dropped between two slices again without a synchronous scan", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const { events, bodies } = wave(0);
+    wal.append(events, bodies);
+    const bodyPath = join(paths.wal, `${SESSION}.bodies.jsonl`);
+    let sweepBytes = 0;
+    const yielded = atFirstYield(() => {
+      // A mandate that narrows rewrites the file and drops the index. The
+      // rewrite reads the file itself, which is not what this counts.
+      const before = bodyReads.syncBytes;
+      expect(wal.dropBodies(events.slice(900, 901))).toBe(1);
+      sweepBytes = bodyReads.syncBytes - before;
+    });
+    const before = bodyReads.syncBytes;
+    const read = await wal.bodiesForAsync(events.slice(0, BATCH));
+    vi.mocked(globalThis.setImmediate).mockRestore();
+    expect(yielded.ran()).toBe(true);
+    expect(read.map((body) => body.event_id_idem)).toEqual(
+      events.slice(0, BATCH).map((event) => event.event_id_idem),
+    );
+    // Reading the batch at its offsets costs the batch. Building the index
+    // again on the synchronous path costs the whole file.
+    const synchronous = bodyReads.syncBytes - before - sweepBytes;
+    expect(synchronous).toBeGreaterThan(0);
+    expect(synchronous).toBeLessThan(statSync(bodyPath).size / 4);
+  });
+
+  it("starts its build again when a sweep rewrites the file while the build reads it", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const { events, bodies } = wave(0);
+    wal.append(events, bodies);
+    const bodyPath = join(paths.wal, `${SESSION}.bodies.jsonl`);
+    let sweepBytes = 0;
+    bodyReads.afterAsyncRead = () => {
+      const before = bodyReads.syncBytes;
+      expect(wal.dropBodies(events.slice(900, 901))).toBe(1);
+      sweepBytes = bodyReads.syncBytes - before;
+    };
+    const before = bodyReads.syncBytes;
+    const read = await wal.bodiesForAsync(events.slice(0, BATCH));
+    expect(bodyReads.afterAsyncRead).toBeUndefined();
+    expect(read).toHaveLength(BATCH);
+    expect(bodyReads.syncBytes - before - sweepBytes).toBeLessThan(
+      statSync(bodyPath).size / 4,
+    );
+    // The sidecar describes the file as it is now. A fresh process reads
+    // every body from it, and none of the one the sweep dropped.
+    const all = await new Wal(paths.wal).bodiesForAsync(events);
+    expect(all).toHaveLength(events.length - 1);
+    expect(new Wal(paths.wal).bodiesFor(events)).toEqual(all);
+  });
+
+  it("reads again off the synchronous path when the index points at the wrong bytes", async () => {
+    const paths = scratchPaths();
+    const report = vi.fn();
+    const wal = new Wal(paths.wal, report);
+    const { events, bodies } = wave(0);
+    wal.append(events, bodies);
+    const bodyPath = join(paths.wal, `${SESSION}.bodies.jsonl`);
+    const yielded = atFirstYield(() => {
+      // Every offset the index holds is now one byte early.
+      writeFileSync(bodyPath, `\n${readFileSync(bodyPath, "utf8")}`);
+    });
+    const before = bodyReads.syncBytes;
+    const read = await wal.bodiesForAsync(events.slice(0, BATCH));
+    vi.mocked(globalThis.setImmediate).mockRestore();
+    expect(yielded.ran()).toBe(true);
+    expect(read.map((body) => body.event_id_idem)).toEqual(
+      events.slice(0, BATCH).map((event) => event.event_id_idem),
+    );
+    expect(bodyReads.syncBytes - before).toBeLessThan(
+      statSync(bodyPath).size / 4,
+    );
+    expect(report).not.toHaveBeenCalledWith(
+      expect.objectContaining({ code: "body_index_unusable" }),
     );
   });
 });
