@@ -194,6 +194,7 @@ describe("list_runs", () => {
               operatorPublicId: null,
               operatorKind: null,
               operatorUserName: null,
+              operatorUserAvatarUrl: null,
               goal: "g".repeat(8192),
             },
           }),
