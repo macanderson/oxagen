@@ -4903,6 +4903,77 @@ describe("observed metering from the model proxy", () => {
       dialect.sqlToQuery(update?.values["numModelCalls"] as SQL).params,
     ).toEqual([0]);
   });
+
+  describe("the harness's total at the seal (#3944, S-07)", () => {
+    const stop = (total: number) =>
+      unsealed("agent_stop", {
+        session_outcome: "completed",
+        session_end_reason: "other",
+        total_cost_usd_micros: total,
+      });
+
+    it("keeps an observed session's metered total and stores the harness's claim beside it", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = chain([start(), observedCall(), stop(99_000)]);
+      // The proxy metered the session in an earlier batch.
+      await tachoEventsIngestHandler(batch(events.slice(0, 2)), CONTEXT);
+      const row = db.sessions.get(SESSION) as Record<string, unknown>;
+      expect(row["costBasis"]).toBe("observed");
+      Object.assign(row, {
+        seqCount: 2,
+        lastHash: (events[1] as TachoEvent).hash,
+        chainVerified: true,
+      });
+      db.updates.length = 0;
+
+      await tachoEventsIngestHandler(batch(events.slice(2)), CONTEXT);
+
+      const sealed = db.updates.find(
+        (u) => u.table === "sessions" && u.values["sealedAt"] !== undefined,
+      );
+      // The seal adds the batch's observed cost (none) and never assigns the
+      // harness's figure over the metered one.
+      const total = sealed?.values["totalCostMicros"];
+      expect(total).toBeInstanceOf(SQL);
+      expect(new PgDialect().sqlToQuery(total as SQL).params).toEqual([0]);
+      expect(sealed?.values["harnessReportedCostMicros"]).toBe(99_000);
+    });
+
+    it("keeps an observed call's cost when the seal arrives in the same batch", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(
+        batch(chain([start(), observedCall(), stop(99_000)])),
+        CONTEXT,
+      );
+      const increments = db.updates.find(
+        (u) => u.table === "sessions" && u.values["inputTokens"] !== undefined,
+      );
+      const total = increments?.values["totalCostMicros"];
+      expect(total).toBeInstanceOf(SQL);
+      expect(new PgDialect().sqlToQuery(total as SQL).params).toEqual([11_100]);
+      expect(db.sessions.get(SESSION)?.["harnessReportedCostMicros"]).toBe(
+        99_000,
+      );
+    });
+
+    it("takes the harness's total for a session the proxy never metered (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(
+        batch(chain([start(), selfReported(), stop(12_345)])),
+        CONTEXT,
+      );
+      const increments = db.updates.find(
+        (u) => u.table === "sessions" && u.values["inputTokens"] !== undefined,
+      );
+      expect(increments?.values["totalCostMicros"]).toBe(12_345);
+      expect(db.sessions.get(SESSION)?.["harnessReportedCostMicros"]).toBe(
+        12_345,
+      );
+    });
+  });
 });
 
 /**

@@ -506,6 +506,13 @@ export const tachoSessions = tachoSchema.table(
     totalCostMicros: bigint("total_cost_micros", { mode: "number" })
       .notNull()
       .default(0),
+    // The total the harness reported for itself at `agent_stop`
+    // (`total_cost_usd_micros`), kept apart from `total_cost_micros`. A
+    // session the host's model proxy metered keeps its observed total, and
+    // this column holds what the harness claimed beside it (#3944, S-07).
+    harnessReportedCostMicros: bigint("harness_reported_cost_micros", {
+      mode: "number",
+    }),
     costBasis: text("cost_basis"),
     hasUnknownModelCost: boolean("has_unknown_model_cost"),
     durationMs: bigint("duration_ms", { mode: "number" }),

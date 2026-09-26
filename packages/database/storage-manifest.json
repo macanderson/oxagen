@@ -4146,7 +4146,7 @@
       "writes": []
     }
   ],
-  "contentHash": "5b8adbe916d2fd206278d88c9b3240dcb8b2831f132412c1a9b1da924bc57b82",
+  "contentHash": "e840455e7ac67c2ebfdf995e9ae580f16213f863dbdd192a27ab36f9ca4a6a5c",
   "domains": [
     {
       "name": "agent",
@@ -22640,6 +22640,12 @@
         {
           "name": "total_cost_micros",
           "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "harness_reported_cost_micros",
+          "nullable": true,
           "primaryKey": false,
           "type": "bigint"
         },

@@ -14,3 +14,17 @@
 ALTER TABLE "tacho"."session_files"
   ALTER COLUMN "lines_added" TYPE bigint,
   ALTER COLUMN "lines_removed" TYPE bigint;
+
+-- Keep the harness's self-reported session total in its own column (#3944,
+-- audit finding S-07).
+--
+-- At `agent_stop` ingest wrote the harness's `total_cost_usd_micros` over
+-- `total_cost_micros`, even for a session the host's model proxy metered
+-- (`cost_basis = 'observed'`). The observed total was lost, and the session
+-- row stopped agreeing with the spend counter, which adds only per-batch
+-- deltas. Ingest now keeps the observed total and writes the harness's figure
+-- here. A self-reported session still takes the harness's total, which also
+-- lands here. Null until a session seals with a reported total.
+
+ALTER TABLE "tacho"."sessions"
+  ADD COLUMN "harness_reported_cost_micros" bigint NULL;

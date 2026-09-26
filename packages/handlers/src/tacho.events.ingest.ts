@@ -1119,9 +1119,35 @@ function terminalPatch(
   );
   set("fastModeState", str(body["fast_mode_state"]));
   set("terminalReason", str(body["terminal_reason"]));
-  if (typeof body["total_cost_usd_micros"] === "number")
+  // The harness's own total is kept in its own column. Whether it also
+  // replaces `total_cost_micros` depends on the session's cost basis, which
+  // the caller knows (`sessionTotalCost`).
+  if (typeof body["total_cost_usd_micros"] === "number") {
+    patch["harnessReportedCostMicros"] = body["total_cost_usd_micros"];
     patch["totalCostMicrosAuthoritative"] = body["total_cost_usd_micros"];
+  }
   return patch;
+}
+
+/**
+ * What a batch writes to `tacho.sessions.total_cost_micros`.
+ *
+ * A self-reported session takes the harness's total at `agent_stop`: the
+ * per-call figures come from the same harness, and its total also covers
+ * calls whose records never arrived. A session the host's model proxy
+ * metered (`cost_basis = 'observed'`, or an observed call in this batch)
+ * keeps adding the observed calls. The harness's total is the claim that
+ * observed metering exists to check, so it never replaces the observed one
+ * (#3944, S-07). It is stored in `harness_reported_cost_micros` either way.
+ */
+export function sessionTotalCost(
+  harnessTotal: number | undefined,
+  observed: boolean,
+  deltaMicros: number,
+): { kind: "assign"; micros: number } | { kind: "add"; micros: number } {
+  if (harnessTotal !== undefined && !observed)
+    return { kind: "assign", micros: harnessTotal };
+  return { kind: "add", micros: deltaMicros };
 }
 
 // A batch whose own values Postgres refuses fails the same way on every retry,
@@ -1717,6 +1743,12 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       const tail = fresh.at(-1);
       const latest = lastRecordedContext(fresh);
       const harnessVersion = batchHarnessVersion(fresh);
+      const totalCost = sessionTotalCost(
+        totalCostMicrosAuthoritative,
+        existing?.costBasis === TACHO_METERING_OBSERVED ||
+          firstObserved !== undefined,
+        delta.totalCostMicros,
+      );
       const increments = {
         numTurns: sql`${schema.tachoSessions.numTurns} + ${delta.numTurns}`,
         numPrompts: sql`${schema.tachoSessions.numPrompts} + ${delta.numPrompts}`,
@@ -1740,9 +1772,9 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         webSearchRequests: sql`${schema.tachoSessions.webSearchRequests} + ${delta.webSearchRequests}`,
         webFetchRequests: sql`${schema.tachoSessions.webFetchRequests} + ${delta.webFetchRequests}`,
         totalCostMicros:
-          totalCostMicrosAuthoritative !== undefined
-            ? totalCostMicrosAuthoritative
-            : sql`${schema.tachoSessions.totalCostMicros} + ${delta.totalCostMicros}`,
+          totalCost.kind === "assign"
+            ? totalCost.micros
+            : sql`${schema.tachoSessions.totalCostMicros} + ${totalCost.micros}`,
         policyDecisions: sql`${schema.tachoSessions.policyDecisions} + ${delta.policyDecisions}`,
         policyDenies: sql`${schema.tachoSessions.policyDenies} + ${delta.policyDenies}`,
         telemetryGapCount: sql`${schema.tachoSessions.telemetryGapCount} + ${delta.telemetryGapCount}`,
