@@ -22,7 +22,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { codexHookPresence } from "../host/codex-writer";
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
@@ -79,13 +79,34 @@ function harnessesOn(platform: RigPlatform): TachoHarness[] {
  */
 const PURGE_ALLOWLIST: string[] = [];
 
-/** What a plain `unenroll` keeps: the local event record, for inspection. */
-const KEEP_ALLOWLIST = [
-  ".config/oxagen/tacho/wal",
-  ".config/oxagen/tacho/spool",
-  ".config/oxagen/tacho/quarantine",
-  ".config/oxagen/tacho/tachod.log",
-];
+/**
+ * The home-relative directory of the agent the rig enrolls. A first enroll
+ * writes into the paths the command started with, and the rig starts with a
+ * new agent's paths (ADR-202).
+ */
+function agentDirOf(rig: Rig): string {
+  return `.config/oxagen/tacho/agents/${basename(rig.deps.paths.dir)}`;
+}
+
+/** What a plain `unenroll` keeps: the agent's local event record and the service log, for inspection. */
+function keepAllowlist(rig: Rig): string[] {
+  const agent = agentDirOf(rig);
+  return [
+    `${agent}/wal`,
+    `${agent}/spool`,
+    `${agent}/quarantine`,
+    ".config/oxagen/tacho/tachod.log",
+  ];
+}
+
+/** The directories a plain `unenroll` keeps because the record under them stays. */
+function keptDirs(rig: Rig): string[] {
+  return [
+    ".config/oxagen/tacho",
+    ".config/oxagen/tacho/agents",
+    agentDirOf(rig),
+  ];
+}
 
 function text(home: string, ...parts: string[]): string {
   return readFileSync(join(home, ...parts), "utf8");
@@ -192,9 +213,10 @@ describe("install rig: macOS, every harness", () => {
     const rig = buildRig(seed);
     expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
     expect((await unenroll({}, rig.deps)).ok).toBe(true);
-    const diff = diffTrees(before, snapshotTree(seed.home), KEEP_ALLOWLIST);
-    // The tacho root itself stays, because the record under it does.
-    expect(diff.added.filter((p) => p !== ".config/oxagen/tacho")).toEqual([]);
+    const diff = diffTrees(before, snapshotTree(seed.home), keepAllowlist(rig));
+    // The agent's directory and the ones above it stay, because the record under them does.
+    const kept = keptDirs(rig);
+    expect(diff.added.filter((p) => !kept.includes(p))).toEqual([]);
     expect(diff.changed).toEqual([]);
     expect(diff.removed).toEqual([]);
   });
@@ -823,8 +845,9 @@ describe("install rig: Windows, Task Scheduler", () => {
     expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
     expect((await unenroll({}, rig.deps)).ok).toBe(true);
     expect(rig.serviceLoaded()).toBe(false);
-    const diff = diffTrees(before, snapshotTree(seed.home), KEEP_ALLOWLIST);
-    expect(diff.added.filter((p) => p !== ".config/oxagen/tacho")).toEqual([]);
+    const diff = diffTrees(before, snapshotTree(seed.home), keepAllowlist(rig));
+    const kept = keptDirs(rig);
+    expect(diff.added.filter((p) => !kept.includes(p))).toEqual([]);
     expect(diff.changed).toEqual([]);
     expect(diff.removed).toEqual([]);
   });
@@ -1119,9 +1142,12 @@ describe("install rig: failure injection", () => {
     const diff = diffTrees(before, snapshotTree(seed.home));
     expect(diff.changed).toEqual([]);
     expect(diff.removed).toEqual([]);
+    const agent = agentDirOf(rig);
     expect(diff.added).toEqual([
       ".config/oxagen/tacho",
-      ".config/oxagen/tacho/host.json",
+      ".config/oxagen/tacho/agents",
+      agent,
+      `${agent}/host.json`,
     ]);
     // status does not call a retired host enrolled.
     const report = await status({ json: true }, rig.deps);
