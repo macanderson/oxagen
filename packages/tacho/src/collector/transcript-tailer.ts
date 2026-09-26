@@ -18,13 +18,15 @@
  * A subagent transcript gets a byte cursor of its own and is tailed the same
  * way, fed with the subagent id so the child chain receives it. Claude Code
  * writes it to `<session>/subagents/agent-<agent id>.jsonl` beside the
- * session's own `<session>.jsonl`, and the tick finds it by listing that
- * directory. `SubagentStart` names no path, and a hook can be lost, so the
- * listing is what finds a subagent whose hooks never arrived. `SubagentStop`
- * drains what is left before the child chain closes, then retires the
- * cursor. The transcript used to be read only there, whole, up to 64 MiB,
- * inside the hook the harness waits on: a longer one lost its tail, and a
- * lost `SubagentStop` meant it was never read (R-11).
+ * session's own `<session>.jsonl`, or, for an agent a workflow runs, one
+ * level further down in `subagents/workflows/<workflow id>/`. The tick finds
+ * both by listing those directories. `SubagentStart` names no path, and a
+ * hook can be lost, so the listing is what finds a subagent whose hooks
+ * never arrived. `SubagentStop` drains what is left before the child chain
+ * closes, then retires the cursor. The transcript used to be read only
+ * there, whole, up to 64 MiB, inside the hook the harness waits on: a longer
+ * one lost its tail, and a lost `SubagentStop` meant it was never read
+ * (R-11).
  *
  * Cursors are persisted next to the daemon state. Without that a restart
  * would re-read every open transcript from byte 0 and seal every message a
@@ -90,7 +92,8 @@ export function subagentDirOf(transcriptPath: string): string | undefined {
  * The agent id a subagent transcript's file name carries, the same id the
  * `SubagentStart` and `SubagentStop` hooks send as `agent_id`: `agent-<id>.jsonl`.
  * Undefined for anything else in the directory, such as the
- * `agent-<id>.meta.json` beside each transcript.
+ * `agent-<id>.meta.json` beside each transcript or a workflow's
+ * `journal.jsonl`.
  */
 export function subagentIdOf(path: string): string | undefined {
   return /^agent-(.+)\.jsonl$/.exec(basename(path))?.[1];
@@ -174,7 +177,12 @@ interface Cursor extends FileCursor {
    * an upgrade does not feed a finished transcript a second time.
    */
   subagents: string[];
-  /** Subagent transcripts still being tailed, by agent id. */
+  /**
+   * Subagent transcripts still being tailed, by agent id. A build before
+   * subagents were tailed ignores this field. A daemon rolled back to one
+   * reads each of these subagents from byte 0 at its `SubagentStop`, and
+   * seals again what this build already fed.
+   */
   agents?: Record<string, FileCursor>;
   /**
    * Set once a sealed session's transcript has gone `sealedIdleMs` without
@@ -225,6 +233,16 @@ async function statIfExists(path: string): Promise<FileStat | undefined> {
 
 /** How many leading bytes of a transcript the cursor fingerprints. */
 const HEAD_BYTES = 64;
+
+/**
+ * What one pass over a transcript did: the lines it fed, refused ones
+ * included, and whether a stat or read failed and stopped it short of the
+ * end of the file.
+ */
+interface Pass {
+  fed: number;
+  failed: boolean;
+}
 
 /** Read `length` bytes at `offset`, or fewer at end of file. */
 async function readAt(
@@ -405,18 +423,24 @@ export class TranscriptTailer {
           continue;
         }
         const cursor = this.cursorFor(session, session.transcriptPath);
-        await this.tailSubagents(session, cursor, this.budget);
+        const subagentsGrew = await this.tailSubagents(
+          session,
+          cursor,
+          this.budget,
+        );
         if (session.sealed) {
           // A sealed chain still gets read at the normal budget, tick after
           // tick, until its transcript has sat unchanged for `sealedIdleMs`:
           // Claude Code has written a trailing `cost-state` or a final
           // `assistant` record after `agent_stop` before, and one pass right
           // at seal time is not guaranteed to be the last write. See
-          // `DEFAULT_SEALED_TAIL_IDLE_MS`.
+          // `DEFAULT_SEALED_TAIL_IDLE_MS`. A subagent still writing counts as
+          // growth too: a background agent can outlive its parent's last
+          // write, and a drained cursor would stop reading it.
           const before = cursor.offset;
           await this.advance(session, cursor, this.budget);
           const now = this.options.now?.() ?? Date.now();
-          if (cursor.offset > before) {
+          if (cursor.offset > before || subagentsGrew) {
             delete cursor.sealedQuietSinceMs;
             this.dirty = true;
           } else if (cursor.sealedQuietSinceMs === undefined) {
@@ -467,20 +491,32 @@ export class TranscriptTailer {
   }
 
   /**
-   * Read everything the transcript and its subagents' transcripts hold right
-   * now, unbounded. Called before a `Stop` or `SessionEnd` hook is sealed so
-   * the turn's model calls sit on the chain before the frame that closes the
-   * turn, and so a subagent whose `SubagentStop` was lost has its transcript
-   * on the child chain before `SessionEnd` closes that chain.
+   * Read everything the session's transcript holds right now, unbounded.
+   * Called before a `Stop` or `SessionEnd` hook is sealed so the turn's model
+   * calls sit on the chain before the frame that closes the turn.
+   *
+   * `SessionEnd` also reads every subagent transcript to its end, so a
+   * subagent whose `SubagentStop` was lost has its transcript on the child
+   * chain before that chain closes. `Stop` ends a turn, not the session, and
+   * fires once a turn while the harness waits on it: a subagent still
+   * running is read at most one budget there, as on the tick, which finishes
+   * the rest.
    */
-  async drain(harnessSessionId: string): Promise<void> {
+  async drain(
+    harnessSessionId: string,
+    hook: "Stop" | "SessionEnd" = "SessionEnd",
+  ): Promise<void> {
     const session = this.options.session(harnessSessionId);
     if (session?.transcriptPath === undefined) return;
     if (!hasTranscriptNormalizer(session)) return;
     const cursor = this.cursorFor(session, session.transcriptPath);
     if (cursor.drained) return;
     await this.advance(session, cursor, Number.POSITIVE_INFINITY);
-    await this.tailSubagents(session, cursor, Number.POSITIVE_INFINITY);
+    await this.tailSubagents(
+      session,
+      cursor,
+      hook === "SessionEnd" ? Number.POSITIVE_INFINITY : this.budget,
+    );
     this.persist();
   }
 
@@ -520,12 +556,22 @@ export class TranscriptTailer {
     // has not read yet. A gap that cannot be written throws here, before the
     // subagent is retired, so the tick keeps the cursor where it stopped and
     // writes the gap on a later pass.
-    const fed = await this.advance(
+    const { fed, failed } = await this.advance(
       session,
       sub,
       Number.POSITIVE_INFINITY,
       subagentId,
     );
+    if (failed) {
+      // A read that failed (EMFILE, EIO) left the rest of the file unread.
+      // Retired now, the cursor would never read it. Kept, the tick reads it
+      // once the file can be read again.
+      this.options.log?.(
+        `subagent transcript ${sub.path} stays open after its SubagentStop: the read failed at ${sub.offset}`,
+      );
+      this.persist();
+      return fed;
+    }
     const agents = { ...cursor.agents };
     delete agents[subagentId];
     if (Object.keys(agents).length > 0) cursor.agents = agents;
@@ -537,44 +583,35 @@ export class TranscriptTailer {
   }
 
   /**
-   * Open a cursor for every subagent transcript in the session's
+   * Open a cursor for every subagent transcript under the session's
    * `subagents/` directory that has none and is not finished, then advance
    * each open one by at most `budget`. Each subagent gets its own budget, so
    * a tick reads at most one budget per transcript, subagents included.
+   * Answers whether any subagent transcript was read further, so a sealed
+   * session is not drained while one of its subagents is still writing.
    */
   private async tailSubagents(
     session: TailedSession,
     cursor: Cursor,
     budget: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const dir =
       session.transcriptPath === undefined
         ? undefined
         : subagentDirOf(session.transcriptPath);
     if (dir !== undefined) {
-      let names: string[] = [];
-      try {
-        names = await fs.readdir(dir);
-      } catch (error) {
-        // No subagent has written yet, which is most sessions.
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-          this.options.log?.(
-            `subagent transcripts in ${dir} unreadable: ${describe(error)}`,
-          );
-      }
-      for (const name of names.sort()) {
-        const id = subagentIdOf(name);
+      for (const path of await this.subagentTranscripts(dir)) {
+        const id = subagentIdOf(path);
         if (id === undefined) continue;
         if (cursor.subagents.includes(id)) continue;
         if (cursor.agents?.[id] !== undefined) continue;
-        cursor.agents = {
-          ...cursor.agents,
-          [id]: { path: join(dir, name), offset: 0 },
-        };
+        cursor.agents = { ...cursor.agents, [id]: { path, offset: 0 } };
         this.dirty = true;
       }
     }
+    let grew = false;
     for (const [id, agent] of Object.entries(cursor.agents ?? {})) {
+      const before = agent.offset;
       // One subagent's failure is logged and costs no other transcript its
       // pass, the parent's included.
       try {
@@ -584,6 +621,42 @@ export class TranscriptTailer {
           `subagent transcript ${agent.path} failed this pass: ${describe(error)}`,
         );
       }
+      if (agent.offset !== before) grew = true;
+    }
+    return grew;
+  }
+
+  /**
+   * Every subagent transcript under a session's `subagents/` directory,
+   * sorted: `agent-<id>.jsonl` in the directory itself, and in each
+   * `workflows/<workflow id>/` one level down, where Claude Code writes the
+   * agents a workflow runs beside the workflow's `journal.jsonl`. On one host
+   * those were 3,634 of 5,059 subagent transcripts.
+   */
+  private async subagentTranscripts(dir: string): Promise<string[]> {
+    const paths = (await this.listDir(dir)).map((name) => join(dir, name));
+    const workflows = join(dir, "workflows");
+    for (const workflow of await this.listDir(workflows)) {
+      const at = join(workflows, workflow);
+      for (const name of await this.listDir(at)) paths.push(join(at, name));
+    }
+    return paths.filter((path) => subagentIdOf(path) !== undefined).sort();
+  }
+
+  /**
+   * The names in a directory, or none when it is not there. No subagent has
+   * written yet in most sessions, and a workflow entry can be a file.
+   */
+  private async listDir(dir: string): Promise<string[]> {
+    try {
+      return await fs.readdir(dir);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" && code !== "ENOTDIR")
+        this.options.log?.(
+          `subagent transcripts in ${dir} unreadable: ${describe(error)}`,
+        );
+      return [];
     }
   }
 
@@ -665,18 +738,17 @@ export class TranscriptTailer {
   /**
    * Read the transcript on from the cursor, then seal one gap for every line
    * the pass refused, however many there were. A subagent's transcript is fed
-   * with its id, and its gap names it. Returns the number of lines fed,
-   * refused ones included.
+   * with its id, and its gap names it.
    */
   private async advance(
     session: TailedSession,
     cursor: FileCursor,
     budget: number,
     subagentId?: string,
-  ): Promise<number> {
-    const fed = await this.feed(session, cursor, budget, subagentId);
+  ): Promise<Pass> {
+    const pass = await this.feed(session, cursor, budget, subagentId);
     const refused = cursor.refused;
-    if (refused === undefined) return fed;
+    if (refused === undefined) return pass;
     // One gap for the pass. A subagent whose chain refused every line sealed
     // one gap per line, 608 of them in one second on one host (#4094).
     this.sealGap(
@@ -688,7 +760,7 @@ export class TranscriptTailer {
     );
     delete cursor.refused;
     this.dirty = true;
-    return fed;
+    return pass;
   }
 
   private async feed(
@@ -696,7 +768,7 @@ export class TranscriptTailer {
     cursor: FileCursor,
     budget: number,
     subagentId?: string,
-  ): Promise<number> {
+  ): Promise<Pass> {
     let fed = 0;
     let st: FileStat | undefined;
     try {
@@ -705,11 +777,11 @@ export class TranscriptTailer {
       this.options.log?.(
         `transcript ${cursor.path} unreadable: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return fed;
+      return { fed, failed: true };
     }
     // Claude Code creates the file on the first message, after SessionStart
     // has already reported its path; until then there is nothing to read.
-    if (st === undefined) return fed;
+    if (st === undefined) return { fed, failed: false };
     let replaced =
       st.size < cursor.offset ||
       (cursor.ino !== undefined && cursor.ino !== st.ino);
@@ -739,9 +811,11 @@ export class TranscriptTailer {
         this.options.log?.(
           `transcript ${cursor.path} read failed at ${cursor.offset}: ${error instanceof Error ? error.message : String(error)}`,
         );
-        return fed;
+        return { fed, failed: true };
       }
-      if (chunk.length === 0) return fed;
+      // The file shrank between the stat and the read. The next pass sees
+      // it as replaced.
+      if (chunk.length === 0) return { fed, failed: true };
       const { lines, consumed } = completeLines(chunk);
       if (consumed === 0) {
         // No newline in what was read. A chunk shorter than the full budget
@@ -749,14 +823,14 @@ export class TranscriptTailer {
         // either way the line's end is not known yet, and the next tick
         // starts on it fresh. A chunk the full budget long with no newline
         // in it is a line the budget cannot hold.
-        if (chunk.length < this.budget) return fed;
+        if (chunk.length < this.budget) return { fed, failed: false };
         // Find the end of the line so the cursor can move past it.
         const skipTo = await this.findLineEnd(
           cursor.path,
           cursor.offset,
           st.size,
         );
-        if (skipTo === undefined) return fed;
+        if (skipTo === undefined) return { fed, failed: false };
         // A line past the budget was silent before: only a log line marked
         // it, and nothing on the chain showed the session had a gap.
         this.sealGap(
@@ -805,7 +879,7 @@ export class TranscriptTailer {
         // Unreadable now; the next tick fingerprints it.
       }
     }
-    return fed;
+    return { fed, failed: false };
   }
 
   /**

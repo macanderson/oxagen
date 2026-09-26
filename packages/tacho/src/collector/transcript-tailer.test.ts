@@ -7,6 +7,7 @@
  */
 import {
   appendFileSync,
+  promises as fs,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -16,7 +17,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
 import { sessionMapKey } from "./registry";
@@ -524,6 +525,139 @@ describe("TranscriptTailer", () => {
     const again = fakeSession("s1", path);
     await tailer([again], { statePath }).instance.tick();
     expect(again.lines).toEqual([{ line: "live-2", subagentId: "live" }]);
+  });
+
+  it("tails the agents a workflow runs, one level down in workflows/", async () => {
+    // Claude Code writes a workflow's agents to
+    // `subagents/workflows/<workflow id>/agent-<id>.jsonl`, beside the
+    // workflow's `journal.jsonl`. The listing saw only `subagents/` itself,
+    // so none of them was read while it ran, and one whose SubagentStop was
+    // lost was never read.
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "");
+    const subagents = subagentDirOf(path) as string;
+    const workflow = join(subagents, "workflows", "wf_x");
+    mkdirSync(workflow, { recursive: true });
+    const agentPath = join(workflow, "agent-w1.jsonl");
+    writeFileSync(agentPath, "w-1\n");
+    writeFileSync(join(workflow, "agent-w1.meta.json"), "{}\n");
+    writeFileSync(join(workflow, "journal.jsonl"), '{"type":"launched"}\n');
+    // A file where a workflow directory would be is skipped, not logged.
+    writeFileSync(join(subagents, "workflows", "wf_file.json"), "{}");
+    const session = fakeSession("s1", path);
+    const { instance, log } = tailer([session]);
+    await instance.tick();
+    expect(session.lines).toEqual([{ line: "w-1", subagentId: "w1" }]);
+    expect(log).toEqual([]);
+
+    // Its SubagentStop names the same file and feeds only the rest.
+    appendFileSync(agentPath, "w-2\n");
+    expect(await instance.ingestSubagentTranscript("s1", "w1", agentPath)).toBe(
+      1,
+    );
+    expect(session.lines.map((l) => l.line)).toEqual(["w-1", "w-2"]);
+  });
+
+  it("keeps a subagent cursor open when the read at its SubagentStop fails", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "");
+    const agentPath = subagentPath(path, "a1");
+    writeFileSync(agentPath, "sub-1\n");
+    const session = fakeSession("s1", path);
+    const { instance, log } = tailer([session]);
+    await instance.tick();
+    appendFileSync(agentPath, "sub-2\n");
+
+    const open = fs.open.bind(fs);
+    const fault = vi.spyOn(fs, "open").mockImplementation((file, ...rest) => {
+      if (String(file) === agentPath)
+        return Promise.reject(
+          Object.assign(new Error("EMFILE: too many open files"), {
+            code: "EMFILE",
+          }),
+        );
+      return open(file, ...rest);
+    });
+    try {
+      expect(
+        await instance.ingestSubagentTranscript("s1", "a1", agentPath),
+      ).toBe(0);
+    } finally {
+      fault.mockRestore();
+    }
+    // Retired here, the cursor would never read `sub-2`.
+    const cursor = instance.state().cursors[cursorId("s1")];
+    expect(cursor?.subagents).toEqual([]);
+    expect(cursor?.agents?.["a1"]).toBeDefined();
+    expect(log.some((line) => line.includes("stays open"))).toBe(true);
+
+    await instance.tick();
+    expect(session.lines.map((l) => l.line)).toEqual(["sub-1", "sub-2"]);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      0,
+    );
+    expect(instance.state().cursors[cursorId("s1")]?.subagents).toEqual(["a1"]);
+  });
+
+  it("reads a running subagent one budget at a Stop, and to its end at SessionEnd", async () => {
+    // The harness waits on Stop, which fires once a turn. The drain reads
+    // the parent's transcript to its end there and leaves a subagent's to
+    // the tick.
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "p1\np2\np3\np4\n");
+    const agentPath = subagentPath(path, "a1");
+    writeFileSync(agentPath, "s1\ns2\ns3\ns4\n");
+    const session = fakeSession("s1", path);
+    const { instance } = tailer([session], { budgetBytes: 8 });
+    await instance.drain("s1", "Stop");
+    expect(
+      session.lines.filter((l) => l.subagentId === undefined),
+    ).toHaveLength(4);
+    expect(session.lines.filter((l) => l.subagentId === "a1")).toHaveLength(2);
+    await instance.drain("s1", "SessionEnd");
+    expect(
+      session.lines.filter((l) => l.subagentId === "a1").map((l) => l.line),
+    ).toEqual(["s1", "s2", "s3", "s4"]);
+  });
+
+  it("keeps reading a sealed session while one of its subagents still writes", async () => {
+    // A background agent can outlive its parent's last write. The quiet clock
+    // watched only the parent, and drained the cursor under a subagent that
+    // was still writing.
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "a\n");
+    const agentPath = subagentPath(path, "bg");
+    writeFileSync(agentPath, "bg-1\n");
+    const session = fakeSession("s1", path);
+    let clock = 1_000_000;
+    const { instance } = tailer([session], {
+      now: () => clock,
+      sealedIdleMs: 1_000,
+    });
+    await instance.tick();
+    session.sealed = true;
+    clock += 100;
+    await instance.tick();
+    for (const line of ["bg-2", "bg-3", "bg-4"]) {
+      appendFileSync(agentPath, `${line}\n`);
+      clock += 600;
+      await instance.tick();
+    }
+    expect(
+      session.lines.filter((l) => l.subagentId === "bg").map((l) => l.line),
+    ).toEqual(["bg-1", "bg-2", "bg-3", "bg-4"]);
+    expect(instance.state().cursors[cursorId("s1")]?.drained).toBeUndefined();
+
+    // Once the subagent is quiet too, the cursor drains as before.
+    clock += 100;
+    await instance.tick();
+    clock += 1_500;
+    await instance.tick();
+    expect(instance.state().cursors[cursorId("s1")]?.drained).toBe(true);
   });
 
   it("keeps tailing a sealed session while it still grows, and drains it only once idle", async () => {

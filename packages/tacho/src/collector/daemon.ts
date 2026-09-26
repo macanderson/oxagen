@@ -1514,10 +1514,10 @@ async function initializeDaemon(
 
   /**
    * What the tailer does before a hook is sealed: a `Stop` or `SessionEnd`
-   * drains the session's transcript and its subagents' so the turn's model
-   * calls sit on the chain before the frame that closes it, and a
-   * `SubagentStop` feeds the rest of the subagent's transcript to the child
-   * chain before that chain is finalized.
+   * drains the session's transcript so the turn's model calls sit on the
+   * chain before the frame that closes it, and `SessionEnd` drains its
+   * subagents' too. A `SubagentStop` feeds the rest of the subagent's
+   * transcript to the child chain before that chain is finalized.
    */
   async function tailBeforeHook(payload: unknown): Promise<void> {
     if (payload === null || typeof payload !== "object") return;
@@ -1540,7 +1540,7 @@ async function initializeDaemon(
         }
       }
       if (hookName === "Stop" || hookName === "SessionEnd")
-        await transcriptTailer.drain(sessionId);
+        await transcriptTailer.drain(sessionId, hookName);
     } catch (error) {
       // The hook must still be answered; a transcript that cannot be read
       // is a gap in the record, not a reason to stall the agent.

@@ -1017,6 +1017,34 @@ export class SessionRecorder {
     return toProtocolTimestamp(this.options.context.now?.() ?? Date.now());
   }
 
+  /**
+   * Fill in the subagent type and the spawning call on a child chain that
+   * opened without them. The transcript tailer can open a child chain before
+   * its `SubagentStart` arrives, and the tailer knows neither. `seal` stamps
+   * each frame's `subagent` block from these options, and `state` persists
+   * the spawning call from them, so the hook that names them fills them in
+   * here. A value already set stays.
+   */
+  private nameSubagent(
+    subagentType: string | undefined,
+    spawnToolUseId: string | undefined,
+  ): void {
+    const parent = this.options.parent;
+    if (parent === undefined) return;
+    const type = parent.subagentType === undefined ? subagentType : undefined;
+    const spawn =
+      parent.spawnToolUseId === undefined ? spawnToolUseId : undefined;
+    if (type === undefined && spawn === undefined) return;
+    this.options = {
+      ...this.options,
+      parent: {
+        ...parent,
+        ...(type !== undefined ? { subagentType: type } : {}),
+        ...(spawn !== undefined ? { spawnToolUseId: spawn } : {}),
+      },
+    };
+  }
+
   private child(
     subagentId: string,
     subagentType: string | undefined,
@@ -1027,6 +1055,9 @@ export class SessionRecorder {
     if (existing) {
       if (subagentType !== undefined && existing.type === undefined)
         existing.type = subagentType;
+      // A spawning call id on any hook but `SubagentStart` is the subagent's
+      // own call, so only the type is filled in here. See `sealHook`.
+      existing.recorder.nameSubagent(subagentType, undefined);
       return existing.recorder;
     }
     const recorder = new SessionRecorder({
@@ -1332,6 +1363,7 @@ export class SessionRecorder {
           : undefined;
       const isStart = first.hook_event_name === "SubagentStart";
       const child = this.child(subagentId, subagentType, spawnToolUseId, ts);
+      if (isStart) child.nameSubagent(subagentType, spawnToolUseId);
       const out: TachoEvent[] = this.pendingChildGenesis.splice(0);
       // The OTel records of this subagent's tool calls carry no `agent_id`,
       // only the `tool_use_id` this hook names first. The spawn's id is the

@@ -520,3 +520,66 @@ describe("the tokens a session family counts", () => {
     expect(countedTools(after.sealedEvents)).toEqual([]);
   });
 });
+
+describe("a child chain the transcript opened before its SubagentStart", () => {
+  it("stamps the type and spawning call the hook names on every frame after it", () => {
+    // The tailer reads a subagent's transcript as it grows, so its first line
+    // can open the child chain before SubagentStart lands. The hook set the
+    // type only for routing, and the child's frames carried no type.
+    const root = new SessionRecorder({
+      context,
+      harnessSessionId: ID,
+      scope: SCOPE,
+    });
+    root.ingestHook(
+      { session_id: ID, hook_event_name: "SessionStart" },
+      {},
+      at,
+    );
+    root.ingestTranscriptLine(transcriptReply("req_1", "msg_1"), "agent-late");
+    root.ingestHook(
+      {
+        session_id: ID,
+        hook_event_name: "SubagentStart",
+        agent_id: "agent-late",
+        agent_type: "Explore",
+        tool_use_id: "toolu_spawn",
+      },
+      {},
+      at,
+    );
+    root.ingestTranscriptLine(transcriptReply("req_2", "msg_2"), "agent-late");
+    // A later hook of the subagent's own call does not rename the spawn.
+    root.ingestHook(
+      {
+        session_id: ID,
+        hook_event_name: "PreToolUse",
+        agent_id: "agent-late",
+        agent_type: "Explore",
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/a" },
+        tool_use_id: "toolu_own",
+      },
+      {},
+      at,
+    );
+    const second = chainOf(root, "agent-late").sealedEvents.find(
+      (event) =>
+        event.kind === "llm_call" && field(event, "request_id") === "req_2",
+    );
+    expect(second?.subagent).toMatchObject({
+      subagent_id: "agent-late",
+      subagent_type: "Explore",
+      spawn_tool_use_id: "toolu_spawn",
+    });
+    const own = chainOf(root, "agent-late").sealedEvents.find(
+      (event) => event.kind === "tool_requested",
+    );
+    expect(own?.subagent?.spawn_tool_use_id).toBe("toolu_spawn");
+    // A restart continues the chain with both.
+    expect(root.state().children["agent-late"]).toMatchObject({
+      type: "Explore",
+      spawnToolUseId: "toolu_spawn",
+    });
+  });
+});
