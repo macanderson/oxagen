@@ -55,6 +55,16 @@ export function FleetEmpty({
           </SafeLink>
         </>
       }
+      after={
+        // The CLI path to the same end (#2950): enrolling a machine records
+        // the sessions of the agent that already runs on it.
+        <p
+          data-testid="fleet-empty-enroll"
+          className="mx-auto mt-4 max-w-[52ch] text-[13px] text-muted-foreground"
+        >
+          {t.rich("enroll", { code: codeTag })}
+        </p>
+      }
     >
       {t("body")}
     </StateWrap>

@@ -903,6 +903,14 @@ describe("not-loaded states", () => {
     expect(
       within(empty).getByRole("link", { name: "Open Agents" }),
     ).toHaveAttribute("href", "/acme/core-platform/agents");
+    // The CLI path to a first run (#2950): the enroll command, set as code.
+    const enroll = within(empty).getByTestId("fleet-empty-enroll");
+    expect(enroll).toHaveTextContent(
+      "To record an agent that already runs on a machine, run oxagen agent enroll on that machine.",
+    );
+    expect(within(enroll).getByText("oxagen agent enroll").tagName).toBe(
+      "CODE",
+    );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });

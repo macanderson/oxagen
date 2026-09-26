@@ -273,7 +273,8 @@
       "title": "No runs yet in {workspace}",
       "body": "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call. You do not create runs here. Agents do.",
       "register": "Register Agent",
-      "agents": "Open Agents"
+      "agents": "Open Agents",
+      "enroll": "To record an agent that already runs on a machine, run <code>oxagen agent enroll</code> on that machine."
     },
     "error": {
       "title": "Fleet could not be loaded",
