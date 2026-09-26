@@ -13,11 +13,24 @@
  * times, and hash of a file that was dirty before a session started, use
  * `node:fs/promises` and a stream, so a large file costs time and not
  * memory, and the daemon's event loop is never blocked on one.
+ *
+ * The one write is a copy of such a file, into a directory the caller names
+ * in Tacho's own state directory, never into the repository or its `.git`.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { lstat, readlink } from "node:fs/promises";
-import { dirname } from "node:path";
+import {
+  type FileHandle,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  readlink,
+  rename,
+  rm,
+  unlink,
+} from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { ExecAsync } from "../host/service";
 import {
   absoluteIn,
@@ -56,6 +69,18 @@ export const MAX_PREEXISTING_PATHS = 256;
 export const MAX_HASHED_FILE_BYTES = 16 * 1024 * 1024;
 
 /**
+ * The most bytes of copies one session keeps, across every worktree it reads.
+ *
+ * A file that held uncommitted edits at the session's first read is copied
+ * into Tacho's state directory, so that once the session changes it a
+ * reconciliation counts only the session's lines rather than everything the
+ * file holds against `HEAD`. A file that would pass this bound is not
+ * copied. Its row then counts the whole file against `HEAD`, and the frame
+ * says so (`SessionChanges.preSessionCounts`).
+ */
+export const MAX_PRE_SESSION_COPY_BYTES = 8 * 1024 * 1024;
+
+/**
  * The most commits one session carries from one read of a worktree to the
  * next. A commit still in `baseline..HEAD` is found again on every read, so
  * the bound matters only for commits that left that range, such as the
@@ -69,6 +94,13 @@ export const MAX_SESSION_COMMITS = 128;
  * bounded read.
  */
 export const MAX_RANGE_COMMITS = 1_024;
+
+/**
+ * The most `HEAD` reflog entries one read walks, newest first, for the
+ * commits made in the worktree (`madeHere`). A session moves `HEAD` once per
+ * commit, checkout, pull, or reset, so this covers far more than one turn.
+ */
+export const MAX_REFLOG_ENTRIES = 1_024;
 
 /**
  * One path that was dirty before the session touched it: the first 32 hex
@@ -105,9 +137,44 @@ export interface WorktreeAttribution {
   preexisting?: PreexistingPaths;
 }
 
+/**
+ * What each reported path was measured against, so the patch beside a
+ * reconciliation takes each hunk against the same state its row's line
+ * counts came from (ADR-188 decision 5).
+ */
+export interface MeasuredPaths {
+  /**
+   * The commit `fromHead` was measured against: `HEAD` at the read, or git's
+   * empty tree in a repository with no commit yet.
+   */
+  headRef: string;
+  /** Paths the session's commits touched, measured against the baseline commit. */
+  fromBaseline: string[];
+  /** Paths measured against `headRef`, or against nothing when untracked. */
+  fromHead: string[];
+  /**
+   * Paths that held uncommitted edits at the session's first read, measured
+   * against what they held then: the copy at `copy`, or nothing when the
+   * path was absent then.
+   */
+  fromPreSession: { path: string; copy: string | null }[];
+}
+
+/**
+ * Where a session keeps its copies (`MAX_PRE_SESSION_COPY_BYTES`): a
+ * directory of its own under Tacho's state directory, and how many bytes the
+ * session may keep there.
+ */
+export interface PreSessionCopies {
+  dir: string;
+  capBytes: number;
+}
+
 /** One reconciliation's answer, and what the next one starts from. */
 export interface SessionChanges {
   changes: GitWorkingTreeChange[];
+  /** On the `session` basis, what each path in `changes` was measured against. */
+  measured?: MeasuredPaths;
   /**
    * The commits the next read starts from, oldest first: the newest
    * `MAX_SESSION_COMMITS` of those counted as the session's.
@@ -123,9 +190,20 @@ export interface SessionChanges {
   /**
    * On the `session` basis, whether changes that were already in the
    * worktree were left out: `complete`, `partial` (the record hit its
-   * bound), or `none` (no record was taken for this worktree).
+   * bound, or an entry in it could not be used), or `none` (no record was
+   * taken for this worktree).
    */
   preexisting: "complete" | "partial" | "none";
+  /**
+   * How the rows of paths that held uncommitted edits before the session
+   * were counted, once the session changed them. `session_only`: each row
+   * counts the session's lines alone. `whole_file`: at least one counts the
+   * file against `HEAD`, because no copy of what it held was kept (past the
+   * cap, a symbolic link, or a file past `MAX_HASHED_FILE_BYTES`) or its
+   * entry in the record could not be read. Absent when the list holds no
+   * such path.
+   */
+  preSessionCounts?: "session_only" | "whole_file";
 }
 
 /** A full commit name, sha-1 or sha-256. */
@@ -140,25 +218,31 @@ const STATUS_ARGS = [
   "--untracked-files=all",
 ];
 
+/** A path's size, times, and kind. */
+interface Stat {
+  size: number;
+  mtimeMs: number;
+  ctimeMs: number;
+  changedAtMs: number;
+  kind: "file" | "link";
+  /** The owner's execute bit, which git reads as mode 100755. */
+  executable: boolean;
+}
+
 /** A path's size and times, or "absent" when nothing is there. */
-async function statOf(absolutePath: string): Promise<
-  | {
-      size: number;
-      mtimeMs: number;
-      changedAtMs: number;
-      kind: "file" | "link";
-    }
-  | "absent"
-  | undefined
-> {
+async function statOf(
+  absolutePath: string,
+): Promise<Stat | "absent" | undefined> {
   try {
     const info = await lstat(absolutePath);
     if (!info.isFile() && !info.isSymbolicLink()) return undefined;
     return {
       size: info.size,
       mtimeMs: info.mtimeMs,
+      ctimeMs: info.ctimeMs,
       changedAtMs: Math.max(info.mtimeMs, info.ctimeMs),
       kind: info.isFile() ? "file" : "link",
+      executable: (info.mode & 0o100) !== 0,
     };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -178,25 +262,149 @@ async function directoryChangedAt(path: string): Promise<number | undefined> {
   }
 }
 
+/** A copy's name: the first 32 hex digits of the sha256 of its bytes. */
+const COPY_NAME = /^[0-9a-f]{32}$/;
+
 /**
  * The first 32 hex digits of the sha256 of a file's bytes, or of a link's
  * target. Read as a stream, so a large file costs time and not memory.
  * Undefined when the read fails.
+ *
+ * With `keep`, the same pass writes the file's bytes into `keep.dir` under a
+ * temporary name and returns that name as `copy`. The caller renames it to
+ * the hash once it knows the bytes are the ones it meant to keep, or removes
+ * it (`settleCopy`), so a copy is whole or absent and its name says what it
+ * holds. A file that grew past `keep.bytes` since it was measured, or a
+ * write that fails, leaves no copy and still answers the hash.
  */
 async function contentHash(
   absolutePath: string,
   kind: "file" | "link",
-): Promise<string | undefined> {
+  keep?: { dir: string; bytes: number; executable: boolean },
+): Promise<{ hash: string; copy?: string } | undefined> {
+  const hash = createHash("sha256");
+  if (kind === "link") {
+    try {
+      hash.update(await readlink(absolutePath));
+      return { hash: hash.digest("hex").slice(0, 32) };
+    } catch {
+      return undefined;
+    }
+  }
+  let copy: { temp: string; handle: FileHandle } | null = null;
+  if (keep !== undefined) {
+    try {
+      await mkdir(keep.dir, { recursive: true, mode: 0o700 });
+      const temp = join(keep.dir, `.partial-${randomUUID()}`);
+      // Git reads the owner's execute bit as the file's mode. A copy of an
+      // executable file keeps it, so a patch taken against the copy claims
+      // no mode change the session did not make.
+      copy = {
+        temp,
+        handle: await open(temp, "wx", keep.executable ? 0o700 : 0o600),
+      };
+    } catch {
+      copy = null;
+    }
+  }
+  const drop = async () => {
+    if (copy === null) return;
+    const { temp, handle } = copy;
+    copy = null;
+    await handle.close().catch(() => undefined);
+    await unlink(temp).catch(() => undefined);
+  };
+  let written = 0;
   try {
-    const hash = createHash("sha256");
-    if (kind === "link") hash.update(await readlink(absolutePath));
-    else
-      for await (const chunk of createReadStream(absolutePath))
-        hash.update(chunk as Buffer);
-    return hash.digest("hex").slice(0, 32);
+    for await (const chunk of createReadStream(absolutePath)) {
+      hash.update(chunk as Buffer);
+      if (copy === null) continue;
+      written += (chunk as Buffer).length;
+      if (keep === undefined || written > keep.bytes) await drop();
+      else await copy.handle.write(chunk as Buffer).catch(async () => drop());
+    }
   } catch {
+    await drop();
     return undefined;
   }
+  const digest = hash.digest("hex").slice(0, 32);
+  if (copy === null) return { hash: digest };
+  const { temp, handle } = copy;
+  try {
+    await handle.close();
+  } catch {
+    await unlink(temp).catch(() => undefined);
+    return { hash: digest };
+  }
+  return { hash: digest, copy: temp };
+}
+
+/** Name a copy `contentHash` wrote by `name`, or remove it when `name` is undefined. */
+async function settleCopy(
+  temp: string | undefined,
+  name: string | undefined,
+): Promise<void> {
+  if (temp === undefined) return;
+  if (name !== undefined)
+    try {
+      await rename(temp, join(dirname(temp), name));
+      return;
+    } catch {
+      // Removed below, so no partial copy is left.
+    }
+  await unlink(temp).catch(() => undefined);
+}
+
+/** The bytes a session's copies already take, or 0 when there are none. */
+async function copiedBytes(dir: string): Promise<number> {
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return 0;
+  }
+  let total = 0;
+  for (const name of names) {
+    try {
+      total += (await lstat(join(dir, name))).size;
+    } catch {
+      // Gone since the listing, so it takes nothing.
+    }
+  }
+  return total;
+}
+
+/**
+ * Remove the copies of every session `live` does not name, by the directory
+ * name the lane gives each session. The daemon calls this after it forgets
+ * sealed sessions, which also clears the directories of sessions a crash
+ * left behind.
+ *
+ * `live` is asked after the directory is listed. The daemon runs this off
+ * its hook queue, so a session can start while it runs. A session's
+ * directory is written only after the session is registered, so any
+ * directory the listing holds belongs to a session `live` already names.
+ */
+export async function removeCopiesOutside(
+  root: string,
+  live: () => Iterable<string>,
+): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(root);
+  } catch {
+    return;
+  }
+  const keep = new Set(live());
+  await Promise.all(
+    names
+      .filter((name) => !keep.has(name))
+      .map((name) =>
+        rm(join(root, name), { recursive: true, force: true }).catch(
+          () => undefined,
+        ),
+      ),
+  );
 }
 
 /** Whether a porcelain v1 code says the path is gone from the worktree. */
@@ -220,18 +428,25 @@ function deletedIn(code: string): boolean {
  * Undefined when the status read fails. A path that cannot be measured is
  * not recorded, so it is reported, which is the direction of error a
  * record of what the session did can explain.
+ *
+ * With `copies`, each recorded file is also copied into `copies.dir` while
+ * it is hashed, in path order until the session's copies would pass
+ * `copies.capBytes`. A later reconciliation counts the session's lines in a
+ * copied file against the copy (`readSessionChanges`).
  */
 export async function readPreexistingPaths(
   exec: ExecAsync,
   root: string,
   startedAtMs: number,
+  copies?: PreSessionCopies,
 ): Promise<PreexistingPaths | undefined> {
   const status = await git(exec, root, STATUS_ARGS);
   if (status === undefined) return undefined;
-  const listed = parsePorcelainZ(status).sort((a, b) =>
-    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
-  );
+  const byPath = (a: { path: string }, b: { path: string }) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+  const listed = parsePorcelainZ(status).sort(byPath);
   const paths: Record<string, PreexistingEntry | null> = {};
+  const present: { path: string; absolute: string; found: Stat }[] = [];
   await pooled(
     listed.slice(0, MAX_PREEXISTING_PATHS).map((entry) => async () => {
       const absolute = absoluteIn(root, entry.path);
@@ -247,12 +462,61 @@ export async function readPreexistingPaths(
         return;
       }
       if (found.changedAtMs >= startedAtMs) return;
-      const hash =
-        found.kind === "file" && found.size > MAX_HASHED_FILE_BYTES
-          ? ""
-          : await contentHash(absolute, found.kind);
-      if (hash === undefined) return;
-      paths[entry.path] = [hash, found.size, found.mtimeMs];
+      present.push({ path: entry.path, absolute, found });
+    }),
+    UNTRACKED_COUNT_CONCURRENCY,
+  );
+  // The copies are chosen in path order, so the same files get one whatever
+  // order the reads above finished in.
+  let room =
+    copies === undefined
+      ? 0
+      : copies.capBytes - (await copiedBytes(copies.dir));
+  const planned = present.sort(byPath).map((file) => {
+    const hashed = !(
+      file.found.kind === "file" && file.found.size > MAX_HASHED_FILE_BYTES
+    );
+    const copied =
+      copies !== undefined &&
+      hashed &&
+      file.found.kind === "file" &&
+      file.found.size <= room;
+    if (copied) room -= file.found.size;
+    return { ...file, hashed, copied };
+  });
+  await pooled(
+    planned.map((file) => async () => {
+      if (!file.hashed) {
+        paths[file.path] = ["", file.found.size, file.found.mtimeMs];
+        return;
+      }
+      const read = await contentHash(
+        file.absolute,
+        file.found.kind,
+        file.copied && copies !== undefined
+          ? {
+              dir: copies.dir,
+              bytes: file.found.size,
+              executable: file.found.executable,
+            }
+          : undefined,
+      );
+      if (read === undefined) return;
+      // The stat above can come seconds before the hash, behind the other
+      // files' hashes. A write in between would be hashed and copied as what
+      // the file held before the session, and the session's edit would never
+      // be reported. So a file whose size or times moved is not recorded,
+      // and a later read reports it.
+      const again = await statOf(file.absolute);
+      const still =
+        again !== undefined &&
+        again !== "absent" &&
+        again.size === file.found.size &&
+        again.mtimeMs === file.found.mtimeMs &&
+        again.ctimeMs === file.found.ctimeMs;
+      await settleCopy(read.copy, still ? read.hash : undefined);
+      if (still)
+        paths[file.path] = [read.hash, file.found.size, file.found.mtimeMs];
     }),
     UNTRACKED_COUNT_CONCURRENCY,
   );
@@ -262,6 +526,40 @@ export async function readPreexistingPaths(
       listed.length <= MAX_PREEXISTING_PATHS &&
       listed.length < MAX_CHANGED_PATHS,
   };
+}
+
+/**
+ * One recorded entry as the state file gave it back: an entry, null for a
+ * path that was absent, or undefined for anything else. `daemon.json` is
+ * checked only as far as the record being an object, and an entry of the
+ * wrong shape threw where it was taken apart.
+ */
+function entryOf(value: unknown): PreexistingEntry | null | undefined {
+  if (value === null) return null;
+  if (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    typeof value[0] === "string" &&
+    typeof value[1] === "number" &&
+    typeof value[2] === "number"
+  )
+    return [value[0], value[1], value[2]];
+  return undefined;
+}
+
+/**
+ * Whether a path from the state file names something inside the repository
+ * the way git names it: relative, with no empty, `.`, or `..` segment. Git
+ * never lists any other kind.
+ */
+function insideRepository(path: string): boolean {
+  return (
+    !/^[A-Za-z]:/.test(path) &&
+    !path.includes("\0") &&
+    // An empty segment is also a leading or trailing `/`.
+    !path.split("/").some((segment) => segment === "" || segment === ".") &&
+    !path.split(/[\\/]/).includes("..")
+  );
 }
 
 /** Whether a recorded path still holds what it held at the session's first read. */
@@ -277,7 +575,84 @@ async function unchangedSince(
   const [hash, size, mtimeMs] = entry;
   if (found.size === size && found.mtimeMs === mtimeMs) return true;
   if (hash === "" || found.size > MAX_HASHED_FILE_BYTES) return false;
-  return (await contentHash(absolute, found.kind)) === hash;
+  return (await contentHash(absolute, found.kind))?.hash === hash;
+}
+
+/** What the session did to one path that held edits before it. */
+interface Contribution {
+  /** A two-letter code, for `rowsOf`. */
+  code: string;
+  count: { added: number; removed: number };
+  /** The copy it was measured against, or null for a path absent then. */
+  copy: string | null;
+}
+
+/** Lines added and removed from `from` to `to`, two paths on disk. */
+async function lineDelta(
+  exec: ExecAsync,
+  cwd: string,
+  from: string,
+  to: string,
+): Promise<{ added: number; removed: number } | undefined> {
+  const stdout = await git(
+    exec,
+    cwd,
+    ["diff", "--numstat", "--no-index", "-z", "--", from, to],
+    [0, 1],
+  );
+  if (stdout === undefined) return undefined;
+  for (const value of parseNumstat(stdout).values()) return value;
+  return undefined;
+}
+
+/**
+ * The session's own change to a path that held uncommitted edits at its
+ * first read, measured from what the path held then to what it holds now.
+ *
+ * A path that was absent then needs no copy: everything it holds now is the
+ * session's. A path that held content needs the copy `readPreexistingPaths`
+ * kept. The status describes the session's change, not the file against
+ * `HEAD`: a file a person created and the session edited is `modified`, and
+ * a file a person edited and the session put back as `HEAD` has it is
+ * `modified` too, with the lines it took out.
+ *
+ * Undefined when there is no copy or either side cannot be read. The caller
+ * then counts the file against `HEAD`, and the frame says so.
+ */
+async function contributionOf(
+  exec: ExecAsync,
+  cwd: string,
+  root: string,
+  repoRelative: string,
+  entry: PreexistingEntry | null,
+  copies: string | undefined,
+): Promise<Contribution | undefined> {
+  const absolute = absoluteIn(root, repoRelative);
+  const now = await statOf(absolute);
+  if (now === undefined || (now !== "absent" && now.kind !== "file"))
+    return undefined;
+  let copy: string | null = null;
+  if (entry !== null) {
+    // The name comes back from the state file, so it is checked before it
+    // becomes a path.
+    if (copies === undefined || !COPY_NAME.test(entry[0])) return undefined;
+    copy = join(copies, entry[0]);
+    const kept = await statOf(copy);
+    if (kept === undefined || kept === "absent" || kept.kind !== "file")
+      return undefined;
+  } else if (now === "absent") return undefined;
+  const count = await lineDelta(
+    exec,
+    cwd,
+    copy ?? "/dev/null",
+    now === "absent" ? "/dev/null" : absolute,
+  );
+  if (count === undefined) return undefined;
+  return {
+    code: copy === null ? "A " : now === "absent" ? "D " : "M ",
+    count,
+    copy,
+  };
 }
 
 /**
@@ -319,23 +694,108 @@ async function diffAgainst(
   return { entries: parseNameStatusZ(names), counts: parseNumstat(numstat) };
 }
 
+/** One commit as `--format=%H %ct %at %ce` prints it. */
+interface LoggedCommit {
+  sha: string;
+  committedAt: number;
+  authoredAt: number;
+  email: string;
+}
+
+const LOG_FORMAT = "--format=%H %ct %at %ce";
+
+function parseLog(stdout: string): LoggedCommit[] {
+  const out: LoggedCommit[] = [];
+  for (const record of stdout.split("\0")) {
+    const [sha, committed, authored, ...rest] = record.trim().split(" ");
+    if (sha === undefined || !COMMIT_NAME.test(sha) || authored === undefined)
+      continue;
+    out.push({
+      sha,
+      committedAt: Number(committed),
+      authoredAt: Number(authored),
+      email: rest.join(" ").toLowerCase(),
+    });
+  }
+  return out;
+}
+
+/**
+ * A `HEAD` reflog subject git writes when it makes a commit in this
+ * worktree: `commit` and its variants (`commit (amend)`), `cherry-pick`,
+ * `revert`, and each commit a rebase replays, whichever command ran the
+ * rebase (`rebase (pick)`, `rebase -i (reword)`, `pull -q --rebase (pick)`).
+ * A pull, a merge, a checkout, and a reset write other subjects.
+ */
+const MADE_HERE =
+  /^(?:(?:commit|cherry-pick|revert)\b[^:]*: |(?:rebase|pull)\b[^(]*\((?:pick|reword|edit|squash|fixup|continue)\): )/;
+
+/**
+ * The commits this worktree's `HEAD` reflog records as made here at or
+ * after `since` (epoch seconds), newest first. Empty when the reflog is off
+ * or cannot be read, which leaves the other tests in `sessionCommits`.
+ */
+async function madeHere(
+  exec: ExecAsync,
+  cwd: string,
+  since: number,
+): Promise<string[]> {
+  const stdout = await git(exec, cwd, [
+    "log",
+    "--walk-reflogs",
+    "-z",
+    `--max-count=${MAX_REFLOG_ENTRIES}`,
+    "--date=unix",
+    // `%gd` is `HEAD@{<epoch seconds>}` under `--date=unix`.
+    "--format=%H %gd %gs",
+    "HEAD",
+    "--",
+  ]);
+  const out: string[] = [];
+  for (const record of (stdout ?? "").split("\0")) {
+    const match = /^([0-9a-f]+) HEAD@\{(\d+)\} (.*)$/s.exec(record.trim());
+    if (match === null) continue;
+    const [, sha = "", at = "", subject = ""] = match;
+    if (COMMIT_NAME.test(sha) && Number(at) >= since && MADE_HERE.test(subject))
+      out.push(sha);
+  }
+  return out;
+}
+
 /**
  * The commits this session made in one worktree, oldest first: the ones an
  * earlier read counted that `baseline..head` no longer lists (a squash merge
  * pulled back is the common case), then every commit that range lists as
  * the session's. Undefined when the range cannot be read.
  *
- * A commit is the session's when it is not a merge, its committer email is
- * the one this repository stamps, and both its committer date and its
- * author date are at or after the session's first read. The committer date
- * alone is not enough. A rebase, an amend, and a cherry-pick stamp a new
- * committer date on a commit someone wrote earlier, so a same-email commit
- * from before the session that the session replayed would count as its own.
- * The author date survives all three.
+ * A commit is the session's when it is not a merge, both its committer date
+ * and its author date are at or after the session's first read, and one of
+ * these holds:
  *
- * Only the commits carried over are bounded here. One still in the range is
- * listed again on every read, so leaving it out of the count would drop its
- * files from one frame and bring them back in the next.
+ * - No remote-tracking ref reaches it. A pull fetches before it merges, so
+ *   every commit a pull brings in is on a remote-tracking ref by the time
+ *   `HEAD` holds it. A commit made here is on none until it is pushed.
+ * - This worktree's `HEAD` reflog records it as made here since the first
+ *   read (`madeHere`). This counts a commit the agent made under another
+ *   email, such as a `GIT_COMMITTER_EMAIL` its shell exports, which tachod
+ *   cannot see, after the agent pushed it in the same turn. A pull, a merge,
+ *   and a reset write other reflog subjects, so a pulled commit is not one.
+ * - Its committer email is the one this repository stamps. This counts a
+ *   commit the session pushed in the same turn when the reflog is off.
+ *
+ * The dates matter as well as the refs. A rebase, an amend, and a
+ * cherry-pick stamp a new committer date on a commit someone wrote earlier,
+ * so a commit from before the session that the session replayed would count
+ * as its own. The author date survives all three.
+ *
+ * The two reads of the range, less the remote-tracking refs and by email,
+ * are filtered and cut in git, so a long range stays a bounded read. The
+ * reflog is read to `MAX_REFLOG_ENTRIES`, and each commit it names that the
+ * other tests left out is checked against `HEAD` on its own, so an amended
+ * or reset commit that left the history is not counted. Only the commits
+ * carried over are bounded here. One still in the range is listed again on
+ * every read, so leaving it out of the count would drop its files from one
+ * frame and bring them back in the next.
  */
 async function sessionCommits(
   exec: ExecAsync,
@@ -346,38 +806,92 @@ async function sessionCommits(
   known: readonly string[],
 ): Promise<string[] | undefined> {
   if (head === baseline) return [...known];
-  const email = await committerEmail(exec, cwd);
-  // No commit here can carry an email git cannot name.
-  if (email === undefined) return [...known];
-  const range = await git(exec, cwd, [
-    "log",
-    "--no-merges",
-    "-z",
-    // Filtered and cut in git, so a long range stays a bounded read.
-    // `--committer` matches a pattern anywhere in the ident, and the brackets
-    // pin it to the email. The exact comparison is still made below.
-    "--fixed-strings",
-    "--regexp-ignore-case",
-    `--committer=<${email}>`,
-    `--max-count=${MAX_RANGE_COMMITS}`,
-    "--format=%H %ct %at %ce",
-    `${baseline}..${head}`,
-    "--",
-  ]);
-  if (range === undefined) return undefined;
   // Git dates are whole seconds. A commit made in the same second as the
   // first read counts.
   const since = Math.floor(firstReadAt / 1000);
-  const inRange: string[] = [];
-  // `git log` lists newest first. Reversed, so the list stays oldest first.
-  for (const record of range.split("\0").reverse()) {
-    const [sha, committed, authored, ...rest] = record.trim().split(" ");
-    if (sha === undefined || sha.length === 0 || authored === undefined)
-      continue;
-    if (rest.join(" ").toLowerCase() !== email) continue;
-    if (!(Number(committed) >= since && Number(authored) >= since)) continue;
-    inRange.push(sha);
+  const email = await committerEmail(exec, cwd);
+  const [local, byEmail, reflog] = await Promise.all([
+    git(exec, cwd, [
+      "log",
+      "--no-merges",
+      "-z",
+      `--max-count=${MAX_RANGE_COMMITS}`,
+      LOG_FORMAT,
+      `${baseline}..${head}`,
+      "--not",
+      "--remotes",
+      "--",
+    ]),
+    // No commit carries an email git cannot name.
+    email === undefined
+      ? ""
+      : git(exec, cwd, [
+          "log",
+          "--no-merges",
+          "-z",
+          // `--committer` matches a pattern anywhere in the ident, and the
+          // brackets pin it to the email. The exact comparison is still made
+          // below.
+          "--fixed-strings",
+          "--regexp-ignore-case",
+          `--committer=<${email}>`,
+          `--max-count=${MAX_RANGE_COMMITS}`,
+          LOG_FORMAT,
+          `${baseline}..${head}`,
+          "--",
+        ]),
+    madeHere(exec, cwd, since),
+  ]);
+  if (local === undefined || byEmail === undefined) return undefined;
+  const counted = new Map<string, LoggedCommit>();
+  const count = (commits: LoggedCommit[]) => {
+    for (const commit of commits)
+      if (commit.committedAt >= since && commit.authoredAt >= since)
+        counted.set(commit.sha, commit);
+  };
+  count(parseLog(local));
+  count(parseLog(byEmail).filter((commit) => commit.email === email));
+  // The reflog names commits by what `HEAD` was after each one, including
+  // commits an amend or a reset has since taken out of the history. Only
+  // those still in `baseline..head` count. A commit made after the first
+  // read cannot be in the baseline's history, so `head` is the one test.
+  const unseen = [...new Set(reflog)]
+    .filter((sha) => !counted.has(sha))
+    .slice(0, MAX_SESSION_COMMITS);
+  if (unseen.length > 0) {
+    const shown = await git(exec, cwd, [
+      "log",
+      "--no-walk=unsorted",
+      "--ignore-missing",
+      "--no-merges",
+      "-z",
+      LOG_FORMAT,
+      ...unseen,
+      "--",
+    ]);
+    const candidates = parseLog(shown ?? "");
+    const reached = new Set<string>();
+    await pooled(
+      candidates.map((commit) => async () => {
+        // Status 0 is "an ancestor", and 1 "not one", which reads as undefined.
+        const answer = await git(exec, cwd, [
+          "merge-base",
+          "--is-ancestor",
+          commit.sha,
+          head,
+        ]);
+        if (answer !== undefined) reached.add(commit.sha);
+      }),
+      UNTRACKED_COUNT_CONCURRENCY,
+    );
+    count(candidates.filter((commit) => reached.has(commit.sha)));
   }
+  // Oldest first. `git log` lists newest first, and the lists interleave, so
+  // they are merged by committer date, which a rebase sets in order.
+  const inRange = [...counted.values()]
+    .reverse()
+    .sort((a, b) => a.committedAt - b.committedAt)
+    .map((commit) => commit.sha);
   const listed = new Set(inRange);
   const carried = known.filter((sha) => !listed.has(sha));
   return [...carried.slice(-MAX_SESSION_COMMITS), ...inRange];
@@ -427,33 +941,36 @@ async function filesOfCommits(
  * The rule, recorded in ADR-188. A path is reported when either:
  *
  * - a commit the session made touched it. The session's commits are the
- *   non-merge commits in `baseline..HEAD` whose committer email is the one
- *   this repository stamps (`committerEmail`) and whose committer and author
- *   dates are both at or after the session's first git read, together with
- *   the commits an earlier read already counted (`sessionCommits`). Its
- *   status and counts come from the worktree against the baseline, which
- *   covers the committed and the uncommitted work on it; or
+ *   non-merge commits in `baseline..HEAD` whose committer and author dates
+ *   are both at or after the session's first git read, and which no
+ *   remote-tracking ref reaches, or this worktree's `HEAD` reflog records as
+ *   made here, or carry the committer email this repository stamps
+ *   (`committerEmail`), together with the commits an earlier read already
+ *   counted (`sessionCommits`). Its status and counts come from the
+ *   worktree against the baseline, which covers the committed and the
+ *   uncommitted work on it; or
  * - the worktree differs from `HEAD` there, tracked or untracked, and the
  *   path is not one the worktree already held that way at the session's
  *   first read (`readPreexistingPaths`) with its content unchanged since.
  *   Its status and counts come from the worktree against `HEAD`.
  *
  * So a pull, a fetch and reset to upstream, or a rebase onto upstream adds
- * no upstream file: those commits carry someone else's committer email, or
- * dates before the session. The session's own rebased commits still count,
- * because a rebase keeps their author date and stamps the session's email
- * and the time it ran. A same-email commit written before the session and
- * replayed by it does not, because its author date is older. And a commit
- * counted once stays counted, so work a squash merge brought back through a
- * pull is still reported, measured against the baseline. A person's
- * uncommitted edit that was there first is left out until its content
- * changes.
+ * no upstream file: those commits are on a remote-tracking ref, and carry
+ * someone else's committer email or dates before the session. The session's
+ * own rebased commits still count, because a rebase keeps their author date
+ * and gives them new names no remote holds. A commit written before the
+ * session and replayed by it does not, because its author date is older.
+ * And a commit counted once stays counted, so work a squash merge brought
+ * back through a pull is still reported, measured against the baseline. A
+ * person's uncommitted edit that was there first is left out until its
+ * content changes, and then only the session's lines in it count.
  *
- * The ADR names what the rule cannot tell apart: a commit written in this
- * repository by anything else using the same email after the session's
- * first read (another session in a sibling worktree, or a person at the
- * keyboard), and an upstream path the session also touched, whose counts
- * include the upstream change.
+ * The ADR names what the rule cannot tell apart: a commit made after the
+ * session's first read by anything else that reaches this worktree before
+ * a remote holds it, is made in this worktree, or carries the same email
+ * (another session in a sibling worktree, or a person at the keyboard); a
+ * pull that updates no remote-tracking ref; and an upstream path the
+ * session also committed, whose counts include the upstream change.
  *
  * A session restored from a state file older than the first-read time is
  * measured the old way, every change since the baseline commit, and says
@@ -466,6 +983,7 @@ export async function readSessionChanges(
   exec: ExecAsync,
   cwd: string,
   start: WorktreeAttribution,
+  copies?: string,
 ): Promise<SessionChanges | undefined> {
   // Both come back from the state file, and both end up as git arguments,
   // so anything that is not a commit name is dropped rather than passed on.
@@ -538,9 +1056,11 @@ export async function readSessionChanges(
 
   const rows = new Map<string, string>();
   const counts = new Map<string, { added: number; removed: number }>();
+  const baselinePaths = new Set<string>();
   for (const entry of atBaseline?.entries ?? []) {
     if (!touched.paths.has(entry.path)) continue;
     rows.set(entry.path, entry.code);
+    baselinePaths.add(entry.path);
     const count = atBaseline?.counts.get(entry.path);
     if (count !== undefined) counts.set(entry.path, count);
   }
@@ -554,25 +1074,57 @@ export async function readSessionChanges(
     if (entry.code === "??" && !rows.has(entry.path))
       rows.set(entry.path, entry.code);
 
-  // Left out: what the worktree held before the session, still unchanged. A
-  // path the session committed is its own whatever it held before.
+  // What the worktree held before the session. A path still holding it is
+  // left out. A path changed since is counted from what it held then, when
+  // that can be read, and against `HEAD` otherwise. A path the session
+  // committed is its own whatever it held before.
   const preexisting =
     typeof start.preexisting?.paths === "object" &&
     start.preexisting.paths !== null
       ? start.preexisting
       : undefined;
+  const fromPreSession = new Map<string, string | null>();
+  let wholeFile = false;
+  // Set when an entry could not be used, so its path's earlier edits, if
+  // any, are in the list and the frame says the record was partial.
+  let lost = false;
   if (preexisting !== undefined && root !== undefined) {
-    const recorded = [...rows.keys()].filter(
-      (path) =>
-        !touched.paths.has(path) && Object.hasOwn(preexisting.paths, path),
+    // The keys come back from the state file and become paths on disk and
+    // git arguments. One that leaves the repository is dropped.
+    const kept = Object.keys(preexisting.paths).filter(
+      (path) => !touched.paths.has(path),
     );
+    const recorded = kept.filter(insideRepository).sort();
+    if (recorded.length < kept.length) lost = true;
+    const found = new Map<string, Contribution | "unchanged" | undefined>();
     await pooled(
       recorded.map((path) => async () => {
-        if (await unchangedSince(root, path, preexisting.paths[path] ?? null))
-          rows.delete(path);
+        const entry = entryOf(preexisting.paths[path]);
+        if (entry === undefined) {
+          lost = true;
+          // Its row, if any, counts the whole file against `HEAD`.
+          if (rows.has(path)) wholeFile = true;
+          return;
+        }
+        found.set(
+          path,
+          (await unchangedSince(root, path, entry))
+            ? "unchanged"
+            : await contributionOf(exec, cwd, root, path, entry, copies),
+        );
       }),
       UNTRACKED_COUNT_CONCURRENCY,
     );
+    // Applied in path order, so the rows come out the same on every read.
+    for (const path of recorded) {
+      const own = found.get(path);
+      if (own === "unchanged") rows.delete(path);
+      else if (own !== undefined) {
+        rows.set(path, own.code);
+        counts.set(path, own.count);
+        fromPreSession.set(path, own.copy);
+      } else if (found.has(path) && rows.has(path)) wholeFile = true;
+    }
   }
 
   const entries = [...rows].map(([path, code]) => ({ code, path }));
@@ -580,13 +1132,33 @@ export async function readSessionChanges(
     await countUntracked(exec, cwd, root, entries, counts);
   return {
     changes: rowsOf(entries, counts, root),
+    measured: {
+      headRef,
+      fromBaseline: entries
+        .map((entry) => entry.path)
+        .filter((path) => baselinePaths.has(path)),
+      fromHead: entries
+        .map((entry) => entry.path)
+        .filter(
+          (path) => !baselinePaths.has(path) && !fromPreSession.has(path),
+        ),
+      fromPreSession: [...fromPreSession].map(([path, copy]) => ({
+        path,
+        copy,
+      })),
+    },
     ownCommits: own.slice(-MAX_SESSION_COMMITS),
     basis: "session",
     preexisting:
       preexisting === undefined
         ? "none"
-        : preexisting.complete
+        : preexisting.complete && !lost
           ? "complete"
           : "partial",
+    ...(wholeFile
+      ? { preSessionCounts: "whole_file" as const }
+      : fromPreSession.size > 0
+        ? { preSessionCounts: "session_only" as const }
+        : {}),
   };
 }

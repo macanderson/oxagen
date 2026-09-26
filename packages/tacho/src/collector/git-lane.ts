@@ -13,6 +13,7 @@
  * a pending SessionEnd (`settleEnding`), because both are about the hook
  * queue and the chain's terminal, which are the daemon's.
  */
+import { join } from "node:path";
 import { jsonContent } from "../evidence/frame-body";
 import type { TachoEvent } from "../envelope";
 import type { ExecAsync } from "../host/service";
@@ -30,6 +31,7 @@ import {
 } from "./registry";
 import type { HookEnvelope } from "./server";
 import {
+  MAX_PRE_SESSION_COPY_BYTES,
   readPreexistingPaths,
   readSessionChanges,
   type SessionChanges,
@@ -48,6 +50,16 @@ const PRE_SESSION_CHANGES: Record<SessionChanges["preexisting"], string> = {
   partial: "partly_excluded",
   none: "included",
 };
+
+/**
+ * The directory one session keeps its pre-session copies in, named for its
+ * chain's uuid, or undefined for a uuid that is not safe as a directory
+ * name. The daemon removes it once it forgets the session (`removeCopiesOutside`).
+ */
+function copiesDirOf(root: string, session: SessionRecord): string | undefined {
+  const uuid = session.recorder.sessionUuid;
+  return /^[0-9a-f-]{36}$/i.test(uuid) ? join(root, uuid) : undefined;
+}
 
 /**
  * Whether a session holds a baseline commit, which a session restored from
@@ -91,6 +103,11 @@ export interface GitLaneDeps {
   settleEnding: (ending: HookEnvelope, sessionUuid: string) => Promise<void>;
   /** Write sealed events to the WAL. Throws when the write fails. */
   record: (events: readonly TachoEvent[]) => void;
+  /**
+   * The directory under Tacho's state directory that holds each session's
+   * pre-session copies (`TachoPaths.preSessionCopies`).
+   */
+  preSessionCopies: string;
 }
 
 /** The lane's surface, as the daemon drives it. */
@@ -115,6 +132,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
     pendingSessionEnds,
     settleEnding,
     record,
+    preSessionCopies,
   } = deps;
 
   /**
@@ -319,6 +337,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
         continue;
       }
       if (due) lastReconcileAt.set(harnessSessionId, at);
+      const copies = copiesDirOf(preSessionCopies, session);
       // Every read runs at the worktree root, so an edit in a subdirectory and
       // one at the top describe the same checkout, and the baseline is
       // switched only when the work moves to another root.
@@ -344,6 +363,9 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
           execAsync,
           root,
           startedAtOf(session, at),
+          copies === undefined
+            ? undefined
+            : { dir: copies, capBytes: MAX_PRE_SESSION_COPY_BYTES },
         );
         if (preexisting !== undefined)
           session.preexistingPaths = rememberForRoot(
@@ -382,25 +404,28 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
         // behind it.
         ...(due
           ? await (async () => {
-              const reading = await readSessionChanges(execAsync, cwd, {
-                baseline: session.baselineCommit,
-                firstReadAt: session.gitFirstReadAt,
-                ownCommits: session.sessionCommits?.[cwd],
-                preexisting: session.preexistingPaths?.[cwd],
-              });
+              const reading = await readSessionChanges(
+                execAsync,
+                cwd,
+                {
+                  baseline: session.baselineCommit,
+                  firstReadAt: session.gitFirstReadAt,
+                  ownCommits: session.sessionCommits?.[cwd],
+                  preexisting: session.preexistingPaths?.[cwd],
+                },
+                copies,
+              );
               return reading === undefined
                 ? {}
                 : {
                     reading,
+                    // Each path's hunk against what its row was counted
+                    // from, so the patch and the rows describe one change.
                     snapshot: await readWorktreeSnapshot(
                       execAsync,
                       cwd,
                       session.baselineCommit,
-                      reading.basis === "session"
-                        ? reading.changes.map(
-                            (change) => change.repo_relative_path,
-                          )
-                        : undefined,
+                      reading.measured,
                     ),
                   };
             })()
@@ -494,6 +519,12 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
               // does not (ADR-188).
               changes_basis: reading.basis,
               pre_session_changes: PRE_SESSION_CHANGES[reading.preexisting],
+              // Whether the rows of files that held edits before the session
+              // count the session's lines alone, or the whole file against
+              // `HEAD` for want of a copy.
+              ...(reading.preSessionCounts !== undefined
+                ? { pre_session_edit_counts: reading.preSessionCounts }
+                : {}),
               ...(snapshot
                 ? {
                     worktree_root: snapshot.root,
