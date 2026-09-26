@@ -151,6 +151,7 @@ export {
   RECALL_ITEM_MAX,
   TRANSCRIPT_NODES,
   TRANSCRIPT_OUTCOMES,
+  UNKEYED_TOOL_PAIRING,
   type TranscriptCounts,
   type FrameCounts,
   type TranscriptDecision,
