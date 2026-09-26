@@ -55,12 +55,15 @@ Three facts shape where the state can come from:
 3. **Newer wins.** Every write carries the forge's `updated_at`. A write never
    replaces a row that holds a newer one, and a write with no `updated_at`
    replaces only a row that has none either.
-4. **Only connected organizations are written.** A GitHub delivery writes only
-   the organizations that hold a connected GitHub source for the delivering
-   installation, each in its own scope and on its own data plane (ADR-042). A
-   GitLab delivery writes only the connection's workspace. The backfill reads
-   with the workspace's own credentials, and a forge that answers 403, 404 or
-   410 leaves the state null.
+4. **Only connected workspaces are written.** A GitHub delivery writes only
+   the workspaces that hold a connected GitHub source for the delivering
+   installation, each in its own tenant scope and on its organization's data
+   plane (ADR-042). A GitLab delivery writes only the connection's workspace.
+   The backfill reads with the workspace's own credentials, and a forge that
+   answers 403, 404 or 410 leaves the state null. The writes are per workspace
+   because the standard tenant policy judges an UPDATE by the scope's own
+   workspace: `withOrgDb` widens reads only, and an org-wide UPDATE through
+   it changes no row.
 5. **`list_runs` reads the stored state.** It joins the links the frames name
    with the rows for the page's sessions in one Postgres read, beside the
    ClickHouse read. Each link gains `state` and `stateSeenAt`. A link with no
@@ -69,7 +72,8 @@ Three facts shape where the state can come from:
 
 ## Consequences
 
-- A repository no connection reaches never gets a state. Its links read
+- A repository no connection reaches never gets a state, and neither does a
+  workspace of a connected organization that holds no connection itself. Its links read
   "status unknown", and so does every link to a forge other than github.com
   and gitlab.com. That is the honest answer: Oxagen has no reader for them.
 - Links recorded before the table existed have no row. They fill in when the

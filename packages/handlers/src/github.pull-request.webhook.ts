@@ -10,15 +10,20 @@
 //
 // Two fences keep one tenant's state out of another's:
 //
-//   - Only organizations holding a connected GitHub source for the delivering
-//     installation are written. An organization that recorded a URL to a pull
+//   - Only workspaces holding a connected GitHub source for the delivering
+//     installation are written. A workspace that recorded a URL to a pull
 //     request in someone else's private repository never learns its state.
-//   - Each write runs in that organization's own scope, on its own data plane
-//     (ADR-042), and names the organization in its WHERE clause.
+//   - Each write runs in that workspace's own tenant scope, on its
+//     organization's data plane (ADR-042), and names the organization and the
+//     workspace in its WHERE clause.
+//
+// The write is per workspace, not per organization, because the standard
+// tenant policy judges an UPDATE by the scope's own workspace. `withOrgDb`
+// widens reads only, so an org-wide UPDATE there would change no row.
 //
 // Deliveries arrive out of order. A write that carries an `updated_at` older
 // than the state a row holds leaves the row alone (`applyForgeState`).
-import { schema, withOrgDb, withSystemDb } from "@oxagen/database";
+import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import {
@@ -29,16 +34,13 @@ import {
 } from "./lib/run-pull-request-state";
 import { logger } from "./logger";
 
-/** One organization to write, with a workspace to scope the write under. */
+/** One workspace to write. */
 export type PullRequestStateScope = { orgId: string; workspaceId: string };
 
 export interface GithubPullRequestStateDeps {
-  /**
-   * The organizations holding a connected GitHub source for this
-   * installation, one scope each.
-   */
+  /** The workspaces holding a connected GitHub source for this installation. */
   connectedScopes(installationId: string): Promise<PullRequestStateScope[]>;
-  /** Write the state to the organization's rows; answers how many it wrote. */
+  /** Write the state to the workspace's rows; answers how many it wrote. */
   apply(
     scope: PullRequestStateScope,
     key: ForgeKey,
@@ -116,7 +118,7 @@ export const githubPullRequestStateDeps: GithubPullRequestStateDeps = {
     // connected GitHub sources filtered by the delivering installation id.
     const rows = await withSystemDb((tx) =>
       tx
-        .selectDistinctOn([schema.sourceConnections.orgId], {
+        .selectDistinct({
           orgId: schema.sourceConnections.orgId,
           workspaceId: schema.sourceConnections.workspaceId,
         })
@@ -137,17 +139,14 @@ export const githubPullRequestStateDeps: GithubPullRequestStateDeps = {
     return rows;
   },
   async apply(scope, key, forge, seenAt) {
-    // The organization's own plane. `withOrgDb` reads every workspace of the
-    // organization in scope, and the WHERE clause names the organization.
     const written = await runInTenantScope(scope, () =>
-      withOrgDb((tx) =>
-        applyForgeState(tx, { orgId: scope.orgId }, key, forge, seenAt),
-      ),
+      withTenantDb((tx) => applyForgeState(tx, scope, key, forge, seenAt)),
     );
     if (written.length > 0)
       logger.info(
         {
           orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
           repository: key.repository,
           number: key.number,
           state: forge.state,

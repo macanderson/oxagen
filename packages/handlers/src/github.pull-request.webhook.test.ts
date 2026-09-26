@@ -28,7 +28,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...actual,
     withSystemDb: seam("system"),
-    withOrgDb: seam("org"),
+    withTenantDb: seam("tenant"),
   };
 });
 
@@ -217,7 +217,7 @@ describe("recordGithubPullRequestState", () => {
     expect(rows[0]).toMatchObject({ state: "open", draft: false });
   });
 
-  it("writes only organizations connected to the installation (negative)", async () => {
+  it("writes only workspaces connected to the installation (negative)", async () => {
     const rows: Row[] = [
       {
         orgId: ORG_A.orgId,
@@ -226,7 +226,8 @@ describe("recordGithubPullRequestState", () => {
         draft: false,
         sourceUpdatedAt: null,
       },
-      // org-b recorded a link to the same pull request and holds no connection.
+      // Another tenant recorded a link to the same pull request and holds no
+      // connection.
       {
         orgId: ORG_B.orgId,
         key: KEY,
@@ -245,7 +246,7 @@ describe("recordGithubPullRequestState", () => {
     expect(deps.connectedScopes).toHaveBeenCalledWith("555");
   });
 
-  it("writes each connected organization once", async () => {
+  it("writes each connected workspace once", async () => {
     const rows: Row[] = [
       {
         orgId: ORG_A.orgId,
@@ -272,7 +273,7 @@ describe("recordGithubPullRequestState", () => {
     expect(out).toEqual({ outcome: "recorded", rows: 2 });
   });
 
-  it("reads nothing when no organization holds a connection (negative)", async () => {
+  it("reads nothing when no workspace holds a connection (negative)", async () => {
     const deps = fakeDeps([], []);
     expect(
       await recordGithubPullRequestState(deps, {
@@ -283,16 +284,14 @@ describe("recordGithubPullRequestState", () => {
     expect(deps.apply).not.toHaveBeenCalled();
   });
 
-  it("finds connected organizations by the delivering installation only", async () => {
+  it("finds connected workspaces by the delivering installation only", async () => {
     statements.length = 0;
     const scopes = await githubPullRequestStateDeps.connectedScopes("555");
     expect(scopes).toEqual([{ id: "r" }]);
     const [read] = statements;
     expect(read?.seam).toBe("system");
     expect(read?.orgInScope).toBeNull();
-    expect(read?.sql).toContain(
-      'select distinct on ("ingestion"."source_connections"."org_id")',
-    );
+    expect(read?.sql).toContain('select distinct "org_id", "workspace_id"');
     expect(read?.sql).toContain("->> 'installationId' = $");
     expect(read?.sql).toContain(
       '"ingestion"."source_connections"."deleted_at" is null',
@@ -302,7 +301,10 @@ describe("recordGithubPullRequestState", () => {
     );
   });
 
-  it("writes in the organization's own scope and names it", async () => {
+  // An UPDATE through the org-wide seam changes no row of a standard table:
+  // its policy judges writes by the scope's own workspace. So each write runs
+  // in the workspace's tenant scope and names both.
+  it("writes in the workspace's own tenant scope and names the org and workspace", async () => {
     statements.length = 0;
     const out = await githubPullRequestStateDeps.apply(
       ORG_A,
@@ -312,11 +314,14 @@ describe("recordGithubPullRequestState", () => {
     );
     expect(out).toBe(1);
     const [write] = statements;
-    expect(write?.seam).toBe("org");
+    expect(write?.seam).toBe("tenant");
     expect(write?.orgInScope).toBe(ORG_A.orgId);
     expect(write?.sql).toContain('update "tacho"."run_pull_requests"');
     expect(write?.params).toEqual(
-      expect.arrayContaining([ORG_A.orgId, "acme/api", 42]),
+      expect.arrayContaining([ORG_A.orgId, ORG_A.workspaceId, "acme/api", 42]),
+    );
+    expect(write?.sql).toContain(
+      '"tacho"."run_pull_requests"."workspace_id" = $',
     );
   });
 
