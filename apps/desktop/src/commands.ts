@@ -305,7 +305,7 @@ export function reapplyArgs(): string[] {
 
 /**
  * `tacho unenroll --all`, with `--purge` when the operator also drops the
- * WAL. Every agent on the machine goes (ADR-202): a machine that holds two
+ * WAL. Every agent on the machine goes (ADR-203): a machine that holds two
  * refuses a bare `unenroll`, which names neither.
  */
 export function unenrollArgs(purge: boolean): string[] {
@@ -374,7 +374,7 @@ export function ago(
  * outright when it was the last one (the hooks, service and credentials go
  * with it). The wizard's install side asked twice; the UI asks twice here.
  * The unenroll names the harness, so it takes this agent and leaves any
- * other agent enrolled on the machine (ADR-202).
+ * other agent enrolled on the machine (ADR-203).
  */
 export function deregisterArgs(
   enrolled: readonly string[],

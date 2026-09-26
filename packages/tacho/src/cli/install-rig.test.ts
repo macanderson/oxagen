@@ -82,7 +82,7 @@ const PURGE_ALLOWLIST: string[] = [];
 /**
  * The home-relative directory of the agent the rig enrolls. A first enroll
  * writes into the paths the command started with, and the rig starts with a
- * new agent's paths (ADR-202).
+ * new agent's paths (ADR-203).
  */
 function agentDirOf(rig: Rig): string {
   return `.config/oxagen/tacho/agents/${basename(rig.deps.paths.dir)}`;

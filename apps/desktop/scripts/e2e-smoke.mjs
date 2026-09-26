@@ -316,7 +316,7 @@ if (has("--enroll") && status?.enrolled) {
 // leave hooks on the machine with no host.json, and `unenroll` strips those
 // too. Skipping it left the test machine half installed. `--all` covers a
 // machine that holds more than one agent, which bare `unenroll` refuses
-// (ADR-202). It is the argv the wizard's Uninstall sends.
+// (ADR-203). It is the argv the wizard's Uninstall sends.
 if (has("--cleanup")) {
   const un = run("tacho", ["unenroll", "--all", "--purge"]);
   record(

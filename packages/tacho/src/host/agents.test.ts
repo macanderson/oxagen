@@ -1,7 +1,7 @@
 /**
- * The agents on one machine (ADR-202): every agent's directory has the same
+ * The agents on one machine (ADR-203): every agent's directory has the same
  * layout, which agent holds a harness, which ports and harnesses another
- * agent holds, and the move of a pre-ADR-202 enrollment into `agents/`.
+ * agent holds, and the move of a pre-ADR-203 enrollment into `agents/`.
  */
 import {
   existsSync,
@@ -390,7 +390,7 @@ describe("the agent a command acts on by default", () => {
   });
 });
 
-/** Writes an enrollment in the layout before ADR-202, with a file in each place. */
+/** Writes an enrollment in the layout before ADR-203, with a file in each place. */
 function legacyMachine(): { home: TachoPaths; legacy: TachoPaths } {
   const home = scratchPaths();
   const legacy = pathsInDir(home, home.tachoDir);

@@ -1,6 +1,6 @@
 /**
  * The user service that runs `tachod`. One service serves every agent on
- * the machine (ADR-202), so `enroll` installs it and `unenroll` reinstalls
+ * the machine (ADR-203), so `enroll` installs it and `unenroll` reinstalls
  * it for the agents that remain, from the same spec.
  */
 import type { ServiceSpec } from "../host/service";

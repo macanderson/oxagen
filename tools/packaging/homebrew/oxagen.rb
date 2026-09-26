@@ -38,7 +38,7 @@ cask "oxagen" do
   # the hooks in every wrapped harness, removes the service, revokes on the
   # control plane, deletes the host credentials), then remove the app.
   # `--all` unenrolls every agent on the machine. Without it, tacho refuses a
-  # machine that holds more than one (ADR-202).
+  # machine that holds more than one (ADR-203).
   # must_succeed is off because an unenrolled machine has nothing to unenroll.
   uninstall launchctl: "sh.oxagen.tachod",
             script:    {

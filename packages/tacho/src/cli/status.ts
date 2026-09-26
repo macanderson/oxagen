@@ -134,7 +134,7 @@ export interface StatusReport {
   shipping?: ShippingHealth;
   /**
    * Every agent on this machine, one report each, oldest enrollment first
-   * (ADR-202). Empty when nothing is enrolled. The rest of this report
+   * (ADR-203). Empty when nothing is enrolled. The rest of this report
    * repeats the first live one, so a reader that knows one enrollment still
    * reads a working agent.
    */

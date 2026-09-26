@@ -211,7 +211,7 @@ export async function credentialStatus(
   deps: CliDeps,
 ): Promise<CredentialStatusReport> {
   const host = readHost(deps);
-  // Each agent on this machine holds its own keys (ADR-202).
+  // Each agent on this machine holds its own keys (ADR-203).
   const others = otherLiveAgents(deps.paths, deps.paths.dir);
   const custody = [
     deps,
@@ -516,7 +516,7 @@ export async function restoreCredentials(
   const heldElsewhere = harnessesHeldElsewhere(deps.paths, deps.paths.dir);
   for (const harness of MODEL_CREDENTIAL_HARNESSES) {
     if (only !== undefined && !only.includes(harness)) continue;
-    // Another agent on this machine brokers this harness's key (ADR-202).
+    // Another agent on this machine brokers this harness's key (ADR-203).
     if (heldElsewhere.has(harness)) continue;
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {

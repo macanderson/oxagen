@@ -230,7 +230,7 @@ fn uninstall_is_refused_while_enrolled_and_allowed_once_the_host_is_retired() {
     assert!(!env.roots.home.join(".local/bin/tacho").exists());
 }
 
-/// ADR-202: each agent keeps its own enrollment under `agents/`. One live
+/// ADR-203: each agent keeps its own enrollment under `agents/`. One live
 /// agent refuses Uninstall whatever else is there, and so does the legacy
 /// root file tachod has not moved yet.
 #[cfg(unix)]

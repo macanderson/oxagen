@@ -99,7 +99,7 @@ export async function runHookProcess(
     const hookId = ulid(Date.now());
     const { text: stdin, truncated } = await readStdin();
     const result = await runTachoHook({
-      // A machine can hold one enrollment per agent (ADR-202), and the hook
+      // A machine can hold one enrollment per agent (ADR-203), and the hook
       // entry names the one it was written for.
       paths: agentPathsForEnrollment(
         tachoHome(process.env),

@@ -1,6 +1,6 @@
 /**
  * Which agent `enroll`, `unenroll` and `reassign` act on when a machine
- * holds more than one (ADR-202), and the deps a command gets once it is
+ * holds more than one (ADR-203), and the deps a command gets once it is
  * bound to one agent.
  */
 import { mkdirSync } from "node:fs";

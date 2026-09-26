@@ -67,7 +67,7 @@ export function resolveTarget(
   deps: Pick<McpStdioDeps, "env" | "home">,
 ): { ok: true; url: string; token: string } | { ok: false; message: string } {
   // The entry names the enrollment it was written for, and a machine can
-  // hold one enrollment per agent (ADR-202). An entry written before entries
+  // hold one enrollment per agent (ADR-203). An entry written before entries
   // named their enrollment gets the oldest agent.
   const paths = agentPathsForEnrollment(
     tachoHome(deps.env, deps.home),

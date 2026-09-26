@@ -121,7 +121,7 @@ may add a harness on a re-apply but never silently removes one.
 
 ### More than one agent
 
-A machine holds one enrollment per agent (ADR-202). Every agent keeps its
+A machine holds one enrollment per agent (ADR-203). Every agent keeps its
 files in a directory of its own, `~/.config/oxagen/tacho/agents/<id>/` (the
 tacho directory is `TACHO_HOME` when set), and no enrollment lives in the tacho
 directory itself. Each agent directory holds the same files under the same
@@ -151,7 +151,7 @@ agent take the same `--harness` and `--all`. Unenrolling one agent restarts
 the service for the agents that remain. `reassign` enrolls again through the
 CLI session, so a token-enrolled agent comes back under a hostname-derived
 agent key with no registered agent or mandate. It prints a warning before the
-revoke that says how to keep the link (#4410, ADR-202 known gaps). Spec §5.8
+revoke that says how to keep the link (#4410, ADR-203 known gaps). Spec §5.8
 has the full rules.
 
 ### Codex

@@ -472,7 +472,7 @@ export function harnessFileProblems(
 
 /**
  * A free loopback port whose model proxy port (the next one) is free too,
- * and neither of them held by another agent's enrollment (ADR-202). The OS
+ * and neither of them held by another agent's enrollment (ADR-203). The OS
  * hands out a port nothing is bound to now, but an agent whose collector is
  * down binds nothing, and the port after it was never asked about.
  */
@@ -494,7 +494,7 @@ async function portClearOfAgents(deps: CliDeps): Promise<number> {
 }
 
 /**
- * Which agent an enroll goes into (ADR-202). A harness belongs to at most
+ * Which agent an enroll goes into (ADR-203). A harness belongs to at most
  * one live agent, so an enroll that names a harness a live agent hooks goes
  * to that agent: a re-apply, an addition of the other harnesses it names,
  * or with `--force` a replacement of that agent's enrollment alone. An
@@ -873,7 +873,7 @@ async function enrollSteps(
       if (credentials === undefined) {
         // The token reached here because it also names a harness this agent
         // hooks. The harnesses it adds belong to no live agent
-        // (`enrollTarget`, ADR-202), so the token enrolls an agent of its own
+        // (`enrollTarget`, ADR-203), so the token enrolls an agent of its own
         // when it names only those.
         deps.err(
           `Adding a harness to an enrolled agent needs the CLI's session: this token names ${added.join(", ")} beside a harness ${existing.agent_key} already hooks. To add ${added.join(", ")} to ${existing.agent_key}, run \`oxagen login\` and enroll again without the token. To enroll the token's agent separately, run the token again with only \`--harness ${added.join(",")}\`.`,

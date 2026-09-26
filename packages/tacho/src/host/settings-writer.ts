@@ -392,7 +392,7 @@ export interface StripResult {
  * Remove Tacho's entries (for one enrollment, or any when omitted) and its
  * env keys, restoring displaced values. Every foreign entry survives.
  * `keepEnv` leaves the env keys in place, for when another enrollment on the
- * machine hooks Claude Code and the keys are its (ADR-202).
+ * machine hooks Claude Code and the keys are its (ADR-203).
  */
 export function stripTachoSettings(
   existing: unknown,

@@ -1,4 +1,4 @@
-# ADR-202: A machine holds one tacho enrollment per agent
+# ADR-203: A machine holds one tacho enrollment per agent
 
 - **Status:** Accepted
 - **Date:** 2026-09-26

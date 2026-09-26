@@ -89,7 +89,7 @@ export async function reassign(
 }
 
 /**
- * The agent a reassign moves (ADR-202). The one on the machine when there is
+ * The agent a reassign moves (ADR-203). The one on the machine when there is
  * one, and undefined when there is none. With more than one, the one whose
  * harnesses `--harness` names: the flag replaces the harness list, and
  * naming at least one of the agent's own harnesses says which agent. Refused

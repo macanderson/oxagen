@@ -4,7 +4,7 @@
  * by the `tachod` executable and `tacho daemon` (the compiled single binary
  * is multi-call, so the service unit runs `tacho daemon`).
  *
- * One process serves every agent on the machine (ADR-202): a collector per
+ * One process serves every agent on the machine (ADR-203): a collector per
  * agent, each on its own ports and with its own state, under one service,
  * one pid file and one log.
  */
@@ -157,7 +157,7 @@ export interface DaemonAgent {
 }
 
 /**
- * The agents this process serves (ADR-202): every agent that has not been
+ * The agents this process serves (ADR-203): every agent that has not been
  * retired on this machine (`agentServes`). When every agent is retired, the
  * first one runs as a lone enrollment always has: its revoke may still be
  * pending. Beside a live agent, a retired one waits for
@@ -256,7 +256,7 @@ export async function runDaemonProcess(): Promise<void> {
     process.stderr.write(line);
   };
   guardDaemonProcess({ stop: stopOnce, exit, log });
-  // A machine enrolled before ADR-202 keeps its enrollment in the tacho
+  // A machine enrolled before ADR-203 keeps its enrollment in the tacho
   // directory. It moves into `agents/` here, before any collector reads it.
   // A move that fails part way is finished by the next start.
   try {

@@ -35,7 +35,7 @@ describe("paths", () => {
       tachoHome({ TACHO_HOME: "/t", CLAUDE_CONFIG_DIR: "/c" }, "/home/x"),
       "a1",
     );
-    // Every agent's files sit in its own directory under agents/ (ADR-202).
+    // Every agent's files sit in its own directory under agents/ (ADR-203).
     expect(paths.dir).toBe("/t/agents/a1");
     expect(paths.hostFile).toBe("/t/agents/a1/host.json");
     expect(paths.socket).toBe("/t/agents/a1/tachod.sock");

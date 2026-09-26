@@ -1,5 +1,5 @@
 /**
- * The agents enrolled on this machine, one directory each (ADR-202).
+ * The agents enrolled on this machine, one directory each (ADR-203).
  *
  * An agent is an operator, a runtime and a harness (ADR-198), so a machine
  * that runs Claude Code and Codex for the same person holds two agents, each
@@ -14,7 +14,7 @@
  * most one live agent, so a hook, a run token or a model call for a harness
  * has exactly one enrollment to go to.
  *
- * A machine enrolled before ADR-202 kept its one enrollment in the tacho
+ * A machine enrolled before ADR-203 kept its one enrollment in the tacho
  * directory itself. `listAgents` still reads it there, and `tachod` moves it
  * into `agents/` when it starts (`migrateLegacyLayout`).
  */
@@ -43,7 +43,7 @@ import {
   type TachoPaths,
 } from "./paths";
 
-/** The id `listAgents` gives an enrollment still in the pre-ADR-202 layout. */
+/** The id `listAgents` gives an enrollment still in the pre-ADR-203 layout. */
 export const LEGACY_AGENT_ID = "legacy";
 
 /** The prefix of the directory `migrateLegacyLayout` fills before it renames it into place. */
@@ -343,7 +343,7 @@ function moveInto(from: string, to: string): void {
 
 /**
  * Moves an enrollment kept in the tacho directory itself (the layout before
- * ADR-202) into `agents/<id>/`, and returns the id, or undefined when there
+ * ADR-203) into `agents/<id>/`, and returns the id, or undefined when there
  * was nothing to move.
  *
  * Only `tachod` calls this, at startup and before any collector runs. It

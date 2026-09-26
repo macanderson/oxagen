@@ -191,7 +191,7 @@ describe("oxagen agent unenroll", () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it("names one of this machine's agents by its harness, or all of them (ADR-202)", async () => {
+  it("names one of this machine's agents by its harness, or all of them (ADR-203)", async () => {
     await run("agent", "unenroll", "--harness", "codex");
     expect(handleTachoUnenroll.mock.calls[0]?.[0]).toMatchObject({
       harness: "codex",
@@ -232,7 +232,7 @@ describe("the deprecated tacho group still runs the host-scoped commands", () =>
     expect(agentStatus).not.toHaveBeenCalled();
   });
 
-  it("unenrolls one agent by its harness, or every agent (ADR-202)", async () => {
+  it("unenrolls one agent by its harness, or every agent (ADR-203)", async () => {
     await run("tacho", "unenroll", "--harness", "codex");
     expect(handleTachoUnenroll.mock.calls[0]?.[0]).toMatchObject({
       harness: "codex",

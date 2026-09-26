@@ -154,7 +154,7 @@ export function detect(
 ): DetectReport {
   // Lenient, as `status` and `unenroll` read it: a host.json from another
   // version or cut short must not stop the first run from listing the apps.
-  // Every enrollment on the machine counts (ADR-202): a harness another
+  // Every enrollment on the machine counts (ADR-203): a harness another
   // agent hooks is covered all the same.
   const enrolledHosts = listAgents(deps.paths).flatMap((agent) =>
     agent.host !== undefined && agent.host.revoked_at === null

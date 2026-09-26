@@ -146,7 +146,7 @@ export async function verify(
   rootDeps: CliDeps,
 ): Promise<VerifyResult> {
   // The turn is checked against the collector of the agent that hooks the
-  // harness, which is where its events land (ADR-202).
+  // harness, which is where its events land (ADR-203).
   const deps = depsForHarness(rootDeps, options.harness ?? "claude-code");
   const host = readHostFile(deps.paths.hostFile);
   if (host === undefined) {

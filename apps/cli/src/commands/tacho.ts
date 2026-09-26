@@ -56,7 +56,7 @@ export interface TachoUnenrollOptions {
   token?: string;
   purge?: boolean;
   reason?: string;
-  /** The agent to remove, by the one harness it hooks (ADR-202). */
+  /** The agent to remove, by the one harness it hooks (ADR-203). */
   harness?: string;
   /** Remove every agent enrolled on this machine. */
   all?: boolean;

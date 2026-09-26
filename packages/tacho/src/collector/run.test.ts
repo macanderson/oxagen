@@ -106,7 +106,7 @@ function served(home: TachoPaths) {
   ]);
 }
 
-describe("daemonAgents (ADR-202)", () => {
+describe("daemonAgents (ADR-203)", () => {
   it("serves no agent on a machine that holds none", () => {
     expect(daemonAgents(scratchPaths())).toEqual([]);
   });

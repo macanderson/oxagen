@@ -2,7 +2,7 @@
  * Where a Tacho host keeps its state (spec section 5.1). Everything lives
  * under one directory so a test can point `TACHO_HOME` at a scratch
  * directory. Each agent on the machine has a directory of its own under
- * `agents/`, with the same files in it (ADR-202). No enrollment lives in the
+ * `agents/`, with the same files in it (ADR-203). No enrollment lives in the
  * tacho directory itself: it holds only what the one `tachod` service needs.
  *
  * The same `~/.config/oxagen` root is used on every platform, Windows
@@ -21,7 +21,7 @@ import { cursorHooksPaths } from "./cursor-writer";
 export interface TachoHome {
   /** `~/.config/oxagen/tacho` unless `TACHO_HOME` overrides it. */
   tachoDir: string;
-  /** `<tachoDir>/agents`: one directory per agent on this machine (ADR-202). */
+  /** `<tachoDir>/agents`: one directory per agent on this machine (ADR-203). */
   agents: string;
   /** The daemon's pid file. */
   pid: string;
@@ -64,7 +64,7 @@ export interface TachoHome {
 /**
  * One agent's paths: the machine's, plus the directory that holds the
  * agent's enrollment and every file that belongs to it. Every agent has the
- * same layout, at `<tachoDir>/agents/<id>/` (ADR-202).
+ * same layout, at `<tachoDir>/agents/<id>/` (ADR-203).
  */
 export interface TachoPaths extends TachoHome {
   /** The agent's directory. */
@@ -237,7 +237,7 @@ export function agentPaths(home: TachoHome, id: string): TachoPaths {
 
 /**
  * The paths of an agent kept in `dir`. `agentPaths` is the one layout. This
- * also reads the layout from before ADR-202, where the only enrollment sat
+ * also reads the layout from before ADR-203, where the only enrollment sat
  * in the tacho directory itself, until `tachod` moves it (`host/agents.ts`).
  */
 export function pathsInDir(home: TachoHome, dir: string): TachoPaths {

@@ -206,7 +206,7 @@ export function buildTachoProgram(): Command {
       }
       if (opts["verify"] === true) {
         // Drive a harness this enrollment hooks, so the turn lands in the
-        // collector just enrolled and not in another agent's (ADR-202).
+        // collector just enrolled and not in another agent's (ADR-203).
         const verifyHarness = (
           harness !== undefined ? parseHarnesses(harness) : []
         ).find(isWrappedHarness);

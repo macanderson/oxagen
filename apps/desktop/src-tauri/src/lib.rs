@@ -13,6 +13,7 @@ mod cli_install;
 mod install_rig_tests;
 mod machine;
 mod sidecar;
+mod update;
 
 use activity::{Activity, ExitDecision};
 use cli_install::{CliInstallState, CliInstallView};
@@ -456,7 +457,10 @@ pub fn run() {
             sidecar::run_sidecar,
             sidecar::kill_sidecar,
             activity::set_busy,
-            log_tail
+            log_tail,
+            update::update_policy,
+            update::set_auto_update,
+            update::restart_tacho_service
         ])
         .build(tauri::generate_context!())
         .expect("error while building the Oxagen desktop app")

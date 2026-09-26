@@ -371,7 +371,7 @@ export type HarnessFacts = ClaudeFacts;
 
 export interface CliDeps {
   /**
-   * The agent the command acts on (ADR-202), plus the machine's paths: the
+   * The agent the command acts on (ADR-203), plus the machine's paths: the
    * tacho directory, the service's pid and log, and the harness files.
    * `defaultAgentPaths` picks the agent when nothing names one.
    */

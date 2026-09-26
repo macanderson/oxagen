@@ -1,5 +1,5 @@
 /**
- * Deps for a command acting on one agent (`host/agents.ts`, ADR-202).
+ * Deps for a command acting on one agent (`host/agents.ts`, ADR-203).
  * Everything that reads or writes an enrollment moves to the agent's
  * directory: its `host.json`, the daemon ports behind it, its credential
  * store and its install receipts. The service and the terminal stay as they

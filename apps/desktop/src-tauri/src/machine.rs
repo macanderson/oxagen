@@ -192,7 +192,7 @@ pub enum Enrollment {
     Unreadable,
 }
 
-/// The id the legacy enrollment goes by. A machine enrolled before ADR-202
+/// The id the legacy enrollment goes by. A machine enrolled before ADR-203
 /// keeps it at `<tachoDir>/host.json`, and tachod moves it under `agents/`
 /// at startup. Until then it is an agent like any other. `LEGACY_AGENT_ID`
 /// in packages/tacho is the same name.

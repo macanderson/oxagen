@@ -1886,7 +1886,7 @@ describe("harnesses and reassign", () => {
     );
     expect(refused.ok).toBe(false);
     // Both ways forward, and neither is "revoke this host": a token that
-    // names codex alone enrolls it beside this agent (ADR-202).
+    // names codex alone enrolls it beside this agent (ADR-203).
     expect(d.errors.join("\n")).toContain(
       "Adding a harness to an enrolled agent needs the CLI's session: this token names codex beside a harness acme.core.cc-laptop already hooks. To add codex to acme.core.cc-laptop, run `oxagen login` and enroll again without the token. To enroll the token's agent separately, run the token again with only `--harness codex`.",
     );
@@ -4302,7 +4302,7 @@ describe("brokered credentials (ADR-143)", () => {
   });
 });
 
-describe("two agents on one machine (ADR-202)", () => {
+describe("two agents on one machine (ADR-203)", () => {
   const TOKEN = "oxe_1time_0123456789abcdefghjkmnpqrs";
   const BOTH =
     "claude-code as acme.core.cc-laptop; codex as acme.core.codex-agent";

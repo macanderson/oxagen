@@ -68,7 +68,7 @@ export interface UnenrollOptions extends CredentialOptions {
   reason?: string;
   /**
    * The harness whose agent to unenroll, on a machine that holds more than
-   * one enrollment (ADR-202). Every other agent's enrollment is kept.
+   * one enrollment (ADR-203). Every other agent's enrollment is kept.
    */
   harness?: TachoHarness;
   /**
@@ -345,7 +345,7 @@ export async function stripEnrollmentHooks(
   };
   const heldElsewhere = harnessesHeldElsewhere(deps.paths, deps.paths.dir);
   // With no enrollment id, the strip would take every Tacho entry, and
-  // while another agent on this machine is enrolled some are its (ADR-202).
+  // while another agent on this machine is enrolled some are its (ADR-203).
   if (host?.host_enrollment_id === undefined && heldElsewhere.size > 0)
     return {
       settingsChanged: false,
@@ -577,7 +577,7 @@ function combined(results: readonly UnenrollResult[]): UnenrollResult {
 }
 
 /**
- * The agents an unenroll acts on (ADR-202). With a harness named, the agent
+ * The agents an unenroll acts on (ADR-203). With a harness named, the agent
  * that hooks it (`agentForHarness`). With none named, the one agent on the
  * machine. None when the machine holds no agent, and the unenroll then
  * clears whatever an enrollment lost part way left behind. With more than
@@ -615,7 +615,7 @@ export function serviceInstalled(deps: CliDeps): boolean {
 
 /**
  * Put the service back for the agents that are still enrolled. One tachod
- * serves every agent (ADR-202), so an unenroll or a failed reassign that
+ * serves every agent (ADR-203), so an unenroll or a failed reassign that
  * removed the service stopped the other agents' collectors and model
  * proxies with its own, and they are down until this starts it again. The
  * command is this binary's, as `enroll` installs it. Returns a warning when
@@ -899,7 +899,7 @@ async function unenrollLocked(
     // pending session ends hold sealed terminal batches, bodies included,
     // that never reached the WAL, so they go with it (ADR-139).
     rmSync(deps.paths.pendingEnds, { force: true });
-    // One tachod writes one log for every agent (ADR-202), so it stays
+    // One tachod writes one log for every agent (ADR-203), so it stays
     // while another agent on this machine is enrolled.
     if (otherLiveAgents(deps.paths, deps.paths.dir).length === 0) {
       rmSync(deps.paths.log, { force: true });

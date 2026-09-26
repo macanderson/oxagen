@@ -148,7 +148,7 @@ const ALLOWED: &[Allowed] = &[
         writes: true,
     },
     // `tacho unenroll`: the last de-register names its one harness, and
-    // Uninstall passes `--all` for every agent on the machine (ADR-202).
+    // Uninstall passes `--all` for every agent on the machine (ADR-203).
     Allowed {
         sidecar: Sidecar::Tacho,
         command: &["unenroll"],

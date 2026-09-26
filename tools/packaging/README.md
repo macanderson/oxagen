@@ -44,7 +44,7 @@ run its scripts with `node`.
   a file that installs nothing.
 - Every package runs `tacho unenroll --all` before it removes the binaries.
   Bare `tacho unenroll` refuses a machine that holds more than one agent
-  (ADR-202).
+  (ADR-203).
 
 ## Tests
 
