@@ -28,6 +28,12 @@ export interface AgentIdentityRow {
   name: string;
   description: string | null;
   harness: string;
+  /**
+   * `agent.agents.agent_type`. `isManagedAgentType` reads it: the workspace's
+   * built-in assistant (`qa-chat`) is Oxagen's, and no identity write may
+   * retire, suspend, or mint a credential for it.
+   */
+  agentType: string;
   status: string;
   createdAt: Date;
   /** The last identity write; for an archived agent, the retirement. */
@@ -51,6 +57,7 @@ const identityColumns = {
   name: schema.agents.name,
   description: schema.agents.description,
   harness: schema.agents.harness,
+  agentType: schema.agents.agentType,
   status: schema.agents.status,
   createdAt: schema.agents.createdAt,
   updatedAt: schema.agents.updatedAt,

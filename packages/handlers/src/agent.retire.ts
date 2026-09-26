@@ -20,6 +20,7 @@ import { agentKeysFor } from "@oxagen/agent/handlers/_agent-identity";
 import { and, eq, inArray } from "drizzle-orm";
 import { AGENT_IDENTITY_ROLES } from "./agent.register";
 import {
+  assertNotManaged,
   requireAgentIdentity,
   revokeAgentCredentials,
   revokeAgentMandates,
@@ -43,6 +44,9 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
   const result = await withTenantDb(async (tx) => {
     const agent = await requireAgentIdentity(tx, input.agentId, scope);
+    // The built-in assistant is Oxagen's: retiring it would stop stella in
+    // the workspace (#4350).
+    assertNotManaged(agent);
     // Lock the agent row before reading its status. `request_mandate` and
     // `grant_mandate` take the same row `FOR SHARE`, so a grant either
     // commits before the mandate scan below sees it, or waits and then reads

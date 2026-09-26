@@ -315,6 +315,7 @@ describe("a tool entry's two halves (#3375)", () => {
       rowsFrom([
         call({
           outcome: "denied",
+          error: true,
           gates: [{ seq: 2, decision: "deny", type: "policy_decision" }],
         }),
       ]),
@@ -382,6 +383,46 @@ describe("a model step's rows", () => {
       output: "no such file",
       pending: false,
     });
+    // Finding P3-3 of the ADR-182 fourth review: the calls row named Read
+    // too, which is drawn as its own row. It names only the Bash call a tool
+    // step recorded.
+    expect(rows[0]).toMatchObject({ kind: "calls", tools: ["Bash"] });
+  });
+
+  // Finding P2-2 of the ADR-182 fourth review: a model call that failed with
+  // no reply kept and no figures drew nothing, while the server counted it
+  // under errors.
+  it("draws one failed row for a failed step with nothing else to draw", () => {
+    const rows = rowsFrom([
+      model({ kinds: ["errors"], outcome: "failed", error: true }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      kind: "event",
+      name: "claude-opus-5",
+      group: null,
+      failed: true,
+      text: null,
+    });
+  });
+
+  it("draws no failed row for a step that draws another row, or for one the server does not count as an error (negative)", () => {
+    const priced = rowsFrom([
+      model({
+        kinds: ["usage", "errors"],
+        outcome: "failed",
+        error: true,
+        costMicros: "10",
+      }),
+    ]);
+    expect(priced.map((row) => [row.kind, row.failed])).toEqual([
+      ["usage", true],
+    ]);
+    // The page reads `error`, never `outcome`: a step the server states is
+    // no error draws no failed row, whatever its outcome says.
+    expect(
+      rowsFrom([model({ kinds: [], outcome: "failed", error: false })]),
+    ).toEqual([]);
   });
 
   // Finding P2-3 of the ADR-182 third review: the server counts `thinking`
@@ -417,6 +458,7 @@ describe("a model step's rows", () => {
     const rows = rowsFrom([
       model({
         kinds: ["usage", "errors"],
+        error: true,
         costMicros: "10",
         response: {
           seq: 1,
@@ -655,6 +697,7 @@ describe("an event's rows", () => {
         turn: 1,
         subject: "Bash",
         outcome: "denied",
+        error: true,
         gates: [{ seq: 2, decision: "deny", type: "policy_decision" }],
       },
       {
@@ -685,6 +728,7 @@ describe("an event's rows", () => {
           turn: 1,
           subject: "Bash",
           outcome: "denied",
+          error: true,
           label: "deny Bash",
         },
       ]),

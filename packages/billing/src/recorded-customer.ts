@@ -1,4 +1,5 @@
-import { withSystemDb, withTenantDb, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
+import { withBillingDb } from "./internal/platform-db";
 import { eq } from "drizzle-orm";
 
 /**
@@ -20,7 +21,7 @@ export async function readRecordedCustomerId(
   orgId: string,
   opts?: { system?: boolean },
 ): Promise<string | null> {
-  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const runner = opts?.system ? withSystemDb : withBillingDb;
   return runner(async (tx) => {
     const settings = await tx.query.orgBillingSettings.findFirst({
       where: eq(schema.orgBillingSettings.orgId, orgId),

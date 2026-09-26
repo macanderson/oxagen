@@ -557,6 +557,129 @@ export async function applyDecayToMemory(args: {
   }
 }
 
+// ── Embedding backfill (#4148) ───────────────────────────────────────────────
+//
+// A memory has no vector when embeddings were down as it was written, or when
+// the migrator cleared a vector of the old size. The `embeddings/backfill`
+// Inngest function reads that set through these three functions and embeds
+// each lesson as a `document`, the way `agent.memory.write` does.
+
+/** A memory the backfill can embed: an id to write back to and a lesson. */
+const EMBEDDABLE_MEMORY = /* cypher */ `m.id IS NOT NULL AND trim(coalesce(m.lesson, '')) <> ''`;
+
+export interface MemoriesMissingEmbedding {
+  /** Memories with no vector that the backfill can embed. */
+  missing: number;
+  /** Memories with no vector and no id or lesson, which it cannot embed. */
+  excluded: number;
+  /** Up to `limit` ids from `missing`. */
+  ids: string[];
+}
+
+/**
+ * Count the active workspace's memories with no vector, and list up to
+ * `limit` of them.
+ */
+export async function findMemoriesMissingEmbedding(
+  limit: number,
+): Promise<MemoriesMissingEmbedding> {
+  const s = scopedSession();
+  try {
+    const counted = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE m.embedding IS NULL
+        WITH ${EMBEDDABLE_MEMORY} AS embeddable
+        RETURN count(CASE WHEN embeddable THEN 1 END) AS missing,
+               count(CASE WHEN embeddable THEN null ELSE 1 END) AS excluded
+      `,
+    );
+    const missing = Number(counted.records[0]?.get("missing") ?? 0);
+    const excluded = Number(counted.records[0]?.get("excluded") ?? 0);
+    if (missing === 0 || limit <= 0) return { missing, excluded, ids: [] };
+
+    const listed = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE m.embedding IS NULL AND ${EMBEDDABLE_MEMORY}
+        RETURN m.id AS id
+        LIMIT $limit
+      `,
+      { limit: BigInt(limit) },
+    );
+    return {
+      missing,
+      excluded,
+      ids: listed.records.map((r) => r.get("id") as string),
+    };
+  } finally {
+    await s.close();
+  }
+}
+
+export interface MemoryLesson {
+  id: string;
+  lesson: string;
+}
+
+/**
+ * The lessons of `ids` that still have no vector. A memory embedded or deleted
+ * since it was listed is left out.
+ */
+export async function readMemoryLessonsMissingEmbedding(
+  ids: string[],
+): Promise<MemoryLesson[]> {
+  if (ids.length === 0) return [];
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE m.id IN $ids AND m.embedding IS NULL AND ${EMBEDDABLE_MEMORY}
+        RETURN m.id AS id, m.lesson AS lesson
+      `,
+      { ids },
+    );
+    return result.records.map((r) => ({
+      id: r.get("id") as string,
+      lesson: r.get("lesson") as string,
+    }));
+  } finally {
+    await s.close();
+  }
+}
+
+/**
+ * Store backfilled vectors with the model that made them. A memory is written
+ * only while it has no vector and still holds the lesson that was embedded, so
+ * an edit that lands in between keeps its own vector. Returns the count
+ * written.
+ */
+export async function setMemoryEmbeddings(
+  rows: { id: string; lesson: string; embedding: number[] }[],
+  model: string,
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        UNWIND $rows AS row
+        MATCH (m:AgentMemory {id: row.id, orgId: $orgId, workspaceId: $workspaceId})
+        WHERE m.embedding IS NULL AND m.lesson = row.lesson
+        SET m.embedding = row.embedding,
+            m.embeddingModel = $model,
+            m.embeddingUpdatedAt = datetime()
+        RETURN count(m) AS written
+      `,
+      { rows, model },
+    );
+    return Number(result.records[0]?.get("written") ?? 0);
+  } finally {
+    await s.close();
+  }
+}
+
 /**
  * Recover confidence by adding `amount` (0-100), capped at 100, and refresh the
  * decay clock. `reinforceMemory` is a thin recovery without an Evidence node;

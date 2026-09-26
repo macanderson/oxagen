@@ -546,6 +546,52 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(retired);
     });
 
+    // #4350: deregistering the built-in assistant suspended the principal
+    // stella acts through, and every stella turn in the workspace failed.
+    it("refuses to retire, suspend or credential the built-in assistant, and still resumes it", async () => {
+      await support.seedAgent(owner, {
+        slug: "qa-chat",
+        agentType: "interactive_chat",
+        status: "active",
+        // Suspended the way suspend_agent left it before this refusal existed.
+        principalStatus: "suspended",
+      });
+      const managed = (err: unknown) =>
+        isHandlerError(err) &&
+        err.code === "forbidden" &&
+        err.reason === "agent_managed_read_only";
+      await expect(
+        inScope(owner, () => agentRetireHandler({ agentId: "qa-chat" }, ctx())),
+      ).rejects.toSatisfy(managed);
+      await expect(
+        inScope(owner, () =>
+          agentSuspendHandler({ agentId: "qa-chat", suspended: true }, ctx()),
+        ),
+      ).rejects.toSatisfy(managed);
+      await expect(
+        inScope(owner, () =>
+          agentCredentialRotateHandler(
+            { agentId: "qa-chat", validityDays: 180 },
+            ctx(),
+          ),
+        ),
+      ).rejects.toSatisfy(managed);
+      expect(eventTypes()).toEqual([]);
+      // A resume stays open: it is the way back for a principal suspended
+      // before the refusal existed.
+      const resumed = await inScope(owner, () =>
+        agentSuspendHandler({ agentId: "qa-chat", suspended: false }, ctx()),
+      );
+      expect(resumed.status).toBe("active");
+      expect(eventTypes()).toEqual(["agent.resumed"]);
+      const read = await inScope(owner, () =>
+        agentGetHandler({ agentId: "qa-chat" }, ctx()),
+      );
+      expect(read.identity.managed).toBe(true);
+      expect(read.identity.status).not.toBe("retired");
+      expect(read.credentials).toEqual([]);
+    });
+
     it("an unknown agent is not_found for every write", async () => {
       const notFound = (err: unknown) =>
         isHandlerError(err) &&

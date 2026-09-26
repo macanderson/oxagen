@@ -42,6 +42,9 @@
     },
     "runStatus": {
       "live": "live",
+      "stale": "stale",
+      "staleWhy": "Oxagen has not heard from this run's host in five minutes. The run may have stopped. Oxagen closes a run after 12 hours with no event.",
+      "staleRevokedWhy": "This run's host was revoked, so Oxagen refuses its events and its commands. The run may still be going on that machine. Oxagen closes a run after 12 hours with no event.",
       "sealed": "sealed",
       "halted": "halted",
       "running": "running",
@@ -81,6 +84,7 @@
     },
     "readFailure": {
       "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}; an organization owner can grant it.",
+      "deniedByRule": "You cannot see {section} in this workspace. The decision rule {rule} refused this read. A workspace admin can change the rule.",
       "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
       "error": "{section} could not be loaded: the control plane answered {code}. Nothing was changed, and runs kept recording."
     },

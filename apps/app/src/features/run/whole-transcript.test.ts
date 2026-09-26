@@ -148,6 +148,59 @@ describe("readWholeTranscript", () => {
     expect(read.ok && isWhole(read.value)).toBe(false);
   });
 
+  // #4343 review: every page answers the head of the run's fold, so a read
+  // that stopped short handed the stream the head, and on a quiet live run
+  // nothing paged the missing tail in.
+  it("answers no frame cursor when it stops short, so the stream replays and pages the rest in", async () => {
+    const withHead = (read: RunTranscript) => ({ ...read, frameCursor: "f9" });
+    const failed = await readWholeTranscript(
+      sourceOf((after) =>
+        after === undefined
+          ? readOk(withHead(page(0, TRANSCRIPT_ENTRY_MAX, "p2")))
+          : readError("frame_store_unreachable", 502),
+      ).source,
+      ctx,
+      "tse_1",
+      "steps",
+    );
+    expect(failed.ok && failed.value.frameCursor).toBeNull();
+    const bounded = await readWholeTranscript(
+      sourceOf(() => readOk(withHead(page(0, TRANSCRIPT_ENTRY_MAX, "more"))))
+        .source,
+      ctx,
+      "tse_1",
+      "steps",
+    );
+    expect(bounded.ok && bounded.value.frameCursor).toBeNull();
+  });
+
+  it("keeps the frame cursor when it read to the head, a live run's short page included (negative)", async () => {
+    const live = await readWholeTranscript(
+      sourceOf((after) =>
+        after === undefined
+          ? readOk({
+              ...page(0, TRANSCRIPT_ENTRY_MAX, "p2"),
+              frameCursor: "f9",
+            })
+          : readOk({
+              ...page(TRANSCRIPT_ENTRY_MAX, 2, "live"),
+              frameCursor: "f9",
+            }),
+      ).source,
+      ctx,
+      "tse_1",
+      "steps",
+    );
+    expect(live.ok && live.value.frameCursor).toBe("f9");
+    const ended = await readWholeTranscript(
+      sourceOf(() => readOk({ ...page(0, 3, null), frameCursor: "f2" })).source,
+      ctx,
+      "tse_1",
+      "steps",
+    );
+    expect(ended.ok && ended.value.frameCursor).toBe("f2");
+  });
+
   it("answers a failed first read as the failure", async () => {
     const { source } = sourceOf(() =>
       readError("frame_store_unreachable", 502),

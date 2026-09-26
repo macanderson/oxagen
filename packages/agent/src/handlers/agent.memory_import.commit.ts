@@ -58,20 +58,20 @@ export async function agentMemoryImportCommitHandler(
     executionStepId: ctx.executionStepId ?? null,
   };
 
-  // Embed the whole commit in ONE gateway call, metered once. Doing it per
+  // Embed the whole commit in ONE provider call, metered once. Doing it per
   // draft was one round trip and one charge each, and while every call was
   // rounded up to a whole credit that made a 200-draft commit cost 200 credits
   // however little the lessons were worth (#1413).
   //
   // On failure fall back to per-draft embedding inside the map below, so a
   // single unembeddable lesson still fails alone — the per-item error capture
-  // this handler promises. A systemic failure (gateway down) fails every draft
+  // this handler promises. A systemic failure (Voyage down) fails every draft
   // there too, and each one reports its own error, so nothing is swallowed.
   let batchEmbeddings: number[][] | null = null;
   try {
     batchEmbeddings = await embedMany(
       input.drafts.map((draft) => draft.lesson),
-      { telemetry },
+      { telemetry, inputType: "document" },
     );
   } catch {
     batchEmbeddings = null;
@@ -94,7 +94,10 @@ export async function agentMemoryImportCommitHandler(
         });
         const embedding =
           batchEmbeddings?.[index] ??
-          (await embedText(draft.lesson, { telemetry }));
+          (await embedText(draft.lesson, {
+            telemetry,
+            inputType: "document",
+          }));
         const { memoryId } = await writeMemory({
           nodeRef: draft.nodeRef ?? USER_MEMORY_NODE_REF,
           embedding,

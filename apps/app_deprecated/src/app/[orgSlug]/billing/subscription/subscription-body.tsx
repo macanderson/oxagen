@@ -5,7 +5,6 @@ import type {
   CreditLedgerRow,
   PlanRow,
   SubscriptionRow,
-  CreditBalanceRow,
 } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 
@@ -27,6 +26,8 @@ import {
   getOrgBillingSettings,
   getOrgBillingStatus,
   isLowBalance,
+  readBalanceMirror,
+  recentCreditLedger,
 } from "@oxagen/billing";
 
 const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
@@ -46,7 +47,7 @@ export async function BillingSubscriptionBody({
   const [
     viewerRoleRow,
     subscriptionRow,
-    creditBalance,
+    balanceCents,
     ledgerRows,
     publicPlans,
   ] = await Promise.all([
@@ -91,34 +92,19 @@ export async function BillingSubscriptionBody({
         )[0] ?? null,
       null as SubscriptionRow | null,
     ),
+    // The balance and the ledger are platform tables on the shared plane, so
+    // billing reads them for an organisation on its own database too (#4315).
     safeQuery(
-      async () =>
-        (
-          await runInTenantScope(
-            { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
-            () =>
-              withTenantDb((tx) =>
-                tx
-                  .select()
-                  .from(schema.creditBalances)
-                  .where(eq(schema.creditBalances.orgId, tenant.id))
-                  .limit(1),
-              ),
-          )
-        )[0] ?? null,
-      null as CreditBalanceRow | null,
+      () =>
+        runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () =>
+          readBalanceMirror(tenant.id),
+        ),
+      0n,
     ),
     safeQuery(
       () =>
         runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () =>
-          withTenantDb((tx) =>
-            tx
-              .select()
-              .from(schema.creditLedger)
-              .where(eq(schema.creditLedger.orgId, tenant.id))
-              .orderBy(desc(schema.creditLedger.createdAt))
-              .limit(10),
-          ),
+          recentCreditLedger(tenant.id, 10),
         ),
       [] as CreditLedgerRow[],
     ),
@@ -254,7 +240,7 @@ export async function BillingSubscriptionBody({
         </div>
         <div className="flex flex-col gap-4">
           <CreditBalance
-            balanceCents={Number(creditBalance?.balanceCents ?? 0)}
+            balanceCents={Number(balanceCents)}
             ledger={ledgerRows.map((e) => ({
               id: e.id,
               deltaCents: Number(e.deltaCents),

@@ -45,3 +45,13 @@ export const RUN_PROGRESSED_EVENT = "cost/run.progressed";
  * `{ orgId, workspaceId, runPublicId }`.
  */
 export const RUN_ENRICH_EVENT = "run/enrich";
+
+/**
+ * Asks `run.pull-request-backfill` to store a row for one pull request link
+ * a run recorded, and to read its state once from the forge (ADR-192). Sent
+ * by the tacho ingest handler for each root session and URL a batch's
+ * `oxagen:pr_link` or `pr.url` frames name, with an id that holds for that
+ * pair, so a re-sent batch asks once. Data is
+ * `{ orgId, workspaceId, rootSessionUuid, url }`.
+ */
+export const RUN_PULL_REQUEST_LINKED_EVENT = "run/pull-request.linked";

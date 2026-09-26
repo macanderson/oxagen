@@ -37,16 +37,29 @@ export function OpenIncident({
   code,
   status,
   at,
+  traceId = null,
+  requestId,
   ws,
 }: {
   code: string;
   status: number;
   /** The instant the read failed, already formatted. */
   at: string;
+  /** The trace the failed read ran under, when one was recorded (#3841). */
+  traceId?: string | null;
+  /** The id the kernel seam gave the failed read, when it reached the kernel. */
+  requestId?: string;
   /** The workspace whose Fleet read failed. */
   ws: string;
 }) {
   const t = useTranslations("fleet.incident");
+  const attached = [
+    `${String(status)} ${code}`,
+    ws,
+    at,
+    ...(traceId === null ? [] : [t("traceItem", { id: traceId })]),
+    ...(requestId === undefined ? [] : [t("requestItem", { id: requestId })]),
+  ];
   const label = useTranslations("fleet.error");
   const [open, setOpen] = useState(false);
   const subjectId = useId();
@@ -106,7 +119,8 @@ export function OpenIncident({
           </select>
           {/* The design attaches the records the incident is about. A failed
               read has no record id of its own, so it attaches what it has:
-              the answer, the workspace, and the instant. */}
+              the answer, the workspace, the instant, and the trace and the
+              request the kernel seam recorded. */}
           <span id={`${subjectId}-attach`} className="text-xs font-medium">
             {t("attach")}
           </span>
@@ -115,7 +129,7 @@ export function OpenIncident({
             data-testid="incident-attach"
             className="flex flex-wrap gap-1.5"
           >
-            {[`${String(status)} ${code}`, ws, at].map((item) => (
+            {attached.map((item) => (
               <li key={item}>
                 {/* Not the mono badge: it lowercases, and the instant ends in Z. */}
                 <Badge tone="quiet" dot={false}>

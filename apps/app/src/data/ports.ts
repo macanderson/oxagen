@@ -60,7 +60,15 @@ import type {
   TranscriptZoom,
 } from "./contracts/run";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
-import type { PullRequestFilter, RunPage } from "./contracts/runs";
+import type { InterjectionQueue } from "./contracts/interjections";
+import type {
+  EnforcementTier,
+  PullRequestFilter,
+  RunPage,
+  RunReplayFilter,
+  RunSortKey,
+  RunStatus,
+} from "./contracts/runs";
 import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
 import type {
   AssistantEngine,
@@ -215,6 +223,25 @@ export interface DataSource {
         limit?: number;
         /** Runs with or without pull requests; absent is every run. */
         pullRequests?: PullRequestFilter;
+        /** Only runs in these statuses; absent is every status. */
+        status?: RunStatus[];
+        /** Only runs published at these tiers; absent is every tier. */
+        tier?: EnforcementTier[];
+        /** Only runs with these grades; `not_recorded` is a run with none. */
+        replayGrade?: RunReplayFilter[];
+        /** A substring searched on the server; absent lists every run. */
+        query?: string;
+        /** The order; absent is newest first. */
+        sort?: { key: RunSortKey; dir: "asc" | "desc" };
+        /** Rows to skip in the filtered, sorted list. Never sent with a cursor. */
+        offset?: number;
+        /** Answer the page's `total`. Only a caller that draws a pager asks. */
+        count?: boolean;
+        /**
+         * Ask for the workspace's live count (`RunPage.liveRuns`). It reads
+         * every root session the workspace holds, so only Fleet's tile asks.
+         */
+        countLive?: boolean;
       },
     ): Promise<Read<RunPage>>;
     get(
@@ -296,6 +323,18 @@ export interface DataSource {
       ctx: WsCtx,
       q: { since: string },
     ): Promise<Read<{ items: ResolvedApprovalItem[]; more: boolean }>>;
+  };
+  /**
+   * list_interjections with `open: true`: the questions agents paused to ask
+   * that nobody has answered, walked to the end of the cursor under a bound,
+   * with `more` set when the bound stopped the walk (#3839); callers:
+   * features/fleet/fleet.tsx and features/shell/source.ts.
+   */
+  interjections: {
+    open(
+      ctx: WsCtx,
+      q: { runId: string | null },
+    ): Promise<Read<InterjectionQueue>>;
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:

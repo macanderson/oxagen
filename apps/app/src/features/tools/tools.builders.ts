@@ -79,6 +79,7 @@ export function agentPageRow(
     description: null,
     agentKey: null,
     harness: "custom",
+    managed: false,
     operatorId: null,
     operatorName: null,
     principalId: null,
@@ -233,6 +234,7 @@ export function toolsSource(reads: ToolsReads) {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse },
     agents: {
       list: answer(
         reads.agents ?? readOk(agentPage([agentPageRow("invoice-bot")])),

@@ -1,5 +1,5 @@
 {
-  "generatedCount": 395,
+  "generatedCount": 398,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -54,6 +54,17 @@
       "domain": "onboarding",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "answer_interjection",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2383,6 +2394,18 @@
       "consumes": []
     },
     {
+      "name": "list_interjections",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_invoices",
       "domain": "billing",
       "surfaces": [
@@ -2673,7 +2696,8 @@
       "surfaces": [
         "api",
         "mcp",
-        "agent"
+        "agent",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -2915,6 +2939,19 @@
         "mcp",
         "cli",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "pause_workspace_runs",
+      "domain": "control",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
       ],
       "component": null,
       "produces": [],

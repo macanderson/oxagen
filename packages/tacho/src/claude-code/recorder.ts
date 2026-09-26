@@ -855,6 +855,23 @@ export class SessionRecorder {
   }
 
   /**
+   * Judge a model call that seals on another chain against this family's
+   * ledger. The proxy files a call on the host's chain when the session
+   * ended while the call streamed, and the session's own OTel or transcript
+   * record of that call can still arrive here. The caller puts `attrs` on
+   * the frame it seals, and calls `commit` once that frame has sealed, so a
+   * later sighting on this chain is stamped its duplicate and a reader
+   * counts the call once.
+   */
+  judgeModelCallSealedElsewhere(body: Record<string, unknown>): {
+    attrs: Record<string, string>;
+    commit: () => void;
+  } {
+    const sighting = this.llmCallSighting(body, "collector");
+    return { attrs: sighting.attrs ?? {}, commit: sighting.commit };
+  }
+
+  /**
    * Whether this session or one of its subagents requested a tool call that
    * no source has sealed yet: its `PreToolUse` was recorded and its
    * `PostToolUse` was not.
@@ -967,6 +984,27 @@ export class SessionRecorder {
 
   get sealedEvents(): readonly TachoEvent[] {
     return this.events;
+  }
+
+  /**
+   * Forget what only a chain still taking frames needs: every model and tool
+   * call the dedupe ledgers hold, the open turn's reply, and every subagent
+   * chain. The ledgers hold up to `LLM_CALL_LEDGER_CAPACITY` and
+   * `TOOL_CALL_LEDGER_CAPACITY` entries, and exist to recognise a second
+   * source reporting a call the chain already holds. The reply holds up to
+   * `TACHO_MAX_BODY_BYTES`, and a session the sweep or the idle bound sealed
+   * keeps it (`sealFinal` does not clear it). A subagent keeps a copy of the
+   * session's context, and a sweep leaves one it finalized marked open. The
+   * registry calls this for a session sealed long enough that no second
+   * source is still coming (`SessionRegistry.releaseSealedState`), when no
+   * subagent runs. A frame that reaches a released subagent later opens it
+   * again where its WAL file ends (`chainTail`).
+   */
+  releaseSealedState(): void {
+    this.llmCalls = new LlmCallLedger();
+    this.toolCalls = new ToolCallLedger();
+    this.turnReply = undefined;
+    this.children.clear();
   }
 
   /**

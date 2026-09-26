@@ -148,11 +148,15 @@ vi.mock("@/features/fleet", async () => {
   const prefs = await vi.importActual<Record<string, unknown>>(
     "@/features/fleet/prefs",
   );
+  const listQuery = await vi.importActual<Record<string, unknown>>(
+    "@/features/fleet/list-query",
+  );
   return {
     Fleet,
     FLEET_PREFS_COOKIE: prefs.FLEET_PREFS_COOKIE,
     readFleetPrefs: prefs.readFleetPrefs,
     pullRequestFilterOf: prefs.pullRequestFilterOf,
+    parseListQuery: listQuery.parseListQuery,
   };
 });
 vi.mock("next/headers", () => ({
@@ -684,6 +688,16 @@ describe("the Fleet page", () => {
       cursor: "c2",
       prefs: { pageSize: 25, hidden: new Set() },
       pullRequests: "any",
+      // No search, facet, order or page on the URL: the default list (#3837).
+      list: {
+        q: "",
+        status: [],
+        tier: [],
+        replay: [],
+        sort: "started",
+        dir: "desc",
+        page: 1,
+      },
       banners: <OnboardingGate ctx={ctx} source={source} />,
     });
     expect(screen.getByTestId("onboarding-gate")).toBeInTheDocument();

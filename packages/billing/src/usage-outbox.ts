@@ -10,12 +10,7 @@ import {
   lte,
   sql,
 } from "drizzle-orm";
-import {
-  schema,
-  withSharedPlaneTenantDb,
-  withSystemDb,
-  type Tx,
-} from "@oxagen/database";
+import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import { insertDurableTokenUsage, type TokenUsageRow } from "@oxagen/telemetry";
 import { requireScope } from "@oxagen/tenancy";
@@ -24,6 +19,7 @@ import {
   snapshotUsageCharge,
   type ChargeUsageArgs,
 } from "./metering";
+import { withBillingDb } from "./internal/platform-db";
 import { recordSpend } from "./spend-counter";
 import { logger } from "./logger";
 
@@ -70,7 +66,7 @@ function assertUsageScope(orgId: string, workspaceId: string): void {
  * `withTenantDb` would open the admission on the organisation's own database,
  * where the delivery worker never looks, so that organisation's usage was
  * never delivered (#4315). A workspace-scoped admission therefore runs under
- * `withSharedPlaneTenantDb`: RLS stays load-bearing for the admission row and
+ * `withBillingDb`: RLS stays load-bearing for the admission row and
  * for every ledger row `settle` writes beside it, and the rows land on the
  * shared plane. An organisation-only scope cannot use it: the workspace GUC
  * is a marker that makes every read of a workspace-scoped table refuse
@@ -79,9 +75,7 @@ function assertUsageScope(orgId: string, workspaceId: string): void {
  * workspace predicates every query here carries.
  */
 function admissionTransaction(workspaceId: string) {
-  return workspaceId === ORG_ONLY_WORKSPACE_ID
-    ? withSystemDb
-    : withSharedPlaneTenantDb;
+  return workspaceId === ORG_ONLY_WORKSPACE_ID ? withSystemDb : withBillingDb;
 }
 
 /** Persist an admission before contacting the provider. Failure refuses the call. */

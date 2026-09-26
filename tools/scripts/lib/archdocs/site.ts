@@ -633,7 +633,7 @@ function knowledge(m: Model): Section {
         rows,
         { id: "neo-table", filter: true },
       ) +
-      `<h3>Vector indexes</h3><p>All 1536-dimensional cosine. <code>graph_node_embedding_index</code> is the universal one because every tenant node also carries the <code>GraphNode</code> anchor label.</p>` +
+      `<h3>Vector indexes</h3><p>All 1024-dimensional cosine, sized to voyage-4-large. <code>graph_node_embedding_index</code> is the universal one because every tenant node also carries the <code>GraphNode</code> anchor label.</p>` +
       table(["Index", "Label", "Property"], vec),
   };
 }

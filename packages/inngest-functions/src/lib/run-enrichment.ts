@@ -34,11 +34,43 @@ export const ENRICHMENT_BODY_READ_CEILING = 2_000;
  * says it covers only the start of the run. The account is persisted with
  * its input digest, so an unchanged run is not summarized again.
  *
- * The budget is per job. A live run is enriched again every
- * `LIVE_ENRICHMENT_INTERVAL_MS` while it changes, and each job starts with the
- * full budget, so nothing yet caps one run's total (#4312).
+ * A live run is enriched again every `LIVE_ENRICHMENT_INTERVAL_MS` while it
+ * changes, so this budget alone does not bound a run. The run's total is
+ * held to {@link ENRICHMENT_RUN_TOTAL_BUDGET_USD}: a job whose run has less
+ * than this left spends only what is left.
  */
 export const ENRICHMENT_RUN_BUDGET_USD = 1;
+
+/**
+ * The most enrichment spends on one run across all of its jobs, in US
+ * dollars (#4312). Five jobs at the per-job budget, or about a dozen at the
+ * text ceiling on the default fast tier, which covers about six hours of a
+ * busy live run summarized every half hour.
+ *
+ * Each call's price is added to the run's `summary_spent_usd_micros` inside
+ * the step that made the call, so the total outlives the job and a replayed
+ * step adds nothing. A job starts with what the run has left, and stops
+ * reducing when that is spent, as it does at the per-job budget: the account
+ * is written from the part it has read and says it covers only the start.
+ * The budget is checked before each reduction call and not before the
+ * account call, so a job can take the run past the cap by at most two calls:
+ * the reduction call that crossed it and the account call, each over at most
+ * one chunk. Once the run's total reaches the cap, the sweep no longer queues the
+ * run, a job asked for it anyway makes no model call, and the last account
+ * stays.
+ */
+export const ENRICHMENT_RUN_TOTAL_BUDGET_USD = 5;
+
+/** {@link ENRICHMENT_RUN_TOTAL_BUDGET_USD} in the micro-dollars the column holds. */
+export const ENRICHMENT_RUN_TOTAL_BUDGET_MICROS =
+  ENRICHMENT_RUN_TOTAL_BUDGET_USD * 1_000_000;
+
+/** A call's price in whole micro-dollars; a missing or negative price is 0. */
+export function usdMicros(usd: number | undefined): number {
+  return usd !== undefined && Number.isFinite(usd) && usd > 0
+    ? Math.round(usd * 1_000_000)
+    : 0;
+}
 
 /** The account's last sentence when the budget stopped the job early. */
 export const ENRICHMENT_BUDGET_NOTE =

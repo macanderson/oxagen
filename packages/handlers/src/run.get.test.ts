@@ -8,6 +8,7 @@ import {
   createRunGetHandler,
   decodeFrameCursor,
   encodeFrameCursor,
+  type PlaceRepository,
   POLL_INTERVAL_MS,
   type RunGetDeps,
 } from "./run.get";
@@ -52,6 +53,12 @@ type Over = {
   configFails?: boolean;
   /** The frame read rejects, as ClickHouse over its memory cap does. */
   framesFail?: boolean;
+  /** The connected repositories by remote digest; none by default. */
+  repositories?: Record<string, PlaceRepository>;
+  /** The repository read rejects, as a Postgres timeout would. */
+  repositoryFails?: boolean;
+  /** Every digest the repository read was asked for. */
+  repositoryAsked?: string[];
   /** Runs after each fake sleep, with the count so far; a test lands events here. */
   onSleep?: (count: number, log: AttemptEventReadRecord[]) => void;
 };
@@ -107,6 +114,12 @@ function harness(over: Over = {}) {
               ? over.sessionConfig
               : { effort: null, thinking: null },
           ),
+    sessionRepository: (_scope, digest) => {
+      over.repositoryAsked?.push(digest);
+      return over.repositoryFails === true
+        ? Promise.reject(new Error("postgres timeout"))
+        : Promise.resolve(over.repositories?.[digest] ?? null);
+    },
     now: () => clock,
     sleep: (ms) => {
       sleeps.push(ms);
@@ -519,6 +532,7 @@ describe("get_run", () => {
       tachoFrames,
       sessionTitle: async () => null,
       sessionConfig: async () => ({ effort: null, thinking: null }),
+      sessionRepository: async () => null,
       now: () => 0,
       sleep: () => Promise.resolve(),
     });
@@ -696,5 +710,72 @@ describe("get_run witnessFor (ADR-064)", () => {
     const out = await get(input({ runId: TACHO_ID }), ctx());
     expect(out.frames.frames).toHaveLength(1);
     expect("framesError" in out).toBe(false);
+  });
+  // A-05: the Run header drew no repository while the work read was pending
+  // or after it failed, though the session recorded its remote's digest.
+  const PLATFORM: PlaceRepository = {
+    host: "github.com",
+    owner: "acme",
+    name: "platform",
+    url: "https://github.com/acme/platform",
+  };
+  const DIGEST = `sha256:${"b".repeat(64)}`;
+  const placed = (over: Over = {}) =>
+    harness({
+      tacho: [
+        tachoSession({
+          publicId: TACHO_ID,
+          session: {
+            cwd: "/Users/mb/src/platform",
+            gitBranch: "fix/tags",
+            gitRemoteDigest: DIGEST,
+          },
+        }),
+      ],
+      ...over,
+    });
+
+  it("names the connected repository the session's remote digest matches in its place (A-05)", async () => {
+    const asked: string[] = [];
+    const { get } = placed({
+      repositories: { [DIGEST]: PLATFORM },
+      repositoryAsked: asked,
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.place).toEqual({
+      path: "/Users/mb/src/platform",
+      branch: "fix/tags",
+      repository: PLATFORM,
+    });
+    expect(asked).toEqual([DIGEST]);
+    expect(runGet.output.parse(out)).toEqual(out);
+  });
+
+  it("answers a null repository when no connected repository matches, and none when the read failed (negative)", async () => {
+    const unmatched = await placed().get(input({ runId: TACHO_ID }), ctx());
+    expect(unmatched.run.place).toEqual({
+      path: "/Users/mb/src/platform",
+      branch: "fix/tags",
+      repository: null,
+    });
+    const failed = await placed({ repositoryFails: true }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
+    // Not read is not "no repository": the key is left out.
+    expect(failed.run.place).toEqual({
+      path: "/Users/mb/src/platform",
+      branch: "fix/tags",
+    });
+  });
+
+  it("reads no repository for a session with no remote digest or for a ledger run (negative)", async () => {
+    const asked: string[] = [];
+    const { get } = harness({ repositoryAsked: asked });
+    const tacho = await get(input({ runId: TACHO_ID }), ctx());
+    const ledger = await get(input({ runId: LEDGER_ID }), ctx());
+    expect(asked).toEqual([]);
+    expect(tacho.run.place?.repository).toBeUndefined();
+    expect(ledger.run.place).toBeNull();
   });
 });

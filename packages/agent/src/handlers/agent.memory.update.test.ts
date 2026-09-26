@@ -85,6 +85,7 @@ describe("agent.memory.update handler", () => {
         // TEST_CTX carries no executionStepId, so the key is absent, not the request id.
         executionStepId: null,
       },
+      inputType: "document",
     });
     const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<
       string,

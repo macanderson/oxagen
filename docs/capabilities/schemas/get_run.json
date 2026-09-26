@@ -589,6 +589,75 @@
               }
             ]
           },
+          "place": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "branch": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "repository": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "host": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          }
+                        },
+                        "required": [
+                          "host",
+                          "owner",
+                          "name",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "path",
+                  "branch"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "harness": {
             "anyOf": [
               {
@@ -719,6 +788,16 @@
                       "type": "null"
                     }
                   ]
+                },
+                "stateSeenAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -767,6 +846,66 @@
                 "type": "null"
               }
             ]
+          },
+          "tokens": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "input_uncached": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cache_read": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cache_write_5m": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cache_write_1h": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "output": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "reasoning": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "input_uncached",
+                  "cache_read",
+                  "cache_write_5m",
+                  "cache_write_1h",
+                  "output",
+                  "reasoning"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cacheHitRate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compacted": {
+            "type": "boolean"
           }
         },
         "required": [

@@ -1929,6 +1929,9 @@
                 }
               ]
             },
+            "error": {
+              "type": "boolean"
+            },
             "approvalId": {
               "anyOf": [
                 {
@@ -2265,6 +2268,16 @@
       },
       "complete": {
         "type": "boolean"
+      },
+      "frameCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
       },
       "counts": {
         "type": "object",

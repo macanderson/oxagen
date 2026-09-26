@@ -5,7 +5,11 @@ import { z } from "zod";
 import { PublicId } from "./common";
 import { Cost } from "./money";
 
-/** `live`: open. `sealed`: ended with a sealed record. `halted`: an operator or policy stopped it. */
+/**
+ * `live`: open. `sealed`: ended with a sealed record. `halted`: an operator or
+ * policy stopped it. Paused and compacted are facts beside the status
+ * (`ingressPaused`, `compacted`), never statuses of their own (ADR-193).
+ */
 export const RunStatus = z.enum(["live", "sealed", "halted"]);
 export type RunStatus = z.infer<typeof RunStatus>;
 
@@ -196,18 +200,97 @@ export function commandBlockOf(run: {
   return run.commandBlock ?? null;
 }
 
+const Count = z.number().int().nonnegative();
+
+/**
+ * A run's token counts by class, from its `cost.run_totals` row. The Run
+ * page's cost rollup and the Fleet row read the same shape.
+ */
+export const RunTokenCounts = z.object({
+  inputUncached: Count,
+  cacheRead: Count,
+  cacheWrite5m: Count,
+  cacheWrite1h: Count,
+  output: Count,
+  reasoning: Count,
+});
+export type RunTokenCounts = z.infer<typeof RunTokenCounts>;
+
+/**
+ * How often a page with no stream reads a live wrapped run again, so its
+ * stale light moves without a reload: the host poll window that decides the
+ * reading (`HOST_POLL_WINDOW_MS` in `@oxagen/oxagen`, five minutes). A light
+ * then trails the host by at most two windows.
+ */
+export const STALE_REREAD_MS = 5 * 60_000;
+
+/**
+ * Whether a later read can change a row's stale light: a live wrapped run,
+ * whose host can go quiet or come back. A ledger run has no host to miss.
+ */
+export function canGoStale(run: {
+  status: RunStatus;
+  source: "ledger" | "tacho";
+}): boolean {
+  return run.status === "live" && run.source === "tacho";
+}
+
+/** Why an open run reads stale: its host went quiet, or it was revoked. */
+export type StaleReason = Extract<
+  CommandBlock,
+  "host_offline" | "host_revoked"
+>;
+
+/**
+ * Why an open run's light reads stale, or null when it reads live.
+ *
+ * - `host_offline`: the host has not checked in within the poll window, five
+ *   minutes (`HOST_POLL_WINDOW_MS`). The host polls every few seconds while
+ *   its daemon runs, so a laptop that went to sleep or a daemon that was
+ *   killed reads stale within minutes rather than live until Oxagen closes
+ *   the run after 12 hours with no event.
+ * - `host_revoked`: the host's enrollment was revoked, so Oxagen refuses its
+ *   polls and its events, and the run is as unreachable as an offline one.
+ *
+ * A run with no host has no heartbeat to miss. A ledger run, and a wrapped
+ * session no host is recorded for, read live until they seal. The Run page
+ * reads the row again when its stream says the reading changed. Fleet reads
+ * it again every `STALE_REREAD_MS` while it lists a live wrapped run.
+ */
+export function staleReason(run: {
+  status: RunStatus;
+  commandBlock?: CommandBlock | null;
+}): StaleReason | null {
+  if (run.status !== "live") return null;
+  return run.commandBlock === "host_offline" ||
+    run.commandBlock === "host_revoked"
+    ? run.commandBlock
+    : null;
+}
+
+/** Whether an open run's light reads stale (`staleReason`). */
+export function isStale(run: {
+  status: RunStatus;
+  commandBlock?: CommandBlock | null;
+}): boolean {
+  return staleReason(run) !== null;
+}
+
 /** Token totals by kind, as the recorder counted them. */
 /**
  * A pull request (or GitLab merge request) the run's frames name. The URL is
  * as recorded; the page links it only when it parses as a PullRequestUrl.
- * `state` is null when no store recorded one, which is every row today: the
- * page says "status unknown" rather than guessing "open".
+ * `state` is stored and kept current by forge webhooks (ADR-192). It is null
+ * when no forge has reported it, and the page then says "status unknown"
+ * rather than guessing "open".
  */
 export const RunPullRequest = z.object({
   url: z.string().min(1),
   number: z.number().int().positive().nullable(),
   repository: z.string().min(1).nullable(),
   state: z.enum(["open", "draft", "merged", "closed"]).nullable(),
+  /** When Oxagen last read `state`; null when it never has. */
+  stateSeenAt: z.iso.datetime({ offset: true }).nullable().optional(),
 });
 export type RunPullRequest = z.infer<typeof RunPullRequest>;
 
@@ -225,6 +308,31 @@ export type RunDiff = z.infer<typeof RunDiff>;
 /** Which runs a Fleet page lists by their pull requests. */
 export const PullRequestFilter = z.enum(["any", "with", "without"]);
 export type PullRequestFilter = z.infer<typeof PullRequestFilter>;
+
+/** The columns `list_runs` orders by, mirrored from its `RUN_SORT_KEYS`. */
+export const RunSortKey = z.enum([
+  "started",
+  "agent",
+  "operator",
+  "status",
+  "tier",
+  "replay",
+  "cost",
+]);
+export type RunSortKey = z.infer<typeof RunSortKey>;
+
+/**
+ * The replay grades a Fleet page filters on, plus `not_recorded` for a run
+ * whose seal recorded none. Mirrored from `list_runs`' `RUN_REPLAY_FILTERS`.
+ */
+export const RunReplayFilter = z.enum([
+  "inspect",
+  "view",
+  "fork",
+  "retry",
+  "not_recorded",
+]);
+export type RunReplayFilter = z.infer<typeof RunReplayFilter>;
 
 const RunTokens = z.object({
   input: z.number().int().nonnegative(),
@@ -267,6 +375,32 @@ export const RunRow = z.object({
   /** Token totals from the session's counted model calls; null when none were recorded. */
   reportedTokens: RunTokens.nullable().optional(),
   machine: RunMachine.nullable(),
+  /**
+   * Where a wrapped session ran, as its start recorded it: the working
+   * directory and the git branch. Null for a ledger run, and where the
+   * session recorded neither. The Run header's checkout strip shows it while
+   * the work read is in flight or after it failed.
+   *
+   * `repository` is the connected repository the session's remote matches,
+   * null when none does. `get_run` answers it; a Fleet row leaves it out,
+   * which reads as not read.
+   */
+  place: z
+    .object({
+      path: z.string().min(1).nullable(),
+      branch: z.string().min(1).nullable(),
+      repository: z
+        .object({
+          host: z.string(),
+          owner: z.string(),
+          name: z.string(),
+          url: z.url(),
+        })
+        .nullable()
+        .optional(),
+    })
+    .nullable()
+    .optional(),
   harness: z
     .object({
       name: z.string(),
@@ -291,6 +425,16 @@ export const RunRow = z.object({
   pullRequestsOpened: z.number().int().nonnegative().optional(),
   /** Lines added and removed; null when nothing reported a change. */
   diff: RunDiff.nullable().optional(),
+  /**
+   * Token counts by class from the run's rollup row; null when the run has
+   * no rollup row. Never zero-filled for a missing row.
+   */
+  tokens: RunTokenCounts.nullable().optional(),
+  /**
+   * The share of input served from cache, from 0 to 1, weighted by spend.
+   * Null when there is no rollup row or it holds none. Never 0 in its place.
+   */
+  cacheHitRate: z.number().min(0).max(1).nullable().optional(),
   replayGrade: ReplayGrade.nullable(),
   verdict: ProofVerdict.nullable(),
   enforcementTier: EnforcementTier,
@@ -305,6 +449,13 @@ export const RunRow = z.object({
    * resume its host applied (#4112). A sealed wrapped run is never paused.
    */
   ingressPaused: z.boolean().optional(),
+  /**
+   * True when the run has ended and frame compaction moved its latest sealed
+   * attempt's frames to the archive segment (ADR-058). False for a ledger run
+   * that has not been compacted. Absent for a wrapped session, whose store
+   * records no recording compaction.
+   */
+  compacted: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */
   completenessGaps: z.array(CompletenessGap),
   /**
@@ -343,7 +494,19 @@ export const RunPage = z.object({
   runs: z.array(RunRow),
   /** Opaque; the next page's cursor, null on the last page. */
   nextCursor: z.string().nullable(),
+  /**
+   * How many runs in the workspace are live, whatever the page, the cursor
+   * or the filter. Absent when the read could not count them.
+   */
+  liveRuns: z.number().int().nonnegative().optional(),
   /** `pull_requests_unread`: the page's pull requests could not be read. */
   warnings: z.array(z.enum(["pull_requests_unread"])).optional(),
+  /**
+   * The runs that match every filter and the search, whatever the page. Null
+   * when more than `totalBound` match. Absent when the read did not count.
+   */
+  total: z.number().int().nonnegative().nullable().optional(),
+  /** The most runs the read counts; present whenever `total` is. */
+  totalBound: z.number().int().positive().optional(),
 });
 export type RunPage = z.infer<typeof RunPage>;

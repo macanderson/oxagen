@@ -22,10 +22,13 @@
 // store keys a body under its organization and workspace, and one tenant's
 // read must never be answered from another tenant's body.
 //
-// A body the store says is gone, or whose bytes no longer hash to the digest,
-// is remembered as showing no words, but only for `failureTtlMs`. An erased
-// run's bodies are then not read again on every read, and a body that lands
-// late is read once the entry expires.
+// A body that cannot be read for a while is remembered as unreadable, but
+// only for `failureTtlMs`: the store has no such object, its bytes no longer
+// hash to the digest, or its key no longer opens it, as after erasure. An
+// erased run's bodies are then not read again on every read, and a body that
+// lands late is read once the entry expires. Unreadable is not "shows no
+// words": the reader leaves the entry as the fold said, because only a body
+// read whole can say it has nothing to show.
 //
 // Eviction is least recently used, bounded by entries: a `Map` keeps
 // insertion order, and a hit is moved to the end.
@@ -73,14 +76,21 @@ interface Scope {
   workspaceId: string;
 }
 
+/** What the cache answers for a body it remembers as unreadable. */
+export const UNREADABLE = "unreadable";
+
 export interface WordsCache {
-  /** What is kept for the frame's body, or undefined when nothing is. */
-  get(scope: Scope, frame: RunFrame): BodyWords | undefined;
+  /**
+   * What is kept for the frame's body: what it says, `UNREADABLE` while a
+   * failed read is remembered, or undefined when nothing is.
+   */
+  get(scope: Scope, frame: RunFrame): BodyWords | typeof UNREADABLE | undefined;
   /** Keep what the frame's body says. A frame with no kept body is ignored. */
   set(scope: Scope, frame: RunFrame, words: BodyWords): void;
   /**
-   * Remember, for `failureTtlMs`, that the frame's body could not be read for
-   * good: the store has no such object, or its bytes no longer hash.
+   * Remember, for `failureTtlMs`, that the frame's body cannot be read and
+   * will not be on a retry: the store has no such object, its bytes no
+   * longer hash, or its key no longer opens it.
    */
   fail(scope: Scope, frame: RunFrame): void;
   /** Bodies kept, a failure included until it expires. */
@@ -100,16 +110,14 @@ function keyOf(scope: Scope, frame: RunFrame): string | null {
   return `${scope.orgId}\n${scope.workspaceId}\n${bodyRef}\n${bodyDigest}`;
 }
 
-/** A failed read shows no words, the same as a body that holds none. */
-const NOTHING: BodyWords = { stream: false, words: null };
-
 export function createWordsCache(
   limits: WordsCacheLimits = WORDS_CACHE_LIMITS,
   now: () => number = Date.now,
 ): WordsCache {
-  const kept = new Map<string, { words: BodyWords; until: number | null }>();
+  type Held = BodyWords | typeof UNREADABLE;
+  const kept = new Map<string, { words: Held; until: number | null }>();
 
-  const keep = (key: string, words: BodyWords, until: number | null) => {
+  const keep = (key: string, words: Held, until: number | null) => {
     kept.delete(key);
     if (limits.maxEntries < 1) return;
     while (kept.size >= limits.maxEntries) {
@@ -141,7 +149,7 @@ export function createWordsCache(
     },
     fail(scope, frame) {
       const key = keyOf(scope, frame);
-      if (key !== null) keep(key, NOTHING, now() + limits.failureTtlMs);
+      if (key !== null) keep(key, UNREADABLE, now() + limits.failureTtlMs);
     },
     size() {
       return kept.size;

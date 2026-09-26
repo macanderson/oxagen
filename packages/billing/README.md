@@ -22,7 +22,7 @@
   - Plugin entitlement: [`@oxagen/plugins`](../plugins/README.md).
 - **Depends on:**
   - `@oxagen/oxagen`: the kernel setters `setBillingAdmissionGate`, `setBudgetAdmissionGate`, and `setUsageRecorder`.
-  - `@oxagen/database`: `withTenantDb`, `withSystemDb`, and the billing schema.
+  - `@oxagen/database`: `withTenantDb`, `withOrgDb`, `withSystemDb`, and the billing schema. Billing tables are platform tables on the shared plane (ADR-042 §2), so a tenant-scoped billing read or write goes through `withBillingDb` or `withBillingOrgDb` (`src/internal/platform-db.ts`). Those pass `{ plane: "shared" }`, so an organisation on its own database still reads the credits it was granted and spent (#4338).
   - `@oxagen/tenancy`: tenant scope for scoped reads and writes.
   - `@oxagen/telemetry`: ClickHouse usage rows and error capture.
   - `@oxagen/run-ledger`: step kinds for the cost rollup (`src/cost-rollup-store.ts`).

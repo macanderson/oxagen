@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
   loggerError: vi.fn(),
-  eraseClaudeSessionRows: vi.fn(),
+  submitClaudeSessionsErase: vi.fn(),
+  claudeSessionsEraseRemaining: vi.fn(),
   /** What `auth.users.email` holds when the function reads it. */
   subjectEmail: { value: "person@example.test" as string | null },
   /** Every operation in the order it ran, across both stores. */
@@ -69,10 +70,15 @@ vi.mock("drizzle-orm", async (importOriginal) => {
 });
 
 vi.mock("@oxagen/telemetry", () => ({
-  eraseClaudeSessionRows: async (email: string) => {
+  ERASE_CLAUDE_SESSIONS_POLL_MS: 15_000,
+  ERASE_CLAUDE_SESSIONS_POLLS: 60,
+  ERASE_CLAUDE_SESSIONS_WAIT_MS: 900_000,
+  submitClaudeSessionsErase: async (email: string) => {
     mocks.order.push("erase-clickhouse-rows");
-    return mocks.eraseClaudeSessionRows(email);
+    return mocks.submitClaudeSessionsErase(email);
   },
+  claudeSessionsEraseRemaining: async (ids: string[]) =>
+    mocks.claudeSessionsEraseRemaining(ids),
 }));
 
 vi.mock("../logger", () => ({
@@ -131,8 +137,10 @@ describe("privacyErasureExecute Inngest handler", () => {
     mocks.loggerInfo.mockClear();
     mocks.loggerWarn.mockClear();
     mocks.loggerError.mockClear();
-    mocks.eraseClaudeSessionRows.mockReset();
-    mocks.eraseClaudeSessionRows.mockResolvedValue(undefined);
+    mocks.submitClaudeSessionsErase.mockReset();
+    mocks.submitClaudeSessionsErase.mockResolvedValue([]);
+    mocks.claudeSessionsEraseRemaining.mockReset();
+    mocks.claudeSessionsEraseRemaining.mockResolvedValue(0);
     mocks.subjectEmail.value = "person@example.test";
     mocks.order.length = 0;
   });
@@ -144,6 +152,16 @@ describe("privacyErasureExecute Inngest handler", () => {
     scope: "user" as const,
     scheduledAt: new Date(Date.now() - 1000).toISOString(),
   };
+
+  /** Run the main handler for `baseEvent`, and return what it threw. */
+  const runErasure = (step: Parameters<Handler>[0]["step"]) =>
+    getHandler("privacy.erasure-execute")({
+      event: { data: baseEvent },
+      step,
+    }).then(
+      () => undefined,
+      (err: unknown) => err,
+    );
 
   it("purges owned auth PII (users/accounts/preferences) then fails loud, never marking completed", async () => {
     const handler = getHandler("privacy.erasure-execute");
@@ -224,8 +242,8 @@ describe("privacyErasureExecute Inngest handler", () => {
       handler({ event: { data: baseEvent }, step: makeStep() }),
     ).rejects.toBeInstanceOf(NonRetriableError);
 
-    expect(mocks.eraseClaudeSessionRows).toHaveBeenCalledOnce();
-    expect(mocks.eraseClaudeSessionRows).toHaveBeenCalledWith(
+    expect(mocks.submitClaudeSessionsErase).toHaveBeenCalledOnce();
+    expect(mocks.submitClaudeSessionsErase).toHaveBeenCalledWith(
       "person@example.test",
     );
     // The read and the ClickHouse delete both come before the users row is
@@ -249,7 +267,10 @@ describe("privacyErasureExecute Inngest handler", () => {
     await expect(
       handler({ event: { data: baseEvent }, step }),
     ).rejects.toBeInstanceOf(NonRetriableError);
-    expect(results.get("erase-clickhouse-rows")).toEqual({ erased: true });
+    expect(results.get("erase-clickhouse-rows")).toEqual({
+      erased: true,
+      mutationIds: [],
+    });
     expect(JSON.stringify([...results.values()])).not.toContain(
       "person@example.test",
     );
@@ -258,7 +279,7 @@ describe("privacyErasureExecute Inngest handler", () => {
   it("still purges credentials when the ClickHouse erase fails, and keeps the address for a re-run", async () => {
     // The step mock runs the body once, so this throw stands for the failure
     // Inngest throws back into the function after its retries.
-    mocks.eraseClaudeSessionRows.mockRejectedValueOnce(
+    mocks.submitClaudeSessionsErase.mockRejectedValueOnce(
       new Error("ClickHouse refused"),
     );
     const handler = getHandler("privacy.erasure-execute");
@@ -297,6 +318,73 @@ describe("privacyErasureExecute Inngest handler", () => {
     );
   });
 
+  // #4316: the mutation can run for minutes. Inngest calls each step over
+  // HTTP through a proxy that closes a request after 300 seconds, so the wait
+  // runs as short reads between sleeps, and the mutation is queued once.
+  it("waits for the mutation in short steps, and queues it once", async () => {
+    mocks.submitClaudeSessionsErase.mockResolvedValue(["m2"]);
+    mocks.claudeSessionsEraseRemaining
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+    const names: string[] = [];
+    const step = {
+      run: async (name: string, fn: () => Promise<unknown>) => {
+        names.push(name);
+        return fn();
+      },
+      sleep: vi.fn(async () => undefined),
+    };
+    const error = await runErasure(step);
+    expect(mocks.submitClaudeSessionsErase).toHaveBeenCalledOnce();
+    expect(mocks.claudeSessionsEraseRemaining).toHaveBeenCalledTimes(3);
+    expect(mocks.claudeSessionsEraseRemaining).toHaveBeenCalledWith(["m2"]);
+    expect(names.filter((name) => name.startsWith("erase-"))).toEqual([
+      "erase-clickhouse-rows",
+      "erase-clickhouse-rows-poll-0",
+      "erase-clickhouse-rows-poll-1",
+      "erase-clickhouse-rows-poll-2",
+    ]);
+    expect(step.sleep).toHaveBeenCalledWith(
+      "erase-clickhouse-rows-wait-0",
+      "15s",
+    );
+    expect(step.sleep).toHaveBeenCalledTimes(3);
+    expect((error as Error).message).toContain(
+      "claude_sessions rows under the account address were deleted",
+    );
+    const userUpdate = mocks.updateSet.mock.calls
+      .map((c) => c[0] as UpdateCall)
+      .find((c) => c.table.id === "users.id");
+    expect(userUpdate?.payload.email).toBe("user-1@deleted.invalid");
+  });
+
+  it("keeps the address when the mutation outlasts 60 reads", async () => {
+    mocks.submitClaudeSessionsErase.mockResolvedValue(["m2"]);
+    mocks.claudeSessionsEraseRemaining.mockResolvedValue(1);
+    const error = await runErasure(makeStep());
+    expect(mocks.claudeSessionsEraseRemaining).toHaveBeenCalledTimes(60);
+    expect((error as Error).message).toContain(
+      "the erase failed after retries",
+    );
+    const userUpdate = mocks.updateSet.mock.calls
+      .map((c) => c[0] as UpdateCall)
+      .find((c) => c.table.id === "users.id");
+    expect(userUpdate?.payload).not.toHaveProperty("email");
+  });
+
+  it("stops waiting as soon as the mutation fails, and keeps the address", async () => {
+    mocks.submitClaudeSessionsErase.mockResolvedValue(["m2"]);
+    mocks.claudeSessionsEraseRemaining.mockRejectedValueOnce(
+      new Error("the claude_sessions erase failed"),
+    );
+    const error = await runErasure(makeStep());
+    expect(mocks.claudeSessionsEraseRemaining).toHaveBeenCalledOnce();
+    expect((error as Error).message).toContain(
+      "the erase failed after retries",
+    );
+  });
+
   it("logs, erases nothing, and reports the rows residual when the address was already overwritten", async () => {
     mocks.subjectEmail.value = "user-1@deleted.invalid";
     const handler = getHandler("privacy.erasure-execute");
@@ -308,7 +396,7 @@ describe("privacyErasureExecute Inngest handler", () => {
       (err: unknown) => err,
     );
     expect(error).toBeInstanceOf(NonRetriableError);
-    expect(mocks.eraseClaudeSessionRows).not.toHaveBeenCalled();
+    expect(mocks.submitClaudeSessionsErase).not.toHaveBeenCalled();
     expect(mocks.loggerWarn).toHaveBeenCalledWith(
       { requestId: "req-1", userId: "user-1" },
       "privacy.erasure-execute: no address left to match in claude_sessions",
@@ -335,7 +423,7 @@ describe("privacyErasureExecute Inngest handler", () => {
     // owned rows, because org-scope semantics are undefined.
     expect(updates.some((c) => c.table.id === "users.id")).toBe(false);
     expect(deletes.length).toBe(0);
-    expect(mocks.eraseClaudeSessionRows).not.toHaveBeenCalled();
+    expect(mocks.submitClaudeSessionsErase).not.toHaveBeenCalled();
   });
 
   it("on-failure handler marks the request failed with the error message", async () => {

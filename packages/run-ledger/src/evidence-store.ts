@@ -32,6 +32,7 @@ import {
   createIngestionCryptoAdapter,
   decrypt,
   encrypt,
+  lastingDecryptFailure,
   resolveIngestionCryptoAdapterForKeyId,
   type IngestionCryptoAdapter,
 } from "@oxagen/crypto";
@@ -295,6 +296,44 @@ function writeOnce(limit: number) {
   };
 }
 
+/**
+ * The key that opens a stored body no longer opens any body: erasure
+ * destroyed it, or KMS has it disabled or pending deletion
+ * (`lastingDecryptFailure` answers `key`). The object is still in the store,
+ * so this is not a `StorageNotFoundError`, and reading it or any other body
+ * under the key fails the same way for as long as the key stays as it is.
+ *
+ * Erasure crypto-shreds (§13.5): it destroys the key and leaves the
+ * write-once object in place. This is how a reader sees an erased body.
+ */
+export class BodyKeyGoneError extends Error {
+  override readonly name = "BodyKeyGoneError";
+  constructor(
+    readonly keyId: string,
+    options: { cause: unknown },
+  ) {
+    super(`the key ${keyId} no longer opens evidence bodies`, options);
+  }
+}
+
+/**
+ * This one stored body does not open, and its key may still open every other
+ * body (`lastingDecryptFailure` answers `body`): the envelope's GCM tag fails,
+ * or KMS says the wrapped data key is damaged or was not wrapped by this key.
+ * Reading it again fails the same way, since neither the bytes nor the key
+ * change between tries. A body reference names the deployment's KEK, not a
+ * key of its own, so one damaged body says nothing about the others.
+ */
+export class BodyUnopenableError extends Error {
+  override readonly name = "BodyUnopenableError";
+  constructor(
+    readonly keyId: string,
+    options: { cause: unknown },
+  ) {
+    super(`this evidence body does not open under the key ${keyId}`, options);
+  }
+}
+
 interface StoredFrameBody {
   /** The redacted plaintext the reference names; the digest proves it. */
   bytes: Uint8Array;
@@ -303,6 +342,12 @@ interface StoredFrameBody {
 }
 
 export interface EvidenceStore extends RunBodyStore, RunArchiveStore {
+  /**
+   * The body `ref` names. Throws `StorageNotFoundError` when no object is
+   * there, `BodyKeyGoneError` when the object is there and its key no longer
+   * opens any body, as after erasure, and `BodyUnopenableError` when this
+   * body alone does not open. Any other failure may pass.
+   */
   getBody(scope: EvidenceScope, ref: string): Promise<StoredFrameBody>;
   /** Required here: this store always has somewhere to put a fold. */
   putAssembly(input: {
@@ -397,9 +442,19 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
         evidenceBodyKey(scope, parsed.keyId, parsed.digestHex),
       );
       const ciphertext = await readAll(object.body);
-      const plaintext = await decrypt(Buffer.from(ciphertext), parsed.keyId, {
-        adapter,
-      });
+      let plaintext: Buffer;
+      try {
+        plaintext = await decrypt(Buffer.from(ciphertext), parsed.keyId, {
+          adapter,
+        });
+      } catch (err) {
+        const lasting = lastingDecryptFailure(err);
+        if (lasting === "key")
+          throw new BodyKeyGoneError(parsed.keyId, { cause: err });
+        if (lasting === "body")
+          throw new BodyUnopenableError(parsed.keyId, { cause: err });
+        throw err;
+      }
       const { contentType, bytes } = parseFrameBodyPlaintext(plaintext);
       return { bytes, contentType, digestHex: parsed.digestHex };
     },
@@ -407,9 +462,7 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
     async putAssembly(input) {
       const parsed = parseEvidenceBodyRef(input.bodyRef);
       if (!parsed) {
-        throw new TypeError(
-          `not an evidence body reference: ${input.bodyRef}`,
-        );
+        throw new TypeError(`not an evidence body reference: ${input.bodyRef}`);
       }
       const key = evidenceAssemblyKey(input, parsed.keyId, parsed.digestHex);
       // The fold is a function of the body's bytes, so the key names its

@@ -30,6 +30,7 @@ export function agentRow(overrides: Partial<AgentRow> = {}): AgentRow {
     description: "Cuts releases and opens their pull requests.",
     agentKey: "acme.core.release-bot",
     harness: "claude-code",
+    managed: false,
     operatorId: "usr_marcusbell",
     operatorName: "Marcus Bell",
     principalId: "prn_91",
@@ -93,6 +94,7 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
       description: "Cuts releases and opens their pull requests.",
       agentKey: "acme.core.release-bot",
       harness: "claude-code",
+      managed: false,
       principalId: "prn_91",
       operatorId: "usr_marcusbell",
       status: "enrolled",
@@ -509,6 +511,7 @@ export function agentsSource(reads: AgentReads) {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse },
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),

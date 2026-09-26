@@ -133,6 +133,7 @@ describe("runs.list", () => {
             model: viewModel,
             harness: null,
             machine,
+            place: null,
             taskRef: null,
             name: null,
             summary: null,
@@ -185,6 +186,24 @@ describe("runs.list", () => {
     expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
       contract: runList,
       input: { limit: 10, cursor: "c2" },
+      page: "fleet",
+    });
+  });
+
+  it("asks list_runs for the live count only when the caller does (#4343 review)", async () => {
+    kernelRead.mockResolvedValue(readOk({ runs: [], nextCursor: null }));
+    await runs.list(ctx, { cursor: "c2", limit: 25, countLive: true });
+    expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
+      contract: runList,
+      input: { limit: 25, cursor: "c2", countLive: true },
+      page: "fleet",
+    });
+    // Negative: the agents page, the onboarding gate and the choice dialogs
+    // read runs without the tile, so their reads count nothing.
+    await runs.list(ctx, { cursor: null, countLive: false });
+    expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
+      contract: runList,
+      input: { limit: 100 },
       page: "fleet",
     });
   });
@@ -1017,6 +1036,7 @@ describe("runs.transcript", () => {
             node: "tool",
             quiet: false,
             outcome: "parked",
+            error: true,
             approvalId: "apr_7Kq2",
             gates: [decision],
             subject: "claude_code__Bash",
@@ -1080,6 +1100,9 @@ describe("runs.transcript", () => {
       parentKey: "1",
       node: "tool",
       outcome: "parked",
+      // Carried as the server stated it, whatever the outcome says: the page
+      // marks rows failed by this alone.
+      error: true,
       approvalId: "apr_7Kq2",
       subject: "claude_code__Bash",
       tool: "Bash",
@@ -1157,6 +1180,7 @@ describe("runs.transcript", () => {
       node: null,
       quiet: false,
       outcome: null,
+      error: false,
       gates: [],
       matches: [],
     });

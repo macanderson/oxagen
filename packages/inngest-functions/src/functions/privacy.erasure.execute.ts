@@ -1,7 +1,13 @@
 import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
 import { schema, withSystemDb } from "@oxagen/database";
-import { eraseClaudeSessionRows } from "@oxagen/telemetry";
+import {
+  ERASE_CLAUDE_SESSIONS_POLL_MS,
+  ERASE_CLAUDE_SESSIONS_POLLS,
+  ERASE_CLAUDE_SESSIONS_WAIT_MS,
+  claudeSessionsEraseRemaining,
+  submitClaudeSessionsErase,
+} from "@oxagen/telemetry";
 import { eq } from "drizzle-orm";
 import { logger } from "../logger";
 
@@ -100,10 +106,13 @@ function clickhouseReport(outcome: ClickhouseErase): {
  * to retry.
  *
  *   - `erase-clickhouse-rows` reads the subject's email address from
- *     `auth.users` and deletes every `claude_sessions` row that holds it. It
- *     runs before `execute-erasure` because that step overwrites the address.
- *     The address stays inside the step: Inngest stores a step's return value
- *     in its run state, so the step returns only whether it erased anything.
+ *     `auth.users` and queues the mutation that deletes every
+ *     `claude_sessions` row that holds it. Short `erase-clickhouse-rows-poll`
+ *     steps then read the mutation until it finishes, for up to 15 minutes.
+ *     It runs before `execute-erasure` because that step overwrites the
+ *     address. The address stays inside the step: Inngest stores a step's
+ *     return value in its run state, so the step returns only whether it
+ *     erased anything and the id of the mutation it queued.
  *     A ClickHouse failure that outlasts Inngest's retries does not stop the
  *     auth purge. It keeps the address instead, so a re-run of the request
  *     can still match the rows.
@@ -189,33 +198,61 @@ export const [privacyErasureExecute, privacyErasureExecuteOnFailure] =
       // Inngest retries a failing step. Once it gives up, the failure is
       // thrown here, and the auth purge below still runs with the address
       // kept, so a re-run can erase the rows.
+      //
+      // The step only queues the mutation and returns its id. The wait is a
+      // run of short reads below it, 15 seconds apart (#4316). Inngest calls
+      // each step over HTTP through a proxy that closes a request after 300
+      // seconds, so the wait cannot sit inside one step. A retried read
+      // reads again, and Inngest keeps the queue step's result, so a retry
+      // never queues the mutation twice.
       let clickhouseErase: ClickhouseErase | null = null;
       if (scope === "user") {
         try {
-          const { erased } = await step.run(
-            "erase-clickhouse-rows",
-            async () => {
-              // tenancy: reads one auth.users row filtered by the event userId, the erasure subject; auth is global with no org_id.
-              const [subject] = await withSystemDb((tx) =>
-                tx
-                  .select({ email: schema.users.email })
-                  .from(schema.users)
-                  .where(eq(schema.users.id, userId))
-                  .limit(1),
+          const queued = await step.run("erase-clickhouse-rows", async () => {
+            // tenancy: reads one auth.users row filtered by the event userId, the erasure subject; auth is global with no org_id.
+            const [subject] = await withSystemDb((tx) =>
+              tx
+                .select({ email: schema.users.email })
+                .from(schema.users)
+                .where(eq(schema.users.id, userId))
+                .limit(1),
+            );
+            const email = subject?.email ?? "";
+            if (email === "" || email === anonymisedEmail(userId)) {
+              logger.warn(
+                { requestId, userId },
+                "privacy.erasure-execute: no address left to match in claude_sessions",
               );
-              const email = subject?.email ?? "";
-              if (email === "" || email === anonymisedEmail(userId)) {
-                logger.warn(
-                  { requestId, userId },
-                  "privacy.erasure-execute: no address left to match in claude_sessions",
-                );
-                return { erased: false };
-              }
-              await eraseClaudeSessionRows(email);
-              return { erased: true };
-            },
-          );
-          clickhouseErase = erased ? "erased" : "no_address";
+              return { erased: false, mutationIds: [] as string[] };
+            }
+            const mutationIds = await submitClaudeSessionsErase(email);
+            return { erased: true, mutationIds };
+          });
+          // A run that queued its erase before the wait moved into steps
+          // kept a result with no ids. That erase waited in its step.
+          const mutationIds: string[] =
+            (queued as { mutationIds?: string[] }).mutationIds ?? [];
+          let remaining = mutationIds.length;
+          for (
+            let n = 0;
+            remaining > 0 && n < ERASE_CLAUDE_SESSIONS_POLLS;
+            n += 1
+          ) {
+            await step.sleep(
+              `erase-clickhouse-rows-wait-${String(n)}`,
+              `${String(ERASE_CLAUDE_SESSIONS_POLL_MS / 1000)}s`,
+            );
+            remaining = await step.run(
+              `erase-clickhouse-rows-poll-${String(n)}`,
+              () => claudeSessionsEraseRemaining(mutationIds),
+            );
+          }
+          if (remaining > 0) {
+            throw new Error(
+              `the claude_sessions erase did not finish within ${String(ERASE_CLAUDE_SESSIONS_WAIT_MS / 1000)} seconds. The server keeps running it.`,
+            );
+          }
+          clickhouseErase = queued.erased ? "erased" : "no_address";
         } catch (err) {
           logger.error(
             { requestId, userId, err },

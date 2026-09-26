@@ -115,6 +115,56 @@ interface EngineManifest {
 }
 
 /**
+ * Run the script's own `write_manifest` for a Node service, as the `app`,
+ * `api` and `mcp` arms call it, and read the manifest it wrote.
+ */
+function nodeManifest(env: Record<string, string>): {
+  env: Record<string, string>;
+} {
+  const start = script.indexOf("write_manifest() {");
+  const end = script.indexOf("\n}\n", start);
+  expect(start).toBeGreaterThan(0);
+  expect(end).toBeGreaterThan(start);
+  const out = mkdtempSync(join(tmpdir(), "node-manifest-"));
+  try {
+    execFileSync(
+      "bash",
+      [
+        "-euo",
+        "pipefail",
+        "-c",
+        `log() { :; }\n${script.slice(start, end + 2)}\nOUT="$1"\nwrite_manifest 3000 512m /api/health ""`,
+        "_",
+        out,
+      ],
+      { env: { ...process.env, ...env }, stdio: "pipe" },
+    );
+    return JSON.parse(readFileSync(join(out, "oxagen-run.json"), "utf8")) as {
+      env: Record<string, string>;
+    };
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+}
+
+// #3841: a page's error line prints the region beside the trace id, and the
+// app reads it from OXAGEN_REGION, which no manifest set.
+describe("package-for-node.sh region", () => {
+  it("sets the region every deployed node runs in", () => {
+    expect(nodeManifest({ OXAGEN_REGION: "" }).env).toEqual({
+      NEXT_TELEMETRY_DISABLED: "1",
+      OXAGEN_REGION: "us-east-1",
+    });
+  });
+
+  it("takes another region the environment names", () => {
+    expect(nodeManifest({ OXAGEN_REGION: "eu-west-1" }).env.OXAGEN_REGION).toBe(
+      "eu-west-1",
+    );
+  });
+});
+
+/**
  * Package the engine in a scratch tree that holds the script and, unless
  * `versionSource` is null, that text as the engine client's version.ts.
  */

@@ -245,7 +245,7 @@
     "dispatch_command": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] \u2014 Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command, and an observe-tier run draws all four disabled with the recorded reason (features/run/actions.ts, features/run/run-controls.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command. A run its host cannot reach draws them disabled with the recorded reason, and an observe-tier run on a polling host takes all four (ADR-163) (features/run/actions.ts, features/run/run-controls.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-018UrgFq-mc1-columns",
@@ -802,6 +802,25 @@
         }
       ]
     },
+    "list_interjections": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "Fleet: the Waiting on a human tile adds the open questions list_interjections returns to the pending approvals, and its basis line names them (data/live/interjections.ts, features/fleet/waiting.ts, features/fleet/waiting-tile.tsx, features/fleet/fleet.tsx)",
+      "proof": "apps/app/src/features/fleet/fleet.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_69a4a70c-08c7-498d-8bcc-8ec9c9335dbf",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/layout.tsx",
+          "entry": "the approvals drawer lists each open question first, links it to its run, and counts it in the topbar button, the sidebar's Fleet count and the phone's Fleet slot (features/shell/source.ts, features/shell/approvals-drawer.tsx, features/shell/interjection-row.tsx, features/shell/use-activity.ts)",
+          "testid": "interjection-row",
+          "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
+          "verifiedAt": "2026-09-25",
+          "verifiedBy": "session_69a4a70c-08c7-498d-8bcc-8ec9c9335dbf"
+        }
+      ]
+    },
     "list_invoices": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
@@ -924,10 +943,10 @@
     "list_runs": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] \u2014 the Fleet Runs panel and the four summary tiles rolled up from its rows: the Tier and Replay columns render list_runs' recorded enforcementTier and replayGrade, and Spend shown sums the recorded cost with its basis (features/fleet/board.tsx, features/fleet/view.ts, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
+      "entry": "/[org]/[ws] \u2014 the Fleet Runs panel and the summary tiles: Live runs reads list_runs' workspace count (liveRuns), the Tier and Replay columns render list_runs' recorded enforcementTier and replayGrade, Spend shown sums the recorded cost with its basis, and Tokens shown sums each row's tokens with the share served from cache weighted by spend (#3834). Rows draw the Tokens column with its cached share, the pull request links with the state a forge last reported and when Oxagen read it (#4129), the lines changed and the summary (#4128), and the paused and compacted status words from ingressPaused and compacted (#3835). The search, facets, sort and page drive list_runs on the server with a bounded total (#3837), the page-size picker drives list_runs' limit, the column picker and page size persist in the fleet_view cookie, and ?prs= carries the pull-request filter (features/fleet/board.tsx, features/fleet/view.ts, features/fleet/run-cells.tsx, features/fleet/tokens.ts, features/fleet/list-query.ts, features/fleet/pager.tsx, features/fleet/prefs.ts, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts; component tests in features/fleet/runs-columns.test.tsx, features/fleet/row-facts.test.tsx, features/fleet/run-cells.test.tsx, features/fleet/pager.test.tsx, features/fleet/prefs.test.ts)",
       "proof": "apps/app/src/features/fleet/fleet.test.tsx",
-      "verifiedAt": "2026-09-23",
-      "verifiedBy": "session-01GDv3vs-fleet-rev1"
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session-69a4a70c-fleet-a3-run-rows"
     },
     "list_skills": {
       "route": "/[org]/[ws]/steering?tab=skills",
@@ -1035,6 +1054,15 @@
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
+    },
+    "pause_workspace_runs": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: ⌘K › “Pause every live run in this workspace” opens a dialog that asks for the reason, queues pause_workspace_runs through features/shell/pause-workspace-actions.ts, and shows the receipt of queued and skipped runs (features/shell/pause-workspace-dialog.tsx, features/shell/command-menu.tsx)",
+      "testid": "pause-workspace-dialog",
+      "proof": "apps/app/src/features/shell/pause-workspace-dialog.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session-69a4a70c-fleet-command-menu"
     },
     "preview_skill_search": {
       "route": "/[org]/[ws]/steering?tab=skills",

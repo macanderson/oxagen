@@ -13,6 +13,8 @@ const state = vi.hoisted(() => ({
   observedAt: null as string | null,
   branch: "fix/auth-redirect" as string | null,
   writes: [] as Record<string, unknown>[],
+  /** The run's `summary_spent_usd_micros`. */
+  spentMicros: 0,
   call: vi.fn(),
   bodies: new Map<string, Uint8Array>(),
   /** The run's frames; the one-prompt run below when unset. */
@@ -93,6 +95,7 @@ vi.mock("@oxagen/database", async (original) => {
                           observedAt: state.observedAt,
                           branch: state.branch,
                           revision: "2026-09-23 10:00:00.123456+00",
+                          spentMicros: state.spentMicros,
                         },
                       ],
             }),
@@ -101,6 +104,16 @@ vi.mock("@oxagen/database", async (original) => {
         update: () => ({
           set: (value: Record<string, unknown>) => ({
             where: async () => {
+              // `summary_spent_usd_micros + <micros>`: the one bound value is
+              // what the call cost.
+              if (value.summarySpentUsdMicros !== undefined) {
+                const { PgDialect } = await import("drizzle-orm/pg-core");
+                const [micros] = new PgDialect().sqlToQuery(
+                  value.summarySpentUsdMicros as never,
+                ).params;
+                state.spentMicros += Number(micros);
+                return;
+              }
               state.writes.push(value);
               if (typeof value.summaryInputDigest === "string")
                 state.digest = value.summaryInputDigest;
@@ -198,6 +211,7 @@ const {
   ENRICHMENT_BUDGET_NOTE,
   ENRICHMENT_CHUNK_CHARS,
   ENRICHMENT_RUN_BUDGET_USD,
+  ENRICHMENT_RUN_TOTAL_BUDGET_MICROS,
 } = await import("../lib/run-enrichment");
 await import("./run.enrich");
 const data = {
@@ -226,6 +240,7 @@ beforeEach(() => {
   state.observedAt = null;
   state.branch = "fix/auth-redirect";
   state.writes = [];
+  state.spentMicros = 0;
   state.bodies.clear();
   state.frames = null;
   state.call.mockReset();
@@ -370,6 +385,66 @@ describe("the enrichment budget", () => {
     // Four reductions and the account.
     expect(state.call).toHaveBeenCalledTimes(5);
     expect(String(state.writes.at(-1)?.summary)).toBe("Worked on it.");
+  });
+
+  // #4312: every job used to start from zero, so a live run summarized every
+  // half hour had no cap on its total.
+  it("stops the second job on a live run at the run's cap, and the third calls no model", async () => {
+    longRun();
+    const portion = { text: "A portion.", model: "fast-test", costUsd: 0.5 };
+    // Job one: two reductions reach the job's budget, and the account, which
+    // no budget gates, costs $3.50. The run has spent $4.50.
+    state.call
+      .mockResolvedValueOnce(portion)
+      .mockResolvedValueOnce(portion)
+      .mockResolvedValueOnce({ ...account, costUsd: 3.5 });
+    expect(await run()).toMatchObject({
+      status: "generated",
+      calls: 3,
+      budgetReached: true,
+    });
+    expect(state.spentMicros).toBe(4_500_000);
+
+    // The live run changes and is summarized again. Its $0.50 left buys one
+    // reduction where the job's own budget would have bought two.
+    state.digest = null;
+    state.call.mockReset();
+    state.call.mockImplementation(async (_scope: unknown, text: string) =>
+      text.startsWith("Return only JSON") ? account : portion,
+    );
+    expect(await run()).toMatchObject({
+      status: "generated",
+      calls: 2,
+      budgetReached: true,
+    });
+    expect(state.spentMicros).toBe(5_010_000);
+    expect(String(state.writes.at(-1)?.summary)).toBe(
+      `Worked on it.${ENRICHMENT_BUDGET_NOTE}`,
+    );
+
+    // At the cap, the run keeps its last account.
+    state.digest = null;
+    state.call.mockClear();
+    const summaries = state.writes.filter((w) => "summary" in w).length;
+    expect(await run()).toEqual({ status: "run_budget_spent" });
+    expect(state.call).not.toHaveBeenCalled();
+    expect(state.writes.filter((w) => "summary" in w)).toHaveLength(summaries);
+    expect(state.spentMicros).toBe(5_010_000);
+  });
+
+  it("gives a run with plenty left the job's own budget (negative)", async () => {
+    longRun();
+    state.spentMicros = ENRICHMENT_RUN_TOTAL_BUDGET_MICROS - 2_000_000;
+    state.call.mockImplementation(async (_scope: unknown, text: string) =>
+      text.startsWith("Return only JSON")
+        ? account
+        : { text: "A portion.", model: "fast-test", costUsd: 0.4 },
+    );
+    // Three reductions reach the job's $1, then the account.
+    expect(await run()).toMatchObject({ calls: 4, budgetReached: true });
+    expect(state.spentMicros).toBe(
+      ENRICHMENT_RUN_TOTAL_BUDGET_MICROS - 2_000_000 + 1_210_000,
+    );
   });
 });
 
@@ -857,6 +932,45 @@ describe("which runs the sweep queues", () => {
       },
       true,
     ],
+    // #4312: a run whose accounts have cost the run's cap keeps its last one.
+    [
+      "live and changed half an hour after its account, with its enrichment cap spent",
+      {
+        observedAt: minutesAgo(31),
+        revision: "r",
+        error: null,
+        changed: true,
+        digest: "d",
+        live: true,
+        spentMicros: 5_000_000,
+      },
+      false,
+    ],
+    [
+      "ended and changed after its account, with its enrichment cap spent",
+      {
+        observedAt: minutesAgo(1),
+        revision: "r",
+        error: null,
+        changed: true,
+        digest: "d",
+        spentMicros: 7_000_000,
+      },
+      false,
+    ],
+    [
+      "live and changed half an hour after its account, a cent under its cap",
+      {
+        observedAt: minutesAgo(31),
+        revision: "r",
+        error: null,
+        changed: true,
+        digest: "d",
+        live: true,
+        spentMicros: 4_990_000,
+      },
+      true,
+    ],
   ] as const)("%s: due is %s", async (_label, row, due) => {
     const { dueForEnrichment } = await import("./run.enrich");
     const { schema } = await import("@oxagen/database");
@@ -951,10 +1065,19 @@ function evaluateDue(
     digest: string | null;
     live?: boolean;
     named?: boolean;
+    spentMicros?: number;
   },
 ): boolean {
   const col = (name: string) => `"tacho"."sessions"."${name}"`;
   const js = text
+    .replace(
+      new RegExp(
+        `${escapeRegExp(col("summary_spent_usd_micros"))} < \\$(\\d+)`,
+        "gu",
+      ),
+      (_m, i: string) =>
+        JSON.stringify((row.spentMicros ?? 0) < Number(params[Number(i) - 1])),
+    )
     .replace(
       new RegExp(
         `${escapeRegExp(col("updated_at"))} IS NOT DISTINCT FROM ${escapeRegExp(col("summary_observed_revision"))}`,

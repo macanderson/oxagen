@@ -46,5 +46,6 @@ Org Owner or Admin, checked by the handler (INV-29).
 | code | meaning |
 |---|---|
 | `forbidden` | No signed-in user and no API key with a live creator (`no_principal`), or the acting user (the signed-in user, or the key's creator) is not an org Owner or Admin (`org_role_required`). |
+| `forbidden` | A suspend names the built-in assistant stella acts as (`qa-chat`), whose principal every stella turn runs under (`agent_managed_read_only`, #4350). A resume of it is allowed. |
 | `not_found` | No live agent with that id or slug (`agent_not_found`). |
 | `conflict` | The agent is retired (`agent_retired`) or has no delegated principal (`agent_principal_missing`). |

@@ -29,6 +29,9 @@
  *   2b. `push` / `pull_request` → ask every workspace whose main repository
  *      this is, on the branch the delivery touched, for a steering sync
  *      (ADR-184). The sync reads the branch itself.
+ *   2c. `pull_request` → store the state the delivery reports on every run
+ *      row that names the pull request, in the workspaces connected to this
+ *      installation (ADR-192).
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
  *   4. Ask the connector to extract ingestable (sourceRecordType, record) pairs.
  *   5. Fan out one `ingestion/entity.received` per (connection × record). The
@@ -44,6 +47,10 @@ import {
   githubSyncTargets,
   requestSteeringSync,
 } from "@oxagen/handlers/context.steering.sync.request";
+import {
+  githubPullRequestStateDeps,
+  recordGithubPullRequestState,
+} from "@oxagen/handlers/github.pull-request.webhook";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
@@ -279,6 +286,25 @@ githubAppWebhookRoute.post("/", async (c) => {
       logger.error(
         { err, eventName },
         "GitHub App webhook: could not request a steering sync; the scheduled sweep will run it",
+      );
+    }
+  }
+
+  // ── Pull request state (ADR-192) ────────────────────────────────────────
+  // Fleet and the Run page show each pull request a run names with the state
+  // GitHub last reported. The handler writes only workspaces connected to
+  // this installation, and a failure never fails the delivery: the next
+  // delivery for the pull request carries its whole state again.
+  if (eventName === "pull_request" && installationId) {
+    try {
+      await recordGithubPullRequestState(githubPullRequestStateDeps, {
+        body,
+        installationId,
+      });
+    } catch (err) {
+      logger.error(
+        { err, eventName },
+        "GitHub App webhook: could not store the pull request's state; runs show the last state stored",
       );
     }
   }

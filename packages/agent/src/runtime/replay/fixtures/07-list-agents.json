@@ -12,6 +12,7 @@
           "description": null,
           "agentKey": "agt_replay",
           "harness": "claude-code",
+          "managed": false,
           "principalId": null,
           "operatorId": null,
           "operatorName": null,

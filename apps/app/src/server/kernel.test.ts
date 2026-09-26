@@ -103,6 +103,23 @@ const PAGE_ERROR = readError(
   PAGE_FAILURES.organization.error.code,
   PAGE_FAILURES.organization.error.status,
 );
+/**
+ * What the seam records on a failure the kernel answered (#3841): no tracer
+ * runs here and no region is set, so both read null. The request id is the
+ * one the seam minted for the call, filled in by `withRequestId`.
+ * kernel-failure-facts.test.ts covers the facts recorded.
+ */
+const FACTS = { traceId: null, region: null };
+const DENIED_READ = { ...DENIED, decidedBy: null, ...FACTS } as const;
+const PAGE_ERROR_READ = { ...PAGE_ERROR, ...FACTS };
+
+/** An expected read with the request id the last invoke carried, where it records facts. */
+function withRequestId(expected: Read<unknown>): Read<unknown> {
+  if (expected.ok || !("traceId" in expected)) return expected;
+  const requestId = invoke.mock.calls.at(-1)?.[2].requestId ?? "";
+  expect(requestId).toMatch(UUID);
+  return { ...expected, requestId };
+}
 
 /** A billing gate's refusal, by the code the kernel seam keys on. */
 class GauExhausted extends Error {
@@ -288,14 +305,14 @@ describe("kernelRead", () => {
   });
 
   it.each<[string, unknown, Read<unknown>, number]>([
-    ["authz_denied", capabilityError("authz_denied"), DENIED, 0],
+    ["authz_denied", capabilityError("authz_denied"), DENIED_READ, 0],
     [
       "capability_not_installed",
       capabilityError("capability_not_installed"),
-      DENIED,
+      DENIED_READ,
       0,
     ],
-    ["no_handler", capabilityError("no_handler"), DENIED, 0],
+    ["no_handler", capabilityError("no_handler"), DENIED_READ, 0],
     [
       "pending_approval",
       capabilityError("pending_approval", "arq_123"),
@@ -305,42 +322,48 @@ describe("kernelRead", () => {
     [
       "pending_approval with no access request",
       capabilityError("pending_approval"),
-      DENIED,
+      DENIED_READ,
       0,
     ],
     [
       "invalid_input",
       capabilityError("invalid_input"),
-      readError("invalid_input", 400),
+      readError("invalid_input", 400, FACTS),
       0,
     ],
     [
       "invalid_output",
       capabilityError("invalid_output"),
-      readError("contract_output_mismatch", 502),
+      readError("contract_output_mismatch", 502, FACTS),
       1,
     ],
-    ["HandlerError forbidden", handlerError("forbidden"), DENIED, 0],
+    ["HandlerError forbidden", handlerError("forbidden"), DENIED_READ, 0],
     // The handler's reason rides in `code`, the kind in the status, so a page's
     // failure sentence written for `github_not_connected` gets the reason.
     [
       "HandlerError not_found",
       handlerError("not_found"),
-      readError("not_found_reason", 404),
+      readError("not_found_reason", 404, FACTS),
       0,
     ],
     [
       "HandlerError conflict",
       handlerError("conflict"),
-      readError("conflict_reason", 409),
+      readError("conflict_reason", 409, FACTS),
       0,
     ],
-    ["a structurally cloned error", clonedError, DENIED, 0],
-    ["an error with no known code", new Coded("ECONNRESET"), PAGE_ERROR, 1],
-    ["a thrown non-object", "boom", PAGE_ERROR, 1],
+    ["a structurally cloned error", clonedError, DENIED_READ, 0],
+    [
+      "an error with no known code",
+      new Coded("ECONNRESET"),
+      PAGE_ERROR_READ,
+      1,
+    ],
+    ["a thrown non-object", "boom", PAGE_ERROR_READ, 1],
   ])("classifies %s", async (_label, thrown, expected, reports) => {
     invoke.mockRejectedValue(thrown);
-    expect(await kernelRead(orgCtx, membersCall)).toEqual(expected);
+    const read = await kernelRead(orgCtx, membersCall);
+    expect(read).toEqual(withRequestId(expected));
     expect(captureError).toHaveBeenCalledTimes(reports);
   });
 

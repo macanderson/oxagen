@@ -27,8 +27,6 @@ const mocks = vi.hoisted(() => {
 
 mocks.languageModel.mockReturnValue(mocks.languageInstance);
 
-const platformGateway = mocks.platformGateway;
-
 vi.mock("@ai-sdk/gateway", () => ({
   gateway: mocks.platformGateway,
   createGateway: mocks.createGateway,
@@ -54,7 +52,6 @@ vi.mock("ai", () => ({
 }));
 
 import {
-  embeddingProvider,
   modelIdentityFor,
   resetCredentialClientsForTests,
   resolvedTierCatalog,
@@ -293,36 +290,6 @@ describe("selectModel — an organisation's own key (ADR-053 §2)", () => {
     });
     selectModel({ credential: { ...OPENROUTER_CREDENTIAL, digest: "d-0" } });
     expect(mocks.createOpenAICompatible).toHaveBeenCalledTimes(BOUND + 2);
-  });
-});
-
-describe("embeddingProvider (@oxagen/ai)", () => {
-  beforeEach(resetMocks);
-
-  it("serves embeddings from the platform gateway, platform-funded, with no credential", () => {
-    const answer = embeddingProvider();
-    expect(answer.provider).toBe(platformGateway);
-    expect(answer.fundedBy).toBe("platform");
-    expect(mocks.createGateway).not.toHaveBeenCalled();
-  });
-
-  it("an OpenRouter credential cannot serve embeddings, so the platform gateway answers and is billed", () => {
-    const answer = embeddingProvider(OPENROUTER_CREDENTIAL);
-    expect(answer.provider).toBe(platformGateway);
-    expect(answer.fundedBy).toBe("platform");
-    expect(mocks.createGateway).not.toHaveBeenCalled();
-    expect(mocks.createOpenAICompatible).not.toHaveBeenCalled();
-  });
-
-  it("a gateway credential serves embeddings on the organisation's key, unbilled", () => {
-    const answer = embeddingProvider(GATEWAY_CREDENTIAL);
-    expect(mocks.createGateway).toHaveBeenCalledTimes(1);
-    expect(mocks.createGateway).toHaveBeenCalledWith({
-      apiKey: "vck_customer",
-    });
-    expect(answer.provider).toBe(mocks.createGateway.mock.results[0]?.value);
-    expect(answer.provider).not.toBe(platformGateway);
-    expect(answer.fundedBy).toBe("org");
   });
 });
 
@@ -589,16 +556,6 @@ describe("BYOK beyond the routed vendors (@oxagen/ai)", () => {
     expect(() =>
       selectModel({ tier: "balanced", credential: compat({ baseUrl: null }) }),
     ).toThrow(/no baseUrl/);
-  });
-
-  it("keeps embeddings on the platform key for every direct vendor, and says so for billing", () => {
-    for (const provider of [
-      "openai",
-      "anthropic",
-      "openai_compatible",
-    ] as const) {
-      expect(embeddingProvider(compat({ provider })).fundedBy).toBe("platform");
-    }
   });
 });
 

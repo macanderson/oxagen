@@ -199,6 +199,44 @@ describe("GET /runs/:run_id/stream", () => {
     });
   });
 
+  // A-06: the Run page opened the stream with no cursor, so the route sent the
+  // run from its first frame, 200 to a read, before anything new arrived. The
+  // page now opens it after the last frame its transcript read folded
+  // (`frameCursor`); this counts the reads each way on a live run of 8,000.
+  it("reaches the head of an 8,000-frame live run in one read from the reader's last frame, and in 41 from the start (A-06)", async () => {
+    const RUN_FRAMES = 8_000;
+    /** `get_run` over the run by cursor: the next 200 frames, and a seal at the head so the stream ends. */
+    const serveRun = () =>
+      mocks.invoke.mockImplementation(
+        (_name: string, input: { framesAfter?: string }) => {
+          const from =
+            input.framesAfter === undefined
+              ? 0
+              : Number(input.framesAfter.slice("cur_".length)) + 1;
+          if (from >= RUN_FRAMES)
+            return Promise.resolve(page([], null, "sealed"));
+          const seqs = Array.from(
+            { length: Math.min(200, RUN_FRAMES - from) },
+            (_, i) => String(from + i),
+          );
+          return Promise.resolve(page(seqs, `cur_${seqs.at(-1)}`));
+        },
+      );
+
+    serveRun();
+    const replay = await open();
+    expect(ids(replay.text)).toHaveLength(RUN_FRAMES);
+    expect(mocks.invoke).toHaveBeenCalledTimes(41);
+
+    vi.clearAllMocks();
+    mocks.capabilityContext.mockReturnValue(CTX);
+    serveRun();
+    const head = await open({}, `?after=cur_${RUN_FRAMES - 1}`);
+    // Nothing the reader holds is sent again, and one read reaches the head.
+    expect(ids(head.text)).toEqual([]);
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+  });
+
   it("answers a refusal before the stream is open as a status, not as a 200 (negative)", async () => {
     mocks.invoke.mockRejectedValueOnce(
       new HandlerError({ code: "not_found", reason: "run_not_found" }),

@@ -280,8 +280,48 @@ export interface StreamAgentReplyArgs {
   }) => Promise<void> | void;
 }
 
+/**
+ * What the provider said when a call failed, for the log line: its HTTP
+ * status and its response body, or the error message when there is no body.
+ * The AI SDK wraps the last attempt in a RetryError after its retries, so the
+ * provider's error is read from `lastError` when present. Capped at 500
+ * characters.
+ */
+export function providerErrorFields(err: unknown): {
+  providerStatus?: number;
+  providerMessage?: string;
+} {
+  const last =
+    typeof err === "object" && err !== null && "lastError" in err
+      ? (err as { lastError: unknown }).lastError
+      : err;
+  if (typeof last !== "object" || last === null) {
+    return last === undefined
+      ? {}
+      : { providerMessage: String(last).slice(0, 500) };
+  }
+  const e = last as {
+    statusCode?: unknown;
+    responseBody?: unknown;
+    message?: unknown;
+  };
+  const body =
+    typeof e.responseBody === "string" && e.responseBody.length > 0
+      ? e.responseBody
+      : typeof e.message === "string"
+        ? e.message
+        : undefined;
+  return {
+    ...(typeof e.statusCode === "number"
+      ? { providerStatus: e.statusCode }
+      : {}),
+    ...(body !== undefined ? { providerMessage: body.slice(0, 500) } : {}),
+  };
+}
+
 // RUNTIME_CONTEXT (v7 middle generic) is the SDK's `Context` alias for
 // `Record<string, unknown>` — spelled inline because `ai` does not re-export it.
+
 export function streamAgentReply(
   args: StreamAgentReplyArgs,
 ): StreamTextResult<ToolSet, Record<string, unknown>, never> {
@@ -569,8 +609,15 @@ export function streamAgentReply(
       completedUsage.push(event.usage);
     },
     onError: async (event) => {
+      // Name what the provider said, so a refused key or a lapsed account
+      // reads in one log line (#4148).
       logger.error(
-        { usageId, alert: "billing_usage_incomplete" },
+        {
+          usageId,
+          alert: "billing_usage_incomplete",
+          reason: "provider_error_before_first_step",
+          ...providerErrorFields(event.error),
+        },
         "Provider call ended before complete usage was reported",
       );
       try {
