@@ -309,9 +309,9 @@ export function TokensTile({ listed }: { listed: readonly ListedRun[] }) {
 }
 
 /**
- * The words a row's status reads as. `RowState` gains paused and compacted
- * with this lane's view.ts change; the union keeps this file compiling on
- * either side of it.
+ * The status words a row can read as: every `RowState`, and paused and
+ * compacted, the two facts beside a run's status (ADR-190).
+ * @internal Exported for its component test.
  */
 export type RowWord = RowState | "paused" | "compacted";
 

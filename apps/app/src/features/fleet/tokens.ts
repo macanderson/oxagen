@@ -15,7 +15,7 @@ import {
 } from "@/data/contracts/money";
 import type { RunRow } from "@/data/contracts/runs";
 
-export type ShownTokens = {
+type ShownTokens = {
   /** Every token the run used, across every class. */
   total: number;
   /**
@@ -65,7 +65,7 @@ export function shownTokens(run: RunRow): ShownTokens | null {
 }
 
 /** The Tokens shown tile over the rows a chip lists. */
-export type TokensShown = {
+type TokensShown = {
   /** The sum over the rows with a figure; null when no row has one. */
   total: number | null;
   /** Rows with no figure, left out of `total`. */

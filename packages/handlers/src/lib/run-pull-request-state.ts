@@ -265,7 +265,7 @@ export function insertRunPullRequest(
  * written. A write with no `updated_at` replaces only a row that has none
  * either, so an undated write never overwrites a dated one.
  */
-export function newerWins(sourceUpdatedAt: Date | null): SQL | undefined {
+function newerWins(sourceUpdatedAt: Date | null): SQL | undefined {
   return sourceUpdatedAt === null
     ? isNull(pulls.sourceUpdatedAt)
     : or(
