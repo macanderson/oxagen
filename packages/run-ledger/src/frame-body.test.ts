@@ -132,11 +132,7 @@ describe("deriveCompletenessGaps", () => {
     expect(gaps).not.toContain("body_missing");
     expect(gaps).not.toContain("tool_bodies");
     expect(
-      gradeSealedAttempt(
-        gaps,
-        rows.length,
-        ledgerEnforcementTier(rows),
-      ),
+      gradeSealedAttempt(gaps, rows.length, ledgerEnforcementTier(rows)),
     ).toBe("fork");
   });
 
@@ -164,6 +160,27 @@ describe("deriveCompletenessGaps", () => {
     ).not.toContain("tool_bodies");
   });
 
+  it("grades inspect when a prompt was dropped for size and its answer was kept", () => {
+    // `jsonBody` writes no body past the 1 MiB cap. The write-ahead frame then
+    // has no body reference, and a reader cannot see what the model was
+    // asked, so the run is not `view` (#3372, finding 1).
+    const rows = [
+      row("model.engine_call_started"),
+      kept("model.engine_call_completed"),
+      kept("tool.engine_call_started"),
+      kept("tool.engine_call_completed"),
+    ];
+    const gaps = deriveCompletenessGaps({
+      rows,
+      policy: FULL,
+      terminalStatus: "completed",
+    });
+    expect(gaps).toEqual(["body_missing"]);
+    expect(gradeSealedAttempt(gaps, 3, ledgerEnforcementTier(rows))).toBe(
+      "inspect",
+    );
+  });
+
   it("names unobserved_tail for an abandoned attempt (negative path)", () => {
     expect(
       deriveCompletenessGaps({
@@ -187,7 +204,9 @@ describe("ledgerEnforcementTier", () => {
   });
 
   it("is harness when a model call was submitted as evidence", () => {
-    expect(ledgerEnforcementTier([row("model.call_completed")])).toBe("harness");
+    expect(ledgerEnforcementTier([row("model.call_completed")])).toBe(
+      "harness",
+    );
     // A run with both was only partly observed and grades at the weaker tier.
     expect(
       ledgerEnforcementTier([

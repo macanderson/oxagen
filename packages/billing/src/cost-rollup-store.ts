@@ -36,6 +36,7 @@ import {
   or,
   sql,
   type AnyColumn,
+  type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
@@ -68,6 +69,35 @@ const TOOL_CALL_TYPES = [...TOOL_CALL_EVENT_TYPES];
 
 const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
+
+/**
+ * Whether a ledger model call hides the run's turn count: its payload is
+ * encrypted, or names no `turn_index`, which an engine call's schema never
+ * does. This is the seal rollup's rule (`deriveSealRollup`) in SQL, and the
+ * Runs list reads it from here, so a run's turns do not change when
+ * compaction swaps its rows for the seal (#3372).
+ * `cost-rollup-ledger-reads.pg.test.ts` has Postgres check the two agree.
+ *
+ * A function rather than a constant: a fragment built at import reads the
+ * schema then, and a test that mocks `@oxagen/database` with no event table
+ * could not import this package.
+ */
+export function modelCallHidesTurn(payload: AnyColumn | SQL): SQL {
+  return sql`(${payload} is null or ${payload}->>'turn_index' is null)`;
+}
+
+/**
+ * A ledger tool call's name, under either payload's name for it:
+ * `capability_name` on `tool.call_completed`, `tool_name` on
+ * `tool.engine_call_completed`. Reading the first alone gave every assistant
+ * tool call a null name, so it counted toward `toolCalls` and was left out
+ * of `breakdown.tools` (#3372).
+ */
+export function toolCallName(payload: AnyColumn | SQL): SQL<string | null> {
+  return sql<
+    string | null
+  >`coalesce(${payload}->>'capability_name', ${payload}->>'tool_name')`;
+}
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
 const principals = schema.principals;
@@ -152,7 +182,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
               Number,
             ),
           opaqueModelCalls:
-            sql<number>`(select count(*) from ${events} where ${events.runId} = ${runs.id} and ${inArray(events.eventType, MODEL_CALL_TYPES)} and ${events.payloadInline} is null)::int`.mapWith(
+            sql<number>`(select count(*) from ${events} where ${events.runId} = ${runs.id} and ${inArray(events.eventType, MODEL_CALL_TYPES)} and ${modelCallHidesTurn(events.payloadInline)})::int`.mapWith(
               Number,
             ),
         })
@@ -296,16 +326,18 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
   return null;
 }
 
-/** A ledger run's tool calls: its `tool.call_completed` events; an encrypted payload names no tool. */
+/** A ledger run's tool calls, under either spelling; an encrypted payload names no tool. */
 async function readLedgerToolCalls(args: {
   orgId: string;
   workspaceId: string;
   runUuid: string;
 }): Promise<ToolCallFrame[]> {
+  // tenancy: the scheduled rollup job reads outside a tenant scope, so the
+  // query is filtered by the run's orgId, workspaceId and run uuid.
   const rows = await withSystemDb((tx) =>
     tx
       .select({
-        name: sql<string | null>`${events.payloadInline}->>'capability_name'`,
+        name: toolCallName(events.payloadInline),
       })
       .from(events)
       .where(

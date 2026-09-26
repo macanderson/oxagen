@@ -29,9 +29,10 @@
  * nothing the chain lacks, and seals a transcript repeat as a continuation
  * block with its usage removed (see `LLM_CALL_USAGE_KEYS`).
  */
+import { LLM_CALL_DUPLICATE_OF_ATTR } from "../evidence/replay-grade";
 
 /** The attr a later sighting carries, naming the source sealed first. */
-export const LLM_CALL_DUPLICATE_OF_ATTR = "oxagen.llm_call_duplicate_of";
+export { LLM_CALL_DUPLICATE_OF_ATTR };
 
 /**
  * The body members that count. Claude Code writes one `assistant` record per

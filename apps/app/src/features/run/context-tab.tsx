@@ -11,7 +11,11 @@
 // token is never estimated here.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { RunTranscript, TranscriptEntry } from "@/data/contracts/run";
+import type {
+  RunTranscript,
+  TranscriptEntry,
+  TranscriptRecallItem,
+} from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
@@ -27,18 +31,36 @@ import {
   type FirstRequest,
   firstPrompt,
   firstRequest,
-  type ManifestItem,
   type ManifestRead,
-  manifestEntry,
-  parseManifest,
-  tallyOf,
+  manifestOf,
 } from "./context-model";
 import { Fact, Facts, Meter, Note, NoValue, Panel, PanelBody } from "./parts";
 import { FrameLink } from "./policy-tab";
 import { entriesOf } from "./recorded-entries";
-import type { Place, RunTabProps } from "./tab-props";
-import { entryKey, soleBody } from "./transcript-model";
+import type { FrameTabProps, Place } from "./tab-props";
+import { entryKey } from "./transcript-rows";
 import { isWhole } from "./whole-transcript";
+
+/**
+ * What a manifest put in front of the model, as the server counted it from
+ * the body it kept (`recall`, ADR-182): the items it rendered, the items it
+ * cut and the tokens it spent. Null when the server could not read those
+ * three from the manifest.
+ */
+function manifestTally(
+  entry: TranscriptEntry,
+): { rendered: number; cut: number; tokens: number } | null {
+  const recall = entry.recall;
+  if (
+    recall === null ||
+    recall.unit !== "items" ||
+    recall.count === null ||
+    recall.cut === null ||
+    recall.tokens === null
+  )
+    return null;
+  return { rendered: recall.count, cut: recall.cut, tokens: recall.tokens };
+}
 
 /** Where "Open the window" lands: the Prompt window panel below. */
 const WINDOW_ANCHOR = "run-context-window";
@@ -207,15 +229,15 @@ function PromptPanel({
   );
 }
 
-/** One item of the manifest, as the spine draws it. */
-function SpineNode({ item }: { item: ManifestItem }) {
+/** One item of the manifest, as the spine draws it from the server's reading. */
+function SpineNode({ item }: { item: TranscriptRecallItem }) {
   const t = useTranslations("run.context.manifest");
   const locale = useLocale();
   const cut = item.outcome === "cut";
   const why = !cut
     ? null
-    : item.superseded_by !== undefined
-      ? t("why.superseded", { id: item.superseded_by })
+    : item.supersededBy !== null
+      ? t("why.superseded", { id: item.supersededBy })
       : item.reason === "budget"
         ? t("why.budget")
         : item.reason === "tier"
@@ -237,7 +259,7 @@ function SpineNode({ item }: { item: ManifestItem }) {
           <span
             className={`${mono} min-w-0 break-all text-[12.5px] ${cut ? "text-muted-foreground" : "font-semibold text-foreground"}`}
           >
-            {item.id}
+            {item.label}
           </span>
           {cut ? (
             <Badge tone="quiet" dot={false}>
@@ -249,12 +271,16 @@ function SpineNode({ item }: { item: ManifestItem }) {
           <Badge tone="quiet" dot={false}>
             {item.kind}
           </Badge>
-          <Badge tone="quiet" dot={false}>
-            {item.force}
-          </Badge>
-          <Badge tone="quiet" dot={false} mono>
-            {t("tokens", { count: formatCount(item.tokens, locale) })}
-          </Badge>
+          {item.force === null ? null : (
+            <Badge tone="quiet" dot={false}>
+              {item.force}
+            </Badge>
+          )}
+          {item.tokens === null ? null : (
+            <Badge tone="quiet" dot={false} mono>
+              {t("tokens", { count: formatCount(item.tokens, locale) })}
+            </Badge>
+          )}
         </div>
         {why === null ? null : (
           <p className="mb-0 mt-[3px] text-[11.5px] leading-[1.5] text-muted-foreground">
@@ -280,8 +306,8 @@ function ManifestSpine({
 }) {
   const t = useTranslations("run.context.manifest");
   const locale = useLocale();
-  const read = manifest?.state === "read" ? manifest.body : null;
-  const tally = read === null ? null : tallyOf(read);
+  const read = manifest?.state === "read" ? manifest.recall : null;
+  const tally = manifest === null ? null : manifestTally(manifest.entry);
   const rendered =
     read?.items.filter((item) => item.outcome === "included") ?? [];
   const cuts = read?.items.filter((item) => item.outcome === "cut") ?? [];
@@ -337,11 +363,11 @@ function ManifestSpine({
       ) : (
         // `.ro-spine { padding-left:30px }` and its rule, 1px at 11px in.
         <ol className="relative m-0 list-none pl-[30px] before:absolute before:bottom-1.5 before:left-[11px] before:top-1.5 before:w-px before:bg-rule">
-          {rendered.map((item) => (
-            <SpineNode key={`in:${item.id}`} item={item} />
+          {rendered.map((item, index) => (
+            <SpineNode key={`in:${item.label}:${String(index)}`} item={item} />
           ))}
-          {cuts.slice(0, CUTS_SHOWN).map((item) => (
-            <SpineNode key={`cut:${item.id}`} item={item} />
+          {cuts.slice(0, CUTS_SHOWN).map((item, index) => (
+            <SpineNode key={`cut:${item.label}:${String(index)}`} item={item} />
           ))}
           {cuts.length > CUTS_SHOWN ? (
             <li className="relative py-[5px]">
@@ -352,8 +378,11 @@ function ManifestSpine({
                   })}
                 </summary>
                 <ol className="m-0 list-none p-0">
-                  {cuts.slice(CUTS_SHOWN).map((item) => (
-                    <SpineNode key={`cut:${item.id}`} item={item} />
+                  {cuts.slice(CUTS_SHOWN).map((item, index) => (
+                    <SpineNode
+                      key={`cut:${item.label}:${String(index + CUTS_SHOWN)}`}
+                      item={item}
+                    />
                   ))}
                 </ol>
               </details>
@@ -363,11 +392,11 @@ function ManifestSpine({
       )}
       {manifest === null ? null : (
         <p className="mb-0 mt-[11px] border-t border-border pt-2.5 text-[11px] text-dim">
-          {read?.bundle_version === undefined
+          {read === null || read.bundleVersion === null
             ? t("footNoBundle", { seq: manifest.entry.seq })
             : t("foot", {
                 seq: manifest.entry.seq,
-                version: String(read.bundle_version),
+                version: String(read.bundleVersion),
               })}
         </p>
       )}
@@ -407,8 +436,8 @@ function PromptWindow({
           <>
             <Badge tone="quiet" dot={false} mono>
               {t("request", {
-                type: request.entry.type,
-                seq: request.entry.seq,
+                type: request.type,
+                seq: request.seq,
               })}
             </Badge>
             <Badge tone="quiet" dot={false}>
@@ -448,8 +477,8 @@ function frameRow(
   tokens: (count: number) => string,
 ): ListRow {
   const counted =
-    manifest?.state === "read" && manifest.entry === entry
-      ? tallyOf(manifest.body).tokens
+    manifest !== null && manifest.entry === entry
+      ? (manifestTally(entry)?.tokens ?? null)
       : null;
   return {
     key: entryKey(entry),
@@ -660,11 +689,15 @@ function RetrievalStats({
 function ContextBody({
   run,
   read,
+  steps,
   manifest,
   place,
 }: {
   run: RunRow;
+  /** The run at `everything`: the frames the tab lists. */
   read: Read<RunTranscript>;
+  /** The run at `steps`, where the first model step is one entry. */
+  steps: Read<RunTranscript>;
   manifest: ManifestRead | null;
   place: Place;
 }) {
@@ -678,7 +711,7 @@ function ContextBody({
     );
   const entries = read.value.entries;
   const prompt = firstPrompt(entries);
-  const request = firstRequest(entries);
+  const request = steps.ok ? firstRequest(steps.value.entries) : null;
   const recalls = entriesOf(read, "recall") ?? [];
   const assembled =
     recalls.find(
@@ -687,17 +720,17 @@ function ContextBody({
     ) ?? null;
   const stopOf = (entry: TranscriptEntry): Stop | null => {
     if (entry.subagent !== undefined) return null;
-    if (manifest !== null && entry === manifest.entry)
+    if (manifest !== null && entry === manifest.entry) {
+      const tally = manifestTally(entry);
       return {
         entry,
         hue: "bg-kind-rule",
         figure:
-          manifest.state === "read"
-            ? t("walk.tokens", {
-                count: formatCount(tallyOf(manifest.body).tokens, locale),
-              })
-            : null,
+          tally === null
+            ? null
+            : t("walk.tokens", { count: formatCount(tally.tokens, locale) }),
       };
+    }
     if (entry.kinds.includes("recall"))
       return { entry, hue: "bg-fk-ctx", figure: null };
     if (
@@ -706,7 +739,13 @@ function ContextBody({
       entry.type === "turn_start"
     )
       return { entry, hue: "bg-fk-op", figure: null };
-    if (request !== null && entry === request.entry)
+    // The first model step opens on this frame (a subagent's frames were
+    // passed over above).
+    if (
+      request !== null &&
+      entry.seq === request.seq &&
+      entry.type === request.type
+    )
       return {
         entry,
         hue: "bg-fk-model",
@@ -739,43 +778,18 @@ function ContextBody({
 }
 
 /**
- * The manifest's items. The transcript carries a frame's text up to a
- * ceiling; a manifest cut there, or carried without its text, is read from
- * the frame's own bytes (`get_run_frame_body`).
+ * The Context tab. It makes no read of its own: the server read the manifest
+ * frame's whole body and states each item's outcome on the entry (`recall`,
+ * ADR-182).
  */
-async function readManifest(
-  { ctx, source, run }: RunTabProps,
-  entry: TranscriptEntry,
-): Promise<ManifestRead> {
-  const body = soleBody(entry);
-  if (body?.fidelity === "digest_only") return { state: "unretained", entry };
-  let text = body !== null && !body.truncated ? body.text : null;
-  if (text === null) {
-    const read = await source.runs
-      .frameBody(ctx, run.id, entry.seq)
-      .catch(() => null);
-    if (read === null || !read.ok) return { state: "failed", entry };
-    if (read.value.text === null) return { state: "unretained", entry };
-    text = read.value.text;
-  }
-  const parsed = parseManifest(text);
-  return parsed === null
-    ? { state: "unparsed", entry }
-    : { state: "read", entry, body: parsed };
-}
-
-/**
- * The Context tab. Its one read of its own is the manifest frame's body, and
- * only when the transcript did not carry all of it.
- */
-export async function ContextTab(props: RunTabProps): Promise<ReactNode> {
-  const { everything, run, place } = props;
-  const entry = everything.ok ? manifestEntry(everything.value.entries) : null;
-  const manifest = entry === null ? null : await readManifest(props, entry);
+export function ContextTab(props: FrameTabProps): ReactNode {
+  const { everything, transcript, run, place } = props;
+  const manifest = everything.ok ? manifestOf(everything.value.entries) : null;
   return (
     <ContextBody
       run={run}
       read={everything}
+      steps={transcript}
       manifest={manifest}
       place={place}
     />

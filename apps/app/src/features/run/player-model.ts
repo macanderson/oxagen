@@ -87,41 +87,28 @@ export function decisionOf(entry: TranscriptEntry | undefined): string | null {
   return entry?.decision?.decision ?? null;
 }
 
-/** The in-app assistant's tool receipt in the ledger. */
-const TOOL_RECEIPT = "tool.engine_call_completed";
-
 /**
- * What a ledger tool receipt records about a call parked for approval, or
- * null when the frame is not one. The ledger's summary (the transcript's
- * label) reads `<tool> parked`, then the public id of the approval the call
- * waits on when the receipt named one: `create_workspace parked apr_…`.
- * `approvalId` is null when it named none.
+ * The ledger's outcome for a tool call parked for a person to decide
+ * (`TOOL_ENGINE_CALL_OUTCOMES` in `@oxagen/run-ledger`). A frame carries it
+ * in `toolStatus`, and the approval it waits on in `approvalId` when the
+ * receipt named one.
  */
-export function parkedReceipt(
-  type: string,
-  summary: string,
-): { approvalId: string | null } | null {
-  if (type !== TOOL_RECEIPT) return null;
-  const [, outcome, approvalId] = summary.split(/\s+/);
-  if (outcome !== "parked") return null;
-  return { approvalId: approvalId ?? null };
-}
+const PARKED = "parked";
 
 /**
  * A frame that needs a person: the approval request itself, the policy
  * decision that asked for one (`ask` in the wrapper's closed vocabulary,
- * tacho `POLICY_DECISIONS`), or a ledger receipt for a call that parked.
- * `summary` is only read for that last case.
+ * tacho `POLICY_DECISIONS`), or a tool call whose receipt says it parked.
  */
 export function isParked(
   type: string,
   decision: string | null,
-  summary = "",
+  toolStatus: string | null = null,
 ): boolean {
   return (
     type === "approval_request" ||
     (type === "policy_decision" && decision === "ask") ||
-    parkedReceipt(type, summary) !== null
+    toolStatus === PARKED
   );
 }
 
@@ -135,7 +122,7 @@ export type Mark = "allowed" | "approval" | "denied" | "proven" | "quiet";
 export function markOf(
   type: string,
   decision: string | null,
-  summary = "",
+  toolStatus: string | null = null,
 ): Mark | null {
   if (type === "policy_decision" || type === "approval_decision") {
     if (decision === "allow") return "allowed";
@@ -144,7 +131,7 @@ export function markOf(
     return "quiet";
   }
   if (type === "approval_request") return "approval";
-  if (parkedReceipt(type, summary) !== null) return "approval";
+  if (toolStatus === PARKED) return "approval";
   if (kindOf(type) === "op") return "proven";
   if (type === "tool_requested" || type === "tool_call") return "quiet";
   return null;
@@ -237,7 +224,7 @@ export function timelineMarks(
     const at = xs[i] ?? 0;
     if (frame.type === "control.steer") marks.push({ at, kind: "steer" });
     if (
-      isParked(frame.type, decisionOf(entries.get(frame.seq)), frame.summary)
+      isParked(frame.type, decisionOf(entries.get(frame.seq)), frame.toolStatus)
     ) {
       if (i - parkedAt > 1) marks.push({ at, kind: "parked" });
       parkedAt = i;
@@ -325,8 +312,8 @@ export function runStateOf(run: RunRow): RunState {
 
 /**
  * The frames an approval can be recorded on: the request that parked it, and
- * the decision that settled it. A ledger receipt for a parked call is a
- * request too (`parkedReceipt`), read from its summary rather than its type.
+ * the decision that settled it. A tool call whose receipt says it parked is a
+ * request too, read from its `toolStatus` rather than its type.
  */
 const REQUEST_FRAMES: ReadonlySet<string> = new Set([
   "approval_request",
@@ -334,11 +321,14 @@ const REQUEST_FRAMES: ReadonlySet<string> = new Set([
 ]);
 const DECISION_FRAMES: ReadonlySet<string> = new Set(["approval_decision"]);
 
-export function isApprovalFrame(type: string, summary = ""): boolean {
+export function isApprovalFrame(
+  type: string,
+  toolStatus: string | null = null,
+): boolean {
   return (
     REQUEST_FRAMES.has(type) ||
     DECISION_FRAMES.has(type) ||
-    parkedReceipt(type, summary) !== null
+    toolStatus === PARKED
   );
 }
 
@@ -346,6 +336,12 @@ export function isApprovalFrame(type: string, summary = ""): boolean {
 type Matchable = Pick<ApprovalItem, "id" | "tool" | "createdAt"> & {
   resolvedAt?: string;
 };
+
+/** What matching reads of a frame: every fact is a field of `get_run`'s frame. */
+type MatchFrame = Pick<
+  RunFrame,
+  "seq" | "type" | "observedAt" | "tool" | "toolStatus" | "approvalId"
+>;
 
 type Matches<T> = {
   /** The approval each approval frame on the page records, by frame seq. */
@@ -357,21 +353,24 @@ type Matches<T> = {
 /**
  * Which approval frame on the page records which approval.
  *
- * A ledger receipt for a parked call names its approval's public id, so it
- * pairs with that approval and no other, ahead of any match by instant.
+ * A frame that names its approval (`approvalId`, which the in-app
+ * assistant's parked receipt carries) pairs with that approval and no other,
+ * ahead of any match by instant.
  *
- * Every other approval frame carries no approval id, and the approval row
- * carries no seq, so the match reads the two things both record: the tool
- * (the frame's summary names it, tacho `tachoFrameSummary`) and the instant
- * (a request frame is recorded when the call parked, a decision frame when it
- * was settled). A frame and an approval pair only when the frame names the
- * approval's tool, and among those the closest instants pair first. A frame
- * that names no tool, as a ledger `tool.approval_recorded` does, matches
- * nothing: its approval stays unmatched and the tab lists it where no frame
- * hides it.
+ * A wrapped session's approval frames record no approval id: the approval
+ * row is minted apart from the frame, and the row carries no seq. For those,
+ * the match reads the two things both record: the tool (`tool`) and the
+ * instant (a request frame is recorded when the call parked, a decision frame
+ * when it was settled). A frame and an approval pair only when the frame
+ * names the approval's tool, and among those the closest instants pair
+ * first. A frame that names no tool, as a ledger `tool.approval_recorded`
+ * does, matches nothing: its approval stays unmatched and the tab lists it
+ * where no frame hides it.
+ *
+ * Nothing here reads `summary`: it is a label for a person (ADR-182 rule 3).
  */
 export function matchApprovals<T extends Matchable>(
-  frames: readonly RunFrame[],
+  frames: readonly MatchFrame[],
   items: readonly T[],
 ): Matches<T> {
   const pairs: {
@@ -382,13 +381,12 @@ export function matchApprovals<T extends Matchable>(
     order: number;
   }[] = [];
   frames.forEach((frame, order) => {
-    if (!isApprovalFrame(frame.type, frame.summary)) return;
-    const tokens = frame.summary.split(/\s+/);
+    if (!isApprovalFrame(frame.type, frame.toolStatus)) return;
     const group = DECISION_FRAMES.has(frame.type) ? "decision" : "request";
     const at = Date.parse(frame.observedAt);
-    const named = parkedReceipt(frame.type, frame.summary)?.approvalId ?? null;
+    const named = frame.approvalId;
     for (const item of items) {
-      if (named === null ? !tokens.includes(item.tool) : item.id !== named)
+      if (named === null ? frame.tool !== item.tool : item.id !== named)
         continue;
       const ref = group === "decision" ? item.resolvedAt : item.createdAt;
       if (ref === undefined) continue;

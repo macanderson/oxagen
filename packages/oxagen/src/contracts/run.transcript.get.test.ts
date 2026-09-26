@@ -133,6 +133,7 @@ describe("get_run_transcript contract", () => {
           decision: "route",
           type: "policy_decision",
           at: "2026-09-11T10:00:04.000Z",
+          harness: false,
         },
       }).success,
     ).toBe(true);
@@ -200,6 +201,7 @@ describe("what the fold states about an entry (ADR-182)", () => {
         type: "approval_request",
         source: "bundle",
         at: "2026-09-11T10:00:04.000Z",
+        harness: false,
       },
     ],
     subject: "Write",
@@ -229,29 +231,67 @@ describe("what the fold states about an entry (ADR-182)", () => {
     }
   });
 
-  it("carries a recall read from the body, and refuses a negative count (negative)", () => {
+  it("carries a recall read from the body, each item with its outcome, and refuses a negative count (negative)", () => {
+    const included = {
+      kind: "rule",
+      label: "rec_1",
+      tokens: 200,
+      outcome: "included",
+      reason: null,
+      supersededBy: null,
+      force: "must",
+    };
     const recall = {
       unit: "items",
-      count: 2,
+      count: 1,
       tokens: 340,
       cut: 1,
-      items: [{ kind: "rule", label: "rec_1", tokens: 200 }],
+      items: [
+        included,
+        {
+          ...included,
+          label: "rec_2",
+          outcome: "cut",
+          reason: "superseded",
+          supersededBy: "rec_1",
+        },
+      ],
+      bundleVersion: 41,
+      body: "listed",
     };
     expect(
       transcriptEntrySchema.safeParse({ ...entry, ...facts, recall }).success,
     ).toBe(true);
-    expect(
-      transcriptEntrySchema.safeParse({
-        ...entry,
-        ...facts,
-        recall: { ...recall, count: -1 },
-      }).success,
-    ).toBe(false);
+    for (const bad of [
+      { count: -1 },
+      { body: "parsed" },
+      { items: [{ ...included, outcome: "withheld" }] },
+      // An item without its outcome would leave a reader to guess it.
+      { items: [{ kind: "rule", label: "rec_1", tokens: 200 }] },
+    ]) {
+      expect(
+        transcriptEntrySchema.safeParse({
+          ...entry,
+          ...facts,
+          recall: { ...recall, ...bad },
+        }).success,
+      ).toBe(false);
+    }
   });
 
   it("answers the run's counts beside the page", () => {
     const counts = {
-      kinds: { prompt: 1, tools: 2 },
+      kinds: {
+        prompt: 1,
+        responses: 0,
+        thinking: 0,
+        tools: 2,
+        policy: 0,
+        usage: 0,
+        recall: 0,
+        seal: 0,
+        errors: 0,
+      },
       entries: 3,
       errors: 0,
       policy: 1,
@@ -270,7 +310,16 @@ describe("what the fold states about an entry (ADR-182)", () => {
     expect(
       runTranscriptGet.output.safeParse({
         ...out,
-        counts: { ...counts, kinds: { nonsense: 1 } },
+        counts: { ...counts, kinds: { ...counts.kinds, nonsense: 1 } },
+      }).success,
+    ).toBe(false);
+    // Every chip is counted on every read, so an answer missing one is refused
+    // rather than read as a zero.
+    const { seal: _seal, ...missingSeal } = counts.kinds;
+    expect(
+      runTranscriptGet.output.safeParse({
+        ...out,
+        counts: { ...counts, kinds: missingSeal },
       }).success,
     ).toBe(false);
   });

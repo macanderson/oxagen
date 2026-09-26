@@ -4,14 +4,15 @@
 // classes, the class costs to the rollup's recorded cost) and the refusals (no
 // rollup, no transcript, no recorded split or saving). It reads no price book:
 // every cost is the one the rollup recorded (#4069).
+//
+// The prompts, steps, calls, families, batches and the parts of the wall
+// clock are the server's, counted over the run's steps (ADR-182); how they
+// are counted is tested in `packages/run-ledger/src/transcript-figures.test.ts`.
+// Here they are only shaped, and the clock they are parts of is worked out.
 import { describe, expect, it } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { sumMoney } from "@/data/contracts/money";
-import type {
-  RunCost,
-  RunCostRollup,
-  TranscriptEntry,
-} from "@/data/contracts/run";
+import type { RunCost, RunCostRollup } from "@/data/contracts/run";
 import {
   provisionalCost,
   runMetrics,
@@ -23,6 +24,7 @@ import {
   runCost,
   runRow,
   transcriptEntry,
+  transcriptFigures,
 } from "./run.builders";
 
 /** The builder's rollup, which carries one model's recorded split and saving. */
@@ -144,7 +146,7 @@ describe("runMetrics", () => {
     expect(m.priced?.hasUnpriced).toBe(true);
   });
 
-  it("counts the operator's prompts and calls every one after the first corrective", () => {
+  it("reads the operator's prompts from the server and calls every one after the first corrective", () => {
     const m = runMetrics({
       run: runRow(),
       cost: readOk(runCost()),
@@ -153,43 +155,27 @@ describe("runMetrics", () => {
     expect(m.prompts).toEqual({ count: 2, corrective: 1 });
   });
 
-  it("counts neither a model request nor a subagent's turn as the operator prompting (negative)", () => {
-    // The contract's `prompt` kind is the request half of a model call, and a
-    // subagent's turn opens on words its parent sent. Neither is the operator.
-    const entries = mockupTranscript().entries.map((entry) =>
-      entry.type === "turn_start" && entry.turn === 2
-        ? {
-            ...entry,
-            subagent: {
-              chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
-              type: "Explore",
-            },
-          }
-        : entry.type === "model.request"
-          ? { ...entry, kinds: [...entry.kinds, "prompt" as const] }
-          : entry,
-    );
-    const m = runMetrics({
-      run: runRow(),
-      cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
-    });
-    expect(m.prompts).toEqual({ count: 1, corrective: 0 });
-  });
-
-  it("reads the tool calls off the transcript", () => {
+  it("shapes the server's tool call figures: the calls, the families and the batches", () => {
     const m = runMetrics({
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
     });
-    expect(m.toolCalls?.map((call) => call.name)).toEqual([
-      "list_pull_requests",
-      "create_tag",
+    expect(m.toolCalls).toEqual({
+      count: 2,
+      failed: 1,
+      tools: [
+        { name: "create_tag", calls: 1 },
+        { name: "list_pull_requests", calls: 1 },
+      ],
+    });
+    expect(m.families).toEqual([
+      { group: "tool", calls: 2, share: 1, ms: 2000, failed: 1, tools: 2 },
     ]);
-    expect(m.toolCalls?.[1]?.failed).toBe(true);
-    expect(m.families?.[0]?.calls).toBe(2);
-    expect(m.batches?.count).toBe(2);
+    expect(m.batches).toMatchObject({ count: 2, parallel: 0, widest: 1 });
+    // The histogram is keyed by how many calls a batch held.
+    expect(m.batches?.histogram.get(1)).toBe(2);
+    expect(m.batches?.histogram.get(2)).toBeUndefined();
   });
 
   it("takes a sealed run's wall clock from start to seal, and a live run's from its last frame", () => {
@@ -209,56 +195,28 @@ describe("runMetrics", () => {
     expect(live.wall.sealed).toBe(false);
   });
 
-  it("counts a parked call's wait as the person's, not the tool's", () => {
-    const entry = (
-      seq: number,
-      type: string,
-      kind: "tool_call" | "frame",
-      label: string,
-      atS: number,
-    ) =>
-      transcriptEntry({
-        seq: String(seq),
-        endSeq: String(seq),
-        type,
-        kind,
-        label,
-        turn: 1,
-        frames: 1,
-        request: null,
-        response: null,
-        callKey: "call_1",
-        at: new Date(
-          Date.parse("2026-09-15T08:00:00.000Z") + atS * 1000,
-        ).toISOString(),
-        elapsedMs: atS * 1000,
-        cost: null,
-        cumulativeCost: null,
-      });
-    const entries = [
-      entry(1, "tool_requested", "tool_call", "create_release", 0),
-      entry(
-        2,
-        "approval_request",
-        "frame",
-        "approval_request create_release",
-        1,
-      ),
-      entry(3, "approval_decision", "frame", "approve create_release", 601),
-      entry(4, "tool_call", "tool_call", "create_release ok", 603),
-    ];
+  it("takes the model, tool and waiting parts from the server and leaves the rest of the clock to the harness", () => {
     const m = runMetrics({
       run: runRow({
         startedAt: "2026-09-15T08:00:00.000Z",
         sealedAt: "2026-09-15T08:10:03.000Z",
       }),
       cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
+      transcript: readOk(
+        mockupTranscript({
+          figures: transcriptFigures({
+            wall: { modelMs: 1_000, toolMs: 2_000, waitingMs: 600_000 },
+          }),
+        }),
+      ),
     });
-    expect(m.wall.parts?.waiting).toBe(600_000);
-    expect(m.wall.parts?.tool).toBe(3_000);
+    expect(m.wall.parts).toEqual({
+      model: 1_000,
+      tool: 2_000,
+      waiting: 600_000,
+      harness: 0,
+    });
     expect(m.wall.lead).toBe("waiting");
-    expect(m.toolCalls?.[0]?.ms).toBe(3_000);
   });
 
   it("answers null for every figure a failed read cannot back, never a zero (negative)", () => {
@@ -275,71 +233,37 @@ describe("runMetrics", () => {
     expect(m.errors).toBeNull();
   });
 
-  it("marks the counts as floors when the transcript stops short of the run", () => {
+  it("answers null for every figure a read that carried none cannot back (negative)", () => {
     const m = runMetrics({
       run: runRow(),
       cost: readOk(runCost()),
-      transcript: readOk(
-        mockupTranscript({ cursor: "next", entries: [transcriptEntry()] }),
-      ),
+      transcript: readOk(mockupTranscript({ figures: null })),
+    });
+    expect(m.prompts).toBeNull();
+    expect(m.toolCalls).toBeNull();
+    expect(m.families).toBeNull();
+    expect(m.batches).toBeNull();
+    expect(m.wall.parts).toBeNull();
+    // The clock itself is the run row's, so it stands.
+    expect(m.wall.ms).toBe(3_300_000);
+  });
+
+  it("marks the counts as floors when the run passed the read's frame cap", () => {
+    const m = runMetrics({
+      run: runRow(),
+      cost: readOk(runCost()),
+      transcript: readOk(mockupTranscript({ complete: false })),
     });
     expect(m.whole).toBe(false);
+    // A later page to read is no floor: the server counted the whole run.
+    const paged = runMetrics({
+      run: runRow(),
+      cost: readOk(runCost()),
+      transcript: readOk(mockupTranscript({ cursor: "next" })),
+    });
+    expect(paged.whole).toBe(true);
   });
 });
-
-/** The instant the hand-built transcripts below start at. */
-const T0 = Date.parse("2026-09-15T08:00:00.000Z");
-
-/**
- * One frame with nothing on it but what a test names: no halves, no cost, no
- * call key, one frame, in turn 1. `atS` is seconds from T0.
- */
-function frame(
-  seq: number,
-  atS: number,
-  overrides: Partial<TranscriptEntry> = {},
-): TranscriptEntry {
-  return transcriptEntry({
-    seq: String(seq),
-    endSeq: String(seq),
-    at: new Date(T0 + atS * 1000).toISOString(),
-    elapsedMs: atS * 1000,
-    kind: "frame",
-    type: "turn_start",
-    label: "turn_start",
-    callKey: null,
-    kinds: [],
-    request: null,
-    response: null,
-    decision: null,
-    frames: 1,
-    turn: 1,
-    cost: null,
-    cumulativeCost: null,
-    ...overrides,
-  });
-}
-
-/** A model call's one frame, with the token counts it reported. */
-function modelFrame(
-  seq: number,
-  atS: number,
-  turn: number,
-  usage: TranscriptEntry["usage"],
-): TranscriptEntry {
-  return frame(seq, atS, {
-    kind: "model_call",
-    type: "llm_call",
-    label: "anthropic/claude-opus-5",
-    turn,
-    usage,
-  });
-}
-
-/** A tool call the producer wrote as one frame: the whole exchange, no request half. */
-function toolFrame(seq: number, atS: number, label: string, turn = 1) {
-  return frame(seq, atS, { kind: "tool_call", type: "tool_call", label, turn });
-}
 
 describe("runMetrics over a partial record", () => {
   it("says the cache's saving is not recorded on a row rolled up before savings were, never a zero (negative)", () => {
@@ -384,56 +308,6 @@ describe("runMetrics over a partial record", () => {
     expect(m.priced?.hasUnpriced).toBe(true);
     // What was recorded is still shown, marked, rather than dropped.
     expect(m.priced?.byClass.output?.micros).toBe("2034842");
-  });
-
-  it("takes a wait off only the call it fell inside", () => {
-    const entries = [
-      frame(0, 0, {
-        kind: "tool_call",
-        type: "tool_requested",
-        label: "list_pull_requests",
-        callKey: "a",
-      }),
-      frame(1, 2, {
-        kind: "tool_call",
-        type: "tool_call",
-        label: "list_pull_requests ok",
-        callKey: "a",
-      }),
-      frame(2, 3, {
-        kind: "tool_call",
-        type: "tool_requested",
-        label: "create_release",
-        callKey: "b",
-      }),
-      frame(3, 4, {
-        type: "approval_request",
-        label: "approval_request create_release",
-        callKey: "b",
-      }),
-      frame(4, 64, {
-        type: "approval_decision",
-        label: "approve create_release",
-        callKey: "b",
-      }),
-      frame(5, 65, {
-        kind: "tool_call",
-        type: "tool_call",
-        label: "create_release ok",
-        callKey: "b",
-      }),
-    ];
-    const m = runMetrics({
-      run: runRow({
-        startedAt: "2026-09-15T08:00:00.000Z",
-        sealedAt: "2026-09-15T08:01:05.000Z",
-      }),
-      cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
-    });
-    // The first call ran 2s and was never parked; the second ran 62s, 60 of them waiting on a person.
-    expect(m.toolCalls?.map((call) => call.ms)).toEqual([2000, 2000]);
-    expect(m.wall.parts).toMatchObject({ tool: 4000, waiting: 60_000 });
   });
 
   it("claims no saving for a run that read nothing from the cache, rather than a saving of zero", () => {
@@ -589,13 +463,12 @@ describe("runMetrics over a partial record", () => {
     },
   );
 
-  it("counts the model calls off the transcript when the rollup was not read", () => {
+  it("takes the model calls from the server's steps when the rollup was not read", () => {
     const m = runMetrics({
       run: runRow(),
       cost: readError("down", 502),
       transcript: readOk(mockupTranscript()),
     });
-    // The request and response of turn 1 are one call; turn 2's llm_call is the other.
     expect(m.modelCalls).toBe(2);
     expect(m.tokens).toBeNull();
     expect(m.priced).toBeNull();
@@ -667,134 +540,69 @@ describe("runMetrics over a partial record", () => {
     });
   });
 
-  it("gives a one-frame tool call no wall time of its own, and sums families and the serial time without it", () => {
-    const entries = [
-      frame(0, 0),
-      modelFrame(1, 1, 1, null),
-      // Emitted shell first; the families sort by count, then by name.
-      toolFrame(2, 2, "Bash ok"),
-      toolFrame(3, 5, "Read ok"),
-    ];
-    const m = runMetrics({
-      run: runRow(),
-      cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
-    });
-    expect(m.toolCalls?.map((call) => [call.name, call.ms])).toEqual([
-      ["Bash", null],
-      ["Read", null],
-    ]);
-    expect(m.families?.map((family) => [family.group, family.ms])).toEqual([
-      ["read", 0],
-      ["shell", 0],
-    ]);
-    expect(m.families?.[0]?.share).toBe(0.5);
-    expect(m.batches).toMatchObject({
-      count: 1,
-      parallel: 1,
-      widest: 2,
-      fanOut: 2,
-      serialMs: 0,
-      // From the first call's start to the last call's end: 2s to 5s.
-      togetherMs: 3000,
-    });
-    expect(m.batches?.histogram.get(2)).toBe(1);
-  });
-
-  it("counts a failed tool call by its status word and files it under its family's failures", () => {
-    const entries = [
-      frame(0, 0),
-      modelFrame(1, 1, 1, null),
-      toolFrame(2, 2, "Bash error"),
-      toolFrame(3, 3, "Bash ok"),
-    ];
-    const m = runMetrics({
-      run: runRow(),
-      cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
-    });
-    expect(m.toolCalls?.map((call) => call.failed)).toEqual([true, false]);
-    expect(m.families).toEqual([
-      { group: "shell", calls: 2, share: 1, ms: 0, failed: 1, tools: 1 },
-    ]);
-  });
-
-  it("closes a batch at a turn boundary even when no model step sits between the calls", () => {
-    const entries = [
-      frame(0, 0, { turn: 1 }),
-      toolFrame(1, 1, "Bash ok", 1),
-      frame(2, 2, { turn: 2 }),
-      toolFrame(3, 3, "Bash ok", 2),
-    ];
-    const m = runMetrics({
-      run: runRow(),
-      cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
-    });
-    expect(m.toolCalls?.map((call) => call.batch)).toEqual([0, 1]);
-    expect(m.batches).toMatchObject({
-      count: 2,
-      parallel: 0,
-      widest: 1,
-      fanOut: 1,
-    });
-    expect(m.batches?.histogram.get(1)).toBe(2);
-  });
-
   it("has no batches, and no family, for a run that called no tool (negative)", () => {
-    const entries = [frame(0, 0), modelFrame(1, 1, 1, null)];
     const m = runMetrics({
       run: runRow(),
       cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
+      transcript: readOk(
+        mockupTranscript({
+          figures: transcriptFigures({
+            calls: {
+              count: 0,
+              failed: 0,
+              tools: [],
+              families: [],
+              batches: null,
+            },
+          }),
+        }),
+      ),
     });
-    expect(m.toolCalls).toEqual([]);
+    expect(m.toolCalls).toEqual({ count: 0, failed: 0, tools: [] });
     expect(m.families).toEqual([]);
     expect(m.batches).toBeNull();
   });
 
-  it("counts the entries the transcript files under errors", () => {
-    const entries = [
-      frame(0, 0),
-      toolFrame(1, 1, "Bash error"),
-      frame(2, 2, {
-        type: "agent_stop",
-        label: "agent_stop",
-        kinds: ["errors"],
-      }),
-      frame(3, 3, { type: "hook", label: "hook", kinds: ["errors", "tools"] }),
-    ];
+  it("counts the entries the server counted as failed or refused", () => {
     const m = runMetrics({
       run: runRow(),
       cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
+      transcript: readOk(
+        mockupTranscript({
+          counts: {
+            kinds: {
+              prompt: 2,
+              responses: 1,
+              thinking: 0,
+              tools: 2,
+              policy: 2,
+              usage: 2,
+              recall: 1,
+              seal: 0,
+              errors: 1,
+            },
+            entries: 9,
+            errors: 2,
+            policy: 2,
+            frames: null,
+          },
+        }),
+      ),
     });
     expect(m.errors).toBe(2);
   });
 
-  it("counts no wait yet for a call still parked at the end of the record", () => {
+  it("runs a live run's clock to the end of its last recorded step when read with no render instant", () => {
     const entries = [
-      frame(0, 0, {
-        kind: "tool_call",
-        type: "tool_requested",
-        label: "create_release",
-        callKey: "call_1",
-      }),
-      frame(1, 4, {
-        type: "approval_request",
-        label: "approval_request create_release",
-        callKey: "call_1",
-      }),
+      transcriptEntry({ seq: "0", elapsedMs: 0, durationMs: null }),
+      transcriptEntry({ seq: "1", elapsedMs: 4_000, durationMs: 1_500 }),
     ];
     const m = runMetrics({
       run: runRow({ status: "live", sealedAt: null }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
     });
-    // The live clock stops at the last frame, the request, so no wait has been recorded.
-    expect(m.wall.ms).toBe(4000);
-    expect(m.wall.parts?.waiting).toBe(0);
-    expect(m.toolCalls?.[0]?.ms).toBe(4000);
+    expect(m.wall.ms).toBe(5_500);
   });
 
   it("runs a live run's clock to the render instant and says where it counts from", () => {
@@ -936,19 +744,23 @@ describe("runMetrics over a partial record", () => {
       parts: null,
       lead: null,
     });
-    expect(m.prompts).toEqual({ count: 0, corrective: 0 });
     expect(m.modelCalls).toBe(54);
   });
 
   it("names the harness as the lead when nothing the record timed accounts for the clock", () => {
-    const entries = [frame(0, 0), frame(1, 30, { type: "turn_end" })];
     const m = runMetrics({
       run: runRow({
         startedAt: "2026-09-15T08:00:00.000Z",
         sealedAt: "2026-09-15T08:01:00.000Z",
       }),
       cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
+      transcript: readOk(
+        mockupTranscript({
+          figures: transcriptFigures({
+            wall: { modelMs: 0, toolMs: 0, waitingMs: 0 },
+          }),
+        }),
+      ),
     });
     expect(m.wall.parts).toEqual({
       model: 0,

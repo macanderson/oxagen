@@ -319,13 +319,22 @@ export class Wal {
   }
 
   /**
-   * Bodies go first so ordinary writes ship content with its event. A crash
-   * between files can leave an orphan body, which retention sweeps remove.
-   * A failed body write now throws (see `writeBodies`), so the sealed event
-   * this call was asked to persist alongside it never reaches the file
-   * either: the caller's mark/seal/append/rollback helper undoes the seal in
-   * memory to match, rather than leaving a recorder cursor ahead of a chain
-   * the WAL never durably held.
+   * Bodies are written after the seq check and before the events, so ordinary
+   * writes ship content with its event. A failed body write throws (see
+   * `writeBodies`), so the sealed event this call was asked to persist
+   * alongside it never reaches the file either: the caller's
+   * mark/seal/append/rollback helper undoes the seal in memory to match,
+   * rather than leaving a recorder cursor ahead of a chain the WAL never
+   * durably held.
+   *
+   * A batch whose events do not land takes its bodies back out: each body
+   * file is cut back to its size before this call. The rolled-back seal hands
+   * the same seq, and so the same `event_id_idem`, to the next event, and a
+   * body left behind under that id was served in place of the next event's
+   * own, which ingest then refused as a digest mismatch (#3372). A crash
+   * between the two writes can still leave an orphan, and the daemon cuts it
+   * at its next startup (`repairOrphanBodies`), before any event takes its
+   * seq.
    *
    * Every event is also checked against this session's last known seq
    * before anything is written. A seq at or behind it is refused rather than
@@ -339,7 +348,6 @@ export class Wal {
     events: readonly TachoEvent[],
     bodies: readonly FrameBody[] = [],
   ): void {
-    this.writeBodies(bodies);
     const bySession = new Map<string, string[]>();
     // What each touched session's bookkeeping held before this call, so a
     // throw — a stale seq caught below, or a write that fails further down —
@@ -351,6 +359,7 @@ export class Wal {
     const priorLastSeq = new Map<string, number | undefined>();
     const priorSealed = new Map<string, string | undefined>();
     const written = new Set<string>();
+    let bodyMarks = new Map<string, number | undefined>();
     try {
       for (const event of events) {
         if (!priorLastSeq.has(event.session_uuid)) {
@@ -404,6 +413,9 @@ export class Wal {
           this.cursor.sealed[event.session_uuid] = event.ts;
         }
       }
+      // After the seq check, so a refused batch writes no body.
+      bodyMarks = this.bodyFileSizes(bodies);
+      this.writeBodies(bodies);
       for (const [session, lines] of bySession) {
         const path = this.fileFor(session);
         const preSize = existsSync(path) ? statSync(path).size : 0;
@@ -427,6 +439,7 @@ export class Wal {
         }
       }
     } catch (error) {
+      this.cutBodiesBack(bodyMarks, bySession, written);
       for (const session of bySession.keys()) {
         // A session whose file this call actually appended to keeps its
         // advanced bookkeeping, because it matches what is now on disk.
@@ -442,6 +455,49 @@ export class Wal {
     }
     if (events.some((event) => event.kind === "agent_stop")) {
       this.persistCursor();
+    }
+  }
+
+  /** Each body file's size before a write, or undefined when it has none. */
+  private bodyFileSizes(
+    bodies: readonly FrameBody[],
+  ): Map<string, number | undefined> {
+    const sizes = new Map<string, number | undefined>();
+    for (const body of bodies) {
+      if (sizes.has(body.session_uuid)) continue;
+      const path = this.bodyFileFor(body.session_uuid);
+      sizes.set(
+        body.session_uuid,
+        existsSync(path) ? statSync(path).size : undefined,
+      );
+    }
+    return sizes;
+  }
+
+  /**
+   * Take a failed `append`'s bodies back out of every session whose events it
+   * did not write. A body for a session with no event in the batch belongs to
+   * an event already on disk (`appendRecovered`) and stays.
+   */
+  private cutBodiesBack(
+    marks: ReadonlyMap<string, number | undefined>,
+    bySession: ReadonlyMap<string, unknown>,
+    written: ReadonlySet<string>,
+  ): void {
+    for (const [session, size] of marks) {
+      if (!bySession.has(session) || written.has(session)) continue;
+      const path = this.bodyFileFor(session);
+      try {
+        if (!existsSync(path)) continue;
+        if (size === undefined) unlinkSync(path);
+        else truncateSync(path, size);
+      } catch (error) {
+        // The append already failed. An orphan left here is served for the
+        // event that takes its seq only if that event writes no body of its
+        // own, because the index keeps the last line for an event id
+        // (`wal-index.ts`).
+        this.bodyFailure(session, "cleanup", error);
+      }
     }
   }
 
@@ -839,6 +895,87 @@ export class Wal {
     this.resume.delete(sessionUuid);
     this.dirtyPaths.add(path);
     return "truncated";
+  }
+
+  /**
+   * Cut the bodies a crash left with no event from the tail of every body
+   * file, and report how many lines went.
+   *
+   * `append` writes a batch's bodies just before its events. A process that
+   * dies between the two writes leaves bodies with no event. The restarted
+   * recorder takes its cursor from the event file, so the next event gets
+   * the same seq and the same `event_id_idem`. When that event wrote no body
+   * of its own, `bodiesFor` served the orphan for it, and ingest refused it.
+   * Retention kept the orphan too, because `keeps` holds any body whose event
+   * id is on the chain, and the later event put it there (#3372).
+   *
+   * Only the batch in flight can be caught between the two writes, so a crash
+   * orphan is always at the end of its file: a line whose seq is past the
+   * session's last event, or a line torn part way. The walk reads back from
+   * the end one line at a time and stops at the first body whose event is on
+   * disk, so it costs the orphans rather than the file. A body file with no
+   * event file beside it is all orphans, and it goes.
+   *
+   * Only the daemon calls this, once at startup after `repairTail`, for the
+   * reason `repairTail` gives.
+   */
+  repairOrphanBodies(): number {
+    let cut = 0;
+    for (const session of this.sessionsWithBodies()) {
+      try {
+        cut += this.cutOrphanBodies(session);
+      } catch (error) {
+        this.bodyFailure(session, "cleanup", error);
+      }
+    }
+    return cut;
+  }
+
+  private cutOrphanBodies(sessionUuid: string): number {
+    const lastSeq = this.lastWrittenSeq(sessionUuid);
+    // A tail that cannot be read says nothing about which bodies are orphans.
+    if (lastSeq === undefined) return 0;
+    const path = this.bodyFileFor(sessionUuid);
+    const size = statSync(path).size;
+    let keep = size;
+    let cut = 0;
+    while (keep > 0) {
+      const line = readTailLine(path, keep);
+      // What is left is one newline.
+      if (line === undefined) {
+        keep = 0;
+        break;
+      }
+      if (line.text.trim().length > 0) {
+        const stored = parseStoredBody(line.text);
+        // A whole line that is not a body was not torn by a crash, so it stays.
+        if (stored === undefined ? line.terminated : stored.seq <= lastSeq)
+          break;
+        cut += 1;
+      }
+      keep = line.offset;
+    }
+    // Blank lines alone are batch separators, not orphans.
+    if (cut === 0) return 0;
+    if (keep === 0) unlinkSync(path);
+    else {
+      truncateSync(path, keep);
+      this.dirtyPaths.add(path);
+    }
+    // Offsets past the cut describe bytes that are gone.
+    this.bodyIndexes.invalidate(sessionUuid);
+    return cut;
+  }
+
+  /**
+   * The seq of the last event in a session's file, read from its tail: -1
+   * when the session has no event on disk, undefined when the tail does not
+   * parse.
+   */
+  private lastWrittenSeq(sessionUuid: string): number | undefined {
+    const path = this.fileFor(sessionUuid);
+    if (!existsSync(path) || statSync(path).size === 0) return -1;
+    return this.lastEvent(sessionUuid)?.seq;
   }
 
   /** The highest seq in a session's file, or -1 when it holds none. */

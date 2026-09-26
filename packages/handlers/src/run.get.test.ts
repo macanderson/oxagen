@@ -293,6 +293,49 @@ describe("get_run", () => {
     });
   });
 
+  // ADR-182 rule 3: a fact is never written into a label for a client to
+  // parse. The Run page pairs a parked receipt with its approval on
+  // `approvalId`, and reads the tool and how it ended from their own fields.
+  it("answers a parked receipt's approval, tool and outcome as fields, and none of them only in its label", async () => {
+    const APPROVAL = "apr_0a1b2c3d4e5f6g7h8j9k0m";
+    const receipt = (runSeq: number, payload: Record<string, unknown>) =>
+      event(runSeq, {
+        eventType: "tool.engine_call_completed",
+        payload: {
+          engine_seq: runSeq,
+          tool_call_id: `tc_${runSeq}`,
+          tool_name: "create_workspace",
+          input_digest: `sha256:${"b".repeat(64)}`,
+          duration_ms: 4,
+          ...payload,
+        },
+      });
+    const { get } = harness({
+      events: [
+        receipt(1, { outcome: "parked", approval_public_id: APPROVAL }),
+        receipt(2, { outcome: "parked" }),
+        event(3),
+      ],
+    });
+    const out = await get(input(), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    const [named, unnamed, other] = out.frames?.frames ?? [];
+    expect(named).toMatchObject({
+      summary: "create_workspace parked",
+      tool: "create_workspace",
+      toolStatus: "parked",
+      approvalId: APPROVAL,
+    });
+    expect(named?.summary).not.toContain(APPROVAL);
+    expect(unnamed).toMatchObject({ toolStatus: "parked", approvalId: null });
+    // A call that waits on nothing names no approval.
+    expect(other).toMatchObject({
+      tool: "read_file",
+      toolStatus: "ok",
+      approvalId: null,
+    });
+  });
+
   it("resumes from the page cursor and from a frame's own cursor with no duplicate and no gap", async () => {
     const { get } = harness({ events: [1, 2, 3, 4, 5].map((n) => event(n)) });
     const first = await get(input({ frameLimit: 2 }), ctx());
