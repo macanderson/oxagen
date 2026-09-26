@@ -413,19 +413,11 @@
       "tool": "register_agent",
       "grade": "INHERIT",
       "group": "Identity and access",
-      "does": "opens a Context PR adding `.oxagen/agents/<slug>.toml` and the generated harness files; identity is created on merge",
+      "does": "one operator on one runtime with one harness, carrying a toolbelt; mints the principal, default role, version 1 and a credential shown once (ADR-192)",
       "absorbs": [
         {
-          "name": "create_agent_def",
-          "file": "agent.definition.create.ts"
-        },
-        {
-          "name": "suggest_agent_def",
-          "file": "agent.definition.suggest.ts"
-        },
-        {
-          "name": "summarize_agent_def",
-          "file": "agent.definition.summarize.ts"
+          "name": "register_agent",
+          "file": "agent.register.ts"
         }
       ],
       "unresolved": [],
@@ -459,23 +451,15 @@
       "tool": "update_agent",
       "grade": "INHERIT",
       "group": "Identity and access",
-      "does": "a Context PR changing the definition; identity and belt update on merge",
+      "does": "moves an agent to another runtime or gives it another toolbelt; each change writes a version and keeps the principal (ADR-192)",
       "absorbs": [
         {
-          "name": "update_agent_def",
-          "file": "agent.definition.update.ts"
+          "name": "move_agent",
+          "file": "agent.move.ts"
         },
         {
-          "name": "revise_agent_def",
-          "file": "agent.definition.revise.ts"
-        },
-        {
-          "name": "publish_agent_def",
-          "file": "agent.definition.publish.ts"
-        },
-        {
-          "name": "deploy_agent",
-          "file": "agent.deploy.ts"
+          "name": "assign_agent_toolbelt",
+          "file": "agent.toolbelt.assign.ts"
         }
       ],
       "unresolved": [],
@@ -509,11 +493,11 @@
       "tool": "retire_agent",
       "grade": "INHERIT",
       "group": "Identity and access",
-      "does": "a Context PR removing the file; principal retired, never deleted",
+      "does": "archives the agent and suspends its principal, revoking credentials, hosts and mandates; principal retired, never deleted",
       "absorbs": [
         {
-          "name": "delete_agent_def",
-          "file": "agent.definition.delete.ts"
+          "name": "retire_agent",
+          "file": "agent.retire.ts"
         }
       ],
       "unresolved": [],
@@ -547,11 +531,11 @@
       "tool": "get_agent",
       "grade": "INHERIT",
       "group": "Identity and access",
-      "does": "identity, roles, belt, mandates",
+      "does": "identity, runtime, toolbelt, versions, roles, mandates",
       "absorbs": [
         {
-          "name": "get_agent_def",
-          "file": "agent.definition.get.ts"
+          "name": "get_agent",
+          "file": "agent.get.ts"
         },
         {
           "name": "get_agent_role",
@@ -598,8 +582,8 @@
       "does": "",
       "absorbs": [
         {
-          "name": "list_agent_defs",
-          "file": "agent.definition.list.ts"
+          "name": "list_agents",
+          "file": "agent.list.ts"
         }
       ],
       "unresolved": [],
