@@ -25,6 +25,7 @@ import {
   encodeTranscriptCursor,
   planTranscriptPage,
   readWords,
+  RECEIPT_OVERLAP_MS,
   type RunTranscriptGetDeps,
   toolResultsOf,
   unsentFolds,
@@ -1620,11 +1621,14 @@ describe("get_run_transcript and a subagent frame received late (#4083)", () => 
   const A = "0192d4a8-7c1e-7a00-8000-00000000a0a0";
   const B = "0192d4a8-7c1e-7a00-8000-00000000b0b0";
   const live = { outcome: "running", sealedAt: null };
-  /** When the control plane received a frame: `second` seconds past 09:01. */
-  const received = (second: number) =>
-    `2026-09-11 09:01:${String(second).padStart(2, "0")}.000`;
-  const receivedMs = (second: number) =>
-    Date.parse(`2026-09-11T09:01:${String(second).padStart(2, "0")}.000Z`);
+  /**
+   * When the control plane received a frame: `tick` tenths of the receipt
+   * overlap past 09:01, so each case keeps its shape if the overlap changes.
+   */
+  const receivedMs = (tick: number) =>
+    Date.parse("2026-09-11T09:01:00.000Z") + (tick * RECEIPT_OVERLAP_MS) / 10;
+  const received = (tick: number) =>
+    new Date(receivedMs(tick)).toISOString().replace("T", " ").replace("Z", "");
   const root = [
     tachoRow(0, {
       kind: "turn_start",
@@ -1667,7 +1671,7 @@ describe("get_run_transcript and a subagent frame received late (#4083)", () => 
   const sub = (
     session: string,
     seq: number,
-    second: number,
+    tick: number,
     over: Partial<TachoFrameRow>,
   ): TachoFrameRow =>
     tachoRow(seq, {
@@ -1678,18 +1682,18 @@ describe("get_run_transcript and a subagent frame received late (#4083)", () => 
       subagentType: "Explore",
       spawnToolUseId: session === A ? "toolu_A" : "toolu_B",
       ts: `2026-09-11 09:00:${String(20 + seq).padStart(2, "0")}.000`,
-      receivedAt: received(second),
+      receivedAt: received(tick),
       ...over,
     });
   /** A's Grep call: requested at frame 0, and its result at every frame after. */
-  const a = (seq: number, second: number) =>
-    sub(A, seq, second, {
+  const a = (seq: number, tick: number) =>
+    sub(A, seq, tick, {
       kind: seq === 0 ? "tool_requested" : "tool_call",
       toolName: "Grep",
       toolUseId: "toolu_g",
     });
-  const b0 = (second: number) =>
-    sub(B, 0, second, {
+  const b0 = (tick: number) =>
+    sub(B, 0, tick, {
       kind: "tool_requested",
       toolName: "Read",
       toolUseId: "toolu_r",
@@ -1739,8 +1743,8 @@ describe("get_run_transcript and a subagent frame received late (#4083)", () => 
   );
 
   it("sends a frame received inside the window that was not readable yet, and the window's other entries once", async () => {
-    // B:0 is the latest receipt the first read saw. A:1 was received five
-    // seconds before it, but its insert had not landed when the page was
+    // B:0 is the latest receipt the first read saw. A:1 was received half
+    // an overlap before it, but its insert had not landed when the page was
     // read.
     const before = harness(root, live, [a(0, 10), b0(30)]);
     const first = await before.transcript(input({ zoom: "everything" }), ctx());

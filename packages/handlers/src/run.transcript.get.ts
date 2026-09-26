@@ -174,10 +174,14 @@ const TACHO_START = "-1";
 /**
  * How far behind the latest receipt a frame can still become readable. Ingest
  * stamps `received_at` on a whole batch before its insert returns, so a batch
- * stamped earlier can land after a read that saw a later one. Ten seconds is
- * the margin this read allows such an insert to land in.
+ * stamped earlier can land after a read that saw a later one. The ClickHouse
+ * client gives up on an insert after its default 30-second request timeout,
+ * and the host resends a batch that failed. The resend carries a later stamp,
+ * which `FINAL` keeps. So a batch lands within 30 seconds of its stamp or
+ * comes back as a later one. Sixty seconds covers that with room for the
+ * server to finish a write the client stopped waiting for.
  */
-export const RECEIPT_OVERLAP_MS = 10_000;
+export const RECEIPT_OVERLAP_MS = 60_000;
 /** A receipt's time: epoch milliseconds, 15 digits at most. */
 const RECEIPT_AT = /^\d{1,15}$/;
 /** A receipt's window digest: the first 12 hex digits of a SHA-256. */
