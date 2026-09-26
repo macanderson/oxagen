@@ -196,6 +196,15 @@ export interface RunFrame {
    * not counted; the first sighting's are.
    */
   llmCall?: FrameLlmCall;
+  /**
+   * When the control plane received a wrapped frame, by the server's clock
+   * (`tacho_events.received_at`). A reader of a run's chains tells a frame
+   * that arrived after its last read by this, because a subagent chain's
+   * `seq` says nothing about the run's other chains (#3823). Undefined on a
+   * ledger frame, whose run has one dense `run_seq`, and on a wrapped row
+   * whose read did not project the column.
+   */
+  receivedAt?: Date;
 }
 
 /** A subagent chain's place in its run. */
@@ -510,6 +519,8 @@ export interface TachoFrameRowLike {
   apiDurationMs?: number | null;
   /** The reasoning effort the call ran at; empty when unrecorded. */
   effort?: string;
+  /** ClickHouse DateTime64 text: when the control plane received the row. */
+  receivedAt?: string;
   /** The chain the row was recorded on; set by a read across a run's chains. */
   sessionUuid?: string;
   rootSessionUuid?: string;
@@ -650,6 +661,9 @@ export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
     turnIndex: row.turnSeq,
     phase: tachoFramePhase(row.kind, payload),
     ...tachoChainFacts(row, payload),
+    ...(row.receivedAt === undefined
+      ? {}
+      : { receivedAt: tachoTimestamp(row.receivedAt) }),
     ...(row.kind === "llm_call"
       ? {
           llmCall: {

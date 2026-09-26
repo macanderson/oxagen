@@ -220,6 +220,19 @@ describe("tachoFrame", () => {
     const bare = tachoFrame(row(5, "subagent_start"));
     expect(bare.spawn).toEqual({ subagentId: null, toolUseId: null });
   });
+
+  it("carries the server's receipt time as a Date (#3823)", () => {
+    const frame = tachoFrame(
+      row(6, "tool_call", { receivedAt: "2026-09-11 09:00:02.500" }),
+    );
+    expect(frame.receivedAt?.toISOString()).toBe("2026-09-11T09:00:02.500Z");
+    // The producer's clock stays on observedAt.
+    expect(frame.observedAt.toISOString()).toBe("2026-09-11T09:00:00.250Z");
+  });
+
+  it("names no receipt time on a row whose read did not project it (negative)", () => {
+    expect(tachoFrame(row(6, "tool_call"))).not.toHaveProperty("receivedAt");
+  });
 });
 
 describe("bisect over wrapped frames", () => {

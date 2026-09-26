@@ -55,3 +55,26 @@ export const RUN_ENRICH_EVENT = "run/enrich";
  * `{ orgId, workspaceId, rootSessionUuid, url }`.
  */
 export const RUN_PULL_REQUEST_LINKED_EVENT = "run/pull-request.linked";
+
+/**
+ * Starts the timeout of one interjection a host raised (#3941, D8). Sent by
+ * the tacho ingest handler after the transaction that writes the
+ * `agent.interjections` row for a `control.interject` frame, with the id
+ * `interjection-raised:<interjection public id>`, so a re-sent batch starts
+ * one timeout. Consumed by the interjection timeout function, which sleeps
+ * until `expiresAt` and, when nobody has answered by then, writes the `deny`
+ * answer with source `timeout`.
+ */
+export const AGENT_INTERJECTION_RAISED_EVENT = "agent/interjection.raised";
+
+/** The data `AGENT_INTERJECTION_RAISED_EVENT` carries. */
+export interface AgentInterjectionRaisedEventData {
+  /** The organization's uuid. */
+  orgId: string;
+  /** The workspace's uuid. */
+  workspaceId: string;
+  /** The interjection's public id (`inj_…`). */
+  interjectionId: string;
+  /** RFC 3339; the deadline the control plane computed, not the host's. */
+  expiresAt: string;
+}

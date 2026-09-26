@@ -37,6 +37,7 @@ import {
   TACHO_EVENTS_INSERT_SETTINGS,
   selectAgentDaySpend,
   selectTachoEventRecords,
+  selectTachoChainHeads,
   selectTachoEvents,
   selectTachoStoredFrames,
   selectTachoSubagentEvents,
@@ -548,6 +549,126 @@ describe("selectAgentDaySpend (ADR-160)", () => {
       hostEnrollmentIds: [],
     });
     expect(spend.size).toBe(0);
+    expect(chSelect).not.toHaveBeenCalled();
+  });
+});
+
+describe("the receipt time on a frame read (#3823)", () => {
+  it("projects received_at under its own name and maps it to receivedAt", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({
+      data: [
+        {
+          seq: "4",
+          ts: "2026-09-08 10:06:03.000",
+          kind: "tool_call",
+          received_at_text: "2026-09-08 10:06:05.250",
+        },
+      ],
+    });
+    const [row] = await selectTachoEvents({
+      sessionUuid: SESSION,
+      afterSeq: 3,
+      limit: 1,
+    });
+    expect(row?.receivedAt).toBe("2026-09-08 10:06:05.250");
+    const [call] = chSelect.mock.calls[0] ?? [];
+    // An alias named received_at would shadow the column in a WHERE filter.
+    expect(call?.query).toContain("toString(received_at) AS received_at_text");
+    expect(call?.query).not.toContain("AS received_at,");
+  });
+
+  it("leaves receivedAt off a row whose read did not project it (negative)", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({
+      data: [{ seq: "4", ts: "2026-09-08 10:06:03.000", kind: "tool_call" }],
+    });
+    const [row] = await selectTachoEvents({
+      sessionUuid: SESSION,
+      afterSeq: 3,
+      limit: 1,
+    });
+    expect(row).not.toHaveProperty("receivedAt");
+  });
+});
+
+describe("selectTachoSubagentEvents: an upper bound", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+
+  it("reads one exact frame of a listed chain, seq 0 included", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await selectTachoSubagentEvents({
+      rootSessionUuid: SESSION,
+      sessionUuids: [CHILD],
+      after: null,
+      throughSeq: 0,
+      limit: 1,
+    });
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).toContain("AND seq <= {throughSeq:Int64}");
+    expect(call?.params).toEqual({
+      rootSessionUuid: SESSION,
+      sessionUuids: [CHILD],
+      throughSeq: 0,
+      limit: 1,
+    });
+  });
+
+  it("reads to each chain's end when no bound is given (negative)", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await selectTachoSubagentEvents({
+      rootSessionUuid: SESSION,
+      after: null,
+      limit: 50,
+    });
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).not.toContain("throughSeq");
+  });
+});
+
+describe("selectTachoChainHeads (#3823)", () => {
+  const CHILD_A = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  const CHILD_B = "0192d4a8-7c1e-7a00-8000-00000000c1d1";
+
+  it("answers each listed chain's last seq, fenced by the root", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({
+      data: [
+        { session_uuid: CHILD_A, last_seq: "12" },
+        { session_uuid: CHILD_B, last_seq: 0 },
+      ],
+    });
+    const heads = await selectTachoChainHeads({
+      rootSessionUuid: SESSION,
+      sessionUuids: [CHILD_A, CHILD_B],
+    });
+    expect(heads).toEqual([
+      { sessionUuid: CHILD_A, lastSeq: 12 },
+      { sessionUuid: CHILD_B, lastSeq: 0 },
+    ]);
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).toContain("max(seq) AS last_seq");
+    expect(call?.query).toContain("session_uuid IN {sessionUuids:Array(UUID)}");
+    // The root filter keeps a listed chain from another run out.
+    expect(call?.query).toContain("root_session_uuid = {rootSessionUuid:UUID}");
+    expect(call?.query).toContain("GROUP BY session_uuid");
+    // A redelivered row has the same seq, so the max needs no FINAL.
+    expect(call?.query).not.toContain("FINAL");
+    expect(call?.params).toEqual({
+      rootSessionUuid: SESSION,
+      sessionUuids: [CHILD_A, CHILD_B],
+    });
+  });
+
+  it("asks nothing of ClickHouse for no chains (negative)", async () => {
+    chSelect.mockReset();
+    const heads = await selectTachoChainHeads({
+      rootSessionUuid: SESSION,
+      sessionUuids: [],
+    });
+    expect(heads).toEqual([]);
     expect(chSelect).not.toHaveBeenCalled();
   });
 });
