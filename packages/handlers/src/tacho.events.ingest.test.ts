@@ -76,7 +76,7 @@ vi.mock("@oxagen/iam/fetch-agent-authz", async (importOriginal) => {
   return { ...original, fetchAgentRunAuthzIn: mocks.fetchAgentRunAuthzIn };
 });
 
-// The toolbelt half of the mandate (ADR-192) reads the workspace's tools and
+// The toolbelt half of the mandate (ADR-198) reads the workspace's tools and
 // belts, which this file's fake does not carry. It denies nothing here; the
 // rule is covered in `lib/toolbelts.test.ts` and its reach onto the bundle in
 // `lib/tacho-host-bundle.test.ts`.
@@ -339,7 +339,7 @@ function forgedGatewaySession(
 }
 
 interface FakeDb {
-  /** The config of the agent's active version (ADR-192), when it has one. */
+  /** The config of the agent's active version (ADR-198), when it has one. */
   activeConfig?: unknown;
   /** The registered agent's public id, for the ledger's agent attribution. */
   agentPublicId?: string;

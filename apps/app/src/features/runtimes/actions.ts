@@ -2,7 +2,7 @@
 // The writes on the Runtimes pages: Add a runtime on the list, and Unenroll on
 // a runtime's Rollback panel.
 //
-// Add a runtime names a runtime (`create_runtime`, ADR-192) and hands the
+// Add a runtime names a runtime (`create_runtime`, ADR-198) and hands the
 // person straight to registering its first agent, because a runtime with no
 // agent governs nothing. The register flow opens with the runtime chosen.
 //

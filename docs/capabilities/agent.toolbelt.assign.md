@@ -10,7 +10,7 @@
 
 ## Intent
 
-Give an agent another toolbelt and keep its identity (ADR-192, #4369). One transaction writes the next `agent.agent_versions` row (`change_kind = 'toolbelt_changed'`) with the agent's current runtime and the new belt, copying the prior version's config forward, and moves `agent.agents.toolbelt_id`.
+Give an agent another toolbelt and keep its identity (ADR-198, #4369). One transaction writes the next `agent.agent_versions` row (`change_kind = 'toolbelt_changed'`) with the agent's current runtime and the new belt, copying the prior version's config forward, and moves `agent.agents.toolbelt_id`.
 
 The principal, its roles and its grants do not change: a belt narrows what the agent is shown and never widens what it may do. An agent that names no belt carries the All tools belt, so assigning that belt to it is no change.
 

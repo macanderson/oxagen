@@ -1,4 +1,4 @@
-// The register form (ADR-192): an agent is one operator on one runtime with
+// The register form (ADR-198): an agent is one operator on one runtime with
 // one harness, carrying a toolbelt. The form asks for the agent's name, the
 // slug that becomes the last segment of its key (ADR-024), the harness, the
 // runtime and the toolbelt. The slug is made from the name by the one rule

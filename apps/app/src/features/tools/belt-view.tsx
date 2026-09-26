@@ -1,5 +1,5 @@
 "use client";
-// One toolbelt, open below the list (ADR-192): every tool in the workspace
+// One toolbelt, open below the list (ADR-198): every tool in the workspace
 // grouped by the server it came from, as `get_toolbelt` answers it.
 //
 // - A custom belt is edited here through `update_toolbelt`: remove or add a

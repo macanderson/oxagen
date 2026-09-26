@@ -1,5 +1,5 @@
 // agent.register.ts — mint an agent: one operator on one runtime with one
-// harness, carrying a toolbelt (ADR-192, #4369; MC spec §6.2).
+// harness, carrying a toolbelt (ADR-198, #4369; MC spec §6.2).
 //
 // Flow, one tenant-scoped transaction after the guards:
 //   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), for the

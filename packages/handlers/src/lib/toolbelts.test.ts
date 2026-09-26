@@ -1,4 +1,4 @@
-// The belt rule every toolbelt reader goes through (ADR-192): which tools a
+// The belt rule every toolbelt reader goes through (ADR-198): which tools a
 // belt holds and which it shows, and how a server named by public id is
 // resolved. Pure functions over rows; the handlers' Postgres suites prove the
 // reads that feed them.

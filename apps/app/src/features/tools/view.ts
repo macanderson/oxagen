@@ -74,7 +74,7 @@ export type ToolsView = {
   names: ToolNameStyle;
   /** The `nextCursor` of an earlier page of the tab's own list. */
   cursor: string | null;
-  /** Only on the Toolbelts tab: the `tbt_…` id of the belt open below the list (ADR-192). */
+  /** Only on the Toolbelts tab: the `tbt_…` id of the belt open below the list (ADR-198). */
   belt: string | null;
 };
 

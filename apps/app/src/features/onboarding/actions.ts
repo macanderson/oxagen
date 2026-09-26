@@ -69,7 +69,7 @@ export type RegisteredAgent = {
 };
 
 /**
- * Mints the agent (ADR-192): one operator on one runtime with one harness,
+ * Mints the agent (ADR-198): one operator on one runtime with one harness,
  * carrying a toolbelt, with its delegated principal, its first version and its
  * long-lived credential. An empty toolbelt is the workspace's All tools belt.
  * A runtime and harness pair a live agent holds comes back `conflict` with

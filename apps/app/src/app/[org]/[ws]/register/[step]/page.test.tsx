@@ -104,7 +104,7 @@ describe("/[org]/[ws]/register/[step]", () => {
     );
   });
 
-  it("hands the runtime Add a runtime chose to the name step (ADR-192)", async () => {
+  it("hands the runtime Add a runtime chose to the name step (ADR-198)", async () => {
     await renderPage(
       await page.default(
         routeProps(

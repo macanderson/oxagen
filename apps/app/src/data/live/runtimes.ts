@@ -1,6 +1,6 @@
 // The runtimes port on the kernel (ARCHITECTURE.md §3.3): the workspace's host
 // enrollments (`list_tacho_hosts`), the identities they name (`list_agents`),
-// and the runtimes the workspace named (`list_runtimes`, ADR-192), each a
+// and the runtimes the workspace named (`list_runtimes`, ADR-198), each a
 // noBillingGate read mapped into its view model.
 //
 // The first two walk their cursor to the end under a bound. The Runtimes page

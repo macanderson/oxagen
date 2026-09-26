@@ -1,4 +1,4 @@
-// create_runtime and list_runtimes (ADR-192, #4369), and the runtime a host
+// create_runtime and list_runtimes (ADR-198, #4369), and the runtime a host
 // enrollment binds.
 //
 // The role gate is proven with a tx double, the way agent.identity.test.ts

@@ -79,7 +79,7 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     ],
   },
   {
-    // ADR-192: an agent is registered on a runtime with a harness and a
+    // ADR-198: an agent is registered on a runtime with a harness and a
     // toolbelt, and a move or a new toolbelt writes a version.
     id: "agent.register",
     group: "Agents",
@@ -99,7 +99,7 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     // here: its handler admits an org Owner or Admin whatever the role grants
     // say, so a ticked `runtime.unenroll` would be a grant the write ignores
     // (#3857 moves the handler onto role grants and adds the two writes).
-    // `list_runtimes` names the runtimes those hosts bind to (ADR-192).
+    // `list_runtimes` names the runtimes those hosts bind to (ADR-198).
     // `create_runtime` is not a permission, for the unenroll reason above: its
     // handler admits the contract's roles whatever the grants say.
     id: "runtime.read",

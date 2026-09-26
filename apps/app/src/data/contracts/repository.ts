@@ -5,7 +5,7 @@
 //
 // The main repo is where `.oxagen/` lives — published steering records and
 // the promotion ledger. An agent is an identity on a runtime, not a file
-// there (ADR-192). A workspace has exactly one main repo, and until it is
+// there (ADR-198). A workspace has exactly one main repo, and until it is
 // bound the workspace is provisional: runs record and spend counts, but
 // steering stays off.
 //

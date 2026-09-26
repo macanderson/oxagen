@@ -327,7 +327,7 @@ describe("toAgentDetail", () => {
     expect(AgentDetail.safeParse(view).success).toBe(true);
   });
 
-  it("carries the runtime, the toolbelt and each version newest first (ADR-192)", () => {
+  it("carries the runtime, the toolbelt and each version newest first (ADR-198)", () => {
     const runtime = {
       id: "rtm_laptop",
       name: "Mac's laptop",

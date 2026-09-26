@@ -1,4 +1,4 @@
-// The toolbelt view models (ADR-192, #4369): the workspace's belts from
+// The toolbelt view models (ADR-198, #4369): the workspace's belts from
 // `list_toolbelts` and one belt from `get_toolbelt`.
 //
 // A toolbelt is the set of tools an agent is shown. It narrows what the agent

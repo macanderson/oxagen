@@ -6,12 +6,12 @@ import { runtimeRefSchema } from "../runtime.shared";
 import { toolbeltRefSchema } from "../toolbelt.shared";
 
 /**
- * Appendix E: `update_agent`, "identity and belt update". ADR-192 replaced the
+ * Appendix E: `update_agent`, "identity and belt update". ADR-198 replaced the
  * mechanism and narrowed what an update can change.
  *
  * Appendix E had it open a Context PR changing `.oxagen/agents/<slug>.toml`,
  * absorbing `update_agent_def`, `revise_agent_def`, `publish_agent_def` and
- * `deploy_agent`. ADR-192 deleted all four with the definition file:
+ * `deploy_agent`. ADR-198 deleted all four with the definition file:
  *
  * - An agent carries no config, prompt or instructions, so there is nothing to
  *   edit (`update_agent_def`), revise from a prompt (`revise_agent_def`) or

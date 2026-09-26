@@ -2,7 +2,7 @@
  * agent-options-data.ts — server-only loader for the chat composer's agent
  * selector.
  *
- * The selector listed agent definitions (`list_agent_defs`), which ADR-192
+ * The selector listed agent definitions (`list_agent_defs`), which ADR-198
  * removed: an agent is now one operator on one runtime with one harness, and
  * there is no definition for a conversation to bind to. The loader answers an
  * empty list, so the deprecated chat page renders with no agent to pick.
@@ -15,7 +15,7 @@ import type { AgentOption } from "@/components/chat/agent-picker/agent-picker-ty
 
 export type { AgentOption };
 
-/** No agent definition is selectable since ADR-192. */
+/** No agent definition is selectable since ADR-198. */
 export async function loadAgentOptions(
   _orgId: string,
   _workspaceId: string,

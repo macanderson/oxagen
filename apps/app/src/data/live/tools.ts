@@ -2,7 +2,7 @@
 // registry's tool versions, the credential broker's grants, the kill switches
 // reaching this workspace, the workspace's auto-approval rules, its data-source
 // connections, the MCP servers the registry imports from, and the workspace's
-// toolbelts (ADR-192), both noBillingGate reads. The role gate on
+// toolbelts (ADR-198), both noBillingGate reads. The role gate on
 // each of them lives in the handler or in IAM (INV-29), so a member without it
 // comes back as `denied` and the tab shows the access-denied state rather than
 // an empty table. An answer a view model refuses is reported once as

@@ -1,10 +1,10 @@
 // get_agent — one agent with its credentials, roles, enrollment, the runtime
-// and toolbelt it is bound to, and its versions, in one read (ADR-192; MC
+// and toolbelt it is bound to, and its versions, in one read (ADR-198; MC
 // spec §6.2, App. E; #2956). The read behind the Agents detail page.
 //
 // `noBillingGate: true`, `mutates: false`: a console read (INV-28).
 //
-// An agent is one operator on one runtime with one harness (ADR-192). The
+// An agent is one operator on one runtime with one harness (ADR-198). The
 // principal, the operator and the harness never change; `versions` records
 // each runtime and toolbelt the agent has had, newest first. No secret leaves
 // this read: a credential shows its prefix and dates, a host its key
@@ -99,7 +99,7 @@ export const agentVersionSchema = z
 export type AgentVersion = z.output<typeof agentVersionSchema>;
 
 /**
- * The limits the agent's active version sets in its config (ADR-192): the
+ * The limits the agent's active version sets in its config (ADR-198): the
  * per-run and per-day spend ceilings the host bundle enforces, and whether the
  * agent must run under the contained launcher (ADR-152). A ceiling the config
  * does not name is null. `invalid` is true when the config cannot be read,

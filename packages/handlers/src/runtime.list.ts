@@ -2,7 +2,7 @@
 //
 // runtime.list.ts — the runtimes named in this workspace, each with its live
 // agents and their harness, its live host enrollments and when a host last
-// reported (ADR-192, #4369). The register form reads the agents to disable a
+// reported (ADR-198, #4369). The register form reads the agents to disable a
 // runtime and harness pair a live agent already holds.
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";

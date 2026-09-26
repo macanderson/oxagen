@@ -10,7 +10,7 @@
 
 ## Intent
 
-Put an agent on another runtime and keep its identity (ADR-192, #4369). A move is how an agent survives new hardware or a cloud migration: the principal, its roles, its credentials and its runs stay.
+Put an agent on another runtime and keep its identity (ADR-198, #4369). A move is how an agent survives new hardware or a cloud migration: the principal, its roles, its credentials and its runs stay.
 
 One transaction:
 

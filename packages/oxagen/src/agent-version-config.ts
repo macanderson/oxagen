@@ -1,9 +1,9 @@
-// The per-agent limits an agent version's `config` carries (ADR-192).
+// The per-agent limits an agent version's `config` carries (ADR-198).
 //
 // An agent version records its runtime, its toolbelt and a `config` object.
 // Two tables in that object reach the host bundle: `budget`
 // (`per_run_micros`, `per_day_micros`) and `containment` (`required`,
-// ADR-152). Before ADR-192 they were written in the agent's definition file;
+// ADR-152). Before ADR-198 they were written in the agent's definition file;
 // the migration that removed the file copied both tables into `config`, so
 // this module reads `config` alone.
 //

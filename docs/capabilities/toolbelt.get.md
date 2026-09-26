@@ -10,7 +10,7 @@
 
 ## Intent
 
-One toolbelt with every tool in the workspace grouped by the server it came from (ADR-192, #4369). The editor behind the Toolbelts tab.
+One toolbelt with every tool in the workspace grouped by the server it came from (ADR-198, #4369). The editor behind the Toolbelts tab.
 
 The declared and built-in tools come first as one group, then each live MCP server by name, including a server whose tools were never imported (a group with no tools). A group the belt holds no tool from reads `included: false`, so a clone's editor can add it back. On the All tools belt every group with a tool is included, a tool an owner or admin has not made available reads `available: false`, and `active` is the tool's workspace default.
 

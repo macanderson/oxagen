@@ -1,5 +1,5 @@
 // get_agent — one agent with its credentials, roles, hosts, the runtime and
-// toolbelt it is bound to, and its versions (ADR-192). Field semantics are on
+// toolbelt it is bound to, and its versions (ADR-198). Field semantics are on
 // the contract (packages/oxagen/src/contracts/agent.get.ts).
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
@@ -220,7 +220,7 @@ function usd(micros: number | undefined): AgentGetOutput["limits"]["perRun"] {
 }
 
 /**
- * The limits the active version's config sets (ADR-192), read by the same
+ * The limits the active version's config sets (ADR-198), read by the same
  * functions the host bundle reads them with (`resolveHostMandate`), so the
  * agent page shows the ceilings the host enforces. A config those functions
  * refuse is reported as invalid, the state in which the host suspends

@@ -1,5 +1,5 @@
 // list_toolbelts — the workspace's toolbelts: its All tools belt first, then
-// the belts cloned from it (ADR-192, #4369).
+// the belts cloned from it (ADR-198, #4369).
 //
 // The first toolbelt path to touch a workspace creates its All tools belt, so
 // this read can insert that one row. It writes nothing else.

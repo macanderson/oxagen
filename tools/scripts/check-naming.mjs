@@ -74,9 +74,9 @@ const ACTIONS = new Set([
   "publish",
   "snapshot",
   "fork",
-  // clone_toolbelt (ADR-192): copy a belt into a new one you can edit.
+  // clone_toolbelt (ADR-198): copy a belt into a new one you can edit.
   "clone",
-  // move_agent (ADR-192): put an agent on another runtime, same principal.
+  // move_agent (ADR-198): put an agent on another runtime, same principal.
   "move",
   // bisect_runs (#2952): align two recordings and find where they diverge.
   "bisect",
@@ -155,6 +155,10 @@ const ACTIONS = new Set([
   "decline",
   "accept",
   "resolve",
+  // answer_interjection: a person answers the question an agent paused its
+  // run to ask (#3839). Not "resolve": an approval is resolved, a question is
+  // answered.
+  "answer",
   "suggest",
   "infer",
   "check",

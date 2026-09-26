@@ -55,7 +55,7 @@ import { OXAGEN_DIR, WORKSPACE_TOML_PATH } from "./repository.tree.get";
 export const GITIGNORE_LINES = [".oxagen/workspace.json", ".stella/private/"];
 
 // No `.oxagen/agents/`: an agent is an identity on a runtime, not a file in
-// the repository (ADR-192).
+// the repository (ADR-198).
 const KEEP_FILES = [".oxagen/rules/.gitkeep", ".oxagen/proposals/.gitkeep"];
 
 /**

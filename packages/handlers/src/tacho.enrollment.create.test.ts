@@ -90,7 +90,7 @@ function happyDb(clash = false): void {
         },
         // The steering read: a workspace with an empty ledger and no records,
         // so the first bundle carries no `context.system`. The runtime reads
-        // (ADR-192) go on to `.orderBy()` / `.limit()` and find no runtime,
+        // (ADR-198) go on to `.orderBy()` / `.limit()` and find no runtime,
         // so the operator path creates the one the hostname names.
         select: () => ({
           from: () => {
@@ -202,7 +202,7 @@ describe("create_tacho_enrollment", () => {
     });
     expect(host?.values["hostnameDigest"]).toMatch(/^sha256:/);
     // No agent names a runtime, so the host binds the one its hostname names,
-    // created with the slug rule every runtime slug follows (ADR-192).
+    // created with the slug rule every runtime slug follows (ADR-198).
     const runtime = inserted.find((row) => row.table === "runtimes");
     expect(runtime?.values).toMatchObject({
       name: "Mac-Studio.local",
@@ -310,7 +310,7 @@ describe("create_tacho_enrollment", () => {
       "cc-a-very-long-hos",
     );
     expect(agentSlugFor("!!!")).toBe("cc-host");
-    // An apostrophe is dropped, not turned into a hyphen (ADR-192).
+    // An apostrophe is dropped, not turned into a hyphen (ADR-198).
     expect(agentSlugFor("Mac's MacBook")).toBe("cc-macs-macbook");
     expect(deviceKeyFingerprint(INPUT.devicePublicKey)).toMatch(
       /^sha256:[0-9a-f]{64}$/,

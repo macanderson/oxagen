@@ -1,6 +1,6 @@
 // audit-exempt: a toolbelt narrows what an agent is shown and grants nothing, and the security event taxonomy has no toolbelt type; the kernel capability.invoke_* audit covers the write.
 //
-// toolbelt.clone.ts — copy a toolbelt into a new custom belt (ADR-192, #4369).
+// toolbelt.clone.ts — copy a toolbelt into a new custom belt (ADR-198, #4369).
 //
 // Role gate: the contract's roles (INV-29). The clone holds every tool the
 // source holds, each active as it is in the source:

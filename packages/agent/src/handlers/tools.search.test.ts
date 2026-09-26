@@ -338,7 +338,7 @@ describe("search_tools", () => {
   });
 
   it("answers an org Member agents and runs, because list_agents and list_runs grant it", async () => {
-    // `list_agents` is the authoritative agent listing (ADR-192) and grants
+    // `list_agents` is the authoritative agent listing (ADR-198) and grants
     // org Member, as `list_runs` does, so search reads both tables.
     mocks.resolveActorOrgRoles.mockResolvedValue(["Member"]);
     mocks.resolveActorWorkspaceRoles.mockResolvedValue([]);

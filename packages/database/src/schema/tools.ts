@@ -4,7 +4,7 @@
 // consequence to one agent, within limits over the tool's declared measures.
 // The ledger is where remaining authority lives: reservations at decision
 // time, settlements at receipt time, releases on failure or denial.
-// The toolbelts (ADR-192) sit at the end of the file.
+// The toolbelts (ADR-198) sit at the end of the file.
 import {
   boolean,
   check,
@@ -162,7 +162,7 @@ export const mandateLedger = toolsSchema.table(
   }),
 );
 
-// ── toolbelts (ADR-192) ──────────────────────────────────────────────────────
+// ── toolbelts (ADR-198) ──────────────────────────────────────────────────────
 // A toolbelt is the set of tools an agent is shown. It narrows what the agent
 // can reach and never widens a grant: roles, mandates and kill switches still
 // decide each call.

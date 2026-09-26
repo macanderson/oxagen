@@ -3,11 +3,11 @@ import { defineTool } from "./_define";
 import { agentRetire } from "../agent.retire";
 
 /**
- * Appendix E: `retire_agent`, "principal retired, never deleted". ADR-192 kept
+ * Appendix E: `retire_agent`, "principal retired, never deleted". ADR-198 kept
  * the outcome and replaced the mechanism.
  *
  * Appendix E had it open a Context PR removing `.oxagen/agents/<slug>.toml`,
- * absorbing `delete_agent_def`. ADR-192 deleted that contract with the
+ * absorbing `delete_agent_def`. ADR-198 deleted that contract with the
  * definition file: an agent carries no file to remove. Retirement is one write
  * that archives the agent, suspends its principal, and revokes its
  * credentials, host enrollments and mandates. Nothing is deleted, so past runs

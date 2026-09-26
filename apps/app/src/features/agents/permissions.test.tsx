@@ -3,7 +3,7 @@
 // page test in agent.test.tsx does not reach: no role held, a role the
 // catalogue does not list or could not be read, a role that expires, the
 // revoke control for an Owner and Admin and nobody on a retired identity, the
-// agent's own ceilings that no read returns yet (ADR-192), the highest priced
+// agent's own ceilings that no read returns yet (ADR-198), the highest priced
 // run, and an agent that holds a mandate. Axe runs after every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
@@ -214,7 +214,7 @@ describe("Permissions › the agent's own ceilings", () => {
     ).toBeNull();
   });
 
-  it("shows the per-run and per-day ceilings the active version sets (ADR-192)", () => {
+  it("shows the per-run and per-day ceilings the active version sets (ADR-198)", () => {
     renderPermissions({
       detail: agentDetail({ limits: LIMITS }),
       runs: [

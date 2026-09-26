@@ -2,7 +2,7 @@
 // and put the handler's HandlerError reason in `code` (§3.2). Each reason
 // import_tools, set_tool_classification, set_kill_switch, the auto-approval
 // writes, create_connection, get_connection, register_mcp_server and the
-// toolbelt writes (ADR-192) throw has its own sentence; any other code is
+// toolbelt writes (ADR-198) throw has its own sentence; any other code is
 // printed as recorded.
 //
 // `register_mcp_server` refuses an endpoint only this deployment can reach,
@@ -67,7 +67,7 @@ export function useActionFailure(
             return t("versionNotFound");
           case "kill_switch_on":
             return t("killSwitchOn");
-          // The toolbelt writes (ADR-192).
+          // The toolbelt writes (ADR-198).
           case "toolbelt_slug_taken":
             return t("toolbeltSlugTaken");
           case "toolbelt_slug_empty":

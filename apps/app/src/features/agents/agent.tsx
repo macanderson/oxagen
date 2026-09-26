@@ -2,7 +2,7 @@
 // header, the seven tabs, and the one tab the URL names. Composition happens
 // here: the registries on Tools and Steering own the reusable objects, and
 // this page shows what this agent's references resolved to. An agent is one
-// operator on one runtime with one harness (ADR-192): the Toolbelt tab gives
+// operator on one runtime with one harness (ADR-198): the Toolbelt tab gives
 // it another belt and the Runtime tab moves it, each writing a version.
 //
 // The identity is read first and every other read is keyed by it
@@ -239,7 +239,7 @@ function tabBody({
               place={place}
               current={detail.toolbelt}
               belts={reads.belts}
-              // assign_agent_toolbelt admits an org Owner or Admin (ADR-192).
+              // assign_agent_toolbelt admits an org Owner or Admin (ADR-198).
               canChange={mayRebind(ctx) && identity.status !== "retired"}
             />
           )}
@@ -256,7 +256,7 @@ function tabBody({
               harness={identity.harness}
               current={detail.runtime}
               runtimes={reads.runtimes}
-              // move_agent admits an org Owner or Admin (ADR-192).
+              // move_agent admits an org Owner or Admin (ADR-198).
               canMove={mayRebind(ctx) && identity.status !== "retired"}
             />
           )}

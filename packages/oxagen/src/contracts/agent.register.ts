@@ -1,4 +1,4 @@
-// register_agent — mint an agent in this workspace (ADR-192, #4369; MC spec
+// register_agent — mint an agent in this workspace (ADR-198, #4369; MC spec
 // §6.2). An agent is the IAM principal for one operator (the registering
 // user) on one runtime with one harness: your laptop with Claude Code is one
 // agent. Registration writes the `agent.agents` row with its runtime and

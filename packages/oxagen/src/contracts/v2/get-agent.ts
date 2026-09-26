@@ -6,7 +6,7 @@ import { agentRoleGet } from "../agent.role.get";
 /**
  * Appendix E: `get_agent`, "identity, roles, belt, mandates".
  *
- * Appendix E had it absorb `get_agent_def` and `get_agent_role`. ADR-192
+ * Appendix E had it absorb `get_agent_def` and `get_agent_role`. ADR-198
  * deleted `get_agent_def` with the definition file it read. The live v1
  * `get_agent` took over its place under this tool's own name: the agent's
  * identity, the runtime it runs on and the toolbelt it carries, its versions,

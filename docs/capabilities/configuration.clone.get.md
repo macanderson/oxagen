@@ -1,6 +1,6 @@
 # get_clone_draft
 
-Read a published skill or steering configuration into an editable clone draft. An agent is an identity, not a configuration, so it has no clone (ADR-192). To give an agent other tools, clone its toolbelt with `clone_toolbelt`.
+Read a published skill or steering configuration into an editable clone draft. An agent is an identity, not a configuration, so it has no clone (ADR-198). To give an agent other tools, clone its toolbelt with `clone_toolbelt`.
 
 **Mode:** sync
 

@@ -29,7 +29,7 @@ export type AgentTab = (typeof AGENT_TABS)[number];
 
 /**
  * The rev1 tab ids, each landing on the tab that absorbed it (`IAM_TAB_ALIAS`).
- * `definition` was the agent's definition file, removed by ADR-192: a link to
+ * `definition` was the agent's definition file, removed by ADR-198: a link to
  * it lands on the Toolbelt tab, which holds what the agent carries now.
  */
 const TAB_ALIASES: Readonly<Record<string, AgentTab>> = {
@@ -78,9 +78,9 @@ export type AgentReads = {
   budgets: SourceRead<DataSource["spend"]["budgets"]> | null;
   /** The organization's role catalogue, for the permissions each held role carries; null off Permissions. */
   roles: SourceRead<DataSource["org"]["roles"]> | null;
-  /** The workspace's toolbelts, for the belt picker (ADR-192); null off Toolbelt. */
+  /** The workspace's toolbelts, for the belt picker (ADR-198); null off Toolbelt. */
   belts: SourceRead<DataSource["tools"]["toolbelts"]> | null;
-  /** The workspace's runtimes, for the Move control (ADR-192); null off Runtime. */
+  /** The workspace's runtimes, for the Move control (ADR-198); null off Runtime. */
   runtimes: SourceRead<DataSource["runtimes"]["named"]> | null;
   period: DayRange;
 };

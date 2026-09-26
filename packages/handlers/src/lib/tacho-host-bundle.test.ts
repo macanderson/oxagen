@@ -35,7 +35,7 @@ vi.mock("@oxagen/iam/machine-key-scope", () => ({
   gatewayMandateTools: () => gatewayMandateTools(),
 }));
 
-// The agent's toolbelt (ADR-192), read through tables this file's fake
+// The agent's toolbelt (ADR-198), read through tables this file's fake
 // transaction does not carry. Its rule is covered in `toolbelts.test.ts`;
 // here it only has to reach the bundle's deny list.
 const agentBeltDenyPatterns = vi.hoisted(() =>
@@ -415,7 +415,7 @@ describe("the wrapped-session policy on the bundle", () => {
 
 describe("the active version's budget on the signed bundle", () => {
   // The version's config is the one source of the budget and containment
-  // tables (ADR-192): the migration that removed the definition file copied
+  // tables (ADR-198): the migration that removed the definition file copied
   // them there.
   function budgetTransaction(
     config: unknown,
@@ -615,7 +615,7 @@ describe("the active version's budget on the signed bundle", () => {
     },
   );
 
-  it("denies on the host every imported tool the agent's toolbelt leaves out (ADR-192)", async () => {
+  it("denies on the host every imported tool the agent's toolbelt leaves out (ADR-198)", async () => {
     agentBeltDenyPatterns.mockResolvedValueOnce([
       "github:delete_repo",
       "linear:*",

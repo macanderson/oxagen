@@ -1,7 +1,7 @@
 // audit-exempt: read-only apart from the one-time All tools belt row it may create; it grants nothing, and the kernel capability.invoke_* audit covers access.
 //
 // toolbelt.list.ts — the workspace's toolbelts, All tools first, with each
-// belt's tool, active tool, server and agent counts (ADR-192, #4369).
+// belt's tool, active tool, server and agent counts (ADR-198, #4369).
 //
 // The first toolbelt path to touch a workspace creates its All tools belt, so
 // this read can insert that one row. `availableTools` is the count the

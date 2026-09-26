@@ -41,6 +41,7 @@ const notifications = vi.fn();
 const counts = vi.fn();
 const assistantEngine = vi.fn();
 const pending = vi.fn();
+const openInterjections = vi.fn<DataSource["interjections"]["open"]>();
 const resolvedSince = vi.fn<DataSource["approvals"]["resolvedSince"]>();
 const mandatesList = vi.fn();
 const source = {
@@ -69,6 +70,7 @@ const source = {
     outcomesSettings: vi.fn(),
   },
   approvals: { pending, resolved: vi.fn(), resolvedSince },
+  interjections: { open: openInterjections },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -158,10 +160,12 @@ beforeEach(() => {
   notifications.mockResolvedValue(feed);
   counts.mockReset();
   counts.mockResolvedValue(
-    readOk({ approvals: 0, proposals: 4, incidents: 1 }),
+    readOk({ approvals: 0, interjections: null, proposals: 4, incidents: 1 }),
   );
   pending.mockReset();
   pending.mockResolvedValue(emptyQueue);
+  openInterjections.mockReset();
+  openInterjections.mockResolvedValue(emptyQueue);
   resolvedSince.mockReset();
   resolvedSince.mockResolvedValue(emptyQueue);
   mandatesList.mockReset();
@@ -214,6 +218,7 @@ describe("shellSource", () => {
             slug: "core-platform",
             name: "Core platform",
             pending: emptyQueue,
+            interjections: emptyQueue,
             resolved: emptyQueue,
           },
         ],
@@ -223,7 +228,12 @@ describe("shellSource", () => {
       feed,
       counts: {
         slug: "core-platform",
-        read: readOk({ approvals: 0, proposals: 4, incidents: 1 }),
+        read: readOk({
+          approvals: 0,
+          interjections: null,
+          proposals: 4,
+          incidents: 1,
+        }),
       },
     });
     expect(context).toHaveBeenCalledWith(ctx);
@@ -316,6 +326,8 @@ describe("shellSource across the organization's workspaces", () => {
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     const wsCtx = { org: "acme", ws: "core-platform" };
     expect(pending).toHaveBeenCalledWith(wsCtx, { runId: null });
+    // The open questions, in the same scope, for the drawer's first rows (#3839).
+    expect(openInterjections).toHaveBeenCalledWith(wsCtx, { runId: null });
     expect(resolvedSince).toHaveBeenCalledOnce();
     const [scope, window] = resolvedSince.mock.calls[0] ?? [];
     expect(scope).toEqual(wsCtx);
@@ -329,7 +341,12 @@ describe("shellSource across the organization's workspaces", () => {
     expect(counts).toHaveBeenCalledWith({ org: "acme", ws: "core-platform" });
     expect(data.counts).toEqual({
       slug: "core-platform",
-      read: readOk({ approvals: 0, proposals: 4, incidents: 1 }),
+      read: readOk({
+        approvals: 0,
+        interjections: null,
+        proposals: 4,
+        incidents: 1,
+      }),
     });
   });
 
@@ -405,6 +422,14 @@ describe("shellSource across the organization's workspaces", () => {
     pending.mockResolvedValue(denied);
     const { data } = await shellSource(ctx, source);
     expect(data.approvals.workspaces[0]?.pending).toEqual(denied);
+  });
+
+  it("carries a workspace's failed interjections read as its failure, beside its approvals (negative)", async () => {
+    const down = readError("record_unmappable", 502);
+    openInterjections.mockResolvedValue(down);
+    const { data } = await shellSource(ctx, source);
+    expect(data.approvals.workspaces[0]?.interjections).toEqual(down);
+    expect(data.approvals.workspaces[0]?.pending).toEqual(emptyQueue);
   });
 });
 

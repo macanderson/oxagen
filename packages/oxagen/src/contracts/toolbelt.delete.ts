@@ -1,4 +1,4 @@
-// delete_toolbelt — delete a custom toolbelt no live agent carries (ADR-192,
+// delete_toolbelt — delete a custom toolbelt no live agent carries (ADR-198,
 // #4369).
 //
 // The row is soft-deleted, so an agent version that named the belt still

@@ -114,7 +114,7 @@ describe("get_agent contract", () => {
     expect(out.identity.firstFrameAt).toBeNull();
   });
 
-  it("parses the versions a move and a new toolbelt wrote, and refuses a definition (ADR-192)", () => {
+  it("parses the versions a move and a new toolbelt wrote, and refuses a definition (ADR-198)", () => {
     const runtime = {
       id: "rtm_0123abcd",
       name: "Mac's Laptop",

@@ -1,4 +1,4 @@
-// The toolbelt capabilities and set_tool_state (ADR-192, #4369): the All
+// The toolbelt capabilities and set_tool_state (ADR-198, #4369): the All
 // tools belt, cloning it, editing the clone by server and by tool, deleting a
 // belt, and the owner's availability and default switches.
 //

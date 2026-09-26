@@ -77,7 +77,7 @@ export const WORKSPACE_SLUG_MAX = 40;
 
 /**
  * The one way a slug is made from a name, for every slug Oxagen derives:
- * organizations, workspaces, runtimes, agents and toolbelts (ADR-192).
+ * organizations, workspaces, runtimes, agents and toolbelts (ADR-198).
  *
  * - Letters are lowercased, and an accented letter keeps its base letter
  *   ("é" becomes "e").

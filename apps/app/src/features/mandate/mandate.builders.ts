@@ -43,6 +43,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse },
     agents: {
       list: refuse,
       get: refuse,

@@ -67,7 +67,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   // fingerprint. Pure SQL (ADR-021 §1), the counterpart to the single-execution
   // failure frame above.
   list_error_clusters: () => import("./telemetry.error.cluster"),
-  // Agent identity (ADR-192, MC spec §6.2, #2956): the identities table and
+  // Agent identity (ADR-198, MC spec §6.2, #2956): the identities table and
   // the one identity read with credentials, roles, hosts, runtime, toolbelt
   // and versions.
   list_agents: () => import("./agent.list"),

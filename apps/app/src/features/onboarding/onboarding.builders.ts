@@ -96,7 +96,7 @@ type Reads = {
   runs?: Read<RunPage>;
   run?: Read<RunDetail>;
   chain?: Read<RunChain>;
-  /** `list_runtimes`, which the name step's runtime picker reads (ADR-192). */
+  /** `list_runtimes`, which the name step's runtime picker reads (ADR-198). */
   runtimes?: Read<NamedRuntimeList>;
   /** `list_toolbelts`, which the name step's toolbelt section reads. */
   toolbelts?: Read<ToolbeltList>;
@@ -246,6 +246,7 @@ export function onboardingSource(reads: Reads): {
       resolved: refuse("approvals.resolved"),
       resolvedSince: refuse("approvals.resolvedSince"),
     },
+    interjections: { open: refuse("interjections.open") },
     billing: {
       plan: refuse("billing.plan"),
       usageCredits: refuse("billing.usageCredits"),

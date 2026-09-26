@@ -1,7 +1,7 @@
 // audit-exempt: a toolbelt narrows what an agent is shown and grants nothing; its roles and grants do not change, and the security event taxonomy has no toolbelt type. The kernel capability.invoke_* audit covers the write.
 //
 // agent.toolbelt.assign.ts — give an agent another toolbelt and keep its
-// identity (ADR-192, #4369). Semantics are on the contract
+// identity (ADR-198, #4369). Semantics are on the contract
 // (packages/oxagen/src/contracts/agent.toolbelt.assign.ts).
 //
 // Role gate: org Owner or Admin (INV-29), the same as every agent identity

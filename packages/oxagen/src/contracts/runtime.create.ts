@@ -1,4 +1,4 @@
-// create_runtime — name a runtime in this workspace (ADR-192, #4369). A
+// create_runtime — name a runtime in this workspace (ADR-198, #4369). A
 // runtime is a named place agents run: a laptop, a VM, a cloud workspace. It
 // holds no machine facts. A host enrollment binds a machine to it later, and
 // the runtime keeps its id when that machine is replaced.

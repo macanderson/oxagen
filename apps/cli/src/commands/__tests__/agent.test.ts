@@ -183,7 +183,7 @@ describe("oxagen agent register", () => {
       writer,
     );
     // No --slug and no --toolbelt: the server derives the slug and gives the
-    // agent the All tools belt (ADR-192).
+    // agent the All tools belt (ADR-198).
     expect(postMock).toHaveBeenCalledWith("agents/register", {
       name: "Release bot",
       harness: "stella",

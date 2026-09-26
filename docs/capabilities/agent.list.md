@@ -36,7 +36,7 @@ A retired agent is a deleted record. The read leaves it out of `items` unless `i
 | `items[].description` | `string \| null` | What the agent is for, from `agent.agents.description`. |
 | `items[].agentKey` | `string \| null` | `org_ns.ws_ns.slug` (ADR-024); null until the namespaces are backfilled. |
 | `items[].harness` | `"stella" \| "claude-code" \| "codex" \| "cursor" \| "claude-agent-sdk" \| "custom"` | |
-| `items[].runtime` | `object \| null` | `{ id, name, slug }` of the runtime the agent runs on now (ADR-192). Null for an agent that runs on no named runtime, and for one registered before runtimes existed that the backfill could not place. |
+| `items[].runtime` | `object \| null` | `{ id, name, slug }` of the runtime the agent runs on now (ADR-198). Null for an agent that runs on no named runtime, and for one registered before runtimes existed that the backfill could not place. |
 | `items[].toolbelt` | `object \| null` | `{ id, name, slug, kind }` of the toolbelt the agent carries. An agent that names no belt reads as the workspace's All tools belt. |
 | `items[].managed` | `boolean` | True for the built-in assistant stella acts as (`qa-chat`). Oxagen manages it, so no identity write accepts it, and its kill switch is how a person stops it (#4350). |
 | `items[].principalId` | `string \| null` | `prn_…`; null on a row that predates Agent RBAC. |

@@ -10,7 +10,7 @@
 
 ## Intent
 
-One agent in one read (ADR-192; MC spec §6.2, App. E; #2956): the identity, the runtime it runs on and the toolbelt it carries, its versions, every long-lived credential it has held, the roles on its principal, and the hosts enrolled under its agent key. The read behind the Agents detail page and the CLI's `oxagen agent status`.
+One agent in one read (ADR-198; MC spec §6.2, App. E; #2956): the identity, the runtime it runs on and the toolbelt it carries, its versions, every long-lived credential it has held, the roles on its principal, and the hosts enrolled under its agent key. The read behind the Agents detail page and the CLI's `oxagen agent status`.
 
 An agent is one operator on one runtime with one harness. The principal, the operator and the harness never change; `versions` records each runtime and toolbelt the agent has had, newest first. No secret leaves this read: a credential shows its prefix and dates, a host its device-key fingerprint. The contract test refuses any output field named like a secret, a hash or a key.
 
@@ -30,7 +30,7 @@ An agent is one operator on one runtime with one harness. The principal, the ope
 | `hosts[]` | object | `hostEnrollmentId` (`tch_…`), `hostname`, `platform`, `status`, `mode`, `harnesses`, `deviceKeyFingerprint`, `collectorVersion`, `hooksOk`, `bundleVersionServed`, `lastSeenAt`, `expiresAt`, `revokedAt`. Newest first, revoked hosts included. |
 | `runtime` | object \| null | `id` (`rtm_…`), `name`, `slug`. Null for an agent that runs on no named runtime, such as stella's in-app assistant. |
 | `toolbelt` | object \| null | `id` (`tbt_…`), `name`, `slug`, `kind`. An agent that names no belt reads as the workspace's All tools belt; null only before any toolbelt path has touched the workspace. |
-| `versions[]` | object | `version`, `changeKind` (`registered`, `runtime_changed`, `toolbelt_changed`, `legacy`), `runtime`, `toolbelt`, `createdBy` (`usr_…`), `createdAt`. Newest first, at most 100. A `legacy` version, written before ADR-192, names no runtime or toolbelt. |
+| `versions[]` | object | `version`, `changeKind` (`registered`, `runtime_changed`, `toolbelt_changed`, `legacy`), `runtime`, `toolbelt`, `createdBy` (`usr_…`), `createdAt`. Newest first, at most 100. A `legacy` version, written before ADR-198, names no runtime or toolbelt. |
 | `limits` | object | The ceilings the active version's config sets, read the way the host bundle reads them: `perRun` and `perDay` (`{ micros, currency }`, null when unset), `containmentRequired`, and `invalid`, true when the config cannot be read and the host suspends governed actions. |
 
 ## Roles

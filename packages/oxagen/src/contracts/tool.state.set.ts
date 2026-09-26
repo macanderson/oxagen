@@ -1,5 +1,5 @@
 // set_tool_state — an owner or admin decides which tools are available to
-// toolbelts and which start active (ADR-192, #4369).
+// toolbelts and which start active (ADR-198, #4369).
 //
 // - `available` is `agent.tools.enabled`. A tool that is not available is out
 //   of every belt, the All tools belt included, until it is made available

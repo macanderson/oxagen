@@ -1,7 +1,7 @@
 // audit-exempt: read-only — one toolbelt and the workspace's tools grouped by server; the kernel capability.invoke_* audit covers access.
 //
 // toolbelt.get.ts — one toolbelt with every workspace tool grouped by the
-// server it came from (ADR-192, #4369). Field semantics are on the contract
+// server it came from (ADR-198, #4369). Field semantics are on the contract
 // (packages/oxagen/src/contracts/toolbelt.get.ts).
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";

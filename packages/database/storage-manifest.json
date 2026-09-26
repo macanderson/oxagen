@@ -54,6 +54,16 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "answer_interjection",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "append_record",
       "reads": [],
@@ -2154,6 +2164,17 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "list_interjections",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "list_invoices",
       "reads": [],
@@ -2419,6 +2440,7 @@
       "surfaces": [
         "agent",
         "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2664,6 +2686,18 @@
     {
       "domain": "repo",
       "name": "pause_repo",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "control",
+      "name": "pause_workspace_runs",
       "reads": [],
       "surfaces": [
         "agent",
@@ -4118,7 +4152,7 @@
       "writes": []
     }
   ],
-  "contentHash": "82e3c49e0fd5ecb3322acae5cbeccef34160a947d1ce38d2ec5cf199b8e5ee7b",
+  "contentHash": "e840ac9bc5fd4417e47f901880dde8e6463e8eabc9ace205080199a91eeffde5",
   "domains": [
     {
       "name": "agent",
@@ -4162,6 +4196,7 @@
         "postgres:agent.context_record_versions",
         "postgres:agent.context_records",
         "postgres:agent.context_sync_state",
+        "postgres:agent.interjections",
         "postgres:agent.runtimes",
         "postgres:agent.tool_versions",
         "postgres:agent.tools"
@@ -4496,6 +4531,7 @@
         "postgres:tacho.gateway_chains",
         "postgres:tacho.hosts",
         "postgres:tacho.incidents",
+        "postgres:tacho.run_pull_requests",
         "postgres:tacho.session_commands",
         "postgres:tacho.session_files",
         "postgres:tacho.session_models",
@@ -4584,7 +4620,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 154
+      "tableCount": 156
     },
     {
       "domains": [
@@ -9248,6 +9284,112 @@
       "domain": "agent",
       "id": "postgres:agent.context_sync_state",
       "name": "context_sync_state",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "agent_key",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "question",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "raised_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "expires_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "answered_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "answer",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "answered_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.interjections",
+      "name": "interjections",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -21550,6 +21692,118 @@
       "domain": "tacho",
       "id": "postgres:tacho.incidents",
       "name": "incidents",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "url",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "number",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "state",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "draft",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "state_seen_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "source_updated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.run_pull_requests",
+      "name": "run_pull_requests",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

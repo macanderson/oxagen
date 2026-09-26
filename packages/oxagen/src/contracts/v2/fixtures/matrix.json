@@ -376,7 +376,7 @@
   {
     "name": "register_agent",
     "group": "Identity and access",
-    "does": "one operator on one runtime with one harness, carrying a toolbelt; mints the principal, default role, version 1 and a credential shown once (ADR-192)",
+    "does": "one operator on one runtime with one harness, carrying a toolbelt; mints the principal, default role, version 1 and a credential shown once (ADR-198)",
     "absorbs": ["register_agent"],
     "resolved": ["register_agent"],
     "unresolved": [],
@@ -402,7 +402,7 @@
   {
     "name": "update_agent",
     "group": "Identity and access",
-    "does": "moves an agent to another runtime or gives it another toolbelt; each change writes a version and keeps the principal (ADR-192)",
+    "does": "moves an agent to another runtime or gives it another toolbelt; each change writes a version and keeps the principal (ADR-198)",
     "absorbs": ["move_agent", "assign_agent_toolbelt"],
     "resolved": ["move_agent", "assign_agent_toolbelt"],
     "unresolved": [],

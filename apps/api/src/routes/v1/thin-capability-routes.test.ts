@@ -544,7 +544,7 @@ const ROUTES: ThinRoute[] = [
       runtimeId: "rtm_0123456789abcdefghjkmn",
       validityDays: 180,
     },
-    // An agent runs on a runtime (ADR-192): a body without one is refused.
+    // An agent runs on a runtime (ADR-198): a body without one is refused.
     invalidBody: { name: "Release bot", harness: "stella" },
     status: 200,
   },

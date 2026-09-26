@@ -1,5 +1,5 @@
 "use client";
-// Step 1 of Register an agent (ADR-192): define the agent. An agent is one
+// Step 1 of Register an agent (ADR-198): define the agent. An agent is one
 // operator on one runtime with one harness, carrying a toolbelt, so the step
 // asks for its name and slug, its harness and runtime, and its toolbelt, then
 // reserves the key with one write, `register_agent`.

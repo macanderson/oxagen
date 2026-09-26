@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // An agent is not a configuration a clone copies: it is an identity on a
-// runtime with a harness and a toolbelt (ADR-192). Skills and records are.
+// runtime with a harness and a toolbelt (ADR-198). Skills and records are.
 export const configurationKindSchema = z.enum(["skill", "record"]);
 export type ConfigurationKind = z.infer<typeof configurationKindSchema>;
 export const configurationCloneDraftSchema = z

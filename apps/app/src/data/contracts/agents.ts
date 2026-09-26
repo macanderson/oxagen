@@ -5,7 +5,7 @@
 // recorded it (§3.4). The contract fields no store records today (model tier,
 // belt size, proven runs) have no view field.
 //
-// An agent is one operator on one runtime with one harness (ADR-192): each row
+// An agent is one operator on one runtime with one harness (ADR-198): each row
 // names the runtime it runs on and the toolbelt it carries, and the detail adds
 // the versions each change of either wrote.
 import { z } from "zod";
@@ -26,7 +26,7 @@ export const AgentHarness = z.enum([
 ]);
 export type AgentHarness = z.infer<typeof AgentHarness>;
 
-/** A runtime as a record names it (`rtm_…`, ADR-192). */
+/** A runtime as a record names it (`rtm_…`, ADR-198). */
 export const RuntimeRef = z.object({
   id: PublicId,
   name: z.string().min(1),
@@ -34,7 +34,7 @@ export const RuntimeRef = z.object({
 });
 export type RuntimeRef = z.infer<typeof RuntimeRef>;
 
-/** A toolbelt as a record names it (`tbt_…`, ADR-192). */
+/** A toolbelt as a record names it (`tbt_…`, ADR-198). */
 export const ToolbeltRef = z.object({
   id: PublicId,
   name: z.string().min(1),
@@ -213,7 +213,7 @@ export const AgentDetail = z.object({
   ),
   /**
    * The ceilings the active version's config sets, which the host bundle
-   * enforces (ADR-192). A ceiling the config does not name is null; `invalid`
+   * enforces (ADR-198). A ceiling the config does not name is null; `invalid`
    * means the config cannot be read and the host suspends governed actions.
    */
   limits: z.object({

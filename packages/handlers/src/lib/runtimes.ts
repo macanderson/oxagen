@@ -1,4 +1,4 @@
-// runtimes.ts — runtimes and agent versions (ADR-192): resolving a runtime,
+// runtimes.ts — runtimes and agent versions (ADR-198): resolving a runtime,
 // the one-live-agent-per-runtime-and-harness rule, the runtime a host
 // enrollment binds, and the version an agent writes when its runtime or
 // toolbelt changes.
@@ -229,7 +229,7 @@ export type AgentVersionChange =
 
 /**
  * Write the agent's next version and move its current binding in the same
- * transaction (ADR-192). The agent row is locked first so two writes number
+ * transaction (ADR-198). The agent row is locked first so two writes number
  * their versions in order. The new version carries the prior active
  * version's `config` forward, which holds the per-agent budget and
  * containment the host bundle reads. Returns the version number written.

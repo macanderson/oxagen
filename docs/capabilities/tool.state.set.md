@@ -10,7 +10,7 @@
 
 ## Intent
 
-An owner or admin decides which tools are available to toolbelts and which start active (ADR-192, #4369).
+An owner or admin decides which tools are available to toolbelts and which start active (ADR-198, #4369).
 
 - `available` writes `agent.tools.enabled`. A tool that is not available is out of every belt, the All tools belt included, until it is made available again. A belt keeps its row for the tool, so the tool comes back as the belt left it.
 - `defaultActive` writes `agent.tools.default_active`: whether the tool is active in the All tools belt and in a clone made from it afterwards. It does not change a belt that already holds the tool.

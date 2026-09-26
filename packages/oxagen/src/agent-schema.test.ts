@@ -36,7 +36,7 @@ describe("graphAccessSchema", () => {
 });
 
 describe("agentDefinitionConfigSchema", () => {
-  it("is the version body, with no identity field (ADR-192)", () => {
+  it("is the version body, with no identity field (ADR-198)", () => {
     const config = agentDefinitionConfigSchema.parse({
       graph,
       agentTools: [{ type: "function", ref: "code.read" }],

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The Identity tab drawn on its own (identity.tsx), for the states the page
 // test in agent.test.tsx does not reach: an identity with no key, principal,
-// operator or first frame; the runtime the agent runs on, or none (ADR-192);
+// operator or first frame; the runtime the agent runs on, or none (ADR-198);
 // a run credential that is revoked, never expires or
 // was used; no credential at all; every host revoked; and a tamper figure
 // that is zero or could not be read. Axe runs after every test (INV-26).
@@ -111,7 +111,7 @@ describe("Identity › facts", () => {
     );
   });
 
-  it("names the runtime the agent runs on (ADR-192)", () => {
+  it("names the runtime the agent runs on (ADR-198)", () => {
     renderIdentity();
     expect(region("Identity")).toHaveTextContent("RuntimeBuild box build-box");
   });

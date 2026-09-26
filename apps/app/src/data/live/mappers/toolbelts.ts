@@ -1,5 +1,5 @@
 // list_toolbelts and get_toolbelt outputs to the toolbelt view models
-// (ARCHITECTURE.md §3.4, ADR-192). Typed from each contract's `_output`.
+// (ARCHITECTURE.md §3.4, ADR-198). Typed from each contract's `_output`.
 import type { toolbeltGet } from "@oxagen/oxagen/contracts/toolbelt.get";
 import type { toolbeltList } from "@oxagen/oxagen/contracts/toolbelt.list";
 import type { z } from "zod";

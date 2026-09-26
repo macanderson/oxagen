@@ -28,7 +28,7 @@ import {
 } from "./_mixins";
 
 // A runtime is a named place agents run: a laptop, a VM, a cloud workspace
-// (ADR-192). It is a slot, not a machine: the host enrollment in tacho.hosts
+// (ADR-198). It is a slot, not a machine: the host enrollment in tacho.hosts
 // is the physical binding, revoked and minted again when the hardware
 // changes, while the runtime and every agent bound to it keep their ids.
 //
@@ -64,7 +64,7 @@ export const runtimes = agentSchema.table(
 
 // Agent identity + versioning (spec §6, agent-runtime epic).
 //
-// ADR-192: an agent is the IAM principal for one operator (the principal's
+// ADR-198: an agent is the IAM principal for one operator (the principal's
 // parent user) on one runtime with one harness. The principal, the operator
 // and the harness never change for the life of the row. The runtime and the
 // toolbelt can: each change inserts an agent_versions row and moves
@@ -95,12 +95,12 @@ export const agents = agentSchema.table(
     // consistency, even though it may carry the spec string, not a plain URL.
     avatarUrl: text("avatar_url"),
     // LLM-inferred, plain-text (<=256 char) description of what this agent does,
-    // written by `summarize_agent_def`, which ADR-192 removed with the
+    // written by `summarize_agent_def`, which ADR-198 removed with the
     // definition file. Rows written before then keep their text; nothing
     // writes it now.
     summary: text("summary"),
     // SHA-256 of the version config `summary` was derived from. Unwritten
-    // since ADR-192, like `summary`.
+    // since ADR-198, like `summary`.
     summaryChecksum: text("summary_checksum"),
     // Agent RBAC Phase 1 (docs/specs/agent-rbac/spec.md §3.1): the delegated
     // IAM principal (iam.principals, kind='agent') for this agent IDENTITY —
@@ -123,7 +123,7 @@ export const agents = agentSchema.table(
     // organization's `cost.cost_centers`, checked by the write handler (no
     // cross-schema FK). Wins over the workspace's label in the rollup.
     costCenter: text("cost_center"),
-    // The runtime the agent runs on now (ADR-192). Null for an agent that
+    // The runtime the agent runs on now (ADR-198). Null for an agent that
     // runs on no runtime Oxagen names (stella's in-app assistant) and for a
     // row the backfill could not place without breaking the one-agent-per-
     // runtime-and-harness index below.
@@ -134,7 +134,7 @@ export const agents = agentSchema.table(
   },
   (t) => ({
     // One live agent per runtime and harness: your laptop with Claude Code is
-    // one agent (ADR-192). An archived (retired) or deleted agent frees the
+    // one agent (ADR-198). An archived (retired) or deleted agent frees the
     // pair for the next registration.
     runtimeHarnessUniq: uniqueIndex("agents_runtime_harness_uniq")
       .on(t.workspaceId, t.runtimeId, t.harness)
@@ -204,14 +204,14 @@ export const agentVersions = agentSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
-    // What the agent was bound to from this version on (ADR-192): the runtime
+    // What the agent was bound to from this version on (ADR-198): the runtime
     // it ran on and the toolbelt it carried. A version is written when an
     // agent registers and each time either one changes; the principal is the
-    // agent's and never moves. Null on versions written before ADR-192.
+    // agent's and never moves. Null on versions written before ADR-198.
     runtimeId: uuid("runtime_id").references(() => runtimes.id),
     toolbeltId: uuid("toolbelt_id"),
     // Why this version exists: `registered`, `runtime_changed`,
-    // `toolbelt_changed`, or `legacy` for a row written before ADR-192.
+    // `toolbelt_changed`, or `legacy` for a row written before ADR-198.
     changeKind: text("change_kind").notNull().default("legacy"),
     // No updatedAt by design — INSERT-only once published.
   },
@@ -1323,7 +1323,7 @@ export const tools = agentSchema.table(
     // builtin = shipped built-in; custom = workspace-authored script tool;
     // mcp = an MCP server's advertised tool; foundry = tool-foundry authored.
     source: citext("source").notNull(),
-    // An owner or admin made the tool available to toolbelts (ADR-192). Off
+    // An owner or admin made the tool available to toolbelts (ADR-198). Off
     // takes it out of every belt, the All tools belt included.
     enabled: boolean("enabled").notNull().default(true),
     // Whether the tool starts active in a belt: its state in the All tools

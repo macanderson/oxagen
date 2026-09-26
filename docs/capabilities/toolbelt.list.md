@@ -10,7 +10,7 @@
 
 ## Intent
 
-The workspace's toolbelts, its All tools belt first and then the belts cloned from it by name, with the counts each one holds (ADR-192, #4369).
+The workspace's toolbelts, its All tools belt first and then the belts cloned from it by name, with the counts each one holds (ADR-198, #4369).
 
 A toolbelt is the set of tools an agent is shown. It narrows what an agent can reach and never widens a grant: roles, mandates and kill switches still decide each call. The All tools belt holds every tool an owner or admin made available (`set_tool_state`), each active as its workspace default says. A custom belt is a clone with its own members (`clone_toolbelt`, `update_toolbelt`).
 

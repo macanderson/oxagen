@@ -86,7 +86,7 @@ describe("propose_configuration_clone", () => {
     });
     expect(github.pulls).toHaveLength(1);
   });
-  it("refuses an agent clone: an agent is an identity, not a configuration (ADR-192)", () => {
+  it("refuses an agent clone: an agent is an identity, not a configuration (ADR-198)", () => {
     expect(
       configurationCloneDraftSchema.safeParse({ ...input(), kind: "agent" })
         .success,

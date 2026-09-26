@@ -115,7 +115,7 @@ const Harness = z.enum([
 ]);
 
 /**
- * A runtime the workspace named (`list_runtimes`, ADR-192): a laptop, a VM or
+ * A runtime the workspace named (`list_runtimes`, ADR-198): a laptop, a VM or
  * a cloud workspace, with the live agents on it, one per harness. The register
  * form reads `agents` to disable a runtime and harness pair already taken.
  */

@@ -200,6 +200,42 @@
       }
     },
     {
+      "name": "answer_interjection",
+      "file": "agent.interjection.answer.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_interjections",
+      "file": "agent.interjection.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "list_agents",
       "file": "agent.list.ts",
       "domain": "agent",
@@ -5086,12 +5122,14 @@
       "surfaces": [
         "api",
         "mcp",
-        "agent"
+        "agent",
+        "cli"
       ],
       "layers": {
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -6395,6 +6433,27 @@
         "docs": true,
         "mcp": true,
         "unit": true,
+        "app": true
+      }
+    },
+    {
+      "name": "pause_workspace_runs",
+      "file": "tacho.workspace_runs.pause.ts",
+      "domain": "control",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
         "app": true
       }
     },

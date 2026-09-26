@@ -1,5 +1,5 @@
 // agent.move.ts — put an agent on another runtime and keep its identity
-// (ADR-192, #4369). Semantics are on the contract
+// (ADR-198, #4369). Semantics are on the contract
 // (packages/oxagen/src/contracts/agent.move.ts).
 //
 // Role gate: org Owner or Admin (INV-29), the same as every agent identity

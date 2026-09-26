@@ -91,7 +91,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           })),
         );
         // Three versions: a legacy row, the registration on the laptop, and
-        // the move to the cloud VM (ADR-192).
+        // the move to the cloud VM (ADR-198).
         await tx.insert(schema.agentVersions).values([
           {
             agentId: alpha.id,

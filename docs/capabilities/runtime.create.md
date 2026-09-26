@@ -10,7 +10,7 @@
 
 ## Intent
 
-Name a runtime in the workspace (ADR-192, #4369): a laptop, a VM, or a cloud workspace agents run on. A runtime holds a name and a slug and no machine facts. A host enrollment binds a machine to it later, and the runtime keeps its id when that machine is replaced, so the agents on it keep theirs.
+Name a runtime in the workspace (ADR-198, #4369): a laptop, a VM, or a cloud workspace agents run on. A runtime holds a name and a slug and no machine facts. A host enrollment binds a machine to it later, and the runtime keeps its id when that machine is replaced, so the agents on it keep theirs.
 
 The Runtimes page's Add a runtime dialog calls this, then goes straight to registering the runtime's first agent (`register_agent`).
 

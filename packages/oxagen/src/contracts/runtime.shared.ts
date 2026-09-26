@@ -1,5 +1,5 @@
 // Shapes shared by the runtime contracts and every contract that names a
-// runtime (ADR-192). No capability registers here.
+// runtime (ADR-198). No capability registers here.
 import { z } from "zod";
 import { WORKSPACE_SLUG_PATTERN } from "../workspace-slug";
 

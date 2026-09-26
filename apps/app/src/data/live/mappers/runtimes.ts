@@ -80,7 +80,7 @@ export function toRuntimeEnrollment(
   };
 }
 
-/** A named runtime with its live agents (`list_runtimes`, ADR-192). */
+/** A named runtime with its live agents (`list_runtimes`, ADR-198). */
 export function toNamedRuntimeList(
   out: ContractOutput<typeof runtimeList>,
 ): z.input<typeof NamedRuntimeList> {

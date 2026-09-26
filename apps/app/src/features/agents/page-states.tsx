@@ -34,7 +34,7 @@ type Failure = Exclude<Read<unknown>, { ok: true }>;
 
 /**
  * Which page the state stands in for. The agent page is the one left: its
- * definition file and the editor that opened it went with ADR-192.
+ * definition file and the editor that opened it went with ADR-198.
  */
 export type StateSubject = "agent";
 

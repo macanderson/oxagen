@@ -156,6 +156,7 @@ const source: DataSource = {
     outcomesSettings: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
+  interjections: { open: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -701,6 +702,10 @@ describe("Spend › Tokens", () => {
     expect(
       screen.getByText("Cache hit rate").nextElementSibling,
     ).toHaveTextContent("50%");
+    // 50 of 750 input tokens were written to the cache (A-08).
+    expect(
+      screen.getByText("Written to cache").nextElementSibling,
+    ).toHaveTextContent("6.7%");
     for (const heading of ["Prompt composition", "By harness"]) {
       const panel = screen
         .getByRole("heading", { name: heading })

@@ -4,6 +4,18 @@ Oxagen is workforce management for autonomous agents, on the shared agent contro
 
 Oxagen governs agents; it does not run them (ADR-043). Stella is the coding agent; Oxagen is the governor, grounder, explainer, meter and rater. Monorepo built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
 
+## Local execution
+
+Mac set this on 2026-09-26 for every repository on this machine. Local builds, test runs, dev servers, and git hooks ran the laptop out of memory and killed agent runs partway through, and every killed run costs money. CI is the only place code is built, checked, or tested.
+
+- Do not run the gate, a build, a typecheck, a lint, or any test, not even one test file. Push the branch and read the CI result. Read a failed job with `gh run view --job <id> --log-failed`.
+- Do not start a dev server: no `next dev`, `next start`, `pnpm dev`, a server under `cargo run`, or anything else that listens on a port.
+- Do not start Docker or Colima, and do not run anything that needs them.
+- Do not run Biome in any form.
+- Git hooks are off on this machine. `LEFTHOOK=0` and `HUSKY=0` are set for every shell and every Claude Code session. Do not reinstall a hook, turn one back on, or run a hook's commands by hand.
+- Code generators and small integrity scripts that only read and write files are allowed, such as regenerating a checksum, a schema index, or a message catalogue.
+- Put this rule, word for word, in the prompt of every subagent you start.
+
 ## Layout
 
 ```
@@ -115,6 +127,8 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 ## Repo-Specific Tooling
 
+CI runs the gate, build, lint, typecheck, and test commands in this table. None of them is run on this machine. `pnpm dev` starts Docker and the dev servers, so it is not run here. `pnpm format` runs Biome, so it is not run here. `pnpm dist:local` builds the desktop app, so it is not run here. `pnpm db:migrate`, `pnpm db:atlas-validate`, and the seed commands need the local Docker databases, so they are not run here either. Code generators and small integrity scripts that only read and write files stay allowed.
+
 | Command | What it does |
 |---|---|
 | `pnpm dev` | Start all apps + Docker (Postgres :5433, ClickHouse :8123, Neo4j :7687) |
@@ -148,7 +162,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:versions` | Every tracked manifest carries the root version, whatever its language (`package.json`, `Cargo.toml`, `Cargo.lock`); `--fix` writes it. Part of `check:contracts` |
 | `pnpm test:e2e` | Run the three Playwright specs (`apps/app/e2e`: `login`, `pay`, `page-load`). The suite holds exactly these three and gains no fourth — every other flow is a component test (`.claude/skills/oxagen-testing`, `apps/app/ARCHITECTURE.md` §6.3). |
 
-**Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit <file>.test.ts`
+**Narrow test runs**: CI runs the tests, and none is run on this machine, not even one file. Where tests do run, the narrow form is `pnpm --filter @oxagen/<pkg> test:unit <file>.test.ts`.
 
 **No `--` before the filename.** `pnpm --filter <pkg> test:unit -- <file>` does NOT
 narrow the run — it runs every test file in the package. pnpm forwards the
@@ -161,9 +175,9 @@ agents obeying the never-run-all-tests rule were violating it and reading a gree
 result as compliance. `pnpm --filter <pkg> exec vitest run <path>` also works and
 is unambiguous.
 
-**Local verification policy:** CI runs builds, lint, typechecks, coverage, and test suites. On the shared machine, run at most one test file for code this task changed, in isolation. Do not run `pnpm gate`, `pnpm gate:full`, or a package-wide suite locally. Lightweight integrity checks and configured git hooks still apply. `CLAUDE.md` has the verification workflow.
+**Local verification policy:** CI runs builds, lint, typechecks, coverage, and test suites. None of them runs on this shared machine, not even one test file. Do not run `pnpm gate`, `pnpm gate:full`, or any test locally. Lightweight integrity checks still apply. Git hooks are off on this machine. `CLAUDE.md` has the verification workflow.
 
-**Affected-package caveat:** `pnpm gate` selects packages changed since `origin/main`. If `HEAD` equals `origin/main`, it may select no packages. An empty selection is not verification evidence. Inspect the actual CI jobs and their output.
+**Affected-package caveat:** CI runs `pnpm gate`, and it is not run on this machine. The gate selects packages changed since `origin/main`. If `HEAD` equals `origin/main`, it may select no packages. An empty selection is not verification evidence. Inspect the actual CI jobs and their output.
 
 **Release script flags**: `tsx tools/scripts/release.ts major --dry-run` (preview without writing), `--set X.Y.Z` (exact version), `--no-npm` / `--no-git` / `--no-notes` (skip individual steps), `--from <ref>` (regenerate notes for an existing tag).
 
@@ -181,7 +195,7 @@ is unambiguous.
 
 ## Local Development
 
-**Docker via Colima** (macOS): `colima start` before `pnpm dev`. The Docker socket is at `~/.colima/default/docker.sock`. If `docker ps` fails with "Cannot connect to the Docker daemon", restart Colima: `colima stop && colima start`.
+**Docker via Colima** (macOS): Colima, Docker, and `pnpm dev` are not run on this machine. CI starts the databases its jobs need. On a machine that runs the dev stack, `colima start` comes before `pnpm dev`. The Docker socket is at `~/.colima/default/docker.sock`. If `docker ps` fails with "Cannot connect to the Docker daemon", restart Colima: `colima stop && colima start`.
 
 **Docker services** (`docker-compose.dev.yml`): Postgres 16 (`:5433`, user/pass `oxagen`/`oxagen`), Neo4j 5.24 (`:7474` UI, `:7687` Bolt`, pass `oxagen-dev`), ClickHouse 24.8 (`:8123` HTTP, `:9000` native`). Host port 5433 avoids collision with a system Postgres on 5432.
 
@@ -199,7 +213,7 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 
 **Concurrency**: a push to `main` gets its own group, keyed by commit; everything else groups by ref so a new push supersedes the run before it. GitHub keeps one *queued* run per group, so a shared group means a third merge evicts the second before it starts — and when merges outpace the run, that chain never terminates. Nothing finishes, `deploy-web`/`deploy-node` never run because they need a passing check, and cancelled runs read as ordinary cleanup so nothing goes red. That took out eight deploys on 2026-09-07 (#2730). ADR-046 has the reasoning and what it costs; `tools/scripts/check-main-concurrency.mjs` fails `check:contracts` if the expression loses `github.sha`, because reverting it would look like a tidy-up.
 
-**Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, atlas-validate (only when migration files are staged). **Pre-push hooks**: `check:prose` for changes under `apps/web` or `apps/docs`, `check:contracts` + `env:check` for matched source files, plus `check:messages` when `apps/app`'s catalogues or sources change and `check:contextgraph-fixtures` when the CGP fixtures change. Test suites run in CI. `check:messages` regenerates nothing; it fails when `apps/app/src/i18n/messages.d.ts` is stale against `messages/*.json`, which is the one way a key the catalogue plainly holds becomes a `NamespacedMessageKeys` type error. Run `pnpm --filter @oxagen/app gen:messages` and commit the result.
+**Pre-commit hooks** (lefthook) are configured for other machines and are off on this one. On those machines they run Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, and atlas-validate (only when migration files are staged). **Pre-push hooks** are configured for other machines and are off on this one too. On those machines they run `check:prose` for changes under `apps/web` or `apps/docs`, `check:contracts` + `env:check` for matched source files, plus `check:messages` when `apps/app`'s catalogues or sources change and `check:contextgraph-fixtures` when the CGP fixtures change. Test suites run in CI. `check:messages` regenerates nothing; it fails when `apps/app/src/i18n/messages.d.ts` is stale against `messages/*.json`, which is the one way a key the catalogue plainly holds becomes a `NamespacedMessageKeys` type error. Run `pnpm --filter @oxagen/app gen:messages` and commit the result.
 
 ## Git Workflow
 
@@ -319,8 +333,8 @@ not carry a copy.
   (inner loop):** Never compile or run the full test suite while developing.
   Build and test only the crates/packages/modules touched by the change
   (plus direct dependents on interface changes). The full suite is CI's job.
-  Here: `pnpm --filter <package> test:unit <file>.test.ts`, never bare `pnpm test`
-  or `turbo run test:unit`. **Not `... test`**: no workspace package defines a
+  Here: CI runs every build and test, and none of them runs on this machine,
+  not even one test file. **Not `... test`**: no workspace package defines a
   `test` script, so `pnpm --filter <package> test` exits 0 having run nothing at
   all. Only the repo root defines one, and it is `turbo run test:unit`, the full
   suite this rule exists to keep out of the inner loop.

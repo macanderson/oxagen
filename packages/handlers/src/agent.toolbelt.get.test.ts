@@ -206,7 +206,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             name: schema.mcpServers.name,
           });
         // "live"'s ping was imported into the registry, so the All tools belt
-        // holds it (ADR-192). "unlisted"'s ping was never imported, so no belt
+        // holds it (ADR-198). "unlisted"'s ping was never imported, so no belt
         // can hold it.
         const live = servers.find((s) => s.name === "live")!;
         await tx.insert(schema.tools).values({
@@ -364,7 +364,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(listed).toContain("unlisted__ping");
     });
 
-    it("the agent's toolbelt narrows the belt and never widens it (ADR-192)", async () => {
+    it("the agent's toolbelt narrows the belt and never widens it (ADR-198)", async () => {
       // A tool a server lists that nobody imported is in no belt.
       const all = agentToolbeltGet.output.parse(await belt("granted"));
       expect(

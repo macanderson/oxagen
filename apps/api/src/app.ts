@@ -87,6 +87,8 @@ import { agentMemoryCitationStatsRoute } from "./routes/v1/agent.memory_citation
 import { agentApprovalListRoute } from "./routes/v1/agent.approval.list";
 import { agentApprovalListResolvedRoute } from "./routes/v1/agent.approval.list_resolved";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
+import { agentInterjectionAnswerRoute } from "./routes/v1/agent.interjection.answer";
+import { agentInterjectionListRoute } from "./routes/v1/agent.interjection.list";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
@@ -264,6 +266,7 @@ import { tachoContainedLaunchRegisterRoute } from "./routes/v1/tacho.contained_l
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoGithubTokenIssueRoute } from "./routes/v1/tacho.github_token.issue";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
+import { tachoWorkspaceRunsPauseRoute } from "./routes/v1/tacho.workspace_runs.pause";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
 import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
 import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
@@ -757,6 +760,8 @@ orgScoped.route("/repository/gitlab/attach", repositoryGitlabAttachRoute);
 // and the workspace rather than to a host, so they sit beside /runs.
 orgScoped.route("/commands", tachoCommandDispatchRoute);
 orgScoped.route("/commands/list", tachoCommandListRoute);
+// pause_workspace_runs: every live run in the workspace, one decision (#3862).
+orgScoped.route("/commands/pause-workspace", tachoWorkspaceRunsPauseRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
 orgScoped.route("/tacho/session-policy", tachoSessionPolicyReadRoute);
 orgScoped.route("/tacho/session-policy", tachoSessionPolicyWriteRoute);
@@ -938,6 +943,8 @@ orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/list", agentApprovalListRoute);
 orgScoped.route("/agent/approvals/resolved", agentApprovalListResolvedRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
+orgScoped.route("/agent/interjections/list", agentInterjectionListRoute);
+orgScoped.route("/agent/interjections/answer", agentInterjectionAnswerRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 // Agent run-trace span tree: one execution plus its steps and tool calls. The
 // list route backs the Activity index.
@@ -960,7 +967,7 @@ orgScoped.route("/agent/roles/assign", agentRoleAssignRoute);
 orgScoped.route("/agent/roles/revoke", agentRoleRevokeRoute);
 orgScoped.route("/agent/roles/get", agentRoleGetRoute);
 orgScoped.route("/agent/roles", agentRoleListRoute);
-// Agent identity (ADR-192, MC spec §6.2, #2956): the identities table, one
+// Agent identity (ADR-198, MC spec §6.2, #2956): the identities table, one
 // identity with its credentials, roles, hosts, runtime, toolbelt and
 // versions, the identity writes (register, rotate, suspend, retire) and the
 // computed belt. Session auth; the org role is checked in each write handler.
@@ -969,13 +976,13 @@ orgScoped.route("/agents/register", agentRegisterRoute);
 orgScoped.route("/agents/credential/rotate", agentCredentialRotateRoute);
 orgScoped.route("/agents/suspend", agentSuspendRoute);
 orgScoped.route("/agents/retire", agentRetireRoute);
-// The two writes that make a new agent version (ADR-192): another runtime,
+// The two writes that make a new agent version (ADR-198): another runtime,
 // another toolbelt. Mounted before the base paths they share.
 orgScoped.route("/agents/move", agentMoveRoute);
 orgScoped.route("/agents/toolbelt/assign", agentToolbeltAssignRoute);
 orgScoped.route("/agents/toolbelt", agentToolbeltGetRoute);
 orgScoped.route("/agents", agentListRoute);
-// Runtimes, toolbelts and tool state (ADR-192). Session auth; the role is
+// Runtimes, toolbelts and tool state (ADR-198). Session auth; the role is
 // checked in each write handler.
 orgScoped.route("/runtimes/create", runtimeCreateRoute);
 orgScoped.route("/runtimes", runtimeListRoute);

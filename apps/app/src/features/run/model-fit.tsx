@@ -6,7 +6,7 @@
 // The panel is generated, not the record, and says so in its badge. A reading
 // names a capability class, never a model id, and changes nothing on its own:
 // a sealed run keeps the model it ran on, and an agent carries no definition
-// file to change (ADR-192). No contract changes an agent's model class from
+// file to change (ADR-198). No contract changes an agent's model class from
 // this page yet, so the card's action is drawn as a stub that says so, never a
 // control that silently does nothing.
 //

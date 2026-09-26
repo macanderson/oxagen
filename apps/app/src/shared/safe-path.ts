@@ -195,16 +195,40 @@ export const routes = {
   /**
    * Fleet; `cursor` opens a later page of its runs table, and `prs` lists
    * only the runs `with` or `without` pull requests (`any`, or absent, is all).
+   * `q` is the search, `status`, `tier` and `replay` each carry a
+   * comma-joined list, `sort` and `dir` the order, and `page` the page number
+   * from 1 (#3837). A default is left out of the URL: `prs` `any`, the
+   * `started` descending order, and page 1.
    */
   fleet: (
     org: string,
     ws: string,
-    q?: { cursor?: string; prs?: "any" | "with" | "without" },
-  ): SafePath =>
-    withQuery(pathOf(org, ws), {
+    q?: {
+      cursor?: string;
+      prs?: "any" | "with" | "without";
+      q?: string;
+      status?: string;
+      tier?: string;
+      replay?: string;
+      sort?: string;
+      dir?: "asc" | "desc";
+      page?: number;
+    },
+  ): SafePath => {
+    const defaultOrder =
+      (q?.sort ?? "started") === "started" && (q?.dir ?? "desc") === "desc";
+    return withQuery(pathOf(org, ws), {
       prs: q?.prs === "any" ? undefined : q?.prs,
+      q: q?.q === "" ? undefined : q?.q,
+      status: q?.status === "" ? undefined : q?.status,
+      tier: q?.tier === "" ? undefined : q?.tier,
+      replay: q?.replay === "" ? undefined : q?.replay,
+      sort: defaultOrder ? undefined : q?.sort,
+      dir: defaultOrder ? undefined : q?.dir,
+      page: q?.page === undefined || q.page <= 1 ? undefined : String(q.page),
       cursor: q?.cursor,
-    }),
+    });
+  },
   /**
    * Agent IAM; `cursor` opens a later page of the identities table, and
    * `deregistered` lists retired agents beside the live ones.
@@ -273,7 +297,7 @@ export const routes = {
    * One step of Register an agent (#2967, ADR-065 decision 1). `agent` carries
    * the identity `register_agent` minted from the name step to the wrap and
    * run steps, so a reload lands back on the same registration. `runtime`
-   * opens the name step with that runtime chosen (`rtm_…`, ADR-192), which is
+   * opens the name step with that runtime chosen (`rtm_…`, ADR-198), which is
    * where Add a runtime lands.
    */
   register: (
@@ -396,7 +420,7 @@ export const routes = {
    * Tools; its tabs are path segments (`/tools/providers`), as the mockup's
    * route names them, and the first tab is the bare path. A category chip, a
    * provider chip, the API-names toggle, a cursor and the toolbelt open on the
-   * Toolbelts tab (`belt`, ADR-192) are query values.
+   * Toolbelts tab (`belt`, ADR-198) are query values.
    */
   tools: (
     org: string,

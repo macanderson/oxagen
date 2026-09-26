@@ -17,7 +17,7 @@ const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 /**
  * The slug a name suggests, by the one rule every name-made slug follows
- * (`slugFromName`, ADR-192): spaces become hyphens and every other special
+ * (`slugFromName`, ADR-198): spaces become hyphens and every other special
  * character, apostrophes included, is dropped.
  */
 export function toSlug(input: string, max = 40): string {

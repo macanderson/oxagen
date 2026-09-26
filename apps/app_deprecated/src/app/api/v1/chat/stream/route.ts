@@ -167,7 +167,7 @@ const BodySchema = z.object({
   // Selected/bound agent (OXA app-agent-selector + Workbench chat↔agent binding) —
   // the publicId (`agt_…`) of the agent chosen in the composer (or threaded
   // from the Ask page's `?agent=<publicId>` URL param), or null/omitted for the
-  // default (generic chat) agent. ADR-192 removed agent definitions, so the
+  // default (generic chat) agent. ADR-198 removed agent definitions, so the
   // field is still accepted from older clients and changes nothing.
   agentId: z.string().min(1).max(64).nullable().default(null),
   // ADR-043: the pinned repo/environment chat context (`pinnedContext`) went
@@ -714,9 +714,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           clientIp,
         };
 
-        // ── Agent binding, retired by ADR-192 ─────────────────────────────────
+        // ── Agent binding, retired by ADR-198 ─────────────────────────────────
         // A turn bound to an agent merged that agent's definition (instructions
-        // and MCP servers) into the turn. ADR-192 removed agent definitions, so
+        // and MCP servers) into the turn. ADR-198 removed agent definitions, so
         // an `agentId` on the request no longer changes the turn: the MCP
         // allowlist is exactly the request's.
         const effectiveServerIds = activeServerIds;

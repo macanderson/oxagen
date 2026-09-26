@@ -1,7 +1,7 @@
 // audit-exempt: availability and the default decide what a toolbelt may show and grant nothing; the security event taxonomy has no tool-state type, and the kernel capability.invoke_* audit covers the write.
 //
 // tool.state.set.ts — an owner or admin decides which tools are available to
-// toolbelts and which start active (ADR-192, #4369). Field semantics are on
+// toolbelts and which start active (ADR-198, #4369). Field semantics are on
 // the contract (packages/oxagen/src/contracts/tool.state.set.ts).
 //
 // Role gate: the contract's roles (INV-29). The target is a list of tools or

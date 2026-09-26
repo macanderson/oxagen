@@ -1,4 +1,4 @@
-// update_toolbelt — rename a custom toolbelt and edit its tools (ADR-192,
+// update_toolbelt — rename a custom toolbelt and edit its tools (ADR-198,
 // #4369).
 //
 // Each change applies in order, in one transaction:

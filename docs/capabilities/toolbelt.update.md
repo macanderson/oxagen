@@ -10,7 +10,7 @@
 
 ## Intent
 
-Rename a custom toolbelt and edit its tools (ADR-192, #4369). Each change applies in order, in one transaction, and each sees the ones before it:
+Rename a custom toolbelt and edit its tools (ADR-198, #4369). Each change applies in order, in one transaction, and each sees the ones before it:
 
 | `op` | Effect |
 |---|---|

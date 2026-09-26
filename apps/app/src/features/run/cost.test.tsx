@@ -325,7 +325,7 @@ describe("CostTab", () => {
     expect(read).toHaveTextContent(
       "2 prompts · 7 turns · 24 steps · 1 tool call failed",
     );
-    // An agent carries no definition file (ADR-192), so the reading names none.
+    // An agent carries no definition file (ADR-198), so the reading names none.
     expect(read).not.toHaveTextContent(".oxagen/agents/");
   });
 
@@ -888,6 +888,42 @@ describe("CostTab", () => {
     expect(tokens).toHaveTextContent("Cache hit 98.8% of input");
     // 400,000 written of 800,000 input tokens.
     expect(tokens).toHaveTextContent("50% of input written to cache");
+    expect(tokens).not.toHaveTextContent("nothing written to cache");
+  });
+
+  it("prints a write share too small to round as under 0.1%, not 0%", async () => {
+    // 300 tokens written of 1,000,000 input: 0.03%, which one decimal rounds
+    // to 0%. The run did write, so the tile must not read as if it had not.
+    await renderTab(
+      props({
+        cost: readOk(
+          costRollup({
+            micros: "4130000",
+            tokens: {
+              inputUncached: 199_700,
+              cacheRead: 800_000,
+              cacheWrite5m: 300,
+              cacheWrite1h: 0,
+              output: 20_000,
+              reasoning: 0,
+            },
+            byClass: {
+              ...RELEASE_RUN_CLASSES,
+              cacheWrite5m: "1875",
+              cacheWrite1h: "0",
+              output: "2246106",
+              reasoning: "0",
+            },
+            cacheSaving: "3555000",
+            cacheHitRate: 0.8,
+            modelCalls: 8,
+          }),
+        ),
+      }),
+    );
+    const tokens = screen.getByTestId("inst-tokens");
+    expect(tokens).toHaveTextContent("<0.1% of input written to cache");
+    expect(tokens).not.toHaveTextContent(/(^|[^.\d])0% of input written/);
     expect(tokens).not.toHaveTextContent("nothing written to cache");
   });
 

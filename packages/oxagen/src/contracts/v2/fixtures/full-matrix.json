@@ -413,7 +413,7 @@
       "tool": "register_agent",
       "grade": "INHERIT",
       "group": "Identity and access",
-      "does": "one operator on one runtime with one harness, carrying a toolbelt; mints the principal, default role, version 1 and a credential shown once (ADR-192)",
+      "does": "one operator on one runtime with one harness, carrying a toolbelt; mints the principal, default role, version 1 and a credential shown once (ADR-198)",
       "absorbs": [
         {
           "name": "register_agent",
@@ -451,7 +451,7 @@
       "tool": "update_agent",
       "grade": "INHERIT",
       "group": "Identity and access",
-      "does": "moves an agent to another runtime or gives it another toolbelt; each change writes a version and keeps the principal (ADR-192)",
+      "does": "moves an agent to another runtime or gives it another toolbelt; each change writes a version and keeps the principal (ADR-198)",
       "absorbs": [
         {
           "name": "move_agent",

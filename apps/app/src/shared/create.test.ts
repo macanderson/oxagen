@@ -105,7 +105,7 @@ describe("clone requests", () => {
   });
   it.each([
     { kind: "tool", cloneSourceRef: "existing" },
-    // An agent is not cloned (ADR-192).
+    // An agent is not cloned (ADR-198).
     { kind: "agent", cloneSourceRef: "existing" },
     { kind: "skill", cloneSourceRef: "" },
     { kind: "skill", cloneSourceRef: "x".repeat(201) },

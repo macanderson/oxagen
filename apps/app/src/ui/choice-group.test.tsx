@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The option-card picker (ADR-192): a free option is chosen on click; a taken
+// The option-card picker (ADR-198): a free option is chosen on click; a taken
 // one stays visible, is announced as unavailable with its reason, opens the
 // reason on hover and on focus, and is never chosen.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

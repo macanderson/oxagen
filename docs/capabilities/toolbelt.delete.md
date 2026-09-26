@@ -10,7 +10,7 @@
 
 ## Intent
 
-Delete a custom toolbelt that no live agent carries (ADR-192, #4369). The row is soft-deleted, so an agent version that named the belt still resolves it by id. Give the agents that carry it another belt first (`assign_agent_toolbelt`).
+Delete a custom toolbelt that no live agent carries (ADR-198, #4369). The row is soft-deleted, so an agent version that named the belt still resolves it by id. Give the agents that carry it another belt first (`assign_agent_toolbelt`).
 
 The handler locks the belt row before it counts carriers, and `assign_agent_toolbelt` and `register_agent` share-lock it before they give it to an agent, so an assignment racing the delete is either counted or refused.
 

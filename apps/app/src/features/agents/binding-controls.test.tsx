@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The agent's two binding writes drawn on their own (ADR-192): the toolbelt
+// The agent's two binding writes drawn on their own (ADR-198): the toolbelt
 // picker saves another belt, the runtime picker moves the agent, each names
 // the version it wrote and refreshes the page, a refusal is named and changes
 // nothing, and a viewer who may not write sees the binding and no control.

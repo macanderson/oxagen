@@ -7,7 +7,7 @@ import { z } from "zod";
 // The design copy that sat at docs/reference/agent-schema.ts duplicated it and
 // was removed on 2026-09-23 (#3895); git history keeps it.
 // An agent VERSION CONFIG is the body `agent_versions.config` carries (see the
-// section below; ADR-192 removed the agent definition file). Triggers belong
+// section below; ADR-198 removed the agent definition file). Triggers belong
 // to automations/playbooks, not the agent: the config carries no trigger
 // fields. An agent INSTANCE is one running execution with live state and a
 // debug posture. An agent LOG is the append-only, typed traceability record
@@ -19,7 +19,7 @@ import { z } from "zod";
 //
 // ADR-043 removed the execution runtime, and with it every field that
 // described HOW an agent runs: skills, sandboxes, sandbox-bound environments
-// and code mode are gone. ADR-192 then moved identity onto the agent row (one
+// and code mode are gone. ADR-198 then moved identity onto the agent row (one
 // operator, one runtime, one harness) and what an agent can reach onto its
 // toolbelt, so what remains here is the version config.
 //
@@ -116,7 +116,7 @@ export type AgentTool = z.infer<typeof agentToolSchema>;
 // ═════════════════════════════════════════════════════════════════════════════
 // VERSION CONFIG — the body `agent_versions.config` carries
 // ═════════════════════════════════════════════════════════════════════════════
-// ADR-192: a customer's agent carries no prompt and no tool list of its own.
+// ADR-198: a customer's agent carries no prompt and no tool list of its own.
 // It carries a runtime and a toolbelt, recorded on the version row, and this
 // config holds only the budget and containment tables the host bundle reads
 // (`agent-version-config.ts`). The in-app assistant, which Oxagen seeds and

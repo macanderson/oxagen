@@ -9,6 +9,19 @@ import type { ContractOutput } from "@/server/kernel";
 
 type RunListOutput = ContractOutput<typeof runList>;
 type RunListItem = RunListOutput["runs"][number];
+type RunListTokens = NonNullable<RunListItem["tokens"]>;
+
+/** The rollup's snake-case token classes as the view names them. */
+function toRunTokenCounts(tokens: RunListTokens) {
+  return {
+    inputUncached: tokens.input_uncached,
+    cacheRead: tokens.cache_read,
+    cacheWrite5m: tokens.cache_write_5m,
+    cacheWrite1h: tokens.cache_write_1h,
+    output: tokens.output,
+    reasoning: tokens.reasoning,
+  };
+}
 
 /**
  * One row of `list_runs` as the tables and the Run header read it. The Run
@@ -58,6 +71,16 @@ export function toRunRow(
     thinking: run.thinking ?? null,
     permissionMode: run.permissionMode ?? null,
     reportedTokens: run.reportedTokens ?? null,
+    // The rollup's counts (#3834). Null is "no rollup row"; absent is "the
+    // read did not look", and each stays what it is.
+    ...(run.tokens === undefined
+      ? {}
+      : {
+          tokens: run.tokens === null ? null : toRunTokenCounts(run.tokens),
+        }),
+    ...(run.cacheHitRate === undefined
+      ? {}
+      : { cacheHitRate: run.cacheHitRate }),
     machine: run.machine,
     place: run.place ?? null,
     harness: run.harness ?? null,
@@ -83,6 +106,9 @@ export function toRunRow(
             number: pull.number,
             repository: pull.repository,
             state: pull.state,
+            ...(pull.stateSeenAt === undefined
+              ? {}
+              : { stateSeenAt: pull.stateSeenAt }),
           })),
         }),
     ...(run.pullRequestsOpened === undefined
@@ -96,6 +122,8 @@ export function toRunRow(
     steerBlock: run.steerBlock ?? null,
     ingressRevoked: run.ingressRevoked ?? false,
     ingressPaused: run.ingressPaused ?? false,
+    // Absent for a wrapped session, whose store records no compaction.
+    ...(run.compacted === undefined ? {} : { compacted: run.compacted }),
     completenessGaps: run.completenessGaps,
     canSummarize: run.canSummarize,
     startedAt: run.startedAt,
@@ -111,5 +139,8 @@ export function toRunPage(out: RunListOutput): z.input<typeof RunPage> {
     nextCursor: out.nextCursor,
     ...(out.liveRuns === undefined ? {} : { liveRuns: out.liveRuns }),
     ...(out.warnings === undefined ? {} : { warnings: out.warnings }),
+    // Absent when the read did not count; null past the bound (#3837).
+    ...(out.total === undefined ? {} : { total: out.total }),
+    ...(out.totalBound === undefined ? {} : { totalBound: out.totalBound }),
   };
 }

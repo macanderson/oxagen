@@ -60,7 +60,7 @@ export const RESERVED_ORG_SLUGS: ReadonlySet<string> = new Set([
  * enforced by `apps/app/src/test/arch/import-graph.test.ts`), so a contract
  * file is the app's doorway to a shared shape. The onboarding form reads these
  * from here, and the definition is still in one place. `slugFromName` is the
- * one derivation every name-made slug uses (ADR-192).
+ * one derivation every name-made slug uses (ADR-198).
  */
 export {
   RESERVED_WORKSPACE_SLUGS,

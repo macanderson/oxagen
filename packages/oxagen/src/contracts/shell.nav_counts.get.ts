@@ -1,8 +1,10 @@
 /**
- * `get_nav_counts`: the sidebar's three counts (MC spec App. E; mockups
- * `pages/shell.md`): Fleet = pending approvals, Steering = open proposals,
- * Audit = open critical incidents in the organization. Each count reads the store that owns it
- * (`agent.approval_requests`, `agent.context_proposals`, `tacho.incidents`).
+ * `get_nav_counts`: the sidebar's counts (MC spec App. E; mockups
+ * `pages/shell.md`): Fleet = pending approvals plus open interjections,
+ * Steering = open proposals, Audit = open critical incidents in the
+ * organization. Each count reads the store that owns it
+ * (`agent.approval_requests`, `agent.interjections`, `agent.context_proposals`,
+ * `tacho.incidents`).
  * A count is null only when its read answered no row, and a null renders as
  * "not recorded", never as a zero.
  *
@@ -18,7 +20,7 @@ export const shellNavCountsGet = registerCapability({
   name: "get_nav_counts",
   domain: "shell",
   description:
-    "The sidebar's counts for this workspace: pending approvals, open steering proposals and open critical incidents, each null when its read answered nothing.",
+    "The sidebar's counts for this workspace: pending approvals, open agent questions, open steering proposals and open critical incidents, each null when its read answered nothing.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -41,6 +43,11 @@ export const shellNavCountsGet = registerCapability({
     .object({
       /** Pending, unexpired approvals in the workspace. */
       approvals: count,
+      /**
+       * Questions agents in the workspace paused to ask that nobody has
+       * answered and that have not expired (#3839).
+       */
+      interjections: count,
       /** Steering proposals that have not merged and were not rejected. */
       proposals: count,
       /** Unresolved incidents at severity 10 across the organization: Audit is an organization page. */

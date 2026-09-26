@@ -281,7 +281,7 @@ export async function mintHostEnrollment(
     delete (returning as Partial<typeof hostColumns>).gatewayLastSeenAt;
   }
 
-  // The runtime the enrollment binds (ADR-192). A token enrollment takes its
+  // The runtime the enrollment binds (ADR-198). A token enrollment takes its
   // agent's runtime. An operator enrollment, and an agent registered before
   // runtimes existed that the backfill left unplaced, take the runtime the
   // hostname names, created when none does. The agent row is not moved: that

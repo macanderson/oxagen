@@ -10,7 +10,7 @@
 
 ## Intent
 
-The runtimes named in the workspace, in name order, each with its live agents and their harness, its live host enrollments, and when a host last reported (ADR-192, #4369).
+The runtimes named in the workspace, in name order, each with its live agents and their harness, its live host enrollments, and when a host last reported (ADR-198, #4369).
 
 The register form reads this to keep a runtime and harness pair from being registered twice. It disables a runtime that already runs the chosen harness, and a harness the chosen runtime already runs, and names the agent that holds the pair. A retired agent frees its pair and is not listed.
 

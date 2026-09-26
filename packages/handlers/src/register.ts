@@ -1,4 +1,5 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
   registerHandler,
@@ -51,6 +52,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       retryAfterSeconds: out.retryAfterSeconds,
     };
   });
+  // The pull request backfill (ADR-192) lives in @oxagen/inngest-functions
+  // for the same reason, and is loaded on its first run.
+  setPullRequestBackfillRunner(async (request) =>
+    (await import("./lib/run-pull-request-backfill")).runPullRequestBackfill(
+      request,
+    ),
+  );
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
       (m) => m.handler as CapabilityHandlerFn,
@@ -1234,6 +1242,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoCommandDispatchHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "pause_workspace_runs",
+    async () =>
+      (await import("./tacho.workspace_runs.pause"))
+        .pauseWorkspaceRunsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "fetch_commands",
     async () =>
       (await import("./tacho.command.fetch"))
@@ -1290,7 +1304,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./agent.toolbelt.get"))
         .agentToolbeltGetHandler as CapabilityHandlerFn,
   );
-  // ADR-192 (#4369): an agent is one operator on one runtime with one
+  // ADR-198 (#4369): an agent is one operator on one runtime with one
   // harness. Runtimes, toolbelts, tool state, and the two writes that make a
   // new agent version.
   registerHandler(
@@ -1422,6 +1436,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./shell.nav_counts.get"))
         .shellNavCountsGetHandler as CapabilityHandlerFn,
+  );
+  // Interjections (#3839): the questions a run paused to ask a person, which
+  // the Fleet waiting tile, the Fleet count and the approvals drawer read.
+  // They live here, not in @oxagen/agent, because the answer queues its
+  // message through this package's command store.
+  registerHandler(
+    "list_interjections",
+    async () =>
+      (await import("./agent.interjection.list"))
+        .agentInterjectionListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "answer_interjection",
+    async () =>
+      (await import("./agent.interjection.answer"))
+        .agentInterjectionAnswerHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_preferences",

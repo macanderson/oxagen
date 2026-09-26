@@ -1,6 +1,6 @@
 # propose_configuration_clone
 
-Submit a skill or steering record clone under a distinct name and source identifier. The proposal changes no active configuration. An agent has no clone (ADR-192).
+Submit a skill or steering record clone under a distinct name and source identifier. The proposal changes no active configuration. An agent has no clone (ADR-198).
 
 **Mode:** sync
 

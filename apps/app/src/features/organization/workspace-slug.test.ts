@@ -12,7 +12,7 @@ describe("slugFromName", () => {
     expect(slugFromName("---")).toBe("");
   });
 
-  it("drops apostrophes and other special characters (ADR-192)", () => {
+  it("drops apostrophes and other special characters (ADR-198)", () => {
     expect(slugFromName("Mac's team")).toBe("macs-team");
     expect(slugFromName("R&D")).toBe("rd");
   });

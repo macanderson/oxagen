@@ -1,4 +1,4 @@
-// toolbelts.ts — the one place a toolbelt is resolved (ADR-192): the
+// toolbelts.ts — the one place a toolbelt is resolved (ADR-198): the
 // workspace's All tools belt, a belt by public id, and the tools a belt holds.
 //
 // A toolbelt narrows what an agent is shown and never widens a grant. Its

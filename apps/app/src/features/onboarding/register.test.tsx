@@ -239,7 +239,7 @@ describe("the name step", () => {
     );
   });
 
-  it("offers the named runtimes with the one Add a runtime chose already chosen (ADR-192)", async () => {
+  it("offers the named runtimes with the one Add a runtime chose already chosen (ADR-198)", async () => {
     const { source } = onboardingSource({
       runtimes: readOk({
         runtimes: [

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The Runtimes pages over a fake DataSource (roadmap mockups/pages/runtimes.md):
 // the list and one runtime in every state the spec lists, the dialogs the page
-// opens, the named runtimes and Add a runtime (ADR-192), and the writes, with
+// opens, the named runtimes and Add a runtime (ADR-198), and the writes, with
 // an axe check in every render. A value no
 // store records renders as not recorded and names its gap.
 import {
@@ -1070,7 +1070,7 @@ describe("Runtimes on a phone", () => {
   });
 });
 
-describe("Named runtimes and Add a runtime (ADR-192)", () => {
+describe("Named runtimes and Add a runtime (ADR-198)", () => {
   it("lists each named runtime with its agents by harness, and Register an agent on one with none", async () => {
     await renderList({
       list: runtimeList([enrollment()]),

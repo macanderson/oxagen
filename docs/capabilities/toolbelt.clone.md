@@ -10,7 +10,7 @@
 
 ## Intent
 
-Copy a toolbelt into a new custom belt you can edit (ADR-192, #4369). The clone holds every tool the source holds, each active as it is in the source:
+Copy a toolbelt into a new custom belt you can edit (ADR-198, #4369). The clone holds every tool the source holds, each active as it is in the source:
 
 - From the All tools belt: every available tool, active as its workspace default says.
 - From a custom belt: every row the source has, as the source left it. A row for a tool that is unavailable now is copied too, so the tool comes back in the clone once an owner or admin makes it available again.

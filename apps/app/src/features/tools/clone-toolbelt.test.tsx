@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Clone a toolbelt (ADR-192): the slug fills from the name until the person
+// Clone a toolbelt (ADR-198): the slug fills from the name until the person
 // types one, the write carries what the dialog shows, a new belt opens below
 // the list, and a taken slug is named on its field. axe checks the state each
 // test ends in (INV-26).

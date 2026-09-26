@@ -187,7 +187,7 @@ afterEach(async () => {
 });
 
 describe("the name step", () => {
-  it("asks for the name, slug, harness, runtime and toolbelt (ADR-192)", () => {
+  it("asks for the name, slug, harness, runtime and toolbelt (ADR-198)", () => {
     renderForm();
     expect(screen.getByLabelText("Name")).toBeInTheDocument();
     expect(screen.getByLabelText("Slug")).toBeInTheDocument();

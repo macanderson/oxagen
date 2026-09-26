@@ -105,7 +105,7 @@ describe("CreateHost", () => {
     const dialog = await screen.findByTestId("create-chooser");
     expect(dialog.querySelector('[data-kind="skill"]')).not.toBeNull();
     // The skill and record wizards are offered. An agent is registered on
-    // its runtime, not created here (ADR-192), and the tool wizard is not
+    // its runtime, not created here (ADR-198), and the tool wizard is not
     // offered yet.
     expect(dialog.querySelector('[data-kind="agent"]')).toBeNull();
     expect(dialog.querySelector('[data-kind="record"]')).not.toBeNull();

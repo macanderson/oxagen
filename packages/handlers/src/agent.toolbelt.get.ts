@@ -17,7 +17,7 @@
 // no schemas; a server whose tools were never imported reports none rather
 // than a placeholder.
 //
-// The agent's toolbelt narrows the result before any gate decides (ADR-192):
+// The agent's toolbelt narrows the result before any gate decides (ADR-198):
 // a registry tool the belt does not show is in `cannotSee` with rule
 // `not_in_toolbelt`, and an MCP tool nobody imported is in no belt. The belt
 // never widens a gate's answer. On a wrapped harness the belt is enforced by
@@ -227,7 +227,7 @@ export const agentToolbeltGetHandler: CapabilityHandler<
       });
     }
     const agentKey = (await agentKeysFor(tx, scope, [row])).get(row.id) ?? null;
-    // The agent's toolbelt (ADR-192): which registry tools it is shown.
+    // The agent's toolbelt (ADR-198): which registry tools it is shown.
     const belt = await agentBeltGovernance(tx, scope, row, ctx.userId ?? null);
     return { row, agentKey, belt };
   });
@@ -339,7 +339,7 @@ export const agentToolbeltGetHandler: CapabilityHandler<
 
   const tools: BeltTool[] = [];
   const cannotSee: BeltExclusion[] = [];
-  // The belt narrows before any gate decides, and never widens (ADR-192).
+  // The belt narrows before any gate decides, and never widens (ADR-198).
   // An MCP tool is shown only when the agent's belt shows it: a tool a server
   // lists but nobody imported is in no belt. A capability is narrowed only
   // when the workspace registry names it; one it does not name is decided by

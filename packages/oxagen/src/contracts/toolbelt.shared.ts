@@ -1,5 +1,5 @@
 // Shapes shared by the toolbelt contracts and every contract that names a
-// toolbelt (ADR-192). No capability registers here.
+// toolbelt (ADR-198). No capability registers here.
 //
 // A toolbelt is the set of tools an agent is shown. It narrows what the agent
 // can reach and never widens a grant: roles, mandates and kill switches still

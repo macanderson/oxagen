@@ -57,6 +57,7 @@ const source: DataSource = {
     outcomesSettings: refuse,
   },
   approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+  interjections: { open: refuse },
   agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
   billing: {
     plan: refuse,

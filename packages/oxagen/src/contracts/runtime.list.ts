@@ -1,5 +1,5 @@
 // list_runtimes — the runtimes named in this workspace and the agents on each
-// (ADR-192, #4369).
+// (ADR-198, #4369).
 //
 // The register form reads this to keep a runtime and harness pair from being
 // registered twice: each runtime lists its live agents with their harness, so
@@ -19,7 +19,7 @@ const instant = z.string().datetime({ offset: true });
 export const runtimeListItem = runtimeRefSchema
   .extend({
     createdAt: instant,
-    /** The live agents on this runtime, one per harness (ADR-192). */
+    /** The live agents on this runtime, one per harness (ADR-198). */
     agents: z
       .array(
         z

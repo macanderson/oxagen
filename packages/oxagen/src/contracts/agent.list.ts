@@ -69,7 +69,7 @@ export const agentListItem = z
     agentKey: z.string().nullable(),
     harness: agentHarnessSchema,
     /**
-     * The runtime the agent runs on now (ADR-192). Null for an agent Oxagen
+     * The runtime the agent runs on now (ADR-198). Null for an agent Oxagen
      * runs on no named runtime (stella's in-app assistant) and for an agent
      * registered before runtimes existed that the backfill could not place.
      */

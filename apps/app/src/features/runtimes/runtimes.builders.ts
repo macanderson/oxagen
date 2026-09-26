@@ -65,7 +65,7 @@ export function runtimeList(
   return readOk({ enrollments, more });
 }
 
-/** A runtime the workspace named (ADR-192), running Claude Code as `mac-claude`. */
+/** A runtime the workspace named (ADR-198), running Claude Code as `mac-claude`. */
 export function namedRuntime(
   overrides: Partial<NamedRuntime> = {},
 ): NamedRuntime {
@@ -177,6 +177,7 @@ export function runtimesSource(reads: {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse },
     agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
     mandates: { list: refuse, get: refuse },
     spend: {

@@ -1,5 +1,5 @@
 "use client";
-// Clone a toolbelt (ADR-192): the dialog that copies a belt into a new custom
+// Clone a toolbelt (ADR-198): the dialog that copies a belt into a new custom
 // belt through `clone_toolbelt`. The new belt starts with every tool the
 // source holds, each on or off as it is there, and opens below the list.
 //

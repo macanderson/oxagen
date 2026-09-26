@@ -10,7 +10,7 @@
 // workspace's main repository, and each wizard ends on a pull request. A kind
 // is offered (in the chooser and in ⌘K) once the host carries its wizard; the
 // order here is the chooser's order. An agent is not one of them: it is an
-// identity on a runtime, registered through the register flow (ADR-192).
+// identity on a runtime, registered through the register flow (ADR-198).
 
 /** Every kind the wizard shell is built to host. */
 export type CreateKind = "tool" | "skill" | "record";

@@ -1,5 +1,5 @@
 // get_toolbelt — one toolbelt, its tools grouped by the server they came from
-// (ADR-192, #4369).
+// (ADR-198, #4369).
 //
 // Every server in the workspace appears once. A group the belt holds no tool
 // from reads `included: false`, so a clone's editor can add it back. On the

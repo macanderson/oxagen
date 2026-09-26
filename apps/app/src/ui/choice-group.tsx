@@ -1,6 +1,6 @@
 "use client";
 // A single choice drawn as a row of option cards: the harness, runtime and
-// toolbelt pickers of the register flow and the agent page (ADR-192).
+// toolbelt pickers of the register flow and the agent page (ADR-198).
 //
 // A native <select> cannot say why an option is off, and a disabled control
 // cannot be hovered or focused, so an option that is taken stays in the row,

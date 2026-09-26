@@ -48,7 +48,7 @@ export interface AgentIdentityRow {
   operatorName: string | null;
   /** The label set through set_cost_center (ADR-142); null inherits the workspace's. */
   costCenter: string | null;
-  /** The runtime the agent runs on now (ADR-192); null when it runs on no named runtime. */
+  /** The runtime the agent runs on now (ADR-198); null when it runs on no named runtime. */
   runtimeId: string | null;
   /** The toolbelt the agent carries now; null reads as the workspace's All tools belt. */
   toolbeltId: string | null;
@@ -586,7 +586,7 @@ export async function newestTamperIncident(
   return row ?? null;
 }
 
-/** A runtime as a record names it (ADR-192). */
+/** A runtime as a record names it (ADR-198). */
 export interface RuntimeRefRow {
   id: string;
   publicId: string;
@@ -594,7 +594,7 @@ export interface RuntimeRefRow {
   slug: string;
 }
 
-/** A toolbelt as a record names it (ADR-192). */
+/** A toolbelt as a record names it (ADR-198). */
 export interface ToolbeltRefRow {
   id: string;
   publicId: string;

@@ -343,7 +343,7 @@ describe("Agents, loaded", () => {
         "Each row names the reusable objects this agent holds a reference to.",
       ),
     ).toBeInTheDocument();
-    // An agent carries no definition file (ADR-192), so no source line names one.
+    // An agent carries no definition file (ADR-198), so no source line names one.
     expect(screen.queryByText(/\.oxagen\/agents\//)).toBeNull();
     expect(headers()).toEqual(COMPOSITION);
     expect(
@@ -360,7 +360,7 @@ describe("Agents, loaded", () => {
       "Cuts releases and opens their pull requests.",
       "MBMarcus Bell",
       "not recorded",
-      // The belt the agent carries (ADR-192).
+      // The belt the agent carries (ADR-198).
       "All tools",
       // The runtime over the host over "<kind> · <tier>": no store records the kind.
       "Build boxbuild-01not recorded · gateway",
@@ -867,7 +867,7 @@ describe("Agents, deregistered", () => {
 });
 
 describe("Agents header actions", () => {
-  it("draws Add a runtime and Register an agent, with Register the one gold action into the register flow (ADR-192)", async () => {
+  it("draws Add a runtime and Register an agent, with Register the one gold action into the register flow (ADR-198)", async () => {
     const { container } = render(
       <IntlProvider>
         <AgentsCreate org="acme" ws="core-platform" />

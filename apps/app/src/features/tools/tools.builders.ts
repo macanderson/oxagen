@@ -328,7 +328,7 @@ type ToolsReads = {
   connections?: Read<ConnectionList>;
   /** The registry tab's server roster; defaults to the two-row fixture. */
   mcpServers?: Read<McpServerList>;
-  /** The Toolbelts tab's list (ADR-192); defaults to All tools and one clone. */
+  /** The Toolbelts tab's list (ADR-198); defaults to All tools and one clone. */
   toolbelts?: Read<ToolbeltList>;
   /** The belt the Toolbelts tab opens; defaults to the clone. */
   toolbelt?: Read<ToolbeltDetail>;
@@ -396,6 +396,7 @@ export function toolsSource(reads: ToolsReads) {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse },
     agents: {
       list: answer(
         reads.agents ?? readOk(agentPage([agentPageRow("invoice-bot")])),

@@ -1,5 +1,5 @@
 // assign_agent_toolbelt — give an agent another toolbelt and keep its
-// identity (ADR-192, #4369).
+// identity (ADR-198, #4369).
 //
 // The handler writes a new `agent_versions` row (`toolbelt_changed`) and moves
 // `agent.agents.toolbelt_id`. The principal, its roles and its grants do not

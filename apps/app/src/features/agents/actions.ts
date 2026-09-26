@@ -1,5 +1,5 @@
 "use server";
-// The writes on an agent (#2956; ADR-057 decision 3; ADR-192), each through
+// The writes on an agent (#2956; ADR-057 decision 3; ADR-198), each through
 // the kernel seam for the workspace viewer the URL names. Every contract here
 // is `noBillingGate` and role-checked in its handler (INV-29): rotate,
 // suspend, retire, move and assign a toolbelt by an org Owner or Admin; a
@@ -73,7 +73,7 @@ export async function setAgentSuspended(
     : result;
 }
 
-// ── Runtime and toolbelt: the agent's versions (ADR-192) ─────────────────────
+// ── Runtime and toolbelt: the agent's versions (ADR-198) ─────────────────────
 // An agent keeps its principal, its roles and its runs for life. Its runtime
 // and its toolbelt can change, and each change writes a new agent version.
 // `move_agent` also revokes the agent's live host enrollments on the old

@@ -1,5 +1,5 @@
 "use client";
-// The two writes that change what an agent is bound to (ADR-192): give it
+// The two writes that change what an agent is bound to (ADR-198): give it
 // another toolbelt (`assign_agent_toolbelt`, on the Toolbelt tab) and move it
 // to another runtime (`move_agent`, on the Runtime tab). Each writes a new
 // agent version; the principal, its roles and its runs stay.

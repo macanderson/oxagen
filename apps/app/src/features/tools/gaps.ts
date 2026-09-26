@@ -7,7 +7,7 @@
 const TOOLS_GAPS = {
   /**
    * The belts holding each tool version and the agents carrying them, per row
-   * of the registry. Toolbelts are stored now (ADR-192) and the Toolbelts tab
+   * of the registry. Toolbelts are stored now (ADR-198) and the Toolbelts tab
    * reads them, but no read answers belt membership per tool version.
    */
   toolbelts: 3852,

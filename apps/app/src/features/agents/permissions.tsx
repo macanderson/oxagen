@@ -9,7 +9,7 @@
 // identity, the set `assign_agent_role` and `revoke_agent_role` accept
 // (INV-29). The agent's own per-run and per-day budgets are `get_agent`'s
 // `limits`, read from its active version's config the way the host bundle
-// reads them (ADR-192), and the organization and workspace ceilings above
+// reads them (ADR-198), and the organization and workspace ceilings above
 // them are read too. No control sets the agent's own budgets here: that waits
 // on #4372. The mandates are `list_mandates` narrowed to the agent.
 import { useLocale, useTranslations } from "next-intl";

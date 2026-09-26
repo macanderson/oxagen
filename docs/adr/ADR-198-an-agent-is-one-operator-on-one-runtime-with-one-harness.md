@@ -1,4 +1,4 @@
-# ADR-192: An agent is one operator on one runtime with one harness
+# ADR-198: An agent is one operator on one runtime with one harness
 
 - **Status:** Accepted
 - **Date:** 2026-09-25
@@ -8,7 +8,7 @@
 - **Refines:** ADR-024 (the agent key and the 18-character agent slug),
   ADR-179 (a re-enrolled host carries on its predecessor's sessions).
 - **Related:** issue #4369, issue #3852 (named toolbelts),
-  `packages/database/atlas/migrations/20260926010000_runtimes_toolbelts_agent_versions.sql`,
+  `packages/database/atlas/migrations/20260926020000_runtimes_toolbelts_agent_versions.sql`,
   `packages/oxagen/src/workspace-slug.ts`,
   `packages/oxagen/src/contracts/{runtime,toolbelt,tool.state,agent.register,agent.move,agent.toolbelt.assign}*.ts`.
 

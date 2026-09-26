@@ -1,6 +1,6 @@
 /**
  * workbench/agents.ts — the deprecated workbench's agent seam, retired by
- * ADR-192.
+ * ADR-198.
  *
  * The capabilities this module wrapped (`list_agent_defs`, `get_agent_def`,
  * `suggest_agent_def`, `create_agent_def`, `update_agent_def`,
@@ -16,12 +16,12 @@
 import type { AgentDefinitionConfig } from "@oxagen/oxagen/agent-schema";
 import type { WorkbenchCtx } from "./scope";
 
-/** Every write through this module since ADR-192. */
+/** Every write through this module since ADR-198. */
 export class AgentDefinitionsRemovedError extends Error {
   readonly code = "agent_definitions_removed";
   constructor() {
     super(
-      "Agent definitions were removed (ADR-192). Register an agent on a runtime from the Agents page.",
+      "Agent definitions were removed (ADR-198). Register an agent on a runtime from the Agents page.",
     );
     this.name = "AgentDefinitionsRemovedError";
   }
@@ -111,7 +111,7 @@ export const DEFAULT_AGENT_TYPE = "custom";
 
 // ── Reads ─────────────────────────────────────────────────────────────────────
 
-/** No agent definitions exist to list (ADR-192). */
+/** No agent definitions exist to list (ADR-198). */
 export async function listAgents(
   _ctx: WorkbenchCtx,
   _status?: "draft" | "active" | "archived",
@@ -119,7 +119,7 @@ export async function listAgents(
   return [];
 }
 
-/** No agent definition exists to read (ADR-192). */
+/** No agent definition exists to read (ADR-198). */
 export async function getAgent(
   _ctx: WorkbenchCtx,
   _agentId: string,
@@ -179,7 +179,7 @@ export async function summarizeAgent(
   return removed();
 }
 
-/** Returns the rows unchanged: nothing writes an agent summary since ADR-192. */
+/** Returns the rows unchanged: nothing writes an agent summary since ADR-198. */
 export async function ensureAgentSummaries(
   _ctx: WorkbenchCtx,
   agents: AgentListRow[],

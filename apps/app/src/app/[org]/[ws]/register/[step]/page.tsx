@@ -42,7 +42,7 @@ export default async function RegisterPage({
   if (registerStep === null) notFound();
   const { agent, runtime } = await searchParams;
   const registerAgent = firstParam(agent) ?? null;
-  // The runtime Add a runtime named, chosen on the name step (ADR-192).
+  // The runtime Add a runtime named, chosen on the name step (ADR-198).
   const registerRuntime = firstParam(runtime) ?? null;
   return (
     <RegisterGate ctx={ctx} step={registerStep} agent={registerAgent}>

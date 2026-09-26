@@ -6,7 +6,7 @@ import { agentList } from "../agent.list";
  * Appendix E: `list_agents`. Blank Does column: the job is unchanged.
  *
  * Appendix E had it absorb `list_agent_defs`, which listed agent definitions
- * with their tool refs and latest version. ADR-192 deleted that contract with
+ * with their tool refs and latest version. ADR-198 deleted that contract with
  * the definition file it read: an agent carries no definition, so there is no
  * definition to list. The live `list_agents` contract answers the question the
  * Agents page asks, one row per agent with its runtime, toolbelt, operator,

@@ -140,9 +140,9 @@ export async function seedAgent(
     workspaceId?: string;
     /** A cost-center label as set_cost_center stores it (ADR-142). */
     costCenter?: string | null;
-    /** `agent.runtimes.id` the agent runs on (ADR-192). */
+    /** `agent.runtimes.id` the agent runs on (ADR-198). */
     runtimeId?: string | null;
-    /** `tools.toolbelts.id` the agent carries (ADR-192). */
+    /** `tools.toolbelts.id` the agent carries (ADR-198). */
     toolbeltId?: string | null;
     /** `interactive_chat` seeds the managed assistant agent; `custom` otherwise. */
     agentType?: string;
@@ -207,7 +207,7 @@ export async function seedAgent(
   });
 }
 
-/** A named runtime in the tenant's workspace (ADR-192). */
+/** A named runtime in the tenant's workspace (ADR-198). */
 export async function seedRuntime(
   tenant: SeededTenant,
   over: { name: string; slug: string; workspaceId?: string },
@@ -235,7 +235,7 @@ export async function seedRuntime(
   });
 }
 
-/** A toolbelt in the tenant's workspace (ADR-192); `all_tools` by default. */
+/** A toolbelt in the tenant's workspace (ADR-198); `all_tools` by default. */
 export async function seedToolbelt(
   tenant: SeededTenant,
   over: {
@@ -556,7 +556,7 @@ export async function cleanupTenants(orgIds: readonly string[]): Promise<void> {
       );
     }
     await tx.delete(schema.agents).where(inArray(schema.agents.orgId, ids));
-    // After the agents and their versions, which reference both (ADR-192).
+    // After the agents and their versions, which reference both (ADR-198).
     await tx.delete(schema.runtimes).where(inArray(schema.runtimes.orgId, ids));
     await tx
       .delete(schema.toolbeltTools)

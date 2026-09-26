@@ -1,6 +1,6 @@
 // audit-exempt: a toolbelt narrows what an agent is shown and grants nothing, and the security event taxonomy has no toolbelt type; the kernel capability.invoke_* audit covers the write.
 //
-// toolbelt.update.ts — rename a custom toolbelt and edit its tools (ADR-192,
+// toolbelt.update.ts — rename a custom toolbelt and edit its tools (ADR-198,
 // #4369). The change semantics are on the contract
 // (packages/oxagen/src/contracts/toolbelt.update.ts); every change applies in
 // order, in one transaction, and each sees the ones before it.

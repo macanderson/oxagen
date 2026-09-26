@@ -1,9 +1,9 @@
-// The agent's versions (ADR-192): what it was bound to from each version on.
+// The agent's versions (ADR-198): what it was bound to from each version on.
 // An agent keeps its principal, its roles and its runs for life; its runtime
 // and its toolbelt can change, and each change writes a version. The list is
 // the record of those changes, newest first, as `get_agent` read it.
 //
-// A version written before ADR-192 is `legacy`: it recorded no runtime and no
+// A version written before ADR-198 is `legacy`: it recorded no runtime and no
 // toolbelt, so those cells say not recorded rather than borrowing the
 // agent's current binding.
 import { useTranslations } from "next-intl";

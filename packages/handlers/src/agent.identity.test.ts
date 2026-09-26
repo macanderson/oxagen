@@ -311,7 +311,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         agentRegisterHandler(registerInput(), ctx()),
       );
       expect(agentRegister.output.parse(registered)).toEqual(registered);
-      // The slug is derived from the name (ADR-192).
+      // The slug is derived from the name (ADR-198).
       expect(registered.slug).toBe("release-bot");
       expect(registered.agentKey).toBe(
         `${owner.orgNamespace}.${owner.workspaceNamespace}.release-bot`,

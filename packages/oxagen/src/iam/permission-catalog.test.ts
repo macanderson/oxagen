@@ -40,7 +40,7 @@ describe("the permission catalogue", () => {
 describe("runtime.read", () => {
   // The Runtimes page's denied state names runtime.read, so an owner must be
   // able to grant it on Roles (roadmap mockups/pages/runtimes.md, Permissions).
-  it("is the Runtimes page's read, over the hosts and the runtimes they bind (ADR-192)", () => {
+  it("is the Runtimes page's read, over the hosts and the runtimes they bind (ADR-198)", () => {
     expect(capabilitiesOf(["runtime.read"])).toEqual([
       "list_runtimes",
       "list_tacho_hosts",

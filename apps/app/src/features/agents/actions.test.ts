@@ -451,7 +451,7 @@ describe("pauseAgent", () => {
   });
 });
 
-describe("moveAgent (ADR-192)", () => {
+describe("moveAgent (ADR-198)", () => {
   it("moves the agent to the runtime for the workspace viewer and answers the version and the hosts it revoked", async () => {
     invoke.mockResolvedValue({
       agentId: "agt_releasebot",
@@ -495,7 +495,7 @@ describe("moveAgent (ADR-192)", () => {
   });
 });
 
-describe("assignAgentToolbelt (ADR-192)", () => {
+describe("assignAgentToolbelt (ADR-198)", () => {
   it("gives the agent the belt for the workspace viewer and answers the version", async () => {
     invoke.mockResolvedValue({
       agentId: "agt_releasebot",

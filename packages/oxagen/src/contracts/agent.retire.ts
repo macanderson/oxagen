@@ -6,7 +6,7 @@
 // (ADR-106, #3124) — an active mandate does not survive its agent's
 // retirement, because a suspended principal can never draw on it. Retiring
 // frees the agent's runtime and harness pair for the next registration
-// (ADR-192).
+// (ADR-198).
 //
 // A governance write on the identity, outside the metering surface:
 // `noBillingGate: true`. Roles: org Owner or Admin (INV-29).

@@ -44,7 +44,7 @@ function denied(message: string): CapabilityError {
 /**
  * `cc-<hostname slug>`, capped at ADR-024's 18-character agent slug. The
  * hostname slug follows the one rule every name-made slug follows
- * (`slugFromName`, ADR-192), after a trailing `.local` is dropped.
+ * (`slugFromName`, ADR-198), after a trailing `.local` is dropped.
  */
 export function agentSlugFor(hostname: string): string {
   const slug = slugFromName(hostname.replace(/\.local$/i, ""), 15);

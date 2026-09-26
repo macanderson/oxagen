@@ -5,7 +5,7 @@
 //
 // Four panels, in the design's order: Identity, Credentials, Run credential
 // and Trust relationships. The Identity panel names the runtime the agent runs
-// on, where the model tier the definition file named used to sit (ADR-192).
+// on, where the model tier the definition file named used to sit (ADR-198).
 // The facts are `get_agent`'s; a fact it does not
 // record says "not recorded" (the purpose lock and the live run tokens are
 // not on the contract), and a write it has no contract for (Change identity,

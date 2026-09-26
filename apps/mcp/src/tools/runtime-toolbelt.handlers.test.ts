@@ -1,4 +1,4 @@
-// The runtime, toolbelt and agent-version tools (ADR-192, #4369). Each one is a
+// The runtime, toolbelt and agent-version tools (ADR-198, #4369). Each one is a
 // thin adapter: build the context, invoke the contract by its registered
 // name on the `mcp` surface, and parse the output through the contract.
 import { beforeEach, describe, expect, it, vi } from "vitest";

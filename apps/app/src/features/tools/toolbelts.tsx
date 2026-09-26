@@ -1,4 +1,4 @@
-// Toolbelts (mockup `tools.md`, Toolbelts tab; ADR-192): the sets of tools
+// Toolbelts (mockup `tools.md`, Toolbelts tab; ADR-198): the sets of tools
 // agents are shown. Every workspace holds one All tools belt, the tools an
 // admin made available, and the belts cloned from it. A toolbelt narrows what
 // an agent is shown and grants nothing: every call still meets the agent's

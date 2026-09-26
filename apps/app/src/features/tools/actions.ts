@@ -654,7 +654,7 @@ export async function removeProvider(
     : result;
 }
 
-// ── Toolbelts (ADR-192) ──────────────────────────────────────────────────────
+// ── Toolbelts (ADR-198) ──────────────────────────────────────────────────────
 // A toolbelt narrows what an agent is shown and never widens a grant. The four
 // writes below each assert the contract's roles in the handler (an org Owner
 // or Admin, or the workspace Owner), so there is no second gate here. The

@@ -30,7 +30,7 @@ describe("register_agent contract", () => {
     });
   });
 
-  it("requires a runtime: an agent is one harness on one runtime (ADR-192)", () => {
+  it("requires a runtime: an agent is one harness on one runtime (ADR-198)", () => {
     const { runtimeId: _omit, ...withoutRuntime } = input;
     expect(agentRegister.input.safeParse(withoutRuntime).success).toBe(false);
     expect(

@@ -430,7 +430,7 @@ describe("RetireAgent", () => {
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual(["Cancel", "Deregister"]);
-    // An agent carries no definition file (ADR-192), so the dialog names none.
+    // An agent carries no definition file (ADR-198), so the dialog names none.
     expect(dialog).not.toHaveTextContent(".oxagen/agents/");
   });
 

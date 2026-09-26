@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// One open toolbelt (ADR-192): a custom belt's server and tool edits through
+// One open toolbelt (ADR-198): a custom belt's server and tool edits through
 // update_toolbelt and its delete, the All tools belt's availability and
 // defaults through set_tool_state for an admin, and a read-only belt for
 // anyone else. Each write refreshes the page on success and names its refusal

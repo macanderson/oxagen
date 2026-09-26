@@ -3,7 +3,7 @@
 // sentences, the actions. Error, access denied and waiting-for-approval replace
 // the page body, header included, and the shell around it stays. Empty keeps
 // the header, and carries Add a runtime itself, because naming a runtime is the
-// way in (ADR-192). The icons are
+// way in (ADR-198). The icons are
 // the mockup's: a framed panel for empty, a circled exclamation for error, a
 // lock for denied.
 import { useTranslations } from "next-intl";

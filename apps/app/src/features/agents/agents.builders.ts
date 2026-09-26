@@ -26,7 +26,7 @@ import { type Read, readOk } from "@/data/read";
 
 type AgentRow = AgentPage["agents"][number];
 
-/** The runtime the sample agent runs on (ADR-192). */
+/** The runtime the sample agent runs on (ADR-198). */
 export const BUILD_BOX: RuntimeRef = {
   id: "rtm_buildbox",
   name: "Build box",
@@ -606,6 +606,7 @@ export function agentsSource(reads: AgentReads) {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse },
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),

@@ -83,7 +83,7 @@ describe("list_agents row", () => {
     expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
   });
 
-  it("names the runtime and toolbelt it is given (ADR-192)", () => {
+  it("names the runtime and toolbelt it is given (ADR-198)", () => {
     const runtime = {
       id: "rtm_0123456789abcdefghjkmn",
       name: "Mac's laptop",
@@ -349,7 +349,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // alpha: enrolled by an active credential; two runs in the window (one
       // priced, one unpriced), one older than 30 days, one child session;
       // one open incident and one resolved. It runs on a named runtime and
-      // names no toolbelt, so it carries the All tools belt (ADR-192).
+      // names no toolbelt, so it carries the All tools belt (ADR-198).
       const laptop = await support.seedRuntime(tenant, {
         name: "Build laptop",
         slug: "build-laptop",

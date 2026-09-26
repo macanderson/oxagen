@@ -10,7 +10,7 @@
 //   3. one ledger run with two events, through @oxagen/run-ledger's RunStore,
 //      so /{org}/{ws}/runs/{run} has a title to load. The run's identity is
 //      resolved the way admission resolves it: an agent registered on a
-//      runtime through the kernel (ADR-192; its delegated principal and its
+//      runtime through the kernel (ADR-198; its delegated principal and its
 //      first version come with it), the
 //      owner's human principal, a pinned authorization snapshot from
 //      @oxagen/iam, and a retention policy version.
@@ -52,7 +52,7 @@ import { AUTH_DIR, SEED, SEED_RECORD } from "../index";
 /** The agent the seeded run is attributed to; registered through the kernel. */
 const AGENT = { slug: "e2e-agent", name: "E2E agent" } as const;
 
-/** The runtime the seeded agent runs on (ADR-192). */
+/** The runtime the seeded agent runs on (ADR-198). */
 const RUNTIME = { slug: "e2e-runtime", name: "E2E runtime" } as const;
 
 /** The goal on the seeded run; what the Run header prints. */

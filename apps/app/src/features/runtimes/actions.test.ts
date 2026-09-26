@@ -1,5 +1,5 @@
 // The Runtimes writes. Add a runtime names one through `create_runtime`
-// (ADR-192) and answers the register flow with that runtime chosen. Unenroll
+// (ADR-198) and answers the register flow with that runtime chosen. Unenroll
 // (runtimes.md, Permissions: `runtime.unenroll`) resolves the viewer the URL
 // names and revokes the one enrollment the page shows through
 // `revoke_tacho_enrollment`, sending no reason it did not ask for. A refusal

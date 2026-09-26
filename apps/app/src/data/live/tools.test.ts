@@ -309,7 +309,7 @@ describe("tools.approvalRules", () => {
   });
 });
 
-describe("tools.toolbelts and tools.toolbelt (ADR-192)", () => {
+describe("tools.toolbelts and tools.toolbelt (ADR-198)", () => {
   const ref = {
     id: "tbt_alltools",
     name: "All tools",

@@ -437,7 +437,7 @@ function steeringManifest(
 
 /**
  * The `budget` and `containment` tables off the config of the host's agent's
- * ACTIVE version (ADR-192). It is undefined when the host names no agent or
+ * ACTIVE version (ADR-198). It is undefined when the host names no agent or
  * has no active version, and each table is undefined when the config
  * declares none.
  */
@@ -511,7 +511,7 @@ export async function resolveHostMandate(
         return scope.mcp?.ruleSets.flat() ?? [];
       })()
     : [];
-  // The agent's toolbelt (ADR-192): every imported MCP tool the belt leaves
+  // The agent's toolbelt (ADR-198): every imported MCP tool the belt leaves
   // out is denied on the host, beside the RBAC rules. A belt narrows what the
   // agent can reach and never allows anything, so it contributes deny rules
   // only. A host enrolled with no agent carries no belt.

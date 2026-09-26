@@ -100,7 +100,7 @@ describe("mapMandateToBundlePermissions", () => {
 });
 
 describe("budgetDocFromVersion", () => {
-  // The definition file is gone (ADR-192). Its migration copied each
+  // The definition file is gone (ADR-198). Its migration copied each
   // `[budget]` table into the version's config, which is the one source now.
   it("reads both ceilings from the version's config", () => {
     expect(

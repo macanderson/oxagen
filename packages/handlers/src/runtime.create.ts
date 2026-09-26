@@ -1,6 +1,6 @@
 // audit-exempt: naming a runtime grants nothing and mints no credential; the agent registered on it next emits agent.registered, and the kernel capability.invoke_* audit covers this call.
 //
-// runtime.create.ts — name a runtime in this workspace (ADR-192, #4369).
+// runtime.create.ts — name a runtime in this workspace (ADR-198, #4369).
 //
 // Role gate: the contract's roles, org Owner or Admin (INV-29), for the
 // signed-in user or the creator of the API key. The slug is the caller's or

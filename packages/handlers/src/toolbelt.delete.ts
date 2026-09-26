@@ -1,7 +1,7 @@
 // audit-exempt: a toolbelt narrows what an agent is shown and grants nothing, and the security event taxonomy has no toolbelt type; the kernel capability.invoke_* audit covers the write.
 //
 // toolbelt.delete.ts — delete a custom toolbelt no live agent carries
-// (ADR-192, #4369). The row is soft-deleted, so an agent version that named
+// (ADR-198, #4369). The row is soft-deleted, so an agent version that named
 // the belt still resolves it by id; its member rows stay with it.
 //
 // Role gate: the contract's roles (INV-29). The All tools belt is refused

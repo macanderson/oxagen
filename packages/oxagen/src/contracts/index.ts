@@ -24,10 +24,12 @@ import { assetUpload } from "./asset.upload";
 import { authCliAuthorize } from "./auth.cli.authorize";
 import { agentApprovalList } from "./agent.approval.list";
 import { agentApprovalListResolved } from "./agent.approval.list_resolved";
+import { agentInterjectionList } from "./agent.interjection.list";
+import { agentInterjectionAnswer } from "./agent.interjection.answer";
 import { agentList } from "./agent.list";
 import { agentGet } from "./agent.get";
 import { agentRegister } from "./agent.register";
-// ADR-192 (#4369): runtimes, toolbelts, tool state, and the two version writes.
+// ADR-198 (#4369): runtimes, toolbelts, tool state, and the two version writes.
 import { agentMove } from "./agent.move";
 import { agentToolbeltAssign } from "./agent.toolbelt.assign";
 import { runtimeCreate } from "./runtime.create";
@@ -74,6 +76,7 @@ import { tachoContainedLaunchRegister } from "./tacho.contained_launch.register"
 import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoGithubTokenIssue } from "./tacho.github_token.issue";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
+import { pauseWorkspaceRuns } from "./tacho.workspace_runs.pause";
 import { tachoCommandFetch } from "./tacho.command.fetch";
 import { tachoCommandList } from "./tacho.command.list";
 import { tachoHostList } from "./tacho.host.list";
@@ -449,7 +452,7 @@ export type {
   SpendGroupKind,
   TokenCounts,
 } from "./spend.shared";
-// Runtime and toolbelt vocabulary (ADR-192). Not capabilities, so exported
+// Runtime and toolbelt vocabulary (ADR-198). Not capabilities, so exported
 // here to satisfy the file-coverage guard.
 export {
   RUNTIME_SLUG_MAX,
@@ -666,6 +669,8 @@ export {
   assetUpload,
   agentApprovalList,
   agentApprovalListResolved,
+  agentInterjectionList,
+  agentInterjectionAnswer,
   agentList,
   agentGet,
   agentRegister,
@@ -742,6 +747,7 @@ export {
   tachoGithubTokenIssue,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
+  pauseWorkspaceRuns,
   tachoCommandFetch,
   tachoCommandList,
   tachoHostList,
@@ -1075,6 +1081,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   assetUpload,
   agentApprovalList,
   agentApprovalListResolved,
+  agentInterjectionList,
+  agentInterjectionAnswer,
   agentList,
   agentGet,
   agentRegister,
@@ -1148,6 +1156,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoGithubTokenIssue,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
+  pauseWorkspaceRuns,
   tachoCommandFetch,
   tachoCommandList,
   tachoHostList,

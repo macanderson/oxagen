@@ -8,7 +8,6 @@ import {
   fromSearchRows,
   moveHighlight,
   orderCommands,
-  PAUSE_ALL_GAP,
   shortcutCommand,
 } from "./commands";
 
@@ -103,7 +102,7 @@ describe("buildCommands", () => {
     ]);
   });
 
-  it("lists every governed action on the page that carries its write, and the one with no write disabled with its gap", () => {
+  it("lists every governed action: pausing every live run opens its dialog, and each other action the page that carries its write", () => {
     const actions = inGroup("actions");
     expect(actions.map((c) => c.id)).toEqual([
       "action:pause-all",
@@ -125,9 +124,15 @@ describe("buildCommands", () => {
       "/acme/core-platform",
       "/acme/api-keys",
     ]);
-    const pause = actions[0];
-    expect(pause && "gap" in pause ? pause.gap : null).toBe(PAUSE_ALL_GAP);
-    expect(pause?.detail).toBe("text:actions.pauseAllNotBacked");
+    // #3862: the entry is backed by pause_workspace_runs. It carries no
+    // not-backed line and no gap, and it opens the confirm dialog.
+    expect(actions[0]).toEqual({
+      id: "action:pause-all",
+      label: "text:actions.pauseAll",
+      group: "actions",
+      pauseWorkspace: true,
+    });
+    expect(actions.some((c) => "gap" in c)).toBe(false);
   });
 
   it("offers no workspace page, assistant turn, wizard or workspace action without a workspace (negative)", () => {

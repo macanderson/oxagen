@@ -10,7 +10,7 @@
  *                         [--slug <slug>] [--toolbelt <tbt_id>]
  *                         [--description <text>] [--validity-days <n>]
  *       register_agent: one harness on one runtime, carrying a toolbelt
- *       (ADR-192); mints the identity and prints the credential once
+ *       (ADR-198); mints the identity and prints the credential once
  *   oxagen agent status <agent>
  *       get_agent: identity, runtime, toolbelt, versions, credentials, roles, hosts
  *   oxagen agent unenroll <agent> [--host <tch_id>] [--reason <text>]

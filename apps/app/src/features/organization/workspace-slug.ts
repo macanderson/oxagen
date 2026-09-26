@@ -7,7 +7,7 @@ import { slugFromName as deriveSlug } from "@oxagen/oxagen/contracts/org.create"
 
 /**
  * A workspace slug made from its name by the one rule every name-made slug
- * follows (ADR-192): lowercase letters and digits in groups joined by single
+ * follows (ADR-198): lowercase letters and digits in groups joined by single
  * hyphens, at most 40 characters. A space becomes a hyphen and every other
  * special character, apostrophes included, is dropped. A name that yields a
  * reserved or too-short slug is refused by the contract, and the refusal is

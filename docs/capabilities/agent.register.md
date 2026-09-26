@@ -10,7 +10,7 @@
 
 ## Intent
 
-Mint an agent in the workspace (ADR-192; MC spec §6.2; shared with the register flow and `oxagen agent register`). An agent is the IAM principal for one operator on one runtime with one harness: your laptop with Claude Code is one agent. The registering user is the operator.
+Mint an agent in the workspace (ADR-198; MC spec §6.2; shared with the register flow and `oxagen agent register`). An agent is the IAM principal for one operator on one runtime with one harness: your laptop with Claude Code is one agent. The registering user is the operator.
 
 One transaction inserts:
 

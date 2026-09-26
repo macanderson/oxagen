@@ -4,7 +4,7 @@
 // not-loaded states, and each tab's panels in the design's order, with what
 // the record does not hold named rather than drawn as a zero. Axe runs after
 // every test. The Toolbelt tab's interactive panels, the mandates panel and
-// the belt and runtime controls (ADR-192) have their own files.
+// the belt and runtime controls (ADR-198) have their own files.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -237,7 +237,7 @@ describe("Agent tabs", () => {
     ["runs", "activity"],
     ["incidents", "activity"],
     ["enrollment", "runtime"],
-    // The definition file went with ADR-192; a link to it lands on Toolbelt.
+    // The definition file went with ADR-198; a link to it lands on Toolbelt.
     ["definition", "toolbelt"],
     ["no-such-tab", "overview"],
   ])("lands the rev1 id %s on %s", async (alias, tab) => {
@@ -416,7 +416,7 @@ describe("Overview", () => {
     );
   });
 
-  it("draws the last 30 days with its link, and the agent's versions (ADR-192)", async () => {
+  it("draws the last 30 days with its link, and the agent's versions (ADR-198)", async () => {
     await renderAgent();
     const last30 = region("Last 30 days");
     expect(last30).toHaveTextContent("Runs4");
@@ -449,7 +449,7 @@ describe("Overview", () => {
   });
 });
 
-describe("Toolbelt and Runtime controls (ADR-192)", () => {
+describe("Toolbelt and Runtime controls (ADR-198)", () => {
   it("offers the workspace's belts on the Toolbelt tab with the current one chosen", async () => {
     const calls = await renderAgent({}, "toolbelt");
     expect(calls.belts).toHaveLength(1);
@@ -679,7 +679,7 @@ describe("Permissions", () => {
     const roles = region("Roles");
     expect(roles).toHaveTextContent("repo.write · pr.open");
     expect(roles).toHaveTextContent("Resource scopenot recorded");
-    // The agent's own budget is on its version, which get_agent does not return (ADR-192).
+    // The agent's own budget is on its version, which get_agent does not return (ADR-198).
     expect(roles).toHaveTextContent("Spend ceilingnot recorded");
     expect(roles).toHaveTextContent(
       "Can move moneynono mandate, so a financial call is denied before dispatch",

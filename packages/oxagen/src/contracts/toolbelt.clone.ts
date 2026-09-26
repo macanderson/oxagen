@@ -1,4 +1,4 @@
-// clone_toolbelt — copy a toolbelt into a new custom belt (ADR-192, #4369).
+// clone_toolbelt — copy a toolbelt into a new custom belt (ADR-198, #4369).
 //
 // The clone holds every tool the source holds, each active as it is in the
 // source. Cloning the All tools belt copies every available tool with its

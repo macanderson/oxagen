@@ -1,6 +1,6 @@
 // Register an agent (#2967, ADR-065 decision 1; register-name, register-wrap
 // and register-run specs in the roadmap's mockups/pages): define the agent
-// (its name, harness, runtime and toolbelt, ADR-192), wrap it, and wait for
+// (its name, harness, runtime and toolbelt, ADR-198), wrap it, and wait for
 // the first frame, one step per `[step]` segment over `register_agent`,
 // `create_enrollment_token` and `get_first_frame`.
 //
@@ -727,7 +727,7 @@ function NameLead() {
 }
 
 /**
- * The name step (ADR-192). It reads the namespaces the key is built from, the
+ * The name step (ADR-198). It reads the namespaces the key is built from, the
  * runtimes to choose from with the agents already on each, and the
  * workspace's toolbelts; with `?agent=` it reads the agent already reserved
  * and shows it read-only, and with `?runtime=` it opens with that runtime
@@ -931,7 +931,7 @@ export async function RegisterAgent({
   step: RegisterStep;
   /** `?agent=`, the identity the name step minted; null on the first step. */
   agent: string | null;
-  /** `?runtime=`, the runtime Add a runtime chose for the name step (ADR-192). */
+  /** `?runtime=`, the runtime Add a runtime chose for the name step (ADR-198). */
   runtime?: string | null;
 }) {
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug };

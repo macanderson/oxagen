@@ -1,7 +1,7 @@
 // Overview (spec pages/agent.md, Overview): what this agent is made of, and
 // the first question the page answers. The panels, in the design's order: the
 // 30-day token use beside the coaching, then the composition beside the last
-// 30 days, then the agent's versions (ADR-192), which took the place of the
+// 30 days, then the agent's versions (ADR-198), which took the place of the
 // definition in git. The composition names the toolbelt the agent carries and
 // the runtime it runs on.
 //

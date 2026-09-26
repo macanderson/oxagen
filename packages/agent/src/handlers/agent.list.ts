@@ -61,7 +61,7 @@ export function toAgentListItem(
     mandates: number | null;
     host: string | null;
     figures: RunWindowFigures | undefined;
-    /** The agent's runtime (ADR-192); null when it runs on no named runtime. */
+    /** The agent's runtime (ADR-198); null when it runs on no named runtime. */
     runtime?: AgentListItem["runtime"];
     /** The agent's toolbelt, the All tools belt when the row names none. */
     toolbelt?: AgentListItem["toolbelt"];

@@ -3,7 +3,7 @@
 // test in agent.test.tsx does not reach: a rollup that could not be read, a
 // row with no cost or no input, each health verdict, a composition whose
 // steering, belt, mandates or operator are missing or unreadable, and the
-// agent's versions (ADR-192). Every missing figure says "not recorded"
+// agent's versions (ADR-198). Every missing figure says "not recorded"
 // rather than drawing a zero. Axe runs after every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
@@ -251,7 +251,7 @@ describe("Overview › composition", () => {
   });
 });
 
-describe("Overview › versions (ADR-192)", () => {
+describe("Overview › versions (ADR-198)", () => {
   it("lists each version newest first with its change, runtime, toolbelt and date", () => {
     renderOverview({
       detail: agentDetail({
@@ -302,7 +302,7 @@ describe("Overview › versions (ADR-192)", () => {
     ]);
     expect(rows[0]).toHaveTextContent("Moved to another runtime");
     expect(rows[0]).toHaveTextContent("GPU box");
-    // A version written before ADR-192 recorded no runtime or toolbelt.
+    // A version written before ADR-198 recorded no runtime or toolbelt.
     expect(rows[2]).toHaveTextContent("not recorded");
   });
 

@@ -89,7 +89,7 @@ describe("list_agents contract", () => {
     expect(parsed.spend30d).toEqual(item.spend30d);
   });
 
-  it("names the runtime and toolbelt, and takes null for an agent on no named runtime (ADR-192)", () => {
+  it("names the runtime and toolbelt, and takes null for an agent on no named runtime (ADR-198)", () => {
     expect(agentListItem.parse(item).runtime?.slug).toBe("macs-laptop");
     expect(
       agentListItem.parse({ ...item, runtime: null, toolbelt: null }).runtime,

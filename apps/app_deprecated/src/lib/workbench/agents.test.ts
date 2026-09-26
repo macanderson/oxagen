@@ -1,5 +1,5 @@
 /**
- * agents.test.ts — the deprecated workbench's agent seam after ADR-192.
+ * agents.test.ts — the deprecated workbench's agent seam after ADR-198.
  *
  * The capabilities it wrapped are gone. Reads answer an empty roster and
  * every write refuses with `AgentDefinitionsRemovedError`, without calling
@@ -41,7 +41,7 @@ const config = {
   agentTools: [],
 };
 
-describe("workbench/agents.ts after ADR-192", () => {
+describe("workbench/agents.ts after ADR-198", () => {
   it("lists no agents", async () => {
     await expect(listAgents(ctx)).resolves.toEqual([]);
     await expect(listAgents(ctx, "active")).resolves.toEqual([]);

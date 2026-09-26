@@ -8,6 +8,7 @@ import type { SpendFinding, SpendReport } from "@/data/contracts/spend";
 import {
   basisOf,
   cacheHitRate,
+  cacheWriteShare,
   classesOf,
   findingsOn,
   perRun,
@@ -80,11 +81,35 @@ describe("rates", () => {
     expect(cacheHitRate(classesOf(tokens()))).toBe(0.75);
   });
 
+  it("reads a rebuilt cache as the share of input written to it, beside a hit rate that leaves writes out (A-08)", () => {
+    // Little fresh input, a high hit rate, and as much written as read.
+    const rebuilt = classesOf(
+      tokens({
+        input_uncached: 5_000,
+        cache_read: 395_000,
+        cache_write_5m: 300_000,
+        cache_write_1h: 100_000,
+      }),
+    );
+    expect(cacheHitRate(rebuilt)).toBeCloseTo(0.9875);
+    expect(cacheWriteShare(rebuilt)).toBe(0.5);
+    // 50 written of 450 input tokens.
+    expect(cacheWriteShare(classesOf(tokens()))).toBeCloseTo(50 / 450);
+  });
+
   it("answers no rate over nothing, never a zero (negative)", () => {
     const none = classesOf(
-      tokens({ input_uncached: 0, cache_read: 0, output: 0, reasoning: 0 }),
+      tokens({
+        input_uncached: 0,
+        cache_read: 0,
+        cache_write_5m: 0,
+        cache_write_1h: 0,
+        output: 0,
+        reasoning: 0,
+      }),
     );
     expect(cacheHitRate(none)).toBeNull();
+    expect(cacheWriteShare(none)).toBeNull();
     expect(reasoningShare(none)).toBeNull();
   });
 

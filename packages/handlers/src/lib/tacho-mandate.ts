@@ -127,7 +127,7 @@ export function mapMandateToBundlePermissions(input: {
 }
 
 /**
- * The `budget` table an agent's active version config carries (ADR-192).
+ * The `budget` table an agent's active version config carries (ADR-198).
  * `perRunMicros` is this mandate's session budget (one tacho host
  * session is one run of the wrapped harness). `perDayMicros` is the agent's
  * ceiling for one UTC day (ADR-160), signed only to a host that enforces it:
@@ -140,7 +140,7 @@ export interface AgentBudgetDoc {
 
 /**
  * The active version's budget, read from its config. The agent definition
- * file that once owned these ceilings is gone (ADR-192); the migration that
+ * file that once owned these ceilings is gone (ADR-198); the migration that
  * removed it copied each file's `[budget]` table into `config`.
  */
 export function budgetDocFromVersion(version: {

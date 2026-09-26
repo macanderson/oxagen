@@ -6,7 +6,7 @@ import {
 } from "./configuration-clone";
 
 describe("clone kinds", () => {
-  it("clones skills and records, never an agent (ADR-192)", () => {
+  it("clones skills and records, never an agent (ADR-198)", () => {
     expect(configurationKindSchema.options).toEqual(["skill", "record"]);
     expect(
       configurationCloneDraftSchema.safeParse({

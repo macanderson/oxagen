@@ -10,7 +10,7 @@
 // waits on. A completed deregister leaves a receipt in the dialog, and the list
 // reloads when the person closes it. `retire_agent` retires the principal and
 // revokes what it holds; an agent carries no definition file to archive
-// (ADR-192).
+// (ADR-198).
 import { useTranslations } from "next-intl";
 import {
   type ReactNode,

@@ -186,7 +186,7 @@ Identity consequence: a Claude Code host is an **agent** in the registry with an
 
 ### 5.3 Claude Agent SDK and custom agents
 
-These do not enroll a host. They register an agent (`register_agent` with harness `claude-agent-sdk` or `custom`, on the runtime the code runs on, ADR-192), receive an agent-scoped API key, and pass `{ agentKey, apiKey }` to `startSession` or `govern`. The collector is optional for them: if `tachod` is reachable the SDK uses it (shared chain, shared spool); otherwise the inline emitter chains and spools in-process to `~/.config/oxagen/tacho/spool/<agentKey>/` and ships directly. The trade is stated in the docs: an inline emitter cannot sign checkpoints with a host device key, so its checkpoints carry the agent key's fingerprint and its sessions score against the wider posterior (`oxagen-roadmap:docs/oxagen/specs/tacho/design/trust-scoring.md` §3).
+These do not enroll a host. They register an agent (`register_agent` with harness `claude-agent-sdk` or `custom`, on the runtime the code runs on, ADR-198), receive an agent-scoped API key, and pass `{ agentKey, apiKey }` to `startSession` or `govern`. The collector is optional for them: if `tachod` is reachable the SDK uses it (shared chain, shared spool); otherwise the inline emitter chains and spools in-process to `~/.config/oxagen/tacho/spool/<agentKey>/` and ships directly. The trade is stated in the docs: an inline emitter cannot sign checkpoints with a host device key, so its checkpoints carry the agent key's fingerprint and its sessions score against the wider posterior (`oxagen-roadmap:docs/oxagen/specs/tacho/design/trust-scoring.md` §3).
 
 ### 5.4 The hook set the enrollment writes
 

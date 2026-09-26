@@ -37,7 +37,7 @@ const ROLE_CHECKED_CONTRACTS = [
   "rotate_agent_credential",
   "suspend_agent",
   "retire_agent",
-  // ADR-192 (#4369): the runtime, toolbelt and agent-version writes.
+  // ADR-198 (#4369): the runtime, toolbelt and agent-version writes.
   "move_agent",
   "assign_agent_toolbelt",
   "create_runtime",

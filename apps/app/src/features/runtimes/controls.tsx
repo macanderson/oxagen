@@ -3,7 +3,7 @@
 // writes, Add a runtime and Unenroll.
 //
 // Add a runtime asks for a name and a slug and names the runtime
-// (`create_runtime`, ADR-192). The slug fills from the name by the one rule
+// (`create_runtime`, ADR-198). The slug fills from the name by the one rule
 // every name-made slug follows (`slugFromName`: spaces become hyphens, every
 // other special character is dropped) until the person types one of their
 // own. The only way on is registering the runtime's first agent: the dialog

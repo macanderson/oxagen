@@ -18,7 +18,7 @@ const WORDS = {
     agent_not_found: "agentNotFound",
     agent_retired: "agentRetired",
     agent_principal_missing: "agentPrincipalMissing",
-    // move_agent and assign_agent_toolbelt (ADR-192).
+    // move_agent and assign_agent_toolbelt (ADR-198).
     runtime_harness_taken: "runtimeHarnessTaken",
     same_runtime: "sameRuntime",
     same_toolbelt: "sameToolbelt",

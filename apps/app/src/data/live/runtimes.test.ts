@@ -1,6 +1,6 @@
 // The runtimes port: `list` walks `list_tacho_hosts` to the end of its cursor
 // under a bound and maps each enrollment, `agents` walks `list_agents` until
-// every key asked for is found, and `named` reads `list_runtimes` (ADR-192). A
+// every key asked for is found, and `named` reads `list_runtimes` (ADR-198). A
 // refusal passes through, an unmappable record
 // is reported once, and a tier looked up from a harness name is never mapped.
 import { agentList } from "@oxagen/oxagen/contracts/agent.list";
@@ -317,7 +317,7 @@ describe("runtimes.agents", () => {
   });
 });
 
-describe("runtimes.named (ADR-192)", () => {
+describe("runtimes.named (ADR-198)", () => {
   const item = {
     id: "rtm_macslaptop",
     name: "Mac's laptop",

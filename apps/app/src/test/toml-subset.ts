@@ -1,7 +1,7 @@
 // A TOML subset parser for tests: basic and literal strings, multi-line basic
 // strings, integers and floats, booleans, arrays, inline tables, dotted and
 // quoted keys, and `[table]` headers. It was the agent definition editor's
-// parser; the definition file went with ADR-192, and the one reader left is
+// parser; the definition file went with ADR-198, and the one reader left is
 // the Repositories test that parses the `.oxagen/` files the init pull
 // request drafts. Pure and edge-safe.
 
