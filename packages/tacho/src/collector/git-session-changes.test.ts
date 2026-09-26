@@ -199,6 +199,45 @@ describe("readSessionChanges against a real repository", () => {
     expect(paths(pulled?.changes)).toEqual(["agent.txt"]);
   });
 
+  it("reports a commit the session made under another email and pushed before the read", async () => {
+    const r = rig();
+    const start = await firstRead(r);
+    const agent = {
+      GIT_AUTHOR_EMAIL: AGENT_EMAIL,
+      GIT_COMMITTER_EMAIL: AGENT_EMAIL,
+    };
+    // A commit the agent then resets away. The reflog still names it, and
+    // it is no longer in the history.
+    writeFileSync(join(r.work, "dropped.txt"), "reset away\n");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "dropped"], {
+      ...datedNow(),
+      ...agent,
+    });
+    r.git(r.work, ["reset", "-q", "--hard", "HEAD~1"]);
+    // The commit it keeps, pushed in the same turn, so a remote-tracking ref
+    // reaches it by the time the turn's reconciliation reads the worktree.
+    writeFileSync(join(r.work, "agent.txt"), "the agent wrote this\n");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "agent work"], {
+      ...datedNow(),
+      ...agent,
+    });
+    r.git(r.work, ["push", "-q", "origin", "main"]);
+    const pushed = await readSessionChanges(r.exec, r.work, start);
+    expect(paths(pushed?.changes)).toEqual(["agent.txt"]);
+
+    // A later pull writes `pull:` to the reflog, not `commit:`, so the
+    // upstream commit stays out.
+    pushUpstream(r);
+    r.git(r.work, ["pull", "-q", "--ff-only", "origin", "main"]);
+    const pulled = await readSessionChanges(r.exec, r.work, {
+      ...start,
+      ownCommits: pushed?.ownCommits,
+    });
+    expect(paths(pulled?.changes)).toEqual(["agent.txt"]);
+  });
+
   it("does not count a commit with the session's email made before its first read", async () => {
     const r = rig();
     // A commit made yesterday on another branch, by the same person.
@@ -495,6 +534,22 @@ describe("readSessionChanges against a real repository", () => {
       },
     });
     expect(paths(read?.changes)).toEqual(["a.txt"]);
+    // The record lost that path, and the row counts the whole file.
+    expect(read?.preexisting).toBe("partial");
+    expect(read?.preSessionCounts).toBe("whole_file");
+  });
+
+  it("drops a path from the state file that leaves the repository", async () => {
+    const r = rig();
+    const start = await firstRead(r);
+    writeFileSync(join(r.root, "outside.txt"), "not in the repository\n");
+    const read = await readSessionChanges(r.exec, r.work, {
+      ...start,
+      preexisting: { paths: { "../outside.txt": null }, complete: true },
+    });
+    expect(paths(read?.changes)).toEqual([]);
+    expect(read?.measured?.fromPreSession).toEqual([]);
+    expect(read?.preexisting).toBe("partial");
   });
 
   it("does not record an edit made after the session started as already there", async () => {
@@ -638,6 +693,23 @@ describe("the daemon's reconciliation against a real repository", () => {
       ...datedNow(),
       GIT_COMMITTER_EMAIL: AGENT_EMAIL,
     });
+    await handle.api.handleHook(hook("Stop", r.work));
+    await handle.tick();
+    expect(listed(handle)).toEqual([["agent.txt"]]);
+  });
+
+  it("records a file the agent committed under its own GIT_COMMITTER_EMAIL and pushed in the same turn", async () => {
+    const r = rig();
+    const handle = await boot(r.exec);
+    await handle.api.handleHook(hook("SessionStart", r.work));
+    await handle.tick();
+    writeFileSync(join(r.work, "agent.txt"), "the agent wrote this\n");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "agent work"], {
+      ...datedNow(),
+      GIT_COMMITTER_EMAIL: AGENT_EMAIL,
+    });
+    r.git(r.work, ["push", "-q", "origin", "main"]);
     await handle.api.handleHook(hook("Stop", r.work));
     await handle.tick();
     expect(listed(handle)).toEqual([["agent.txt"]]);

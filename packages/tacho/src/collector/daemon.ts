@@ -3270,6 +3270,7 @@ async function initializeDaemon(
         }
       }
     });
+    let swept = false;
     await stage("spool, transcripts, sweep, checkpoint", () =>
       serial.run(async () => {
         const t = now();
@@ -3304,14 +3305,7 @@ async function initializeDaemon(
             registry.settleSwept(candidate);
           }
           registry.forgetSealed(timers.walRetainMs);
-          // A forgotten session reconciles no more, so its pre-session
-          // copies go. So do any a crash left behind.
-          await removeCopiesOutside(
-            paths.preSessionCopies,
-            new Set(
-              registry.list().map((session) => session.recorder.sessionUuid),
-            ),
-          );
+          swept = true;
           if (failure !== undefined) throw failure.error;
         }
         if (t - lastCheckpoint >= timers.checkpointMs) {
@@ -3321,6 +3315,16 @@ async function initializeDaemon(
         if (stateDirty) persistState();
       }),
     );
+    // A forgotten session reconciles no more, so its pre-session copies go.
+    // So do any a crash left behind. A sealed session keeps its copies until
+    // then, because a `SessionStart` resume reopens it and it reconciles
+    // again. Off the hook queue, since removing files is not a hook's work.
+    if (swept)
+      await stage("pre-session copies", () =>
+        removeCopiesOutside(paths.preSessionCopies, () =>
+          registry.list().map((session) => session.recorder.sessionUuid),
+        ),
+      );
     // Refresh before draining, so a batch carrying bodies leaves under the
     // mandate the control plane holds now rather than the one cached before
     // an outage.
