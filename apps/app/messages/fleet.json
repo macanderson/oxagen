@@ -195,6 +195,7 @@
         "older": "Older runs",
         "newest": "Newest runs",
         "rangeEmpty": "0 of {total}",
+        "rangeEmptyMore": "0 of {total}+",
         "previous": "Previous",
         "next": "Next",
         "page": "Page {page}"

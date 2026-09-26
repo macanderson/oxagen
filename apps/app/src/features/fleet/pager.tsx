@@ -140,9 +140,11 @@ export function RunsPager({
       : Math.min(Math.max(1, Math.ceil(total / pageSize)), reachable);
   const range =
     rows === 0
-      ? total === null || total > 0
-        ? t("rangeEmpty", { total: count(total ?? totalBound ?? 0) })
-        : t("none")
+      ? total === null
+        ? t("rangeEmptyMore", { total: count(totalBound ?? 0) })
+        : total > 0
+          ? t("rangeEmpty", { total: count(total) })
+          : t("none")
       : total === null
         ? t("rangeMore", {
             from: count(from),

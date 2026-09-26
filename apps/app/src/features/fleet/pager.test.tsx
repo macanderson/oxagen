@@ -131,6 +131,16 @@ describe("RunsPager", () => {
     expect(screen.getByTestId("pager-range")).toHaveTextContent("0 of 279");
   });
 
+  it("keeps the plus sign on an empty page past the count's bound", () => {
+    renderPager({
+      list: list({ page: 402 }),
+      rows: 0,
+      total: null,
+      totalBound: 10_000,
+    });
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("0 of 10,000+");
+  });
+
   it("reads 0 of 0 for an empty list", () => {
     renderPager({ rows: 0, total: 0, totalBound: 10_000 });
     expect(screen.getByTestId("pager-range")).toHaveTextContent("0 of 0");
