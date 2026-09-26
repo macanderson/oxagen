@@ -182,18 +182,54 @@ async function tenantPlaneDb(
  * the transaction is held for the callback's lifetime.
  */
 export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-  const { orgId, workspaceId } = requireScope();
-  const bypass = rlsEnforced() ? "off" : "on";
+  const scope = requireScope();
   // The SAME GUC/RLS setup runs on a dedicated plane as on the shared one — a
   // customer-controlled endpoint is a second place the policies are enforced,
   // never an excuse to skip them.
-  const { database, planeKey } = await tenantPlaneDb(orgId);
+  const { database, planeKey } = await tenantPlaneDb(scope.orgId);
+  return tenantTransaction(database, planeKey, scope, fn);
+}
+
+/**
+ * Run DB work in a tenant-scoped transaction on the SHARED plane, whatever
+ * plane the organisation's tenant data lives on.
+ *
+ * ADR-042 §2 keeps platform tables (billing, IAM, auth, org) on the shared
+ * plane, and ADR-134 settles a dedicated-plane organisation's model usage
+ * there. `withTenantDb` cannot reach those rows for such an organisation,
+ * because it opens its transaction on the dedicated plane. `withSystemDb`
+ * reaches the shared plane but turns RLS off. This seam sets the same GUCs as
+ * `withTenantDb`, so the `tenant_isolation` policies still fence every row,
+ * and opens the transaction on the shared plane (#4315).
+ *
+ * It never consults the plane resolver, so a degraded or disabled dedicated
+ * plane does not stop a platform write. Use it for platform tables only. A
+ * tenant-data table read through it reads the shared plane, which for a
+ * dedicated-plane organisation holds none of its data.
+ */
+export async function withSharedPlaneTenantDb<T>(
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  return tenantTransaction(db(), "shared", requireScope(), fn);
+}
+
+/**
+ * Open the transaction both tenant seams share: set the org, workspace,
+ * org-wide and bypass GUCs the policies read, then run `fn`.
+ */
+function tenantTransaction<T>(
+  database: Database,
+  planeKey: string,
+  scope: { orgId: string; workspaceId: string },
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  const bypass = rlsEnforced() ? "off" : "on";
   return runOnPlane(planeKey, () =>
     database.transaction(async (tx) => {
       await tx.execute(sql`
       select
-        set_config('app.current_org_id', ${orgId}, true),
-        set_config('app.current_workspace_id', ${workspaceGuc(workspaceId)}, true),
+        set_config('app.current_org_id', ${scope.orgId}, true),
+        set_config('app.current_workspace_id', ${workspaceGuc(scope.workspaceId)}, true),
         set_config('app.org_wide', 'off', true),
         set_config('app.rls_bypass', ${bypass}, true)
     `);
