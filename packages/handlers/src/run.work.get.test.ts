@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { prLinkOf } from "./lib/run-work";
+import {
+  checkoutId,
+  prLinkOf,
+  workDigest,
+  type WorkContextRow,
+  type WorkDiffRow,
+} from "./lib/run-work";
+import { readWorkPullRequests, type WorkPrDeps } from "./lib/run-work-prs";
 import { createRunWorkGetHandler, type RunWorkDeps } from "./run.work.get";
 import type { TachoSessionColumns } from "./run.list";
 import {
@@ -183,6 +190,116 @@ describe("get_run_work", () => {
       { repositoryId: "R_1", number: 42, headSha: null },
     ]);
     expect(result.warnings).toContain("recorded_repository_not_connected");
+  });
+  // #3791: the daemon seals a session's first hook before its first Git read,
+  // so that frame names the path alone. As a checkout of its own it matched
+  // no repository or branch, and the work read incomplete for good.
+  it("folds the path-only first frame into the Git context at its path, and the work reads complete", async () => {
+    const { handler, deps } = setup({ chainVerified: true });
+    const pathOnly: WorkContextRow = {
+      path: "/work/app",
+      branch: "",
+      head: "",
+      remote: "",
+      repository: "",
+      first_seq: 0,
+      last_seq: 0,
+    };
+    const located: WorkContextRow = {
+      path: "/work/app",
+      branch: "fix/run",
+      head: "b".repeat(40),
+      remote: workDigest("github.com/acme/app"),
+      repository: "https://github.com/acme/app",
+      first_seq: 1,
+      last_seq: 9,
+    };
+    const diff = (context: WorkContextRow, seq: number): WorkDiffRow => ({
+      ...context,
+      seq,
+      observed_at: "2026-09-25 10:00:00.000",
+      base: "c".repeat(40),
+      content_digest: "sha256:diff",
+      bytes_ref: "blob",
+      complete: "true",
+      limitations: "",
+      omitted: "",
+      redactions: "[]",
+      redaction_count: 0,
+    });
+    vi.mocked(deps.contexts).mockResolvedValue([pathOnly, located]);
+    vi.mocked(deps.diffs).mockResolvedValue([
+      diff(located, 9),
+      diff(pathOnly, 0),
+    ]);
+    vi.mocked(deps.repositories).mockResolvedValue([
+      {
+        connectionId: "conn_1",
+        providerRepositoryId: "R_1",
+        host: "github.com",
+        owner: "acme",
+        name: "app",
+        url: "https://github.com/acme/app",
+        connected: true,
+      },
+    ]);
+    // The real PR read over a GitHub that holds no PR for the branch, so
+    // every warning comes from the checkouts the handler passes it.
+    const github: WorkPrDeps = {
+      client: vi.fn().mockResolvedValue({
+        getRepoInfo: vi.fn().mockResolvedValue({ defaultBranch: "main" }),
+        listPullRequests: vi.fn().mockResolvedValue([]),
+      }),
+      now: () => "2026-09-25T10:00:00Z",
+    };
+    vi.mocked(deps.pullRequests).mockImplementation(
+      (scope, checkouts, repositories, _deps, recorded) =>
+        readWorkPullRequests(scope, checkouts, repositories, github, recorded),
+    );
+    const result = await handler({ runId: RUN_ID }, ctx());
+    const merged = checkoutId(located);
+    expect(result.checkouts).toMatchObject([
+      {
+        id: merged,
+        path: "/work/app",
+        branch: "fix/run",
+        firstSeq: "0",
+        lastSeq: "9",
+        repository: { connected: true },
+      },
+    ]);
+    expect(result.warnings).toEqual([]);
+    expect(result.complete).toBe(true);
+    // A diff sealed on the path-only frame names the checkout it folded into.
+    expect(result.diffs.map((d) => d.checkoutId)).toEqual([merged, merged]);
+  });
+  it("keeps a path-only location with no Git context, and still says what it lacks (negative)", async () => {
+    const { handler, deps } = setup({ chainVerified: true });
+    vi.mocked(deps.contexts).mockResolvedValue([
+      {
+        path: "/tmp/scratch",
+        branch: "",
+        head: "",
+        remote: "",
+        repository: "",
+        first_seq: 0,
+        last_seq: 4,
+      },
+    ]);
+    vi.mocked(deps.pullRequests).mockImplementation(
+      (scope, checkouts, repositories, _deps, recorded) =>
+        readWorkPullRequests(
+          scope,
+          checkouts,
+          repositories,
+          { client: vi.fn(), now: () => "2026-09-25T10:00:00Z" },
+          recorded,
+        ),
+    );
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result.checkouts).toMatchObject([{ path: "/tmp/scratch" }]);
+    expect(result.warnings).toEqual(["repository_not_connected"]);
+    expect(result.complete).toBe(false);
   });
   it("reads a PR link from the frame first and its URL second", () => {
     expect(
