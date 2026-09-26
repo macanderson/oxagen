@@ -135,7 +135,11 @@ const runNotFound = () =>
 
 /** A read that names both a run and command ids, or neither. */
 const runOrCommands = () =>
-  new CapabilityError(tachoCommandList.name, "invalid_input", "run_or_commands");
+  new CapabilityError(
+    tachoCommandList.name,
+    "invalid_input",
+    "run_or_commands",
+  );
 
 export function createListCommandsHandler(
   deps: ListCommandsDeps,

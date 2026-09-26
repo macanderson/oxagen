@@ -85,7 +85,11 @@ describe("pauseStateOf", () => {
       appliedAt: null,
     });
     expect(pauseStateOf([held], false, NOW)?.state).toBe("pausing");
-    const queued = row({ outcome: "queued", expiresAt: at(30), appliedAt: null });
+    const queued = row({
+      outcome: "queued",
+      expiresAt: at(30),
+      appliedAt: null,
+    });
     expect(pauseStateOf([queued], false, NOW)).toBeNull();
   });
 
