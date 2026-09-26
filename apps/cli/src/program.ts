@@ -735,6 +735,39 @@ export function buildProgram(): Command {
       await runTurns(runId, opts);
     });
   runCmd
+    .command("transcript")
+    .description(
+      "Read one page of a run's transcript: its entries, the count per chip over the whole run, and a search of the kept bodies",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--zoom <zoom>", "turns, steps, or everything", "steps")
+    .option(
+      "--kinds <kinds>",
+      "The chips to keep, comma-separated (thinking,seal)",
+    )
+    .option("--query <words>", "Words to search the entries for, ignoring case")
+    .option("--after <cursor>", "The cursor the previous page printed")
+    .option("--limit <n>", "Page size, 1 to 500", (v) => Number.parseInt(v, 10))
+    .option("--text <text>", "How much of each body to carry: excerpt or full")
+    .option("--json", "Output the raw contract payload as JSON")
+    .action(
+      async (
+        runId: string,
+        opts: {
+          zoom?: string;
+          kinds?: string;
+          query?: string;
+          after?: string;
+          limit?: number;
+          text?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { runTranscript } = await import("./commands/run.js");
+        await runTranscript(runId, opts);
+      },
+    );
+  runCmd
     .command("export")
     .description(
       "Queue the signed, offline-verifiable evidence bundle for a sealed run — Owner/Admin only",

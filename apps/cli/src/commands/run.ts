@@ -1,11 +1,16 @@
 /**
  * `oxagen run list`, `oxagen run export <run-id>`,
  * `oxagen run export-status <export-id>`, `oxagen run download <export-id>`,
- * `oxagen run chain <run-id>` and `oxagen run turns <run-id>`: the CLI parity
- * surfaces for `list_runs`, `export_run`, `get_run_export`, `get_run_chain`
- * and `get_run_turns` (Mission Control spec §12.9, §13.4, §14.1; ADR-058).
+ * `oxagen run chain <run-id>`, `oxagen run turns <run-id>` and
+ * `oxagen run transcript <run-id>`: the CLI parity surfaces for `list_runs`,
+ * `export_run`, `get_run_export`, `get_run_chain`, `get_run_turns` and
+ * `get_run_transcript` (Mission Control spec §12.9, §13.4, §14.1; ADR-058).
  *
  * `list` prints the workspace's runs, newest first, one page at a time.
+ *
+ * `transcript` prints one page of a run's transcript at a zoom, narrowed to
+ * the chips asked for and to the entries that hold a query, with each chip's
+ * count over the whole run.
  *
  * `export` queues the signed, offline-verifiable evidence bundle for one
  * sealed run and prints the export id. The bundle is built off the request
@@ -21,6 +26,7 @@ import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { formatUsd } from "@oxagen/billing/rate-card";
+import { isTranscriptKind, TRANSCRIPT_KINDS } from "@oxagen/tacho";
 import { apiPostOrThrow, printTable } from "../lib/api.js";
 import { getApiUrl } from "../lib/config.js";
 import { createOutput } from "../lib/output.js";
@@ -436,6 +442,262 @@ export async function runTurns(
     writer.write("");
     writer.write(
       `The run is longer than one read carries. These are its first ${result.turns.length} turns.`,
+    );
+  }
+}
+
+// ── oxagen run transcript ────────────────────────────────────────────────────
+
+/** The zoom levels and body lengths `get_run_transcript` takes. */
+const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
+const TRANSCRIPT_TEXTS = ["excerpt", "full"] as const;
+/** The contract's bounds on a query and a page. */
+const TRANSCRIPT_QUERY_MAX = 200;
+const TRANSCRIPT_LIMIT_MAX = 500;
+
+/** One entry of the `get_run_transcript` output, as far as the CLI prints it. */
+interface RunTranscriptEntry {
+  seq: string;
+  key?: string;
+  kind: string;
+  label: string;
+  kinds: string[];
+  turn: number | null;
+  node?: string | null;
+  quiet?: boolean;
+  outcome?: string | null;
+  tool?: string | null;
+  model?: string | null;
+  matches?: string[];
+}
+
+/** Mirrors the `get_run_transcript` contract output, as far as the CLI prints it. */
+export interface RunTranscriptResult {
+  zoom: string;
+  kinds: string[];
+  entries: RunTranscriptEntry[];
+  cursor: string | null;
+  complete: boolean;
+  /** Present only on a read that starts at the run's first frame. */
+  counts?: {
+    kinds: Record<string, number>;
+    entries: number;
+    errors: number;
+    policy: number;
+  };
+  /** Present only on a read with a query. */
+  search?: { query: string; matched: number; unsearched: number };
+}
+
+export interface RunTranscriptOptions {
+  zoom?: string;
+  /** Chips to keep, comma-separated. */
+  kinds?: string;
+  query?: string;
+  after?: string;
+  limit?: number;
+  text?: string;
+  json?: boolean;
+}
+
+/** The chips in `--kinds`, each once, or the first word no chip answers to. */
+function parseKinds(
+  value: string | undefined,
+): { kinds: string[] } | { unknown: string } {
+  const words = (value ?? "")
+    .split(",")
+    .map((word) => word.trim())
+    .filter((word) => word !== "");
+  const unknown = words.find((word) => !isTranscriptKind(word));
+  if (unknown !== undefined) return { unknown };
+  return { kinds: [...new Set(words)] };
+}
+
+/** `a or b`, and `a, b, or c` past two. */
+function orList(words: readonly string[]): string {
+  if (words.length <= 2) return words.join(" or ");
+  return `${words.slice(0, -1).join(", ")}, or ${words.at(-1) ?? ""}`;
+}
+
+/** `1 entry`, `2 entries`. */
+function countOf(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Left-aligned columns two spaces apart, as `oxagen run turns` prints them. */
+function writeColumns(rows: string[][], writer: CommandWriter): void {
+  const widths = (rows[0] ?? []).map((_, col) =>
+    Math.max(...rows.map((r) => (r[col] ?? "").length)),
+  );
+  for (const r of rows) {
+    writer.write(
+      r
+        .map((cell, col) => cell.padEnd(widths[col] ?? 0))
+        .join("  ")
+        .trimEnd(),
+    );
+  }
+}
+
+/**
+ * `oxagen run transcript <run-id>`: one page of `get_run_transcript`.
+ *
+ * `--kinds` keeps the entries that answer any of the chips named, and
+ * `--query` keeps the entries that hold the words in their label, tool,
+ * target or kept bodies. The server checks both. The CLI refuses a chip
+ * name, a zoom, a body length or a page size the contract does not take
+ * before it sends anything.
+ *
+ * Pretty mode prints the count per chip over the whole run, which only a
+ * read from the run's start carries, then what a query found, then the
+ * page's entries with their turn, key, row, name and outcome. An entry with
+ * nothing to show (`quiet`) is left out, as the Run page leaves it out, and
+ * `--json` lists it. A count or a match count from a read that stopped short
+ * of the run's end prints as a floor (`12+`).
+ */
+export async function runTranscript(
+  runId: string,
+  opts: RunTranscriptOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const zoom = opts.zoom ?? "steps";
+  if (!(TRANSCRIPT_ZOOMS as readonly string[]).includes(zoom)) {
+    out.error(
+      `--zoom takes ${orList(TRANSCRIPT_ZOOMS)}, not "${zoom}".`,
+      "usage",
+    );
+    return;
+  }
+  const chips = parseKinds(opts.kinds);
+  if ("unknown" in chips) {
+    out.error(
+      `No chip is named "${chips.unknown}". --kinds takes ${orList(TRANSCRIPT_KINDS)}, comma-separated.`,
+      "usage",
+    );
+    return;
+  }
+  if (
+    opts.text !== undefined &&
+    !(TRANSCRIPT_TEXTS as readonly string[]).includes(opts.text)
+  ) {
+    out.error(
+      `--text takes ${orList(TRANSCRIPT_TEXTS)}, not "${opts.text}".`,
+      "usage",
+    );
+    return;
+  }
+  if (
+    opts.limit !== undefined &&
+    (!Number.isInteger(opts.limit) ||
+      opts.limit < 1 ||
+      opts.limit > TRANSCRIPT_LIMIT_MAX)
+  ) {
+    out.error(
+      `--limit takes a whole number from 1 to ${TRANSCRIPT_LIMIT_MAX}.`,
+      "usage",
+    );
+    return;
+  }
+  const query = opts.query?.trim();
+  if (
+    query !== undefined &&
+    (query === "" || query.length > TRANSCRIPT_QUERY_MAX)
+  ) {
+    out.error(
+      `--query takes 1 to ${TRANSCRIPT_QUERY_MAX} characters of words to search for.`,
+      "usage",
+    );
+    return;
+  }
+
+  let result: RunTranscriptResult;
+  try {
+    result = await apiPostOrThrow<RunTranscriptResult>("runs/transcript", {
+      runId,
+      zoom,
+      ...(chips.kinds.length === 0 ? {} : { kinds: chips.kinds }),
+      ...(query === undefined ? {} : { query }),
+      ...(opts.after === undefined ? {} : { after: opts.after }),
+      ...(opts.limit === undefined ? {} : { limit: opts.limit }),
+      ...(opts.text === undefined ? {} : { text: opts.text }),
+    });
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+
+  const { counts, search, complete } = result;
+  const count = (n: number) => (complete ? String(n) : `${n}+`);
+  const shown = result.entries.filter((entry) => entry.quiet !== true);
+  writer.write(
+    `${runId} at ${result.zoom}: ${countOf(shown.length, "entry", "entries")} on this page${
+      counts === undefined ? "" : `, ${count(counts.entries)} in the run`
+    }`,
+  );
+  if (counts !== undefined) {
+    const chipCounts = TRANSCRIPT_KINDS.filter(
+      (kind) => counts.kinds[kind] !== undefined,
+    ).map((kind) => `${kind} ${count(counts.kinds[kind] ?? 0)}`);
+    writer.write(`Counts: ${chipCounts.join(", ")}`);
+  }
+  if (search !== undefined) {
+    // The search reads the same frames the counts do, so a read that stopped
+    // short of the run's end found a floor too.
+    writer.write(`Search "${search.query}": ${count(search.matched)} matched`);
+    if (search.unsearched > 0) {
+      writer.write(
+        `The search is partial: it could not look inside ${countOf(search.unsearched, "kept body", "kept bodies")}.`,
+      );
+    }
+  }
+  writer.write("");
+  if (shown.length === 0) {
+    writer.write("No entries on this page.");
+  } else {
+    const dash = "-";
+    writeColumns(
+      [
+        [
+          "Turn",
+          "Key",
+          "Row",
+          "Name",
+          "Outcome",
+          ...(search === undefined ? [] : ["Matched in"]),
+        ],
+        ...shown.map((entry) => [
+          entry.turn === null ? dash : String(entry.turn),
+          entry.key ?? entry.seq,
+          entry.node ?? entry.kind,
+          entry.tool ?? entry.model ?? entry.label,
+          entry.outcome ?? dash,
+          ...(search === undefined
+            ? []
+            : [(entry.matches ?? []).join(", ") || dash]),
+        ]),
+      ],
+      writer,
+    );
+  }
+  const quiet = result.entries.length - shown.length;
+  if (quiet > 0) {
+    writer.write(
+      `${quiet === 1 ? "1 entry with nothing to show is" : `${quiet} entries with nothing to show are`} left out. --json lists them.`,
+    );
+  }
+  if (result.cursor !== null) {
+    writer.write(
+      `More entries: pass --after ${result.cursor} for the next page.`,
+    );
+  }
+  if (!complete) {
+    writer.write(
+      "The run is longer than one read carries. These entries cover its first part.",
     );
   }
 }

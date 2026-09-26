@@ -1,14 +1,19 @@
 // `readWholeTranscript` and `isWhole`: the Transcript tab, Policy and Context
 // read the run to its end rather than taking the first page as the run, at the
-// largest page the contract allows, with each entry once, and the counts and
-// figures the server sent with the last page.
+// largest page the contract allows, with each entry once, and the last page's
+// counts and figures, or the first page's when the last carried none.
 import { describe, expect, it, vi } from "vitest";
 import { type RunTranscript, TRANSCRIPT_ENTRY_MAX } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk, type Read } from "@/data/read";
 import { WsCtx } from "@/server/viewer";
 import { unsafeMint } from "@/server/viewer.testing";
-import { runTranscript, transcriptEntry } from "./run.builders";
+import {
+  runTranscript,
+  transcriptCounts,
+  transcriptEntry,
+  transcriptFigures,
+} from "./run.builders";
 import { isWhole, readWholeTranscript } from "./whole-transcript";
 
 const ctx = unsafeMint(WsCtx, {
@@ -76,6 +81,42 @@ describe("readWholeTranscript", () => {
     ]);
     // A live run's later page counts what was recorded since the first.
     expect(read.ok && read.value.counts?.entries).toBe(full + 3);
+  });
+
+  // A read from a cursor carries no counts or figures: `get_run_transcript`
+  // counts the run only on a read that starts at its first frame. The
+  // Transcript tab's chips and the page's figures are the whole run's, so a
+  // run of two pages keeps the first page's rather than reading as none
+  // (#3942: every chip keeps its whole-run count).
+  it("keeps the first page's counts and figures when a later page carries none", async () => {
+    const full = TRANSCRIPT_ENTRY_MAX;
+    const counts = transcriptCounts({
+      kinds: { thinking: 3, seal: 1 },
+      entries: full + 3,
+    });
+    const figures = transcriptFigures();
+    const { source } = sourceOf((after) =>
+      after === undefined
+        ? readOk({ ...page(0, full, "p2"), counts, figures })
+        : readOk({ ...page(full, 3, null), counts: null, figures: null }),
+    );
+    const read = await readWholeTranscript(source, ctx, "tse_1", "steps", {
+      text: "full",
+    });
+    if (!read.ok) throw new Error("the read answers");
+    expect(read.value.entries).toHaveLength(full + 3);
+    expect(read.value.counts).toEqual(counts);
+    expect(read.value.figures).toEqual(figures);
+  });
+
+  it("answers no counts when no page carried any (negative)", async () => {
+    const { source } = sourceOf((after) =>
+      after === undefined
+        ? readOk({ ...page(0, TRANSCRIPT_ENTRY_MAX, "p2"), counts: null })
+        : readOk({ ...page(TRANSCRIPT_ENTRY_MAX, 3, null), counts: null }),
+    );
+    const read = await readWholeTranscript(source, ctx, "tse_1", "steps");
+    expect(read.ok && read.value.counts).toBeNull();
   });
 
   it("reads page after page to the end, narrowed to the chip asked for", async () => {

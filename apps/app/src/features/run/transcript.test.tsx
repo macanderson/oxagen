@@ -1040,6 +1040,24 @@ describe("the search", () => {
     });
   });
 
+  // A read that stopped short of the run's end counted and searched only the
+  // part it read. The chips print their counts as floors, and the search line
+  // printed exact ones. The footer counted the run's entries under the
+  // matches drawn (#3942).
+  it("marks the search's counts as floors on a read that stopped short, and counts the matches drawn (negative)", async () => {
+    readTranscriptPage.mockResolvedValue(found("changelog", [8, 9]));
+    renderSection({ read: readOk(releaseTranscript({ complete: false })) });
+    search("changelog");
+    await waitFor(() => {
+      expect(screen.getByTestId("tx-matches")).toHaveTextContent(
+        "2+ of 13+ entries",
+      );
+    });
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      /^2 entries\. The run has more frames than one read carries/,
+    );
+  });
+
   it("says nothing matches rather than showing an empty feed (negative)", async () => {
     readTranscriptPage.mockResolvedValue(found("no such words", []));
     renderSection();
@@ -1247,6 +1265,35 @@ describe("paging past the cursor", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("transcript-more")).toBeNull();
     });
+  });
+
+  // A page read from a cursor carries no counts: `get_run_transcript` counts
+  // the run only on a read that starts at its first frame. Every chip keeps
+  // the whole run's count the tab opened with (#3942).
+  it("keeps every chip's whole-run count after a page that carries none", async () => {
+    readTranscriptPage.mockResolvedValue(
+      pageOk({ ...tailPage, counts: null, cursor: null, complete: true }),
+    );
+    renderSection({ read: paged });
+    const chipCounts = () =>
+      [
+        "prompt",
+        "responses",
+        "thinking",
+        "tools",
+        "usage",
+        "recall",
+        "seal",
+      ].map((chip) => screen.getByTestId(`chip-${chip}-count`).textContent);
+    // releaseCounts(): the whole run's count per chip.
+    const whole = ["1", "5", "2", "6", "5", "1", "0"];
+    expect(chipCounts()).toEqual(whole);
+    fireEvent.click(screen.getByTestId("transcript-more"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-more")).toBeNull();
+    });
+    expect(chipCounts()).toEqual(whole);
+    expect(screen.getByTestId("chip-errors-count")).toHaveTextContent("1");
   });
 
   it("names a cursor the capability did not write, and keeps every row already read (negative)", async () => {

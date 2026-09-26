@@ -20,7 +20,7 @@ A body the store cannot return reads as `text: null` on its half; the rest of th
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs/transcript`
 - MCP: `get_run_transcript`
-- CLI: `oxagen run transcript <run-id> [--zoom <zoom>] [--kinds <kinds>] [--query <words>] [--after <cursor>] [--json]`
+- CLI: `oxagen run transcript <run-id> [--zoom <zoom>] [--kinds <kinds>] [--query <words>] [--after <cursor>] [--limit <n>] [--text <excerpt|full>] [--json]` prints one page: each entry with something to show, the count per chip when the read starts at the run's first frame, what a query found, and the `--after` value for the next page. `--kinds` takes the chips comma-separated (see Example).
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `get_run_transcript`
 - Not billed (`noBillingGate: true`): reading a recording is a console read (ADR-052 exclusion 2). IAM default-deny; high sensitivity.
@@ -80,7 +80,7 @@ Each chip selects what the Run page's Transcript tab draws under it, so the coun
 
 The fold runs over every frame first, and the filter then keeps the entries that answer a chip pressed. A filtered transcript therefore shows the same steps as an unfiltered one, only fewer of them: a `policy` selection at `steps` keeps each governed tool call whole, with both halves. At `everything` the answer is the same as filtering frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
 
-The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query opens the Transcript tab with every chip off. The tab hides and shows the rows of the whole-run read the page already made, so no chip setting reads again, and each chip's count is `counts.kinds` from that read.
+The Run page's transcript mockup (`mockups/pages/run-transcript.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query opens the Transcript tab with every chip off. The tab hides and shows the rows of the whole-run read the page already made, so no chip setting reads again, and each chip's count is `counts.kinds` from that read.
 
 ## Output
 
@@ -242,7 +242,26 @@ leaves every block's cost null rather than drawing a zero.
 
 ## How much body text a zoom carries
 
-`everything` is one entry per frame and carries up to **16 384** characters per half. `turns` and `steps` fold a whole exchange into one entry and carry up to **1 024** — a page of 200 steps at the full cap is several megabytes of body text nobody asked for on that render, and an excerpt plus the entry's `label` is what a folded level is for. A caller that needs the whole of each body at `steps`, as the Run page does for a tool's output, asks for `text: "full"`, and `text: "excerpt"` cuts `everything` to the smaller cap. A half cut at either cap says `truncated: true`, so a reader follows the frame to `get_run_frame_body` for the whole of it.
+`everything` is one entry per frame and carries up to **16 384** characters per half. `turns` and `steps` fold a whole exchange into one entry and carry up to **1 024**. A page of 200 steps at the full cap is several megabytes of body text nobody asked for on that render, and an excerpt plus the entry's `label` is what a folded level is for. A caller that needs the whole of each body at `steps`, as the Run page does for a tool's output, asks for `text: "full"`, and `text: "excerpt"` cuts `everything` to the smaller cap. A half cut at either cap says `truncated: true`, so a reader follows the frame to `get_run_frame_body` for the whole of it.
+
+## Example
+
+Read the model calls that reasoned and the run's stop:
+
+```sh
+oxagen run transcript tse_4q8r1t6v3x5z0b2d7h2k9m --kinds thinking,seal
+```
+
+```text
+tse_4q8r1t6v3x5z0b2d7h2k9m at steps: 2 entries on this page, 14 in the run
+Counts: prompt 1, responses 6, thinking 1, tools 5, policy 0, usage 6, recall 0, seal 1, errors 0
+
+Turn  Key  Row    Name                     Outcome
+1     4    model  anthropic/claude-opus-5  ok
+-     13   seal   agent_stop               -
+```
+
+The counts cover the whole run, whatever `--kinds` keeps. A page read with `--after` carries none. Add `--query <words>` to keep the entries that hold the words, and `--json` to print the contract payload.
 
 ## Errors
 
