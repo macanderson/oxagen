@@ -670,6 +670,22 @@ async function unenrollLocked(
   ]) {
     if (existsSync(path)) unlinkSync(path);
   }
+  // The copies of files that held uncommitted edits when a session started.
+  // Only the daemon removes them, when it forgets a session, and daemon.json
+  // went above, so no daemon would ever remove these. They hold a person's
+  // worktree content, so they go whether or not the record is purged. A
+  // failure is a warning that names the folder, not a throw that would stop
+  // the unenroll before it deals with host.json.
+  try {
+    rmSync(deps.paths.preSessionCopies, { recursive: true, force: true });
+    deps.out(
+      `      pre-session copies removed from ${deps.paths.preSessionCopies}`,
+    );
+  } catch (error) {
+    warnings.push(
+      `could not remove the pre-session copies in ${deps.paths.preSessionCopies}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   // The Stella identity cache holds pids and start times and nothing else. A
   // later enrollment rebuilds it, so it goes whether or not `--purge` was
   // given, and an emptied root can then be removed. A cache left behind does
