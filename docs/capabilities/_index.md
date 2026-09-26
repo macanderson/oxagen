@@ -32,6 +32,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [answer_interjection](agent.interjection.answer.md) | [agent.interjection.answer.ts](../../packages/oxagen/src/contracts/agent.interjection.answer.ts) | api, mcp |
 | [assign_agent_role](agent.role.assign.md) | [agent.role.assign.ts](../../packages/oxagen/src/contracts/agent.role.assign.ts) | api, mcp, agent |
 | [attach_memory_evidence](agent.memory_evidence.attach.md) | [agent.memory_evidence.attach.ts](../../packages/oxagen/src/contracts/agent.memory_evidence.attach.ts) | api, mcp, agent |
 | [authorize_mcp_server](agent.mcp.authorize.complete.md) | [agent.mcp.authorize.complete.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.complete.ts) | api, mcp |
@@ -61,6 +62,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_agents](agent.list.md) | [agent.list.ts](../../packages/oxagen/src/contracts/agent.list.ts) | api, mcp, agent |
 | [list_approvals](agent.approval.list.md) | [agent.approval.list.ts](../../packages/oxagen/src/contracts/agent.approval.list.ts) | api, mcp, agent |
 | [list_executions](agent.execution.list.md) | [agent.execution.list.ts](../../packages/oxagen/src/contracts/agent.execution.list.ts) | api, mcp, agent |
+| [list_interjections](agent.interjection.list.md) | [agent.interjection.list.ts](../../packages/oxagen/src/contracts/agent.interjection.list.ts) | api, mcp, agent |
 | [list_mcp_consents](agent.mcp_consent.list.md) | [agent.mcp_consent.list.ts](../../packages/oxagen/src/contracts/agent.mcp_consent.list.ts) | api, mcp, agent |
 | [list_mcp_servers](agent.mcp.list.md) | [agent.mcp.list.ts](../../packages/oxagen/src/contracts/agent.mcp.list.ts) | api, mcp, agent |
 | [list_memories](agent.memory.list.md) | [agent.memory.list.ts](../../packages/oxagen/src/contracts/agent.memory.list.ts) | api, mcp, agent |
