@@ -6,6 +6,7 @@ import {
   TACHO_EVENT_COLUMNS,
   flattenEvent,
   unflattenEvent,
+  unflattenEventReading,
 } from "./columns";
 import { BODY_MEMBER_NAMES, parseTachoEvent } from "./envelope";
 import {
@@ -292,5 +293,118 @@ describe("unflattenEvent, the readings a row leaves open", () => {
     const row = flattenEvent(forged as unknown as typeof event);
     expect(row["hash"]).toBe(forged["hash"]);
     expect(unflattenEvent(row)).toBeNull();
+  });
+});
+
+// #3814: the run export rebuilds a session row by row, and each row used to
+// search every reading it leaves open. The rows of one session mostly share
+// a reading, so the export carries the last match to the next row.
+describe("unflattenEventReading, a reading carried from the row before", () => {
+  /**
+   * Events whose rows need the same non-default reading: every empty group
+   * sent as `{}`, content sent as `{ redactions: [] }`, and a whole-second
+   * ts. The third names a turn, so its row leaves that group closed.
+   */
+  function oneShapeSession() {
+    const shape = {
+      turn: {},
+      span: {},
+      context: {},
+      host: {},
+      anthropic: {},
+      content: { redactions: [] },
+    };
+    const events = sealAll([
+      unsealed(
+        "tool_call",
+        { tool_name: "Read", tool_status: "ok" },
+        { ...shape, ts: "2026-09-08T10:06:04Z" },
+      ),
+      unsealed(
+        "tool_call",
+        { tool_name: "Bash", tool_status: "ok" },
+        { ...shape, ts: "2026-09-08T10:06:05Z" },
+      ),
+      unsealed(
+        "tool_call",
+        { tool_name: "Grep", tool_status: "ok" },
+        { ...shape, turn: { turn_seq: 1 }, ts: "2026-09-08T10:06:06Z" },
+      ),
+    ]);
+    return events.map((event) => ({
+      event,
+      row: asClickHouseRead(flattenEvent(event)),
+    }));
+  }
+
+  it("names the flags the matching reading flipped, after searching every reading", () => {
+    const [first] = oneShapeSession();
+    if (!first) throw new Error("no event");
+    const result = unflattenEventReading(first.row);
+    expect(result.event).toEqual(first.event);
+    expect(result.reading).toEqual([
+      "group:turn",
+      "group:span",
+      "group:context",
+      "group:host",
+      "group:anthropic",
+      "content:empty",
+      "ts:whole_second",
+    ]);
+    // Seven open flags, and the match flips all seven: the last of 128.
+    expect(result.tried).toBe(128);
+  });
+
+  it("matches the next row on its first candidate when given the row before's reading", () => {
+    const [first, second] = oneShapeSession();
+    if (!first || !second) throw new Error("no events");
+    const { reading } = unflattenEventReading(first.row);
+    const result = unflattenEventReading(second.row, { first: reading });
+    expect(result.tried).toBe(1);
+    expect(result.event).toEqual(second.event);
+    expect(result.reading).toEqual(reading);
+  });
+
+  it("ignores a hinted flag the row does not leave open", () => {
+    const [first, , third] = oneShapeSession();
+    if (!first || !third) throw new Error("no events");
+    const { reading } = unflattenEventReading(first.row);
+    expect(reading).toContain("group:turn");
+    const result = unflattenEventReading(third.row, { first: reading });
+    expect(result.tried).toBe(1);
+    expect(result.event).toEqual(third.event);
+    expect(result.reading).not.toContain("group:turn");
+  });
+
+  it("still finds the reading after a wrong hint, trying each reading once (negative)", () => {
+    const [, second] = oneShapeSession();
+    if (!second) throw new Error("no event");
+    const result = unflattenEventReading(second.row, { first: [] });
+    expect(result.event).toEqual(second.event);
+    // The hint's reading, then the other 127, with the hint's not repeated.
+    expect(result.tried).toBe(128);
+    expect(unflattenEvent(second.row, { first: [] })).toEqual(second.event);
+  });
+
+  it("tries every reading once for a row no reading matches, hint or not (negative)", () => {
+    // The control plane never stores an address member (#3072), so no
+    // reading of this row hashes to its hash. Five empty groups and an empty
+    // content leave six flags open: 64 readings.
+    const [withAddress] = sealAll([
+      unsealed(
+        "agent_start",
+        {},
+        { anthropic: { user_email_digest: `sha256:${"d".repeat(64)}` } },
+      ),
+    ]);
+    if (!withAddress) throw new Error("no event");
+    const row = flattenEvent(withAddress);
+    const plain = unflattenEventReading(row);
+    const hinted = unflattenEventReading(row, { first: ["content:empty"] });
+    expect(plain).toEqual({ event: null, reading: null, tried: 64 });
+    expect(hinted).toEqual({ event: null, reading: null, tried: 64 });
+    expect(
+      unflattenEventReading({ ...row, hash: undefined }, { first: [] }),
+    ).toEqual({ event: null, reading: null, tried: 0 });
   });
 });
