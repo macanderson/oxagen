@@ -225,8 +225,8 @@ describe("readLedgerPrReceipts", () => {
     };
     await expect(readLedgerPrReceipts(store, "run")).resolves.toEqual({
       receipts: [
-        { repositoryId: "R_1", number: 41, headSha: "abc" },
-        { repositoryId: "R_1", number: 42, headSha: "abc" },
+        { repositoryId: "R_1", number: 41, headSha: "abc", seq: "1" },
+        { repositoryId: "R_1", number: 42, headSha: "abc", seq: "4" },
       ],
       complete: true,
     });

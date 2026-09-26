@@ -14,6 +14,8 @@ export interface RecordedRunPr {
   repositoryId: string;
   number: number;
   headSha: string | null;
+  /** The ledger event that recorded it (`run_seq`), where the reader has one. */
+  seq?: string;
 }
 
 /** The ledger events one page reads, and the pages one read walks. */
@@ -59,6 +61,7 @@ export async function readLedgerPrReceipts(
           typeof payload.head_commit_sha === "string"
             ? payload.head_commit_sha
             : null,
+        seq: event.runSeq,
       });
     }
     const last = events.at(-1);
