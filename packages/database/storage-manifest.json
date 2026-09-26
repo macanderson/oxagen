@@ -4146,7 +4146,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e3a5bba1519777d4b9b0ce48348048e75466c22b07e03a8270ae4d6d60d04d25",
+  "contentHash": "5b8adbe916d2fd206278d88c9b3240dcb8b2831f132412c1a9b1da924bc57b82",
   "domains": [
     {
       "name": "agent",
@@ -21715,13 +21715,13 @@
           "name": "lines_added",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "lines_removed",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "observed_status",

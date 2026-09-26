@@ -767,8 +767,12 @@ export const tachoSessionFiles = tachoSchema.table(
     bytesWritten: bigint("bytes_written", { mode: "number" })
       .notNull()
       .default(0),
-    linesAdded: integer("lines_added").notNull().default(0),
-    linesRemoved: integer("lines_removed").notNull().default(0),
+    // bigint: git reconciliation assigns these from the envelope's u32, which
+    // passes the int4 limit (#3944, S-02).
+    linesAdded: bigint("lines_added", { mode: "number" }).notNull().default(0),
+    linesRemoved: bigint("lines_removed", { mode: "number" })
+      .notNull()
+      .default(0),
     /**
      * What git said about this path at the last reconciliation: added,
      * modified, deleted or renamed. Null means no current changed-file
