@@ -11,6 +11,7 @@
         "operatorId": null,
         "operatorKind": "agent",
         "operatorName": "release-bot",
+        "operatorAvatarUrl": null,
         "operatorAttribution": null,
         "operatorRole": null,
         "status": "halted",
