@@ -123,6 +123,9 @@ describe("get_run contract", () => {
       observedAt: "2026-09-08T10:06:04.000Z",
       digest: `sha256:${"0".repeat(64)}`,
       summary: "read_file completed",
+      tool: "read_file",
+      toolStatus: "completed",
+      approvalId: null,
       body: {
         digest: `sha256:${"a".repeat(64)}`,
         bytesRef: "evb:v1:evidence:v1:" + "a".repeat(64),
@@ -138,6 +141,13 @@ describe("get_run contract", () => {
       cost: null,
     };
     expect(runFrameSchema.safeParse(frame).success).toBe(true);
+    expect(
+      runFrameSchema.safeParse({
+        ...frame,
+        toolStatus: "parked",
+        approvalId: "apr_01k5rq8m4",
+      }).success,
+    ).toBe(true);
     expect(
       runFrameSchema.safeParse({
         ...frame,
@@ -161,5 +171,33 @@ describe("get_run contract", () => {
     ).toBe(false);
     const { body: _dropped, ...withoutBody } = frame;
     expect(runFrameSchema.safeParse(withoutBody).success).toBe(false);
+  });
+
+  it("parses a frame recorded before it named its tool, reading each tool field as null", () => {
+    // tool, toolStatus and approvalId arrived with #4307. An output recorded
+    // before then carries none of them and must still parse.
+    const recorded = {
+      cursor: "ZjoxMg",
+      seq: "12",
+      type: "tool.call_completed",
+      stage: "tool",
+      observedAt: "2026-09-08T10:06:04.000Z",
+      digest: `sha256:${"0".repeat(64)}`,
+      summary: "read_file completed",
+      body: {
+        digest: null,
+        bytesRef: null,
+        redactions: [],
+        fidelity: "digest_only",
+      },
+      cost: null,
+    };
+    const parsed = runFrameSchema.safeParse(recorded);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toMatchObject({
+      tool: null,
+      toolStatus: null,
+      approvalId: null,
+    });
   });
 });

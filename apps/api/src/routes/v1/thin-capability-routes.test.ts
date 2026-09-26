@@ -519,6 +519,8 @@ const ROUTES: ThinRoute[] = [
     method: "POST",
     capability: agentList.name,
     body: { limit: 10 },
+    // The contract leaves retired agents out unless the caller asks (#4333).
+    expectedInput: { limit: 10, includeRetired: false },
     invalidBody: { limit: 0 },
     status: 200,
   },

@@ -9,7 +9,9 @@
 import {
   digestBytes,
   digestJcs,
+  hasToJsonMember,
   type JsonValue,
+  legacyJcs,
   type Sha256Digest,
 } from "./digest";
 import { eventIdIdem } from "./ids";
@@ -30,6 +32,38 @@ function toJson(value: unknown): JsonValue {
 export function hashEvent(event: Record<string, unknown>): Sha256Digest {
   const { hash: _ignored, ...rest } = event;
   return digestJcs(toJson(rest));
+}
+
+/**
+ * The rule an event's hash was taken under, or undefined when it hashes to
+ * `hash` under neither.
+ *
+ * `jcs` is the rule `hashEvent` seals with. An event a build before it
+ * sealed, whose content holds a member named `toJSON` (an attribute a host
+ * named that, most likely), hashed to the text `canonicalize@1.0.8` wrote
+ * instead, `legacyJcs`. That form is accepted too, so an older host's events
+ * still verify at ingest, in an export, and when a row is rebuilt. It holds
+ * only in the key order the event was sealed in, and for no event without
+ * that member, since the two texts are the same for every other value.
+ */
+export function eventHashRule(
+  event: Record<string, unknown>,
+  hash: unknown,
+): "jcs" | "legacy" | undefined {
+  const { hash: _ignored, ...rest } = event;
+  const value = toJson(rest);
+  if (digestJcs(value) === hash) return "jcs";
+  if (hasToJsonMember(value) && digestBytes(legacyJcs(value)) === hash)
+    return "legacy";
+  return undefined;
+}
+
+/** Whether an event hashes to `hash` under either rule (`eventHashRule`). */
+export function eventHashHolds(
+  event: Record<string, unknown>,
+  hash: unknown,
+): boolean {
+  return eventHashRule(event, hash) !== undefined;
 }
 
 export interface ChainCursor {
@@ -115,8 +149,9 @@ export function verifyChain(
         );
       }
     }
-    const recomputed = hashEvent(event as unknown as Record<string, unknown>);
-    if (recomputed !== event.hash) {
+    if (
+      !eventHashHolds(event as unknown as Record<string, unknown>, event.hash)
+    ) {
       violations.push(`seq ${event.seq} hash does not match its content`);
     }
     if (event.event_id_idem !== eventIdIdem(event.session_uuid, event.seq)) {
