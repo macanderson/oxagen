@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "tool-target",
+  "severity": "error",
+  "description": "A toolbelt lists a tool target that is not <server>__<tool> or <server>__*.",
+  "refused_by_reader": true,
+  "changed": [
+    "tools/toolbelts/refunds.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "tools/toolbelts/refunds.toml",
+      "line": 8,
+      "field": "tools.1"
+    }
+  ]
+}

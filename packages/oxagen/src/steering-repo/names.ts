@@ -37,7 +37,11 @@ export function steeringRepoName(workspaceSlug: string, n = 1): string {
 
 // ── Branches ─────────────────────────────────────────────────────────────────
 
-/** A steering PR's branch starts with the top-level folder it changes. */
+/**
+ * A steering PR's branch starts with the top-level folder it changes, with
+ * two exceptions: a change to workspace.toml uses `workspace/`, and a memory
+ * PR, which changes steering/memory/, uses `memory/`.
+ */
 export const BRANCH_PREFIXES = [
   "steering",
   "memory",

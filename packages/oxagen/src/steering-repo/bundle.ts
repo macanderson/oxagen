@@ -51,6 +51,7 @@ export const bundleRecordSchema = z
     load: recordLoadSchema.describe("The load in force: the record's own, or the one its force implies."),
     repos: z.array(repoRefSchema).optional(),
     tools: z.array(toolTargetSchema).optional(),
+    skills: z.array(lineageSchema).optional(),
     applies_to: z.array(z.string()).optional(),
     tokens: tokensSchema.describe("The record as delivered: its label as a heading, then its body."),
     index_tokens: tokensSchema.describe("The record's one index line."),

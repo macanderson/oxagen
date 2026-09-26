@@ -196,6 +196,13 @@
               "pattern": "^(?=[a-z0-9_*]{4,64}$)[a-z][a-z0-9_]{0,23}__(?:\\*|[a-z][a-z0-9_]*)$"
             }
           },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$"
+            }
+          },
           "applies_to": {
             "type": "array",
             "items": {

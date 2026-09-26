@@ -182,8 +182,8 @@ const HELD_SETTINGS: Record<SteeringRepoTemplateInput["provider"], string[]> = {
 export function readmeTemplate(input: SteeringRepoTemplateInput): string {
   const holds =
     input.scope.kind === "workspace"
-      ? `It holds the steering for the ${input.scope.label} workspace: steering records, skills, tool servers, agents, and policies.`
-      : `It holds the organization records of ${input.organization}, and every workspace in the organization inherits them.`;
+      ? "It holds the workspace's steering records, skills, tool servers, agents, and policies."
+      : "It holds the organization's records, and every workspace in the organization inherits them.";
   const block = [
     `# ${input.repository}`,
     "",

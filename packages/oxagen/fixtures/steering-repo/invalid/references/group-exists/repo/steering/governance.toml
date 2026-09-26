@@ -1,0 +1,20 @@
+#:schema https://oxagen.sh/schemas/governance/v1.json
+schema = "governance/v1"
+mode = "team"                        # solo, team, or regulated
+
+[steering]
+always_on_tokens = 4000              # a number or "off". Unset inherits Oxagen's default, which only warns.
+
+[ledger]
+rotate = "month"                     # day, week, month, or year
+max_lines = 10000                    # a new file starts here even mid-period
+
+[memory]
+recall_unreviewed = "same-agent"     # same-agent, or off
+batch_size = 20                      # memories per memory PR
+retire_after_days = 180
+auto_merge = false                   # allowed in solo mode only
+
+[[reviewers]]
+paths = ["steering/billing/**", "tools/servers/billing/**"]
+group = "refund-leads"

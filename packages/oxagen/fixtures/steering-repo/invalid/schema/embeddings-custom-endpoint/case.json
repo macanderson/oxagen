@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "embeddings-custom-endpoint",
+  "severity": "error",
+  "description": "A custom embedding provider names no endpoint url.",
+  "refused_by_reader": true,
+  "changed": [
+    "workspace.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "workspace.toml",
+      "line": 21,
+      "field": "embeddings.url"
+    }
+  ]
+}

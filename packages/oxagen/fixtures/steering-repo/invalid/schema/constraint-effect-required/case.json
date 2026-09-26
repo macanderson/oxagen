@@ -1,0 +1,17 @@
+{
+  "check": "schema",
+  "rule": "constraint-effect-required",
+  "severity": "error",
+  "description": "A constraint names no effect.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/platform/a-intel.platform.no-force-push.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.no-force-push.md",
+      "field": "effect"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "check": "authority",
+  "rule": "effect-on-constraint-only",
+  "severity": "error",
+  "description": "A kind other than constraint carries an effect.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/billing/a-intel.billing.refund-limit.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/billing/a-intel.billing.refund-limit.md",
+      "line": 7,
+      "field": "effect"
+    }
+  ]
+}

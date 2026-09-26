@@ -1,7 +1,9 @@
 // record.ts: `steering-record/v1`, a steering record's YAML frontmatter
 // (oxagen-steering-record-spec, Frontmatter fields and JSON Schema), with the
-// three fields the steering repo spec adds before v1 ships: `repos`, `tools`,
-// and `description` on every kind (steering-repo-spec, Record changes).
+// four fields the steering repo spec adds before v1 ships: `repos`, `tools`,
+// `skills`, and `description` on every kind (steering-repo-spec, Record
+// changes). Targets combine: a record reaches a request only when every
+// target it names matches.
 //
 // A record file is `---`, a strict YAML frontmatter, `---`, and a CommonMark
 // body. This module reads one, and computes the `id` and `hash` Oxagen stamps
@@ -101,6 +103,11 @@ const recordShape = z
       .optional()
       .describe(
         "Tool names, or <server>__* prefixes. The record reaches a request only when the run's toolbelt holds a match.",
+      ),
+    skills: uniqueArray(lineageSchema, "skills", 1)
+      .optional()
+      .describe(
+        "Skill lineages. The record reaches a request only when the request's context.skill is on the list. A record cannot target a named agent.",
       ),
     applies_to: z
       .array(z.string().min(1))
