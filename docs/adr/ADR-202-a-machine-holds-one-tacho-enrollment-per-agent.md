@@ -138,7 +138,9 @@ bundle and writes its event to its own slot's spool, which the collector
 drains when it starts. A model call routed through the proxy fails until the
 service is back. When the reinstall fails, the command warns that the
 remaining agents have no collector or model proxy, names them, says to run
-`tacho enroll` for one of them, and exits 1.
+`tacho enroll --harness <list>` with the first agent's harness list, and
+exits 1. That enroll finds the agent's slot, sends no request, and installs
+the service again.
 
 This outage is accepted. Stopping one collector while the others keep running
 needs a way to tell a running `tachod` which slot to drop, and it has none:
@@ -199,7 +201,11 @@ such a collector needs no data migration.
   (`packages/handlers/src/tacho.enrollment.create.ts`). A sub slot is
   token-enrolled by construction, so reassigning one returns an agent under a
   different key, unlinked from the agent registered on the Agents page and
-  from that agent's mandate.
+  from that agent's mandate. Before its revoke, a reassign of a sub slot
+  prints a warning that names the agent key and says how to keep the link:
+  unenroll that agent, register it in the target workspace, and run the
+  command its page shows. #4410 tracks carrying the agent link through a
+  reassign.
 
 ## Alternatives considered
 

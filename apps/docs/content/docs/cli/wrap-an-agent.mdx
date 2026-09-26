@@ -291,7 +291,11 @@ tacho reassign --harness codex --workspace <slug>
 
 On a machine with more than one enrollment, `reassign` needs `--harness`. The list picks the agent that hooks at least one of those harnesses, and it becomes that agent's harness list. A list that names harnesses of two agents is refused. Reassign one agent at a time.
 
-`reassign` enrolls the agent again through your CLI session, the way `tacho enroll` does without a token, so run `oxagen login` first. The new enrollment is not linked to any agent on the Agents page, and its agent key comes from the machine's hostname. An agent you enrolled with a token therefore comes back under a different agent key, without its link to the agent you registered and without that agent's mandate.
+`reassign` enrolls the agent again through your CLI session, the way `tacho enroll` does without a token, so run `oxagen login` first. The new enrollment is not linked to any agent on the Agents page, and its agent key comes from the machine's hostname. An agent you enrolled with a token therefore comes back under a different agent key, without its link to the agent you registered and without that agent's mandate. `reassign` prints a warning before it revokes such an agent. To keep the link, do not reassign it:
+
+1. Run `tacho unenroll --harness <harness>` with a harness the agent hooks.
+2. Register the agent in the target workspace on the Agents page.
+3. Run the command the agent's page shows.
 
 ## Limits
 

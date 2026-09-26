@@ -150,7 +150,10 @@ After a pull, the directory is reported to Oxagen with the commit it pulled, the
 oxagen agent register --name <name> --harness <stella|claude-code|codex|cursor|claude-agent-sdk|custom> --runtime <rtm_id> [--slug <slug>] [--toolbelt <tbt_id>] [--description <text>] [--validity-days <n>] [--json]
 oxagen agent status <agent> [--json]
 oxagen agent unenroll <agent> [--host <tch_id>] [--reason <text>] [--json]
+oxagen agent unenroll [--harness <name>] [--all] [--token <apiKey>] [--purge] [--reason <text>]
 ```
+
+Without an agent, `unenroll` removes this machine's enrollment, the same as `tacho unenroll`. On a machine with more than one enrollment, name the one to remove with `--harness`, or remove them all with `--all`. Pass one of the two.
 
 `register` mints the agent (`register_agent`): one operator on one runtime with one harness, carrying a toolbelt. It writes the agent row, its delegated principal, the default agent role, the first agent version and one long-lived credential, printed once and never recoverable. An agent carries no prompt and no definition file. `status` reads `get_agent`: the identity, the runtime it runs on, the toolbelt it carries, its versions, its credentials (prefix and dates, never the secret), the roles on its principal and the hosts enrolled under its key. `unenroll` revokes the agent's live host enrollments through `revoke_tacho_enrollment`, or one host with `--host`. `register` and `unenroll` are org Owner/Admin writes: the key `oxagen login` minted authenticates as the user who approved the login, and the handler checks that user's org role. The credential `register` prints is locked to its purpose and is not accepted as a bearer by the API or the MCP server; it is the credential the run-token exchange of the spec consumes.
 

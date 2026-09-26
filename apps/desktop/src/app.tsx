@@ -1574,7 +1574,7 @@ export function App() {
           <>
             <span className="sub">
               {hostHarnesses.length > 0
-                ? `This de-registers ${joinLabels(hostHarnesses)} and deletes the local event log. Sure?`
+                ? `This de-registers every agent enrolled on this machine, including ${joinLabels(hostHarnesses)}, and deletes the local event log. Sure?`
                 : "This removes the command line links, the local event log and your sign-in on this machine. Sure?"}
             </span>
             <button
@@ -2108,8 +2108,8 @@ export function App() {
               {state.host_path}: {state.host_error}. The machine may still be
               enrolled, so setup is not offered here, because it would write
               over that file. Run <code>tacho status</code> in a terminal to see
-              what is in place, or <code>tacho unenroll</code> to remove it,
-              then reopen Oxagen.
+              what is in place, or <code>tacho unenroll --all</code> to remove
+              it, then reopen Oxagen.
             </p>
           </section>
         ) : firstRun ? (

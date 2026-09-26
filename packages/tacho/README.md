@@ -142,12 +142,13 @@ tacho status --json                       # adds `enrollments`, one report per s
 ```
 
 A bare `unenroll` or `reassign` on a machine with two enrollments refuses and
-lists them. `oxagen tacho unenroll` does not take `--harness` or `--all`, so
-use `tacho` for these. Unenrolling one agent restarts the service for the
-agents that remain. `reassign` enrolls again through the CLI session, so a
-token-enrolled agent comes back under a hostname-derived agent key with no
-registered agent or mandate (ADR-202, known gaps). Spec §5.8 has the full
-rules.
+lists them. `oxagen tacho unenroll` and `oxagen agent unenroll` without an
+agent take the same `--harness` and `--all`. Unenrolling one agent restarts
+the service for the agents that remain. `reassign` enrolls again through the
+CLI session, so a token-enrolled agent comes back under a hostname-derived
+agent key with no registered agent or mandate. It prints a warning before the
+revoke that says how to keep the link (#4410, ADR-202 known gaps). Spec §5.8
+has the full rules.
 
 ### Codex
 
