@@ -501,6 +501,22 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         ),
       );
     }
+    // A job that finds the workspace switched off moves only the observed
+    // time, which gives the next sweep a fresh event id. It leaves a failed
+    // attempt's error and the observed revision as they were, so the run is
+    // due again on its own terms once the setting is back on (#3784). This
+    // step used to clear the error, which kept a failed run out of the sweep
+    // until the run changed again.
+    async function markSeen() {
+      await inScope(() =>
+        withTenantDb((tx) =>
+          tx
+            .update(table)
+            .set({ summaryObservedAt: new Date(observedAt) })
+            .where(where),
+        ),
+      );
+    }
     const standing = await step.run("admit", () =>
       inScope(() =>
         sweepEventStanding(data, latest.ts, new Date(observedAt), async () => {
@@ -524,7 +540,7 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       return { status: standing };
     }
     if (!(await enabled())) {
-      await step.run("disabled", () => markObserved());
+      await step.run("disabled", () => markSeen());
       logSkip(data, "disabled");
       return { status: "disabled" };
     }

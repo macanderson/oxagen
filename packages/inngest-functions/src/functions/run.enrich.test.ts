@@ -209,10 +209,10 @@ describe("automatic run enrichment", () => {
     expect(await run()).toEqual({ status: "disabled" });
     expect(state.call).not.toHaveBeenCalled();
     expect(state.writes).toHaveLength(1);
-    expect(Object.keys(state.writes[0]!)).toEqual([
-      "summaryObservedAt",
-      "summaryError",
-    ]);
+    // Only the observed time moves. A failed attempt keeps its error, so the
+    // run is due again once enrichment is back on (#3784).
+    expect(Object.keys(state.writes[0]!)).toEqual(["summaryObservedAt"]);
+    expect(state.writes[0]).not.toHaveProperty("summaryError");
   });
   it("does not persist an invented account when Stella or credit admission fails", async () => {
     state.call.mockRejectedValue(new Error("credit gate refused"));
