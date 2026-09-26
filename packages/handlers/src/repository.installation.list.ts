@@ -39,7 +39,7 @@ export interface InstallationRepositoriesDeps {
   repositories(installationId: string): Promise<GitHubInstallationRepositories>;
 }
 
-const githubInstallationRepositoriesDeps: InstallationRepositoriesDeps = {
+export const githubInstallationRepositoriesDeps: InstallationRepositoriesDeps = {
   async repositories(installationId) {
     const appId = process.env["GITHUB_APP_ID"];
     const privateKey = process.env["GITHUB_APP_PRIVATE_KEY"];
