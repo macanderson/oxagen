@@ -565,13 +565,203 @@ export function pullRequestAttrs(response: unknown): Record<string, string> {
  * `hooks.ts` merges them into the effect frame's attrs beside
  * `pullRequestAttrs`.
  *
- * The Repository and issues lane writes the reading. Until then it refuses,
- * and no hook calls it.
+ * The control plane reads a command frame's head for `gh issue <verb> N`
+ * itself, so this names only what the head cannot carry: the issue a GitHub
+ * MCP call acted on, whose input the frame keeps as a digest, and the number
+ * `gh issue create` prints once the issue exists.
  */
 export function issueAttrs(
-  _toolName: string,
-  _input: unknown,
-  _response: unknown,
+  toolName: string,
+  input: unknown,
+  response: unknown,
 ): Record<string, string> {
-  throw new Error("issueAttrs: not implemented (#3970)");
+  const fields =
+    typeof input === "object" && input !== null
+      ? (input as Record<string, unknown>)
+      : {};
+  if (toolName === "Bash" || toolName === "Shell") {
+    const command = fields["command"];
+    if (typeof command !== "string" || !createsIssue(command)) return {};
+    const created = issueUrlIn(response);
+    return created === null ? {} : issueAttrsOf({ ...created, action: "created" });
+  }
+  const mcp = /^mcp__[^_]+(?:_[^_]+)*?__(.+)$/.exec(toolName);
+  const cursor = mcp === null ? /^MCP:(.+)$/.exec(toolName) : null;
+  const tool = mcp?.[1] ?? cursor?.[1];
+  if (tool === undefined) return {};
+  const action = mcpIssueAction(tool, fields);
+  if (action === undefined) return {};
+  const owner = fields["owner"];
+  const repo = fields["repo"];
+  const number = positiveNumber(fields["issue_number"] ?? fields["issueNumber"]);
+  const created = action === "created" ? issueUrlIn(response) : null;
+  if (created !== null) return issueAttrsOf({ ...created, action });
+  if (
+    typeof owner !== "string" ||
+    typeof repo !== "string" ||
+    !REPO_SEGMENT.test(owner) ||
+    !REPO_SEGMENT.test(repo) ||
+    number === undefined
+  )
+    return {};
+  return issueAttrsOf({
+    repository: `${owner}/${repo}`,
+    number,
+    url: `https://github.com/${owner}/${repo}/issues/${String(number)}`,
+    action,
+  });
+}
+
+/**
+ * The release a GitHub MCP call created, as the frame attrs
+ * `release.repository` (`owner/repo`) and `release.tag`, or `{}` when the
+ * call created none (#3890). `get_run_work` reads the tag of a `gh release
+ * create` from the command head, and these attrs for the MCP call, whose
+ * input the frame keeps only as a digest. The tool name is read by its
+ * words, so `create_release`, `github_create_release` and `createRelease`
+ * read alike.
+ */
+export function releaseAttrs(
+  toolName: string,
+  input: unknown,
+): Record<string, string> {
+  const mcp = /^mcp__[^_]+(?:_[^_]+)*?__(.+)$/.exec(toolName);
+  const cursor = mcp === null ? /^MCP:(.+)$/.exec(toolName) : null;
+  const tool = mcp?.[1] ?? cursor?.[1];
+  if (tool === undefined) return {};
+  const name = tool
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 0)
+    .join("_");
+  if (!/(^|_)(create_release|release_create)$/.test(name)) return {};
+  const fields =
+    typeof input === "object" && input !== null
+      ? (input as Record<string, unknown>)
+      : {};
+  const owner = fields["owner"];
+  const repo = fields["repo"];
+  const tag = fields["tag_name"] ?? fields["tagName"] ?? fields["tag"];
+  if (
+    typeof owner !== "string" ||
+    typeof repo !== "string" ||
+    typeof tag !== "string" ||
+    !REPO_SEGMENT.test(owner) ||
+    !REPO_SEGMENT.test(repo) ||
+    !/^[^\s-][^\s]{0,254}$/.test(tag)
+  )
+    return {};
+  return { "release.repository": `${owner}/${repo}`, "release.tag": tag };
+}
+
+/** An issue's page on github.com: owner, repository and number. */
+const ISSUE_URL =
+  /https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)\b/;
+const REPO_SEGMENT = /^[A-Za-z0-9_.-]+$/;
+
+function positiveNumber(value: unknown): number | undefined {
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d+$/.test(value)
+        ? Number(value)
+        : Number.NaN;
+  return Number.isSafeInteger(n) && n > 0 ? n : undefined;
+}
+
+function issueAttrsOf(issue: {
+  repository: string;
+  number: number;
+  url: string;
+  action: string;
+}): Record<string, string> {
+  return {
+    "issue.repository": issue.repository,
+    "issue.number": String(issue.number),
+    "issue.url": issue.url,
+    "issue.action": issue.action,
+  };
+}
+
+/** The first issue URL a response names: stdout first, then the rest of it. */
+function issueUrlIn(
+  response: unknown,
+): { repository: string; number: number; url: string } | null {
+  const stdout =
+    typeof response === "object" && response !== null
+      ? (response as Record<string, unknown>)["stdout"]
+      : undefined;
+  const texts = [
+    typeof stdout === "string" ? stdout : "",
+    typeof response === "string" ? response : (JSON.stringify(response) ?? ""),
+  ];
+  for (const text of texts) {
+    const match = ISSUE_URL.exec(text);
+    const number = positiveNumber(match?.[3]);
+    if (match === null || number === undefined) continue;
+    return {
+      repository: `${match[1] as string}/${match[2] as string}`,
+      number,
+      url: match[0],
+    };
+  }
+  return null;
+}
+
+/** Whether a shell line runs `gh issue create` in one of its commands. */
+function createsIssue(command: string): boolean {
+  for (const piece of splitCommandList(command)) {
+    const tokens = tokenizeSimpleCommand(piece.split("|", 1)[0] ?? "");
+    if (tokens === undefined) continue;
+    let i = 0;
+    while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i] ?? ""))
+      i += 1;
+    if (tokens[i]?.split("/").at(-1) !== "gh") continue;
+    // The subcommand words, past the repository option and any flag: `gh -R
+    // o/r issue create` and `gh issue create -t x` both read issue, create.
+    const words: string[] = [];
+    for (let j = i + 1; j < tokens.length && words.length < 2; j += 1) {
+      const token = tokens[j] as string;
+      if (token === "-R" || token === "--repo") j += 1;
+      else if (!token.startsWith("-")) words.push(token);
+    }
+    if (words[0] === "issue" && words[1] === "create") return true;
+  }
+  return false;
+}
+
+/**
+ * What a GitHub MCP issue tool does to its issue, keyed off the words of the
+ * tool name so `create_issue`, `github_create_issue`, `createIssue` and
+ * `issue_create` read alike. `issue_read` reads, `add_issue_comment`
+ * comments, and `issue_write` or `update_issue` edits, closes or reopens by
+ * the `method` and `state` it was called with. Undefined for a tool that
+ * acts on no single issue (`list_issues`, `search_issues`).
+ */
+function mcpIssueAction(
+  tool: string,
+  input: Record<string, unknown>,
+): string | undefined {
+  const name = tool
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 0)
+    .join("_");
+  const ends = (suffix: string) => name === suffix || name.endsWith(`_${suffix}`);
+  const state = input["state"];
+  const bystate = (fallback: string) =>
+    state === "closed" ? "closed" : state === "open" ? "reopened" : fallback;
+  if (ends("issue_read") || ends("get_issue") || ends("get_issue_comments"))
+    return "viewed";
+  if (ends("add_issue_comment") || ends("issue_comment_create")) return "commented";
+  if (ends("create_issue") || ends("issue_create")) return "created";
+  // Before `issue_write`, whose words it ends with: it links a sub-issue to
+  // the issue it names, which edits that issue.
+  if (ends("sub_issue_write")) return "edited";
+  if (ends("issue_write"))
+    return input["method"] === "create" ? "created" : bystate("edited");
+  if (ends("update_issue") || ends("issue_update")) return bystate("edited");
+  return undefined;
 }

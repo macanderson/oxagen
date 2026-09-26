@@ -29,6 +29,7 @@ import type {
   ContextWindow,
   RunContext,
 } from "@/data/contracts/run-context";
+import type { RunIssues } from "@/data/contracts/run-issues";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { PriceBook, SpendFindingEvidence } from "@/data/contracts/spend";
@@ -832,6 +833,12 @@ type RunReads = {
    */
   work?: Read<RunWork>;
   /**
+   * `get_run_issues`, started with the page and awaited by the Issues tab
+   * and its count in the tab strip (#3970). A test that says nothing about it
+   * gets a run that names no issue.
+   */
+  issues?: Read<RunIssues>;
+  /**
    * The spine above the tabs, read with the page and not with a tab. A test
    * that says nothing about it gets a run that produced nothing, so a test
    * about the header or a tab is not also a test about the spine. A function
@@ -1010,9 +1017,11 @@ export function runSource(reads: RunReads) {
         );
       },
       chain: answer("chain", reads.chain),
-      // No Run tab reads these yet; the Repository and issues lane and the
-      // Context and cost lane add their reads (#3970, #4001).
-      issues: refuse,
+      issues: (_ctx, runId) =>
+        Promise.resolve(
+          reads.issues ??
+            readOk({ runId, issues: [], complete: true, warnings: [] }),
+        ),
       findings: answer("findings", reads.findings ?? readOk({ findings: [] })),
       context: answer("context", reads.context ?? readOk(runContext())),
       turns: answer("turns", reads.turns ?? readOk(runTurns())),

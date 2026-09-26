@@ -11,6 +11,7 @@ import type {
   RunTranscript,
   TranscriptKind,
 } from "@/data/contracts/run";
+import type { RunIssues } from "@/data/contracts/run-issues";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
@@ -67,6 +68,11 @@ export type RunTabProps = {
   outputs: Read<RunOutputs>;
   /** `get_run_work`, started by the page and awaited where it is drawn. */
   work: Promise<Read<RunWork>>;
+  /**
+   * `get_run_issues`, started by the page beside the work read and awaited by
+   * the Issues tab and its count in the tab strip (#3970).
+   */
+  issues: Promise<Read<RunIssues>>;
   /** `get_agent` for the run's agent; null when the run names none. */
   agent: Read<AgentDetail> | null;
   /**

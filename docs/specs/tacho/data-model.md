@@ -297,7 +297,7 @@ OTel `tool_decision` and `tool.blocked_on_user` seal as `harness_permission`, no
 | Column | Type | Contents |
 |---|---|---|
 | `body` | String (JSON) | the kind-specific body from the envelope, redacted, validated against the package schema |
-| `attrs` | Map(String, String) | every OTel attribute not promoted above, verbatim key and stringified value |
+| `attrs` | Map(String, String) | every OTel attribute not promoted above, verbatim key and stringified value. An effect frame also names what its response alone carries: `pr.url`, `pr.number` and `pr.repository` on a `pr_open` call, `issue.repository`, `issue.number`, `issue.url` and `issue.action` on a GitHub MCP issue call or `gh issue create` (#3970), which `get_run_issues` reads, and `release.repository` and `release.tag` on a GitHub MCP release call (#3890), which `get_run_work` reads |
 | `raw_source_digest` | String | sha256 of the raw hook stdin / OTLP record / transcript line the event was derived from |
 
 ## 3. Postgres (`agent` schema, RLS via `orgScopeMixin`)

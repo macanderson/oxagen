@@ -1685,6 +1685,15 @@
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
+    "get_run_issues": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=issues Issues: the run's task, the issues its recorded pull requests close and the issues its frames name, each with its state on GitHub, its relation, its edge and the frames that show it. The tab strip's Issues count reads the same answer (data/live/runs.ts, features/run/run-issues.ts, features/run/issues-tab.tsx).",
+      "testid": "run-issues",
+      "proof": "apps/app/src/features/run/issues-tab.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "run-evidence-tabs-repository-and-issues"
+    },
     "get_run_outcomes_settings": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",

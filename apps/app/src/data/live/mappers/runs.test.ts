@@ -100,6 +100,7 @@ describe("toRunPage", () => {
           operatorKind: "human",
           operatorName: "Marcus Bell",
           operatorAttribution: "initiator",
+          operatorRole: "member",
           status: "sealed",
           outcome: "completed",
           turns: 12,
@@ -159,6 +160,8 @@ describe("toRunPage", () => {
       operatorKind: null,
       operatorName: null,
       operatorAttribution: null,
+      // No role was stamped, and the view says so rather than guessing one.
+      operatorRole: null,
       // The session recorded both, so neither is dropped on the way to the view.
       model: {
         slug: "claude-haiku-4-5-20251001",

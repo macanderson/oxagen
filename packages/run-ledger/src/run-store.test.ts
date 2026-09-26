@@ -1134,6 +1134,40 @@ describe("SQL builders", () => {
     expect(plain.params.at(-1)).toBeNull();
   });
 
+  it("buildCreateRunSql stamps the initiating person's workspace role from membership at insert (#3999)", () => {
+    const input = makeCreateRunInput();
+    const { sql: text, params } = compile(
+      buildCreateRunSql("arun_x", SHA_1, input),
+    );
+    // The column is written by the statement itself, so no caller can pass a
+    // role of its own and every caller stamps one.
+    expect(text).toMatch(/max_attempts,\s+operator_role,\s+origin_message_id/);
+    const subselect = text.slice(
+      text.indexOf("SELECT lower(wu.role)"),
+      text.indexOf("LIMIT 1"),
+    );
+    expect(subselect).toContain("FROM workspace.workspace_users wu");
+    expect(subselect).toContain(
+      "JOIN iam.principals p ON p.parent_user_id = wu.user_id",
+    );
+    // Only a person has a role; an agent or service principal stamps null.
+    expect(subselect).toContain("p.kind = 'human'");
+    // The membership is the run's workspace, and the principal the run's org.
+    expect(subselect).toMatch(/p\.id = \$\d+::uuid/);
+    expect(subselect).toMatch(/p\.org_id = \$\d+::uuid/);
+    expect(subselect).toMatch(/wu\.workspace_id = \$\d+::uuid/);
+    // Its parameters are the spec's initiating principal and the run's scope,
+    // in that order, and they sit just before the origin message.
+    expect(params.slice(-4, -1)).toEqual([
+      input.spec.actor_binding.initiating_principal_id,
+      input.orgId,
+      input.workspaceId,
+    ]);
+    // The read-back never selects it: `assertRunRowMatchesSpec` checks the
+    // spec's identity, and the role is not part of the spec.
+    expect(text).not.toContain("i.operator_role");
+  });
+
   it("buildLockRunForAttemptSql takes the run row's FOR UPDATE lock", () => {
     const { sql: text, params } = compile(buildLockRunForAttemptSql(UUID_RUN));
     expect(text).toContain("FROM agent.agent_runs");

@@ -159,6 +159,7 @@ function props({
     cost,
     outputs: readOk(runOutputs()),
     work: Promise.resolve(readError("not_found", 404)),
+    issues: Promise.resolve(readError("not_found", 404)),
     agent: agentRead,
     now: NOW,
   };

@@ -1433,6 +1433,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./run.work.get")).runWorkGetHandler as CapabilityHandlerFn,
   );
+  // The Run page's Issues tab (#3970, ADR-197).
+  registerHandler(
+    "get_run_issues",
+    async () =>
+      (await import("./run.issues.get"))
+        .runIssuesGetHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "get_run_outputs",
     async () =>
