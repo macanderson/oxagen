@@ -196,6 +196,25 @@ export function commandBlockOf(run: {
   return run.commandBlock ?? null;
 }
 
+/**
+ * How often a page with no stream reads a live wrapped run again, so its
+ * stale light moves without a reload: the host poll window that decides the
+ * reading (`HOST_POLL_WINDOW_MS` in `@oxagen/oxagen`, five minutes). A light
+ * then trails the host by at most two windows.
+ */
+export const STALE_REREAD_MS = 5 * 60_000;
+
+/**
+ * Whether a later read can change a row's stale light: a live wrapped run,
+ * whose host can go quiet or come back. A ledger run has no host to miss.
+ */
+export function canGoStale(run: {
+  status: RunStatus;
+  source: "ledger" | "tacho";
+}): boolean {
+  return run.status === "live" && run.source === "tacho";
+}
+
 /** Why an open run reads stale: its host went quiet, or it was revoked. */
 export type StaleReason = Extract<
   CommandBlock,
@@ -215,8 +234,8 @@ export type StaleReason = Extract<
  *
  * A run with no host has no heartbeat to miss. A ledger run, and a wrapped
  * session no host is recorded for, read live until they seal. The Run page
- * reads the row again when its stream says the reading changed; Fleet reads
- * it when the page loads.
+ * reads the row again when its stream says the reading changed. Fleet reads
+ * it again every `STALE_REREAD_MS` while it lists a live wrapped run.
  */
 export function staleReason(run: {
   status: RunStatus;

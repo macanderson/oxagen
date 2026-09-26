@@ -5,15 +5,18 @@
 // state, with an axe check in every case. Each tile figure is recomputed from
 // the rows the table draws, so a tile that disagreed with its table fails.
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   within,
 } from "@testing-library/react";
+import { HOST_POLL_WINDOW_MS } from "@oxagen/oxagen/contracts/run.list";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { STALE_REREAD_MS } from "@/data/contracts/runs";
 import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -622,6 +625,62 @@ describe("the Runs panel", () => {
       /^live$/,
     );
     expect(heard.querySelector("[data-pulse]")).not.toBeNull();
+  });
+
+  describe("reading a live wrapped run's light again (A-02, #4343 review)", () => {
+    // Fleet read a run's stale light once, when it loaded, so a Fleet left
+    // open kept pulsing live after the host went quiet. With no stream to
+    // say so, it reads itself again once per host poll window.
+    let visibility: DocumentVisibilityState = "visible";
+    beforeEach(() => {
+      vi.useFakeTimers({
+        now: NOW,
+        toFake: ["Date", "setInterval", "clearInterval"],
+      });
+      visibility = "visible";
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => visibility,
+      });
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(document, "visibilityState");
+    });
+    const advance = (ms: number) => {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    };
+
+    it("reads the page again once per host poll window while it lists a live wrapped run", async () => {
+      await loaded({
+        runs: runPage([
+          runRow({ id: "tse_open", source: "tacho", status: "live" }),
+          runRow({ id: "tse_done", source: "tacho", status: "sealed" }),
+        ]),
+      });
+      // The window is the one the row's stale reading uses.
+      expect(STALE_REREAD_MS).toBe(HOST_POLL_WINDOW_MS);
+      advance(STALE_REREAD_MS - 1);
+      expect(refresh).not.toHaveBeenCalled();
+      advance(1);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      // Negative: a hidden tab is not read.
+      visibility = "hidden";
+      advance(STALE_REREAD_MS);
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it("reads nothing again when no listed run can go stale (negative)", async () => {
+      await loaded({
+        runs: runPage([
+          runRow({ id: "arun_open", source: "ledger", status: "live" }),
+          runRow({ id: "tse_done", source: "tacho", status: "sealed" }),
+        ]),
+      });
+      advance(STALE_REREAD_MS * 3);
+      expect(refresh).not.toHaveBeenCalled();
+    });
   });
 
   it("marks the chips, the pager and the row actions as 44px touch targets on a phone", async () => {

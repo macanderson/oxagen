@@ -34,6 +34,8 @@ import {
   type RunDiff,
   type RunPullRequest,
   type RunRow,
+  canGoStale,
+  STALE_REREAD_MS,
   staleReason,
 } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
@@ -72,6 +74,7 @@ import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, headCell, numericCell } from "@/ui/table";
+import { LiveRefresh } from "@/ui/live-refresh";
 import { ToastStack, useToasts } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
 import { Clock } from "@/ui/clock";
@@ -1475,6 +1478,13 @@ export function FleetBoard({
 
   return (
     <>
+      {/* A live wrapped run's stale light is as of this read. With no stream
+          to say the host went quiet, Fleet reads itself again once per host
+          poll window while it lists one (A-02). */}
+      <LiveRefresh
+        active={runs.some(canGoStale)}
+        intervalMs={STALE_REREAD_MS}
+      />
       <Tiles
         listed={listed}
         approvals={approvals}
