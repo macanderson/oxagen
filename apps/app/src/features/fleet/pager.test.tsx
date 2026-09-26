@@ -196,6 +196,22 @@ describe("RunsPager", () => {
     await expectNoAxe(container);
   });
 
+  // #4386 review: in another order, page 1 is not the newest runs, so the
+  // link that opens it says first page.
+  it("names the link First page when the list is in another order", () => {
+    renderPager({
+      rows: 10,
+      cursor: null,
+      nextCursor: null,
+      list: list({ sort: "cost", dir: "desc", page: 3 }),
+    });
+    expect(screen.queryByRole("link", { name: "Newest runs" })).toBeNull();
+    expect(screen.getByRole("link", { name: "First page" })).toHaveAttribute(
+      "href",
+      "/acme/core?sort=cost&dir=desc",
+    );
+  });
+
   it("draws no Newest runs link on the newest page itself", () => {
     renderPager({ rows: 10, cursor: null, nextCursor: "c9", list: list() });
     expect(screen.queryByRole("link", { name: "Newest runs" })).toBeNull();

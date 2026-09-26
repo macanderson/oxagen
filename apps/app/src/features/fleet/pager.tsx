@@ -17,6 +17,7 @@ import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import {
   type FleetListQuery,
+  isNewestFirst,
   lastReachablePage,
   listQueryToRoute,
   pageRange,
@@ -109,12 +110,15 @@ export function RunsPager({
         </span>
         <span className="ms-auto flex flex-wrap items-center gap-3">
           {cursor === null && list.page === 1 ? null : (
+            // Page 1 of the list in its own order. That is the newest runs
+            // only in the newest-first order; in another order it may hold
+            // the oldest or the costliest, so the link says first page.
             <SafeLink
               to={routes.fleet(org, ws, firstPage)}
               data-touch-target=""
               className={`${linkText} inline-flex items-center`}
             >
-              {t("newest")}
+              {isNewestFirst(list) ? t("newest") : t("first")}
             </SafeLink>
           )}
           {nextCursor === null ? null : (
