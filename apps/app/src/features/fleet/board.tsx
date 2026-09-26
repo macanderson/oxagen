@@ -725,18 +725,18 @@ function PauseDialog({
   const ledger = run?.source === "ledger";
   // The run this dialog shows while it is open, and null once it has closed,
   // so a command's answer can tell whether its dialog is still there.
-  const showing = useRef<string | null>(null);
+  const showingRef = useRef<string | null>(null);
   const runId = run?.id ?? null;
   useEffect(() => {
-    showing.current = runId;
+    showingRef.current = runId;
     return () => {
-      showing.current = null;
+      showingRef.current = null;
     };
   }, [runId]);
 
   function close() {
     const changed = applied !== null;
-    showing.current = null;
+    showingRef.current = null;
     setReason("");
     setFailure(null);
     setApplied(null);
@@ -757,7 +757,7 @@ function PauseDialog({
           sent,
           reason,
         );
-        const open = showing.current === run.id;
+        const open = showingRef.current === run.id;
         if (!result.ok) setFailure(failureText(result));
         else if (result.value.commandIds.length === 0)
           setFailure(command("noRecipient"));
