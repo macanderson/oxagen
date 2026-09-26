@@ -41,6 +41,7 @@ import {
   releaseFrames,
   releaseTranscript,
 } from "./actions-tab.builders";
+import { runIssues } from "./issues.builders";
 import {
   contextAssembly,
   contextWindow,
@@ -168,6 +169,7 @@ async function renderTab(setup: Setup = {}) {
     cost,
     outputs: ok(runOutputs()),
     work: source.runs.work(ctx, run.id),
+    issues: Promise.resolve(ok(runIssues())),
     agent: null,
     now: NOW,
   });
