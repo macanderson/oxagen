@@ -129,27 +129,41 @@ CREATE INDEX "toolbelt_tools_org_idx" ON "tools"."toolbelt_tools" ("org_id", "wo
 COMMENT ON TABLE "tools"."toolbelt_tools" IS
   'A custom belt''s members: one agent.tools row each, active or not. Removing a server from the belt deletes its rows.';
 
--- Tenant + workspace RLS, class `standard` (tools/scripts/gen-rls-migration.ts).
+-- Tenant + workspace RLS, class `standard` (tools/scripts/gen-rls-migration.ts),
+-- with the org-wide read policy every standard table carries for the
+-- `withOrgDb` read seam (ADR-086, 20260917120000_org_wide_read_mode.sql).
 ALTER TABLE agent.runtimes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent.runtimes FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON agent.runtimes;
+DROP POLICY IF EXISTS tenant_org_wide_read ON agent.runtimes;
 CREATE POLICY tenant_isolation ON agent.runtimes
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+CREATE POLICY tenant_org_wide_read ON agent.runtimes
+  FOR SELECT
+  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
 
 ALTER TABLE tools.toolbelts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tools.toolbelts FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON tools.toolbelts;
+DROP POLICY IF EXISTS tenant_org_wide_read ON tools.toolbelts;
 CREATE POLICY tenant_isolation ON tools.toolbelts
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+CREATE POLICY tenant_org_wide_read ON tools.toolbelts
+  FOR SELECT
+  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
 
 ALTER TABLE tools.toolbelt_tools ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tools.toolbelt_tools FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON tools.toolbelt_tools;
+DROP POLICY IF EXISTS tenant_org_wide_read ON tools.toolbelt_tools;
 CREATE POLICY tenant_isolation ON tools.toolbelt_tools
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+CREATE POLICY tenant_org_wide_read ON tools.toolbelt_tools
+  FOR SELECT
+  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
 
 -- oxagen_app grants: guarded, fresh clusters may lack the role. A belt's
 -- members are deleted when a server leaves the belt.
