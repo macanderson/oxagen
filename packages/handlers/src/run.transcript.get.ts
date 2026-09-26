@@ -11,17 +11,36 @@
 //
 // Every fact a reader would otherwise derive from an entry's frames is the
 // fold's, and goes out as a field of the entry: its key, parent, node,
-// outcome, gates, subject, family, duration and echo. Two need bytes the fold
-// does not read, so they are added here: a recall entry's items, parsed from
-// the body it kept (`recallOf`), and each reply's `tool_use` blocks, which
-// name the tool step that recorded the call (`toolUseClaimer`) and what came
-// back. `counts` counts the run's entries at the zoom, and `figures` the
-// run's steps, calls and time (`transcriptFigures`), whatever the chips.
+// outcome, gates, subject, family and duration. Three need bytes the fold
+// does not read, so the bodies are read here and the rule that needs them
+// runs over what was read: which prompts and replies have nothing to show,
+// and which reply repeats words the reader was just shown (`markWords`, over
+// the words `readWords` reads for the whole run at `steps`); a recall
+// entry's items, parsed from the body it kept (`recallOf`); and each reply's
+// `tool_use` blocks, which name the tool step that recorded the call
+// (`toolUseClaimer`) and what came back. `counts` counts the run's entries at the zoom, and
+// `figures` the run's steps, calls and time (`transcriptFigures`), whatever
+// the chips.
+//
+// The digest of what a body says is kept per process (`WordsCache`, keyed by
+// tenant, body reference and digest), because a body never changes. So a read
+// reads the words of only the bodies no earlier read in the process has read.
+// The cache keeps no text: every half on the page, and every half a search
+// looks inside, is read from the evidence store. A read's body cost is its
+// page's halves, at most one read each, plus the word bodies it has not read
+// before, not the whole run's.
 //
 // A `query` narrows the entries the chips kept (`searchFolds`). Label, tool
-// and target are matched on the entry; each half's text is read from the
-// evidence store, at most TRANSCRIPT_SEARCH_HALF_MAX halves per read, and
-// `search.unsearched` counts the halves the read could not look inside.
+// and target are matched on the entry; each half of an entry they do not
+// match is read from the evidence store, at most TRANSCRIPT_SEARCH_HALF_MAX
+// halves per read, and `search.unsearched` counts the halves the read could
+// not look inside. A read from a cursor searches only the entries it can
+// still send (`unsentFolds`), so paging through a search reads each body
+// once rather than once per page.
+//
+// `counts.frames` carries the policy and recall counts at `everything`, one
+// entry per frame (`frameCounts`), at every zoom: the Run page reads `steps`
+// and takes its tab badges from there, with no second read of the run.
 //
 // Three things are computed over the whole run and not over the page: the
 // cumulative cost, which is a prefix sum from the run's first frame (§8.4),
@@ -56,20 +75,30 @@ import {
   type TranscriptZoom,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import {
+  bareToolName,
   filterFoldsByKind,
+  frameCounts,
   frameFolds,
   frameKey,
+  markWords,
+  type MessageAssembly,
+  type RecallBody,
   recallOf,
   type RunFrame,
   stepFolds,
+  toolFamilyOf,
   toolUseClaimer,
   TRANSCRIPT_KINDS,
   transcriptCounts,
   transcriptFigures,
   type TranscriptDecision,
   type TranscriptFold,
+  type TranscriptWords,
   turnFolds,
-  withoutDuplicateModelCalls,
+  readTranscriptFrames,
+  TRANSCRIPT_FRAME_CAP,
+  wordsDigest,
+  wordsHalf,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
@@ -82,6 +111,12 @@ import {
 import { assemblyView, readAssembly } from "./lib/transcript-assembly";
 import { mapConcurrent } from "./lib/map-concurrent";
 import { searchableText, searchFolds } from "./lib/transcript-search";
+import {
+  type BodyWords,
+  createWordsCache,
+  type WordsCache,
+} from "./lib/transcript-words-cache";
+import { StorageNotFoundError } from "@oxagen/storage";
 import { digestBytes } from "@oxagen/tacho";
 import { logger } from "./logger";
 import {
@@ -92,15 +127,11 @@ import {
 } from "./run.list";
 import {
   defaultRunReadDeps,
-  readRunFrames,
   resolveRun,
+  runChainReads,
   startCursorSeq,
   type RunReadDeps,
-  withoutLateReports,
 } from "./lib/run-read";
-
-/** The most frames a transcript folds; past it the transcript is incomplete. */
-const TRANSCRIPT_FRAME_CAP = 10_000;
 /**
  * The largest recall body read to parse what it put in front of the model. A
  * steering manifest lists at most 2,000 items; a body past this is not one,
@@ -109,6 +140,12 @@ const TRANSCRIPT_FRAME_CAP = 10_000;
 const RECALL_BODY_MAX = 1_048_576;
 /** Bodies read at once. */
 const BODY_CONCURRENCY = 8;
+/**
+ * The most halves one read reads for their words (`readWords`): about three
+ * per turn, the prompt, the reply and the model step before the reply. An
+ * entry past it keeps what the fold said about it.
+ */
+export const TRANSCRIPT_WORDS_HALF_MAX = 2_000;
 
 const DECIMAL = /^\d+$/;
 /** The tacho start cursor: frames are numbered from 0, so a read from the start sits at -1. */
@@ -133,6 +170,12 @@ export type RunTranscriptGetDeps = RunReadDeps & {
    * view (#3526).
    */
   priceBook: (slice: PriceBookSlice) => Promise<PriceBook>;
+  /**
+   * The digests of what the bodies this process has read say
+   * (`createWordsCache`). Omitted, the handler keeps its own, so the one
+   * handler a process serves from keeps one cache for every read.
+   */
+  words?: WordsCache;
 };
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -275,6 +318,25 @@ export function planTranscriptPage(
 }
 
 /**
+ * The folds a page read from a cursor can still send, the cursor given as
+ * frame positions in the run as read (`cursorPosition`): those that open
+ * after its `through` frame, and those at or before it whose last frame lies
+ * past `high`, which `planTranscriptPage` sends again. Every other fold was
+ * sent and has not changed since, so no page from this cursor on sends it.
+ * Null reads from the start, where every fold can be sent.
+ */
+export function unsentFolds<T extends { span: FoldSpan }>(
+  folds: readonly T[],
+  cursor: { throughAt: number; highAt: number } | null,
+): readonly T[] {
+  if (cursor === null) return folds;
+  return folds.filter(
+    (fold) =>
+      fold.span.open > cursor.throughAt || fold.span.end > cursor.highAt,
+  );
+}
+
+/**
  * The fold index `key` opens, or when no fold opens there any longer (its
  * opening frame was a model call's copy a richer one replaced), the last fold
  * that opens at or before the frame's position.
@@ -298,7 +360,94 @@ function foldThrough(
 // ---- Bodies ---------------------------------------------------------------------------
 
 /**
- * One half of the exchange.
+ * A half's kept body as the record vouches for it (`read`): the message a
+ * recorded model stream was (`assembly`), or else its text. Otherwise why
+ * there is none: the frame kept no body (`none`), the bytes are not UTF-8
+ * text (`not_text`), the store has no such object or the bytes no longer hash
+ * to the recorded digest (`gone`), or the read failed in some other way
+ * (`unread`).
+ *
+ * One body the store cannot answer (an object gone missing, a key id this
+ * deployment no longer holds, a transient read failure) leaves its own half
+ * unread. It must not fail the read: every other half is still readable, and
+ * the Policy, Context and stats tabs read through this same handler.
+ */
+type BodyRead =
+  | { state: "read"; text: string; assembly: MessageAssembly | null }
+  | { state: "none" | "not_text" | "gone" | "unread" };
+
+async function readBody(
+  bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
+  scope: RunScope,
+  frame: RunFrame,
+): Promise<BodyRead> {
+  const { bodyRef, bodyDigest } = frame.body;
+  if (bodyRef === null || bodyDigest === null) return { state: "none" };
+  let stored: Awaited<ReturnType<typeof bodies.getBody>>;
+  try {
+    stored = await bodies.getBody(scope, bodyRef);
+  } catch (err) {
+    if (err instanceof StorageNotFoundError) return { state: "gone" };
+    logger.warn(
+      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
+      "get_run_transcript: a frame body could not be read; its half is shown without text",
+    );
+    return { state: "unread" };
+  }
+  if (digestBytes(stored.bytes) !== bodyDigest) return { state: "gone" };
+  let text: string;
+  try {
+    text = decoder.decode(stored.bytes);
+  } catch {
+    return { state: "not_text" };
+  }
+  try {
+    return {
+      state: "read",
+      text,
+      assembly: await readAssembly(bodies, scope, bodyRef, text, frame),
+    };
+  } catch (err) {
+    logger.warn(
+      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
+      "get_run_transcript: a frame's reassembly could not be read; its half is shown without text",
+    );
+    return { state: "unread" };
+  }
+}
+
+/**
+ * What a body the store answered says, for the words cache: the digest of
+ * its words, never the words (`wordsDigest`). A stream's words are its last
+ * text block that has any.
+ */
+function bodyWords(body: {
+  text: string;
+  assembly: MessageAssembly | null;
+}): BodyWords {
+  if (body.assembly === null)
+    return { stream: false, words: wordsDigest(body.text) };
+  let last: TranscriptWords = null;
+  for (const block of body.assembly.blocks) {
+    if (block.kind !== "text") continue;
+    last = wordsDigest(block.text) ?? last;
+  }
+  return { stream: true, last };
+}
+
+/**
+ * The words `fold` shows from its words half's body: the text of a body that
+ * is not a model stream, and of a stream only a model step's last text block.
+ * A prompt or reply kept as a stream is shown no text, so it shows no words.
+ */
+function wordsOf(fold: TranscriptFold, words: BodyWords): TranscriptWords {
+  if (!words.stream) return words.words;
+  return fold.node === "model" ? words.last : null;
+}
+
+/**
+ * One half of the exchange, read from the evidence store every time: the
+ * words cache holds digests, never text, so no half is answered from it.
  *
  * A half whose bytes are a recorded model stream carries the REASSEMBLY —
  * the message those bytes were — and no text at all. The wire is the
@@ -329,78 +478,115 @@ async function half(
     })),
     fidelity,
   };
-  if (bodyRef === null || bodyDigest === null) {
+  const body = await readBody(bodies, scope, frame);
+  if (body.state !== "read")
     return { ...base, text: null, truncated: false, assembly: null };
-  }
-  const unread = { ...base, text: null, truncated: false, assembly: null };
-  // One body the store cannot answer (an object gone missing, a key id this
-  // deployment no longer holds, a transient read failure) leaves its own half
-  // unread. It must not fail the page: every other half is still readable,
-  // and the Policy, Context and stats tabs read through this same page.
-  let stored: Awaited<ReturnType<typeof bodies.getBody>>;
-  try {
-    stored = await bodies.getBody(scope, bodyRef);
-  } catch (err) {
-    logger.warn(
-      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
-      "get_run_transcript: a frame body could not be read; its half is shown without text",
-    );
-    return unread;
-  }
-  if (digestBytes(stored.bytes) !== bodyDigest) return unread;
-  let text: string;
-  try {
-    text = decoder.decode(stored.bytes);
-  } catch {
-    return unread;
-  }
-  let assembly: Awaited<ReturnType<typeof readAssembly>>;
-  try {
-    assembly = await readAssembly(bodies, scope, bodyRef, text, frame);
-  } catch (err) {
-    logger.warn(
-      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
-      "get_run_transcript: a frame's reassembly could not be read; its half is shown without text",
-    );
-    return unread;
-  }
-  if (assembly !== null) {
+  if (body.assembly !== null) {
     return {
       ...base,
       text: null,
       truncated: false,
-      assembly: assemblyView(assembly, outputRate(frame)),
+      assembly: assemblyView(body.assembly, outputRate(frame)),
     };
   }
+  const { text } = body;
   return text.length > textMax
     ? { ...base, text: text.slice(0, textMax), truncated: true, assembly: null }
     : { ...base, text, truncated: false, assembly: null };
 }
 
 /**
- * A recall frame's whole body as text, for `recallOf` to parse, or null when
- * none was kept, it cannot be read, it does not hash to its digest, or it is
- * larger than any manifest. A half's text is cut at the zoom's cap, and a
- * manifest cut short does not parse, so this reads the body on its own.
+ * The words each entry of `needed` shows a reader, for `markWords`, as the
+ * digest of those words: read the way `half` reads the half a reader is
+ * shown, whole rather than cut at the zoom's cap. A prompt or reply shows the
+ * text of its half, and none when the half is a recorded model stream, which
+ * a reader is shown as a message with no text. A model step shows the last
+ * text block of its reply, or the reply's text where the recorder assembled
+ * none.
+ *
+ * At most `halfMax` halves are settled: the first ones in the order given,
+ * whether `cache` holds them or not. So which entries a read settles does not
+ * depend on what earlier reads left in the cache, and every page of a run,
+ * and every read of a live one, settles the same ones. An entry past the
+ * bound is left out of the answer, so `markWords` leaves it as the fold said.
+ * A half with no kept body shows no words, costs no read and does not count.
+ *
+ * A half `cache` holds costs no read. What each read says is kept in it; a
+ * body the store says is gone, or that no longer hashes, is kept as showing
+ * no words for the cache's failure TTL. A read that failed any other way is
+ * not kept, and is tried again on the next read.
+ */
+export async function readWords(
+  bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
+  scope: RunScope,
+  needed: readonly TranscriptFold[],
+  options: { halfMax?: number; cache?: WordsCache | null } = {},
+): Promise<Map<TranscriptFold, TranscriptWords>> {
+  const halfMax = options.halfMax ?? TRANSCRIPT_WORDS_HALF_MAX;
+  const cache = options.cache ?? null;
+  const words = new Map<TranscriptFold, TranscriptWords>();
+  const reads: { fold: TranscriptFold; frame: RunFrame }[] = [];
+  let settled = 0;
+  for (const fold of needed) {
+    const frame = wordsHalf(fold);
+    if (
+      frame === null ||
+      frame.body.bodyRef === null ||
+      frame.body.bodyDigest === null
+    ) {
+      words.set(fold, null);
+      continue;
+    }
+    if (settled >= halfMax) continue;
+    settled += 1;
+    const kept = cache?.get(scope, frame);
+    if (kept !== undefined) words.set(fold, wordsOf(fold, kept));
+    else reads.push({ fold, frame });
+  }
+  const said = await mapConcurrent(
+    reads,
+    BODY_CONCURRENCY,
+    async ({ fold, frame }): Promise<TranscriptWords> => {
+      const body = await readBody(bodies, scope, frame);
+      if (body.state === "gone") cache?.fail(scope, frame);
+      if (body.state === "not_text")
+        cache?.set(scope, frame, { stream: false, words: null });
+      if (body.state !== "read") return null;
+      const read = bodyWords(body);
+      cache?.set(scope, frame, read);
+      return wordsOf(fold, read);
+    },
+  );
+  reads.forEach(({ fold }, i) => words.set(fold, said[i] ?? null));
+  return words;
+}
+
+/**
+ * A recall frame's whole body as text, for `recallOf` to parse, or why there
+ * is none: the frame kept no body, the body cannot be read or no longer
+ * hashes to its digest, or it is larger than any manifest. A half's text is
+ * cut at the zoom's cap, and a manifest cut short does not parse, so this
+ * reads the body on its own.
  */
 async function recallBody(
   bodies: Pick<EvidenceStore, "getBody">,
   scope: RunScope,
   frame: RunFrame,
-): Promise<string | null> {
+): Promise<RecallBody> {
   const { bodyRef, bodyDigest } = frame.body;
-  if (bodyRef === null || bodyDigest === null) return null;
+  if (bodyRef === null || bodyDigest === null) return { state: "unretained" };
   try {
     const stored = await bodies.getBody(scope, bodyRef);
-    if (stored.bytes.byteLength > RECALL_BODY_MAX) return null;
-    if (digestBytes(stored.bytes) !== bodyDigest) return null;
-    return decoder.decode(stored.bytes);
+    if (stored.bytes.byteLength > RECALL_BODY_MAX) return { state: "unlisted" };
+    if (digestBytes(stored.bytes) !== bodyDigest)
+      return { state: "unreadable" };
+    return { state: "kept", text: decoder.decode(stored.bytes) };
   } catch (err) {
     logger.warn(
       { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
       "get_run_transcript: a recall body could not be read; its recall falls back to the recorded count",
     );
-    return null;
+    return { state: "unreadable" };
   }
 }
 
@@ -423,8 +609,10 @@ export function toolResultsOf(
 
 /**
  * `half` with each `tool_use` block's `stepKey` (the tool step that recorded
- * the call, from `claim`) and `result` (what the page's `tool_result` blocks
- * say came back). A half with no assembly is returned as it is.
+ * the call, from `claim`), `result` (what the page's `tool_result` blocks say
+ * came back), `family` (`toolFamilyOf` its name) and `tool` (its name as the
+ * harness knows it, `bareToolName`). A half with no assembly
+ * is returned as it is.
  */
 export function withToolUseFacts(
   half: TranscriptEntryBody | null,
@@ -457,6 +645,8 @@ export function withToolUseFacts(
                 block.callKey === null
                   ? null
                   : (results.get(block.callKey) ?? null),
+              family: toolFamilyOf(block.name),
+              tool: bareToolName(block.name),
             }
           : block,
       ),
@@ -518,18 +708,20 @@ function decisionView(decision: TranscriptDecision) {
     decision: decision.decision,
     type: decision.type,
     source: decision.source,
+    harness: decision.harness,
     at: decision.at.toISOString(),
   };
 }
 
 /**
  * The reasoning effort the fold's model call ran at: the first of its frames
- * that recorded one. Null where none did, which is every ledger frame and
- * every wrapped frame from a harness that does not report it.
+ * that recorded one, as the fold's `usage` chip reads it (`frameKinds`).
+ * Null where none did, which is every ledger frame and every wrapped frame
+ * from a harness that does not report it.
  */
 function entryEffort(fold: TranscriptFold): string | null {
-  for (const frame of [fold.opening, fold.request, fold.response]) {
-    const effort = frame?.identity.effort;
+  for (const frame of fold.members) {
+    const effort = frame.identity.effort;
     if (effort !== undefined && effort !== "") return effort;
   }
   return null;
@@ -538,6 +730,7 @@ function entryEffort(fold: TranscriptFold): string | null {
 export function createRunTranscriptGetHandler(
   deps: RunTranscriptGetDeps,
 ): CapabilityHandler<typeof runTranscriptGet> {
+  const words = deps.words ?? createWordsCache();
   return async (input, ctx): Promise<RunTranscriptGetOutput> => {
     const after =
       input.after === undefined ? null : decodeTranscriptCursor(input.after);
@@ -548,14 +741,13 @@ export function createRunTranscriptGetHandler(
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
     // The run's own chain and every subagent chain under it, each spliced in
-    // where it was spawned (`readRunFrames`).
-    const read = await readRunFrames(deps, run, TRANSCRIPT_FRAME_CAP);
-    // Once a chain's model calls are observed by the proxy, the harness's own
-    // report of the same calls counts neither its tokens nor its cost.
-    withoutLateReports(read.frames);
-    // One model call reported by several sources is one step
-    // (`withoutDuplicateModelCalls`): a proxied call drew twice.
-    const shown = withoutDuplicateModelCalls(read.frames);
+    // where it was spawned; late harness reports uncounted; each model call
+    // once. `run.summarize` reads the same frames (`readTranscriptFrames`).
+    const read = await readTranscriptFrames(
+      runChainReads(deps, run),
+      TRANSCRIPT_FRAME_CAP,
+    );
+    const shown = read.frames;
     // The fold runs over every frame, then the chips narrow its entries, so
     // a filtered read shows the same steps, turns and turn numbers as an
     // unfiltered one (ADR-182).
@@ -569,20 +761,63 @@ export function createRunTranscriptGetHandler(
         : input.zoom === "turns"
           ? turnFolds(shown, steps)
           : frameFolds(shown);
+    // Which prompts and replies show nothing, and which reply repeats words
+    // the reader was just shown, need their words. At `steps`, the zoom the
+    // Run page draws rows from, they are read over the whole run, before the
+    // counts, so an entry that draws no row counts nowhere. The words cache
+    // answers every body an earlier read read, so a later page or a live
+    // tail read reads only the bodies that are new. Which entries are
+    // settled does not depend on the cache: the first 2,000 word halves are,
+    // on every page (`readWords`).
+    //
+    // `turns` is a group, and nothing in it is settled this way. At
+    // `everything`, one entry per frame, the entries' words are not read
+    // either: the Run page reads it only to list decisions, recalls and
+    // governed actions, which never turn quiet on words, and `counts.frames`
+    // needs none. There a prompt or reply is quiet only where the fold says
+    // so, `echoOf` is null, and `counts` counts every prompt and reply the
+    // fold keeps.
+    //
+    // The figures are counted over `steps` at every zoom, and count a prompt
+    // as the prompt chip counts it at `steps`. So at the other two zooms the
+    // `steps` prompts' words are read: one body per prompt, which the cache
+    // already holds once the run has been read at `steps`. The figures then
+    // do not move with the zoom.
+    await markWords(
+      input.zoom === "steps"
+        ? all
+        : steps.filter((step) => step.node === "prompt"),
+      (needed) => readWords(deps.bodies, scope, needed, { cache: words }),
+    );
     // Counted over every entry at the zoom, whatever the chips or query, so
-    // a chip's count and the rows it shows agree.
-    const counts = transcriptCounts(all, TRANSCRIPT_KINDS);
+    // a chip's count and the rows it shows agree. The frames' own policy and
+    // recall counts ride every read, so a reader at `steps` never reads
+    // `everything` for them.
+    const counts = {
+      ...transcriptCounts(all, TRANSCRIPT_KINDS),
+      frames: frameCounts(shown),
+    };
     // The page's figures, over the steps of every frame read (ADR-182).
     const figures = transcriptFigures(shown, steps);
     const chipped = filterFoldsByKind(all, input.kinds);
+    // Where the reader stands, as frame positions in the run as read.
+    const at =
+      after === null
+        ? null
+        : {
+            throughAt: cursorPosition(shown, after.through),
+            highAt: cursorPosition(shown, after.high),
+          };
     // A query narrows what the chips kept, and the matches page on the same
     // cursor as any other read. Each half is searched as far as a full read
-    // carries it, so a match is one a reader can see.
+    // carries it, so a match is one a reader can see. A page read from a
+    // cursor searches only the entries it can still send (`unsentFolds`):
+    // the pages before it searched the rest, and a search reads bodies.
     const found =
       input.query === undefined
         ? null
         : await searchFolds(
-            chipped,
+            unsentFolds(chipped, at),
             input.query,
             async (frame) => {
               const body = await half(
@@ -624,28 +859,30 @@ export function createRunTranscriptGetHandler(
     // sequence alone no longer orders the frames of a run. The fold states
     // each entry's span in those positions.
     const spans = folds.map((fold) => fold.span);
+    const through =
+      after === null || at === null
+        ? -1
+        : foldThrough(
+            spans,
+            folds.map((fold) => frameKey(fold.opening)),
+            shown,
+            after.through,
+          );
     const plan = planTranscriptPage(
       spans,
-      after === null
-        ? null
-        : {
-            through: foldThrough(
-              spans,
-              folds.map((fold) => frameKey(fold.opening)),
-              shown,
-              after.through,
-            ),
-            high: cursorPosition(shown, after.high),
-          },
+      at === null ? null : { through, high: at.highAt },
       input.limit,
     );
     const page = plan.indexes.map((i) => folds[i] as TranscriptFold);
     // The cursor names frames by key, so it survives a later read that holds
-    // more frames, or hides one this read showed.
+    // more frames, or hides one this read showed. The reader's place in fold
+    // order moves only when the page sends a new entry: a page of grown
+    // entries alone leaves `through` where the cursor had it, which a fold
+    // before it (the one `foldThrough` falls back to) would move backward.
     const nextCursor = (): string =>
       encodeTranscriptCursor({
         through:
-          plan.through === -1
+          plan.through === through
             ? (after?.through ?? startKey)
             : frameKey((folds[plan.through] as TranscriptFold).opening),
         high:
@@ -732,8 +969,12 @@ export function createRunTranscriptGetHandler(
         request: TranscriptEntryBody | null;
         response: TranscriptEntryBody | null;
       };
-      const claim = (uses: { name: string; callKey: string | null }[]) =>
-        claimer(fold, uses);
+      // Each half is claimed from the frame that carried it, so a turn's
+      // reply claims its calls as the model step that made it does.
+      const claimFrom =
+        (carrier: RunFrame | null) =>
+        (uses: { name: string; callKey: string | null }[]) =>
+          claimer(carrier, uses);
       return {
         seq: opening.seq,
         endSeq: fold.endSeq,
@@ -758,8 +999,16 @@ export function createRunTranscriptGetHandler(
         effort: entryEffort(fold),
         usage: fold.usage ?? null,
         kinds: [...fold.kinds],
-        request: withToolUseFacts(pair.request, claim, results),
-        response: withToolUseFacts(pair.response, claim, results),
+        request: withToolUseFacts(
+          pair.request,
+          claimFrom(fold.request),
+          results,
+        ),
+        response: withToolUseFacts(
+          pair.response,
+          claimFrom(fold.response),
+          results,
+        ),
         decision: fold.decision === null ? null : decisionView(fold.decision),
         frames: fold.frames,
         turn: fold.turn,
@@ -773,6 +1022,7 @@ export function createRunTranscriptGetHandler(
         approvalId: fold.approvalId,
         gates: fold.gates.map(decisionView),
         subject: fold.subject,
+        tool: fold.subject === null ? null : bareToolName(fold.subject),
         family: fold.family,
         model: fold.model,
         durationMs: fold.durationMs,

@@ -21,7 +21,6 @@ import {
   markOf,
   matchApprovals,
   openFrameOf,
-  parkedReceipt,
   runStateOf,
   stepsOf,
   tickPositions,
@@ -92,25 +91,41 @@ describe("markOf", () => {
     expect(isParked("policy_decision", null)).toBe(false);
   });
 
-  it("reads the assistant's parked receipt as needing a person, and its denied one as not", () => {
+  it("reads a call whose receipt says it parked as needing a person, and a denied one as not", () => {
     const receipt = "tool.engine_call_completed";
-    expect(parkedReceipt(receipt, "create_tag parked apr_0a1b")).toEqual({
-      approvalId: "apr_0a1b",
-    });
-    expect(parkedReceipt(receipt, "create_tag parked")).toEqual({
+    expect(isParked(receipt, null, "parked")).toBe(true);
+    expect(isParked(receipt, null, "denied")).toBe(false);
+    expect(isParked(receipt, null)).toBe(false);
+    expect(markOf(receipt, null, "parked")).toBe("approval");
+    expect(markOf(receipt, null, "completed")).toBeNull();
+    expect(isApprovalFrame(receipt, "parked")).toBe(true);
+    expect(isApprovalFrame(receipt, "completed")).toBe(false);
+  });
+
+  // ADR-182 rule 3: the Player reads the frame's fields, never its label. A
+  // label that says "parked" on a frame whose recorded status does not is
+  // not a parked call.
+  it("reads nothing out of a frame's label (negative)", () => {
+    const receipt = "tool.engine_call_completed";
+    expect(isParked(receipt, null, "completed")).toBe(false);
+    expect(markOf(receipt, null, null)).toBeNull();
+    expect(isApprovalFrame(receipt, null)).toBe(false);
+    const labelOnly = runFrame({
+      seq: "14",
+      cursor: "14",
+      type: receipt,
+      summary: "create_tag parked apr_early",
+      tool: null,
+      toolStatus: null,
       approvalId: null,
+      observedAt: releaseAt(14),
     });
-    expect(parkedReceipt(receipt, "create_tag denied")).toBeNull();
-    // Only the ledger's receipt: a wrapped `tool_call` names no park this way.
-    expect(parkedReceipt("tool_call", "create_tag parked")).toBeNull();
-    expect(isParked(receipt, null, "create_tag parked apr_0a1b")).toBe(true);
-    expect(isParked(receipt, null, "create_tag denied")).toBe(false);
-    expect(markOf(receipt, null, "create_tag parked apr_0a1b")).toBe(
-      "approval",
-    );
-    expect(markOf(receipt, null, "create_tag completed")).toBeNull();
-    expect(isApprovalFrame(receipt, "create_tag parked apr_0a1b")).toBe(true);
-    expect(isApprovalFrame(receipt, "create_tag completed")).toBe(false);
+    expect(
+      matchApprovals(
+        [labelOnly],
+        [parkedRelease({ id: "apr_early", tool: "create_tag" })],
+      ).matched.size,
+    ).toBe(0);
   });
 });
 
@@ -251,6 +266,7 @@ describe("matchApprovals", () => {
         cursor: "4",
         type: "approval_request",
         summary: "approval_request create_tag",
+        tool: "create_tag",
         observedAt: releaseAt(4),
       }),
       runFrame({
@@ -258,6 +274,7 @@ describe("matchApprovals", () => {
         cursor: "14",
         type: "approval_request",
         summary: "approval_request create_tag",
+        tool: "create_tag",
         observedAt: releaseAt(14),
       }),
     ];
@@ -283,6 +300,7 @@ describe("matchApprovals", () => {
       cursor: "16",
       type: "approval_decision",
       summary: "allow github__create_release",
+      tool: "github__create_release",
       observedAt: decided.resolvedAt,
     });
     const { byFrame } = matchApprovals([...frames, decision], [decided]);
@@ -298,7 +316,10 @@ describe("matchApprovals", () => {
         seq: "14",
         cursor: "14",
         type: "tool.engine_call_completed",
-        summary: "create_tag parked apr_early",
+        summary: "create_tag parked",
+        tool: "create_tag",
+        toolStatus: "parked",
+        approvalId: "apr_early",
         observedAt: releaseAt(14),
       }),
     ];
@@ -321,6 +342,8 @@ describe("matchApprovals", () => {
       cursor: "14",
       type: "tool.engine_call_completed",
       summary: "create_tag parked",
+      tool: "create_tag",
+      toolStatus: "parked",
       observedAt: releaseAt(14),
     });
     expect(matchApprovals([unnamed], [late, early]).byFrame.get("14")?.id).toBe(
@@ -332,6 +355,8 @@ describe("matchApprovals", () => {
       cursor: "14",
       type: "tool.engine_call_completed",
       summary: "create_tag denied",
+      tool: "create_tag",
+      toolStatus: "denied",
       observedAt: releaseAt(14),
     });
     expect(matchApprovals([denied], [late, early]).matched.size).toBe(0);
@@ -355,6 +380,7 @@ describe("matchApprovals", () => {
       cursor: "16",
       type: "approval_decision",
       summary: "allow github__create_release",
+      tool: "github__create_release",
     });
     expect(matchApprovals([decision], [parkedRelease()]).matched.size).toBe(0);
   });

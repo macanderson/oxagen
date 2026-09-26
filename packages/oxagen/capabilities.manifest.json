@@ -3078,6 +3078,23 @@
       }
     },
     {
+      "name": "author_graph_rule",
+      "file": "graph.rule.author.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "search_graph",
       "file": "graph.search.ts",
       "domain": "graph",

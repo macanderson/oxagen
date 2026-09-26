@@ -1,7 +1,8 @@
 // The one transcript fold (ADR-182). The step rules here were the Run page's
-// (apps/app/src/features/run/transcript-model.test.ts) and the server's
-// (run-frames.test.ts) until the two folds became this one; their cases are
-// ported so the behaviour each pinned stays pinned where the rule now lives.
+// (the browser fold in `apps/app/src/features/run/transcript-model.ts`, since
+// removed) and the server's (run-frames.test.ts) until the two folds became
+// this one; their cases are ported so the behaviour each pinned stays pinned
+// where the rule now lives.
 import { describe, expect, it } from "vitest";
 import { NO_BODY } from "./frame-body";
 import {
@@ -17,14 +18,20 @@ import type { AttemptEventReadRecord } from "./run-store";
 import {
   filterFoldsByKind,
   foldTranscript,
+  frameCounts,
   frameFolds,
+  markWords,
+  wordsDigest,
   RECALL_ITEM_MAX,
+  type RecallBody,
   recallOf,
   stepFolds,
   toolUseClaimer,
   type TranscriptFold,
+  type TranscriptRecallBody,
   transcriptCounts,
   turnFolds,
+  wordsHalf,
 } from "./transcript-steps";
 
 const ROOT = "0192d4a8-7c1e-7a00-8000-00000000000a";
@@ -238,6 +245,35 @@ describe("the everything zoom", () => {
       );
     });
 
+    it("says whether the decision is the harness checking itself, the one place that rule lives", () => {
+      const decided = (seq: number, source: string | null) =>
+        w(seq, "policy_decision", {
+          policyDecision: "allow",
+          body: JSON.stringify(
+            source === null ? {} : { policy_source: source },
+          ),
+        });
+      const entries = foldTranscript(
+        [
+          decided(1, "harness"),
+          decided(2, "managed_settings"),
+          decided(3, "bundle"),
+          decided(4, "human"),
+          decided(5, null),
+        ],
+        "everything",
+      );
+      expect(
+        entries.map((e) => [e.decision?.source, e.decision?.harness]),
+      ).toEqual([
+        ["harness", true],
+        ["managed_settings", true],
+        ["bundle", false],
+        ["human", false],
+        [null, false],
+      ]);
+    });
+
     it("never becomes the decision of a call, and stays an entry of its own", () => {
       const folded = stepFolds([
         w(0, "tool_requested", { toolName: "Read", toolUseId: "toolu_r" }),
@@ -416,6 +452,59 @@ describe("pairing a model call's halves", () => {
       w(2, "model.response", { model: "m" }),
     ]);
     expect(shape(folded)).toEqual([["1", ["1", "2"]]]);
+  });
+});
+
+/**
+ * `frames`, each behind a proxy that counts every field read on it, and the
+ * running count. The fold reads a frame's fields each time it compares that
+ * frame, so the reads measure the work it did without a clock.
+ */
+function counted(frames: readonly RunFrame[]): {
+  frames: RunFrame[];
+  reads: () => number;
+} {
+  let reads = 0;
+  const handler: ProxyHandler<RunFrame> = {
+    get(target, field, receiver) {
+      reads += 1;
+      return Reflect.get(target, field, receiver) as unknown;
+    },
+  };
+  return {
+    frames: frames.map((frame) => new Proxy(frame, handler)),
+    reads: () => reads,
+  };
+}
+
+// Finding P3-8 of the ADR-182 review: rule 2 rescanned a key's every frame
+// for each request, so a key sealed many times folded in quadratic time. A
+// read holds up to 10,000 frames (TRANSCRIPT_FRAME_CAP).
+describe("a key sealed on every frame of a full read", () => {
+  it("pairs each request with the next response no other request took, in linear time", () => {
+    const half = 5_000;
+    const { frames, reads } = counted([
+      ...Array.from({ length: half }, (_, i) =>
+        w(i, "model.request", { model: "m", toolUseId: "m1" }),
+      ),
+      ...Array.from({ length: half }, (_, i) =>
+        w(half + i, "model.response", { model: "m", toolUseId: "m1" }),
+      ),
+    ]);
+    const folded = stepFolds(frames);
+    expect(folded).toHaveLength(half);
+    expect(
+      folded.every(
+        (fold, i) =>
+          fold.members.length === 2 &&
+          fold.members[1]?.seq === String(half + i),
+      ),
+    ).toBe(true);
+    // Work, not time, so a slow or instrumented runner cannot fail it (P3-6
+    // of the re-review). A scan of the key's frames for each request reads
+    // at least half × half = 25,000,000 fields. The linear fold reads a
+    // bounded number per frame: 42 when this was written.
+    expect(reads()).toBeLessThan(frames.length * 100);
   });
 });
 
@@ -972,6 +1061,34 @@ describe("how a call ended", () => {
       quiet: false,
     });
   });
+
+  it("states no outcome at everything for a call's request frame, which cannot say how the call ended", () => {
+    const frames = [
+      w(1, "tool_requested", { toolName: "Bash", toolUseId: "k1" }),
+      w(2, "tool_call", {
+        toolName: "Bash",
+        toolStatus: "ok",
+        toolUseId: "k1",
+      }),
+      w(3, "model.request", { model: "m", toolUseId: "c1" }),
+      w(4, "model.response", { model: "m", toolUseId: "c1" }),
+    ];
+    expect(
+      frameFolds(frames).map((f) => [f.key, f.node, f.outcome, f.durationMs]),
+    ).toEqual([
+      ["1", "tool", null, null],
+      ["2", "tool", "ok", null],
+      ["3", "model", null, null],
+      ["4", "model", "ok", null],
+    ]);
+  });
+
+  it("keeps a lone request pending at steps, where the step is the whole call (negative)", () => {
+    const [tool] = stepFolds([
+      w(1, "tool_requested", { toolName: "Bash", toolUseId: "k1" }),
+    ]);
+    expect(tool?.outcome).toBe("pending");
+  });
 });
 
 describe("turn boundaries and replies", () => {
@@ -1009,33 +1126,15 @@ describe("turn boundaries and replies", () => {
     expect(entry?.response?.seq).toBe("3");
   });
 
-  it("marks a message that repeats the operator's prompt, and a reply that repeats the last one", () => {
-    const reply = (seq: number, digest: string, over = {}) =>
-      w(seq, "turn_end", { turnSeq: 1, ...kept(digest), ...over });
+  it("leaves the echo unsettled until the words are read: the fold compares no digests", () => {
     const folded = stepFolds([
       w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
-      reply(2, "prompt"),
-      reply(3, "answer"),
-      reply(4, "answer"),
-      reply(5, "other"),
+      w(2, "turn_end", { turnSeq: 1, ...kept("prompt") }),
     ]);
-    expect(folded.map((f) => [f.key, f.echoOf])).toEqual([
-      ["1", null],
-      ["2", "1"],
-      ["3", null],
-      ["4", "3"],
-      ["5", null],
+    expect(folded.map((f) => [f.echoOf, f.quiet])).toEqual([
+      [null, false],
+      [null, false],
     ]);
-  });
-
-  it("keeps a subagent's message that repeats the operator's words, and never echoes across turns (negative)", () => {
-    const folded = stepFolds([
-      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
-      s(SUB, 0, "turn_end", kept("prompt")),
-      w(2, "turn_start", { turnSeq: 2, ...kept("prompt2") }),
-      w(3, "turn_end", { turnSeq: 2, ...kept("prompt") }),
-    ]);
-    expect(folded.map((f) => f.echoOf)).toEqual([null, null, null, null]);
   });
 
   it("reads the run's stop as its seal, and a subagent's stop as control (negative)", () => {
@@ -1127,7 +1226,7 @@ describe("the turns zoom", () => {
     const [turn] = foldTranscript(
       [
         w(0, "turn_start", { turnSeq: 1 }),
-        w(1, "llm_call", { model: "m", turnSeq: 1 }),
+        w(1, "llm_call", { model: "m", turnSeq: 1, ...kept("m") }),
         w(2, "tool_call", {
           toolName: "Read",
           toolStatus: "failed",
@@ -1220,12 +1319,197 @@ describe("a subagent's entries", () => {
   });
 });
 
+/**
+ * A `markWords` reader that answers from a table of words by entry key, as
+ * the digest of each entry's words (`wordsDigest`), the way the handler does.
+ */
+function reader(table: Record<string, string | null>) {
+  const asked: string[][] = [];
+  const read = (needed: readonly TranscriptFold[]) => {
+    asked.push(needed.map((fold) => fold.key));
+    return Promise.resolve(
+      new Map(
+        needed.flatMap((fold) =>
+          fold.key in table
+            ? [[fold, wordsDigest(table[fold.key] ?? null)] as const]
+            : [],
+        ),
+      ),
+    );
+  };
+  return { read, asked };
+}
+
+describe("wordsDigest", () => {
+  it("names words by the digest of their trimmed text, so surrounding whitespace does not count", () => {
+    expect(wordsDigest("  Fixed it.\n")).toBe(wordsDigest("Fixed it."));
+    expect(wordsDigest("Fixed it.")).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(wordsDigest("Fixed it.")).not.toBe(wordsDigest("Fixed it"));
+  });
+
+  it("gives no digest for blank text or none (negative)", () => {
+    expect(wordsDigest(" \n\t")).toBeNull();
+    expect(wordsDigest("")).toBeNull();
+    expect(wordsDigest(null)).toBeNull();
+  });
+});
+
+describe("markWords", () => {
+  const facts = (folds: readonly TranscriptFold[]) =>
+    folds.map((f) => [f.key, f.node, f.quiet, f.echoOf]);
+
+  it("reads a turn's closing message that repeats the model's last words as an echo of that step", async () => {
+    // The model's reply is kept as the stream it arrived in and the closing
+    // message as plain words, so their digests differ; their words do not.
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+      w(2, "llm_call", { turnSeq: 1, model: "m", ...kept("stream") }),
+      w(3, "turn_end", { turnSeq: 1, ...kept("words") }),
+    ]);
+    const { read, asked } = reader({
+      "1": "Fix the build.",
+      "2": "Fixed it.\n",
+      "3": "  Fixed it.",
+    });
+    await markWords(folds, read);
+    expect(facts(folds)).toEqual([
+      ["1", "prompt", false, null],
+      ["2", "model", false, null],
+      ["3", "reply", true, "2"],
+    ]);
+    // One read, for the prompt, the reply and the step said before the reply.
+    expect(asked).toEqual([["1", "3", "2"]]);
+  });
+
+  it("reads a message that repeats the operator's prompt, and a reply that repeats the reply before it", async () => {
+    const reply = (seq: number) =>
+      w(seq, "turn_end", { turnSeq: 1, ...kept(`r${String(seq)}`) });
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+      reply(2),
+      reply(3),
+      reply(4),
+      reply(5),
+    ]);
+    const { read } = reader({
+      "1": "Fix the build.",
+      "2": "Fix the build.",
+      "3": "Done.",
+      "4": "Done.",
+      "5": "Anything else?",
+    });
+    await markWords(folds, read);
+    expect(folds.map((f) => f.echoOf)).toEqual([null, "1", null, "3", null]);
+    expect(folds.map((f) => f.quiet)).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+    ]);
+  });
+
+  it("keeps a subagent's words that repeat the operator's or the run's, and never echoes across turns (negative)", async () => {
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+      w(2, "llm_call", { turnSeq: 1, model: "m", ...kept("stream") }),
+      s(SUB, 0, "turn_end", kept("brief")),
+      w(3, "turn_start", { turnSeq: 2, ...kept("prompt2") }),
+      w(4, "turn_end", { turnSeq: 2, ...kept("late") }),
+    ]);
+    const { read } = reader({
+      "1": "Look around.",
+      "2": "Looked.",
+      [`${SUB}:0`]: "Look around.",
+      "3": "Again.",
+      "4": "Looked.",
+    });
+    await markWords(folds, read);
+    expect(folds.map((f) => [f.echoOf, f.quiet])).toEqual([
+      [null, false],
+      [null, false],
+      [null, false],
+      [null, false],
+      [null, false],
+    ]);
+  });
+
+  it("reads a prompt or reply with only whitespace, or no words to show, as having nothing to show", async () => {
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("blank") }),
+      w(2, "turn_end", { turnSeq: 1, ...kept("stream") }),
+      w(3, "oxagen:message", {
+        turnSeq: 1,
+        ...kept("r"),
+        body: JSON.stringify({ last_assistant_message_digest: "sha256:r" }),
+      }),
+    ]);
+    const { read } = reader({ "1": " \n\t", "2": null, "3": "Released." });
+    await markWords(folds, read);
+    expect(facts(folds)).toEqual([
+      ["1", "prompt", true, null],
+      ["2", "reply", true, null],
+      ["3", "reply", false, null],
+    ]);
+  });
+
+  it("leaves an entry the read did not answer as the fold said, and reads nothing when nothing has words (negative)", async () => {
+    const folds = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+      w(2, "turn_end", { turnSeq: 1, ...kept("reply") }),
+    ]);
+    await markWords(folds, reader({}).read);
+    expect(folds.map((f) => [f.quiet, f.echoOf])).toEqual([
+      [false, null],
+      [false, null],
+    ]);
+
+    const silent = stepFolds([
+      w(1, "turn_start", { turnSeq: 1 }),
+      w(2, "llm_call", { turnSeq: 1, model: "m", ...kept("stream") }),
+      w(3, "tool_call", { turnSeq: 1, toolName: "Bash", toolStatus: "ok" }),
+    ]);
+    const { read, asked } = reader({});
+    await markWords(silent, read);
+    expect(asked).toEqual([]);
+  });
+
+  it("names the half an entry says its words in", () => {
+    const [prompt, model, reply] = stepFolds([
+      w(1, "turn_start", { turnSeq: 1, ...kept("p") }),
+      w(2, "llm_call", { turnSeq: 1, model: "m", ...kept("m") }),
+      w(3, "turn_end", { turnSeq: 1, ...kept("r") }),
+    ]);
+    expect(prompt && wordsHalf(prompt)?.seq).toBe("1");
+    expect(model && wordsHalf(model)?.seq).toBe("2");
+    expect(reply && wordsHalf(reply)?.seq).toBe("3");
+  });
+});
+
 describe("transcriptCounts", () => {
+  it("counts no entry a reader is shown nothing for: a quiet one, or a reply that repeats words just shown", async () => {
+    const folds = stepFolds([
+      w(0, "agent_start"),
+      // A prompt that kept no body is quiet from the fold.
+      w(1, "turn_start", { turnSeq: 1 }),
+      w(2, "turn_start", { turnSeq: 2, ...kept("prompt") }),
+      w(3, "llm_call", { turnSeq: 2, model: "m", ...kept("stream") }),
+      w(4, "turn_end", { turnSeq: 2, ...kept("words") }),
+    ]);
+    await markWords(
+      folds,
+      reader({ "2": "Ship it.", "3": "Shipped.", "4": "Shipped." }).read,
+    );
+    const counts = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    expect(counts.entries).toBe(2);
+    expect(counts.kinds).toMatchObject({ prompt: 1, responses: 1 });
+  });
+
   it("counts every entry per chip, the entries with something to show, errors and decisions", () => {
     const folds = frameFolds([
       w(0, "agent_start"),
       w(1, "turn_start", { turnSeq: 1, ...kept("p") }),
-      w(2, "llm_call", { model: "m", costUsdMicros: 3 }),
+      w(2, "llm_call", { model: "m", costUsdMicros: 3, ...kept("m") }),
       w(3, "tool_call", { toolName: "Bash", toolStatus: "error" }),
       w(4, "policy_decision", { policyDecision: "deny" }),
       w(5, "policy_decision", {
@@ -1254,6 +1538,127 @@ describe("transcriptCounts", () => {
     // The managed-settings check is the harness checking itself.
     expect(counts.policy).toBe(1);
   });
+
+  // Finding P2 of the ADR-182 re-review: every model step counted, though a
+  // call still waiting on its reply, and one kept as a digest with no cost
+  // or tokens, draw no row. A model step counts where it draws: under
+  // `responses` when its reply was kept, whatever the reply said, and under
+  // `usage` when it carried a cost, tokens or an effort.
+  it("counts a model step only under the chips it draws a row for, and not at all when it draws none (negative)", () => {
+    const folds = stepFolds([
+      w(0, "turn_start", { turnSeq: 1, ...kept("p") }),
+      // A reply that only called a tool: kept, so a row under responses.
+      w(1, "llm_call", { turnSeq: 1, model: "m", ...kept("tools-only") }),
+      w(2, "tool_call", { turnSeq: 1, toolName: "Bash", toolUseId: "tu_b" }),
+      // Kept as a digest, with a cost: a usage row and nothing else.
+      w(3, "llm_call", {
+        turnSeq: 1,
+        model: "m",
+        costUsdMicros: 5,
+        ...digestOnly("priced"),
+      }),
+      // Kept as a digest, with the effort it ran at: a usage row.
+      w(4, "llm_call", {
+        turnSeq: 1,
+        model: "m",
+        effort: "high",
+        ...digestOnly("effort"),
+      }),
+      // Kept as a digest with no figures: nothing to draw.
+      w(5, "llm_call", { turnSeq: 1, model: "m", ...digestOnly("bare") }),
+      // Sent and not yet answered: nothing to draw.
+      w(6, "model.request", {
+        turnSeq: 1,
+        model: "m",
+        toolUseId: "m_live",
+        ...kept("request"),
+      }),
+    ]);
+    const facts = folds.map((fold) => [
+      fold.key,
+      fold.node,
+      fold.quiet,
+      [...fold.kinds].sort(),
+    ]);
+    expect(facts).toEqual([
+      ["0", "prompt", false, ["prompt"]],
+      ["1", "model", false, ["responses"]],
+      ["2", "tool", false, ["tools"]],
+      ["3", "model", false, ["usage"]],
+      ["4", "model", false, ["usage"]],
+      ["5", "model", true, []],
+      ["6", "model", true, []],
+    ]);
+    expect(folds[6]?.outcome).toBe("pending");
+    const counts = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    expect(counts.entries).toBe(5);
+    expect(counts.kinds).toMatchObject({
+      prompt: 1,
+      responses: 1,
+      tools: 1,
+      usage: 2,
+    });
+  });
+});
+
+describe("frameCounts", () => {
+  const frames = [
+    w(1, "turn_start", { turnSeq: 1, ...kept("prompt") }),
+    w(2, "steering.manifest", { turnSeq: 1 }),
+    // The harness checking itself: the policy chip keeps it, the Policy
+    // tab's count does not.
+    w(3, "policy_decision", {
+      turnSeq: 1,
+      policyDecision: "deny",
+      toolUseId: "t1",
+      body: JSON.stringify({ policy_source: "managed_settings" }),
+    }),
+    // One call with two decisions: one step at `steps`, two frames.
+    w(4, "policy_decision", {
+      turnSeq: 1,
+      policyDecision: "ask",
+      toolUseId: "t2",
+    }),
+    w(5, "approval_decision", {
+      turnSeq: 1,
+      policyDecision: "approve",
+      toolUseId: "t2",
+    }),
+    w(6, "tool_call", { turnSeq: 1, toolName: "Bash", toolUseId: "t2" }),
+    w(7, "turn_end", { turnSeq: 1, ...kept("reply") }),
+  ];
+
+  it("counts the policy and recall frames as `transcriptCounts` does at everything", () => {
+    const counts = frameCounts(frames);
+    expect(counts).toEqual({ kinds: { policy: 3, recall: 1 }, policy: 2 });
+    const everything = transcriptCounts(frameFolds(frames), TRANSCRIPT_KINDS);
+    expect(counts).toEqual({
+      kinds: {
+        policy: everything.kinds.policy,
+        recall: everything.kinds.recall,
+      },
+      policy: everything.policy,
+    });
+  });
+
+  it("is not the count at steps, where one call's decisions are one entry (negative)", () => {
+    const steps = transcriptCounts(stepFolds(frames), TRANSCRIPT_KINDS);
+    expect(steps.kinds.policy).toBe(2);
+    expect(frameCounts(frames).kinds.policy).toBe(3);
+  });
+
+  it("needs no words: marking the prompt and reply quiet changes no count it carries", async () => {
+    const folds = frameFolds(frames);
+    const before = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    await markWords(folds, reader({ "1": "  ", "7": "" }).read);
+    const after = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    // The words did change what the entries count.
+    expect(after.entries).toBe(before.entries - 2);
+    expect(frameCounts(frames)).toEqual({
+      kinds: { policy: after.kinds.policy, recall: after.kinds.recall },
+      policy: after.policy,
+    });
+  });
 });
 
 describe("toolUseClaimer", () => {
@@ -1267,12 +1672,12 @@ describe("toolUseClaimer", () => {
     w(7, "tool_call", { toolName: "Grep", toolStatus: "ok" }),
   ];
   const steps = stepFolds(frames);
-  const model = nth(steps, 1);
+  const reply = frames[1] as RunFrame;
 
   it("claims a block by its call key, then by name for the next unclaimed step after the reply", () => {
     const claim = toolUseClaimer(steps);
     expect(
-      claim(model, [
+      claim(reply, [
         { name: "Bash", callKey: "k1" },
         { name: "Read", callKey: null },
         { name: "Read", callKey: null },
@@ -1284,7 +1689,7 @@ describe("toolUseClaimer", () => {
   it("claims nothing in another turn, or for a call no step recorded (negative)", () => {
     const claim = toolUseClaimer(steps);
     expect(
-      claim(model, [
+      claim(reply, [
         { name: "Grep", callKey: null },
         { name: "Edit", callKey: "k9" },
       ]),
@@ -1293,14 +1698,110 @@ describe("toolUseClaimer", () => {
 
   it("does not claim a keyed step by name for a block that kept a different key (negative)", () => {
     const claim = toolUseClaimer(steps);
-    expect(claim(model, [{ name: "Bash", callKey: "k2" }])).toEqual([null]);
+    expect(claim(reply, [{ name: "Bash", callKey: "k2" }])).toEqual([null]);
+  });
+
+  // Finding P3-2 of the ADR-182 review: claims were kept across the replies
+  // one page asked about, so an unkeyed claim came out differently wherever
+  // the page cut.
+  describe("whatever the page holds", () => {
+    const run = [
+      w(1, "turn_start", { turnSeq: 1 }),
+      w(2, "llm_call", { turnSeq: 1, model: "m" }),
+      w(3, "llm_call", { turnSeq: 1, model: "m" }),
+      w(4, "tool_call", { turnSeq: 1, toolName: "Bash", toolStatus: "ok" }),
+      w(5, "llm_call", { turnSeq: 1, model: "m" }),
+      w(6, "tool_call", { turnSeq: 1, toolName: "Bash", toolStatus: "ok" }),
+    ];
+    const folded = stepFolds(run);
+    const [, first, second, , third] = run as RunFrame[];
+    const bash = [{ name: "Bash", callKey: null }];
+
+    it("claims the same steps for a reply asked alone or after the replies before it", () => {
+      const all = toolUseClaimer(folded);
+      const inOrder = [first, second, third].map((frame) =>
+        all(frame as RunFrame, bash),
+      );
+      const alone = [third, second, first].map((frame) =>
+        toolUseClaimer(folded)(frame as RunFrame, bash),
+      );
+      expect(inOrder).toEqual([[null], ["4"], ["6"]]);
+      expect(alone.reverse()).toEqual(inOrder);
+    });
+
+    it("never claims past the chain's next model call, which the reply's calls ran before (negative)", () => {
+      // The first reply's Bash ran before the second model call, or it ran
+      // nowhere the record shows.
+      expect(toolUseClaimer(folded)(first as RunFrame, bash)).toEqual([null]);
+    });
+  });
+
+  it("claims from the step a carrying frame belongs to, so a turn's reply claims as its model step does", () => {
+    const run = [
+      w(1, "turn_start", { turnSeq: 1, ...kept("p") }),
+      w(2, "llm_call", { turnSeq: 1, model: "m" }),
+      w(3, "tool_call", { turnSeq: 1, toolName: "Write", toolStatus: "ok" }),
+      w(4, "turn_end", { turnSeq: 1 }),
+    ];
+    const folded = stepFolds(run);
+    const [turn] = turnFolds(run, folded);
+    expect(turn?.span.end).toBe(3);
+    // The turn's span holds the call, so claiming from the turn's own span
+    // could never find it.
+    expect(
+      toolUseClaimer(folded)(run[1] as RunFrame, [
+        { name: "Write", callKey: null },
+      ]),
+    ).toEqual(["3"]);
+  });
+
+  it("claims nothing by name for a frame no step holds, or no frame (negative)", () => {
+    const claim = toolUseClaimer(steps);
+    expect(claim(w(99, "llm_call"), [{ name: "Read", callKey: null }])).toEqual(
+      [null],
+    );
+    expect(claim(null, [{ name: "Bash", callKey: "k1" }])).toEqual(["3"]);
+  });
+
+  it("claims only on the reply's own chain (negative)", () => {
+    const CHILD = "0192d4a8-7c1e-7a00-8000-0000000000c9";
+    const run = [
+      w(1, "turn_start", { turnSeq: 1 }),
+      w(2, "llm_call", { turnSeq: 1, model: "m" }),
+      s(CHILD, 0, "tool_call", {
+        turnSeq: 1,
+        toolName: "Read",
+        toolStatus: "ok",
+      }),
+    ];
+    expect(
+      toolUseClaimer(stepFolds(run))(run[1] as RunFrame, [
+        { name: "Read", callKey: null },
+      ]),
+    ).toEqual([null]);
   });
 });
 
 describe("recallOf", () => {
   const manifest = w(1, "steering.manifest", kept("m"));
+  const said = (text: string): RecallBody => ({ state: "kept", text });
+  /** An item the reading lists, with no reason, replacement or force recorded. */
+  const listed = (
+    kind: string,
+    label: string,
+    tokens: number | null,
+    outcome: "included" | "cut" = "included",
+  ) => ({
+    kind,
+    label,
+    tokens,
+    outcome,
+    reason: null,
+    supersededBy: null,
+    force: null,
+  });
 
-  it("reads a steering manifest's included items, its cut and its tokens", () => {
+  it("reads a steering manifest's items with the outcome of each, its cut and its tokens", () => {
     const body = JSON.stringify({
       schema: "oxagen.steering.manifest/1",
       included: 2,
@@ -1312,16 +1813,87 @@ describe("recallOf", () => {
         { id: "rec_3", kind: "fact", tokens: 900, outcome: "cut" },
       ],
     });
-    expect(recallOf(manifest, body)).toEqual({
+    expect(recallOf(manifest, said(body))).toEqual({
       unit: "items",
       count: 2,
       tokens: 340,
       cut: 1,
       items: [
-        { kind: "rule", label: "rec_1", tokens: 200 },
-        { kind: "fact", label: "rec_2", tokens: 140 },
+        listed("rule", "rec_1", 200),
+        listed("fact", "rec_2", 140),
+        listed("fact", "rec_3", 900, "cut"),
+      ],
+      bundleVersion: null,
+      body: "listed",
+    });
+  });
+
+  it("carries each item's force, the reason for a cut and what superseded it, and the bundle the manifest names", () => {
+    // The shape the host seals (`steeringManifestFrameSchema`): each item's
+    // outcome and force, and no `included` or `cut` of its own.
+    const body = JSON.stringify({
+      budget_tokens: 4000,
+      spent_tokens: 340,
+      bundle_version: 41,
+      items: [
+        {
+          id: "rec_1",
+          kind: "rule",
+          force: "must",
+          tokens: 200,
+          outcome: "included",
+        },
+        {
+          id: "rec_2",
+          kind: "fact",
+          force: "may",
+          tokens: 900,
+          outcome: "cut",
+          reason: "budget",
+        },
+        {
+          id: "rec_3",
+          kind: "fact",
+          force: "should",
+          tokens: 140,
+          outcome: "cut",
+          reason: "superseded",
+          superseded_by: "rec_1",
+        },
       ],
     });
+    expect(recallOf(manifest, said(body))).toEqual({
+      unit: "items",
+      count: 1,
+      tokens: 340,
+      cut: 2,
+      items: [
+        { ...listed("rule", "rec_1", 200), force: "must" },
+        {
+          ...listed("fact", "rec_2", 900, "cut"),
+          force: "may",
+          reason: "budget",
+        },
+        {
+          ...listed("fact", "rec_3", 140, "cut"),
+          force: "should",
+          reason: "superseded",
+          supersededBy: "rec_1",
+        },
+      ],
+      bundleVersion: 41,
+      body: "listed",
+    });
+  });
+
+  it("reads an outcome it has no word for as a cut, never as delivered (negative)", () => {
+    const body = JSON.stringify({
+      items: [{ id: "rec_1", kind: "rule", tokens: 5, outcome: "withheld" }],
+    });
+    const recall = recallOf(manifest, said(body));
+    expect(recall.items[0]?.outcome).toBe("cut");
+    expect(recall.count).toBe(0);
+    expect(recall.cut).toBe(1);
   });
 
   it("reads a context frame's listed frames, counting them when no total was recorded", () => {
@@ -1333,15 +1905,14 @@ describe("recallOf", () => {
         "not an item",
       ],
     });
-    expect(recallOf(manifest, body)).toEqual({
+    expect(recallOf(manifest, said(body))).toEqual({
       unit: "frames",
       count: 2,
       tokens: 90,
       cut: null,
-      items: [
-        { kind: "file", label: "a.ts", tokens: 40 },
-        { kind: "file", label: "b.ts", tokens: null },
-      ],
+      items: [listed("file", "a.ts", 40), listed("file", "b.ts", null)],
+      bundleVersion: null,
+      body: "listed",
     });
   });
 
@@ -1354,24 +1925,28 @@ describe("recallOf", () => {
     }));
     const recall = recallOf(
       manifest,
-      JSON.stringify({ included: items.length, items }),
+      said(JSON.stringify({ included: items.length, items })),
     );
     expect(recall.items).toHaveLength(RECALL_ITEM_MAX);
     expect(recall.count).toBe(RECALL_ITEM_MAX + 5);
   });
 
-  it("falls back to the ledger's recorded frame count for a body it cannot read (negative)", () => {
+  it("falls back to the ledger's recorded frame count for a body it cannot read, and says why (negative)", () => {
     const selected = ledger(1, "context.frames_selected", { frame_count: 6 });
-    for (const body of [null, "not json", "[1,2]", JSON.stringify({ a: 1 })]) {
-      expect(recallOf(selected, body)).toEqual({
-        unit: "frames",
-        count: 6,
-        tokens: null,
-        cut: null,
-        items: [],
-      });
-    }
-    expect(recallOf(manifest, null).count).toBeNull();
+    const fallback = (body: TranscriptRecallBody) => ({
+      unit: "frames",
+      count: 6,
+      tokens: null,
+      cut: null,
+      items: [],
+      bundleVersion: null,
+      body,
+    });
+    for (const text of ["not json", "[1,2]", JSON.stringify({ a: 1 })])
+      expect(recallOf(selected, said(text))).toEqual(fallback("unlisted"));
+    for (const state of ["unretained", "unreadable", "unlisted"] as const)
+      expect(recallOf(selected, { state })).toEqual(fallback(state));
+    expect(recallOf(manifest, { state: "unretained" }).count).toBeNull();
   });
 
   it("reads a count that is not a whole number, or is below zero, as none (negative)", () => {
@@ -1379,14 +1954,19 @@ describe("recallOf", () => {
       included: -1,
       spent_tokens: 1.5,
       cut: "3",
+      bundle_version: -2,
       items: [{ id: "r", kind: "fact", tokens: -4, outcome: "included" }],
     });
-    expect(recallOf(manifest, body)).toEqual({
+    // The recorded `cut` is not a count, so the cut is read from the items,
+    // which say none was cut.
+    expect(recallOf(manifest, said(body))).toEqual({
       unit: "items",
       count: 1,
       tokens: null,
-      cut: null,
-      items: [{ kind: "fact", label: "r", tokens: null }],
+      cut: 0,
+      items: [listed("fact", "r", null)],
+      bundleVersion: null,
+      body: "listed",
     });
   });
 });

@@ -85,6 +85,26 @@ export const runFrameSchema = z
      * carries none, or is encrypted.
      */
     summary: z.string(),
+    /**
+     * The tool the frame is about, as its producer named it: the ledger's
+     * `capability_name` or `tool_name`, a wrapped frame's tool. Null when the
+     * frame names none. `summary` may show it too, but a client reads it here
+     * and never parses the label for it (ADR-182 rule 3).
+     */
+    tool: z.string().nullable(),
+    /**
+     * How the tool call ended, as its producer recorded it: the ledger's
+     * receipt outcome (`completed`, `failed`, `denied`, `cancelled`,
+     * `parked`) or a wrapped frame's tool status. Null on a frame that
+     * records none, an intention included.
+     */
+    toolStatus: z.string().nullable(),
+    /**
+     * The approval a parked tool call waits on (`apr_…`), as the receipt
+     * recorded it. Null on every other frame, and on a parked receipt that
+     * named no approval.
+     */
+    approvalId: z.string().nullable(),
     body: frameBodySchema,
     /** The frame's own cost record; null when it carried none. */
     cost: runCostSchema.nullable(),

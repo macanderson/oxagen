@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   getSegment: vi.fn(),
   selectTachoEvents: vi.fn(),
   selectTachoEventRecords: vi.fn(),
+  selectTachoSubagentEvents: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -50,11 +51,13 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
 vi.mock("@oxagen/telemetry", () => ({
   selectTachoEvents: mocks.selectTachoEvents,
   selectTachoEventRecords: mocks.selectTachoEventRecords,
+  selectTachoSubagentEvents: mocks.selectTachoSubagentEvents,
 }));
 
 import {
   readRunFrames,
   readSealedSegments,
+  readTranscriptFramesOf,
   resolveRunRecord,
 } from "./run-record";
 
@@ -439,5 +442,75 @@ describe("readRunFrames", () => {
   it("reads an empty wrapped session as no frames (negative)", async () => {
     tachoChain([]);
     expect(await readRunFrames(SCOPE, WRAPPED)).toEqual([]);
+  });
+});
+
+// ADR-182: the summary job folds the frames the Run page folds. The
+// composition is `readTranscriptFrames` in @oxagen/run-ledger, tested there;
+// these check that the job's reads reach it.
+describe("readTranscriptFramesOf", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  const childRow = (seq: number): TachoFrameRow =>
+    ({
+      ...tachoRow(seq),
+      sessionUuid: CHILD,
+      rootSessionUuid: SESSION,
+      parentSessionUuid: SESSION,
+    }) as TachoFrameRow;
+
+  it("reads a wrapped run's subagent chains, as Postgres lists them, and splices them in", async () => {
+    tachoChain([0, 1]);
+    mocks.withTenantDb.mockResolvedValue([{ sessionUuid: CHILD }]);
+    mocks.selectTachoSubagentEvents.mockResolvedValue([childRow(0)]);
+    const read = await readTranscriptFramesOf(SCOPE, WRAPPED);
+    expect(read.complete).toBe(true);
+    expect(
+      read.frames.map((f) => [f.chain?.sessionUuid ?? "root", f.seq]),
+    ).toEqual([
+      ["root", "0"],
+      ["root", "1"],
+      // Every frame here has one timestamp and no spawn was recorded, so
+      // no root frame was observed after the chain began: it goes last.
+      [CHILD, "0"],
+    ]);
+    expect(mocks.selectTachoSubagentEvents).toHaveBeenCalledWith({
+      rootSessionUuid: SESSION,
+      sessionUuids: [CHILD],
+      after: null,
+      limit: 10_001,
+    });
+    expect(scopes).toEqual([SCOPE]);
+  });
+
+  it("reads no subagent frames when Postgres lists no chains (negative)", async () => {
+    tachoChain([0]);
+    mocks.withTenantDb.mockResolvedValue([]);
+    const read = await readTranscriptFramesOf(SCOPE, WRAPPED);
+    expect(read.frames.map((f) => f.seq)).toEqual(["0"]);
+    expect(mocks.selectTachoSubagentEvents).not.toHaveBeenCalled();
+  });
+
+  it("stops a long chain one page past the cap and says the read was cut (negative)", async () => {
+    tachoChain(range(0, 12_000));
+    mocks.withTenantDb.mockResolvedValue([]);
+    const read = await readTranscriptFramesOf(SCOPE, WRAPPED);
+    expect(read.frames).toHaveLength(10_000);
+    expect(read.complete).toBe(false);
+    // 21 windows of 500 hold 10,500 rows: past the cap, so no more are read.
+    expect(mocks.selectTachoEvents).toHaveBeenCalledTimes(21);
+  });
+
+  it("reads a ledger run's events and no subagent chains", async () => {
+    const readAttemptEventsSince = vi.fn(() => Promise.resolve([]));
+    mocks.createPostgresRunStore.mockReturnValue({ readAttemptEventsSince });
+    const read = await readTranscriptFramesOf(SCOPE, {
+      source: "ledger",
+      runId: "r1",
+      attempts: [],
+    });
+    expect(read).toEqual({ frames: [], complete: true });
+    expect(readAttemptEventsSince).toHaveBeenCalledWith("r1", "0", 500);
+    expect(mocks.selectTachoSubagentEvents).not.toHaveBeenCalled();
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 });

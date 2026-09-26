@@ -24,6 +24,7 @@ import { deflateSync, gzipSync, zstdCompressSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
 import type { TachoEvent } from "../envelope";
+import { bodyIsPartial } from "../evidence/replay-grade";
 import type { FetchLike } from "../host/control-client";
 import { openCredentialStore } from "../host/credential-store";
 import { modelProxyPortFor, writeHostFile } from "../host/host-file";
@@ -806,6 +807,9 @@ describe("the loopback model proxy", () => {
     expect(frame!.content?.digest).toBe(
       sha(Buffer.from(body!.bytes_base64, "base64")),
     );
+    // The seal reads the same attr: this body holds half the call, so the
+    // session counts the frame as missing its body (#3372).
+    expect(bodyIsPartial(frame!.attrs)).toBe(true);
   });
 
   it("cuts a secret out of the recorded bytes, and chains the digest of what is left", async () => {
