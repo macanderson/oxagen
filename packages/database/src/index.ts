@@ -23,6 +23,7 @@ export * as relations from "./relations";
 export * from "./types";
 export {
   withTenantDb,
+  withSharedPlaneTenantDb,
   withOrgDb,
   withTransactionOrgScope,
   withSystemDb,
