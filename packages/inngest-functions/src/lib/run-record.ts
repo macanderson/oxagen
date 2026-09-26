@@ -179,23 +179,6 @@ async function* tachoRowPages(
   }
 }
 
-/**
- * Every `tacho_events` row of a session, in sequence order. The read stops
- * once it holds more than `upTo` rows, so a capped reader can tell a chain
- * that fits from one that does not.
- */
-async function allTachoRows(
-  sessionUuid: string,
-  upTo = Number.POSITIVE_INFINITY,
-): Promise<TachoFrameRow[]> {
-  const rows: TachoFrameRow[] = [];
-  for await (const page of tachoRowPages(sessionUuid)) {
-    rows.push(...page);
-    if (rows.length > upTo) return rows;
-  }
-  return rows;
-}
-
 /** Every stored event of a session with its envelope columns, in order. */
 async function allTachoRecords(
   sessionUuid: string,
