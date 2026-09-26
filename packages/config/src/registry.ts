@@ -249,7 +249,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "OpenTelemetry",
     description:
       "The region this process answers from, printed beside the trace id on a page's " +
-      "error line (#3841). Every deployed node runs in us-east-1; the node manifest " +
+      "error line (#3841). Every deployed node runs in us-east-1, and the node manifest " +
       "(tools/scripts/package-for-node.sh) sets it too. Unset locally, where the page " +
       "says the region was not recorded.",
     secret: false,
