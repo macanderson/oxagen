@@ -85,6 +85,7 @@ import {
 } from "./lib/run-list-work";
 import { isCursorInstant } from "./lib/cursor-instant";
 import { compactedProbe } from "./lib/run-list-status";
+import { appliedHaltIsPause } from "./lib/run-pause";
 import { logger } from "./logger";
 import {
   countRuns,
@@ -169,7 +170,6 @@ const events = schema.agentRunEvents;
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
 const hosts = schema.tachoHosts;
-const commands = schema.tachoControlCommands;
 
 /** Millisecond precision, so a cursor built from a JS Date compares exactly. */
 const ms = (column: SQL | typeof sessions.startedAt) =>
@@ -622,25 +622,15 @@ const tachoColumns = {
     outputTokens: sessions.outputTokens,
     cacheReadTokens: sessions.cacheReadTokens,
     cacheCreationTokens: sessions.cacheCreationTokens,
-    // Whether the host holds the session paused: the last pause or resume it
-    // acknowledged `applied`. Dispatch writes one `run` row per session,
-    // addressed by public id, so `tacho_control_commands_target_idx` answers
-    // it. A pause still queued, or one the host refused, does not count: the
-    // pause dialog promises that the run's status says when it has applied.
-    // The subquery names the outer table the way `machineSnapshot` does, so
-    // it depends on the same unaliased `.from(sessions)`.
-    paused: sql<boolean>`coalesce((
-      select ${commands.command} = 'pause'
-      from ${commands}
-      where ${commands.orgId} = ${sessions.orgId}
-        and ${commands.workspaceId} = ${sessions.workspaceId}
-        and ${commands.targetKind} = 'run'
-        and ${commands.targetId} = ${sessions.publicId}
-        and ${commands.command} in ('pause', 'resume')
-        and ${commands.outcome} = 'applied'
-      order by ${commands.appliedAt} desc nulls last, ${commands.issuedAt} desc
-      limit 1
-    ), false)`,
+    // Whether the host holds the session paused (`appliedHaltIsPause`, the
+    // rule `get_run` reads its pause by). The subquery names the outer table
+    // the way `machineSnapshot` does, so it depends on the same unaliased
+    // `.from(sessions)`.
+    paused: appliedHaltIsPause({
+      orgId: sessions.orgId,
+      workspaceId: sessions.workspaceId,
+      publicId: sessions.publicId,
+    }),
     // What the page lists beside the run: how many `pr_open` calls ingest
     // counted, and the harness's own line totals from the session's end.
     pullRequests: sessions.pullRequests,

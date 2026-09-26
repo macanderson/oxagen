@@ -12,7 +12,8 @@ import {
   POLL_INTERVAL_MS,
   type RunGetDeps,
 } from "./run.get";
-import { encodeRunCursor } from "./run.list";
+import { encodeRunCursor, type RunScope } from "./run.list";
+import type { PauseCommandRow, PausePosition } from "./lib/run-pause";
 import {
   ctx,
   event,
@@ -61,6 +62,18 @@ type Over = {
   repositoryAsked?: string[];
   /** Runs after each fake sleep, with the count so far; a test lands events here. */
   onSleep?: (count: number, log: AttemptEventReadRecord[]) => void;
+  /** The run's pause and resume rows. The pause is read only when this or `pauseFails` is set. */
+  pauseRows?: PauseCommandRow[];
+  /** The pause read rejects, as a Postgres timeout would. */
+  pauseFails?: boolean;
+  /** Every run the pause read was asked for. */
+  pauseAsked?: string[];
+  /** The turn and step at the pause frame; none counted by default. */
+  position?: PausePosition;
+  /** The position read rejects, as ClickHouse over its memory cap does. */
+  positionFails?: boolean;
+  /** Every chain and seq the position read was asked for. */
+  positionAsked?: [string, number][];
 };
 
 function harness(over: Over = {}) {
@@ -127,6 +140,24 @@ function harness(over: Over = {}) {
       over.onSleep?.(sleeps.length, log);
       return Promise.resolve();
     },
+    ...(over.pauseRows === undefined && over.pauseFails !== true
+      ? {}
+      : {
+          pause: {
+            pauseCommands: (_scope: RunScope, runPublicId: string) => {
+              over.pauseAsked?.push(runPublicId);
+              return over.pauseFails === true
+                ? Promise.reject(new Error("postgres timeout"))
+                : Promise.resolve(over.pauseRows ?? []);
+            },
+            pausePosition: (sessionUuid: string, seq: number) => {
+              over.positionAsked?.push([sessionUuid, seq]);
+              return over.positionFails === true
+                ? Promise.reject(new Error("Code: 241. Memory limit exceeded"))
+                : Promise.resolve(over.position ?? { turn: null, step: null });
+            },
+          },
+        }),
   };
   return { get: createRunGetHandler(deps), log, sleeps, stores };
 }
@@ -775,5 +806,245 @@ describe("get_run witnessFor (ADR-064)", () => {
     expect(asked).toEqual([]);
     expect(tacho.run.place?.repository).toBeUndefined();
     expect(ledger.run.place).toBeNull();
+  });
+});
+
+// #3972: get_run answers where a paused run stopped, who paused it, when and
+// why, and whether the pause is on its way, in force, or being lifted. The
+// state rides the rule list_runs reads `paused` by (the row's
+// `ingressPaused`); the rows name the command behind it.
+describe("get_run pause (#3972)", () => {
+  const USER = "usr_0123456789abcdefghjkmn";
+  // The harness clock reads 1970, so a row expires only when a test says so.
+  const pauseRow = (over: Partial<PauseCommandRow> = {}): PauseCommandRow => ({
+    publicId: "tcm_pause",
+    command: "pause",
+    outcome: "applied",
+    reason: "budget review",
+    issuedAt: new Date("2026-09-11T09:02:00.000Z"),
+    expiresAt: null,
+    appliedAt: new Date("2026-09-11T09:02:04.000Z"),
+    appliedAtSeq: 41,
+    issuedByPublicId: USER,
+    issuedByName: "Ada Park",
+    ...over,
+  });
+  const resumeRow = (over: Partial<PauseCommandRow> = {}) =>
+    pauseRow({
+      publicId: "tcm_resume",
+      command: "resume",
+      outcome: "queued",
+      reason: null,
+      issuedAt: new Date("2026-09-11T09:04:00.000Z"),
+      appliedAt: null,
+      appliedAtSeq: null,
+      ...over,
+    });
+  const wrapped = (paused: boolean) => [
+    tachoSession({
+      publicId: TACHO_ID,
+      session: { outcome: "running", sealedAt: null, paused },
+    }),
+  ];
+  const base = ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID });
+  const ledger = (ingressPaused: boolean) => [
+    { ...base, run: { ...base.run, status: "running", ingressPaused } },
+  ];
+
+  it("answers pausing for a queued pause on a wrapped run, at the run's head, with no frame and no applied time", async () => {
+    const positionAsked: [string, number][] = [];
+    const { get } = harness({
+      tacho: wrapped(false),
+      pauseRows: [
+        pauseRow({
+          outcome: "queued",
+          expiresAt: new Date("2026-09-11T10:02:00.000Z"),
+          appliedAt: null,
+          appliedAtSeq: null,
+        }),
+      ],
+      positionAsked,
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.run.pause).toEqual({
+      state: "pausing",
+      commandId: "tcm_pause",
+      resumeCommandId: null,
+      seq: null,
+      // The fixture's head: 2 turns, 3 model calls and 4 tool calls.
+      turn: 2,
+      step: 7,
+      by: { id: USER, name: "Ada Park" },
+      issuedAt: "2026-09-11T09:02:00.000Z",
+      appliedAt: null,
+      reason: "budget review",
+    });
+    expect(positionAsked).toEqual([]);
+  });
+
+  it("answers paused for an applied pause on a wrapped run, at its frame, with the turn and step counted there", async () => {
+    const positionAsked: [string, number][] = [];
+    const pauseAsked: string[] = [];
+    const { get } = harness({
+      tacho: wrapped(true),
+      pauseRows: [pauseRow()],
+      position: { turn: 3, step: 12 },
+      positionAsked,
+      pauseAsked,
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.run.pause).toEqual({
+      state: "paused",
+      commandId: "tcm_pause",
+      resumeCommandId: null,
+      seq: "41",
+      turn: 3,
+      step: 12,
+      by: { id: USER, name: "Ada Park" },
+      issuedAt: "2026-09-11T09:02:00.000Z",
+      appliedAt: "2026-09-11T09:02:04.000Z",
+      reason: "budget review",
+    });
+    expect(pauseAsked).toEqual([TACHO_ID]);
+    // The run's own chain, at the frame the host sealed.
+    expect(positionAsked).toEqual([[SESSION_UUID, 41]]);
+  });
+
+  it("answers resuming for a resume queued behind the applied pause, naming both commands", async () => {
+    const { get } = harness({
+      tacho: wrapped(true),
+      pauseRows: [resumeRow(), pauseRow()],
+      position: { turn: 3, step: 12 },
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.run.pause).toMatchObject({
+      state: "resuming",
+      commandId: "tcm_pause",
+      resumeCommandId: "tcm_resume",
+      seq: "41",
+    });
+  });
+
+  it("answers no pause once the resume is applied (negative)", async () => {
+    const { get } = harness({
+      tacho: wrapped(false),
+      pauseRows: [
+        resumeRow({
+          outcome: "applied",
+          appliedAt: new Date("2026-09-11T09:04:03.000Z"),
+          appliedAtSeq: 57,
+        }),
+        pauseRow(),
+      ],
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.pause).toBeNull();
+  });
+
+  it("answers no pause for a queued pause past its expiry, or one the host refused (negative)", async () => {
+    for (const row of [
+      pauseRow({
+        outcome: "queued",
+        expiresAt: new Date(0),
+        appliedAt: null,
+        appliedAtSeq: null,
+      }),
+      pauseRow({ outcome: "failed", appliedAt: null, appliedAtSeq: null }),
+    ]) {
+      const { get } = harness({ tacho: wrapped(false), pauseRows: [row] });
+      const out = await get(input({ runId: TACHO_ID }), ctx());
+      expect(out.run.pause).toBeNull();
+    }
+  });
+
+  it("answers a ledger run's pause from its ingress fence and its receipt, with no frame, turn or step", async () => {
+    const positionAsked: [string, number][] = [];
+    const { get } = harness({
+      ledger: ledger(true),
+      pauseRows: [pauseRow({ appliedAtSeq: null })],
+      positionAsked,
+    });
+    const out = await get(input(), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.run.pause).toEqual({
+      state: "paused",
+      commandId: "tcm_pause",
+      resumeCommandId: null,
+      seq: null,
+      turn: null,
+      step: null,
+      by: { id: USER, name: "Ada Park" },
+      issuedAt: "2026-09-11T09:02:00.000Z",
+      appliedAt: "2026-09-11T09:02:04.000Z",
+      reason: "budget review",
+    });
+    expect(positionAsked).toEqual([]);
+  });
+
+  it("answers no pause for a ledger run its fence does not hold, whatever a receipt says (negative)", async () => {
+    const { get } = harness({
+      ledger: ledger(false),
+      pauseRows: [
+        resumeRow({
+          outcome: "applied",
+          appliedAt: new Date("2026-09-11T09:04:00.000Z"),
+        }),
+        pauseRow({ appliedAtSeq: null }),
+      ],
+    });
+    expect((await get(input(), ctx())).run.pause).toBeNull();
+  });
+
+  it("answers no pause for a sealed run and reads no pause row for it (negative)", async () => {
+    const pauseAsked: string[] = [];
+    const { get } = harness({
+      tacho: [tachoSession({ publicId: TACHO_ID, session: { paused: true } })],
+      pauseRows: [pauseRow()],
+      pauseAsked,
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.status).toBe("sealed");
+    expect(out.run.pause).toBeNull();
+    expect(pauseAsked).toEqual([]);
+  });
+
+  it("still answers the pause when its turn and step cannot be read, with the position left null", async () => {
+    const { get } = harness({
+      tacho: wrapped(true),
+      pauseRows: [pauseRow()],
+      positionFails: true,
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.run.pause).toMatchObject({
+      state: "paused",
+      seq: "41",
+      turn: null,
+      step: null,
+    });
+  });
+
+  it("reads a blank name as none, and a row that names no user as no issuer", async () => {
+    const blank = await harness({
+      tacho: wrapped(true),
+      pauseRows: [pauseRow({ issuedByName: "  " })],
+    }).get(input({ runId: TACHO_ID }), ctx());
+    expect(blank.run.pause?.by).toEqual({ id: USER, name: null });
+    const nobody = await harness({
+      tacho: wrapped(true),
+      pauseRows: [pauseRow({ issuedByPublicId: null, issuedByName: null })],
+    }).get(input({ runId: TACHO_ID }), ctx());
+    expect(nobody.run.pause?.by).toBeNull();
+  });
+
+  it("leaves the field out when the pause read fails, and still answers the run", async () => {
+    const { get } = harness({ tacho: wrapped(true), pauseFails: true });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.status).toBe("live");
+    expect("pause" in out.run).toBe(false);
+    expect(runGet.output.parse(out)).toEqual(out);
   });
 });
