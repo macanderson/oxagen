@@ -29,18 +29,24 @@
         "toolCalls": 14,
         "retries": 0,
         "productiveRatio": null,
+        "advancedSteps": null,
+        "unproductiveSteps": null,
+        "unproductiveCauses": null,
         "byModel": [],
         "byTool": [
           {
             "name": "create_pull_request",
-            "calls": 1
+            "calls": 1,
+            "resultTokens": null,
+            "cost": null
           }
         ],
         "priceEntryIds": [],
         "rolledUpAt": "2026-09-24T09:05:00.000Z",
         "isEstimate": false
       },
-      "provisional": null
+      "provisional": null,
+      "baseline": null
     }
   },
   "frames": [
