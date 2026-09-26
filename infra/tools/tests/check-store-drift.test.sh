@@ -504,14 +504,26 @@ contains "$CURL_OUT" "Failed to connect" "curl config: real curl reached the con
 # empty result, and the check reported "55 declared, 0 present" against a
 # database carrying all 55 (#3036). An empty database and a refused query must
 # not collapse into one another — the header is what tells them apart.
+#
+# cypher-shell prints that header only above a first row. A query that matches
+# nothing prints nothing, exactly like a query that never ran, so the script
+# writes every query to return at least one row (see the shipped-script checks
+# below). On 2026-09-26 the organisation database listing filtered in Cypher,
+# matched nothing on production, and blocked the migration gate on 3069a18.
 printf 'name\n"tenant_public_id"\n"execution_org"\n\n' > "$WORK/neo-ok.txt"
 OUT=$(neo_result_names "$WORK/neo-ok.txt"); CODE=$?
 expect_code 0 "$CODE" "neo4j result: a headed result is read"
 [[ $OUT == $'tenant_public_id\nexecution_org' ]] && pass || fail "neo4j result: expected two unquoted names, got: $OUT"
-printf 'name\n' > "$WORK/neo-empty.txt"
-OUT=$(neo_result_names "$WORK/neo-empty.txt"); CODE=$?
-expect_code 0 "$CODE" "neo4j result: a headed result with no rows is a real, empty answer"
-[[ -z $OUT ]] && pass || fail "neo4j result: an empty answer must print nothing, got: $OUT"
+# The vector size query answers a blank for every index that is not a vector
+# index, so a database with only lookup indexes still returns rows.
+printf 'name\n""\n"memory_embedding_index 1024"\n""\n' > "$WORK/neo-blanks.txt"
+OUT=$(neo_result_names "$WORK/neo-blanks.txt"); CODE=$?
+expect_code 0 "$CODE" "neo4j result: a result with blank rows is read"
+[[ $OUT == "memory_embedding_index 1024" ]] && pass || fail "neo4j result: blank rows must be dropped, got: $OUT"
+printf 'name\n""\n""\n' > "$WORK/neo-all-blank.txt"
+OUT=$(neo_result_names "$WORK/neo-all-blank.txt"); CODE=$?
+expect_code 0 "$CODE" "neo4j result: a database with no vector index is a real, empty answer"
+[[ -z $OUT ]] && pass || fail "neo4j result: only blank rows must print nothing, got: $OUT"
 printf 'Unsupported Java 17.0.20.1 detected. Please use Java(TM) 21 or Java(TM) 25 to run Cypher Shell.\n' > "$WORK/neo-java.txt"
 neo_result_names "$WORK/neo-java.txt" >/dev/null 2>&1
 expect_code 2 "$?" "neo4j result: cypher-shell refusing to run is 'unknown', not 'nothing present'"
@@ -546,6 +558,24 @@ if [[ $sent -ge 2 ]]; then pass; else fail "script: expected both ClickHouse rea
 
 bad=$(grep -oE 'neo_cypher "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv 'neo_cypher "SHOW' || true)
 expect_code 0 "$bad" "script: every Neo4j statement it sends is a SHOW"
+bad=$(grep -oE 'neo_cypher_on [^ ]+ "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv ' "SHOW' || true)
+expect_code 0 "$bad" "script: every Neo4j statement it sends to a named database is a SHOW"
+sent=$(grep -cE 'neo_cypher_on [^ ]+ "SHOW' "$TOOLS/check-store-drift.sh" || true)
+if [[ $sent -ge 2 ]]; then pass; else fail "script: expected the database listing and the vector read, found $sent"; fi
+
+# A query that matches no row prints nothing, which reads as unknown. The two
+# vector size queries filter outside Cypher so each always has a row: SHOW
+# DATABASES lists at least `system`, and every database has its lookup indexes.
+contains "$SCRIPT" "SHOW DATABASES YIELD name RETURN DISTINCT name" "script: lists every database and filters the organisation ones itself"
+contains "$SCRIPT" "RETURN CASE WHEN type = 'VECTOR' THEN" "script: reads every index and blanks the ones that are not vector indexes"
+case "$SCRIPT" in
+  *"SHOW DATABASES YIELD name WHERE"*) fail "script: a WHERE on SHOW DATABASES can match nothing, and nothing reads as unknown" ;;
+  *) pass ;;
+esac
+case "$SCRIPT" in
+  *"WHERE type = 'VECTOR'"*) fail "script: a WHERE on the vector index read can match nothing, and nothing reads as unknown" ;;
+  *) pass ;;
+esac
 contains "$SCRIPT" "_migrations" "script: reads the ledger db-migrate.ts actually writes"
 contains "$SCRIPT" "system.tables" "script: also asks which tables exist, not only the ledger"
 contains "$SCRIPT" "readonly=1" "script: read-only is enforced on the server, not asserted about the text"
