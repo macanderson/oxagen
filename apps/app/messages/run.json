@@ -648,9 +648,7 @@
       "tier": "{tier} tier",
       "status": {
         "waiting": "paused",
-        "waitingCaption": "waiting on a person",
-        "answered": "answered",
-        "timedOut": "timed out"
+        "waitingCaption": "waiting on a person"
       },
       "note": {
         "waiting": "<strong>The loop is stopped.</strong> The harness is holding before its first model call. Nothing has been charged since {at}.",

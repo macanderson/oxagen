@@ -36,6 +36,7 @@ import {
 import { formatDuration } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { StatusBadge } from "@/ui/status-badge";
 import { InterjectionAnswer } from "./interjection-answer";
 import { kindOf } from "./player-model";
 import type { Place } from "./tab-props";
@@ -198,11 +199,12 @@ function Header({
     case "closed":
       status = <Badge tone="approval">{t("status.waiting")}</Badge>;
       break;
+    // Once the question is settled, the header says what the run is doing,
+    // as the ordinary Run page does: live while it works, its outcome once
+    // it ends.
     case "answered":
-      status = <Badge tone="allowed">{t("status.answered")}</Badge>;
-      break;
     case "timedOut":
-      status = <Badge tone="denied">{t("status.timedOut")}</Badge>;
+      status = <StatusBadge status={run.status} outcome={run.outcome} />;
       break;
   }
   return (
@@ -543,9 +545,11 @@ function OperatorQuestion({
               minutes: Math.round(body.timeoutMs / 60_000),
             })}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {t("timeout.closes", { at: clock(row.expiresAt) })}
-          </p>
+          {stage === "waiting" ? (
+            <p className="text-xs text-muted-foreground">
+              {t("timeout.closes", { at: clock(row.expiresAt) })}
+            </p>
+          ) : null}
         </section>
       ) : null}
       {!open && row !== null && row.answeredAt !== null ? (
