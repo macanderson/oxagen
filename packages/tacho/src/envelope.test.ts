@@ -20,6 +20,30 @@ describe("tacho/1.0 envelope", () => {
     expect(TACHO_KINDS.length).toBeGreaterThanOrEqual(45);
   });
 
+  it("carries the unbound-repository kinds with opaque bodies (#3941)", () => {
+    const kinds = [
+      "repo.unknown",
+      "control.interject",
+      "control.answer",
+      "repo.bound",
+      "workspace.created",
+      "skills.resolved",
+      "skills.searched",
+      "skills.loaded",
+    ] as const;
+    for (const kind of kinds) {
+      expect(isTachoKind(kind)).toBe(true);
+      // Opaque on the wire: the strict schema lives in `interjection.ts`, so
+      // a member an older reader has not heard of never fails the envelope.
+      const { event } = sealEvent(
+        unsealed(kind, { later: { a: 1 } }),
+        GENESIS_CURSOR,
+      );
+      expect(tachoEventSchema.safeParse(event).success).toBe(true);
+    }
+    expect(isTachoKind("run.started")).toBe(false);
+  });
+
   it("refuses an unknown body member so producer drift is visible", () => {
     const { event } = sealEvent(
       unsealed("tool_call", { tool_name: "Read" }),
