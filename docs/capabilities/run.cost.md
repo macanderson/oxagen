@@ -37,7 +37,7 @@ The rollup:
 |---|---|---|
 | `cost` | object or null | `{ micros, currency, basis }`; null when no model frame was priced |
 | `tokens` | object | counts by class: `input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning` |
-| `cacheHitRate` | number or null | `cache_read ÷ (input_uncached + cache_read)`, weighted by each frame's spend; null when no frame carried input tokens |
+| `cacheHitRate` | number or null | `cache_read ÷ (input_uncached + cache_read)`, weighted by each frame's spend; null when no frame carried input tokens. Cache writes are not in the denominator, so a run that rebuilt its cache can still read a high rate. The rebuild share, `(cache_write_5m + cache_write_1h) ÷ (input_uncached + cache_read + cache_write_5m + cache_write_1h)`, comes from `tokens`, and the Run page's Cost tab prints it beside the rate |
 | `turns` | integer or null | null for a ledger run whose model-call payloads are encrypted |
 | `steps`, `modelCalls`, `toolCalls` | integer | counts from the frames |
 | `retries` | integer or null | the harness's API retry count; null for a ledger run |

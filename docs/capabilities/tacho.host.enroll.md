@@ -41,7 +41,7 @@ The token is the credential: the call carries no session and no API key, so the 
 | `not_found` | `token_unknown` | no token matches the digest |
 | `conflict` | `token_used` | the token was presented before, including by a concurrent presentation that won the row lock (counted on the row) |
 | `conflict` | `token_expired` | past `expiresAt` (counted on the row) |
-| `conflict` | `agent_retired` | the agent the token was issued for no longer exists |
+| `conflict` | `agent_retired` | the token's agent was deleted or retired after the token was issued. The transaction rolls back and leaves the token unused |
 | `conflict` | `agent_has_host` | a live host is already enrolled as that agent key; a revoked host gives its key up, so revoke it and present a new token |
 
 ## Honesty
