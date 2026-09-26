@@ -270,12 +270,13 @@ describe("the question at the first prompt", () => {
     }
   });
 
-  it.each([
+  const QUIET: Array<[string, Parameters<typeof harness>[0]]> = [
     ["the workspace's skills are off", { bundle: { unbound_repo: undefined } }],
     ["the bundle did not verify", { verified: false }],
     ["the directory has no origin", { remote: undefined }],
-  ] as const)("asks nothing when %s", async (_name, options) => {
-    const h = harness(options as Parameters<typeof harness>[0]);
+  ];
+  it.each(QUIET)("asks nothing when %s", async (_name, options) => {
+    const h = harness(options);
     await start(h);
     const first = await prompt(h);
     expect(kinds(first.events)).toEqual(["turn_start"]);
