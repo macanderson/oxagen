@@ -1,7 +1,7 @@
 // embeddings.backfill.ts: gives every node with no vector one (#4148).
 //
 // Embeddings failed in production for about two days, and ingestion stored
-// records without vectors. The move to voyage-3-large then resized every
+// records without vectors. The move to voyage-4-large then resized every
 // vector index to 1,024 dimensions, and the migrator cleared every vector of
 // the old size. A node with `n.embedding IS NULL` is invisible to vector
 // search and to dedup's similarity pass, and nothing else fills it in.

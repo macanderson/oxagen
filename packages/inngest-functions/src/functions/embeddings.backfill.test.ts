@@ -129,7 +129,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 vi.mock("@oxagen/ai", () => ({
   embedMany: mocks.embedMany,
   embedText: vi.fn(),
-  EMBEDDING_MODEL: "voyage-3-large",
+  EMBEDDING_MODEL: "voyage-4-large",
   EmbeddingUnavailableError: mocks.EmbeddingUnavailableError,
 }));
 
@@ -480,8 +480,8 @@ describe("embeddings/backfill", () => {
 
     // Every node holds the vector of its own text and the model that made it.
     expect(m1.embedding).toEqual(vectorFor(m1.lesson!));
-    expect(m1.embeddingModel).toBe("voyage-3-large");
-    expect(m3.embeddingModel).toBe("voyage-3-large");
+    expect(m1.embeddingModel).toBe("voyage-4-large");
+    expect(m3.embeddingModel).toBe("voyage-4-large");
     const e1Text = renderEntityText("Issue", "Fix e1", {
       state: "open",
       number: 7,
@@ -489,14 +489,14 @@ describe("embeddings/backfill", () => {
     expect(mocks.upsertEmbedding).toHaveBeenCalledWith(
       "e1",
       vectorFor(e1Text),
-      "voyage-3-large",
+      "voyage-4-large",
       "org-a",
     );
-    expect(e1.embeddingModel).toBe("voyage-3-large");
+    expect(e1.embeddingModel).toBe("voyage-4-large");
     expect(e2.embedding).not.toBeNull();
 
     expect(summaryLine()).toMatchObject({
-      model: "voyage-3-large",
+      model: "voyage-4-large",
       workspaces: 3,
       workspacesFailed: 0,
       missingBefore: 4,

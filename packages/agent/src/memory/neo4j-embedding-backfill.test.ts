@@ -111,7 +111,7 @@ describe("setMemoryEmbeddings", () => {
     ];
 
     const written = await withTestScope(() =>
-      setMemoryEmbeddings(rows, "voyage-3-large"),
+      setMemoryEmbeddings(rows, "voyage-4-large"),
     );
 
     expect(written).toBe(1);
@@ -125,11 +125,11 @@ describe("setMemoryEmbeddings", () => {
     );
     expect(cypher).toContain("m.embedding = row.embedding");
     expect(cypher).toContain("m.embeddingModel = $model");
-    expect(paramsOf(0)).toEqual({ rows, model: "voyage-3-large" });
+    expect(paramsOf(0)).toEqual({ rows, model: "voyage-4-large" });
   });
 
   it("opens no session for no rows", async () => {
-    await expect(setMemoryEmbeddings([], "voyage-3-large")).resolves.toBe(0);
+    await expect(setMemoryEmbeddings([], "voyage-4-large")).resolves.toBe(0);
     expect(sessionRun).not.toHaveBeenCalled();
   });
 });
