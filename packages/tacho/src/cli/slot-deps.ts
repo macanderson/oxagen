@@ -39,11 +39,13 @@ export function depsForHarness<D extends CliDeps>(deps: D, harness: string): D {
 
 /**
  * `deps` bound to `slot`, with the harness files its enroll recorded. The
- * root slot is `deps` itself, whose harness files the CLI already overlaid.
+ * root slot takes the root's paths as `deps` holds them, since the CLI
+ * already overlaid their harness files: `deps` itself when it is the root's,
+ * and the root again when it was bound to another slot.
  */
 export function depsForSlot<D extends CliDeps>(deps: D, slot: Slot): D {
   return slot.harness === undefined
-    ? deps
+    ? slotDeps(deps, rootPathsOf(deps))
     : slotDeps(deps, withRecordedHarnessFiles(slot.paths, slot.host));
 }
 
