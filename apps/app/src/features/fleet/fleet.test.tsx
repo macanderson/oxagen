@@ -345,9 +345,10 @@ describe("summary tiles", () => {
     expect(tile("Tokens shown")).toHaveTextContent(
       "Tokens shownnot recordedno cache figure recorded",
     );
-    // No token figure is typed or zeroed: both lines carry the gap they wait on.
-    for (const part of tile("Tokens shown").querySelectorAll("[data-recorded]"))
-      expect(part).toHaveAttribute("data-gap", "G3");
+    // No row carries a token figure, so none is typed or zeroed (#3834).
+    expect(
+      within(tile("Tokens shown")).getByTestId("tokens-not-recorded"),
+    ).toHaveAttribute("data-recorded", "false");
   });
 
   it("marks an open run's cost as an estimate, in its cell and in Spend shown (#3980)", async () => {
@@ -526,7 +527,7 @@ describe("the Runs panel", () => {
     expect(row("arun_sealed")).toHaveTextContent("retry");
     expect(
       within(row("arun_halted")).getByTestId("row-tokens"),
-    ).toHaveAttribute("data-gap", "G3");
+    ).toHaveAttribute("data-recorded", "false");
     expect(row("arun_halted")).toHaveTextContent("not recorded");
   });
 
@@ -607,15 +608,11 @@ describe("the Runs panel", () => {
     );
   });
 
-  it("draws the Tokens sort where the design has it, disabled until runs carry tokens (G3)", async () => {
+  it("draws the Tokens sort where the design has it, and it sorts (#3834)", async () => {
     await loaded();
-    const sort = screen.getByTestId("sort-tokens");
-    expect(sort).toBeDisabled();
-    expect(sort).toHaveAccessibleName("Sort by Tokens");
-    expect(sort).toHaveAttribute(
-      "title",
-      "Runs carry no token figure yet, so there is nothing to sort.",
-    );
+    const sort = screen.getByRole("button", { name: "Sort by Tokens" });
+    expect(sort).toBeEnabled();
+    expect(sort.closest("th")).toHaveAttribute("aria-sort", "none");
   });
 
   it("reads a live run with a parked call as parked for approval, and resolves it on the Run page", async () => {
