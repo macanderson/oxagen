@@ -45,6 +45,19 @@ function model(fetchImpl: typeof fetch, inputType?: "query" | "document") {
   });
 }
 
+/** The error `doEmbed` rejects with. Fails the test when it resolves. */
+async function embedError(
+  fetchImpl: typeof fetch,
+  values: string[],
+): Promise<unknown> {
+  try {
+    await model(fetchImpl).doEmbed({ values });
+  } catch (err) {
+    return err;
+  }
+  throw new Error("expected doEmbed to reject");
+}
+
 describe("createVoyageEmbeddingModel", () => {
   it("posts the texts, model, input type, and dimension with the key as a bearer token", async () => {
     const fetchImpl = okFetch();
@@ -111,9 +124,9 @@ describe("createVoyageEmbeddingModel", () => {
           { status: 200 },
         ),
     );
-    const err = await model(fetchImpl as unknown as typeof fetch)
-      .doEmbed({ values: ["a"] })
-      .catch((e: unknown) => e);
+    const err = await embedError(fetchImpl as unknown as typeof fetch, [
+      "a",
+    ]);
     expect(APICallError.isInstance(err)).toBe(true);
     expect((err as APICallError).isRetryable).toBe(false);
     expect((err as APICallError).message).toContain(`${DIMS} numbers long`);
@@ -130,9 +143,10 @@ describe("createVoyageEmbeddingModel", () => {
     const fetchImpl = vi.fn(
       async () => new Response('{"detail":"no"}', { status }),
     );
-    const err = (await model(fetchImpl as unknown as typeof fetch)
-      .doEmbed({ values: ["a"] })
-      .catch((e: unknown) => e)) as APICallError;
+    const err = (await embedError(
+      fetchImpl as unknown as typeof fetch,
+      ["a"],
+    )) as APICallError;
     expect(APICallError.isInstance(err)).toBe(true);
     expect(err.statusCode).toBe(status);
     expect(err.isRetryable).toBe(retryable);
@@ -141,9 +155,9 @@ describe("createVoyageEmbeddingModel", () => {
 
   it("keeps customer text out of the error's request record", async () => {
     const fetchImpl = vi.fn(async () => new Response("bad", { status: 400 }));
-    const err = (await model(fetchImpl as unknown as typeof fetch)
-      .doEmbed({ values: ["secret customer text"] })
-      .catch((e: unknown) => e)) as APICallError;
+    const err = (await embedError(fetchImpl as unknown as typeof fetch, [
+      "secret customer text",
+    ])) as APICallError;
     expect(JSON.stringify(err.requestBodyValues)).not.toContain(
       "secret customer text",
     );
@@ -153,9 +167,10 @@ describe("createVoyageEmbeddingModel", () => {
     const fetchImpl = vi.fn(async () => {
       throw new TypeError("fetch failed");
     });
-    const err = (await model(fetchImpl as unknown as typeof fetch)
-      .doEmbed({ values: ["a"] })
-      .catch((e: unknown) => e)) as APICallError;
+    const err = (await embedError(
+      fetchImpl as unknown as typeof fetch,
+      ["a"],
+    )) as APICallError;
     expect(APICallError.isInstance(err)).toBe(true);
     expect(err.isRetryable).toBe(true);
   });
